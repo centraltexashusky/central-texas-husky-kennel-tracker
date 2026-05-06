@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <button class="menu-toggle" id="menuToggle" type="button">Menu</button>
     <div class="app-layout">
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
@@ -35,14 +34,26 @@
         </div>
         <div class="status-card" aria-live="polite">
           <span class="status-dot"></span>
-          <span id="modeLabel">Review mode</span>
+          <span id="modeLabel">Live app</span>
         </div>
       </header>
 
       <section class="notice">
-        <strong>Review version:</strong>
-        Submissions are saved on this device only until the Google Sheet connection is added. Use a private helper link to auto-fill the helper name and email.
+        <strong>Connected tracker:</strong>
+        Submissions are sent to the kennel Google Sheet. If the connection is unavailable, this device keeps a temporary local copy.
       </section>
+
+      <label class="mobile-page-menu">
+        Menu
+        <select id="mobilePageSelect">
+          <option value="dailyPage">Daily Tasks</option>
+          <option value="timesheetPage">Timesheet</option>
+          <option value="ourDogsPage">Our Dogs</option>
+          <option value="boardingDogsPage">Boarding Dogs</option>
+          <option value="requestsPage">Request</option>
+          <option value="maintenancePage">Maintenance</option>
+        </select>
+      </label>
 
       <section class="page-view is-active" id="dailyPage">
       <form id="kennelForm" class="tracker-form">
@@ -386,11 +397,17 @@
 
         <section class="form-section detail-panel" id="ownedDogDetail" hidden>
           <div class="section-heading"><span>E</span><div><h2 id="ownedDogDetailTitle">Add New Dog</h2><p>Double click a row to edit an existing dog.</p></div></div>
+          <figure class="dog-profile-photo" id="ownedDogPhotoCard" hidden>
+            <img id="ownedDogPhotoPreview" alt="Dog profile" />
+            <figcaption id="ownedDogPhotoName"></figcaption>
+          </figure>
           <form id="ourDogForm" class="tracker-form">
             <input type="hidden" name="id" />
             <div class="field-grid">
               <label>Call name<input type="text" name="callName" required /></label>
               <label>Show name<input type="text" name="showName" /></label>
+              <label>Profile photo<input type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/*" /></label>
+              <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Optional shared image link" /></label>
               <label>Date of birth<input type="date" name="dateOfBirth" /></label>
               <label>Sex<select name="sex" id="ownedDogSex"><option>Male</option><option>Female</option></select></label>
               <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
@@ -402,17 +419,22 @@
               <label>Last heat cycle<input type="date" name="lastHeat" id="ownedLastHeat" /></label>
               <label>Estimated next heat cycle<input type="date" name="nextHeat" id="ownedNextHeat" readonly /></label>
             </div>
-
-            <div class="field-grid">
-              <label>Treadmill minutes<input type="number" name="treadmillMinutes" min="0" placeholder="0" /></label>
-              <label>Scooter minutes<input type="number" name="scooterMinutes" min="0" placeholder="0" /></label>
-            </div>
-
-            <label>Training progress<textarea name="trainingProgress" rows="3" placeholder="Leash, recall, crate, show stack, manners, treadmill, scooter"></textarea></label>
             <label>Medication or special care notes<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
             <label>General notes<textarea name="notes" rows="3"></textarea></label>
             <div class="button-row"><button type="submit" id="ownedDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
           </form>
+
+          <section class="existing-only" id="ownedDogActivityPanel" hidden>
+            <div class="section-heading compact-heading"><span>A</span><div><h2>Activity And Training</h2><p>Add treadmill, scooter, and training entries for this dog.</p></div></div>
+            <div class="field-grid">
+              <label>Treadmill minutes<input type="number" id="ownedTreadmillMinutes" min="0" placeholder="Minutes" /></label>
+              <label>Scooter minutes<input type="number" id="ownedScooterMinutes" min="0" placeholder="Minutes" /></label>
+            </div>
+            <div class="button-row"><button type="button" id="addTreadmillLog">Add Treadmill Time</button><button type="button" id="addScooterLog">Add Scooter Time</button></div>
+            <label>Training progress entry<textarea id="ownedTrainingEntry" rows="3" placeholder="What was worked on today?"></textarea></label>
+            <button type="button" id="addTrainingLog">Add Training Entry</button>
+            <div id="ownedActivityHistory" class="record-grid"></div>
+          </section>
         </section>
       </section>
 
@@ -441,19 +463,23 @@
         <section class="form-section detail-panel" id="boardingDogDetail" hidden>
           <div class="section-heading"><span>E</span><div><h2 id="boardingDogDetailTitle">Add Boarding Dog</h2><p>Double click a row to edit an existing boarding dog.</p></div></div>
           <div class="alert-banner">Required Update From Owner: use this when vaccines, owner instructions, or boarding details need to be refreshed.</div>
+          <figure class="dog-profile-photo" id="boardingDogPhotoCard" hidden>
+            <img id="boardingDogPhotoPreview" alt="Boarding dog profile" />
+            <figcaption id="boardingDogPhotoName"></figcaption>
+          </figure>
           <form id="boardingDogForm" class="tracker-form">
             <input type="hidden" name="id" />
             <div class="field-grid">
               <label>Dog name<input type="text" name="dogName" required /></label>
               <label>Breed / description<input type="text" name="breedDescription" /></label>
+              <label>Profile photo<input type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/*" /></label>
+              <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Optional shared image link" /></label>
               <label>Owner name<input type="text" name="ownerName" required /></label>
               <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
               <label>Owner email<input type="email" name="ownerEmail" /></label>
               <label>Emergency contact name<input type="text" name="emergencyName" /></label>
               <label>Emergency contact phone<input type="tel" name="emergencyPhone" /></label>
               <label>Veterinarian / clinic<input type="text" name="vetInfo" /></label>
-              <label>Drop-off time<input type="datetime-local" name="dropoffTime" /></label>
-              <label>Pick-up time<input type="datetime-local" name="pickupTime" /></label>
               <label>Rabies vaccination<input type="date" name="rabiesDate" /></label>
               <label>DHPP vaccination<input type="date" name="dhppDate" /></label>
               <label>Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
@@ -476,6 +502,26 @@
             <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
             <div class="button-row"><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
           </form>
+
+          <section class="existing-only" id="boardingSchedulePanel" hidden>
+            <div class="section-heading compact-heading"><span>S</span><div><h2>Boarding Schedule And Requests</h2><p>Add boarding stays and service requests for this dog.</p></div></div>
+            <form id="boardingStayForm" class="tracker-form">
+              <div class="field-grid">
+                <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
+                <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
+              </div>
+              <div class="checklist compact">
+                <label><input type="checkbox" name="stayRequests" value="Bath requested" /> Bath requested</label>
+                <label><input type="checkbox" name="stayRequests" value="Nail trim requested" /> Nail trim requested</label>
+                <label><input type="checkbox" name="stayRequests" value="Paw trim requested" /> Paw trim requested</label>
+                <label><input type="checkbox" name="stayRequests" value="Training requested" /> Training requested</label>
+                <label><input type="checkbox" name="stayRequests" value="Exercise requested" /> Exercise requested</label>
+              </div>
+              <label>Stay notes<textarea name="stayNotes" rows="2" placeholder="Owner instructions or pickup grooming notes"></textarea></label>
+              <button type="submit">Add Boarding Stay</button>
+            </form>
+            <div id="boardingStayHistory" class="record-grid"></div>
+          </section>
         </section>
       </section>
 
@@ -490,6 +536,8 @@
             <div class="checklist">
               <label><input type="checkbox" name="urgentNeeds" value="Yes" /> Urgent Needs</label>
             </div>
+            <label>Request photo/video<input type="file" name="requestMedia" id="requestMedia" accept="image/*,video/*" multiple /></label>
+            <label>Shared request media link<textarea name="mediaLink" rows="2" placeholder="Paste a Google Drive, iCloud, or phone-shared link if available"></textarea></label>
             <label>Request / suggestion<textarea name="requestText" rows="4" required></textarea></label>
             <label>Reason or benefit<textarea name="reason" rows="3" placeholder="Why this helps kennel care, safety, efficiency, or dog comfort"></textarea></label>
             <button type="submit">Submit Request</button>

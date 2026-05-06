@@ -37,8 +37,11 @@ This is a review version of the kennel task tracking app.
 Best free option for this app:
 Use Google Sheets as the database with Google Apps Script as the backend. It is free for this scale and keeps the data somewhere you can review, filter, and export.
 
-Important limitation:
-The current GitHub Pages static site can easily submit data to Google Sheets, but reading/searching/updating existing rows from Google Sheets is harder from a static site because of browser security and Google Apps Script response limitations. For full persistent search and edit across devices, the best free setup is to host the app itself as a Google Apps Script Web App or add a small Apps Script API layer.
+Current setup:
+The app submits records to Google Sheets and also reads dog, boarding, request, maintenance, and timesheet records back from a `Database` tab using the Apps Script endpoint. This is what lets desktop and mobile share records.
+
+Important deployment note:
+Whenever `google-apps-script.js` changes, paste the updated code into Apps Script and redeploy a new web app version. Whenever `index.html`, `styles.css`, or `script.js` changes, upload the updated files to GitHub.
 
 Other options:
 - Wix CMS: easiest if already included in your Wix plan.
@@ -55,6 +58,16 @@ The current form lets helpers select photo/video files and paste a shared media 
 
 More advanced option:
 Apps Script can receive base64 file uploads and save them to Drive, but video files can hit size and speed limits. For reliability, pasted Drive links are better.
+
+## Dog Profile Photos
+
+The app supports profile photo upload previews and profile photo links. For reliable cross-device use, use the profile photo link field:
+
+1. Upload the dog photo to a shared Google Drive folder.
+2. Copy the share link.
+3. Paste it into the dog profile photo link field.
+
+Browser-uploaded image previews can work for small photos, but large images may not sync well through Google Sheets. Drive links are the safer long-term method.
 
 ## Wix Hosting Plan
 
@@ -97,6 +110,7 @@ The Apps Script creates these tabs as needed:
 - Requests
 - Maintenance
 - Timesheet
+- Database
 
 Urgent maintenance items automatically send an email to `centraltexashusky@gmail.com` after Apps Script is connected.
 

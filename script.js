@@ -5,6 +5,7 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const form = $("#kennelForm");
+const modeLabel = $("#modeLabel");
 const daySelect = $("#dayOfWeek");
 const mondaySection = $("#mondaySection");
 const tuesdaySection = $("#tuesdaySection");
@@ -76,6 +77,21 @@ function writeRecords(type, records) {
   localStorage.setItem(stateKeys[type], JSON.stringify(records));
 }
 
+function mergeRecords(type, incomingRecords) {
+  const byId = {};
+  [...readRecords(type), ...incomingRecords].forEach((record) => {
+    if (!record?.id) return;
+    const existing = byId[record.id];
+    if (!existing || new Date(record.updatedAt || record.submittedAt || 0) >= new Date(existing.updatedAt || existing.submittedAt || 0)) {
+      byId[record.id] = record;
+    }
+  });
+  writeRecords(
+    type,
+    Object.values(byId).sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0)),
+  );
+}
+
 function upsertRecord(type, payload) {
   const records = readRecords(type);
   const record = { ...payload, id: payload.id || uid(type), updatedAt: new Date().toISOString() };
@@ -100,6 +116,28 @@ function setFormValues(targetForm, record) {
     if (!field || field.type === "checkbox") return;
     field.value = value ?? "";
   });
+}
+
+function fileToDataUrl(input) {
+  const file = input.files?.[0];
+  if (!file) return Promise.resolve("");
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
+function setDogPhoto(kind, record) {
+  const isOwned = kind === "owned";
+  const card = isOwned ? $("#ownedDogPhotoCard") : $("#boardingDogPhotoCard");
+  const img = isOwned ? $("#ownedDogPhotoPreview") : $("#boardingDogPhotoPreview");
+  const caption = isOwned ? $("#ownedDogPhotoName") : $("#boardingDogPhotoName");
+  const name = isOwned ? record.callName : record.dogName;
+  const photo = record.profilePhotoData || record.profilePhotoUrl;
+  card.hidden = !photo;
+  if (photo) img.src = photo;
+  caption.textContent = name || "";
 }
 
 function showToast(message) {
@@ -165,12 +203,37 @@ function updateCompletionCount() {
 
 async function sendPayload(payload) {
   if (!GOOGLE_SCRIPT_URL) return;
-  await fetch(GOOGLE_SCRIPT_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  try {
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(payload),
+    });
+    modeLabel.textContent = "Live app";
+  } catch (error) {
+    modeLabel.textContent = "Offline copy";
+  }
+}
+
+function loadRemoteRecords() {
+  if (!GOOGLE_SCRIPT_URL) return;
+  const callbackName = `cthRemote_${Date.now()}`;
+  window[callbackName] = (data) => {
+    ["ownedDog", "boardingDog", "request", "maintenance", "timesheet"].forEach((type) => mergeRecords(type, data[type] || []));
+    renderAllRecords();
+    modeLabel.textContent = "Live app";
+    delete window[callbackName];
+    script.remove();
+  };
+  const script = document.createElement("script");
+  script.src = `${GOOGLE_SCRIPT_URL}?callback=${callbackName}`;
+  script.onerror = () => {
+    modeLabel.textContent = "Local copy";
+    delete window[callbackName];
+    script.remove();
+  };
+  document.body.appendChild(script);
 }
 
 function buildDailyPayload() {
@@ -196,7 +259,26 @@ function buildDailyPayload() {
     monthlyTasks: checkedFrom(form, "monthlyTasks"),
     suppliesLow: checkedFrom(form, "suppliesLow"),
     ownerNotes: data.get("ownerNotes"),
+    boardingTasks: upcomingBoardingTaskText(),
   };
+}
+
+function upcomingBoardingTaskText() {
+  const today = todayDate();
+  const tomorrow = addDays(today, 1);
+  const tasks = [];
+  readRecords("boardingDog").forEach((dog) => {
+    (dog.stays || []).forEach((stay) => {
+      if (stay.dropoffTime?.slice(0, 10) === today) tasks.push(`${dog.dogName} drop-off scheduled at ${formatDateTime(stay.dropoffTime)}.`);
+      if (stay.pickupTime?.slice(0, 10) === today) tasks.push(`${dog.dogName} pick-up scheduled at ${formatDateTime(stay.pickupTime)}.`);
+      if ((stay.requests || []).includes("Bath requested")) {
+        const pickupDate = stay.pickupTime?.slice(0, 10);
+        if (pickupDate === today) tasks.push(`${dog.dogName} bath requested. ${stay.bathPlan}`);
+        if (pickupDate === tomorrow) tasks.push(`${dog.dogName} bath requested for tomorrow pickup. Complete bath today if pickup is during busy kennel hours.`);
+      }
+    });
+  });
+  return tasks.join("\n");
 }
 
 function renderDemoSubmissions() {
@@ -237,6 +319,9 @@ function openOwnedDog(record = {}) {
   $("#ownedDogDetailTitle").textContent = record.id ? `Edit ${record.callName || "Dog"}` : "Add New Dog";
   $("#ourDogForm").reset();
   setFormValues($("#ourDogForm"), record);
+  setDogPhoto("owned", record);
+  $("#ownedDogActivityPanel").hidden = !record.id;
+  renderOwnedActivity(record);
   window.scrollTo({ top: $("#ownedDogDetail").offsetTop - 12, behavior: "smooth" });
 }
 
@@ -245,10 +330,65 @@ function openBoardingDog(record = {}) {
   $("#boardingDogDetailTitle").textContent = record.id ? `Edit ${record.dogName || "Boarding Dog"}` : "Add Boarding Dog";
   $("#boardingDogForm").reset();
   setFormValues($("#boardingDogForm"), record);
+  setDogPhoto("boarding", record);
+  $("#boardingSchedulePanel").hidden = !record.id;
   $$('input[name="boardingFlags"]').forEach((input) => {
     input.checked = (record.flags || []).includes(input.value);
   });
+  renderBoardingStays(record);
   window.scrollTo({ top: $("#boardingDogDetail").offsetTop - 12, behavior: "smooth" });
+}
+
+function activeOwnedDog() {
+  const id = $("#ourDogForm").elements.id.value;
+  return readRecords("ownedDog").find((record) => record.id === id);
+}
+
+function activeBoardingDog() {
+  const id = $("#boardingDogForm").elements.id.value;
+  return readRecords("boardingDog").find((record) => record.id === id);
+}
+
+function renderOwnedActivity(record = activeOwnedDog()) {
+  const logs = [...(record?.exerciseLogs || []), ...(record?.trainingLogs || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  $("#ownedActivityHistory").innerHTML = logs.length
+    ? logs.map((log) => `<article class="record-card"><strong>${log.type} - ${log.date}</strong><p>${log.minutes ? `${log.minutes} minutes` : ""}${log.note ? log.note : ""}</p></article>`).join("")
+    : "<p>No activity or training entries yet.</p>";
+}
+
+function addOwnedLog(type, minutes, note = "") {
+  const dog = activeOwnedDog();
+  if (!dog) {
+    showToast("Save the dog first.");
+    return;
+  }
+  const log = { id: uid("log"), type, date: todayDate(), minutes, note };
+  if (type === "Training") {
+    dog.trainingLogs = dog.trainingLogs || [];
+    dog.trainingLogs.unshift(log);
+  } else {
+    dog.exerciseLogs = dog.exerciseLogs || [];
+    dog.exerciseLogs.unshift(log);
+  }
+  const record = upsertRecord("ownedDog", dog);
+  sendPayload(record);
+  renderOwnedActivity(record);
+  renderOwnedDogs();
+  showToast(`${type} entry added.`);
+}
+
+function renderBoardingStays(record = activeBoardingDog()) {
+  const stays = record?.stays || [];
+  $("#boardingStayHistory").innerHTML = stays.length
+    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><p>${(stay.requests || []).join(", ") || "No service requests"}</p><p>${stay.bathPlan || ""}</p><p>${stay.stayNotes || ""}</p></article>`).join("")
+    : "<p>No boarding stays logged yet.</p>";
+}
+
+function bathPlanForStay(stay) {
+  if (!(stay.requests || []).includes("Bath requested")) return "";
+  const pickup = new Date(stay.pickupTime);
+  const peak = pickup.getHours() >= 9 && pickup.getHours() < 11;
+  return peak ? "Bath should be completed the day prior because pickup is during busy kennel hours." : "Bath can be done day-of if at least two hours are available before pickup.";
 }
 
 function renderRequests() {
@@ -352,16 +492,9 @@ function saveTimeEntry(payload) {
 }
 
 function initEvents() {
-  $("#menuToggle").addEventListener("click", () => $("#sidebar").classList.toggle("is-open"));
+  $("#mobilePageSelect").addEventListener("change", (event) => switchPage(event.target.value));
   $$(".nav-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      $$(".nav-button").forEach((item) => item.classList.remove("is-active"));
-      $$(".page-view").forEach((page) => page.classList.remove("is-active"));
-      button.classList.add("is-active");
-      $(`#${button.dataset.page}`)?.classList.add("is-active");
-      $("#sidebar").classList.remove("is-open");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    });
+    button.addEventListener("click", () => switchPage(button.dataset.page));
   });
 
   $("#reviewLoginButton").addEventListener("click", () => setHelper({ name: "Ms. Yuko", email: "review-helper@centraltexashusky.com", key: "review" }));
@@ -420,12 +553,36 @@ function initEvents() {
   });
   $("#ourDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const payload = { type: "ownedDog", submittedAt: new Date().toISOString(), ...formPayload(event.currentTarget) };
+    const existing = activeOwnedDog() || {};
+    const photoData = await fileToDataUrl($("#ownedDogPhotoInput"));
+    const payload = {
+      ...existing,
+      type: "ownedDog",
+      submittedAt: existing.submittedAt || new Date().toISOString(),
+      ...formPayload(event.currentTarget),
+      profilePhotoData: photoData || existing.profilePhotoData || "",
+      exerciseLogs: existing.exerciseLogs || [],
+      trainingLogs: existing.trainingLogs || [],
+    };
     const record = upsertRecord("ownedDog", payload);
     await sendPayload(record);
-    $("#ownedDogDetail").hidden = true;
+    $("#ownedDogActivityPanel").hidden = false;
+    setDogPhoto("owned", record);
+    renderOwnedActivity(record);
     renderOwnedDogs();
     showToast("Dog record saved.");
+  });
+  $("#addTreadmillLog").addEventListener("click", () => {
+    addOwnedLog("Treadmill", Number($("#ownedTreadmillMinutes").value || 0));
+    $("#ownedTreadmillMinutes").value = "";
+  });
+  $("#addScooterLog").addEventListener("click", () => {
+    addOwnedLog("Scooter", Number($("#ownedScooterMinutes").value || 0));
+    $("#ownedScooterMinutes").value = "";
+  });
+  $("#addTrainingLog").addEventListener("click", () => {
+    addOwnedLog("Training", "", $("#ownedTrainingEntry").value);
+    $("#ownedTrainingEntry").value = "";
   });
 
   $("#boardingDogSearch").addEventListener("input", renderBoardingDogs);
@@ -438,17 +595,56 @@ function initEvents() {
   });
   $("#boardingDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const payload = { type: "boardingDog", submittedAt: new Date().toISOString(), ...formPayload(event.currentTarget), flags: checkedFrom(event.currentTarget, "boardingFlags") };
+    const existing = activeBoardingDog() || {};
+    const photoData = await fileToDataUrl($("#boardingDogPhotoInput"));
+    const payload = {
+      ...existing,
+      type: "boardingDog",
+      submittedAt: existing.submittedAt || new Date().toISOString(),
+      ...formPayload(event.currentTarget),
+      flags: checkedFrom(event.currentTarget, "boardingFlags"),
+      profilePhotoData: photoData || existing.profilePhotoData || "",
+      stays: existing.stays || [],
+    };
     const record = upsertRecord("boardingDog", payload);
     await sendPayload(record);
-    $("#boardingDogDetail").hidden = true;
+    $("#boardingSchedulePanel").hidden = false;
+    setDogPhoto("boarding", record);
+    renderBoardingStays(record);
     renderBoardingDogs();
     showToast("Boarding dog record saved.");
+  });
+  $("#boardingStayForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const dog = activeBoardingDog();
+    if (!dog) {
+      showToast("Save the boarding dog first.");
+      return;
+    }
+    const payload = formPayload(event.currentTarget);
+    const stay = {
+      id: uid("stay"),
+      createdAt: new Date().toISOString(),
+      dropoffTime: payload.dropoffTime,
+      pickupTime: payload.pickupTime,
+      requests: checkedFrom(event.currentTarget, "stayRequests"),
+      stayNotes: payload.stayNotes,
+    };
+    stay.bathPlan = bathPlanForStay(stay);
+    dog.stays = dog.stays || [];
+    dog.stays.unshift(stay);
+    const record = upsertRecord("boardingDog", dog);
+    await sendPayload(record);
+    renderBoardingStays(record);
+    renderBoardingDogs();
+    event.currentTarget.reset();
+    showToast("Boarding stay added.");
   });
 
   $("#requestForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), ...formPayload(event.currentTarget), urgentNeeds: event.currentTarget.querySelector('input[name="urgentNeeds"]').checked };
+    const files = [...$("#requestMedia").files].map((file) => file.name).join(", ");
+    const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), ...formPayload(event.currentTarget), mediaFiles: files, urgentNeeds: event.currentTarget.querySelector('input[name="urgentNeeds"]').checked };
     upsertRecord("request", payload);
     await sendPayload(payload);
     if (payload.urgentNeeds) emailNow("Urgent Kennel Request", `Urgent kennel request submitted.\n\nRequested by: ${payload.requestedBy}\nCategory: ${payload.category}\nRequest: ${payload.requestText}\nReason: ${payload.reason}`);
@@ -470,6 +666,13 @@ function initEvents() {
   });
 }
 
+function switchPage(pageId) {
+  $$(".nav-button").forEach((item) => item.classList.toggle("is-active", item.dataset.page === pageId));
+  $$(".page-view").forEach((page) => page.classList.toggle("is-active", page.id === pageId));
+  $("#mobilePageSelect").value = pageId;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 setDefaultDateAndDay();
 updateConditionalSections();
 updateRotationBanner();
@@ -479,3 +682,4 @@ renderDemoSubmissions();
 loadHelperFromUrl();
 initEvents();
 renderAllRecords();
+loadRemoteRecords();

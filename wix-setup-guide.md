@@ -91,10 +91,17 @@ const GOOGLE_SCRIPT_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 The script writes to separate tabs for daily reports, owned dogs, boarding dogs, requests, and maintenance. If a maintenance item is marked urgent, Apps Script sends an email to `centraltexashusky@gmail.com`.
 
 Database recommendation:
-Google Sheets is the best free starting database. If you need every device to search and update existing records live, consider hosting the app as a Google Apps Script Web App or moving the dog database into Wix CMS.
+Google Sheets is the best free starting database. This app uses a `Database` tab for cross-device records and separate tabs for readable operational logs.
+
+When updating:
+- Upload `index.html`, `styles.css`, and `script.js` to GitHub.
+- Paste updated `google-apps-script.js` into Apps Script and redeploy a new web app version.
 
 Maintenance media recommendation:
 Create a Google Drive folder called `Kennel Maintenance Media`. Helpers can upload photos/videos there and paste the share link into the Maintenance form. This is more reliable than trying to email large videos directly from the browser.
+
+Dog photo recommendation:
+Create a Google Drive folder called `Dog Profile Photos`. Upload profile photos there and paste the share link into the profile photo link field. This keeps photos available across desktop and mobile without storing large images inside the Sheet.
 
 ## Final Helper Message
 

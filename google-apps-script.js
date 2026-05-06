@@ -7,6 +7,15 @@ const ALLOWED_HELPER_KEYS = [];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 const SPREADSHEET_ID = "1K25et0at9uOi57I28gRzk3dISsQorLV7Zgd8rLoh6QU";
 
+function doGet(e) {
+  const callback = e.parameter.callback;
+  const data = readDatabase();
+  const text = callback ? `${callback}(${JSON.stringify(data)});` : JSON.stringify(data);
+  return ContentService.createTextOutput(text).setMimeType(
+    callback ? ContentService.MimeType.JAVASCRIPT : ContentService.MimeType.JSON,
+  );
+}
+
 function doPost(e) {
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   const payload = JSON.parse(e.postData.contents);
@@ -86,25 +95,28 @@ function appendKennelReport(spreadsheet, payload) {
 
 function appendOwnedDog(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Our Dogs") || spreadsheet.insertSheet("Our Dogs");
-  const headers = ["Submitted At", "Call Name", "Show Name", "DOB", "Sex", "Rabies", "DHPP", "Heartworm", "Last Bath", "Next Bath", "Last Heat", "Next Heat", "Food Amount", "Treadmill Minutes", "Scooter Minutes", "Training Progress", "Special Care", "Notes"];
+  const headers = ["Submitted At", "ID", "Call Name", "Show Name", "Photo Link", "DOB", "Sex", "Rabies", "DHPP", "Heartworm", "Last Bath", "Next Bath", "Last Heat", "Next Heat", "Food Amount", "Exercise Logs", "Training Logs", "Special Care", "Notes"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.callName, payload.showName, payload.dateOfBirth, payload.sex, payload.rabiesDate, payload.dhppDate, payload.heartwormDate, payload.lastBath, payload.nextBath, payload.lastHeat, payload.nextHeat, payload.foodAmount, payload.treadmillMinutes, payload.scooterMinutes, payload.trainingProgress, payload.specialCare, payload.notes]);
+  sheet.appendRow([payload.submittedAt, payload.id, payload.callName, payload.showName, payload.profilePhotoUrl, payload.dateOfBirth, payload.sex, payload.rabiesDate, payload.dhppDate, payload.heartwormDate, payload.lastBath, payload.nextBath, payload.lastHeat, payload.nextHeat, payload.foodAmount, JSON.stringify(payload.exerciseLogs || []), JSON.stringify(payload.trainingLogs || []), payload.specialCare, payload.notes]);
+  appendDatabaseRecord(payload);
   return ok();
 }
 
 function appendBoardingDog(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Boarding Dogs") || spreadsheet.insertSheet("Boarding Dogs");
-  const headers = ["Submitted At", "Dog Name", "Breed", "Owner", "Owner Phone", "Owner Email", "Emergency Name", "Emergency Phone", "Vet Info", "Drop-off", "Pick-up", "Rabies", "DHPP", "Bordetella", "Heartworm", "Flags", "Special Care", "Daily Activity", "Boarding History"];
+  const headers = ["Submitted At", "ID", "Dog Name", "Photo Link", "Breed", "Owner", "Owner Phone", "Owner Email", "Emergency Name", "Emergency Phone", "Vet Info", "Rabies", "DHPP", "Bordetella", "Heartworm", "Flags", "Stays", "Special Care", "Daily Activity", "Boarding History"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.dogName, payload.breedDescription, payload.ownerName, payload.ownerPhone, payload.ownerEmail, payload.emergencyName, payload.emergencyPhone, payload.vetInfo, payload.dropoffTime, payload.pickupTime, payload.rabiesDate, payload.dhppDate, payload.bordetellaDate, payload.heartwormDate, (payload.flags || []).join(", "), payload.specialCare, payload.dailyActivity, payload.boardingHistory]);
+  sheet.appendRow([payload.submittedAt, payload.id, payload.dogName, payload.profilePhotoUrl, payload.breedDescription, payload.ownerName, payload.ownerPhone, payload.ownerEmail, payload.emergencyName, payload.emergencyPhone, payload.vetInfo, payload.rabiesDate, payload.dhppDate, payload.bordetellaDate, payload.heartwormDate, (payload.flags || []).join(", "), JSON.stringify(payload.stays || []), payload.specialCare, payload.dailyActivity, payload.boardingHistory]);
+  appendDatabaseRecord(payload);
   return ok();
 }
 
 function appendRequest(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Requests") || spreadsheet.insertSheet("Requests");
-  const headers = ["Submitted At", "Requested By", "Category", "Urgent", "Request", "Reason"];
+  const headers = ["Submitted At", "Requested By", "Category", "Urgent", "Request", "Reason", "Media Link", "Media Files"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.requestedBy, payload.category, payload.urgentNeeds ? "Yes" : "No", payload.requestText, payload.reason]);
+  sheet.appendRow([payload.submittedAt, payload.requestedBy, payload.category, payload.urgentNeeds ? "Yes" : "No", payload.requestText, payload.reason, payload.mediaLink, payload.mediaFiles]);
+  appendDatabaseRecord(payload);
   if (payload.urgentNeeds && OWNER_ALERT_EMAIL) {
     MailApp.sendEmail({
       to: OWNER_ALERT_EMAIL,
@@ -120,6 +132,7 @@ function appendMaintenance(spreadsheet, payload) {
   const headers = ["Submitted At", "Reported By", "Location", "Urgent", "Issue", "Media Link", "Media Files", "Suggested Action"];
   ensureHeaders(sheet, headers);
   sheet.appendRow([payload.submittedAt, payload.reportedBy, payload.location, payload.urgentAttention ? "Yes" : "No", payload.issue, payload.mediaLink, payload.mediaFiles, payload.suggestedAction]);
+  appendDatabaseRecord(payload);
   if (payload.urgentAttention && OWNER_ALERT_EMAIL) {
     MailApp.sendEmail({
       to: OWNER_ALERT_EMAIL,
@@ -135,7 +148,34 @@ function appendTimesheet(spreadsheet, payload) {
   const headers = ["Submitted At", "Date", "Helper Name", "Helper Email", "Clock In", "Clock Out", "Hours", "Note"];
   ensureHeaders(sheet, headers);
   sheet.appendRow([payload.submittedAt, payload.date, payload.helperName, payload.helperEmail, payload.clockInTime, payload.clockOutTime, payload.hours, payload.note]);
+  appendDatabaseRecord(payload);
   return ok();
+}
+
+function appendDatabaseRecord(payload) {
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = spreadsheet.getSheetByName("Database") || spreadsheet.insertSheet("Database");
+  ensureHeaders(sheet, ["Updated At", "Type", "ID", "Payload JSON"]);
+  sheet.appendRow([payload.updatedAt || payload.submittedAt || new Date().toISOString(), payload.type, payload.id || "", JSON.stringify(payload)]);
+}
+
+function readDatabase() {
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = spreadsheet.getSheetByName("Database");
+  const data = { ownedDog: [], boardingDog: [], request: [], maintenance: [], timesheet: [] };
+  if (!sheet || sheet.getLastRow() < 2) return data;
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+  const latest = {};
+  rows.forEach((row) => {
+    const type = row[1];
+    const id = row[2];
+    const json = row[3];
+    if (!data[type] || !id || !json) return;
+    const record = JSON.parse(json);
+    latest[`${type}:${id}`] = record;
+  });
+  Object.values(latest).forEach((record) => data[record.type]?.push(record));
+  return data;
 }
 
 function ensureHeaders(sheet, headers) {
