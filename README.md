@@ -30,6 +30,31 @@ This is a review version of the kennel task tracking app.
 - Boarding Dogs: owner contact, emergency contact, vet authorization, boarding schedule, vaccine records, required owner updates, special care, daily owner updates, and requested services
 - Request: items needed and good-to-have suggestions from kennel help
 - Maintenance: repairs or attention needed, with an Urgent Attention option
+- Timesheet: clock in/out, manual entries, current-week records, and last week/month/year summaries
+
+## Free Persistent Database Options
+
+Best free option for this app:
+Use Google Sheets as the database with Google Apps Script as the backend. It is free for this scale and keeps the data somewhere you can review, filter, and export.
+
+Important limitation:
+The current GitHub Pages static site can easily submit data to Google Sheets, but reading/searching/updating existing rows from Google Sheets is harder from a static site because of browser security and Google Apps Script response limitations. For full persistent search and edit across devices, the best free setup is to host the app itself as a Google Apps Script Web App or add a small Apps Script API layer.
+
+Other options:
+- Wix CMS: easiest if already included in your Wix plan.
+- Firebase free tier: good app database, more technical setup.
+- Supabase free tier: good app database, more technical setup.
+
+## Maintenance Media
+
+The current form lets helpers select photo/video files and paste a shared media link. Email links cannot automatically attach local files from a browser. Best workflow:
+
+1. Helper uploads photo/video to a shared Google Drive folder.
+2. Helper pastes the Drive link into the Maintenance form.
+3. If Urgent Attention is checked, the email includes the pasted link.
+
+More advanced option:
+Apps Script can receive base64 file uploads and save them to Drive, but video files can hit size and speed limits. For reliability, pasted Drive links are better.
 
 ## Wix Hosting Plan
 
@@ -71,6 +96,7 @@ The Apps Script creates these tabs as needed:
 - Boarding Dogs
 - Requests
 - Maintenance
+- Timesheet
 
 Urgent maintenance items automatically send an email to `centraltexashusky@gmail.com` after Apps Script is connected.
 

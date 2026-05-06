@@ -18,6 +18,7 @@ function doPost(e) {
   if (payload.type === "boardingDog") return appendBoardingDog(spreadsheet, payload);
   if (payload.type === "request") return appendRequest(spreadsheet, payload);
   if (payload.type === "maintenance") return appendMaintenance(spreadsheet, payload);
+  if (payload.type === "timesheet") return appendTimesheet(spreadsheet, payload);
 
   return appendKennelReport(spreadsheet, payload);
 }
@@ -100,24 +101,39 @@ function appendBoardingDog(spreadsheet, payload) {
 
 function appendRequest(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Requests") || spreadsheet.insertSheet("Requests");
-  const headers = ["Submitted At", "Requested By", "Category", "Request", "Reason"];
+  const headers = ["Submitted At", "Requested By", "Category", "Urgent", "Request", "Reason"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.requestedBy, payload.category, payload.requestText, payload.reason]);
+  sheet.appendRow([payload.submittedAt, payload.requestedBy, payload.category, payload.urgentNeeds ? "Yes" : "No", payload.requestText, payload.reason]);
+  if (payload.urgentNeeds && OWNER_ALERT_EMAIL) {
+    MailApp.sendEmail({
+      to: OWNER_ALERT_EMAIL,
+      subject: "Urgent Kennel Request",
+      body: `Urgent kennel request submitted.\n\nRequested by: ${payload.requestedBy}\nCategory: ${payload.category}\nRequest: ${payload.requestText}\nReason: ${payload.reason}\n\nPlease review right away.`,
+    });
+  }
   return ok();
 }
 
 function appendMaintenance(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Maintenance") || spreadsheet.insertSheet("Maintenance");
-  const headers = ["Submitted At", "Reported By", "Location", "Urgent", "Issue", "Suggested Action"];
+  const headers = ["Submitted At", "Reported By", "Location", "Urgent", "Issue", "Media Link", "Media Files", "Suggested Action"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.reportedBy, payload.location, payload.urgentAttention ? "Yes" : "No", payload.issue, payload.suggestedAction]);
+  sheet.appendRow([payload.submittedAt, payload.reportedBy, payload.location, payload.urgentAttention ? "Yes" : "No", payload.issue, payload.mediaLink, payload.mediaFiles, payload.suggestedAction]);
   if (payload.urgentAttention && OWNER_ALERT_EMAIL) {
     MailApp.sendEmail({
       to: OWNER_ALERT_EMAIL,
       subject: "Urgent Kennel Maintenance Attention Needed",
-      body: `Urgent maintenance item submitted.\n\nLocation: ${payload.location}\nReported by: ${payload.reportedBy}\nIssue: ${payload.issue}\nSuggested action: ${payload.suggestedAction}\n\nPlease address or schedule right away.`,
+      body: `Urgent maintenance item submitted.\n\nLocation: ${payload.location}\nReported by: ${payload.reportedBy}\nIssue: ${payload.issue}\nSuggested action: ${payload.suggestedAction}\nMedia link: ${payload.mediaLink || "No link provided"}\nFiles selected: ${payload.mediaFiles || "None"}\n\nPlease address or schedule right away.`,
     });
   }
+  return ok();
+}
+
+function appendTimesheet(spreadsheet, payload) {
+  const sheet = spreadsheet.getSheetByName("Timesheet") || spreadsheet.insertSheet("Timesheet");
+  const headers = ["Submitted At", "Date", "Helper Name", "Helper Email", "Clock In", "Clock Out", "Hours", "Note"];
+  ensureHeaders(sheet, headers);
+  sheet.appendRow([payload.submittedAt, payload.date, payload.helperName, payload.helperEmail, payload.clockInTime, payload.clockOutTime, payload.hours, payload.note]);
   return ok();
 }
 

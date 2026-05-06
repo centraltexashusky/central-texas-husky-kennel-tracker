@@ -7,6 +7,7 @@ Host the kennel tracker so Ms. Yuko or another kennel helper can click a private
 The app now includes sidebar sections for:
 
 - Daily Tasks
+- Timesheet
 - Our Dogs
 - Boarding Dogs
 - Request
@@ -88,6 +89,12 @@ const GOOGLE_SCRIPT_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 ```
 
 The script writes to separate tabs for daily reports, owned dogs, boarding dogs, requests, and maintenance. If a maintenance item is marked urgent, Apps Script sends an email to `centraltexashusky@gmail.com`.
+
+Database recommendation:
+Google Sheets is the best free starting database. If you need every device to search and update existing records live, consider hosting the app as a Google Apps Script Web App or moving the dog database into Wix CMS.
+
+Maintenance media recommendation:
+Create a Google Drive folder called `Kennel Maintenance Media`. Helpers can upload photos/videos there and paste the share link into the Maintenance form. This is more reliable than trying to email large videos directly from the browser.
 
 ## Final Helper Message
 
