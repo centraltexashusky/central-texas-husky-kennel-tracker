@@ -59,6 +59,7 @@ function appendKennelReport(spreadsheet, payload) {
     "Monthly Tasks",
     "Supplies Low",
     "Owner Notes",
+    "Boarding Tasks",
   ];
 
   if (sheet.getLastRow() === 0) {
@@ -88,6 +89,7 @@ function appendKennelReport(spreadsheet, payload) {
     (payload.monthlyTasks || []).join(", "),
     (payload.suppliesLow || []).join(", "),
     payload.ownerNotes,
+    payload.boardingTasks,
   ]);
 
   return ok();
@@ -95,18 +97,18 @@ function appendKennelReport(spreadsheet, payload) {
 
 function appendOwnedDog(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Our Dogs") || spreadsheet.insertSheet("Our Dogs");
-  const headers = ["Submitted At", "ID", "Call Name", "Show Name", "Photo Link", "DOB", "Sex", "Rabies", "DHPP", "Heartworm", "Last Bath", "Next Bath", "Last Heat", "Next Heat", "Food Amount", "Exercise Logs", "Training Logs", "Special Care", "Notes"];
+  const headers = ["Submitted At", "ID", "Call Name", "Show Name", "Photo Link", "DOB", "Sex", "Spayed / Neutered", "Rabies", "Rabies Good 3 Years", "DHPP", "Heartworm", "Last Bath", "Next Bath", "Last Heat", "Next Heat", "Food Amount", "Exercise Logs", "Training Logs", "Special Care", "Notes"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.id, payload.callName, payload.showName, payload.profilePhotoUrl, payload.dateOfBirth, payload.sex, payload.rabiesDate, payload.dhppDate, payload.heartwormDate, payload.lastBath, payload.nextBath, payload.lastHeat, payload.nextHeat, payload.foodAmount, JSON.stringify(payload.exerciseLogs || []), JSON.stringify(payload.trainingLogs || []), payload.specialCare, payload.notes]);
+  sheet.appendRow([payload.submittedAt, payload.id, payload.callName, payload.showName, payload.profilePhotoUrl, payload.dateOfBirth, payload.sex, payload.spayNeuterStatus, payload.rabiesDate, payload.rabiesGoodThreeYears, payload.dhppDate, payload.heartwormDate, payload.lastBath, payload.nextBath, payload.lastHeat, payload.nextHeat, payload.foodAmount, JSON.stringify(payload.exerciseLogs || []), JSON.stringify(payload.trainingLogs || []), payload.specialCare, payload.notes]);
   appendDatabaseRecord(payload);
   return ok();
 }
 
 function appendBoardingDog(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Boarding Dogs") || spreadsheet.insertSheet("Boarding Dogs");
-  const headers = ["Submitted At", "ID", "Dog Name", "Photo Link", "Breed", "Owner", "Owner Phone", "Owner Email", "Emergency Name", "Emergency Phone", "Vet Info", "Rabies", "DHPP", "Bordetella", "Heartworm", "Flags", "Stays", "Special Care", "Daily Activity", "Boarding History"];
+  const headers = ["Submitted At", "ID", "Dog Name", "Photo Link", "Breed", "Sex", "Spayed / Neutered", "Owner", "Owner Phone", "Owner Email", "Emergency Name", "Emergency Phone", "Vet Info", "Rabies", "Rabies Good 3 Years", "DHPP", "Bordetella", "Heartworm", "Flags", "Stays", "Special Care", "Daily Activity", "Boarding History"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.id, payload.dogName, payload.profilePhotoUrl, payload.breedDescription, payload.ownerName, payload.ownerPhone, payload.ownerEmail, payload.emergencyName, payload.emergencyPhone, payload.vetInfo, payload.rabiesDate, payload.dhppDate, payload.bordetellaDate, payload.heartwormDate, (payload.flags || []).join(", "), JSON.stringify(payload.stays || []), payload.specialCare, payload.dailyActivity, payload.boardingHistory]);
+  sheet.appendRow([payload.submittedAt, payload.id, payload.dogName, payload.profilePhotoUrl, payload.breedDescription, payload.sex, payload.spayNeuterStatus, payload.ownerName, payload.ownerPhone, payload.ownerEmail, payload.emergencyName, payload.emergencyPhone, payload.vetInfo, payload.rabiesDate, payload.rabiesGoodThreeYears, payload.dhppDate, payload.bordetellaDate, payload.heartwormDate, (payload.flags || []).join(", "), JSON.stringify(payload.stays || []), payload.specialCare, payload.dailyActivity, payload.boardingHistory]);
   appendDatabaseRecord(payload);
   return ok();
 }

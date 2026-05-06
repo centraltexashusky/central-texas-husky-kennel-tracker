@@ -29,7 +29,7 @@
           <p class="eyebrow">Central Texas Husky</p>
           <h1>Kennel Task Tracker</h1>
           <p class="subhead">
-            Complete this before leaving each shift. The final version will send each submission to the kennel tracking Google Sheet.
+            Complete this before leaving each shift. Records are sent to the kennel tracking Google Sheet.
           </p>
         </div>
         <div class="status-card" aria-live="polite">
@@ -40,7 +40,7 @@
 
       <section class="notice">
         <strong>Connected tracker:</strong>
-        Submissions are sent to the kennel Google Sheet. If the connection is unavailable, this device keeps a temporary local copy.
+        Records are sent to the kennel Google Sheet and loaded back into the app for desktop and mobile review.
       </section>
 
       <label class="mobile-page-menu">
@@ -61,18 +61,22 @@
           <div class="section-heading">
             <span>0</span>
             <div>
-              <h2>Helper Access</h2>
-              <p>Use a private helper link so the name and email are attached to the report.</p>
+              <h2>Helper PIN Login</h2>
+              <p>Enter the assigned 4 digit helper PIN before submitting records.</p>
             </div>
           </div>
 
           <div class="login-panel" id="loginPanel">
             <div>
               <strong id="loginStatus">Helper not loaded</strong>
-              <p id="loginHelp">Open this page with a private helper link, or use review access for testing.</p>
+              <p id="loginHelp">Helper name and email will fill in after PIN login.</p>
             </div>
             <div class="login-actions">
-              <button type="button" class="secondary-button" id="reviewLoginButton">Review Access</button>
+              <label class="pin-field">
+                Helper PIN
+                <input type="password" id="helperPinInput" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="****" autocomplete="off" />
+              </label>
+              <button type="button" class="secondary-button" id="helperPinLoginButton">Login</button>
               <button type="button" class="secondary-button" id="clearHelperButton" hidden>Clear Helper</button>
             </div>
           </div>
@@ -95,12 +99,12 @@
 
             <label>
               Kennel helper
-              <input type="text" name="helperName" id="helperName" placeholder="Private link fills this automatically" readonly required />
+              <input type="text" name="helperName" id="helperName" placeholder="PIN login fills this automatically" readonly required />
             </label>
 
             <label>
               Helper email
-              <input type="text" name="helperEmail" id="helperEmail" placeholder="Private link fills this automatically" readonly required />
+              <input type="text" name="helperEmail" id="helperEmail" placeholder="PIN login fills this automatically" readonly required />
             </label>
 
             <input type="hidden" name="helperKey" id="helperKey" />
@@ -306,8 +310,8 @@
         <div class="section-heading">
           <span>R</span>
           <div>
-            <h2>Recent Demo Submissions</h2>
-            <p>These are saved only in this browser for review.</p>
+            <h2>Recent Submissions</h2>
+            <p>Recent kennel reports submitted from this device.</p>
           </div>
         </div>
         <div id="recentSubmissions" class="submission-list"></div>
@@ -406,18 +410,20 @@
             <div class="field-grid">
               <label>Call name<input type="text" name="callName" required /></label>
               <label>Show name<input type="text" name="showName" /></label>
-              <label>Profile photo<input type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/*" /></label>
-              <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Optional shared image link" /></label>
+              <label>Profile photo required<input type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/*" /></label>
+              <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Use a shared image link if not uploading" /></label>
               <label>Date of birth<input type="date" name="dateOfBirth" /></label>
-              <label>Sex<select name="sex" id="ownedDogSex"><option>Male</option><option>Female</option></select></label>
+              <label>Sex<select name="sex" id="ownedDogSex" required><option>Male</option><option>Female</option></select></label>
+              <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
               <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
-              <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
+              <label class="inline-check"><input type="checkbox" name="rabiesGoodThreeYears" value="Yes" /> Rabies good for 3 years from last vaccination</label>
+              <label id="ownedDhppLabel">Last DHPP vaccination <span id="ownedDhppWarning" class="vaccine-warning"></span><input type="date" name="dhppDate" id="ownedDhppDate" /></label>
               <label>Last heartworm medication<input type="date" name="heartwormDate" /></label>
               <label>Last bath<input type="date" name="lastBath" id="ownedLastBath" /></label>
               <label>Next scheduled bath<input type="date" name="nextBath" id="ownedNextBath" readonly /></label>
               <label>Food amount currently eating<input type="text" name="foodAmount" placeholder="Example: 2 cups AM, 2 cups PM" /></label>
-              <label>Last heat cycle<input type="date" name="lastHeat" id="ownedLastHeat" /></label>
-              <label>Estimated next heat cycle<input type="date" name="nextHeat" id="ownedNextHeat" readonly /></label>
+              <label id="ownedLastHeatLabel">Last heat cycle<input type="date" name="lastHeat" id="ownedLastHeat" /></label>
+              <label id="ownedNextHeatLabel">Estimated next heat cycle<input type="date" name="nextHeat" id="ownedNextHeat" readonly /></label>
             </div>
             <label>Medication or special care notes<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
             <label>General notes<textarea name="notes" rows="3"></textarea></label>
@@ -472,15 +478,18 @@
             <div class="field-grid">
               <label>Dog name<input type="text" name="dogName" required /></label>
               <label>Breed / description<input type="text" name="breedDescription" /></label>
-              <label>Profile photo<input type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/*" /></label>
-              <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Optional shared image link" /></label>
+              <label>Profile photo required<input type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/*" /></label>
+              <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Use a shared image link if not uploading" /></label>
+              <label>Sex<select name="sex" required><option value="">Select sex</option><option>Male</option><option>Female</option><option>Unknown</option></select></label>
+              <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
               <label>Owner name<input type="text" name="ownerName" required /></label>
               <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
               <label>Owner email<input type="email" name="ownerEmail" /></label>
-              <label>Emergency contact name<input type="text" name="emergencyName" /></label>
-              <label>Emergency contact phone<input type="tel" name="emergencyPhone" /></label>
+              <label>Emergency contact name<input type="text" name="emergencyName" required /></label>
+              <label>Emergency contact phone<input type="tel" name="emergencyPhone" required /></label>
               <label>Veterinarian / clinic<input type="text" name="vetInfo" /></label>
               <label>Rabies vaccination<input type="date" name="rabiesDate" /></label>
+              <label class="inline-check"><input type="checkbox" name="rabiesGoodThreeYears" value="Yes" /> Rabies good for 3 years from last vaccination</label>
               <label>DHPP vaccination<input type="date" name="dhppDate" /></label>
               <label>Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
               <label>Heartworm medication<input type="date" name="heartwormDate" /></label>

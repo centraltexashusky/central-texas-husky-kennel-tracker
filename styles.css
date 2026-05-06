@@ -233,6 +233,15 @@ h2 {
   background: #f6f8f7;
 }
 
+.data-table tr.is-current-boarding td {
+  background: #e2f3e7;
+  border-bottom-color: #b7d9c2;
+}
+
+.data-table tr.is-current-boarding:hover td {
+  background: #d6ecd9;
+}
+
 .detail-panel {
   border-color: #bdd2d0;
   box-shadow: inset 4px 0 0 var(--teal), var(--shadow);
@@ -347,6 +356,15 @@ h2 {
   justify-content: flex-end;
 }
 
+.pin-field {
+  gap: 5px;
+  min-width: 150px;
+}
+
+.pin-field input {
+  text-align: center;
+}
+
 .tracker-form,
 .recent-submissions {
   display: grid;
@@ -398,6 +416,41 @@ label {
   display: grid;
   font-weight: 700;
   gap: 8px;
+}
+
+.inline-check {
+  align-items: center;
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  min-height: 46px;
+  padding: 10px 12px;
+}
+
+.inline-check input {
+  accent-color: var(--teal);
+  height: 20px;
+  width: 20px;
+}
+
+.is-disabled-field {
+  color: #8a9a9d;
+  opacity: 0.58;
+}
+
+.vaccine-warning {
+  font-weight: 900;
+  margin-left: 6px;
+}
+
+.is-orange-warning {
+  color: #b76c16;
+}
+
+.is-red-warning {
+  color: var(--red);
 }
 
 input[type="date"],

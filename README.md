@@ -8,17 +8,17 @@ This is a review version of the kennel task tracking app.
 - Works well on phone or desktop
 - Lets the kennel helper check off daily tasks
 - Adds sidebar sections for Daily Tasks, Our Dogs, Boarding Dogs, Request, and Maintenance
-- Uses a private helper link to fill helper name and email
+- Uses a 4 digit helper PIN to fill helper name and email
 - Includes a clock-in and clock-out timesheet section
 - Shows Monday weekly tasks
 - Shows Tuesday trash task
 - Shows monthly deep-clean rotation
-- Saves demo submissions in the browser only
+- Sends records to Google Sheets and keeps recent submissions visible on the page
 
 ## What It Will Do After Google Sheet Setup
 
 - The owner emails or texts the page link to the kennel helper
-- The helper opens the private link
+- The helper opens the app link and enters their assigned PIN
 - The helper clocks in, completes the checklist, clocks out, and submits the daily report
 - The page sends the report to a Google Sheet
 - The owner reviews daily task history, timesheets, dog records, boarding records, requests, maintenance issues, health notes, supplies, and social content ideas in one place
@@ -77,15 +77,18 @@ Use Wix Velo with a Wix-hosted custom element. Wix documentation says custom ele
 Simpler alternative:
 Host this folder on a small static host such as GitHub Pages or Netlify and embed it into Wix using an HTML iframe. This is easier, but it means the app itself is not hosted by Wix.
 
-## Private Helper Link
+## Helper PIN Login
 
-Use a private link like this:
+Helper PINs are set near the top of `script.js`:
 
-```text
-https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/?helper=Ms.%20Yuko&email=yuko@example.com&key=cth-yuko
+```js
+const HELPER_PINS = {
+  "1001": { name: "Ms. Yuko", email: "yuko@centraltexashusky.com", key: "helper-yuko" },
+  "1002": { name: "Lexi", email: "lexi@centraltexashusky.com", key: "helper-lexi" },
+};
 ```
 
-Replace the email with the correct helper email. The `key` value is a simple private identifier that can be stored with each submission.
+Update the PINs and helper emails before publishing. The PIN field is hidden on screen as `****`.
 
 This avoids Google Cloud, OAuth, and paid subscription confusion.
 
@@ -137,9 +140,9 @@ Hi Ms. Yuko,
 
 Please clock in and complete the kennel checklist here:
 
-[Insert private helper link]
+[Insert app link]
 
-At the end of the shift, please let the dogs out again between 1:00 PM and 1:30 PM, pick up after them, spend a little social/play time with them, take a photo or video for social media, clock out, and submit the report.
+Enter your assigned 4 digit PIN when the page opens. At the end of the shift, please let the dogs out again between 1:00 PM and 1:30 PM, pick up after them, spend a little social/play time with them, take a photo or video for social media, clock out, and submit the report.
 
 Thank you,
 

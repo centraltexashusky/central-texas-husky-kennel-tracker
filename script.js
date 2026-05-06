@@ -15,6 +15,11 @@ const helperKey = $("#helperKey");
 const loginStatus = $("#loginStatus");
 const loginHelp = $("#loginHelp");
 
+const HELPER_PINS = {
+  "1001": { name: "Ms. Yuko", email: "yuko@centraltexashusky.com", key: "helper-yuko" },
+  "1002": { name: "Lexi", email: "lexi@centraltexashusky.com", key: "helper-lexi" },
+};
+
 const stateKeys = {
   ownedDog: "cth-ownedDog-records",
   boardingDog: "cth-boardingDog-records",
@@ -113,7 +118,11 @@ function checkedFrom(targetForm, name) {
 function setFormValues(targetForm, record) {
   Object.entries(record).forEach(([key, value]) => {
     const field = targetForm.elements[key];
-    if (!field || field.type === "checkbox") return;
+    if (!field) return;
+    if (field.type === "checkbox") {
+      field.checked = value === "Yes" || value === true;
+      return;
+    }
     field.value = value ?? "";
   });
 }
@@ -155,8 +164,8 @@ function setHelper(user) {
   $("#manualHelper").value = user.name || "";
   $("#timesheetHelperDisplay").textContent = user.name || "No helper loaded";
   loginStatus.textContent = user.name ? `Helper loaded: ${user.name}` : "Helper loaded";
-  loginHelp.textContent = user.email || "Review mode helper account";
-  $("#reviewLoginButton").hidden = true;
+  loginHelp.textContent = user.email || "PIN helper account";
+  $("#helperPinInput").value = "";
   $("#clearHelperButton").hidden = false;
 }
 
@@ -167,17 +176,20 @@ function clearHelper() {
   $("#manualHelper").value = "";
   $("#timesheetHelperDisplay").textContent = "No helper loaded";
   loginStatus.textContent = "Helper not loaded";
-  loginHelp.textContent = "Open this page with a private helper link, or use review access for testing.";
-  $("#reviewLoginButton").hidden = false;
+  loginHelp.textContent = "Helper name and email will fill in after PIN login.";
+  $("#helperPinInput").value = "";
   $("#clearHelperButton").hidden = true;
 }
 
-function loadHelperFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const name = params.get("helper") || params.get("name");
-  const email = params.get("email");
-  const key = params.get("key");
-  if (name && email && key) setHelper({ name, email, key });
+function loginWithPin() {
+  const pin = $("#helperPinInput").value.trim();
+  const helper = HELPER_PINS[pin];
+  if (!helper) {
+    showToast("PIN not recognized.");
+    return;
+  }
+  setHelper(helper);
+  showToast(`${helper.name} is logged in.`);
 }
 
 function getDeepCleanBuilding(date = new Date()) {
@@ -212,7 +224,7 @@ async function sendPayload(payload) {
     });
     modeLabel.textContent = "Live app";
   } catch (error) {
-    modeLabel.textContent = "Offline copy";
+    modeLabel.textContent = "Sync pending";
   }
 }
 
@@ -229,7 +241,7 @@ function loadRemoteRecords() {
   const script = document.createElement("script");
   script.src = `${GOOGLE_SCRIPT_URL}?callback=${callbackName}`;
   script.onerror = () => {
-    modeLabel.textContent = "Local copy";
+    modeLabel.textContent = "Sync pending";
     delete window[callbackName];
     script.remove();
   };
@@ -287,7 +299,7 @@ function renderDemoSubmissions() {
     ? saved
         .map((submission) => `<article class="submission-item"><strong>${submission.date} - ${submission.helperName}</strong><p>${submission.dayOfWeek} | ${submission.dailyTasks.length} daily tasks | ${submission.healthConcern}</p><p>Social: ${submission.socialContent || "No content note"}</p></article>`)
         .join("")
-    : "<p>No demo submissions yet.</p>";
+    : "<p>No recent submissions yet.</p>";
 }
 
 function matches(record, query) {
@@ -306,12 +318,30 @@ function renderOwnedDogs() {
 
 function renderBoardingDogs() {
   const query = $("#boardingDogSearch").value || "";
-  const records = readRecords("boardingDog").filter((record) => matches(record, query));
+  const records = readRecords("boardingDog")
+    .filter((record) => matches(record, query))
+    .sort((a, b) => Number(isCurrentlyBoarding(b)) - Number(isCurrentlyBoarding(a)));
   $("#boardingDogTableBody").innerHTML = records.length
     ? records
-        .map((record) => `<tr data-id="${record.id}"><td>${record.dogName || ""}</td><td>${record.ownerName || ""}</td><td>${record.ownerPhone || ""}</td><td>${record.dropoffTime || ""}</td><td>${record.pickupTime || ""}</td><td>${record.flags?.includes("Required update from owner") ? "Yes" : "No"}</td><td>${(record.flags || []).filter((flag) => flag.includes("requested")).join(", ")}</td></tr>`)
+        .map((record) => {
+          const stay = currentOrNextStay(record);
+          const rowClass = isCurrentlyBoarding(record) ? " class=\"is-current-boarding\"" : "";
+          return `<tr data-id="${record.id}"${rowClass}><td>${record.dogName || ""}</td><td>${record.ownerName || ""}</td><td>${record.ownerPhone || ""}</td><td>${formatDateTime(stay?.dropoffTime) || ""}</td><td>${formatDateTime(stay?.pickupTime) || ""}</td><td>${record.flags?.includes("Required update from owner") ? "Yes" : "No"}</td><td>${[...(record.flags || []).filter((flag) => flag.includes("requested")), ...((stay?.requests || []).filter((flag) => flag.includes("requested")))].join(", ")}</td></tr>`;
+        })
         .join("")
     : `<tr><td colspan="7">No matching boarding dogs. Use Add New Dog.</td></tr>`;
+}
+
+function currentOrNextStay(record) {
+  const now = new Date();
+  return [...(record.stays || [])]
+    .sort((a, b) => new Date(a.dropoffTime) - new Date(b.dropoffTime))
+    .find((stay) => new Date(stay.pickupTime) >= now) || null;
+}
+
+function isCurrentlyBoarding(record) {
+  const now = new Date();
+  return (record.stays || []).some((stay) => new Date(stay.dropoffTime) <= now && new Date(stay.pickupTime) >= now);
 }
 
 function openOwnedDog(record = {}) {
@@ -322,6 +352,7 @@ function openOwnedDog(record = {}) {
   setDogPhoto("owned", record);
   $("#ownedDogActivityPanel").hidden = !record.id;
   renderOwnedActivity(record);
+  updateOwnedDogConditionalFields();
   window.scrollTo({ top: $("#ownedDogDetail").offsetTop - 12, behavior: "smooth" });
 }
 
@@ -337,6 +368,38 @@ function openBoardingDog(record = {}) {
   });
   renderBoardingStays(record);
   window.scrollTo({ top: $("#boardingDogDetail").offsetTop - 12, behavior: "smooth" });
+}
+
+function updateOwnedDogConditionalFields() {
+  const sex = $("#ownedDogSex").value;
+  const female = sex === "Female";
+  [$("#ownedLastHeat"), $("#ownedNextHeat")].forEach((field) => {
+    field.disabled = !female;
+    if (!female) field.value = "";
+  });
+  [$("#ownedLastHeatLabel"), $("#ownedNextHeatLabel")].forEach((label) => label.classList.toggle("is-disabled-field", !female));
+  updateDhppWarning();
+}
+
+function updateDhppWarning() {
+  const value = $("#ownedDhppDate").value;
+  const warning = $("#ownedDhppWarning");
+  const label = $("#ownedDhppLabel");
+  warning.textContent = "";
+  label.classList.remove("is-orange-warning", "is-red-warning");
+  if (!value) return;
+  const monthsOld = (new Date() - new Date(`${value}T12:00:00`)) / (1000 * 60 * 60 * 24 * 30.4375);
+  if (monthsOld >= 12) {
+    warning.textContent = "! Over 1 year";
+    label.classList.add("is-red-warning");
+  } else if (monthsOld >= 11) {
+    warning.textContent = "! 11 months old";
+    label.classList.add("is-orange-warning");
+  }
+}
+
+function hasRequiredPhoto(existing, photoInput, photoLink) {
+  return Boolean(existing.profilePhotoData || existing.profilePhotoUrl || photoInput.files?.[0] || photoLink);
 }
 
 function activeOwnedDog() {
@@ -497,7 +560,13 @@ function initEvents() {
     button.addEventListener("click", () => switchPage(button.dataset.page));
   });
 
-  $("#reviewLoginButton").addEventListener("click", () => setHelper({ name: "Ms. Yuko", email: "review-helper@centraltexashusky.com", key: "review" }));
+  $("#helperPinLoginButton").addEventListener("click", loginWithPin);
+  $("#helperPinInput").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      loginWithPin();
+    }
+  });
   $("#clearHelperButton").addEventListener("click", clearHelper);
   form.addEventListener("change", () => {
     updateCompletionCount();
@@ -543,6 +612,8 @@ function initEvents() {
 
   $("#ownedLastBath").addEventListener("change", () => ($("#ownedNextBath").value = addMonths($("#ownedLastBath").value, 1)));
   $("#ownedLastHeat").addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, 183)));
+  $("#ownedDogSex").addEventListener("change", updateOwnedDogConditionalFields);
+  $("#ownedDhppDate").addEventListener("change", updateDhppWarning);
   $("#ownedDogSearch").addEventListener("input", renderOwnedDogs);
   $("#addOwnedDogButton").addEventListener("click", () => openOwnedDog());
   $("#cancelOwnedDogEdit").addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
@@ -554,12 +625,21 @@ function initEvents() {
   $("#ourDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const existing = activeOwnedDog() || {};
+    const formData = formPayload(event.currentTarget);
+    if (!hasRequiredPhoto(existing, $("#ownedDogPhotoInput"), formData.profilePhotoUrl)) {
+      showToast("Add a profile photo or shared photo link before saving this dog.");
+      return;
+    }
     const photoData = await fileToDataUrl($("#ownedDogPhotoInput"));
+    const isFemale = formData.sex === "Female";
     const payload = {
       ...existing,
       type: "ownedDog",
       submittedAt: existing.submittedAt || new Date().toISOString(),
-      ...formPayload(event.currentTarget),
+      ...formData,
+      rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
+      lastHeat: isFemale ? formData.lastHeat : "",
+      nextHeat: isFemale ? formData.nextHeat : "",
       profilePhotoData: photoData || existing.profilePhotoData || "",
       exerciseLogs: existing.exerciseLogs || [],
       trainingLogs: existing.trainingLogs || [],
@@ -596,12 +676,18 @@ function initEvents() {
   $("#boardingDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const existing = activeBoardingDog() || {};
+    const formData = formPayload(event.currentTarget);
+    if (!hasRequiredPhoto(existing, $("#boardingDogPhotoInput"), formData.profilePhotoUrl)) {
+      showToast("Add a profile photo or shared photo link before saving this boarding dog.");
+      return;
+    }
     const photoData = await fileToDataUrl($("#boardingDogPhotoInput"));
     const payload = {
       ...existing,
       type: "boardingDog",
       submittedAt: existing.submittedAt || new Date().toISOString(),
-      ...formPayload(event.currentTarget),
+      ...formData,
+      rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
       flags: checkedFrom(event.currentTarget, "boardingFlags"),
       profilePhotoData: photoData || existing.profilePhotoData || "",
       stays: existing.stays || [],
@@ -679,7 +765,6 @@ updateRotationBanner();
 updateCompletionCount();
 updateTimeDisplays();
 renderDemoSubmissions();
-loadHelperFromUrl();
 initEvents();
 renderAllRecords();
 loadRemoteRecords();
