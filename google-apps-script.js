@@ -5,9 +5,10 @@
 
 const ALLOWED_HELPER_KEYS = [];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
+const SPREADSHEET_ID = "1K25et0at9uOi57I28gRzk3dISsQorLV7Zgd8rLoh6QU";
 
 function doPost(e) {
-  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   const payload = JSON.parse(e.postData.contents);
 
   if (ALLOWED_HELPER_KEYS.length && !ALLOWED_HELPER_KEYS.includes(payload.helperKey)) {

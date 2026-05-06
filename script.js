@@ -1,4 +1,4 @@
-const GOOGLE_SCRIPT_URL = "";
+const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxDHHMANZoq4vz4PwwTuz4yn8MBUfFcKfTwZ0PDdOnaYQcFBqA8BF9xUF_X0-xnrXFD5w/exec";
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 
 const $ = (selector) => document.querySelector(selector);
