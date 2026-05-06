@@ -14,12 +14,16 @@
           <span>Kennel Ops</span>
         </div>
         <nav class="side-nav" aria-label="Kennel tracker sections">
-          <button class="nav-button is-active" type="button" data-page="timesheetPage">Timesheet</button>
-          <button class="nav-button" type="button" data-page="dailyPage">Daily Tasks</button>
-          <button class="nav-button" type="button" data-page="ourDogsPage">Our Dogs</button>
-          <button class="nav-button" type="button" data-page="boardingDogsPage">Boarding Dogs</button>
-          <button class="nav-button" type="button" data-page="requestsPage">Request</button>
-          <button class="nav-button" type="button" data-page="maintenancePage">Maintenance</button>
+          <button class="nav-button is-active" type="button" data-page="loginPage" data-roles="public">Login</button>
+          <button class="nav-button" type="button" data-page="dashboardPage" data-roles="admin">Owner Dashboard</button>
+          <button class="nav-button" type="button" data-page="timesheetPage" data-roles="helper,admin">Timesheet</button>
+          <button class="nav-button" type="button" data-page="dailyPage" data-roles="helper,admin">Daily Tasks</button>
+          <button class="nav-button" type="button" data-page="ourDogsPage" data-roles="helper,admin">Our Dogs</button>
+          <button class="nav-button" type="button" data-page="boardingDogsPage" data-roles="helper,admin">Boarding Dogs</button>
+          <button class="nav-button" type="button" data-page="requestsPage" data-roles="helper,admin">Request</button>
+          <button class="nav-button" type="button" data-page="maintenancePage" data-roles="helper,admin">Maintenance</button>
+          <button class="nav-button" type="button" data-page="servicesPage" data-roles="admin">Services & Pricing</button>
+          <button class="nav-button" type="button" data-page="financialsPage" data-roles="admin">Financials</button>
         </nav>
       </aside>
 
@@ -35,6 +39,7 @@
         <div class="status-card" aria-live="polite">
           <span class="status-dot"></span>
           <span id="modeLabel">Live app</span>
+          <button type="button" class="sync-button" id="syncNowButton">Sync now</button>
         </div>
       </header>
 
@@ -46,14 +51,60 @@
       <label class="mobile-page-menu">
         Menu
         <select id="mobilePageSelect">
+          <option value="loginPage" data-roles="public">Login</option>
+          <option value="dashboardPage" data-roles="admin">Owner Dashboard</option>
           <option value="timesheetPage">Timesheet</option>
           <option value="dailyPage">Daily Tasks</option>
           <option value="ourDogsPage">Our Dogs</option>
           <option value="boardingDogsPage">Boarding Dogs</option>
           <option value="requestsPage">Request</option>
           <option value="maintenancePage">Maintenance</option>
+          <option value="servicesPage" data-roles="admin">Services & Pricing</option>
+          <option value="financialsPage" data-roles="admin">Financials</option>
         </select>
       </label>
+
+      <section class="page-view is-active" id="loginPage">
+        <section class="form-section">
+          <div class="section-heading">
+            <span>0</span>
+            <div>
+              <h2>Login</h2>
+              <p>Enter your assigned PIN. This device will remember the login until you sign out.</p>
+            </div>
+          </div>
+
+          <div class="login-panel" id="loginPanel">
+            <div>
+              <strong id="loginStatus">Not logged in</strong>
+              <p id="loginHelp">Helpers use their 4 digit PIN. Admin uses the owner/admin PIN.</p>
+            </div>
+            <div class="login-actions">
+              <label class="pin-field">
+                PIN
+                <input type="password" id="helperPinInput" inputmode="numeric" maxlength="6" pattern="[0-9]{4,6}" placeholder="****" autocomplete="off" />
+              </label>
+              <button type="button" class="secondary-button" id="helperPinLoginButton">Login</button>
+              <button type="button" class="secondary-button" id="clearHelperButton" hidden>Sign Out</button>
+            </div>
+          </div>
+
+          <div class="role-note">
+            <strong>Access rules:</strong> helpers can use timesheets, daily tasks, dogs, requests, and maintenance. Admin can also see dashboard, pricing, and financials.
+          </div>
+        </section>
+      </section>
+
+      <section class="page-view" id="dashboardPage">
+        <section class="form-section">
+          <div class="section-heading"><span>D</span><div><h2>Owner Dashboard</h2><p>High-level kennel view for today.</p></div></div>
+          <div class="dashboard-grid" id="dashboardCards"></div>
+        </section>
+        <section class="recent-submissions">
+          <div class="section-heading"><span>!</span><div><h2>Attention Needed</h2><p>Operations, health, and owner follow-up items.</p></div></div>
+          <div class="record-grid" id="dashboardAlerts"></div>
+        </section>
+      </section>
 
       <section class="page-view" id="dailyPage">
       <form id="kennelForm" class="tracker-form">
@@ -67,23 +118,10 @@
           </div>
 
           <div class="field-grid">
-            <label>
-              Date
-              <input type="date" name="date" required />
-            </label>
-
-            <label>
-              Kennel helper
-              <input type="text" name="helperName" id="helperName" placeholder="PIN login fills this automatically" readonly required />
-            </label>
-
-            <label>
-              Helper email
-              <input type="text" name="helperEmail" id="helperEmail" placeholder="PIN login fills this automatically" readonly required />
-            </label>
-
+            <label>Date<input type="date" name="date" required /></label>
+            <label>Kennel helper<input type="text" name="helperName" id="helperName" placeholder="PIN login fills this automatically" readonly required /></label>
+            <label>Helper email<input type="text" name="helperEmail" id="helperEmail" placeholder="PIN login fills this automatically" readonly required /></label>
             <input type="hidden" name="helperKey" id="helperKey" />
-
             <label>
               Day
               <select name="dayOfWeek" id="dayOfWeek" required>
@@ -293,32 +331,7 @@
       </section>
       </section>
 
-      <section class="page-view is-active" id="timesheetPage">
-        <section class="form-section">
-          <div class="section-heading">
-            <span>0</span>
-            <div>
-              <h2>Helper PIN Login</h2>
-              <p>Enter the assigned 4 digit helper PIN to activate the kennel tracker menus.</p>
-            </div>
-          </div>
-
-          <div class="login-panel" id="loginPanel">
-            <div>
-              <strong id="loginStatus">Helper not loaded</strong>
-              <p id="loginHelp">Helper name and email will fill in after PIN login.</p>
-            </div>
-            <div class="login-actions">
-              <label class="pin-field">
-                Helper PIN
-                <input type="password" id="helperPinInput" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="****" autocomplete="off" />
-              </label>
-              <button type="button" class="secondary-button" id="helperPinLoginButton">Login</button>
-              <button type="button" class="secondary-button" id="clearHelperButton" hidden>Clear Helper</button>
-            </div>
-          </div>
-        </section>
-
+      <section class="page-view" id="timesheetPage">
         <section class="form-section">
           <div class="section-heading">
             <span>T</span>
@@ -401,16 +414,23 @@
 
         <section class="form-section detail-panel" id="ownedDogDetail" hidden>
           <div class="section-heading"><span>E</span><div><h2 id="ownedDogDetailTitle">Add New Dog</h2><p>Double click a row to edit an existing dog.</p></div></div>
-          <figure class="dog-profile-photo" id="ownedDogPhotoCard" hidden>
-            <img id="ownedDogPhotoPreview" alt="Dog profile" />
-            <figcaption id="ownedDogPhotoName"></figcaption>
-          </figure>
           <form id="ourDogForm" class="tracker-form">
             <input type="hidden" name="id" />
+            <div class="dog-profile-editor">
+              <button type="button" class="dog-photo-picker" id="ownedDogPhotoPicker" aria-label="Choose profile photo for this dog">
+                <img id="ownedDogPhotoPreview" alt="" hidden />
+                <span id="ownedDogPhotoInitials">Dog</span>
+              </button>
+              <div>
+                <strong id="ownedDogPhotoName">New dog</strong>
+                <span class="required-mark">Photo required</span>
+                <p>Tap the square to add or change the profile photo.</p>
+                <input class="visually-hidden-file" type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/*" tabindex="-1" />
+              </div>
+            </div>
             <div class="field-grid">
               <label>Call name<input type="text" name="callName" required /></label>
               <label>Show name<input type="text" name="showName" /></label>
-              <label>Profile photo required<input type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/*" /></label>
               <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Use a shared image link if not uploading" /></label>
               <label>Date of birth<input type="date" name="dateOfBirth" /></label>
               <label>Sex<select name="sex" id="ownedDogSex" required><option>Male</option><option>Female</option></select></label>
@@ -469,16 +489,23 @@
         <section class="form-section detail-panel" id="boardingDogDetail" hidden>
           <div class="section-heading"><span>E</span><div><h2 id="boardingDogDetailTitle">Add Boarding Dog</h2><p>Double click a row to edit an existing boarding dog.</p></div></div>
           <div class="alert-banner">Required Update From Owner: use this when vaccines, owner instructions, or boarding details need to be refreshed.</div>
-          <figure class="dog-profile-photo" id="boardingDogPhotoCard" hidden>
-            <img id="boardingDogPhotoPreview" alt="Boarding dog profile" />
-            <figcaption id="boardingDogPhotoName"></figcaption>
-          </figure>
           <form id="boardingDogForm" class="tracker-form">
             <input type="hidden" name="id" />
+            <div class="dog-profile-editor">
+              <button type="button" class="dog-photo-picker" id="boardingDogPhotoPicker" aria-label="Choose profile photo for this boarding dog">
+                <img id="boardingDogPhotoPreview" alt="" hidden />
+                <span id="boardingDogPhotoInitials">Dog</span>
+              </button>
+              <div>
+                <strong id="boardingDogPhotoName">New boarding dog</strong>
+                <span class="required-mark">Photo required</span>
+                <p>Tap the square to add or change the profile photo.</p>
+                <input class="visually-hidden-file" type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/*" tabindex="-1" />
+              </div>
+            </div>
             <div class="field-grid">
               <label>Dog name<input type="text" name="dogName" required /></label>
               <label>Breed / description<input type="text" name="breedDescription" /></label>
-              <label>Profile photo required<input type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/*" /></label>
               <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Use a shared image link if not uploading" /></label>
               <label>Sex<select name="sex" required><option value="">Select sex</option><option>Male</option><option>Female</option><option>Unknown</option></select></label>
               <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
@@ -552,7 +579,7 @@
             <button type="submit">Submit Request</button>
           </form>
         </section>
-        <section class="recent-submissions"><div class="section-heading"><span>R</span><div><h2>Recent Requests</h2><p>Review-mode records saved in this browser.</p></div></div><div id="requestRecords" class="record-grid"></div></section>
+        <section class="recent-submissions"><div class="section-heading"><span>R</span><div><h2>Recent Requests</h2><p>Active requests are shown first. Completed history can be shown when needed.</p></div></div><label class="toggle-row"><input type="checkbox" id="showCompletedRequests" /> Show completed requests</label><div id="requestRecords" class="record-grid"></div></section>
       </section>
 
       <section class="page-view" id="maintenancePage">
@@ -573,7 +600,58 @@
             <button type="submit">Submit Maintenance Item</button>
           </form>
         </section>
-        <section class="recent-submissions"><div class="section-heading"><span>R</span><div><h2>Recent Maintenance Items</h2><p>Urgent items can trigger an owner email after Google Sheet/Apps Script connection.</p></div></div><div id="maintenanceRecords" class="record-grid"></div></section>
+        <section class="recent-submissions"><div class="section-heading"><span>R</span><div><h2>Recent Maintenance Items</h2><p>Active items are shown first. Completed history can be shown when needed.</p></div></div><label class="toggle-row"><input type="checkbox" id="showCompletedMaintenance" /> Show completed maintenance</label><div id="maintenanceRecords" class="record-grid"></div></section>
+      </section>
+
+      <section class="page-view" id="servicesPage">
+        <section class="form-section">
+          <div class="section-heading"><span>$</span><div><h2>Services & Pricing</h2><p>Admin-only catalog for puppies, deposits, add-ons, boarding, yard rental, grooming, and training.</p></div></div>
+          <form id="serviceForm" class="tracker-form">
+            <input type="hidden" name="id" />
+            <div class="field-grid">
+              <label>Service name<input type="text" name="serviceName" required placeholder="Example: Husky De-shed" /></label>
+              <label>Category<select name="category" required><option>Puppy placement</option><option>Deposit</option><option>Boarding</option><option>Grooming</option><option>Training</option><option>Exercise</option><option>Private yard rental</option><option>Fee / surcharge</option></select></label>
+              <label>Base price<input type="number" name="basePrice" min="0" step="0.01" required /></label>
+              <label>Unit<select name="unit" required><option>per service</option><option>per dog/hour</option><option>per night</option><option>per day</option><option>per session</option><option>per puppy</option><option>flat deposit</option></select></label>
+              <label>Deposit amount<input type="number" name="depositAmount" min="0" step="0.01" placeholder="Optional" /></label>
+              <label>Default duration<input type="text" name="defaultDuration" placeholder="Example: 60 minutes" /></label>
+            </div>
+            <div class="checklist compact">
+              <label><input type="checkbox" name="serviceFlags" value="Active" checked /> Active</label>
+              <label><input type="checkbox" name="serviceFlags" value="Admin only" /> Admin only</label>
+              <label><input type="checkbox" name="serviceFlags" value="Alumni only" /> Alumni only</label>
+              <label><input type="checkbox" name="serviceFlags" value="Vaccine proof required" /> Vaccine proof required</label>
+              <label><input type="checkbox" name="serviceFlags" value="Owner bookable later" /> Owner bookable later</label>
+              <label><input type="checkbox" name="serviceFlags" value="Taxable" /> Taxable</label>
+            </div>
+            <label>Pricing notes / guardrails<textarea name="pricingNotes" rows="3" placeholder="What is included, price justification, discount rules, or contract notes"></textarea></label>
+            <div class="button-row"><button type="submit">Save Service</button><button type="button" class="secondary-button" id="resetServiceForm">New Service</button></div>
+          </form>
+        </section>
+        <section class="recent-submissions">
+          <div class="section-heading"><span>P</span><div><h2>Pricing Catalog</h2><p>Double click a row to edit. Use this as the admin source of truth for services.</p></div></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Service</th><th>Category</th><th>Price</th><th>Unit</th><th>Deposit</th><th>Flags</th></tr></thead>
+              <tbody id="serviceTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="page-view" id="financialsPage">
+        <section class="form-section">
+          <div class="section-heading"><span>F</span><div><h2>Financials</h2><p>Admin-only financial cockpit. These are planning metrics, not tax/accounting records.</p></div></div>
+          <div class="dashboard-grid" id="financialCards"></div>
+        </section>
+        <section class="recent-submissions">
+          <div class="section-heading"><span>C</span><div><h2>CFO Notes</h2><p>Pricing guardrails from the current research pass.</p></div></div>
+          <div class="record-grid">
+            <article class="record-card"><strong>Older puppy pricing</strong><p>Current $2,500 pricing should show clear proof of value: training, health records, temperament, AKC status, and included support.</p></article>
+            <article class="record-card"><strong>Deposit guardrail</strong><p>Review deposits above $500 or 20% of purchase price before using them publicly.</p></article>
+            <article class="record-card"><strong>Private yard rental</strong><p>Start around $10-$12 per dog/hour; test premium $15-$20 blocks when shade, water, privacy, and photo-friendly features are ready.</p></article>
+          </div>
+        </section>
       </section>
     </main>
     </div>
