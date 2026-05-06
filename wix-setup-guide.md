@@ -4,6 +4,14 @@
 
 Host the kennel tracker so Ms. Yuko or another kennel helper can click a private link, clock in, complete the checklist, clock out, and submit the information into a Google Sheet.
 
+The app now includes sidebar sections for:
+
+- Daily Tasks
+- Our Dogs
+- Boarding Dogs
+- Request
+- Maintenance
+
 ## Recommended Launch Path
 
 For the first live version, use this practical path:
@@ -78,6 +86,8 @@ Replace `yuko@example.com` with the correct helper email.
 ```js
 const GOOGLE_SCRIPT_URL = "YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
 ```
+
+The script writes to separate tabs for daily reports, owned dogs, boarding dogs, requests, and maintenance. If a maintenance item is marked urgent, Apps Script sends an email to `centraltexashusky@gmail.com`.
 
 ## Final Helper Message
 

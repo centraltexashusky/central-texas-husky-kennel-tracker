@@ -34,10 +34,72 @@ textarea {
   font: inherit;
 }
 
+.app-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #173138;
+  color: #fff;
+  min-height: 100vh;
+  padding: 22px 16px;
+  position: sticky;
+  top: 0;
+}
+
+.sidebar-brand {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  display: grid;
+  gap: 5px;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+}
+
+.sidebar-brand strong {
+  font-size: 1rem;
+}
+
+.sidebar-brand span {
+  color: #bad0cf;
+}
+
+.side-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-button {
+  background: transparent;
+  color: #e8efee;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
+}
+
+.nav-button:hover,
+.nav-button.is-active {
+  background: #f1c96f;
+  color: #1f2d36;
+}
+
+.menu-toggle {
+  display: none;
+}
+
 .app-shell {
   margin: 0 auto;
   max-width: 1120px;
   padding: 28px 18px 48px;
+}
+
+.page-view {
+  display: none;
+}
+
+.page-view.is-active {
+  display: block;
 }
 
 .page-header {
@@ -106,6 +168,16 @@ h2 {
   color: #5e4a12;
   margin-bottom: 18px;
   padding: 14px 16px;
+}
+
+.alert-banner {
+  background: #fff7e0;
+  border: 1px solid #efd385;
+  border-radius: 8px;
+  color: #5e4a12;
+  font-weight: 800;
+  margin-bottom: 16px;
+  padding: 12px 14px;
 }
 
 .login-panel {
@@ -186,6 +258,10 @@ label {
 }
 
 input[type="date"],
+input[type="datetime-local"],
+input[type="email"],
+input[type="number"],
+input[type="tel"],
 input[type="text"],
 select,
 textarea {
@@ -196,6 +272,35 @@ textarea {
   min-height: 46px;
   padding: 10px 12px;
   width: 100%;
+}
+
+.record-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.record-card {
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+}
+
+.record-card strong {
+  font-size: 1rem;
+}
+
+.record-card span,
+.record-card p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.record-card.is-urgent {
+  border-color: #bf4e45;
+  box-shadow: inset 4px 0 0 #bf4e45;
 }
 
 textarea {
@@ -367,6 +472,38 @@ button:hover {
 }
 
 @media (max-width: 760px) {
+  .app-layout {
+    display: block;
+  }
+
+  .menu-toggle {
+    background: var(--ink);
+    bottom: 86px;
+    color: #fff;
+    display: block;
+    left: 12px;
+    position: fixed;
+    z-index: 20;
+  }
+
+  .sidebar {
+    bottom: 0;
+    box-shadow: var(--shadow);
+    left: 0;
+    max-width: 280px;
+    min-height: 100vh;
+    position: fixed;
+    top: 0;
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+    width: 82vw;
+    z-index: 19;
+  }
+
+  .sidebar.is-open {
+    transform: translateX(0);
+  }
+
   .app-shell {
     padding: 18px 12px 38px;
   }

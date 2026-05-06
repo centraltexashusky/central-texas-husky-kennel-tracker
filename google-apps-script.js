@@ -4,16 +4,26 @@
 // Optional: set helper keys below to reject unknown/private links.
 
 const ALLOWED_HELPER_KEYS = [];
+const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 
 function doPost(e) {
-  const sheetName = "Kennel Reports";
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = spreadsheet.getSheetByName(sheetName) || spreadsheet.insertSheet(sheetName);
   const payload = JSON.parse(e.postData.contents);
 
   if (ALLOWED_HELPER_KEYS.length && !ALLOWED_HELPER_KEYS.includes(payload.helperKey)) {
     throw new Error("Unknown helper key.");
   }
+
+  if (payload.type === "ownedDog") return appendOwnedDog(spreadsheet, payload);
+  if (payload.type === "boardingDog") return appendBoardingDog(spreadsheet, payload);
+  if (payload.type === "request") return appendRequest(spreadsheet, payload);
+  if (payload.type === "maintenance") return appendMaintenance(spreadsheet, payload);
+
+  return appendKennelReport(spreadsheet, payload);
+}
+
+function appendKennelReport(spreadsheet, payload) {
+  const sheet = spreadsheet.getSheetByName("Kennel Reports") || spreadsheet.insertSheet("Kennel Reports");
 
   const headers = [
     "Submitted At",
@@ -69,5 +79,54 @@ function doPost(e) {
     payload.ownerNotes,
   ]);
 
+  return ok();
+}
+
+function appendOwnedDog(spreadsheet, payload) {
+  const sheet = spreadsheet.getSheetByName("Our Dogs") || spreadsheet.insertSheet("Our Dogs");
+  const headers = ["Submitted At", "Call Name", "Show Name", "DOB", "Sex", "Rabies", "DHPP", "Heartworm", "Last Bath", "Next Bath", "Last Heat", "Next Heat", "Food Amount", "Treadmill Minutes", "Scooter Minutes", "Training Progress", "Special Care", "Notes"];
+  ensureHeaders(sheet, headers);
+  sheet.appendRow([payload.submittedAt, payload.callName, payload.showName, payload.dateOfBirth, payload.sex, payload.rabiesDate, payload.dhppDate, payload.heartwormDate, payload.lastBath, payload.nextBath, payload.lastHeat, payload.nextHeat, payload.foodAmount, payload.treadmillMinutes, payload.scooterMinutes, payload.trainingProgress, payload.specialCare, payload.notes]);
+  return ok();
+}
+
+function appendBoardingDog(spreadsheet, payload) {
+  const sheet = spreadsheet.getSheetByName("Boarding Dogs") || spreadsheet.insertSheet("Boarding Dogs");
+  const headers = ["Submitted At", "Dog Name", "Breed", "Owner", "Owner Phone", "Owner Email", "Emergency Name", "Emergency Phone", "Vet Info", "Drop-off", "Pick-up", "Rabies", "DHPP", "Bordetella", "Heartworm", "Flags", "Special Care", "Daily Activity", "Boarding History"];
+  ensureHeaders(sheet, headers);
+  sheet.appendRow([payload.submittedAt, payload.dogName, payload.breedDescription, payload.ownerName, payload.ownerPhone, payload.ownerEmail, payload.emergencyName, payload.emergencyPhone, payload.vetInfo, payload.dropoffTime, payload.pickupTime, payload.rabiesDate, payload.dhppDate, payload.bordetellaDate, payload.heartwormDate, (payload.flags || []).join(", "), payload.specialCare, payload.dailyActivity, payload.boardingHistory]);
+  return ok();
+}
+
+function appendRequest(spreadsheet, payload) {
+  const sheet = spreadsheet.getSheetByName("Requests") || spreadsheet.insertSheet("Requests");
+  const headers = ["Submitted At", "Requested By", "Category", "Request", "Reason"];
+  ensureHeaders(sheet, headers);
+  sheet.appendRow([payload.submittedAt, payload.requestedBy, payload.category, payload.requestText, payload.reason]);
+  return ok();
+}
+
+function appendMaintenance(spreadsheet, payload) {
+  const sheet = spreadsheet.getSheetByName("Maintenance") || spreadsheet.insertSheet("Maintenance");
+  const headers = ["Submitted At", "Reported By", "Location", "Urgent", "Issue", "Suggested Action"];
+  ensureHeaders(sheet, headers);
+  sheet.appendRow([payload.submittedAt, payload.reportedBy, payload.location, payload.urgentAttention ? "Yes" : "No", payload.issue, payload.suggestedAction]);
+  if (payload.urgentAttention && OWNER_ALERT_EMAIL) {
+    MailApp.sendEmail({
+      to: OWNER_ALERT_EMAIL,
+      subject: "Urgent Kennel Maintenance Attention Needed",
+      body: `Urgent maintenance item submitted.\n\nLocation: ${payload.location}\nReported by: ${payload.reportedBy}\nIssue: ${payload.issue}\nSuggested action: ${payload.suggestedAction}\n\nPlease address or schedule right away.`,
+    });
+  }
+  return ok();
+}
+
+function ensureHeaders(sheet, headers) {
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+  }
+}
+
+function ok() {
   return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
 }

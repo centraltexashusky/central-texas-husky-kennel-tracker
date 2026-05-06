@@ -7,6 +7,7 @@ This is a review version of the kennel task tracking app.
 - Opens as a simple web page
 - Works well on phone or desktop
 - Lets the kennel helper check off daily tasks
+- Adds sidebar sections for Daily Tasks, Our Dogs, Boarding Dogs, Request, and Maintenance
 - Uses a private helper link to fill helper name and email
 - Includes a clock-in and clock-out timesheet section
 - Shows Monday weekly tasks
@@ -20,7 +21,15 @@ This is a review version of the kennel task tracking app.
 - The helper opens the private link
 - The helper clocks in, completes the checklist, clocks out, and submits the daily report
 - The page sends the report to a Google Sheet
-- The owner reviews all task history, timesheet records, health notes, supplies, and social content ideas in one place
+- The owner reviews daily task history, timesheets, dog records, boarding records, requests, maintenance issues, health notes, supplies, and social content ideas in one place
+
+## Sidebar Sections
+
+- Daily Tasks: the original kennel checklist and timesheet
+- Our Dogs: call name, show name, DOB, sex, vaccines, heartworm medication, baths, heat cycles, food amount, exercise, training, and care notes
+- Boarding Dogs: owner contact, emergency contact, vet authorization, boarding schedule, vaccine records, required owner updates, special care, daily owner updates, and requested services
+- Request: items needed and good-to-have suggestions from kennel help
+- Maintenance: repairs or attention needed, with an Urgent Attention option
 
 ## Wix Hosting Plan
 
@@ -54,6 +63,16 @@ This avoids Google Cloud, OAuth, and paid subscription confusion.
 ```js
 const GOOGLE_SCRIPT_URL = "PASTE_APPS_SCRIPT_WEB_APP_URL_HERE";
 ```
+
+The Apps Script creates these tabs as needed:
+
+- Kennel Reports
+- Our Dogs
+- Boarding Dogs
+- Requests
+- Maintenance
+
+Urgent maintenance items automatically send an email to `centraltexashusky@gmail.com` after Apps Script is connected.
 
 ## Wix Custom Element Conversion
 

@@ -1,6 +1,11 @@
 const GOOGLE_SCRIPT_URL = "";
+const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 
 const form = document.querySelector("#kennelForm");
+const menuToggle = document.querySelector("#menuToggle");
+const sidebar = document.querySelector("#sidebar");
+const navButtons = document.querySelectorAll(".nav-button");
+const pageViews = document.querySelectorAll(".page-view");
 const daySelect = document.querySelector("#dayOfWeek");
 const mondaySection = document.querySelector("#mondaySection");
 const tuesdaySection = document.querySelector("#tuesdaySection");
@@ -24,6 +29,18 @@ const totalTimeDisplay = document.querySelector("#totalTimeDisplay");
 const clockInTime = document.querySelector("#clockInTime");
 const clockOutTime = document.querySelector("#clockOutTime");
 const totalMinutes = document.querySelector("#totalMinutes");
+const ourDogForm = document.querySelector("#ourDogForm");
+const boardingDogForm = document.querySelector("#boardingDogForm");
+const requestForm = document.querySelector("#requestForm");
+const maintenanceForm = document.querySelector("#maintenanceForm");
+const ownedLastBath = document.querySelector("#ownedLastBath");
+const ownedNextBath = document.querySelector("#ownedNextBath");
+const ownedLastHeat = document.querySelector("#ownedLastHeat");
+const ownedNextHeat = document.querySelector("#ownedNextHeat");
+const ownedDogRecords = document.querySelector("#ownedDogRecords");
+const boardingDogRecords = document.querySelector("#boardingDogRecords");
+const requestRecords = document.querySelector("#requestRecords");
+const maintenanceRecords = document.querySelector("#maintenanceRecords");
 
 const months = [
   "January",
@@ -51,6 +68,20 @@ function setDefaultDateAndDay() {
   if ([...daySelect.options].some((option) => option.value === dayName)) {
     daySelect.value = dayName;
   }
+}
+
+function addMonths(dateString, monthsToAdd) {
+  if (!dateString) return "";
+  const date = new Date(`${dateString}T12:00:00`);
+  date.setMonth(date.getMonth() + monthsToAdd);
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(dateString, daysToAdd) {
+  if (!dateString) return "";
+  const date = new Date(`${dateString}T12:00:00`);
+  date.setDate(date.getDate() + daysToAdd);
+  return date.toISOString().slice(0, 10);
 }
 
 function getDeepCleanBuilding(date = new Date()) {
@@ -225,6 +256,96 @@ async function submitToGoogleSheet(payload) {
   return response;
 }
 
+async function submitOperationalRecord(payload) {
+  if (!GOOGLE_SCRIPT_URL) {
+    saveRecord(payload.type, payload);
+    showToast(`${payload.label || "Record"} saved in review mode.`);
+    renderAllRecords();
+    return;
+  }
+
+  await fetch(GOOGLE_SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  showToast(`${payload.label || "Record"} sent.`);
+}
+
+function saveRecord(type, payload) {
+  const key = `cth-${type}-records`;
+  const saved = JSON.parse(localStorage.getItem(key) || "[]");
+  saved.unshift(payload);
+  localStorage.setItem(key, JSON.stringify(saved.slice(0, 30)));
+}
+
+function readRecords(type) {
+  return JSON.parse(localStorage.getItem(`cth-${type}-records`) || "[]");
+}
+
+function renderRecordList(container, records, emptyText, cardBuilder) {
+  if (!records.length) {
+    container.innerHTML = `<p>${emptyText}</p>`;
+    return;
+  }
+  container.innerHTML = records.map(cardBuilder).join("");
+}
+
+function renderAllRecords() {
+  renderRecordList(ownedDogRecords, readRecords("ownedDog"), "No dog records saved yet.", (record) => `
+    <article class="record-card">
+      <strong>${record.callName || "Unnamed dog"}</strong>
+      <span>${record.showName || "No show name"} | ${record.sex || "No sex"} | DOB: ${record.dateOfBirth || "Not set"}</span>
+      <p>Next bath: ${record.nextBath || "Not set"}${record.nextHeat ? ` | Next heat: ${record.nextHeat}` : ""}</p>
+      <p>${record.specialCare || record.notes || ""}</p>
+    </article>
+  `);
+
+  renderRecordList(boardingDogRecords, readRecords("boardingDog"), "No boarding records saved yet.", (record) => `
+    <article class="record-card">
+      <strong>${record.dogName || "Unnamed boarding dog"}</strong>
+      <span>Owner: ${record.ownerName || "Not set"} | ${record.ownerPhone || "No phone"}</span>
+      <p>Drop-off: ${record.dropoffTime || "Not set"} | Pick-up: ${record.pickupTime || "Not set"}</p>
+      <p>${record.flags?.includes("Required update from owner") ? "Required update from owner. " : ""}${record.specialCare || ""}</p>
+    </article>
+  `);
+
+  renderRecordList(requestRecords, readRecords("request"), "No requests saved yet.", (record) => `
+    <article class="record-card">
+      <strong>${record.category || "Request"}</strong>
+      <span>By: ${record.requestedBy || "Not set"} | ${record.submittedAt}</span>
+      <p>${record.requestText || ""}</p>
+    </article>
+  `);
+
+  renderRecordList(maintenanceRecords, readRecords("maintenance"), "No maintenance items saved yet.", (record) => `
+    <article class="record-card ${record.urgentAttention ? "is-urgent" : ""}">
+      <strong>${record.urgentAttention ? "Urgent: " : ""}${record.location || "Maintenance"}</strong>
+      <span>By: ${record.reportedBy || "Not set"} | ${record.submittedAt}</span>
+      <p>${record.issue || ""}</p>
+    </article>
+  `);
+}
+
+function formPayload(targetForm) {
+  const data = new FormData(targetForm);
+  return Object.fromEntries(data.entries());
+}
+
+function checkedFrom(targetForm, name) {
+  return [...targetForm.querySelectorAll(`input[name="${name}"]:checked`)].map((input) => input.value);
+}
+
+function maybeOpenUrgentEmail(payload) {
+  if (!payload.urgentAttention) return;
+  const subject = encodeURIComponent("Urgent Kennel Maintenance Attention Needed");
+  const body = encodeURIComponent(
+    `Urgent maintenance item submitted.\n\nLocation: ${payload.location}\nReported by: ${payload.reportedBy}\nIssue: ${payload.issue}\nSuggested action: ${payload.suggestedAction}\n\nPlease address or schedule right away.`,
+  );
+  window.location.href = `mailto:${OWNER_ALERT_EMAIL}?subject=${subject}&body=${body}`;
+}
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!helperName.value || !helperEmail.value) {
@@ -245,6 +366,80 @@ form.addEventListener("change", () => {
   updateCompletionCount();
   updateConditionalSections();
   updateRotationBanner();
+});
+
+menuToggle.addEventListener("click", () => {
+  sidebar.classList.toggle("is-open");
+});
+
+navButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    navButtons.forEach((item) => item.classList.remove("is-active"));
+    pageViews.forEach((page) => page.classList.remove("is-active"));
+    button.classList.add("is-active");
+    document.querySelector(`#${button.dataset.page}`)?.classList.add("is-active");
+    sidebar.classList.remove("is-open");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+});
+
+ownedLastBath.addEventListener("change", () => {
+  ownedNextBath.value = addMonths(ownedLastBath.value, 1);
+});
+
+ownedLastHeat.addEventListener("change", () => {
+  ownedNextHeat.value = addDays(ownedLastHeat.value, 183);
+});
+
+ourDogForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = {
+    type: "ownedDog",
+    label: "Dog record",
+    submittedAt: new Date().toISOString(),
+    ...formPayload(ourDogForm),
+  };
+  await submitOperationalRecord(payload);
+  ourDogForm.reset();
+});
+
+boardingDogForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = {
+    type: "boardingDog",
+    label: "Boarding record",
+    submittedAt: new Date().toISOString(),
+    ...formPayload(boardingDogForm),
+    flags: checkedFrom(boardingDogForm, "boardingFlags"),
+  };
+  await submitOperationalRecord(payload);
+  boardingDogForm.reset();
+});
+
+requestForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = {
+    type: "request",
+    label: "Request",
+    submittedAt: new Date().toISOString(),
+    ...formPayload(requestForm),
+  };
+  await submitOperationalRecord(payload);
+  requestForm.reset();
+});
+
+maintenanceForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const payload = {
+    type: "maintenance",
+    label: "Maintenance item",
+    submittedAt: new Date().toISOString(),
+    ...formPayload(maintenanceForm),
+    urgentAttention: maintenanceForm.querySelector('input[name="urgentAttention"]').checked,
+  };
+  await submitOperationalRecord(payload);
+  maybeOpenUrgentEmail(payload);
+  maintenanceForm.reset();
 });
 
 reviewLoginButton.addEventListener("click", () => {
@@ -272,3 +467,4 @@ updateCompletionCount();
 updateTimeDisplays();
 renderSubmissions();
 loadHelperFromUrl();
+renderAllRecords();
