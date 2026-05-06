@@ -1,5 +1,4 @@
 const GOOGLE_SCRIPT_URL = "";
-const GOOGLE_CLIENT_ID = document.querySelector('meta[name="google-client-id"]')?.content || "";
 
 const form = document.querySelector("#kennelForm");
 const daySelect = document.querySelector("#dayOfWeek");
@@ -13,9 +12,9 @@ const helperName = document.querySelector("#helperName");
 const helperEmail = document.querySelector("#helperEmail");
 const loginStatus = document.querySelector("#loginStatus");
 const loginHelp = document.querySelector("#loginHelp");
-const googleSignInButton = document.querySelector("#googleSignInButton");
 const reviewLoginButton = document.querySelector("#reviewLoginButton");
-const signOutButton = document.querySelector("#signOutButton");
+const clearHelperButton = document.querySelector("#clearHelperButton");
+const helperKey = document.querySelector("#helperKey");
 const clockInButton = document.querySelector("#clockInButton");
 const clockOutButton = document.querySelector("#clockOutButton");
 const clearTimesButton = document.querySelector("#clearTimesButton");
@@ -25,8 +24,6 @@ const totalTimeDisplay = document.querySelector("#totalTimeDisplay");
 const clockInTime = document.querySelector("#clockInTime");
 const clockOutTime = document.querySelector("#clockOutTime");
 const totalMinutes = document.querySelector("#totalMinutes");
-
-let googleIdToken = "";
 
 const months = [
   "January",
@@ -79,63 +76,38 @@ function updateCompletionCount() {
   completionText.textContent = `${checked} task${checked === 1 ? "" : "s"} checked`;
 }
 
-function decodeJwtPayload(token) {
-  const payload = token.split(".")[1];
-  const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-  return JSON.parse(decodeURIComponent(escape(window.atob(normalized))));
-}
-
-function setSignedInUser(user, token = "") {
+function setHelper(user) {
   setDefaultDateAndDay();
   updateRotationBanner();
   updateConditionalSections();
   helperName.value = user.name || "";
   helperEmail.value = user.email || "";
-  googleIdToken = token;
-  loginStatus.textContent = user.email ? `Signed in as ${user.name}` : "Signed in";
+  helperKey.value = user.key || "";
+  loginStatus.textContent = user.name ? `Helper loaded: ${user.name}` : "Helper loaded";
   loginHelp.textContent = user.email || "Review mode helper account";
   reviewLoginButton.hidden = true;
-  signOutButton.hidden = false;
+  clearHelperButton.hidden = false;
 }
 
-function signOut() {
+function clearHelper() {
   helperName.value = "";
   helperEmail.value = "";
-  googleIdToken = "";
-  loginStatus.textContent = "Not signed in";
-  loginHelp.textContent = GOOGLE_CLIENT_ID
-    ? "Use Google sign-in before submitting the kennel report."
-    : "For local review, use the review login. On Wix, this will use Google sign-in.";
+  helperKey.value = "";
+  loginStatus.textContent = "Helper not loaded";
+  loginHelp.textContent = "Open this page with a private helper link, or use review access for testing.";
   reviewLoginButton.hidden = false;
-  signOutButton.hidden = true;
+  clearHelperButton.hidden = true;
 }
 
-function initGoogleSignIn() {
-  if (!GOOGLE_CLIENT_ID || !window.google?.accounts?.id) {
-    googleSignInButton.innerHTML = "";
-    return;
+function loadHelperFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const name = params.get("helper") || params.get("name");
+  const email = params.get("email");
+  const key = params.get("key");
+
+  if (name && email && key) {
+    setHelper({ name, email, key });
   }
-
-  window.google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: (response) => {
-      const profile = decodeJwtPayload(response.credential);
-      setSignedInUser(
-        {
-          name: profile.name,
-          email: profile.email,
-        },
-        response.credential,
-      );
-    },
-  });
-
-  window.google.accounts.id.renderButton(googleSignInButton, {
-    theme: "outline",
-    size: "large",
-    text: "signin_with",
-    shape: "rectangular",
-  });
 }
 
 function formatDateTime(value) {
@@ -180,7 +152,7 @@ function buildPayload() {
     date: data.get("date"),
     helperName: data.get("helperName"),
     helperEmail: data.get("helperEmail"),
-    googleIdToken,
+    helperKey: data.get("helperKey"),
     dayOfWeek: data.get("dayOfWeek"),
     clockInTime: data.get("clockInTime"),
     clockOutTime: data.get("clockOutTime"),
@@ -256,7 +228,7 @@ async function submitToGoogleSheet(payload) {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!helperName.value || !helperEmail.value) {
-    showToast("Please sign in before submitting.");
+    showToast("Please open the private helper link before submitting.");
     return;
   }
 
@@ -276,13 +248,14 @@ form.addEventListener("change", () => {
 });
 
 reviewLoginButton.addEventListener("click", () => {
-  setSignedInUser({
+  setHelper({
     name: "Ms. Yuko",
     email: "review-helper@centraltexashusky.com",
+    key: "review",
   });
 });
 
-signOutButton.addEventListener("click", signOut);
+clearHelperButton.addEventListener("click", clearHelper);
 clockInButton.addEventListener("click", () => setClock(clockInTime));
 clockOutButton.addEventListener("click", () => setClock(clockOutTime));
 clearTimesButton.addEventListener("click", () => {
@@ -298,4 +271,4 @@ updateRotationBanner();
 updateCompletionCount();
 updateTimeDisplays();
 renderSubmissions();
-window.setTimeout(initGoogleSignIn, 400);
+loadHelperFromUrl();

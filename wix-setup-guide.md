@@ -2,7 +2,7 @@
 
 ## Goal
 
-Host the kennel tracker so Ms. Yuko or another kennel helper can click a link, sign in with Google, clock in, complete the checklist, clock out, and submit the information into a Google Sheet.
+Host the kennel tracker so Ms. Yuko or another kennel helper can click a private link, clock in, complete the checklist, clock out, and submit the information into a Google Sheet.
 
 ## Recommended Launch Path
 
@@ -31,8 +31,7 @@ Steps:
 7. Make the iframe tall enough for mobile use.
 8. Send the Wix page link to the kennel helper.
 
-Important:
-Google login requires HTTPS and a real domain. It will not fully work from the local `file://` review page.
+Private helper links do not require Google Cloud, OAuth, or a paid subscription.
 
 ## Wix Option 2: Wix-Hosted Custom Element
 
@@ -53,27 +52,15 @@ Steps:
 COO recommendation:
 Use Option 1 first. Move to Option 2 after the system is proven.
 
-## Google Login Setup
+## Private Helper Link
 
-1. Go to Google Cloud Console.
-2. Create or open a Central Texas Husky project.
-3. Configure the OAuth consent screen.
-4. Create an OAuth Client ID.
-5. Choose Web application.
-6. Add the live domain as an authorized JavaScript origin:
-   `https://www.centraltexashusky.com`
-7. Copy the Client ID.
-8. Paste the Client ID into the tracker:
+Use this format:
 
-```html
-<meta name="google-client-id" content="YOUR_CLIENT_ID_HERE" />
+```text
+https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/?helper=Ms.%20Yuko&email=yuko@example.com&key=cth-yuko
 ```
 
-9. Paste the same Client ID into the Apps Script:
-
-```js
-const GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
-```
+Replace `yuko@example.com` with the correct helper email.
 
 ## Google Sheet Setup
 
@@ -82,7 +69,7 @@ const GOOGLE_CLIENT_ID = "YOUR_CLIENT_ID_HERE";
 2. Open Extensions > Apps Script.
 3. Paste the code from:
    `google-apps-script.js`
-4. Set the `GOOGLE_CLIENT_ID`.
+4. Optional: add accepted helper keys in `ALLOWED_HELPER_KEYS`.
 5. Deploy as a Web App.
 6. Set access according to your Google Workspace needs.
 7. Copy the Web App URL.
@@ -100,7 +87,7 @@ Please use this link for your kennel shift:
 
 [Insert Wix kennel tracker page link]
 
-When you arrive, sign in with Google and clock in. Before you leave, let the dogs out again between 1:00 PM and 1:30 PM, pick up after them, spend a little social/play time with them, take a photo or video for social media, complete the checklist, clock out, and submit the report.
+When you arrive, clock in. Before you leave, let the dogs out again between 1:00 PM and 1:30 PM, pick up after them, spend a little social/play time with them, take a photo or video for social media, complete the checklist, clock out, and submit the report.
 
 Thank you,
 

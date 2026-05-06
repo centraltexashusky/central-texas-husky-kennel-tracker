@@ -4,9 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Central Texas Husky Kennel Tracker</title>
-    <meta name="google-client-id" content="" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
     <main class="app-shell">
@@ -26,7 +24,7 @@
 
       <section class="notice">
         <strong>Review version:</strong>
-        Submissions are saved on this device only until the Google Sheet connection is added. Google login needs a hosted Wix page and a Google OAuth Client ID.
+        Submissions are saved on this device only until the Google Sheet connection is added. Use a private helper link to auto-fill the helper name and email.
       </section>
 
       <form id="kennelForm" class="tracker-form">
@@ -34,20 +32,19 @@
           <div class="section-heading">
             <span>0</span>
             <div>
-              <h2>Google Login</h2>
-              <p>Use the helper's Google account so the name and email are attached to the report.</p>
+              <h2>Helper Access</h2>
+              <p>Use a private helper link so the name and email are attached to the report.</p>
             </div>
           </div>
 
           <div class="login-panel" id="loginPanel">
             <div>
-              <strong id="loginStatus">Not signed in</strong>
-              <p id="loginHelp">For local review, use the review login. On Wix, this will use Google sign-in.</p>
+              <strong id="loginStatus">Helper not loaded</strong>
+              <p id="loginHelp">Open this page with a private helper link, or use review access for testing.</p>
             </div>
             <div class="login-actions">
-              <div id="googleSignInButton"></div>
-              <button type="button" class="secondary-button" id="reviewLoginButton">Review Login</button>
-              <button type="button" class="secondary-button" id="signOutButton" hidden>Sign Out</button>
+              <button type="button" class="secondary-button" id="reviewLoginButton">Review Access</button>
+              <button type="button" class="secondary-button" id="clearHelperButton" hidden>Clear Helper</button>
             </div>
           </div>
         </section>
@@ -69,13 +66,15 @@
 
             <label>
               Kennel helper
-              <input type="text" name="helperName" id="helperName" placeholder="Login to fill automatically" readonly required />
+              <input type="text" name="helperName" id="helperName" placeholder="Private link fills this automatically" readonly required />
             </label>
 
             <label>
               Helper email
-              <input type="text" name="helperEmail" id="helperEmail" placeholder="Login to fill automatically" readonly required />
+              <input type="text" name="helperEmail" id="helperEmail" placeholder="Private link fills this automatically" readonly required />
             </label>
+
+            <input type="hidden" name="helperKey" id="helperKey" />
 
             <label>
               Day

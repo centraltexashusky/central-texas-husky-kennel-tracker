@@ -7,7 +7,7 @@ This is a review version of the kennel task tracking app.
 - Opens as a simple web page
 - Works well on phone or desktop
 - Lets the kennel helper check off daily tasks
-- Includes Google login readiness
+- Uses a private helper link to fill helper name and email
 - Includes a clock-in and clock-out timesheet section
 - Shows Monday weekly tasks
 - Shows Tuesday trash task
@@ -17,7 +17,7 @@ This is a review version of the kennel task tracking app.
 ## What It Will Do After Google Sheet Setup
 
 - The owner emails or texts the page link to the kennel helper
-- The helper opens the link and signs in with Google
+- The helper opens the private link
 - The helper clocks in, completes the checklist, clocks out, and submits the daily report
 - The page sends the report to a Google Sheet
 - The owner reviews all task history, timesheet records, health notes, supplies, and social content ideas in one place
@@ -30,30 +30,17 @@ Use Wix Velo with a Wix-hosted custom element. Wix documentation says custom ele
 Simpler alternative:
 Host this folder on a small static host such as GitHub Pages or Netlify and embed it into Wix using an HTML iframe. This is easier, but it means the app itself is not hosted by Wix.
 
-## Google Login Setup
+## Private Helper Link
 
-1. Go to Google Cloud Console.
-2. Create or open a project for Central Texas Husky.
-3. Configure the OAuth consent screen.
-4. Create an OAuth Client ID.
-5. Choose Web application.
-6. Add your Wix domain as an authorized JavaScript origin, for example:
-   - `https://www.centraltexashusky.com`
-7. Copy the Client ID.
-8. Paste it into `index.html`:
+Use a private link like this:
 
-```html
-<meta name="google-client-id" content="PASTE_CLIENT_ID_HERE" />
+```text
+https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/?helper=Ms.%20Yuko&email=yuko@example.com&key=cth-yuko
 ```
 
-9. Paste the same Client ID into `google-apps-script.js`:
+Replace the email with the correct helper email. The `key` value is a simple private identifier that can be stored with each submission.
 
-```js
-const GOOGLE_CLIENT_ID = "PASTE_CLIENT_ID_HERE";
-```
-
-Local note:
-Google login will not fully work from a `file://` page. The review login button exists so you can review the flow before hosting.
+This avoids Google Cloud, OAuth, and paid subscription confusion.
 
 ## Google Sheet Connection
 
@@ -89,9 +76,9 @@ For the first live version, I would use the simpler iframe/external static host 
 
 Hi Ms. Yuko,
 
-Please sign in with Google, clock in, and complete the kennel checklist here:
+Please clock in and complete the kennel checklist here:
 
-[Insert hosted app link]
+[Insert private helper link]
 
 At the end of the shift, please let the dogs out again between 1:00 PM and 1:30 PM, pick up after them, spend a little social/play time with them, take a photo or video for social media, clock out, and submit the report.
 

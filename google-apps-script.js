@@ -1,9 +1,9 @@
 // Google Apps Script endpoint for the final Google Sheet connection.
 // Paste this into Apps Script attached to the response spreadsheet, deploy it
 // as a web app, and put the deployment URL into GOOGLE_SCRIPT_URL in script.js.
-// For Google login verification, paste your OAuth web client ID below.
+// Optional: set helper keys below to reject unknown/private links.
 
-const GOOGLE_CLIENT_ID = "";
+const ALLOWED_HELPER_KEYS = [];
 
 function doPost(e) {
   const sheetName = "Kennel Reports";
@@ -11,18 +11,8 @@ function doPost(e) {
   const sheet = spreadsheet.getSheetByName(sheetName) || spreadsheet.insertSheet(sheetName);
   const payload = JSON.parse(e.postData.contents);
 
-  if (GOOGLE_CLIENT_ID && payload.googleIdToken) {
-    const tokenResponse = UrlFetchApp.fetch(
-      "https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(payload.googleIdToken),
-    );
-    const tokenInfo = JSON.parse(tokenResponse.getContentText());
-
-    if (tokenInfo.aud !== GOOGLE_CLIENT_ID) {
-      throw new Error("Google login token audience did not match this app.");
-    }
-
-    payload.helperEmail = tokenInfo.email || payload.helperEmail;
-    payload.helperName = tokenInfo.name || payload.helperName;
+  if (ALLOWED_HELPER_KEYS.length && !ALLOWED_HELPER_KEYS.includes(payload.helperKey)) {
+    throw new Error("Unknown helper key.");
   }
 
   const headers = [
@@ -30,6 +20,7 @@ function doPost(e) {
     "Date",
     "Helper Name",
     "Helper Email",
+    "Helper Key",
     "Day Of Week",
     "Clock In",
     "Clock Out",
@@ -58,6 +49,7 @@ function doPost(e) {
     payload.date,
     payload.helperName,
     payload.helperEmail,
+    payload.helperKey,
     payload.dayOfWeek,
     payload.clockInTime,
     payload.clockOutTime,
