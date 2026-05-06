@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Central Texas Husky Kennel Tracker</title>
+    <meta name="google-client-id" content="" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Central Texas Husky</p>
+          <h1>Kennel Task Tracker</h1>
+          <p class="subhead">
+            Complete this before leaving each shift. The final version will send each submission to the kennel tracking Google Sheet.
+          </p>
+        </div>
+        <div class="status-card" aria-live="polite">
+          <span class="status-dot"></span>
+          <span id="modeLabel">Review mode</span>
+        </div>
+      </header>
+
+      <section class="notice">
+        <strong>Review version:</strong>
+        Submissions are saved on this device only until the Google Sheet connection is added. Google login needs a hosted Wix page and a Google OAuth Client ID.
+      </section>
+
+      <form id="kennelForm" class="tracker-form">
+        <section class="form-section">
+          <div class="section-heading">
+            <span>0</span>
+            <div>
+              <h2>Google Login</h2>
+              <p>Use the helper's Google account so the name and email are attached to the report.</p>
+            </div>
+          </div>
+
+          <div class="login-panel" id="loginPanel">
+            <div>
+              <strong id="loginStatus">Not signed in</strong>
+              <p id="loginHelp">For local review, use the review login. On Wix, this will use Google sign-in.</p>
+            </div>
+            <div class="login-actions">
+              <div id="googleSignInButton"></div>
+              <button type="button" class="secondary-button" id="reviewLoginButton">Review Login</button>
+              <button type="button" class="secondary-button" id="signOutButton" hidden>Sign Out</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="section-heading">
+            <span>1</span>
+            <div>
+              <h2>Shift Info</h2>
+              <p>Basic details for the daily record.</p>
+            </div>
+          </div>
+
+          <div class="field-grid">
+            <label>
+              Date
+              <input type="date" name="date" required />
+            </label>
+
+            <label>
+              Kennel helper
+              <input type="text" name="helperName" id="helperName" placeholder="Login to fill automatically" readonly required />
+            </label>
+
+            <label>
+              Helper email
+              <input type="text" name="helperEmail" id="helperEmail" placeholder="Login to fill automatically" readonly required />
+            </label>
+
+            <label>
+              Day
+              <select name="dayOfWeek" id="dayOfWeek" required>
+                <option value="">Select day</option>
+                <option>Monday</option>
+                <option>Tuesday</option>
+                <option>Wednesday</option>
+                <option>Thursday</option>
+                <option>Friday</option>
+                <option>Saturday</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="section-heading">
+            <span>2</span>
+            <div>
+              <h2>Timesheet</h2>
+              <p>Clock in when work begins and clock out before leaving.</p>
+            </div>
+          </div>
+
+          <div class="timesheet-grid">
+            <div class="time-card">
+              <span>Clock In</span>
+              <strong id="clockInDisplay">Not clocked in</strong>
+              <button type="button" id="clockInButton">Clock In</button>
+            </div>
+            <div class="time-card">
+              <span>Clock Out</span>
+              <strong id="clockOutDisplay">Not clocked out</strong>
+              <button type="button" id="clockOutButton">Clock Out</button>
+            </div>
+            <div class="time-card">
+              <span>Total Time</span>
+              <strong id="totalTimeDisplay">Not calculated</strong>
+              <button type="button" class="secondary-button" id="clearTimesButton">Clear Times</button>
+            </div>
+          </div>
+
+          <input type="hidden" name="clockInTime" id="clockInTime" />
+          <input type="hidden" name="clockOutTime" id="clockOutTime" />
+          <input type="hidden" name="totalMinutes" id="totalMinutes" />
+        </section>
+
+        <section class="form-section">
+          <div class="section-heading">
+            <span>3</span>
+            <div>
+              <h2>Daily Tasks</h2>
+              <p>Tap each completed task.</p>
+            </div>
+          </div>
+
+          <div class="checklist two-column" data-group="dailyTasks">
+            <label><input type="checkbox" name="dailyTasks" value="Dogs let out safely" /> Dogs let out safely</label>
+            <label><input type="checkbox" name="dailyTasks" value="Kennel cleaning completed after dogs were let out" /> Kennel cleaning completed after dogs were let out</label>
+            <label><input type="checkbox" name="dailyTasks" value="Food preparation started" /> Food preparation started</label>
+            <label><input type="checkbox" name="dailyTasks" value="Training completed during 9 AM to 10 AM food prep window" /> Training completed during 9 AM to 10 AM food prep window</label>
+            <label><input type="checkbox" name="dailyTasks" value="Treadmill exercise completed for selected dogs" /> Treadmill exercise completed for selected dogs</label>
+            <label><input type="checkbox" name="dailyTasks" value="Morning feeding completed around 10 AM" /> Morning feeding completed around 10 AM</label>
+            <label><input type="checkbox" name="dailyTasks" value="All dogs ate normally" /> All dogs ate normally</label>
+            <label><input type="checkbox" name="dailyTasks" value="Dogs returned to kennel safely" /> Dogs returned to kennel safely</label>
+            <label><input type="checkbox" name="dailyTasks" value="Electric scooter exercise completed for selected dogs" /> Electric scooter exercise completed for selected dogs</label>
+            <label><input type="checkbox" name="dailyTasks" value="Baths completed as needed" /> Baths completed as needed</label>
+            <label><input type="checkbox" name="dailyTasks" value="Yard poop cleaned" /> Yard poop cleaned</label>
+            <label><input type="checkbox" name="dailyTasks" value="Holes filled" /> Holes filled</label>
+            <label><input type="checkbox" name="dailyTasks" value="Kennel areas reset before leaving" /> Kennel areas reset before leaving</label>
+            <label><input type="checkbox" name="dailyTasks" value="1 PM to 1:30 PM dogs let out before leaving" /> 1 PM to 1:30 PM dogs let out before leaving</label>
+            <label><input type="checkbox" name="dailyTasks" value="Afternoon yard pickup completed after final let-out" /> Afternoon yard pickup completed after final let-out</label>
+            <label><input type="checkbox" name="dailyTasks" value="Afternoon social/play time completed" /> Afternoon social/play time completed</label>
+            <label><input type="checkbox" name="dailyTasks" value="Social media photo or video taken" /> Social media photo or video taken</label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="section-heading">
+            <span>4</span>
+            <div>
+              <h2>Dogs, Health, And Content</h2>
+              <p>Quick notes that help the owner review the day.</p>
+            </div>
+          </div>
+
+          <label>
+            Dogs trained or exercised today
+            <textarea name="dogsExercised" rows="3" placeholder="Example: Beau treadmill, Blue scooter, Luna leash training"></textarea>
+          </label>
+
+          <label>
+            Dogs bathed today
+            <textarea name="dogsBathed" rows="2" placeholder="List names or write none"></textarea>
+          </label>
+
+          <label>
+            Health or behavior concerns
+            <select name="healthConcern" id="healthConcern" required>
+              <option>No concerns today</option>
+              <option>Yes, notes below</option>
+            </select>
+          </label>
+
+          <label>
+            Health or behavior notes
+            <textarea name="healthNotes" rows="3" placeholder="Appetite, stool, coughing, limping, heat cycle, behavior, or other concern"></textarea>
+          </label>
+
+          <label>
+            What photo or video did you take today?
+            <textarea name="socialContent" rows="3" required placeholder="Example: funny puppy moment, clean kennel, treadmill session, bath day, dogs running"></textarea>
+          </label>
+        </section>
+
+        <section class="form-section conditional" id="mondaySection">
+          <div class="section-heading">
+            <span>M</span>
+            <div>
+              <h2>Monday Weekly Tasks</h2>
+              <p>Weekly cleaning and AC filter tasks.</p>
+            </div>
+          </div>
+
+          <div class="checklist" data-group="weeklyTasks">
+            <label><input type="checkbox" name="weeklyTasks" value="Monday thorough kennel clean completed" /> Monday thorough kennel clean completed</label>
+            <label><input type="checkbox" name="weeklyTasks" value="Dog Mansion main AC filter cleaned" /> Dog Mansion main AC filter cleaned</label>
+            <label><input type="checkbox" name="weeklyTasks" value="Dog Shed mini-split AC filter cleaned" /> Dog Shed mini-split AC filter cleaned</label>
+            <label><input type="checkbox" name="weeklyTasks" value="Dog Shed window AC filter cleaned" /> Dog Shed window AC filter cleaned</label>
+            <label><input type="checkbox" name="weeklyTasks" value="Self-filling water bowls cleaned" /> Self-filling water bowls cleaned</label>
+            <label><input type="checkbox" name="weeklyTasks" value="Grooming table towels changed out" /> Grooming table towels changed out</label>
+            <label><input type="checkbox" name="weeklyTasks" value="Gates, latches, fencing, and yard safety checked" /> Gates, latches, fencing, and yard safety checked</label>
+            <label><input type="checkbox" name="weeklyTasks" value="Weekly bath plan reviewed" /> Weekly bath plan reviewed</label>
+            <label><input type="checkbox" name="weeklyTasks" value="Weekly exercise/training priorities reviewed" /> Weekly exercise/training priorities reviewed</label>
+          </div>
+        </section>
+
+        <section class="form-section conditional" id="tuesdaySection">
+          <div class="section-heading">
+            <span>T</span>
+            <div>
+              <h2>Tuesday Trash Task</h2>
+              <p>Trash pickup is Wednesday.</p>
+            </div>
+          </div>
+
+          <div class="checklist">
+            <label><input type="checkbox" name="tuesdayTasks" value="Trash removed for Wednesday pickup" /> Trash removed for Wednesday pickup</label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="section-heading">
+            <span>5</span>
+            <div>
+              <h2>Monthly Deep Clean</h2>
+              <p>Usually completed during the first week of the month, alternating buildings.</p>
+            </div>
+          </div>
+
+          <div class="rotation-banner" id="rotationBanner"></div>
+
+          <div class="field-grid">
+            <label>
+              Is this monthly deep cleaning week?
+              <select name="monthlyWeek" id="monthlyWeek" required>
+                <option>No</option>
+                <option>Yes</option>
+              </select>
+            </label>
+
+            <label>
+              Building deep cleaned
+              <select name="deepCleanBuilding" id="deepCleanBuilding">
+                <option>Not applicable</option>
+                <option>Dog Mansion</option>
+                <option>Dog Shed</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="checklist" data-group="monthlyTasks">
+            <label><input type="checkbox" name="monthlyTasks" value="Floors thoroughly cleaned" /> Floors thoroughly cleaned</label>
+            <label><input type="checkbox" name="monthlyTasks" value="Walls and panels cleaned" /> Walls and panels cleaned</label>
+            <label><input type="checkbox" name="monthlyTasks" value="Kennel surfaces cleaned" /> Kennel surfaces cleaned</label>
+            <label><input type="checkbox" name="monthlyTasks" value="AC/filter area checked after cleaning" /> AC/filter area checked after cleaning</label>
+            <label><input type="checkbox" name="monthlyTasks" value="Dog Mansion attic AC filter replaced as needed" /> Dog Mansion attic AC filter replaced as needed</label>
+            <label><input type="checkbox" name="monthlyTasks" value="AC drain line treated with bleach or vinegar, never mixed" /> AC drain line treated with bleach or vinegar, never mixed</label>
+            <label><input type="checkbox" name="monthlyTasks" value="Drains and low areas checked" /> Drains and low areas checked</label>
+            <label><input type="checkbox" name="monthlyTasks" value="Drying and ventilation completed" /> Drying and ventilation completed</label>
+            <label><input type="checkbox" name="monthlyTasks" value="Repair or safety issues noted" /> Repair or safety issues noted</label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="section-heading">
+            <span>6</span>
+            <div>
+              <h2>Supplies And Owner Notes</h2>
+              <p>Flag anything that needs follow-up.</p>
+            </div>
+          </div>
+
+          <div class="checklist compact" data-group="suppliesLow">
+            <label><input type="checkbox" name="suppliesLow" value="Food" /> Food</label>
+            <label><input type="checkbox" name="suppliesLow" value="Treats" /> Treats</label>
+            <label><input type="checkbox" name="suppliesLow" value="Cleaning supplies" /> Cleaning supplies</label>
+            <label><input type="checkbox" name="suppliesLow" value="Shampoo" /> Shampoo</label>
+            <label><input type="checkbox" name="suppliesLow" value="Towels" /> Towels</label>
+            <label><input type="checkbox" name="suppliesLow" value="Poop bags" /> Poop bags</label>
+            <label><input type="checkbox" name="suppliesLow" value="Other" /> Other</label>
+            <label><input type="checkbox" name="suppliesLow" value="Nothing low today" /> Nothing low today</label>
+          </div>
+
+          <label>
+            Repairs, safety issues, or owner notes
+            <textarea name="ownerNotes" rows="4" placeholder="Loose latch, AC issue, hole, supply note, unusual dog behavior, repair needed"></textarea>
+          </label>
+        </section>
+
+        <div class="submit-bar">
+          <div>
+            <strong id="completionText">0 tasks checked</strong>
+            <p>Review before submitting.</p>
+          </div>
+          <button type="submit">Submit Kennel Report</button>
+        </div>
+      </form>
+
+      <section class="recent-submissions">
+        <div class="section-heading">
+          <span>R</span>
+          <div>
+            <h2>Recent Demo Submissions</h2>
+            <p>These are saved only in this browser for review.</p>
+          </div>
+        </div>
+        <div id="recentSubmissions" class="submission-list"></div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="script.js"></script>
+  </body>
+</html>
