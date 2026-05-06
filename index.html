@@ -14,8 +14,8 @@
           <span>Kennel Ops</span>
         </div>
         <nav class="side-nav" aria-label="Kennel tracker sections">
-          <button class="nav-button is-active" type="button" data-page="dailyPage">Daily Tasks</button>
-          <button class="nav-button" type="button" data-page="timesheetPage">Timesheet</button>
+          <button class="nav-button is-active" type="button" data-page="timesheetPage">Timesheet</button>
+          <button class="nav-button" type="button" data-page="dailyPage">Daily Tasks</button>
           <button class="nav-button" type="button" data-page="ourDogsPage">Our Dogs</button>
           <button class="nav-button" type="button" data-page="boardingDogsPage">Boarding Dogs</button>
           <button class="nav-button" type="button" data-page="requestsPage">Request</button>
@@ -46,8 +46,8 @@
       <label class="mobile-page-menu">
         Menu
         <select id="mobilePageSelect">
-          <option value="dailyPage">Daily Tasks</option>
           <option value="timesheetPage">Timesheet</option>
+          <option value="dailyPage">Daily Tasks</option>
           <option value="ourDogsPage">Our Dogs</option>
           <option value="boardingDogsPage">Boarding Dogs</option>
           <option value="requestsPage">Request</option>
@@ -55,33 +55,8 @@
         </select>
       </label>
 
-      <section class="page-view is-active" id="dailyPage">
+      <section class="page-view" id="dailyPage">
       <form id="kennelForm" class="tracker-form">
-        <section class="form-section">
-          <div class="section-heading">
-            <span>0</span>
-            <div>
-              <h2>Helper PIN Login</h2>
-              <p>Enter the assigned 4 digit helper PIN before submitting records.</p>
-            </div>
-          </div>
-
-          <div class="login-panel" id="loginPanel">
-            <div>
-              <strong id="loginStatus">Helper not loaded</strong>
-              <p id="loginHelp">Helper name and email will fill in after PIN login.</p>
-            </div>
-            <div class="login-actions">
-              <label class="pin-field">
-                Helper PIN
-                <input type="password" id="helperPinInput" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="****" autocomplete="off" />
-              </label>
-              <button type="button" class="secondary-button" id="helperPinLoginButton">Login</button>
-              <button type="button" class="secondary-button" id="clearHelperButton" hidden>Clear Helper</button>
-            </div>
-          </div>
-        </section>
-
         <section class="form-section">
           <div class="section-heading">
             <span>1</span>
@@ -318,7 +293,32 @@
       </section>
       </section>
 
-      <section class="page-view" id="timesheetPage">
+      <section class="page-view is-active" id="timesheetPage">
+        <section class="form-section">
+          <div class="section-heading">
+            <span>0</span>
+            <div>
+              <h2>Helper PIN Login</h2>
+              <p>Enter the assigned 4 digit helper PIN to activate the kennel tracker menus.</p>
+            </div>
+          </div>
+
+          <div class="login-panel" id="loginPanel">
+            <div>
+              <strong id="loginStatus">Helper not loaded</strong>
+              <p id="loginHelp">Helper name and email will fill in after PIN login.</p>
+            </div>
+            <div class="login-actions">
+              <label class="pin-field">
+                Helper PIN
+                <input type="password" id="helperPinInput" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" placeholder="****" autocomplete="off" />
+              </label>
+              <button type="button" class="secondary-button" id="helperPinLoginButton">Login</button>
+              <button type="button" class="secondary-button" id="clearHelperButton" hidden>Clear Helper</button>
+            </div>
+          </div>
+        </section>
+
         <section class="form-section">
           <div class="section-heading">
             <span>T</span>

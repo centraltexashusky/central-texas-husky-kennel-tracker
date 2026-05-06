@@ -84,6 +84,18 @@ textarea {
   color: #1f2d36;
 }
 
+.nav-button:disabled,
+.nav-button.is-locked {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.nav-button:disabled:hover,
+.nav-button.is-locked:hover {
+  background: transparent;
+  color: #e8efee;
+}
+
 .mobile-page-menu {
   display: none;
 }
