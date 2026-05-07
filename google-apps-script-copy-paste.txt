@@ -29,6 +29,7 @@ function doPost(e) {
   if (payload.type === "request") return appendRequest(spreadsheet, payload);
   if (payload.type === "maintenance") return appendMaintenance(spreadsheet, payload);
   if (payload.type === "timesheet") return appendTimesheet(spreadsheet, payload);
+  if (payload.type === "service") return appendService(spreadsheet, payload);
 
   return appendKennelReport(spreadsheet, payload);
 }
@@ -115,11 +116,11 @@ function appendBoardingDog(spreadsheet, payload) {
 
 function appendRequest(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Requests") || spreadsheet.insertSheet("Requests");
-  const headers = ["Submitted At", "Requested By", "Category", "Urgent", "Request", "Reason", "Media Link", "Media Files"];
+  const headers = ["Submitted At", "Requested By", "Category", "Urgent", "Status", "Completed At", "Completed By", "Request", "Reason", "Media Link", "Media Files"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.requestedBy, payload.category, payload.urgentNeeds ? "Yes" : "No", payload.requestText, payload.reason, payload.mediaLink, payload.mediaFiles]);
+  sheet.appendRow([payload.submittedAt, payload.requestedBy, payload.category, payload.urgentNeeds ? "Yes" : "No", payload.status || (payload.completed ? "Completed" : "Active"), payload.completedAt || "", payload.completedBy || "", payload.requestText, payload.reason, payload.mediaLink, payload.mediaFiles]);
   appendDatabaseRecord(payload);
-  if (payload.urgentNeeds && OWNER_ALERT_EMAIL) {
+  if (payload.urgentNeeds && !payload.completed && OWNER_ALERT_EMAIL) {
     MailApp.sendEmail({
       to: OWNER_ALERT_EMAIL,
       subject: "Urgent Kennel Request",
@@ -131,11 +132,11 @@ function appendRequest(spreadsheet, payload) {
 
 function appendMaintenance(spreadsheet, payload) {
   const sheet = spreadsheet.getSheetByName("Maintenance") || spreadsheet.insertSheet("Maintenance");
-  const headers = ["Submitted At", "Reported By", "Location", "Urgent", "Issue", "Media Link", "Media Files", "Suggested Action"];
+  const headers = ["Submitted At", "Reported By", "Location", "Urgent", "Status", "Completed At", "Completed By", "Issue", "Media Link", "Media Files", "Suggested Action"];
   ensureHeaders(sheet, headers);
-  sheet.appendRow([payload.submittedAt, payload.reportedBy, payload.location, payload.urgentAttention ? "Yes" : "No", payload.issue, payload.mediaLink, payload.mediaFiles, payload.suggestedAction]);
+  sheet.appendRow([payload.submittedAt, payload.reportedBy, payload.location, payload.urgentAttention ? "Yes" : "No", payload.status || (payload.completed ? "Completed" : "Active"), payload.completedAt || "", payload.completedBy || "", payload.issue, payload.mediaLink, payload.mediaFiles, payload.suggestedAction]);
   appendDatabaseRecord(payload);
-  if (payload.urgentAttention && OWNER_ALERT_EMAIL) {
+  if (payload.urgentAttention && !payload.completed && OWNER_ALERT_EMAIL) {
     MailApp.sendEmail({
       to: OWNER_ALERT_EMAIL,
       subject: "Urgent Kennel Maintenance Attention Needed",
@@ -154,6 +155,15 @@ function appendTimesheet(spreadsheet, payload) {
   return ok();
 }
 
+function appendService(spreadsheet, payload) {
+  const sheet = spreadsheet.getSheetByName("Services") || spreadsheet.insertSheet("Services");
+  const headers = ["Submitted At", "ID", "Service Name", "Category", "Base Price", "Unit", "Deposit Amount", "Default Duration", "Flags", "Pricing Notes"];
+  ensureHeaders(sheet, headers);
+  sheet.appendRow([payload.submittedAt, payload.id, payload.serviceName, payload.category, payload.basePrice, payload.unit, payload.depositAmount, payload.defaultDuration, (payload.flags || []).join(", "), payload.pricingNotes]);
+  appendDatabaseRecord(payload);
+  return ok();
+}
+
 function appendDatabaseRecord(payload) {
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName("Database") || spreadsheet.insertSheet("Database");
@@ -164,7 +174,7 @@ function appendDatabaseRecord(payload) {
 function readDatabase() {
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName("Database");
-  const data = { ownedDog: [], boardingDog: [], request: [], maintenance: [], timesheet: [] };
+  const data = { ownedDog: [], boardingDog: [], request: [], maintenance: [], timesheet: [], service: [] };
   if (!sheet || sheet.getLastRow() < 2) return data;
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
   const latest = {};

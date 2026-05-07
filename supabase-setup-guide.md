@@ -11,7 +11,7 @@ Use this after reviewing the local page.
 5. Copy the full SQL into Supabase.
 6. Run it.
 
-This creates one table named `kennel_records` for daily tasks, timesheets, dogs, boarding dogs, requests, maintenance, and services.
+This creates one table named `kennel_records` for daily tasks, timesheets, dogs, boarding dogs, requests, maintenance, and services. It also creates a public Supabase Storage bucket named `kennel-media` for dog profile photos and uploaded media previews.
 
 ## 2. Add The Supabase Keys To The Webpage
 
@@ -49,7 +49,14 @@ https://vwvkzniygessvwifrwvn.supabase.co/auth/v1/callback
 
 Important: Google and Facebook login will not complete from a `file://` preview. Test social login from the hosted website or from a local web server URL such as `http://localhost:8000`.
 
-## 4. Quick Auth Troubleshooting
+## 4. Confirm Media Storage
+
+1. In Supabase, go to Storage.
+2. Confirm there is a bucket named `kennel-media`.
+3. Confirm it is public.
+4. If the SQL policies were not applied, allow the anon/public key to read and upload objects in this bucket.
+
+## 5. Quick Auth Troubleshooting
 
 Google 403 usually means one of these is wrong:
 
@@ -67,7 +74,7 @@ Facebook refusing the connection usually means one of these is wrong:
 - The Facebook app is still in Development mode and the login user is not added as a tester/admin/developer.
 - The `email` permission is not enabled or ready for testing.
 
-## 5. Review Before Deploying
+## 6. Review Before Deploying
 
 Open the local file:
 
@@ -75,7 +82,7 @@ Open the local file:
 
 The page will work in local fallback mode until Supabase URL and anon key are added. Google and Facebook login need the page to be hosted on a real URL.
 
-## 6. Admin Access
+## 7. Admin Access
 
 Admin access is controlled in `script.js`:
 

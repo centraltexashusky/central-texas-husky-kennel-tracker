@@ -47,3 +47,30 @@ for update
 to anon, authenticated
 using (true)
 with check (true);
+
+insert into storage.buckets (id, name, public)
+values ('kennel-media', 'kennel-media', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Kennel app can read media" on storage.objects;
+drop policy if exists "Kennel app can upload media" on storage.objects;
+drop policy if exists "Kennel app can update media" on storage.objects;
+
+create policy "Kennel app can read media"
+on storage.objects
+for select
+to anon, authenticated
+using (bucket_id = 'kennel-media');
+
+create policy "Kennel app can upload media"
+on storage.objects
+for insert
+to anon, authenticated
+with check (bucket_id = 'kennel-media');
+
+create policy "Kennel app can update media"
+on storage.objects
+for update
+to anon, authenticated
+using (bucket_id = 'kennel-media')
+with check (bucket_id = 'kennel-media');

@@ -1,5 +1,6 @@
 const SUPABASE_URL = "https://vwvkzniygessvwifrwvn.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_IeKmeCMalVYUnYQUe3gEew_NdjAzmAQ";
+const MEDIA_BUCKET = "kennel-media";
 const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 
@@ -25,6 +26,7 @@ let supabaseClient = null;
 let detailDialogContext = null;
 let pendingCustomerBooking = null;
 let activeClockIn = JSON.parse(localStorage.getItem("cth-active-clock-in") || "null") || "";
+const selectedDogPhotos = { owned: null, boarding: null };
 
 const defaultDailyTasks = {
   morning: [
@@ -206,12 +208,12 @@ function readRecords(type) {
 }
 
 function compactRecordsForStorage(records) {
-  const maxInlineMediaLength = 700000;
+  const maxInlineMediaLength = 1800000;
   return records.map((record) => {
     const copy = { ...record };
     if (copy.profilePhotoData && copy.profilePhotoData.length > maxInlineMediaLength) {
       copy.profilePhotoData = "";
-      copy.profilePhotoNote = "Large uploaded profile photo was not kept inline. Use a shared image link or upload a smaller image.";
+      copy.profilePhotoNote = "Large uploaded profile photo was not kept inline. Upload to Supabase Storage or use a shared image link.";
     }
     if (Array.isArray(copy.mediaItems)) {
       copy.mediaItems = copy.mediaItems.map((item) =>
@@ -469,6 +471,43 @@ function fileToDataUrl(input) {
   return compressImageFile(file);
 }
 
+function selectedPhotoFor(kind, input) {
+  return input?.files?.[0] || selectedDogPhotos[kind]?.file || null;
+}
+
+async function uploadDogPhotoToSupabase(file, dogId) {
+  if (!supabaseClient || !file) return "";
+  const extension = (file.name.split(".").pop() || "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+  const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
+  const path = `dog-photos/${safeDogId}-${Date.now()}.${extension}`;
+  const { data, error } = await supabaseClient.storage.from(MEDIA_BUCKET).upload(path, file, {
+    upsert: true,
+    contentType: file.type || "image/jpeg",
+  });
+  if (error) {
+    showToast(`Photo upload failed: ${error.message}`);
+    return "";
+  }
+  const { data: urlData } = supabaseClient.storage.from(MEDIA_BUCKET).getPublicUrl(data.path);
+  return urlData?.publicUrl || "";
+}
+
+async function durableDogPhoto(kind, existing, formData, photoInput, dogId) {
+  const file = selectedPhotoFor(kind, photoInput);
+  const uploadedUrl = file ? await uploadDogPhotoToSupabase(file, dogId) : "";
+  const cachedPreview = selectedDogPhotos[kind]?.previewDataUrl || "";
+  if (uploadedUrl) {
+    return { profilePhotoUrl: uploadedUrl, profilePhotoData: "" };
+  }
+  if (formData.profilePhotoUrl) {
+    return { profilePhotoUrl: formData.profilePhotoUrl, profilePhotoData: "" };
+  }
+  if (existing.profilePhotoUrl) {
+    return { profilePhotoUrl: existing.profilePhotoUrl, profilePhotoData: existing.profilePhotoData || "" };
+  }
+  return { profilePhotoUrl: "", profilePhotoData: cachedPreview || existing.profilePhotoData || "" };
+}
+
 function readSmallFileDataUrl(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -508,7 +547,7 @@ function setDogPhoto(kind, record) {
   const caption = isOwned ? $("#ownedDogPhotoName") : $("#boardingDogPhotoName");
   const initials = isOwned ? $("#ownedDogPhotoInitials") : $("#boardingDogPhotoInitials");
   const name = isOwned ? record.callName : record.dogName;
-  const photo = record.profilePhotoData || record.profilePhotoUrl;
+  const photo = record.profilePhotoUrl || record.profilePhotoData;
   if (photo) {
     img.src = photo;
     img.hidden = false;
@@ -527,12 +566,16 @@ async function previewSelectedDogPhoto(kind) {
   const input = isOwned ? $("#ownedDogPhotoInput") : $("#boardingDogPhotoInput");
   const img = isOwned ? $("#ownedDogPhotoPreview") : $("#boardingDogPhotoPreview");
   const initials = isOwned ? $("#ownedDogPhotoInitials") : $("#boardingDogPhotoInitials");
-  const dataUrl = await fileToDataUrl(input);
+  const file = input.files?.[0];
+  if (!file) return;
+  const dataUrl = await compressImageFile(file, { maxDimension: 700, quality: 0.62 });
   if (!dataUrl) return;
+  selectedDogPhotos[kind] = { file, previewDataUrl: dataUrl };
   img.src = dataUrl;
   img.hidden = false;
   initials.hidden = true;
-  clearFieldError(isOwned ? $("#ourDogForm").elements.profilePhotoUrl : $("#boardingDogForm").elements.profilePhotoUrl);
+  const formEl = isOwned ? $("#ourDogForm") : $("#boardingDogForm");
+  if (formEl?.elements?.profilePhotoUrl) clearFieldError(formEl.elements.profilePhotoUrl);
 }
 
 function avatarText(name = "") {
@@ -869,6 +912,7 @@ function startAutoSync() {
 
 function payloadForSheet(payload) {
   const copy = { ...payload };
+  if (copy.profilePhotoUrl) delete copy.profilePhotoData;
   delete copy.profilePhoto;
   delete copy.requestMedia;
   delete copy.maintenanceMedia;
@@ -1341,6 +1385,7 @@ function isCurrentlyBoarding(record) {
 
 function openOwnedDog(record = {}) {
   $("#ownedDogDetail").hidden = false;
+  selectedDogPhotos.owned = null;
   $("#ownedDogDetailTitle").textContent = record.id ? `Edit ${record.callName || "Dog"}` : "Add New Dog";
   $("#ourDogForm").reset();
   setFormValues($("#ourDogForm"), record);
@@ -1354,6 +1399,7 @@ function openOwnedDog(record = {}) {
 
 function openBoardingDog(record = {}) {
   $("#boardingDogDetail").hidden = false;
+  selectedDogPhotos.boarding = null;
   $("#boardingDogDetailTitle").textContent = record.id ? `Edit ${record.dogName || "Boarding Dog"}` : "Add Boarding Dog";
   $("#boardingDogForm").reset();
   setFormValues($("#boardingDogForm"), record);
@@ -1409,7 +1455,8 @@ function updateDhppWarning() {
 }
 
 function hasRequiredPhoto(existing, photoInput, photoLink) {
-  return Boolean(existing.profilePhotoData || existing.profilePhotoUrl || photoInput.files?.[0] || photoLink);
+  const kind = photoInput?.id === "ownedDogPhotoInput" ? "owned" : "boarding";
+  return Boolean(existing.profilePhotoData || existing.profilePhotoUrl || selectedPhotoFor(kind, photoInput) || photoLink);
 }
 
 function activeOwnedDog() {
@@ -2000,23 +2047,44 @@ function emailNow(subjectText, bodyText) {
   window.location.href = `mailto:${OWNER_ALERT_EMAIL}?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
 }
 
+function normalizeHelperName(value = "") {
+  return value.toLowerCase().replace(/^ms\.?\s+/, "").replace(/\s+/g, " ").trim();
+}
+
+function timesheetBelongsToCurrentUser(record) {
+  if (!record || !currentUser) return false;
+  const currentEmail = (currentUser.email || helperEmail.value || "").toLowerCase();
+  const recordEmail = (record.helperEmail || "").toLowerCase();
+  if (currentEmail && recordEmail && currentEmail === recordEmail) return true;
+  const currentNames = [currentUser.name, helperName.value].filter(Boolean).map(normalizeHelperName);
+  const recordName = normalizeHelperName(record.helperName || "");
+  return Boolean(recordName && currentNames.includes(recordName));
+}
+
+function findOpenClockInForCurrentUser() {
+  if (!currentUser) return null;
+  return readRecords("timesheet")
+    .filter((record) => record.clockInTime && !record.clockOutTime && timesheetBelongsToCurrentUser(record))
+    .sort((a, b) => new Date(b.clockInTime) - new Date(a.clockInTime))[0] || null;
+}
+
+function syncActiveClockInFromOpenRecord() {
+  const open = findOpenClockInForCurrentUser();
+  if (!open) return null;
+  activeClockIn = { id: open.id, clockInTime: open.clockInTime, helperEmail: open.helperEmail || currentUser.email || helperEmail.value || "" };
+  localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
+  return open;
+}
+
 function updateTimeDisplays() {
   if (activeClockIn?.clockInTime && currentUser?.email) {
     const openRecord = readRecords("timesheet").find((record) => record.id === activeClockIn.id);
-    if (openRecord?.helperEmail && openRecord.helperEmail !== currentUser.email) {
+    if (openRecord && !timesheetBelongsToCurrentUser(openRecord)) {
       activeClockIn = "";
       localStorage.removeItem("cth-active-clock-in");
     }
   }
-  if (!activeClockIn?.clockInTime && currentUser?.email) {
-    const open = readRecords("timesheet")
-      .filter((record) => record.helperEmail === currentUser.email && record.clockInTime && !record.clockOutTime)
-      .sort((a, b) => new Date(b.clockInTime) - new Date(a.clockInTime))[0];
-    if (open) {
-      activeClockIn = { id: open.id, clockInTime: open.clockInTime, helperEmail: open.helperEmail };
-      localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
-    }
-  }
+  if (!activeClockIn?.clockInTime) syncActiveClockInFromOpenRecord();
   $("#clockInDisplay").textContent = activeClockIn?.clockInTime ? formatDateTime(activeClockIn.clockInTime) : "Not clocked in";
   $("#clockOutDisplay").textContent = activeClockIn?.clockInTime ? "Ready to clock out" : "Not clocked out";
 }
@@ -2226,6 +2294,7 @@ function initEvents() {
       showToast("Sign in first.");
       return;
     }
+    if (!activeClockIn?.clockInTime) syncActiveClockInFromOpenRecord();
     if (activeClockIn?.clockInTime) {
       showToast(`Already clocked in at ${formatDateTime(activeClockIn.clockInTime)}.`);
       return;
@@ -2250,12 +2319,21 @@ function initEvents() {
     showToast(`Clock-in confirmed: ${formatDateTime(clockInTime)}.`);
   });
   $("#clockOutButton").addEventListener("click", () => {
-    if (!activeClockIn?.clockInTime) {
+    let openRecord = activeClockIn?.clockInTime ? readRecords("timesheet").find((record) => record.id === activeClockIn.id) : null;
+    if (!openRecord) openRecord = syncActiveClockInFromOpenRecord();
+    if (!activeClockIn?.clockInTime || !openRecord) {
       showToast("Clock in first, or use Manual Entry.");
       return;
     }
     const clockOutTime = new Date().toISOString();
-    saveTimeEntry({ id: activeClockIn.id, helperName: helperName.value || "Unknown helper", helperEmail: helperEmail.value, clockInTime: activeClockIn.clockInTime, clockOutTime });
+    saveTimeEntry({
+      id: openRecord.id,
+      helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown helper",
+      helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
+      clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
+      clockOutTime,
+      note: openRecord.note === "Open clock-in" ? "" : openRecord.note,
+    });
     activeClockIn = "";
     localStorage.removeItem("cth-active-clock-in");
     updateTimeDisplays();
@@ -2326,17 +2404,20 @@ function initEvents() {
       const photoField = event.currentTarget.elements.profilePhotoUrl;
       const hasPhoto = hasRequiredPhoto(existing, $("#ownedDogPhotoInput"), formData.profilePhotoUrl);
       if (!validateForm(event.currentTarget, [{ field: photoField, valid: hasPhoto, message: "Add a profile photo by tapping the square, or paste a shared photo link." }])) return;
-      const photoData = await fileToDataUrl($("#ownedDogPhotoInput"));
+      const dogId = existing.id || formData.id || uid("ownedDog");
+      const photo = await durableDogPhoto("owned", existing, formData, $("#ownedDogPhotoInput"), dogId);
       const isFemale = formData.sex === "Female";
       const payload = {
         ...existing,
         type: "ownedDog",
+        id: dogId,
         submittedAt: existing.submittedAt || new Date().toISOString(),
         ...formData,
         rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
         lastHeat: isFemale ? formData.lastHeat : "",
         nextHeat: isFemale ? formData.nextHeat : "",
-        profilePhotoData: photoData || existing.profilePhotoData || "",
+        profilePhotoUrl: photo.profilePhotoUrl,
+        profilePhotoData: photo.profilePhotoData,
         exerciseLogs: existing.exerciseLogs || [],
         trainingLogs: existing.trainingLogs || [],
       };
@@ -2347,6 +2428,7 @@ function initEvents() {
       renderOwnedActivity(record);
       renderOwnedDogs();
       renderBoardingDogs();
+      selectedDogPhotos.owned = null;
       setOwnedFormLocked(true);
       showDetailDialog("Dog Saved", `<p>${escapeHtml(record.callName || record.showName || "Dog")} has been saved.</p>`);
     } catch (error) {
@@ -2461,15 +2543,18 @@ function initEvents() {
       const photoField = event.currentTarget.elements.profilePhotoUrl;
       const hasPhoto = hasRequiredPhoto(existing, $("#boardingDogPhotoInput"), formData.profilePhotoUrl);
       if (!validateForm(event.currentTarget, [{ field: photoField, valid: hasPhoto, message: "Add a profile photo by tapping the square, or paste a shared photo link." }])) return;
-      const photoData = await fileToDataUrl($("#boardingDogPhotoInput"));
+      const dogId = existing.id || formData.id || uid("boardingDog");
+      const photo = await durableDogPhoto("boarding", existing, formData, $("#boardingDogPhotoInput"), dogId);
       const payload = {
         ...existing,
         type: "boardingDog",
+        id: dogId,
         submittedAt: existing.submittedAt || new Date().toISOString(),
         ...formData,
         rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
         flags: checkedFrom(event.currentTarget, "boardingFlags"),
-        profilePhotoData: photoData || existing.profilePhotoData || "",
+        profilePhotoUrl: photo.profilePhotoUrl,
+        profilePhotoData: photo.profilePhotoData,
         stays: existing.stays || [],
       };
       const record = upsertRecord("boardingDog", payload);
@@ -2479,6 +2564,7 @@ function initEvents() {
       renderBoardingStays(record);
       renderBoardingDogs();
       renderBoardingRequests();
+      selectedDogPhotos.boarding = null;
       setBoardingFormLocked(true);
       showDetailDialog("Boarding Dog Saved", `<p>${escapeHtml(record.dogName || "Boarding dog")} has been saved.</p>`);
     } catch (error) {
