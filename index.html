@@ -16,6 +16,7 @@
         <nav class="side-nav" aria-label="Kennel tracker sections">
           <button class="nav-button is-active" type="button" data-page="loginPage" data-roles="public">Login</button>
           <button class="nav-button" type="button" data-page="customerPage" data-roles="customer">Add Dog</button>
+          <button class="nav-button" type="button" data-page="customerRequestsPage" data-roles="customer">My Request</button>
           <button class="nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin">Main Dashboard</button>
           <button class="nav-button" type="button" data-page="timesheetPage" data-roles="helper,admin">Timesheet</button>
           <button class="nav-button" type="button" data-page="dailyPage" data-roles="helper,admin">Daily Tasks</button>
@@ -53,6 +54,7 @@
         <select id="mobilePageSelect">
           <option value="loginPage" data-roles="public">Login</option>
           <option value="customerPage" data-roles="customer">Add Dog</option>
+          <option value="customerRequestsPage" data-roles="customer">My Request</option>
           <option value="dashboardPage" data-roles="helper,admin">Main Dashboard</option>
           <option value="timesheetPage">Timesheet</option>
           <option value="dailyPage">Daily Tasks</option>
@@ -112,6 +114,10 @@
               <label>Owner name<input type="text" name="ownerName" id="customerOwnerName" required /></label>
               <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
               <label>Owner email<input type="email" name="ownerEmail" id="customerOwnerEmail" required /></label>
+              <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
+              <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
+              <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
+              <label>Rabies duration<select name="rabiesDuration"><option value="">Select duration</option><option>1 year</option><option>3 years</option><option>Unknown</option></select></label>
             </div>
             <label>Care notes<textarea name="specialCare" rows="3" placeholder="Feeding, medication, behavior, allergies, or handling notes"></textarea></label>
             <button type="submit">Add Dog To Request</button>
@@ -134,12 +140,20 @@
         </section>
       </section>
 
+      <section class="page-view" id="customerRequestsPage">
+        <section class="form-section">
+          <div class="section-heading"><span>R</span><div><h2>My Request</h2><p>Review boarding requests and requested services for your dogs.</p></div></div>
+          <div class="record-grid" id="customerRequestList"></div>
+        </section>
+      </section>
+
       <section class="page-view" id="dashboardPage">
         <section class="form-section">
           <div class="section-heading"><span>D</span><div><h2>Main Dashboard</h2><p>High-level kennel view, today timeline, and calendar review.</p></div></div>
           <div class="dashboard-filter">
             <label>Review date<input type="date" id="dashboardDate" /></label>
           </div>
+          <div class="task-calendar" id="dashboardTaskCalendar" aria-label="Daily task calendar"></div>
           <div class="dashboard-grid" id="dashboardCards"></div>
         </section>
         <section class="recent-submissions">
@@ -745,7 +759,10 @@
     <dialog id="detailDialog" class="detail-dialog">
       <div class="dialog-header">
         <h2 id="detailDialogTitle">Details</h2>
-        <button type="button" class="secondary-button" id="closeDetailDialog">Close</button>
+        <div class="dialog-actions">
+          <button type="button" class="secondary-button complete-button" id="completeDetailTaskButton" hidden>Complete Task</button>
+          <button type="button" class="secondary-button" id="closeDetailDialog">Close</button>
+        </div>
       </div>
       <div id="detailDialogBody" class="detail-dialog-body"></div>
     </dialog>
@@ -755,6 +772,16 @@
         <button type="button" class="secondary-button" id="closeMediaDialog">Close</button>
       </div>
       <div id="mediaDialogBody" class="media-preview-body"></div>
+    </dialog>
+    <dialog id="bookingConfirmDialog" class="detail-dialog">
+      <div class="dialog-header">
+        <h2>Confirm Boarding Request</h2>
+        <button type="button" class="secondary-button" id="cancelBookingRequestButton">Cancel</button>
+      </div>
+      <div id="bookingConfirmBody" class="detail-dialog-body"></div>
+      <div class="dialog-footer">
+        <button type="button" id="confirmBookingRequestButton">Confirm Request</button>
+      </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>

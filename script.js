@@ -22,6 +22,8 @@ const headerLogoutButton = $("#headerLogoutButton");
 let syncIntervalId = null;
 let currentUser = null;
 let supabaseClient = null;
+let detailDialogContext = null;
+let pendingCustomerBooking = null;
 let activeClockIn = JSON.parse(localStorage.getItem("cth-active-clock-in") || "null") || "";
 
 const defaultDailyTasks = {
@@ -455,16 +457,17 @@ function pageAllowed(pageId) {
 }
 
 function updateNavigationAccess() {
+  const customerPages = ["customerPage", "customerRequestsPage"];
   $$(".nav-button").forEach((button) => {
     const locked = !pageAllowed(button.dataset.page);
     button.disabled = locked;
     button.classList.toggle("is-locked", locked);
-    const hidden = (currentRole() === "customer" && button.dataset.page !== "customerPage") || (!helperIsLoggedIn() && button.dataset.page !== "loginPage");
+    const hidden = (currentRole() === "customer" && !customerPages.includes(button.dataset.page)) || (!helperIsLoggedIn() && button.dataset.page !== "loginPage");
     button.classList.toggle("is-hidden-nav", hidden);
   });
   [...$("#mobilePageSelect").options].forEach((option) => {
     option.disabled = !pageAllowed(option.value);
-    option.hidden = (currentRole() === "customer" && option.value !== "customerPage") || (!helperIsLoggedIn() && option.value !== "loginPage");
+    option.hidden = (currentRole() === "customer" && !customerPages.includes(option.value)) || (!helperIsLoggedIn() && option.value !== "loginPage");
   });
 }
 
@@ -782,8 +785,12 @@ function escapeHtml(value = "") {
 
 function mediaLinkHtml(record) {
   const links = [];
-  if (record.mediaLink) links.push(`<a href="${escapeHtml(record.mediaLink)}" target="_blank" rel="noopener">Open shared media</a>`);
-  if (record.profilePhotoUrl) links.push(`<a href="${escapeHtml(record.profilePhotoUrl)}" target="_blank" rel="noopener">Open profile photo</a>`);
+  if (record.mediaLink) {
+    links.push(`<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(record.mediaLink)}" data-media-type="external/link" data-media-name="Shared media">Open shared media</button>`);
+  }
+  if (record.profilePhotoUrl) {
+    links.push(`<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(record.profilePhotoUrl)}" data-media-type="external/link" data-media-name="Profile photo">Open profile photo</button>`);
+  }
   if (record.mediaItems?.length) {
     links.push(
       ...record.mediaItems.map(
@@ -807,16 +814,24 @@ function detailRows(record, keys) {
     .join("");
 }
 
-function showDetailDialog(title, html) {
+function showDetailDialog(title, html, context = null) {
+  detailDialogContext = context;
   $("#detailDialogTitle").textContent = title;
   $("#detailDialogBody").innerHTML = html;
+  const completeButton = $("#completeDetailTaskButton");
+  if (context && ["request", "maintenance"].includes(context.type)) {
+    const record = readRecords(context.type).find((item) => item.id === context.id);
+    completeButton.hidden = Boolean(record?.completed);
+  } else {
+    completeButton.hidden = true;
+  }
   $("#detailDialog").showModal();
 }
 
 function showMediaDialog(src, type, name) {
   $("#mediaDialogTitle").textContent = name || "Media";
   if (!src) {
-    $("#mediaDialogBody").innerHTML = "<p>This older record only saved the file name. Upload media again or paste a shared media link to preview it here.</p>";
+    $("#mediaDialogBody").innerHTML = `<p>This older record only saved the file name, so the image or video itself is not available to preview. Re-upload the file or paste a shared media link on the item to view it here.</p>${name ? `<p><strong>Saved file name:</strong> ${escapeHtml(name)}</p>` : ""}`;
     $("#mediaDialog").showModal();
     return;
   }
@@ -824,9 +839,13 @@ function showMediaDialog(src, type, name) {
   const safeName = escapeHtml(name || "Uploaded media");
   $("#mediaDialogBody").innerHTML = type?.startsWith("video/")
     ? `<video src="${safeSrc}" controls playsinline></video>`
-    : type?.startsWith("image/")
+    : type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i.test(src)
       ? `<img src="${safeSrc}" alt="${safeName}" />`
-      : `<p>This file type cannot be previewed here.</p><a href="${safeSrc}" target="_blank" rel="noopener">Open file</a>`;
+      : /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(src)
+        ? `<video src="${safeSrc}" controls playsinline></video>`
+        : type === "external/link"
+          ? `<iframe class="media-iframe" src="${safeSrc}" title="${safeName}"></iframe><a href="${safeSrc}" target="_blank" rel="noopener">Open in a new tab</a>`
+          : `<p>This file type cannot be previewed here.</p><a href="${safeSrc}" target="_blank" rel="noopener">Open file</a>`;
   $("#mediaDialog").showModal();
 }
 
@@ -1257,7 +1276,33 @@ function renderDashboard() {
   $("#dashboardAlerts").innerHTML = alerts.length
     ? alerts.map((alert) => typeof alert === "string" ? `<article class="record-card is-urgent">${alert}</article>` : `<article class="record-card clickable-card is-urgent" data-action="view-alert" data-type="${alert.type}" data-id="${alert.id}">${alert.html}</article>`).join("")
     : "<p>No urgent dashboard alerts right now.</p>";
+  renderDashboardTaskCalendar();
   renderDashboardTimeline();
+}
+
+function renderDashboardTaskCalendar() {
+  const calendar = $("#dashboardTaskCalendar");
+  if (!calendar) return;
+  const selectedDate = $("#dashboardDate")?.value || todayDate();
+  const selected = new Date(`${selectedDate}T12:00:00`);
+  const year = selected.getFullYear();
+  const month = selected.getMonth();
+  const monthName = selected.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const reportCounts = readRecords("dailyTask").reduce((counts, record) => {
+    const date = record.date || record.submittedAt?.slice(0, 10);
+    if (date) counts[date] = (counts[date] || 0) + 1;
+    return counts;
+  }, {});
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const blanks = Array.from({ length: firstDay }, () => `<span class="calendar-blank"></span>`);
+  const days = Array.from({ length: daysInMonth }, (_, index) => {
+    const day = index + 1;
+    const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const count = reportCounts[date] || 0;
+    return `<button type="button" class="calendar-day ${date === selectedDate ? "is-selected" : ""} ${count ? "has-records" : ""}" data-date="${date}"><span>${day}</span>${count ? `<small>${count}</small>` : ""}</button>`;
+  });
+  calendar.innerHTML = `<div class="calendar-title"><strong>Task Calendar</strong><span>${monthName}</span></div><div class="calendar-weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-grid">${blanks.join("")}${days.join("")}</div>`;
 }
 
 function renderDashboardTimeline() {
@@ -1321,7 +1366,9 @@ function showDashboardDetail(key) {
   const html = records.length
     ? records.map((record) => `<article class="record-card">${genericDetailHtml(record)}</article>`).join("")
     : "<p>No open items in this category.</p>";
-  showDetailDialog(labels[key] || "Dashboard Details", html);
+  const type = key === "requests" ? "request" : key === "maintenance" ? "maintenance" : "";
+  const context = type && records.length === 1 ? { type, id: records[0].id } : null;
+  showDetailDialog(labels[key] || "Dashboard Details", html, context);
 }
 
 function renderFinancials() {
@@ -1382,6 +1429,24 @@ function renderCustomerDogs() {
   updateCustomerEstimate();
 }
 
+function renderCustomerRequests() {
+  const list = $("#customerRequestList");
+  if (!list) return;
+  const records = readRecords("boardingDog")
+    .filter((record) => record.customerRequest && (record.ownerEmail === currentUser?.email || currentRole() === "admin"))
+    .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+  list.innerHTML = records.length
+    ? records
+        .map((record) => {
+          const stay = record.stays?.[0] || {};
+          const services = stay.requests?.length ? stay.requests.join(", ") : "No added services";
+          const estimate = record.estimatedTotal ? `<p><strong>Estimated total:</strong> ${money(record.estimatedTotal)}</p>` : "";
+          return `<article class="record-card clickable-card ${record.boardingStatus === "Pending" ? "is-pending" : ""}" data-action="view-customer-request" data-id="${record.id}"><strong>${escapeHtml(record.dogName || "Dog")} - ${escapeHtml(record.boardingStatus || "Pending")}</strong><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${estimate}</article>`;
+        })
+        .join("")
+    : "<p>No boarding requests submitted yet.</p>";
+}
+
 function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
   const services = readRecords("service").filter((service) => (service.flags || []).includes("Active") && !(service.flags || []).includes("Admin only"));
@@ -1426,6 +1491,75 @@ function updateCustomerEstimate() {
   $("#customerEstimate").textContent = estimate.dogs.length
     ? `${estimate.dogs.length} dog(s), ${estimate.days} boarding day(s), ${estimate.services.length} service(s): estimated total ${money(estimate.total)}.`
     : "Select dog(s), dates, and services to see an estimate.";
+}
+
+function showBookingConfirmDialog(estimate) {
+  pendingCustomerBooking = estimate;
+  const dogList = estimate.dogs.map((dog) => `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}</li>`).join("");
+  const serviceList = estimate.services.length
+    ? estimate.services.map((service) => `<li>${escapeHtml(service.serviceName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</li>`).join("")
+    : "<li>No added services selected</li>";
+  $("#bookingConfirmBody").innerHTML = `
+    <div class="booking-summary">
+      <div><strong>Dog(s)</strong><ul>${dogList}</ul></div>
+      <div><strong>Stay</strong><p>${formatDateTime(estimate.dropoffTime)} to ${formatDateTime(estimate.pickupTime)}</p><p>${estimate.days} boarding day(s)</p></div>
+      <div><strong>Services</strong><ul>${serviceList}</ul></div>
+      <div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>
+      ${estimate.requestNotes ? `<div><strong>Notes</strong><p>${escapeHtml(estimate.requestNotes)}</p></div>` : ""}
+    </div>
+  `;
+  $("#bookingConfirmDialog").showModal();
+}
+
+async function submitPendingCustomerBooking() {
+  const estimate = pendingCustomerBooking;
+  if (!estimate?.dogs?.length) return;
+  for (const dog of estimate.dogs) {
+    const stay = {
+      id: uid("stay"),
+      status: "Pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      dropoffTime: estimate.dropoffTime,
+      pickupTime: estimate.pickupTime,
+      requests: estimate.services.map((service) => `${service.serviceName} requested`),
+      stayNotes: estimate.requestNotes,
+      estimatedTotal: estimate.total,
+    };
+    stay.bathPlan = bathPlanForStay(stay);
+    const payload = {
+      type: "boardingDog",
+      id: uid("boardingDog"),
+      submittedAt: new Date().toISOString(),
+      boardingStatus: "Pending",
+      customerRequest: true,
+      dogName: dog.dogName,
+      breedDescription: dog.breedDescription,
+      ownerName: dog.ownerName,
+      ownerPhone: dog.ownerPhone,
+      ownerEmail: dog.ownerEmail,
+      specialCare: dog.specialCare,
+      spayNeuterStatus: dog.spayNeuterStatus,
+      dhppDate: dog.dhppDate,
+      rabiesDate: dog.rabiesDate,
+      rabiesDuration: dog.rabiesDuration,
+      estimatedTotal: estimate.total,
+      requestedServices: estimate.services.map((service) => service.serviceName),
+      flags: ["Required update from owner"],
+      stays: [stay],
+    };
+    const record = upsertRecord("boardingDog", payload);
+    await sendPayload(record);
+  }
+  pendingCustomerBooking = null;
+  $("#bookingConfirmDialog").close();
+  $("#customerBookingForm").reset();
+  renderBoardingDogs();
+  renderCustomerDogs();
+  renderCustomerRequests();
+  renderDashboard();
+  switchPage("customerRequestsPage");
+  showToast("Boarding request submitted.");
 }
 
 function renderServices() {
@@ -1475,6 +1609,7 @@ function renderAllRecords() {
   renderCfoNotes();
   renderSettingsUsers();
   renderCustomerDogs();
+  renderCustomerRequests();
   renderDemoSubmissions();
 }
 
@@ -1568,7 +1703,17 @@ function initEvents() {
   });
   syncNowButton.addEventListener("click", loadRemoteRecords);
   headerLogoutButton.addEventListener("click", clearHelper);
-  $("#dashboardDate").addEventListener("change", renderDashboardTimeline);
+  $("#dashboardDate").addEventListener("change", () => {
+    renderDashboardTaskCalendar();
+    renderDashboardTimeline();
+  });
+  $("#dashboardTaskCalendar").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-date]");
+    if (!button) return;
+    $("#dashboardDate").value = button.dataset.date;
+    renderDashboardTaskCalendar();
+    renderDashboardTimeline();
+  });
   $("#dashboardCards").addEventListener("click", (event) => {
     const card = event.target.closest('[data-action="dashboard-detail"]');
     if (card) showDashboardDetail(card.dataset.key);
@@ -1585,7 +1730,7 @@ function initEvents() {
     const card = event.target.closest('[data-action="view-alert"]');
     if (!card) return;
     const record = readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
-    if (record) showDetailDialog(titleForRecord(card.dataset.type, record), detailForRecord(card.dataset.type, record));
+    if (record) showDetailDialog(titleForRecord(card.dataset.type, record), detailForRecord(card.dataset.type, record), { type: card.dataset.type, id: record.id });
   });
 
   $("#googleLoginButton").addEventListener("click", () => loginWithProvider("google"));
@@ -1611,6 +1756,12 @@ function initEvents() {
     });
   });
   $("#closeDetailDialog").addEventListener("click", () => $("#detailDialog").close());
+  $("#completeDetailTaskButton").addEventListener("click", async () => {
+    if (!detailDialogContext) return;
+    await toggleRecordCompletion(detailDialogContext.type, detailDialogContext.id);
+    $("#detailDialog").close();
+    renderDashboard();
+  });
   $("#closeMediaDialog").addEventListener("click", () => $("#mediaDialog").close());
   document.addEventListener("click", (event) => {
     const mediaButton = event.target.closest('[data-action="view-media"]');
@@ -1962,7 +2113,7 @@ function initEvents() {
     const card = event.target.closest('[data-action="view-request"]');
     if (!card) return;
     const record = readRecords("request").find((item) => item.id === card.dataset.id);
-    if (record) showDetailDialog(titleForRecord("request", record), requestDetailHtml(record));
+    if (record) showDetailDialog(titleForRecord("request", record), requestDetailHtml(record), { type: "request", id: record.id });
   });
   $("#maintenanceRecords").addEventListener("click", (event) => {
     if (event.target.closest('[data-action="view-media"]')) return;
@@ -1975,7 +2126,7 @@ function initEvents() {
     const card = event.target.closest('[data-action="view-maintenance"]');
     if (!card) return;
     const record = readRecords("maintenance").find((item) => item.id === card.dataset.id);
-    if (record) showDetailDialog(titleForRecord("maintenance", record), maintenanceDetailHtml(record));
+    if (record) showDetailDialog(titleForRecord("maintenance", record), maintenanceDetailHtml(record), { type: "maintenance", id: record.id });
   });
 
   $("#serviceForm").addEventListener("submit", async (event) => {
@@ -2032,6 +2183,12 @@ function initEvents() {
   });
   $("#customerBookingForm").addEventListener("change", updateCustomerEstimate);
   $("#customerDogList").addEventListener("change", updateCustomerEstimate);
+  $("#customerRequestList").addEventListener("click", (event) => {
+    const card = event.target.closest('[data-action="view-customer-request"]');
+    if (!card) return;
+    const record = readRecords("boardingDog").find((item) => item.id === card.dataset.id);
+    if (record) showDetailDialog(titleForRecord("boardingDog", record), detailForRecord("boardingDog", record));
+  });
   $("#customerBookingForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!validateForm(event.currentTarget)) return;
@@ -2040,41 +2197,13 @@ function initEvents() {
       showToast("Select at least one dog for the boarding request.");
       return;
     }
-    for (const dog of estimate.dogs) {
-      const stay = {
-        id: uid("stay"),
-        status: "Pending",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        dropoffTime: estimate.dropoffTime,
-        pickupTime: estimate.pickupTime,
-        requests: estimate.services.map((service) => `${service.serviceName} requested`),
-        stayNotes: estimate.requestNotes,
-      };
-      stay.bathPlan = bathPlanForStay(stay);
-      const payload = {
-        type: "boardingDog",
-        id: uid("boardingDog"),
-        submittedAt: new Date().toISOString(),
-        boardingStatus: "Pending",
-        customerRequest: true,
-        dogName: dog.dogName,
-        breedDescription: dog.breedDescription,
-        ownerName: dog.ownerName,
-        ownerPhone: dog.ownerPhone,
-        ownerEmail: dog.ownerEmail,
-        specialCare: dog.specialCare,
-        flags: ["Required update from owner"],
-        stays: [stay],
-      };
-      const record = upsertRecord("boardingDog", payload);
-      await sendPayload(record);
-    }
-    event.currentTarget.reset();
-    renderBoardingDogs();
-    renderCustomerDogs();
-    showToast("Boarding request submitted.");
+    showBookingConfirmDialog(estimate);
   });
+  $("#cancelBookingRequestButton").addEventListener("click", () => {
+    pendingCustomerBooking = null;
+    $("#bookingConfirmDialog").close();
+  });
+  $("#confirmBookingRequestButton").addEventListener("click", submitPendingCustomerBooking);
 
   $("#cfoNoteForm").addEventListener("submit", async (event) => {
     event.preventDefault();

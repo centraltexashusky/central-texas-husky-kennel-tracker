@@ -471,6 +471,31 @@ h2 {
   margin-left: auto;
 }
 
+.booking-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.booking-summary ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.estimate-total {
+  align-items: center;
+  background: #fff6df;
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.estimate-total span {
+  font-size: 1.4rem;
+  font-weight: 900;
+}
+
 .media-preview-button {
   background: #e8efee;
   color: var(--teal-dark);
@@ -481,11 +506,69 @@ h2 {
 
 .media-preview-body img,
 .media-preview-body video {
+  background: #111;
   border-radius: 8px;
   display: block;
   max-height: 70vh;
   max-width: 100%;
   width: 100%;
+}
+
+.media-iframe {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 65vh;
+  width: 100%;
+}
+
+.task-calendar {
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 16px;
+  padding: 12px;
+}
+
+.calendar-title,
+.calendar-weekdays,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.calendar-title {
+  align-items: center;
+  grid-template-columns: 1fr auto;
+}
+
+.calendar-title span,
+.calendar-weekdays span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.calendar-day {
+  background: #fff;
+  border: 1px solid var(--line);
+  min-height: 44px;
+  padding: 6px;
+}
+
+.calendar-day.has-records {
+  border-color: var(--teal);
+}
+
+.calendar-day.is-selected {
+  background: var(--gold);
+}
+
+.calendar-day small {
+  display: block;
+  font-size: 0.72rem;
 }
 
 .summary-card {
@@ -935,6 +1018,23 @@ textarea {
   gap: 12px;
   justify-content: space-between;
   margin-bottom: 14px;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.complete-button {
+  background: #dff2e6;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 .dialog-header h2 {
