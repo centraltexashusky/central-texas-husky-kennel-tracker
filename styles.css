@@ -372,6 +372,11 @@ h2 {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.dashboard-filter {
+  margin-bottom: 14px;
+  max-width: 280px;
+}
+
 .dashboard-card {
   background: #f6f8f7;
   border: 1px solid var(--line);
@@ -541,8 +546,19 @@ label {
 
 .required-mark {
   color: var(--red);
-  font-size: 0.86rem;
+  font-size: 1.1rem;
   font-weight: 900;
+}
+
+.tracker-form.is-readonly {
+  opacity: 0.78;
+}
+
+.tracker-form.is-readonly input,
+.tracker-form.is-readonly select,
+.tracker-form.is-readonly textarea {
+  background: #eef3f2;
+  color: #5e727b;
 }
 
 .field-help,

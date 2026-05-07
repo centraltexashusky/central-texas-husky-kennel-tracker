@@ -1,4 +1,6 @@
-const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxDHHMANZoq4vz4PwwTuz4yn8MBUfFcKfTwZ0PDdOnaYQcFBqA8BF9xUF_X0-xnrXFD5w/exec";
+const SUPABASE_URL = "https://vwvkzniygessvwifrwvn.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_IeKmeCMalVYUnYQUe3gEew_NdjAzmAQ";
+const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 
 const $ = (selector) => document.querySelector(selector);
@@ -17,6 +19,8 @@ const loginHelp = $("#loginHelp");
 const syncNowButton = $("#syncNowButton");
 let syncIntervalId = null;
 let currentUser = null;
+let supabaseClient = null;
+let activeClockIn = JSON.parse(localStorage.getItem("cth-active-clock-in") || "null") || "";
 
 const HELPER_PINS = {
   "1001": { name: "Ms. Yuko", email: "yuko@centraltexashusky.com", key: "helper-yuko" },
@@ -34,6 +38,7 @@ const stateKeys = {
   maintenance: "cth-maintenance-records",
   timesheet: "cth-timesheet-records",
   service: "cth-service-records",
+  dailyTask: "cth-dailyTask-records",
   session: "cth-current-session",
 };
 
@@ -98,6 +103,58 @@ function readRecords(type) {
 
 function writeRecords(type, records) {
   localStorage.setItem(stateKeys[type], JSON.stringify(records));
+}
+
+function supabaseReady() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
+}
+
+function initSupabaseClient() {
+  if (!supabaseReady()) {
+    modeLabel.textContent = "Setup needed";
+    return;
+  }
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+  });
+}
+
+function recordTypes() {
+  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask"];
+}
+
+function userFromSupabase(supabaseUser) {
+  if (!supabaseUser?.email) return null;
+  const email = supabaseUser.email.toLowerCase();
+  const name = supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || email.split("@")[0];
+  return {
+    name,
+    email,
+    key: supabaseUser.id,
+    role: ADMIN_EMAILS.map((item) => item.toLowerCase()).includes(email) ? "admin" : "helper",
+    authProvider: "supabase",
+  };
+}
+
+async function loginWithProvider(provider) {
+  if (!supabaseClient) {
+    showToast("Add your Supabase URL and anon key first. Helper PIN still works for local testing.");
+    return;
+  }
+  const { error } = await supabaseClient.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: window.location.href.split("#")[0] },
+  });
+  if (error) showToast(error.message);
+}
+
+async function restoreSupabaseSession() {
+  if (!supabaseClient) return false;
+  const { data } = await supabaseClient.auth.getSession();
+  const user = userFromSupabase(data.session?.user);
+  if (!user) return false;
+  setHelper(user, { switchAfterLogin: false });
+  return true;
 }
 
 function mergeRecords(type, incomingRecords) {
@@ -205,7 +262,7 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove("is-visible"), 3400);
 }
 
-function setHelper(user) {
+function setHelper(user, options = {}) {
   currentUser = { ...user, role: user.role || "helper" };
   localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
   setDefaultDateAndDay();
@@ -213,22 +270,31 @@ function setHelper(user) {
   helperEmail.value = user.email || "";
   helperKey.value = user.key || "";
   $("#manualHelper").value = user.name || "";
+  $$('input[name="requestedBy"], input[name="reportedBy"]').forEach((field) => {
+    field.value = user.name || "";
+    field.readOnly = true;
+  });
   $("#timesheetHelperDisplay").textContent = currentUser.name || "No user loaded";
   loginStatus.textContent = currentUser.name ? `${currentUser.role === "admin" ? "Admin" : "Helper"} logged in: ${currentUser.name}` : "Logged in";
   loginHelp.textContent = `${currentUser.email || "PIN account"} | Access: ${currentUser.role}`;
   $("#helperPinInput").value = "";
   $("#clearHelperButton").hidden = false;
   updateNavigationAccess();
-  switchPage(currentUser.role === "admin" ? "dashboardPage" : "timesheetPage");
+  if (options.switchAfterLogin !== false) switchPage("dashboardPage");
 }
 
-function clearHelper() {
+async function clearHelper() {
+  if (supabaseClient) await supabaseClient.auth.signOut();
   currentUser = null;
   localStorage.removeItem(stateKeys.session);
   helperName.value = "";
   helperEmail.value = "";
   helperKey.value = "";
   $("#manualHelper").value = "";
+  $$('input[name="requestedBy"], input[name="reportedBy"]').forEach((field) => {
+    field.value = "";
+    field.readOnly = false;
+  });
   $("#timesheetHelperDisplay").textContent = "No user loaded";
   loginStatus.textContent = "Not logged in";
   loginHelp.textContent = "Helpers use their 4 digit PIN. Admin uses the owner/admin PIN.";
@@ -283,6 +349,10 @@ function restoreSession() {
   helperEmail.value = saved.email || "";
   helperKey.value = saved.key || "";
   $("#manualHelper").value = saved.name || "";
+  $$('input[name="requestedBy"], input[name="reportedBy"]').forEach((field) => {
+    field.value = saved.name || "";
+    field.readOnly = true;
+  });
   $("#timesheetHelperDisplay").textContent = saved.name || "No user loaded";
   loginStatus.textContent = `${saved.role === "admin" ? "Admin" : "Helper"} logged in: ${saved.name}`;
   loginHelp.textContent = `${saved.email || "PIN account"} | Access: ${saved.role}`;
@@ -311,57 +381,58 @@ function updateCompletionCount() {
 }
 
 async function sendPayload(payload) {
-  if (!GOOGLE_SCRIPT_URL) return;
+  if (!supabaseClient) {
+    modeLabel.textContent = "Local saved";
+    return;
+  }
   try {
     modeLabel.textContent = "Sending...";
-    await fetch(GOOGLE_SCRIPT_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(payloadForSheet(payload)),
+    const { error } = await supabaseClient.from("kennel_records").upsert({
+      id: payload.id,
+      type: payload.type,
+      payload: payloadForSheet(payload),
+      helper_email: payload.helperEmail || currentUser?.email || "",
+      user_id: currentUser?.key || null,
+      submitted_at: payload.submittedAt || new Date().toISOString(),
+      updated_at: payload.updatedAt || new Date().toISOString(),
     });
+    if (error) throw error;
     modeLabel.textContent = "Sent";
-    window.setTimeout(loadRemoteRecords, 1600);
+    window.setTimeout(loadRemoteRecords, 500);
   } catch (error) {
     modeLabel.textContent = "Sync failed";
+    showToast(`Supabase sync failed: ${error.message}`);
   }
 }
 
-function loadRemoteRecords() {
-  if (!GOOGLE_SCRIPT_URL) return;
-  const callbackName = `cthRemote_${Date.now()}`;
+async function loadRemoteRecords() {
+  if (!supabaseClient) {
+    modeLabel.textContent = "Local only";
+    return;
+  }
   modeLabel.textContent = "Syncing...";
   syncNowButton.disabled = true;
-  const timeoutId = window.setTimeout(() => {
-    modeLabel.textContent = "Sync failed";
-    syncNowButton.disabled = false;
-    delete window[callbackName];
-    script.remove();
-  }, 12000);
-  window[callbackName] = (data) => {
-    window.clearTimeout(timeoutId);
-    ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service"].forEach((type) => mergeRecords(type, data[type] || []));
+  try {
+    const { data, error } = await supabaseClient.from("kennel_records").select("*").order("updated_at", { ascending: false }).limit(1500);
+    if (error) throw error;
+    const grouped = Object.fromEntries(recordTypes().map((type) => [type, []]));
+    (data || []).forEach((row) => {
+      if (grouped[row.type]) grouped[row.type].push(row.payload);
+    });
+    recordTypes().forEach((type) => mergeRecords(type, grouped[type] || []));
     renderAllRecords();
     modeLabel.textContent = "Synced";
-    syncNowButton.disabled = false;
-    delete window[callbackName];
-    script.remove();
-  };
-  const script = document.createElement("script");
-  script.src = `${GOOGLE_SCRIPT_URL}?callback=${callbackName}&v=${Date.now()}`;
-  script.onerror = () => {
-    window.clearTimeout(timeoutId);
+  } catch (error) {
     modeLabel.textContent = "Sync failed";
+    showToast(`Supabase load failed: ${error.message}`);
+  } finally {
     syncNowButton.disabled = false;
-    delete window[callbackName];
-    script.remove();
-  };
-  document.body.appendChild(script);
+  }
 }
 
 function startAutoSync() {
-  if (!GOOGLE_SCRIPT_URL || syncIntervalId) return;
-  syncIntervalId = window.setInterval(loadRemoteRecords, 15000);
+  if (!supabaseClient || syncIntervalId) return;
+  syncIntervalId = window.setInterval(loadRemoteRecords, 10000);
 }
 
 function payloadForSheet(payload) {
@@ -392,7 +463,6 @@ const fieldHelp = {
   dayOfWeek: "Required so Monday and Tuesday tasks show correctly.",
   helperName: "Filled in after PIN login.",
   helperEmail: "Filled in after PIN login.",
-  socialContent: "Required. A short note is enough.",
   callName: "Required for Our Dogs.",
   dogName: "Required for Boarding Dogs.",
   sex: "Required for health and care tracking.",
@@ -431,7 +501,7 @@ function setupRequiredFields() {
     if (field.required) {
       const title = label.querySelector(".field-label-text");
       if (title && !title.querySelector(".required-mark")) {
-        title.insertAdjacentHTML("beforeend", '<span class="required-mark">Required</span>');
+        title.insertAdjacentHTML("beforeend", '<span class="required-mark" aria-label="required">*</span>');
       }
       if (!label.querySelector(".field-help") && fieldHelp[field.name]) {
         field.insertAdjacentHTML("afterend", `<span class="field-help">${fieldHelp[field.name]}</span>`);
@@ -500,6 +570,7 @@ function buildDailyPayload() {
   const data = new FormData(form);
   return {
     type: "dailyTask",
+    id: data.get("id") || uid("dailyTask"),
     submittedAt: new Date().toISOString(),
     date: data.get("date"),
     helperName: data.get("helperName"),
@@ -542,12 +613,17 @@ function upcomingBoardingTaskText() {
 }
 
 function renderDemoSubmissions() {
-  const saved = JSON.parse(localStorage.getItem("cthKennelSubmissions") || "[]");
+  const saved = readRecords("dailyTask");
   $("#recentSubmissions").innerHTML = saved.length
     ? saved
-        .map((submission) => `<article class="submission-item"><strong>${submission.date} - ${submission.helperName}</strong><p>${submission.dayOfWeek} | ${submission.dailyTasks.length} daily tasks | ${submission.healthConcern}</p><p>Social: ${submission.socialContent || "No content note"}</p></article>`)
+        .map((submission) => `<article class="submission-item"><strong>${submission.date} - ${submission.helperName}</strong><p>${submission.dayOfWeek} | ${submission.dailyTasks.length} daily tasks | ${submission.healthConcern}</p><p>Social: ${submission.socialContent || "No content note"}</p>${canEditOwnToday(submission) ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-daily" data-id="${submission.id}">Edit Today's Report</button></div>` : ""}</article>`)
         .join("")
     : "<p>No recent submissions yet.</p>";
+}
+
+function canEditOwnToday(record) {
+  if (currentRole() === "admin") return true;
+  return record?.date === todayDate() && record?.helperEmail === currentUser?.email;
 }
 
 function matches(record, query) {
@@ -615,7 +691,20 @@ function openBoardingDog(record = {}) {
     input.checked = (record.flags || []).includes(input.value);
   });
   renderBoardingStays(record);
+  setBoardingFormLocked(Boolean(record.id));
   window.scrollTo({ top: $("#boardingDogDetail").offsetTop - 12, behavior: "smooth" });
+}
+
+function setBoardingFormLocked(locked) {
+  const formEl = $("#boardingDogForm");
+  [...formEl.elements].forEach((field) => {
+    if (field.type === "hidden") return;
+    if (["editBoardingDogButton", "cancelBoardingDogEdit"].includes(field.id)) return;
+    field.disabled = locked;
+  });
+  $("#boardingDogSaveButton").hidden = locked;
+  $("#editBoardingDogButton").hidden = !locked;
+  formEl.classList.toggle("is-readonly", locked);
 }
 
 function updateOwnedDogConditionalFields() {
@@ -691,7 +780,7 @@ function addOwnedLog(type, minutes, note = "") {
 function renderBoardingStays(record = activeBoardingDog()) {
   const stays = record?.stays || [];
   $("#boardingStayHistory").innerHTML = stays.length
-    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><p>${(stay.requests || []).join(", ") || "No service requests"}</p><p>${stay.bathPlan || ""}</p><p>${stay.stayNotes || ""}</p></article>`).join("")
+    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><p>${(stay.requests || []).join(", ") || "No service requests"}</p><p>${stay.bathPlan || ""}</p><p>${stay.stayNotes || ""}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${stay.id}">Edit Stay</button></div></article>`).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
 
@@ -777,6 +866,7 @@ function dashboardMetrics() {
 
 function renderDashboard() {
   if (!$("#dashboardCards")) return;
+  $("#dashboardDate").value ||= todayDate();
   const metrics = dashboardMetrics();
   const cards = [
     ["Dogs on property", metrics.ownedDogs.length + metrics.currentBoarding.length, "Owned dogs plus active boarding dogs."],
@@ -799,6 +889,31 @@ function renderDashboard() {
   $("#dashboardAlerts").innerHTML = alerts.length
     ? alerts.map((alert) => `<article class="record-card is-urgent"><strong>Attention</strong><p>${alert}</p></article>`).join("")
     : "<p>No urgent dashboard alerts right now.</p>";
+  renderDashboardTimeline();
+}
+
+function renderDashboardTimeline() {
+  const selectedDate = $("#dashboardDate")?.value || todayDate();
+  const items = [];
+  recordTypes().forEach((type) => {
+    readRecords(type).forEach((record) => {
+      const timestamp = record.updatedAt || record.submittedAt || record.clockInTime;
+      const date = record.date || timestamp?.slice(0, 10);
+      if (date !== selectedDate) return;
+      items.push({ type, record, timestamp });
+    });
+  });
+  items.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+  $("#dashboardTimeline").innerHTML = items.length
+    ? items
+        .map(({ type, record, timestamp }) => {
+          const helper = record.helperName || record.requestedBy || record.reportedBy || currentUser?.name || "Unknown";
+          const title = type === "dailyTask" ? "Daily task report" : type === "timesheet" ? "Timesheet" : type === "request" ? "Request" : type === "maintenance" ? "Maintenance" : type === "boardingDog" ? "Boarding dog update" : type === "service" ? "Service/pricing update" : "Dog update";
+          const summary = record.requestText || record.issue || record.dogName || record.callName || record.serviceName || `${record.dailyTasks?.length || 0} tasks checked`;
+          return `<article class="record-card"><strong>${formatDateTime(timestamp)} - ${title}</strong><span>${helper}</span><p>${summary || ""}</p></article>`;
+        })
+        .join("")
+    : "<p>No activity recorded for this date yet.</p>";
 }
 
 function renderFinancials() {
@@ -824,9 +939,9 @@ function renderServices() {
   const records = readRecords("service");
   $("#serviceTableBody").innerHTML = records.length
     ? records
-        .map((record) => `<tr data-id="${record.id}"><td>${record.serviceName || ""}</td><td>${record.category || ""}</td><td>${money(record.basePrice)}</td><td>${record.unit || ""}</td><td>${record.depositAmount ? money(record.depositAmount) : ""}</td><td>${(record.flags || []).join(", ")}</td></tr>`)
+        .map((record) => `<tr data-id="${record.id}"><td>${record.serviceName || ""}</td><td>${record.category || ""}</td><td>${money(record.basePrice)}</td><td>${record.unit || ""}</td><td>${record.depositAmount ? money(record.depositAmount) : ""}</td><td>${record.taxRate ? `${record.taxRate}%` : ""}</td><td>${(record.flags || []).join(", ")}</td></tr>`)
         .join("")
-    : `<tr><td colspan="6">No services saved yet.</td></tr>`;
+    : `<tr><td colspan="7">No services saved yet.</td></tr>`;
 }
 
 function openService(record = {}) {
@@ -863,15 +978,16 @@ function renderAllRecords() {
   renderTimesheet();
   renderServices();
   renderFinancials();
+  renderDemoSubmissions();
 }
 
 function emailNow(subjectText, bodyText) {
   window.location.href = `mailto:${OWNER_ALERT_EMAIL}?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
 }
 
-let activeClockIn = "";
 function updateTimeDisplays() {
-  $("#clockInDisplay").textContent = activeClockIn ? formatDateTime(activeClockIn) : "Not clocked in";
+  $("#clockInDisplay").textContent = activeClockIn?.clockInTime ? formatDateTime(activeClockIn.clockInTime) : "Not clocked in";
+  $("#clockOutDisplay").textContent = activeClockIn?.clockInTime ? "Ready to clock out" : "Not clocked out";
 }
 
 function weekStart(date) {
@@ -907,8 +1023,11 @@ function renderTimesheet() {
   const currentWeekRecords = records.filter((record) => inRange(record, thisWeekStart, nextWeekStart));
 
   $("#timesheetRows").innerHTML = currentWeekRecords.length
-    ? currentWeekRecords.map((record) => `<tr><td>${record.date}</td><td>${record.helperName}</td><td>${formatDateTime(record.clockInTime)}</td><td>${formatDateTime(record.clockOutTime)}</td><td>${Number(record.hours).toFixed(2)}</td><td>${record.note || ""}</td></tr>`).join("")
-    : `<tr><td colspan="6">No time entries for this week.</td></tr>`;
+    ? currentWeekRecords.map((record) => {
+        const canEdit = canEditOwnToday(record);
+        return `<tr><td>${record.date}</td><td>${record.helperName}</td><td>${formatDateTime(record.clockInTime)}</td><td>${formatDateTime(record.clockOutTime)}</td><td>${Number(record.hours || 0).toFixed(2)}</td><td>${record.note || ""}</td><td>${canEdit ? `<button type="button" class="secondary-button" data-action="edit-time" data-id="${record.id}">Edit</button>` : ""}</td></tr>`;
+      }).join("")
+    : `<tr><td colspan="7">No time entries for this week.</td></tr>`;
 
   $("#thisWeekHours").textContent = sumHours(currentWeekRecords).toFixed(2);
   $("#lastWeekHours").textContent = sumHours(records.filter((record) => inRange(record, lastWeekStart, thisWeekStart))).toFixed(2);
@@ -925,10 +1044,12 @@ function renderTimesheet() {
 }
 
 function saveTimeEntry(payload) {
+  const existing = payload.id ? readRecords("timesheet").find((record) => record.id === payload.id) : null;
   const record = {
+    ...existing,
     type: "timesheet",
-    id: uid("timesheet"),
-    submittedAt: new Date().toISOString(),
+    id: payload.id || uid("timesheet"),
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
     date: payload.date || payload.clockInTime.slice(0, 10),
     helperName: payload.helperName,
     helperEmail: payload.helperEmail || helperEmail.value,
@@ -949,7 +1070,10 @@ function initEvents() {
     button.addEventListener("click", () => switchPage(button.dataset.page));
   });
   syncNowButton.addEventListener("click", loadRemoteRecords);
+  $("#dashboardDate").addEventListener("change", renderDashboardTimeline);
 
+  $("#googleLoginButton").addEventListener("click", () => loginWithProvider("google"));
+  $("#facebookLoginButton").addEventListener("click", () => loginWithProvider("facebook"));
   $("#helperPinLoginButton").addEventListener("click", loginWithPin);
   $("#helperPinInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -967,31 +1091,74 @@ function initEvents() {
     event.preventDefault();
     if (!validateForm(event.currentTarget)) return;
     const payload = buildDailyPayload();
-    const saved = JSON.parse(localStorage.getItem("cthKennelSubmissions") || "[]");
-    saved.unshift(payload);
-    localStorage.setItem("cthKennelSubmissions", JSON.stringify(saved.slice(0, 10)));
-    await sendPayload(payload);
+    const record = upsertRecord("dailyTask", payload);
+    await sendPayload(record);
     renderDemoSubmissions();
-    showToast(GOOGLE_SCRIPT_URL ? "Kennel report sent." : "Demo saved. Google Sheet connection is not active yet.");
+    $("#dailyTaskId").value = record.id;
+    showToast("Daily task report submitted.");
+  });
+  $("#recentSubmissions").addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="edit-daily"]');
+    if (!button) return;
+    const record = readRecords("dailyTask").find((item) => item.id === button.dataset.id);
+    if (!record || !canEditOwnToday(record)) {
+      showToast("Only today's submitted report can be edited by the submitting helper. Admin can edit older reports.");
+      return;
+    }
+    form.reset();
+    setFormValues(form, record);
+    $("#dailyTaskId").value = record.id;
+    ["dailyTasks", "weeklyTasks", "tuesdayTasks", "monthlyTasks", "suppliesLow"].forEach((name) => {
+      form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+        input.checked = (record[name] || []).includes(input.value);
+      });
+    });
+    updateCompletionCount();
+    updateConditionalSections();
+    updateRotationBanner();
+    showToast("Today's report loaded for editing.");
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   $("#clockInButton").addEventListener("click", () => {
     if (!helperIsLoggedIn()) {
-      showToast("Enter your helper PIN first.");
+      showToast("Sign in first.");
       return;
     }
-    activeClockIn = new Date().toISOString();
+    if (activeClockIn?.clockInTime) {
+      showToast(`Already clocked in at ${formatDateTime(activeClockIn.clockInTime)}.`);
+      return;
+    }
+    const clockInTime = new Date().toISOString();
+    const record = upsertRecord("timesheet", {
+      type: "timesheet",
+      id: uid("timesheet"),
+      submittedAt: clockInTime,
+      date: clockInTime.slice(0, 10),
+      helperName: helperName.value || currentUser.name,
+      helperEmail: helperEmail.value || currentUser.email,
+      clockInTime,
+      clockOutTime: "",
+      hours: 0,
+      note: "Open clock-in",
+    });
+    activeClockIn = { id: record.id, clockInTime };
+    localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
+    sendPayload(record);
     updateTimeDisplays();
-    showToast("Clock in recorded.");
+    showToast(`Clock-in confirmed: ${formatDateTime(clockInTime)}.`);
   });
   $("#clockOutButton").addEventListener("click", () => {
-    if (!activeClockIn) {
+    if (!activeClockIn?.clockInTime) {
       showToast("Clock in first, or use Manual Entry.");
       return;
     }
-    saveTimeEntry({ helperName: helperName.value || "Unknown helper", helperEmail: helperEmail.value, clockInTime: activeClockIn, clockOutTime: new Date().toISOString() });
+    const clockOutTime = new Date().toISOString();
+    saveTimeEntry({ id: activeClockIn.id, helperName: helperName.value || "Unknown helper", helperEmail: helperEmail.value, clockInTime: activeClockIn.clockInTime, clockOutTime });
     activeClockIn = "";
+    localStorage.removeItem("cth-active-clock-in");
     updateTimeDisplays();
+    showToast(`Clock-out confirmed: ${formatDateTime(clockOutTime)}.`);
   });
   $("#saveTimeEntryButton").addEventListener("click", () => {
     if (!activeClockIn) showToast("No active clock-in to save.");
@@ -999,15 +1166,32 @@ function initEvents() {
   $("#manualTimeForm").addEventListener("submit", (event) => {
     event.preventDefault();
     if (!helperIsLoggedIn()) {
-      showToast("Enter your helper PIN first.");
+      showToast("Sign in first.");
       return;
     }
     if (!validateForm(event.currentTarget)) return;
     const payload = formPayload(event.currentTarget);
-    saveTimeEntry({ helperName: payload.manualHelper || helperName.value || "Unknown helper", date: payload.manualDate, clockInTime: payload.manualClockIn, clockOutTime: payload.manualClockOut, note: payload.manualNote });
+    saveTimeEntry({ id: payload.manualTimeId, helperName: payload.manualHelper || helperName.value || "Unknown helper", date: payload.manualDate, clockInTime: payload.manualClockIn, clockOutTime: payload.manualClockOut, note: payload.manualNote });
     event.currentTarget.reset();
     $("#manualDate").value = todayDate();
     $("#manualHelper").value = helperName.value;
+    $("#manualTimeId").value = "";
+  });
+  $("#timesheetRows").addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="edit-time"]');
+    if (!button) return;
+    const record = readRecords("timesheet").find((item) => item.id === button.dataset.id);
+    if (!record || !canEditOwnToday(record)) {
+      showToast("Only today's time entry can be edited by the helper. Admin can edit older entries.");
+      return;
+    }
+    $("#manualTimeId").value = record.id;
+    $("#manualHelper").value = record.helperName;
+    $("#manualDate").value = record.date;
+    $("#manualTimeForm").elements.manualClockIn.value = record.clockInTime?.slice(0, 16);
+    $("#manualTimeForm").elements.manualClockOut.value = record.clockOutTime?.slice(0, 16);
+    $("#manualTimeForm").elements.manualNote.value = record.note || "";
+    showToast("Time entry loaded for editing.");
   });
 
   $("#ownedLastBath").addEventListener("change", () => ($("#ownedNextBath").value = addMonths($("#ownedLastBath").value, 1)));
@@ -1069,6 +1253,10 @@ function initEvents() {
   $("#boardingDogSearch").addEventListener("input", renderBoardingDogs);
   $("#addBoardingDogButton").addEventListener("click", () => openBoardingDog());
   $("#cancelBoardingDogEdit").addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
+  $("#editBoardingDogButton").addEventListener("click", () => {
+    setBoardingFormLocked(false);
+    showToast("Boarding dog record unlocked for editing.");
+  });
   $("#boardingDogPhotoPicker").addEventListener("click", () => $("#boardingDogPhotoInput").click());
   $("#boardingDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("boarding"));
   $("#boardingDogTableBody").addEventListener("dblclick", (event) => {
@@ -1100,6 +1288,7 @@ function initEvents() {
     setDogPhoto("boarding", record);
     renderBoardingStays(record);
     renderBoardingDogs();
+    setBoardingFormLocked(true);
     showToast("Boarding dog record saved.");
   });
   $("#boardingStayForm").addEventListener("submit", async (event) => {
@@ -1111,9 +1300,12 @@ function initEvents() {
       return;
     }
     const payload = formPayload(event.currentTarget);
+    const existingStay = (dog.stays || []).find((stay) => stay.id === payload.stayId);
     const stay = {
-      id: uid("stay"),
-      createdAt: new Date().toISOString(),
+      ...existingStay,
+      id: payload.stayId || uid("stay"),
+      createdAt: existingStay?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       dropoffTime: payload.dropoffTime,
       pickupTime: payload.pickupTime,
       requests: checkedFrom(event.currentTarget, "stayRequests"),
@@ -1121,13 +1313,38 @@ function initEvents() {
     };
     stay.bathPlan = bathPlanForStay(stay);
     dog.stays = dog.stays || [];
-    dog.stays.unshift(stay);
+    const stayIndex = dog.stays.findIndex((item) => item.id === stay.id);
+    if (stayIndex >= 0) dog.stays[stayIndex] = stay;
+    else dog.stays.unshift(stay);
     const record = upsertRecord("boardingDog", dog);
     await sendPayload(record);
     renderBoardingStays(record);
     renderBoardingDogs();
     event.currentTarget.reset();
-    showToast("Boarding stay added.");
+    $("#boardingStayId").value = "";
+    $("#boardingStaySaveButton").textContent = "Add Boarding Stay";
+    showToast(existingStay ? "Boarding stay updated." : "Boarding stay added.");
+  });
+  $("#boardingStayHistory").addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="edit-stay"]');
+    if (!button) return;
+    const dog = activeBoardingDog();
+    const stay = dog?.stays?.find((item) => item.id === button.dataset.id);
+    if (!stay) return;
+    $("#boardingStayId").value = stay.id;
+    $("#boardingStayForm").elements.dropoffTime.value = stay.dropoffTime?.slice(0, 16);
+    $("#boardingStayForm").elements.pickupTime.value = stay.pickupTime?.slice(0, 16);
+    $("#boardingStayForm").elements.stayNotes.value = stay.stayNotes || "";
+    $("#boardingStayForm").querySelectorAll('input[name="stayRequests"]').forEach((input) => {
+      input.checked = (stay.requests || []).includes(input.value);
+    });
+    $("#boardingStaySaveButton").textContent = "Save Boarding Stay";
+    showToast("Boarding stay loaded for editing.");
+  });
+  $("#resetBoardingStayButton").addEventListener("click", () => {
+    $("#boardingStayForm").reset();
+    $("#boardingStayId").value = "";
+    $("#boardingStaySaveButton").textContent = "Add Boarding Stay";
   });
 
   $("#requestForm").addEventListener("submit", async (event) => {
@@ -1204,7 +1421,7 @@ function initEvents() {
 
 function switchPage(pageId) {
   if (!pageAllowed(pageId)) {
-    showToast(helperIsLoggedIn() ? "Your login does not have access to that page." : "Enter your PIN first.");
+    showToast(helperIsLoggedIn() ? "Your login does not have access to that page." : "Sign in first.");
     pageId = "loginPage";
   }
   $$(".nav-button").forEach((item) => item.classList.toggle("is-active", item.dataset.page === pageId));
@@ -1213,18 +1430,24 @@ function switchPage(pageId) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-setDefaultDateAndDay();
-seedDefaultServices();
-restoreSession();
-updateConditionalSections();
-updateRotationBanner();
-updateCompletionCount();
-updateTimeDisplays();
-renderDemoSubmissions();
-setupRequiredFields();
-initEvents();
-updateNavigationAccess();
-renderAllRecords();
-if (helperIsLoggedIn()) switchPage(currentRole() === "admin" ? "dashboardPage" : "timesheetPage");
-loadRemoteRecords();
-startAutoSync();
+async function initializeApp() {
+  initSupabaseClient();
+  setDefaultDateAndDay();
+  $("#dashboardDate").value = todayDate();
+  seedDefaultServices();
+  const restoredFromSupabase = await restoreSupabaseSession();
+  if (!restoredFromSupabase) restoreSession();
+  updateConditionalSections();
+  updateRotationBanner();
+  updateCompletionCount();
+  updateTimeDisplays();
+  setupRequiredFields();
+  initEvents();
+  updateNavigationAccess();
+  renderAllRecords();
+  if (helperIsLoggedIn()) switchPage("dashboardPage");
+  await loadRemoteRecords();
+  startAutoSync();
+}
+
+initializeApp();

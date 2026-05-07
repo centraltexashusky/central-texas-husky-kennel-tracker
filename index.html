@@ -15,7 +15,7 @@
         </div>
         <nav class="side-nav" aria-label="Kennel tracker sections">
           <button class="nav-button is-active" type="button" data-page="loginPage" data-roles="public">Login</button>
-          <button class="nav-button" type="button" data-page="dashboardPage" data-roles="admin">Owner Dashboard</button>
+          <button class="nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin">Main Dashboard</button>
           <button class="nav-button" type="button" data-page="timesheetPage" data-roles="helper,admin">Timesheet</button>
           <button class="nav-button" type="button" data-page="dailyPage" data-roles="helper,admin">Daily Tasks</button>
           <button class="nav-button" type="button" data-page="ourDogsPage" data-roles="helper,admin">Our Dogs</button>
@@ -33,7 +33,7 @@
           <p class="eyebrow">Central Texas Husky</p>
           <h1>Kennel Task Tracker</h1>
           <p class="subhead">
-            Complete this before leaving each shift. Records are sent to the kennel tracking Google Sheet.
+            Complete this before leaving each shift. Records are sent to the Supabase kennel database.
           </p>
         </div>
         <div class="status-card" aria-live="polite">
@@ -45,14 +45,14 @@
 
       <section class="notice">
         <strong>Connected tracker:</strong>
-        Records are sent to the kennel Google Sheet and loaded back into the app for desktop and mobile review.
+        Records are sent to Supabase and loaded back into the app for desktop and mobile review.
       </section>
 
       <label class="mobile-page-menu">
         Menu
         <select id="mobilePageSelect">
           <option value="loginPage" data-roles="public">Login</option>
-          <option value="dashboardPage" data-roles="admin">Owner Dashboard</option>
+          <option value="dashboardPage" data-roles="helper,admin">Main Dashboard</option>
           <option value="timesheetPage">Timesheet</option>
           <option value="dailyPage">Daily Tasks</option>
           <option value="ourDogsPage">Our Dogs</option>
@@ -70,35 +70,44 @@
             <span>0</span>
             <div>
               <h2>Login</h2>
-              <p>Enter your assigned PIN. This device will remember the login until you sign out.</p>
+              <p>Use Supabase login. This device will remember the session until you sign out.</p>
             </div>
           </div>
 
           <div class="login-panel" id="loginPanel">
             <div>
               <strong id="loginStatus">Not logged in</strong>
-              <p id="loginHelp">Helpers use their 4 digit PIN. Admin uses the owner/admin PIN.</p>
+              <p id="loginHelp">Sign in with Google or another enabled Supabase provider.</p>
             </div>
             <div class="login-actions">
+              <button type="button" class="secondary-button" id="googleLoginButton">Continue With Google</button>
+              <button type="button" class="secondary-button" id="facebookLoginButton">Continue With Facebook</button>
               <label class="pin-field">
-                PIN
+                Helper PIN
                 <input type="password" id="helperPinInput" inputmode="numeric" maxlength="6" pattern="[0-9]{4,6}" placeholder="****" autocomplete="off" />
               </label>
-              <button type="button" class="secondary-button" id="helperPinLoginButton">Login</button>
+              <button type="button" class="secondary-button" id="helperPinLoginButton">PIN Login</button>
               <button type="button" class="secondary-button" id="clearHelperButton" hidden>Sign Out</button>
             </div>
           </div>
 
           <div class="role-note">
-            <strong>Access rules:</strong> helpers can use timesheets, daily tasks, dogs, requests, and maintenance. Admin can also see dashboard, pricing, and financials.
+            <strong>Access rules:</strong> helpers can use dashboard, timesheets, daily tasks, dogs, requests, and maintenance. Admin can also see pricing and financials.
           </div>
         </section>
       </section>
 
       <section class="page-view" id="dashboardPage">
         <section class="form-section">
-          <div class="section-heading"><span>D</span><div><h2>Owner Dashboard</h2><p>High-level kennel view for today.</p></div></div>
+          <div class="section-heading"><span>D</span><div><h2>Main Dashboard</h2><p>High-level kennel view, today timeline, and calendar review.</p></div></div>
+          <div class="dashboard-filter">
+            <label>Review date<input type="date" id="dashboardDate" /></label>
+          </div>
           <div class="dashboard-grid" id="dashboardCards"></div>
+        </section>
+        <section class="recent-submissions">
+          <div class="section-heading"><span>T</span><div><h2>Daily Timeline</h2><p>Timestamped work submitted by all helpers for the selected day.</p></div></div>
+          <div class="record-grid" id="dashboardTimeline"></div>
         </section>
         <section class="recent-submissions">
           <div class="section-heading"><span>!</span><div><h2>Attention Needed</h2><p>Operations, health, and owner follow-up items.</p></div></div>
@@ -108,6 +117,7 @@
 
       <section class="page-view" id="dailyPage">
       <form id="kennelForm" class="tracker-form">
+        <input type="hidden" name="id" id="dailyTaskId" />
         <section class="form-section">
           <div class="section-heading">
             <span>1</span>
@@ -201,7 +211,7 @@
 
           <label>
             What photo or video did you take today?
-            <textarea name="socialContent" rows="3" required placeholder="Example: funny puppy moment, clean kennel, treadmill session, bath day, dogs running"></textarea>
+            <textarea name="socialContent" rows="3" placeholder="Example: funny puppy moment, clean kennel, treadmill session, bath day, dogs running"></textarea>
           </label>
         </section>
 
@@ -362,10 +372,11 @@
           <form id="manualTimeForm" class="tracker-form">
             <div class="section-heading compact-heading"><span>M</span><div><h2>Manual Entry</h2><p>Use this if someone forgot to clock in or clock out.</p></div></div>
             <div class="field-grid">
-              <label>Helper name<input type="text" name="manualHelper" id="manualHelper" /></label>
+              <label>Helper name<input type="text" name="manualHelper" id="manualHelper" readonly /></label>
               <label>Entry date<input type="date" name="manualDate" id="manualDate" /></label>
               <label>Clock in<input type="datetime-local" name="manualClockIn" required /></label>
               <label>Clock out<input type="datetime-local" name="manualClockOut" required /></label>
+              <input type="hidden" name="manualTimeId" id="manualTimeId" />
             </div>
             <label>Manual entry note<textarea name="manualNote" rows="2" placeholder="Reason for manual entry"></textarea></label>
             <button type="submit">Save Manual Time Entry</button>
@@ -376,7 +387,7 @@
           <div class="section-heading"><span>W</span><div><h2>Current Week</h2><p>Clock in and clock out records for this week.</p></div></div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Date</th><th>Helper</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Note</th></tr></thead>
+              <thead><tr><th>Date</th><th>Helper</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Note</th><th>Edit</th></tr></thead>
               <tbody id="timesheetRows"></tbody>
             </table>
           </div>
@@ -423,7 +434,7 @@
               </button>
               <div>
                 <strong id="ownedDogPhotoName">New dog</strong>
-                <span class="required-mark">Photo required</span>
+                <span class="required-mark" aria-label="required">*</span>
                 <p>Tap the square to add or change the profile photo.</p>
                 <input class="visually-hidden-file" type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/*" tabindex="-1" />
               </div>
@@ -498,7 +509,7 @@
               </button>
               <div>
                 <strong id="boardingDogPhotoName">New boarding dog</strong>
-                <span class="required-mark">Photo required</span>
+                <span class="required-mark" aria-label="required">*</span>
                 <p>Tap the square to add or change the profile photo.</p>
                 <input class="visually-hidden-file" type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/*" tabindex="-1" />
               </div>
@@ -536,12 +547,13 @@
             <label>Special care instructions<textarea name="specialCare" rows="3" placeholder="Medication, feeding, handling, allergies, behavior concerns"></textarea></label>
             <label>Daily activity update for owner<textarea name="dailyActivity" rows="3" placeholder="Eating, potty, play, exercise, mood, photos/videos taken"></textarea></label>
             <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
-            <div class="button-row"><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
+            <div class="button-row"><button type="button" class="secondary-button" id="editBoardingDogButton" hidden>Edit Dog</button><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
           </form>
 
           <section class="existing-only" id="boardingSchedulePanel" hidden>
             <div class="section-heading compact-heading"><span>S</span><div><h2>Boarding Schedule And Requests</h2><p>Add boarding stays and service requests for this dog.</p></div></div>
             <form id="boardingStayForm" class="tracker-form">
+              <input type="hidden" name="stayId" id="boardingStayId" />
               <div class="field-grid">
                 <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
                 <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
@@ -554,7 +566,7 @@
                 <label><input type="checkbox" name="stayRequests" value="Exercise requested" /> Exercise requested</label>
               </div>
               <label>Stay notes<textarea name="stayNotes" rows="2" placeholder="Owner instructions or pickup grooming notes"></textarea></label>
-              <button type="submit">Add Boarding Stay</button>
+              <div class="button-row"><button type="submit" id="boardingStaySaveButton">Add Boarding Stay</button><button type="button" class="secondary-button" id="resetBoardingStayButton">New Stay</button></div>
             </form>
             <div id="boardingStayHistory" class="record-grid"></div>
           </section>
@@ -614,6 +626,7 @@
               <label>Base price<input type="number" name="basePrice" min="0" step="0.01" required /></label>
               <label>Unit<select name="unit" required><option>per service</option><option>per dog/hour</option><option>per night</option><option>per day</option><option>per session</option><option>per puppy</option><option>flat deposit</option></select></label>
               <label>Deposit amount<input type="number" name="depositAmount" min="0" step="0.01" placeholder="Optional" /></label>
+              <label>Tax rate %<input type="number" name="taxRate" min="0" step="0.01" placeholder="Example: 8.25" /></label>
               <label>Default duration<input type="text" name="defaultDuration" placeholder="Example: 60 minutes" /></label>
             </div>
             <div class="checklist compact">
@@ -632,7 +645,7 @@
           <div class="section-heading"><span>P</span><div><h2>Pricing Catalog</h2><p>Double click a row to edit. Use this as the admin source of truth for services.</p></div></div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Service</th><th>Category</th><th>Price</th><th>Unit</th><th>Deposit</th><th>Flags</th></tr></thead>
+              <thead><tr><th>Service</th><th>Category</th><th>Price</th><th>Unit</th><th>Deposit</th><th>Tax</th><th>Flags</th></tr></thead>
               <tbody id="serviceTableBody"></tbody>
             </table>
           </div>
@@ -657,6 +670,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="script.js"></script>
   </body>
 </html>
