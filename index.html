@@ -106,28 +106,35 @@
 
       <section class="page-view" id="customerPage">
         <section class="form-section">
-          <div class="section-heading"><span>C</span><div><h2>Add Dog</h2><p>Add your dog, choose boarding dates, and request services.</p></div></div>
+          <div class="section-heading"><span>C</span><div><h2>Add Dog</h2><p>Add your dog and keep care details current.</p></div></div>
           <form id="customerDogForm" class="tracker-form">
+            <input type="hidden" name="id" id="customerDogId" />
             <div class="field-grid">
               <label>Dog name<input type="text" name="dogName" required /></label>
               <label>Breed / description<input type="text" name="breedDescription" placeholder="Example: Siberian Husky, 3 years old" /></label>
               <label>Owner name<input type="text" name="ownerName" id="customerOwnerName" required /></label>
               <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
               <label>Owner email<input type="email" name="ownerEmail" id="customerOwnerEmail" required /></label>
+              <label>Emergency contact name<input type="text" name="emergencyName" required /></label>
+              <label>Emergency contact phone<input type="tel" name="emergencyPhone" required /></label>
               <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
               <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
               <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
               <label>Rabies duration<select name="rabiesDuration"><option value="">Select duration</option><option>1 year</option><option>3 years</option><option>Unknown</option></select></label>
             </div>
             <label>Care notes<textarea name="specialCare" rows="3" placeholder="Feeding, medication, behavior, allergies, or handling notes"></textarea></label>
-            <button type="submit">Add Dog To Request</button>
+            <div class="button-row"><button type="submit" id="saveCustomerDogButton">Save Dog</button><button type="button" class="secondary-button" id="newCustomerDogButton">New Dog</button></div>
           </form>
           <div class="customer-dog-list" id="customerDogList"></div>
         </section>
+      </section>
 
+      <section class="page-view" id="customerRequestsPage">
         <section class="form-section">
           <div class="section-heading"><span>B</span><div><h2>Boarding Request</h2><p>Select dog(s), requested stay, and optional services.</p></div></div>
           <form id="customerBookingForm" class="tracker-form">
+            <input type="hidden" name="editingRequestId" id="editingCustomerRequestId" />
+            <div class="customer-dog-list" id="customerBookingDogList"></div>
             <div class="field-grid">
               <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
               <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
@@ -135,12 +142,9 @@
             <div class="checklist compact" id="customerServiceOptions"></div>
             <div class="estimate-box" id="customerEstimate">Select dog(s), dates, and services to see an estimate.</div>
             <label>Request notes<textarea name="requestNotes" rows="3" placeholder="Anything we should know about this boarding request?"></textarea></label>
-            <button type="submit">Request Boarding</button>
+            <div class="button-row"><button type="submit" id="requestBoardingButton">Request Boarding</button><button type="button" class="secondary-button" id="resetCustomerBookingButton">New Request</button></div>
           </form>
         </section>
-      </section>
-
-      <section class="page-view" id="customerRequestsPage">
         <section class="form-section">
           <div class="section-heading"><span>R</span><div><h2>My Request</h2><p>Review boarding requests and requested services for your dogs.</p></div></div>
           <div class="record-grid" id="customerRequestList"></div>
@@ -203,17 +207,13 @@
             <span>2</span>
             <div>
               <h2>Morning Tasks</h2>
-              <p>Tap each completed morning task.</p>
+              <p>Check each completed task for the shift.</p>
             </div>
           </div>
 
           <div class="checklist two-column task-list" id="morningTaskList" data-group="dailyTasks"></div>
           <div class="admin-task-controls" id="dailyTaskAdminControls" hidden>
             <input type="text" id="newTaskText" placeholder="Add a new daily task" />
-            <select id="newTaskShift">
-              <option value="morning">Morning</option>
-              <option value="pm">PM</option>
-            </select>
             <button type="button" id="addDailyTaskButton">Add Task</button>
           </div>
         </section>
@@ -223,7 +223,7 @@
             <span>PM</span>
             <div>
               <h2>PM Tasks</h2>
-              <p>5 PM to 6 PM evening care, exercise, feeding, cleaning, and reset work.</p>
+              <p>Check each completed task for the shift.</p>
             </div>
           </div>
 
@@ -239,7 +239,7 @@
             <span>3</span>
             <div>
               <h2>Dogs, Health, And Content</h2>
-              <p>Quick notes that help the owner review the day.</p>
+              <p>Daily notes for staff to review.</p>
             </div>
           </div>
 
@@ -273,16 +273,10 @@
             </div>
           </div>
 
-          <div class="checklist" data-group="weeklyTasks">
-            <label><input type="checkbox" name="weeklyTasks" value="Monday thorough kennel clean completed" /> Monday thorough kennel clean completed</label>
-            <label><input type="checkbox" name="weeklyTasks" value="Dog Mansion main AC filter cleaned" /> Dog Mansion main AC filter cleaned</label>
-            <label><input type="checkbox" name="weeklyTasks" value="Dog Shed mini-split AC filter cleaned" /> Dog Shed mini-split AC filter cleaned</label>
-            <label><input type="checkbox" name="weeklyTasks" value="Dog Shed window AC filter cleaned" /> Dog Shed window AC filter cleaned</label>
-            <label><input type="checkbox" name="weeklyTasks" value="Self-filling water bowls cleaned" /> Self-filling water bowls cleaned</label>
-            <label><input type="checkbox" name="weeklyTasks" value="Grooming table towels changed out" /> Grooming table towels changed out</label>
-            <label><input type="checkbox" name="weeklyTasks" value="Gates, latches, fencing, and yard safety checked" /> Gates, latches, fencing, and yard safety checked</label>
-            <label><input type="checkbox" name="weeklyTasks" value="Weekly bath plan reviewed" /> Weekly bath plan reviewed</label>
-            <label><input type="checkbox" name="weeklyTasks" value="Weekly exercise/training priorities reviewed" /> Weekly exercise/training priorities reviewed</label>
+          <div class="checklist managed-task-list" id="weeklyTaskList" data-group="weeklyTasks"></div>
+          <div class="admin-task-controls" id="weeklyTaskAdminControls" hidden>
+            <input type="text" id="newWeeklyTaskText" placeholder="Add a new weekly task" />
+            <button type="button" id="addWeeklyTaskButton">Add Task</button>
           </div>
         </section>
 
@@ -295,8 +289,10 @@
             </div>
           </div>
 
-          <div class="checklist">
-            <label><input type="checkbox" name="tuesdayTasks" value="Trash removed for Wednesday pickup" /> Trash removed for Wednesday pickup</label>
+          <div class="checklist managed-task-list" id="tuesdayTaskList"></div>
+          <div class="admin-task-controls" id="tuesdayTaskAdminControls" hidden>
+            <input type="text" id="newTuesdayTaskText" placeholder="Add a new Tuesday task" />
+            <button type="button" id="addTuesdayTaskButton">Add Task</button>
           </div>
         </section>
 
@@ -330,16 +326,10 @@
             </label>
           </div>
 
-          <div class="checklist" data-group="monthlyTasks">
-            <label><input type="checkbox" name="monthlyTasks" value="Floors thoroughly cleaned" /> Floors thoroughly cleaned</label>
-            <label><input type="checkbox" name="monthlyTasks" value="Walls and panels cleaned" /> Walls and panels cleaned</label>
-            <label><input type="checkbox" name="monthlyTasks" value="Kennel surfaces cleaned" /> Kennel surfaces cleaned</label>
-            <label><input type="checkbox" name="monthlyTasks" value="AC/filter area checked after cleaning" /> AC/filter area checked after cleaning</label>
-            <label><input type="checkbox" name="monthlyTasks" value="Dog Mansion attic AC filter replaced as needed" /> Dog Mansion attic AC filter replaced as needed</label>
-            <label><input type="checkbox" name="monthlyTasks" value="AC drain line treated with bleach or vinegar, never mixed" /> AC drain line treated with bleach or vinegar, never mixed</label>
-            <label><input type="checkbox" name="monthlyTasks" value="Drains and low areas checked" /> Drains and low areas checked</label>
-            <label><input type="checkbox" name="monthlyTasks" value="Drying and ventilation completed" /> Drying and ventilation completed</label>
-            <label><input type="checkbox" name="monthlyTasks" value="Repair or safety issues noted" /> Repair or safety issues noted</label>
+          <div class="checklist managed-task-list" id="monthlyTaskList" data-group="monthlyTasks"></div>
+          <div class="admin-task-controls" id="monthlyTaskAdminControls" hidden>
+            <input type="text" id="newMonthlyTaskText" placeholder="Add a new monthly task" />
+            <button type="button" id="addMonthlyTaskButton">Add Task</button>
           </div>
         </section>
 
@@ -464,9 +454,10 @@
             <input type="search" id="ownedDogSearch" placeholder="Search our dogs by call name, show name, sex, or notes" />
             <button type="button" id="addOwnedDogButton">Add New Dog</button>
           </div>
+          <div class="column-manager" id="ownedDogColumnManager"></div>
           <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>Call Name</th><th>Show Name</th><th>Sex</th><th>DOB</th><th>Rabies</th><th>Next Bath</th><th>Food</th></tr></thead>
+            <table class="data-table" id="ownedDogTable">
+              <thead id="ownedDogTableHead"></thead>
               <tbody id="ownedDogTableBody"></tbody>
             </table>
           </div>
@@ -543,12 +534,24 @@
             <input type="search" id="boardingDogSearch" placeholder="Search boarding dogs by dog, owner, phone, schedule, or notes" />
             <button type="button" id="addBoardingDogButton">Add New Dog</button>
           </div>
+          <div class="column-manager" id="boardingDogColumnManager"></div>
           <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>Dog</th><th>Owner</th><th>Phone</th><th>Drop-off</th><th>Pick-up</th><th>Required Update</th><th>Requests</th></tr></thead>
+            <table class="data-table" id="boardingDogTable">
+              <thead id="boardingDogTableHead"></thead>
               <tbody id="boardingDogTableBody"></tbody>
             </table>
           </div>
+        </section>
+
+        <section class="recent-submissions" id="boardingRequestsSection">
+          <div class="section-heading">
+            <span>R</span>
+            <div>
+              <h2>Boarding Requests</h2>
+              <p>Review pending, approved, and cancelled customer boarding requests separately from the dog roster.</p>
+            </div>
+          </div>
+          <div class="record-grid" id="boardingRequestRecords"></div>
         </section>
 
         <section class="form-section detail-panel" id="boardingDogDetail" hidden>
@@ -638,8 +641,7 @@
             <div class="checklist">
               <label><input type="checkbox" name="urgentNeeds" value="Yes" /> Urgent Needs</label>
             </div>
-            <label>Request photo/video<input type="file" name="requestMedia" id="requestMedia" accept="image/*,video/*" multiple /></label>
-            <label>Shared request media link<textarea name="mediaLink" rows="2" placeholder="Paste a Google Drive, iCloud, or phone-shared link if available"></textarea></label>
+            <label>Photo or video upload<input type="file" name="requestMedia" id="requestMedia" accept="image/*,video/*" multiple /></label>
             <label>Request / suggestion<textarea name="requestText" rows="4" required></textarea></label>
             <label>Reason or benefit<textarea name="reason" rows="3" placeholder="Why this helps kennel care, safety, efficiency, or dog comfort"></textarea></label>
             <button type="submit">Submit Request</button>
@@ -661,7 +663,6 @@
             </div>
             <label>Issue or repair needed<textarea name="issue" rows="4" required placeholder="What needs attention? Include photos separately if useful."></textarea></label>
             <label>Photo or video upload<input type="file" name="maintenanceMedia" id="maintenanceMedia" accept="image/*,video/*" multiple /></label>
-            <label>Shared photo/video link<textarea name="mediaLink" rows="2" placeholder="Paste a Google Drive, iCloud, or phone-shared link if available"></textarea></label>
             <label>Suggested action<textarea name="suggestedAction" rows="3" placeholder="Repair, replace, inspect, schedule service, order part"></textarea></label>
             <button type="submit">Submit Maintenance Item</button>
           </form>
