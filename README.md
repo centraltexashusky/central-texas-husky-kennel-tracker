@@ -1,6 +1,6 @@
 # Central Texas Husky Kennel Task Tracker
 
-This is a review version of the kennel task tracking app.
+This is a review version of the kennel operations app.
 
 ## What It Does Now
 
@@ -13,14 +13,15 @@ This is a review version of the kennel task tracking app.
 - Shows Monday weekly tasks
 - Shows Tuesday trash task
 - Shows monthly deep-clean rotation
-- Sends records to Google Sheets and keeps recent submissions visible on the page
+- Saves records locally for review and sends records to Supabase when the user signs in with Google/Facebook
+- Keeps PIN login available for quick local testing
 
-## What It Will Do After Google Sheet Setup
+## What It Will Do After Supabase Setup
 
 - The owner emails or texts the page link to the kennel helper
-- The helper opens the app link and enters their assigned PIN
+- The helper opens the app link and signs in
 - The helper clocks in, completes the checklist, clocks out, and submits the daily report
-- The page sends the report to a Google Sheet
+- The page sends the report to the kennel database
 - The owner reviews daily task history, timesheets, dog records, boarding records, requests, maintenance issues, health notes, supplies, and social content ideas in one place
 
 ## Sidebar Sections
@@ -32,21 +33,13 @@ This is a review version of the kennel task tracking app.
 - Maintenance: repairs or attention needed, with an Urgent Attention option
 - Timesheet: clock in/out, manual entries, current-week records, and last week/month/year summaries
 
-## Free Persistent Database Options
-
-Best free option for this app:
-Use Google Sheets as the database with Google Apps Script as the backend. It is free for this scale and keeps the data somewhere you can review, filter, and export.
+## Persistent Database
 
 Current setup:
-The app submits records to Google Sheets and also reads dog, boarding, request, maintenance, and timesheet records back from a `Database` tab using the Apps Script endpoint. This is what lets desktop and mobile share records.
+The app uses Supabase as the persistent database. Google/Facebook sign-in saves records across desktop and mobile. PIN login is kept as a local fallback only and does not sync across devices.
 
 Important deployment note:
-Whenever `google-apps-script.js` changes, paste the updated code into Apps Script and redeploy a new web app version. Whenever `index.html`, `styles.css`, or `script.js` changes, upload the updated files to GitHub.
-
-Other options:
-- Wix CMS: easiest if already included in your Wix plan.
-- Firebase free tier: good app database, more technical setup.
-- Supabase free tier: good app database, more technical setup.
+Whenever `index.html`, `styles.css`, or `script.js` changes, upload the updated files to GitHub or your Wix-hosted version.
 
 ## Maintenance Media
 
@@ -67,7 +60,7 @@ The app supports profile photo upload previews and profile photo links. For reli
 2. Copy the share link.
 3. Paste it into the dog profile photo link field.
 
-Browser-uploaded image previews can work for small photos, but large images may not sync well through Google Sheets. Drive links are the safer long-term method.
+Browser-uploaded image previews can work for small photos, but shared links are still the safest long-term method for cross-device media review.
 
 ## Wix Hosting Plan
 
@@ -90,32 +83,7 @@ const HELPER_PINS = {
 
 Update the PINs and helper emails before publishing. The PIN field is hidden on screen as `****`.
 
-This avoids Google Cloud, OAuth, and paid subscription confusion.
-
-## Google Sheet Connection
-
-1. Create or open the tracking Google Sheet.
-2. Open Extensions > Apps Script.
-3. Paste the code from `google-apps-script.js`.
-4. Deploy as a web app.
-5. Copy the web app URL.
-6. Paste that URL into `GOOGLE_SCRIPT_URL` in `script.js`.
-
-```js
-const GOOGLE_SCRIPT_URL = "PASTE_APPS_SCRIPT_WEB_APP_URL_HERE";
-```
-
-The Apps Script creates these tabs as needed:
-
-- Kennel Reports
-- Our Dogs
-- Boarding Dogs
-- Requests
-- Maintenance
-- Timesheet
-- Database
-
-Urgent maintenance items automatically send an email to `centraltexashusky@gmail.com` after Apps Script is connected.
+PIN login is useful for local review only. Use Google/Facebook sign-in for records that need to sync across devices.
 
 ## Wix Custom Element Conversion
 

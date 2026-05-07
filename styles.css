@@ -104,6 +104,10 @@ textarea {
   color: #e8efee;
 }
 
+.nav-button.is-hidden-nav {
+  display: none;
+}
+
 .mobile-page-menu {
   display: none;
 }
@@ -172,6 +176,25 @@ h2 {
   flex: 0 0 auto;
   gap: 10px;
   padding: 12px 14px;
+}
+
+.user-card {
+  align-items: stretch;
+  min-width: 170px;
+}
+
+.user-card div {
+  display: grid;
+  gap: 2px;
+}
+
+.user-card span {
+  font-weight: 850;
+}
+
+.user-card small {
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .sync-button {
@@ -272,6 +295,15 @@ h2 {
 
 .data-table tr.is-current-boarding:hover td {
   background: #d6ecd9;
+}
+
+.data-table tr.is-pending-boarding td {
+  background: #fff0d6;
+  border-bottom-color: #efc46a;
+}
+
+.data-table tr.is-pending-boarding:hover td {
+  background: #ffe7ba;
 }
 
 .detail-panel {
@@ -412,6 +444,48 @@ h2 {
   border-radius: 8px;
   margin-top: 14px;
   padding: 12px 14px;
+}
+
+.customer-dog-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.customer-dog-item,
+.estimate-box {
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.customer-dog-item {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.customer-dog-item span {
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.media-preview-button {
+  background: #e8efee;
+  color: var(--teal-dark);
+  font-size: 0.82rem;
+  margin-right: 6px;
+  padding: 7px 10px;
+}
+
+.media-preview-body img,
+.media-preview-body video {
+  border-radius: 8px;
+  display: block;
+  max-height: 70vh;
+  max-width: 100%;
+  width: 100%;
 }
 
 .summary-card {
@@ -637,6 +711,18 @@ textarea {
   width: 100%;
 }
 
+input[readonly],
+textarea[readonly],
+select.is-readonly-select {
+  background: #eef3f2;
+  color: #5e727b;
+  cursor: not-allowed;
+}
+
+select.is-readonly-select {
+  pointer-events: none;
+}
+
 input:focus,
 select:focus,
 textarea:focus,
@@ -753,6 +839,142 @@ textarea {
   height: 20px;
   margin-top: 1px;
   width: 20px;
+}
+
+.task-item {
+  align-items: center;
+  position: relative;
+}
+
+.task-text {
+  flex: 1 1 auto;
+}
+
+.task-admin-tools {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.icon-button,
+.remove-task-button {
+  align-items: center;
+  background: #e8efee;
+  border-radius: 999px;
+  color: var(--teal-dark);
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0;
+  width: 28px;
+}
+
+.remove-task-button {
+  background: #f7e3df;
+  color: var(--red);
+}
+
+.admin-task-controls {
+  align-items: center;
+  background: #f6f8f7;
+  border: 1px dashed #bdd2d0;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 150px auto;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.clickable-card {
+  cursor: pointer;
+}
+
+.clickable-card:hover {
+  border-color: #bdd2d0;
+  box-shadow: 0 8px 24px rgba(31, 45, 54, 0.08);
+}
+
+.detail-media {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.detail-media a,
+.detail-media .media-preview-button {
+  background: #e8efee;
+  border-radius: 999px;
+  color: var(--teal-dark);
+  font-weight: 800;
+  padding: 6px 10px;
+  text-decoration: none;
+}
+
+.detail-dialog {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  max-height: min(760px, 88vh);
+  max-width: min(760px, calc(100% - 28px));
+  padding: 18px;
+  width: 100%;
+}
+
+.detail-dialog::backdrop {
+  background: rgba(31, 45, 54, 0.38);
+}
+
+.dialog-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.dialog-header h2 {
+  margin: 0;
+}
+
+.detail-dialog-body {
+  display: grid;
+  gap: 10px;
+}
+
+.detail-row {
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.detail-row strong {
+  color: var(--teal-dark);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.activity-entry-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+}
+
+.activity-entry {
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
 }
 
 .conditional.is-muted {
@@ -928,6 +1150,8 @@ button:disabled {
   .timesheet-grid,
   .summary-grid,
   .dashboard-grid,
+  .activity-entry-grid,
+  .admin-task-controls,
   .checklist.two-column,
   .checklist.compact {
     grid-template-columns: 1fr;

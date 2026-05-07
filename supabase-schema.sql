@@ -22,28 +22,28 @@ drop policy if exists "Authenticated users can insert kennel records" on public.
 drop policy if exists "Authenticated users can update kennel records" on public.kennel_records;
 drop policy if exists "Users can insert their own kennel records" on public.kennel_records;
 drop policy if exists "Users can update own records and admin can update all" on public.kennel_records;
+drop policy if exists "Kennel app can read records" on public.kennel_records;
+drop policy if exists "Kennel app can insert records" on public.kennel_records;
+drop policy if exists "Kennel app can update records" on public.kennel_records;
 
-create policy "Authenticated users can read kennel records"
+-- PIN login is browser-side, so the public app key must be allowed to read/write
+-- kennel records. For tighter security later, move PIN verification into a
+-- Supabase Edge Function and restrict these policies again.
+create policy "Kennel app can read records"
 on public.kennel_records
 for select
-to authenticated
+to anon, authenticated
 using (true);
 
-create policy "Users can insert their own kennel records"
+create policy "Kennel app can insert records"
 on public.kennel_records
 for insert
-to authenticated
-with check (auth.uid() = user_id);
+to anon, authenticated
+with check (true);
 
-create policy "Users can update own records and admin can update all"
+create policy "Kennel app can update records"
 on public.kennel_records
 for update
-to authenticated
-using (
-  auth.uid() = user_id
-  or lower(auth.jwt() ->> 'email') = 'centraltexashusky@gmail.com'
-)
-with check (
-  auth.uid() = user_id
-  or lower(auth.jwt() ->> 'email') = 'centraltexashusky@gmail.com'
-);
+to anon, authenticated
+using (true)
+with check (true);
