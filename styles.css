@@ -464,11 +464,22 @@ h2 {
   align-items: center;
   display: flex;
   gap: 10px;
+  justify-content: space-between;
 }
 
 .customer-dog-item span {
   color: var(--muted);
   margin-left: auto;
+}
+
+.customer-dog-item > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.customer-dog-item > div span {
+  margin-left: 0;
 }
 
 .booking-summary {
@@ -832,6 +843,23 @@ button:focus-visible {
   opacity: 0.72;
 }
 
+.record-card.is-approved {
+  background: #e2f3e7;
+  border-color: #8ec49e;
+  box-shadow: inset 4px 0 0 #4f9b62;
+}
+
+.record-card.is-pending {
+  background: #fff0d6;
+  border-color: #efc46a;
+  box-shadow: inset 4px 0 0 #d99d2f;
+}
+
+.record-card.is-cancelled {
+  background: #eef2f1;
+  opacity: 0.72;
+}
+
 .record-card.is-completed strong {
   text-decoration: line-through;
   text-decoration-thickness: 2px;
@@ -863,6 +891,10 @@ button:focus-visible {
   font-size: 0.84rem;
   min-height: 38px;
   padding: 8px 11px;
+}
+
+.danger-button {
+  color: var(--red);
 }
 
 .toggle-row {
@@ -903,6 +935,24 @@ textarea {
   margin-bottom: 16px;
 }
 
+.service-option {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.service-option span {
+  align-items: flex-start;
+  display: inline-flex;
+  gap: 10px;
+}
+
+.service-quantity {
+  flex: 0 0 78px;
+  min-height: 40px;
+  padding: 8px;
+  width: 78px;
+}
+
 .checklist label {
   align-items: flex-start;
   background: #f6f8f7;
@@ -922,6 +972,12 @@ textarea {
   height: 20px;
   margin-top: 1px;
   width: 20px;
+}
+
+.checklist input.service-quantity {
+  height: 40px;
+  margin-top: 0;
+  width: 78px;
 }
 
 .task-item {
@@ -966,9 +1022,37 @@ textarea {
   border-radius: 8px;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(0, 1fr) 150px auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   margin-top: 12px;
   padding: 12px;
+}
+
+.column-manager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.column-chip {
+  align-items: center;
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 6px;
+  padding: 8px;
+}
+
+.column-chip.is-off {
+  opacity: 0.62;
+}
+
+.column-chip label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  margin: 0;
 }
 
 .clickable-card {

@@ -59,6 +59,32 @@ const defaultDailyTasks = {
   ],
 };
 
+const defaultManagedTasks = {
+  weekly: [
+    "Monday thorough kennel clean completed",
+    "Dog Mansion main AC filter cleaned",
+    "Dog Shed mini-split AC filter cleaned",
+    "Dog Shed window AC filter cleaned",
+    "Self-filling water bowls cleaned",
+    "Grooming table towels changed out",
+    "Gates, latches, fencing, and yard safety checked",
+    "Weekly bath plan reviewed",
+    "Weekly exercise/training priorities reviewed",
+  ],
+  tuesday: ["Trash removed for Wednesday pickup"],
+  monthly: [
+    "Floors thoroughly cleaned",
+    "Walls and panels cleaned",
+    "Kennel surfaces cleaned",
+    "AC/filter area checked after cleaning",
+    "Dog Mansion attic AC filter replaced as needed",
+    "AC drain line treated with bleach or vinegar, never mixed",
+    "Drains and low areas checked",
+    "Drying and ventilation completed",
+    "Repair or safety issues noted",
+  ],
+};
+
 const HELPER_PINS = {
   "1001": { name: "Ms. Yuko", email: "yuko@centraltexashusky.com", key: "helper-yuko", role: "helper" },
   "1002": { name: "Lexi", email: "lexi@centraltexashusky.com", key: "helper-lexi", role: "helper" },
@@ -80,6 +106,7 @@ const stateKeys = {
   settingsUser: "cth-settingsUser-records",
   cfoNote: "cth-cfoNote-records",
   taskConfig: "cth-daily-task-config",
+  tableConfig: "cth-table-column-config",
   session: "cth-current-session",
 };
 
@@ -97,6 +124,31 @@ const defaultCfoNotes = [
   { title: "Deposit guardrail", note: "Review deposits above $500 or 20% of purchase price before using them publicly." },
   { title: "Private yard rental", note: "Start around $10-$12 per dog/hour; test premium $15-$20 blocks when shade, water, privacy, and photo-friendly features are ready." },
 ];
+
+const tableColumns = {
+  ownedDog: [
+    { key: "callName", label: "Call Name", value: (record) => record.callName || "" },
+    { key: "sex", label: "Sex", value: (record) => record.sex || "" },
+    { key: "specialCare", label: "Special Care Note", value: (record) => record.specialCare || "" },
+    { key: "dateOfBirth", label: "DOB", value: (record) => record.dateOfBirth || "" },
+    { key: "rabiesDate", label: "Rabies", value: (record) => record.rabiesDate || "" },
+    { key: "nextBath", label: "Next Bath", value: (record) => record.nextBath || "" },
+    { key: "foodAmount", label: "Food", value: (record) => record.foodAmount || "" },
+  ],
+  boardingDog: [
+    { key: "dogName", label: "Dog", value: (record) => record.dogName || "" },
+    { key: "ownerName", label: "Owner", value: (record) => record.ownerName || "" },
+    { key: "ownerPhone", label: "Phone", value: (record) => record.ownerPhone || "" },
+    { key: "emergencyPhone", label: "Emergency", value: (record) => [record.emergencyName, record.emergencyPhone].filter(Boolean).join(" ") },
+    { key: "dropoffTime", label: "Drop-off", value: (record) => formatDateTime(currentOrNextStay(record)?.dropoffTime) || "" },
+    { key: "pickupTime", label: "Pick-up", value: (record) => formatDateTime(currentOrNextStay(record)?.pickupTime) || "" },
+    { key: "requiredUpdate", label: "Required Update", value: (record) => (record.flags || []).includes("Required update from owner") ? "Yes" : "No" },
+    { key: "requests", label: "Requests", value: (record) => {
+      const stay = currentOrNextStay(record);
+      return [...(record.flags || []).filter((flag) => flag.includes("requested")), ...((stay?.requests || []).filter((flag) => flag.includes("requested")))].join(", ");
+    } },
+  ],
+};
 
 function uid(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -153,15 +205,46 @@ function readRecords(type) {
   return JSON.parse(localStorage.getItem(stateKeys[type]) || "[]");
 }
 
+function compactRecordsForStorage(records) {
+  const maxInlineMediaLength = 700000;
+  return records.map((record) => {
+    const copy = { ...record };
+    if (copy.profilePhotoData && copy.profilePhotoData.length > maxInlineMediaLength) {
+      copy.profilePhotoData = "";
+      copy.profilePhotoNote = "Large uploaded profile photo was not kept inline. Use a shared image link or upload a smaller image.";
+    }
+    if (Array.isArray(copy.mediaItems)) {
+      copy.mediaItems = copy.mediaItems.map((item) =>
+        item?.dataUrl && item.dataUrl.length > maxInlineMediaLength
+          ? { ...item, dataUrl: "", note: "Large media file was logged by filename only." }
+          : item,
+      );
+    }
+    return copy;
+  });
+}
+
 function writeRecords(type, records) {
-  localStorage.setItem(stateKeys[type], JSON.stringify(records));
+  const compactedRecords = compactRecordsForStorage(records);
+  try {
+    localStorage.setItem(stateKeys[type], JSON.stringify(compactedRecords));
+    return compactedRecords;
+  } catch (error) {
+    showToast("This record could not be saved. Try a smaller photo or remove large video files.");
+    throw error;
+  }
 }
 
 function readTaskConfig() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.taskConfig) || "null");
-  return saved || {
+  const base = saved || {};
+  return {
     morning: defaultDailyTasks.morning.map((text) => ({ id: uid("task"), text })),
     pm: defaultDailyTasks.pm.map((text) => ({ id: uid("task"), text })),
+    weekly: defaultManagedTasks.weekly.map((text) => ({ id: uid("task"), text })),
+    tuesday: defaultManagedTasks.tuesday.map((text) => ({ id: uid("task"), text })),
+    monthly: defaultManagedTasks.monthly.map((text) => ({ id: uid("task"), text })),
+    ...base,
   };
 }
 
@@ -170,7 +253,62 @@ function writeTaskConfig(config) {
 }
 
 function ensureTaskConfig() {
-  if (!localStorage.getItem(stateKeys.taskConfig)) writeTaskConfig(readTaskConfig());
+  writeTaskConfig(readTaskConfig());
+}
+
+function readTableConfig() {
+  const saved = JSON.parse(localStorage.getItem(stateKeys.tableConfig) || "null") || {};
+  const withDefaults = {};
+  Object.entries(tableColumns).forEach(([type, columns]) => {
+    withDefaults[type] = saved[type] || columns.map((column) => column.key);
+  });
+  return withDefaults;
+}
+
+function writeTableConfig(config) {
+  localStorage.setItem(stateKeys.tableConfig, JSON.stringify(config));
+}
+
+function activeColumns(type) {
+  const order = readTableConfig()[type] || [];
+  return order.map((key) => tableColumns[type].find((column) => column.key === key)).filter(Boolean);
+}
+
+function renderColumnManager(type, selector) {
+  const container = $(selector);
+  if (!container) return;
+  const order = readTableConfig()[type] || [];
+  const columns = tableColumns[type];
+  container.innerHTML = columns
+    .map((column) => {
+      const visible = order.includes(column.key);
+      const index = order.indexOf(column.key);
+      return `<div class="column-chip ${visible ? "" : "is-off"}" data-column="${column.key}" data-table="${type}">
+        <label><input type="checkbox" ${visible ? "checked" : ""} data-action="toggle-column" data-table="${type}" data-column="${column.key}" /> ${escapeHtml(column.label)}</label>
+        <button type="button" class="icon-button" data-action="move-column-up" data-table="${type}" data-column="${column.key}" ${index <= 0 ? "disabled" : ""} title="Move left">↑</button>
+        <button type="button" class="icon-button" data-action="move-column-down" data-table="${type}" data-column="${column.key}" ${index < 0 || index >= order.length - 1 ? "disabled" : ""} title="Move right">↓</button>
+      </div>`;
+    })
+    .join("");
+}
+
+function updateTableColumnConfig(type, columnKey, action) {
+  if (!type || !columnKey || !action) return;
+  const config = readTableConfig();
+  const order = config[type] || [];
+  const currentIndex = order.indexOf(columnKey);
+  if (action === "toggle-column") {
+    config[type] = currentIndex >= 0 ? order.filter((key) => key !== columnKey) : [...order, columnKey];
+  } else if (currentIndex >= 0) {
+    const nextIndex = action === "move-column-up" ? currentIndex - 1 : currentIndex + 1;
+    if (nextIndex >= 0 && nextIndex < order.length) {
+      [order[currentIndex], order[nextIndex]] = [order[nextIndex], order[currentIndex]];
+      config[type] = order;
+    }
+  }
+  writeTableConfig(config);
+  if (type === "ownedDog") renderOwnedDogs();
+  if (type === "boardingDog") renderBoardingDogs();
 }
 
 function supabaseReady() {
@@ -276,8 +414,8 @@ function upsertRecord(type, payload) {
   const index = records.findIndex((item) => item.id === record.id);
   if (index >= 0) records[index] = record;
   else records.unshift(record);
-  writeRecords(type, records);
-  return record;
+  const storedRecords = writeRecords(type, records);
+  return storedRecords.find((item) => item.id === record.id) || record;
 }
 
 function formPayload(targetForm) {
@@ -300,22 +438,63 @@ function setFormValues(targetForm, record) {
   });
 }
 
+function compressImageFile(file, options = {}) {
+  const maxDimension = options.maxDimension || 1000;
+  const quality = options.quality || 0.74;
+  if (!file?.type?.startsWith("image/")) return Promise.resolve("");
+  return new Promise((resolve) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      const scale = Math.min(1, maxDimension / Math.max(image.width || 1, image.height || 1));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round((image.width || 1) * scale));
+      canvas.height = Math.max(1, Math.round((image.height || 1) * scale));
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(objectUrl);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve("");
+    };
+    image.src = objectUrl;
+  });
+}
+
 function fileToDataUrl(input) {
   const file = input.files?.[0];
   if (!file) return Promise.resolve("");
+  return compressImageFile(file);
+}
+
+function readSmallFileDataUrl(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
+    reader.onerror = () => resolve("");
     reader.readAsDataURL(file);
   });
 }
 
-function fileToMediaItem(file) {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({ name: file.name, type: file.type || "application/octet-stream", dataUrl: reader.result });
-    reader.readAsDataURL(file);
-  });
+async function fileToMediaItem(file) {
+  const item = {
+    id: uid("media"),
+    name: file.name,
+    type: file.type || "application/octet-stream",
+    size: file.size || 0,
+    savedAt: new Date().toISOString(),
+    dataUrl: "",
+  };
+  if (file.type?.startsWith("image/")) {
+    item.dataUrl = await compressImageFile(file, { maxDimension: 1200, quality: 0.7 });
+  } else if ((file.size || 0) <= 700000) {
+    item.dataUrl = await readSmallFileDataUrl(file);
+  } else {
+    item.note = "Large video file was logged by filename only.";
+  }
+  return item;
 }
 
 async function filesToMediaItems(input) {
@@ -394,6 +573,7 @@ function setHelper(user, options = {}) {
   updateNavigationAccess();
   renderDailyTaskLists();
   fillCustomerDefaults();
+  renderAllRecords();
   if (options.switchAfterLogin !== false) switchPage(currentUser.role === "customer" ? "customerPage" : "dashboardPage");
 }
 
@@ -457,17 +637,16 @@ function pageAllowed(pageId) {
 }
 
 function updateNavigationAccess() {
-  const customerPages = ["customerPage", "customerRequestsPage"];
   $$(".nav-button").forEach((button) => {
     const locked = !pageAllowed(button.dataset.page);
     button.disabled = locked;
     button.classList.toggle("is-locked", locked);
-    const hidden = (currentRole() === "customer" && !customerPages.includes(button.dataset.page)) || (!helperIsLoggedIn() && button.dataset.page !== "loginPage");
+    const hidden = locked && !(button.dataset.page === "loginPage" && !helperIsLoggedIn());
     button.classList.toggle("is-hidden-nav", hidden);
   });
   [...$("#mobilePageSelect").options].forEach((option) => {
     option.disabled = !pageAllowed(option.value);
-    option.hidden = (currentRole() === "customer" && !customerPages.includes(option.value)) || (!helperIsLoggedIn() && option.value !== "loginPage");
+    option.hidden = option.disabled && !(option.value === "loginPage" && !helperIsLoggedIn());
   });
 }
 
@@ -517,21 +696,40 @@ function updateCompletionCount() {
   $("#completionText").textContent = `${checked} task${checked === 1 ? "" : "s"} checked`;
 }
 
+function taskInputName(shift) {
+  const names = {
+    morning: "dailyTasks",
+    pm: "pmTasks",
+    weekly: "weeklyTasks",
+    tuesday: "tuesdayTasks",
+    monthly: "monthlyTasks",
+  };
+  return names[shift] || "dailyTasks";
+}
+
 function taskLabel(task, shift) {
+  const canManageTasks = ["helper", "admin"].includes(currentRole());
   const adminTools =
-    currentRole() === "admin"
+    canManageTasks
       ? `<span class="task-admin-tools"><button type="button" class="icon-button" data-action="move-task-up" data-shift="${shift}" data-id="${task.id}" title="Move up">↑</button><button type="button" class="icon-button" data-action="move-task-down" data-shift="${shift}" data-id="${task.id}" title="Move down">↓</button><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">×</button></span>`
       : "";
-  return `<label class="task-item" draggable="${currentRole() === "admin"}" data-shift="${shift}" data-id="${task.id}"><input type="checkbox" name="${shift === "pm" ? "pmTasks" : "dailyTasks"}" value="${task.text}" /> <span class="task-text">${task.text}</span>${adminTools}</label>`;
+  return `<label class="task-item" draggable="${canManageTasks}" data-shift="${shift}" data-id="${task.id}"><input type="checkbox" name="${taskInputName(shift)}" value="${escapeHtml(task.text)}" /> <span class="task-text">${escapeHtml(task.text)}</span>${adminTools}</label>`;
 }
 
 function renderDailyTaskLists(selected = {}) {
   const config = readTaskConfig();
   $("#morningTaskList").innerHTML = config.morning.map((task) => taskLabel(task, "morning")).join("");
   $("#pmTaskList").innerHTML = config.pm.map((task) => taskLabel(task, "pm")).join("");
-  $("#dailyTaskAdminControls").hidden = currentRole() !== "admin";
-  $("#pmTaskAdminControls").hidden = currentRole() !== "admin";
-  ["dailyTasks", "pmTasks"].forEach((name) => {
+  $("#weeklyTaskList").innerHTML = config.weekly.map((task) => taskLabel(task, "weekly")).join("");
+  $("#tuesdayTaskList").innerHTML = config.tuesday.map((task) => taskLabel(task, "tuesday")).join("");
+  $("#monthlyTaskList").innerHTML = config.monthly.map((task) => taskLabel(task, "monthly")).join("");
+  const canManageTasks = ["helper", "admin"].includes(currentRole());
+  $("#dailyTaskAdminControls").hidden = !canManageTasks;
+  $("#pmTaskAdminControls").hidden = !canManageTasks;
+  $("#weeklyTaskAdminControls").hidden = !canManageTasks;
+  $("#tuesdayTaskAdminControls").hidden = !canManageTasks;
+  $("#monthlyTaskAdminControls").hidden = !canManageTasks;
+  ["dailyTasks", "pmTasks", "weeklyTasks", "tuesdayTasks", "monthlyTasks"].forEach((name) => {
     form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
       input.checked = (selected[name] || []).includes(input.value);
     });
@@ -558,13 +756,12 @@ function removeTask(shift, id) {
 
 function addCustomTask() {
   const text = $("#newTaskText").value.trim();
-  const shift = $("#newTaskShift").value;
   if (!text) {
     showToast("Enter a task before adding it.");
     return;
   }
   const config = readTaskConfig();
-  config[shift].push({ id: uid("task"), text });
+  config.morning.push({ id: uid("task"), text });
   writeTaskConfig(config);
   $("#newTaskText").value = "";
   renderDailyTaskLists();
@@ -583,6 +780,20 @@ function addPmCustomTask() {
   $("#newPmTaskText").value = "";
   renderDailyTaskLists();
   showToast("PM task added.");
+}
+
+function addManagedTask(shift, inputSelector) {
+  const text = $(inputSelector).value.trim();
+  if (!text) {
+    showToast("Enter a task before adding it.");
+    return;
+  }
+  const config = readTaskConfig();
+  config[shift].push({ id: uid("task"), text });
+  writeTaskConfig(config);
+  $(inputSelector).value = "";
+  renderDailyTaskLists();
+  showToast("Task added.");
 }
 
 function setOwnedFormLocked(locked) {
@@ -658,7 +869,6 @@ function startAutoSync() {
 
 function payloadForSheet(payload) {
   const copy = { ...payload };
-  delete copy.profilePhotoData;
   delete copy.profilePhoto;
   delete copy.requestMedia;
   delete copy.maintenanceMedia;
@@ -831,7 +1041,7 @@ function showDetailDialog(title, html, context = null) {
 function showMediaDialog(src, type, name) {
   $("#mediaDialogTitle").textContent = name || "Media";
   if (!src) {
-    $("#mediaDialogBody").innerHTML = `<p>This older record only saved the file name, so the image or video itself is not available to preview. Re-upload the file or paste a shared media link on the item to view it here.</p>${name ? `<p><strong>Saved file name:</strong> ${escapeHtml(name)}</p>` : ""}`;
+    $("#mediaDialogBody").innerHTML = `<p>This file was logged with the request. Images are saved as previews; larger video files are saved by file name so the form can submit reliably.</p>${name ? `<p><strong>Saved file name:</strong> ${escapeHtml(name)}</p>` : ""}`;
     $("#mediaDialog").showModal();
     return;
   }
@@ -1006,28 +1216,115 @@ function matches(record, query) {
 function renderOwnedDogs() {
   const query = $("#ownedDogSearch").value || "";
   const records = readRecords("ownedDog").filter((record) => matches(record, query));
+  const columns = activeColumns("ownedDog");
+  $("#ownedDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>`;
   $("#ownedDogTableBody").innerHTML = records.length
     ? records
-        .map((record) => `<tr data-id="${record.id}"><td>${record.callName || ""}</td><td>${record.showName || ""}</td><td>${record.sex || ""}</td><td>${record.dateOfBirth || ""}</td><td>${record.rabiesDate || ""}</td><td>${record.nextBath || ""}</td><td>${record.foodAmount || ""}</td></tr>`)
+        .map((record) => `<tr data-id="${record.id}">${columns.map((column) => `<td>${escapeHtml(column.value(record))}</td>`).join("")}</tr>`)
         .join("")
-    : `<tr><td colspan="7">No matching dogs. Use Add New Dog.</td></tr>`;
+    : `<tr><td colspan="${columns.length || 1}">No matching dogs. Use Add New Dog.</td></tr>`;
+  renderColumnManager("ownedDog", "#ownedDogColumnManager");
 }
 
 function renderBoardingDogs() {
   const query = $("#boardingDogSearch").value || "";
-  const records = readRecords("boardingDog")
-    .filter((record) => matches(record, query))
+  const records = combinedBoardingDogRecords()
+    .filter((record) => record.boardingStatus !== "Cancelled" && matches(record, query))
     .sort((a, b) => Number(isCurrentlyBoarding(b)) - Number(isCurrentlyBoarding(a)));
+  const columns = activeColumns("boardingDog");
+  $("#boardingDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>`;
   $("#boardingDogTableBody").innerHTML = records.length
     ? records
         .map((record) => {
-          const stay = currentOrNextStay(record);
-          const rowClass = record.boardingStatus === "Pending" ? " class=\"is-pending-boarding\"" : isCurrentlyBoarding(record) ? " class=\"is-current-boarding\"" : "";
-          const actions = record.boardingStatus === "Pending" ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="approve-boarding" data-id="${record.id}">Approve</button><button type="button" class="secondary-button" data-action="change-boarding" data-id="${record.id}">Change</button></div>` : "";
-          return `<tr data-id="${record.id}"${rowClass}><td>${record.dogName || ""}${actions}</td><td>${record.ownerName || ""}</td><td>${record.ownerPhone || ""}</td><td>${formatDateTime(stay?.dropoffTime) || ""}</td><td>${formatDateTime(stay?.pickupTime) || ""}</td><td>${record.flags?.includes("Required update from owner") ? "Yes" : "No"}</td><td>${[...(record.flags || []).filter((flag) => flag.includes("requested")), ...((stay?.requests || []).filter((flag) => flag.includes("requested")))].join(", ")}</td></tr>`;
+          const rowClass = isCurrentlyBoarding(record) ? " class=\"is-current-boarding\"" : record.boardingStatus === "Pending" ? " class=\"is-pending-boarding\"" : "";
+          return `<tr data-id="${record.id}" data-source="${escapeHtml(record.sourceType || record.type || "boardingDog")}"${rowClass}>${columns.map((column) => `<td>${escapeHtml(column.value(record))}</td>`).join("")}</tr>`;
         })
         .join("")
-    : `<tr><td colspan="7">No matching boarding dogs. Use Add New Dog.</td></tr>`;
+    : `<tr><td colspan="${columns.length || 1}">No matching boarding dogs. Use Add New Dog.</td></tr>`;
+  renderColumnManager("boardingDog", "#boardingDogColumnManager");
+}
+
+function dogRosterKey(record) {
+  return `${record.dogName || record.callName || record.showName || ""}|${record.ownerEmail || record.ownerPhone || record.ownerName || record.sourceType || ""}`.toLowerCase();
+}
+
+function combinedBoardingDogRecords() {
+  const records = readRecords("boardingDog")
+    .filter((record) => record.boardingStatus !== "Cancelled")
+    .map((record) => ({ ...record, sourceType: "boardingDog" }));
+  const seen = new Set(records.map(dogRosterKey));
+  readRecords("customerDog")
+    .filter((dog) => !dog.removed && dog.dogName)
+    .forEach((dog) => {
+      const mapped = {
+        ...dog,
+        type: "customerDog",
+        sourceType: "customerDog",
+        dogName: dog.dogName,
+        flags: [],
+        stays: [],
+        boardingStatus: "Not boarding",
+      };
+      const key = dogRosterKey(mapped);
+      if (!seen.has(key)) {
+        seen.add(key);
+        records.push(mapped);
+      }
+    });
+  readRecords("ownedDog")
+    .filter((dog) => dog.callName || dog.showName)
+    .forEach((dog) => {
+      const mapped = {
+        ...dog,
+        type: "ownedDog",
+        sourceType: "ownedDog",
+        dogName: dog.callName || dog.showName,
+        breedDescription: dog.showName || dog.breedDescription || "",
+        ownerName: "Central Texas Husky",
+        ownerPhone: "",
+        ownerEmail: "",
+        emergencyName: "",
+        emergencyPhone: "",
+        flags: [],
+        stays: [],
+        boardingStatus: "Kennel dog",
+      };
+      const key = dogRosterKey(mapped);
+      if (!seen.has(key)) {
+        seen.add(key);
+        records.push(mapped);
+      }
+    });
+  return records;
+}
+
+function renderBoardingRequests() {
+  const list = $("#boardingRequestRecords");
+  if (!list) return;
+  const records = readRecords("boardingDog")
+    .filter((record) => record.customerRequest)
+    .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
+  list.innerHTML = records.length
+    ? records
+        .map((record) => {
+          const stay = record.stays?.[0] || {};
+          const services = stay.requests?.length ? stay.requests.join(", ") : "No added services";
+          const statusClass = statusClassForRequest(record.boardingStatus);
+          const actions =
+            record.boardingStatus !== "Cancelled"
+              ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="approve-boarding" data-id="${record.id}">Approve</button><button type="button" class="secondary-button" data-action="change-boarding" data-id="${record.id}">Change</button><button type="button" class="secondary-button" data-action="cancel-boarding" data-id="${record.id}">Cancel Request</button></div>`
+              : "";
+          return `<article class="record-card clickable-card ${statusClass}" data-id="${record.id}" data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")} - ${escapeHtml(record.boardingStatus || "Pending")}</strong><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${record.estimatedTotal ? `<p><strong>Estimated total:</strong> ${money(record.estimatedTotal)}</p>` : ""}${actions}</article>`;
+        })
+        .join("")
+    : "<p>No boarding requests yet.</p>";
+}
+
+function statusClassForRequest(status = "") {
+  if (status === "Approved") return "is-approved";
+  if (status === "Pending") return "is-pending";
+  if (status === "Cancelled") return "is-cancelled";
+  return "";
 }
 
 function currentOrNextStay(record) {
@@ -1421,10 +1718,16 @@ function fillCustomerDefaults() {
 
 function renderCustomerDogs() {
   if (!$("#customerDogList")) return;
-  const dogs = readRecords("customerDog").filter((dog) => dog.ownerEmail === currentUser?.email || currentRole() === "admin");
+  const dogs = readRecords("customerDog").filter((dog) => !dog.removed && (dog.ownerEmail === currentUser?.email || currentRole() === "admin"));
+  const checkedIds = new Set([...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')].map((input) => input.value));
   $("#customerDogList").innerHTML = dogs.length
-    ? dogs.map((dog) => `<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="${dog.id}" /> ${escapeHtml(dog.dogName)} <span>${escapeHtml(dog.breedDescription || "")}</span></label>`).join("")
+    ? dogs.map((dog) => `<article class="customer-dog-item"><div><strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span></div><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-customer-dog" data-id="${dog.id}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-customer-dog" data-id="${dog.id}">Remove</button></div></article>`).join("")
     : "<p>No dogs added yet.</p>";
+  if ($("#customerBookingDogList")) {
+    $("#customerBookingDogList").innerHTML = dogs.length
+      ? dogs.map((dog) => `<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="${dog.id}" ${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span></label>`).join("")
+      : "<p>Add a dog before creating a boarding request.</p>";
+  }
   renderCustomerServiceOptions();
   updateCustomerEstimate();
 }
@@ -1441,7 +1744,8 @@ function renderCustomerRequests() {
           const stay = record.stays?.[0] || {};
           const services = stay.requests?.length ? stay.requests.join(", ") : "No added services";
           const estimate = record.estimatedTotal ? `<p><strong>Estimated total:</strong> ${money(record.estimatedTotal)}</p>` : "";
-          return `<article class="record-card clickable-card ${record.boardingStatus === "Pending" ? "is-pending" : ""}" data-action="view-customer-request" data-id="${record.id}"><strong>${escapeHtml(record.dogName || "Dog")} - ${escapeHtml(record.boardingStatus || "Pending")}</strong><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${estimate}</article>`;
+          const actions = record.boardingStatus !== "Cancelled" ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-customer-request" data-id="${record.id}">Update</button><button type="button" class="secondary-button" data-action="cancel-customer-request" data-id="${record.id}">Cancel Request</button></div>` : "";
+          return `<article class="record-card clickable-card ${statusClassForRequest(record.boardingStatus)}" data-action="view-customer-request" data-id="${record.id}"><strong>${escapeHtml(record.dogName || "Dog")} - ${escapeHtml(record.boardingStatus || "Pending")}</strong><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${estimate}${actions}</article>`;
         })
         .join("")
     : "<p>No boarding requests submitted yet.</p>";
@@ -1449,16 +1753,79 @@ function renderCustomerRequests() {
 
 function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
-  const services = readRecords("service").filter((service) => (service.flags || []).includes("Active") && !(service.flags || []).includes("Admin only"));
+  const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
+  const services = readRecords("service").filter((service) => (service.flags || []).includes("Active") && !(service.flags || []).includes("Admin only") && service.category !== "Boarding");
   $("#customerServiceOptions").innerHTML = services.length
-    ? services.map((service) => `<label><input type="checkbox" name="customerServices" value="${service.id}" /> ${escapeHtml(service.serviceName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</label>`).join("")
+    ? services.map((service) => {
+        const checked = checkedIds.has(service.id);
+        const quantityValue = $("#customerBookingForm").elements[`serviceQuantity-${service.id}`]?.value || "1";
+        return `<label class="service-option"><span><input type="checkbox" name="customerServices" value="${service.id}" ${checked ? "checked" : ""} /> ${escapeHtml(service.serviceName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span><input class="service-quantity" type="number" name="serviceQuantity-${service.id}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(service.serviceName)} quantity" /></label>`;
+      }).join("")
     : "<p>No customer services are active yet.</p>";
 }
 
 function selectedCustomerDogs() {
-  return [...document.querySelectorAll('input[name="customerDogSelect"]:checked')]
+  return [...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')]
     .map((input) => readRecords("customerDog").find((dog) => dog.id === input.value))
-    .filter(Boolean);
+    .filter((dog) => dog && !dog.removed);
+}
+
+function resetCustomerDogForm() {
+  $("#customerDogForm").reset();
+  $("#customerDogId").value = "";
+  $("#saveCustomerDogButton").textContent = "Save Dog";
+  fillCustomerDefaults();
+}
+
+function openCustomerDog(record = {}) {
+  resetCustomerDogForm();
+  setFormValues($("#customerDogForm"), record);
+  $("#customerDogId").value = record.id || "";
+  $("#saveCustomerDogButton").textContent = record.id ? "Save Dog Changes" : "Save Dog";
+  $("#customerDogForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetCustomerBookingForm() {
+  $("#customerBookingForm").reset();
+  $("#editingCustomerRequestId").value = "";
+  $("#requestBoardingButton").textContent = "Request Boarding";
+  pendingCustomerBooking = null;
+  renderCustomerDogs();
+  updateCustomerEstimate();
+}
+
+function editCustomerRequest(record) {
+  if (!record) return;
+  switchPage("customerRequestsPage");
+  resetCustomerBookingForm();
+  const stay = record.stays?.[0] || {};
+  $("#editingCustomerRequestId").value = record.id;
+  $("#customerBookingForm").elements.dropoffTime.value = stay.dropoffTime?.slice(0, 16) || "";
+  $("#customerBookingForm").elements.pickupTime.value = stay.pickupTime?.slice(0, 16) || "";
+  $("#customerBookingForm").elements.requestNotes.value = stay.stayNotes || "";
+  const dog = readRecords("customerDog").find((item) => item.dogName === record.dogName && item.ownerEmail === record.ownerEmail);
+  if (dog) {
+    const checkbox = [...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]')].find((input) => input.value === dog.id);
+    if (checkbox) checkbox.checked = true;
+  }
+  const serviceQuantities = new Map((record.requestedServices || []).map((item) => {
+    if (typeof item === "object") return [item.id || item.serviceName, Number(item.quantity || 1)];
+    const match = String(item).match(/^(.*?)\s+x(\d+)$/);
+    return [match ? match[1] : String(item), match ? Number(match[2]) : 1];
+  }));
+  $("#customerBookingForm").querySelectorAll('input[name="customerServices"]').forEach((input) => {
+    const service = readRecords("service").find((item) => item.id === input.value);
+    const quantity = serviceQuantities.get(service?.id) || serviceQuantities.get(service?.serviceName);
+    input.checked = Boolean(quantity);
+    const quantityInput = $("#customerBookingForm").querySelector(`input[name="serviceQuantity-${input.value}"]`);
+    if (quantityInput) {
+      quantityInput.value = String(quantity || 1);
+      quantityInput.disabled = !input.checked;
+    }
+  });
+  $("#requestBoardingButton").textContent = "Update Request";
+  updateCustomerEstimate();
+  $("#customerBookingForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function boardingDays(dropoffTime, pickupTime) {
@@ -1477,11 +1844,18 @@ function customerEstimateDetails() {
   const formEl = $("#customerBookingForm");
   const data = formPayload(formEl);
   const dogs = selectedCustomerDogs();
-  const services = checkedFrom(formEl, "customerServices").map((id) => readRecords("service").find((service) => service.id === id)).filter(Boolean);
+  const services = checkedFrom(formEl, "customerServices")
+    .map((id) => {
+      const service = readRecords("service").find((item) => item.id === id);
+      if (!service) return null;
+      const quantity = Math.max(1, Number(formEl.elements[`serviceQuantity-${id}`]?.value || 1));
+      return { ...service, quantity };
+    })
+    .filter(Boolean);
   const days = boardingDays(data.dropoffTime, data.pickupTime);
   const boardingService = readRecords("service").find((service) => service.category === "Boarding" && (service.flags || []).includes("Active"));
   const boardingCost = dogs.length * days * Number(boardingService?.basePrice || 0);
-  const serviceCost = dogs.length * services.reduce((total, service) => total + Number(service.basePrice || 0), 0);
+  const serviceCost = dogs.length * services.reduce((total, service) => total + Number(service.basePrice || 0) * Number(service.quantity || 1), 0);
   return { dogs, services, days, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: data.pickupTime, requestNotes: data.requestNotes };
 }
 
@@ -1497,7 +1871,7 @@ function showBookingConfirmDialog(estimate) {
   pendingCustomerBooking = estimate;
   const dogList = estimate.dogs.map((dog) => `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}</li>`).join("");
   const serviceList = estimate.services.length
-    ? estimate.services.map((service) => `<li>${escapeHtml(service.serviceName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</li>`).join("")
+    ? estimate.services.map((service) => `<li>${escapeHtml(service.serviceName)} x${Number(service.quantity || 1)} - ${money(Number(service.basePrice || 0) * Number(service.quantity || 1))} ${escapeHtml(service.unit || "")}</li>`).join("")
     : "<li>No added services selected</li>";
   $("#bookingConfirmBody").innerHTML = `
     <div class="booking-summary">
@@ -1514,23 +1888,27 @@ function showBookingConfirmDialog(estimate) {
 async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
   if (!estimate?.dogs?.length) return;
+  const editingId = $("#editingCustomerRequestId")?.value;
+  const editingRecord = editingId ? readRecords("boardingDog").find((record) => record.id === editingId) : null;
   for (const dog of estimate.dogs) {
+    const useExisting = editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1);
     const stay = {
-      id: uid("stay"),
+      id: useExisting ? editingRecord.stays?.[0]?.id || uid("stay") : uid("stay"),
       status: "Pending",
-      createdAt: new Date().toISOString(),
+      createdAt: useExisting ? editingRecord.stays?.[0]?.createdAt || new Date().toISOString() : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       dropoffTime: estimate.dropoffTime,
       pickupTime: estimate.pickupTime,
-      requests: estimate.services.map((service) => `${service.serviceName} requested`),
+      requests: estimate.services.map((service) => `${service.serviceName}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`),
       stayNotes: estimate.requestNotes,
       estimatedTotal: estimate.total,
     };
     stay.bathPlan = bathPlanForStay(stay);
     const payload = {
+      ...(useExisting ? editingRecord : {}),
       type: "boardingDog",
-      id: uid("boardingDog"),
-      submittedAt: new Date().toISOString(),
+      id: useExisting ? editingRecord.id : uid("boardingDog"),
+      submittedAt: useExisting ? editingRecord.submittedAt || new Date().toISOString() : new Date().toISOString(),
       boardingStatus: "Pending",
       customerRequest: true,
       dogName: dog.dogName,
@@ -1538,13 +1916,15 @@ async function submitPendingCustomerBooking() {
       ownerName: dog.ownerName,
       ownerPhone: dog.ownerPhone,
       ownerEmail: dog.ownerEmail,
+      emergencyName: dog.emergencyName,
+      emergencyPhone: dog.emergencyPhone,
       specialCare: dog.specialCare,
       spayNeuterStatus: dog.spayNeuterStatus,
       dhppDate: dog.dhppDate,
       rabiesDate: dog.rabiesDate,
       rabiesDuration: dog.rabiesDuration,
       estimatedTotal: estimate.total,
-      requestedServices: estimate.services.map((service) => service.serviceName),
+      requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
       flags: ["Required update from owner"],
       stays: [stay],
     };
@@ -1553,13 +1933,14 @@ async function submitPendingCustomerBooking() {
   }
   pendingCustomerBooking = null;
   $("#bookingConfirmDialog").close();
-  $("#customerBookingForm").reset();
+  resetCustomerBookingForm();
   renderBoardingDogs();
+  renderBoardingRequests();
   renderCustomerDogs();
   renderCustomerRequests();
   renderDashboard();
   switchPage("customerRequestsPage");
-  showToast("Boarding request submitted.");
+  showDetailDialog(editingId ? "Request Updated" : "Request Sent", `<p>Your boarding request has been sent for approval.</p><p>${estimate.dogs.length} dog(s), ${estimate.days} boarding day(s), estimated total ${money(estimate.total)}.</p>`);
 }
 
 function renderServices() {
@@ -1601,6 +1982,7 @@ function renderAllRecords() {
   renderDashboard();
   renderOwnedDogs();
   renderBoardingDogs();
+  renderBoardingRequests();
   renderRequests();
   renderMaintenance();
   renderTimesheet();
@@ -1611,6 +1993,7 @@ function renderAllRecords() {
   renderCustomerDogs();
   renderCustomerRequests();
   renderDemoSubmissions();
+  updateTimeDisplays();
 }
 
 function emailNow(subjectText, bodyText) {
@@ -1618,6 +2001,22 @@ function emailNow(subjectText, bodyText) {
 }
 
 function updateTimeDisplays() {
+  if (activeClockIn?.clockInTime && currentUser?.email) {
+    const openRecord = readRecords("timesheet").find((record) => record.id === activeClockIn.id);
+    if (openRecord?.helperEmail && openRecord.helperEmail !== currentUser.email) {
+      activeClockIn = "";
+      localStorage.removeItem("cth-active-clock-in");
+    }
+  }
+  if (!activeClockIn?.clockInTime && currentUser?.email) {
+    const open = readRecords("timesheet")
+      .filter((record) => record.helperEmail === currentUser.email && record.clockInTime && !record.clockOutTime)
+      .sort((a, b) => new Date(b.clockInTime) - new Date(a.clockInTime))[0];
+    if (open) {
+      activeClockIn = { id: open.id, clockInTime: open.clockInTime, helperEmail: open.helperEmail };
+      localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
+    }
+  }
   $("#clockInDisplay").textContent = activeClockIn?.clockInTime ? formatDateTime(activeClockIn.clockInTime) : "Not clocked in";
   $("#clockOutDisplay").textContent = activeClockIn?.clockInTime ? "Ready to clock out" : "Not clocked out";
 }
@@ -1745,7 +2144,10 @@ function initEvents() {
   $("#clearHelperButton").addEventListener("click", clearHelper);
   $("#addDailyTaskButton").addEventListener("click", addCustomTask);
   $("#addPmTaskButton").addEventListener("click", addPmCustomTask);
-  ["morningTaskList", "pmTaskList"].forEach((listId) => {
+  $("#addWeeklyTaskButton").addEventListener("click", () => addManagedTask("weekly", "#newWeeklyTaskText"));
+  $("#addTuesdayTaskButton").addEventListener("click", () => addManagedTask("tuesday", "#newTuesdayTaskText"));
+  $("#addMonthlyTaskButton").addEventListener("click", () => addManagedTask("monthly", "#newMonthlyTaskText"));
+  ["morningTaskList", "pmTaskList", "weeklyTaskList", "tuesdayTaskList", "monthlyTaskList"].forEach((listId) => {
     $(`#${listId}`).addEventListener("click", (event) => {
       const control = event.target.closest("[data-action]");
       if (!control) return;
@@ -1841,7 +2243,7 @@ function initEvents() {
       hours: 0,
       note: "Open clock-in",
     });
-    activeClockIn = { id: record.id, clockInTime };
+    activeClockIn = { id: record.id, clockInTime, helperEmail: record.helperEmail };
     localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
     sendPayload(record);
     updateTimeDisplays();
@@ -1898,6 +2300,11 @@ function initEvents() {
   $("#ownedDogSex").addEventListener("change", updateOwnedDogConditionalFields);
   $("#ownedDhppDate").addEventListener("change", updateDhppWarning);
   $("#ownedDogSearch").addEventListener("input", renderOwnedDogs);
+  $("#ownedDogColumnManager").addEventListener("click", (event) => {
+    const control = event.target.closest("[data-action]");
+    if (!control) return;
+    updateTableColumnConfig(control.dataset.table, control.dataset.column, control.dataset.action);
+  });
   $("#addOwnedDogButton").addEventListener("click", () => openOwnedDog());
   $("#cancelOwnedDogEdit").addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
   $("#editOwnedDogButton").addEventListener("click", () => {
@@ -1913,33 +2320,38 @@ function initEvents() {
   });
   $("#ourDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const existing = activeOwnedDog() || {};
-    const formData = formPayload(event.currentTarget);
-    const photoField = event.currentTarget.elements.profilePhotoUrl;
-    const hasPhoto = hasRequiredPhoto(existing, $("#ownedDogPhotoInput"), formData.profilePhotoUrl);
-    if (!validateForm(event.currentTarget, [{ field: photoField, valid: hasPhoto, message: "Add a profile photo by tapping the square, or paste a shared photo link." }])) return;
-    const photoData = await fileToDataUrl($("#ownedDogPhotoInput"));
-    const isFemale = formData.sex === "Female";
-    const payload = {
-      ...existing,
-      type: "ownedDog",
-      submittedAt: existing.submittedAt || new Date().toISOString(),
-      ...formData,
-      rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
-      lastHeat: isFemale ? formData.lastHeat : "",
-      nextHeat: isFemale ? formData.nextHeat : "",
-      profilePhotoData: photoData || existing.profilePhotoData || "",
-      exerciseLogs: existing.exerciseLogs || [],
-      trainingLogs: existing.trainingLogs || [],
-    };
-    const record = upsertRecord("ownedDog", payload);
-    await sendPayload(record);
-    $("#ownedDogActivityPanel").hidden = false;
-    setDogPhoto("owned", record);
-    renderOwnedActivity(record);
-    renderOwnedDogs();
-    setOwnedFormLocked(true);
-    showToast("Dog record saved.");
+    try {
+      const existing = activeOwnedDog() || {};
+      const formData = formPayload(event.currentTarget);
+      const photoField = event.currentTarget.elements.profilePhotoUrl;
+      const hasPhoto = hasRequiredPhoto(existing, $("#ownedDogPhotoInput"), formData.profilePhotoUrl);
+      if (!validateForm(event.currentTarget, [{ field: photoField, valid: hasPhoto, message: "Add a profile photo by tapping the square, or paste a shared photo link." }])) return;
+      const photoData = await fileToDataUrl($("#ownedDogPhotoInput"));
+      const isFemale = formData.sex === "Female";
+      const payload = {
+        ...existing,
+        type: "ownedDog",
+        submittedAt: existing.submittedAt || new Date().toISOString(),
+        ...formData,
+        rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
+        lastHeat: isFemale ? formData.lastHeat : "",
+        nextHeat: isFemale ? formData.nextHeat : "",
+        profilePhotoData: photoData || existing.profilePhotoData || "",
+        exerciseLogs: existing.exerciseLogs || [],
+        trainingLogs: existing.trainingLogs || [],
+      };
+      const record = upsertRecord("ownedDog", payload);
+      await sendPayload(record);
+      $("#ownedDogActivityPanel").hidden = false;
+      setDogPhoto("owned", record);
+      renderOwnedActivity(record);
+      renderOwnedDogs();
+      renderBoardingDogs();
+      setOwnedFormLocked(true);
+      showDetailDialog("Dog Saved", `<p>${escapeHtml(record.callName || record.showName || "Dog")} has been saved.</p>`);
+    } catch (error) {
+      showDetailDialog("Dog Not Saved", `<p>The dog record could not be saved: ${escapeHtml(error.message)}</p>`);
+    }
   });
   $("#addTreadmillLog").addEventListener("click", () => {
     addOwnedLog("Treadmill", Number($("#ownedTreadmillMinutes").value || 0));
@@ -1955,6 +2367,11 @@ function initEvents() {
   });
 
   $("#boardingDogSearch").addEventListener("input", renderBoardingDogs);
+  $("#boardingDogColumnManager").addEventListener("click", (event) => {
+    const control = event.target.closest("[data-action]");
+    if (!control) return;
+    updateTableColumnConfig(control.dataset.table, control.dataset.column, control.dataset.action);
+  });
   $("#addBoardingDogButton").addEventListener("click", () => openBoardingDog());
   $("#cancelBoardingDogEdit").addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
   $("#editBoardingDogButton").addEventListener("click", () => {
@@ -1965,8 +2382,46 @@ function initEvents() {
   $("#boardingDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("boarding"));
   $("#boardingDogTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");
-    if (!row) return;
+    if (!row || row.dataset.source !== "boardingDog") return;
     openBoardingDog(readRecords("boardingDog").find((record) => record.id === row.dataset.id));
+  });
+  $("#boardingRequestRecords").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    const action = button?.dataset.action;
+    if (["approve-boarding", "change-boarding", "cancel-boarding"].includes(action)) {
+      event.stopPropagation();
+      const record = readRecords("boardingDog").find((item) => item.id === button.dataset.id);
+      if (!record) return;
+      if (action === "approve-boarding") {
+        const updated = upsertRecord("boardingDog", {
+          ...record,
+          boardingStatus: "Approved",
+          stays: (record.stays || []).map((stay) => ({ ...stay, status: "Approved", updatedAt: new Date().toISOString() })),
+        });
+        await sendPayload(updated);
+        renderBoardingDogs();
+        renderBoardingRequests();
+        renderCustomerRequests();
+        showToast("Boarding request approved.");
+      }
+      if (action === "change-boarding") {
+        openBoardingDog(record);
+        setBoardingFormLocked(false);
+      }
+      if (action === "cancel-boarding") {
+        const updated = upsertRecord("boardingDog", { ...record, boardingStatus: "Cancelled", cancelledAt: new Date().toISOString(), flags: (record.flags || []).filter((flag) => flag !== "Required update from owner") });
+        await sendPayload(updated);
+        renderBoardingDogs();
+        renderBoardingRequests();
+        renderCustomerRequests();
+        showToast("Boarding request cancelled.");
+      }
+      return;
+    }
+    const card = event.target.closest('[data-action="view-boarding-request"]');
+    if (!card) return;
+    const record = readRecords("boardingDog").find((item) => item.id === card.dataset.id);
+    if (record) showDetailDialog(titleForRecord("boardingDog", record), detailForRecord("boardingDog", record));
   });
   $("#boardingDogTableBody").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
@@ -1982,39 +2437,53 @@ function initEvents() {
       });
       await sendPayload(updated);
       renderBoardingDogs();
+      renderBoardingRequests();
       showToast("Boarding request approved.");
     }
     if (button.dataset.action === "change-boarding") {
       openBoardingDog(record);
       setBoardingFormLocked(false);
     }
+    if (button.dataset.action === "cancel-boarding") {
+      const updated = upsertRecord("boardingDog", { ...record, boardingStatus: "Cancelled", cancelledAt: new Date().toISOString(), flags: (record.flags || []).filter((flag) => flag !== "Required update from owner") });
+      await sendPayload(updated);
+      renderBoardingDogs();
+      renderBoardingRequests();
+      renderCustomerRequests();
+      showToast("Boarding request cancelled.");
+    }
   });
   $("#boardingDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const existing = activeBoardingDog() || {};
-    const formData = formPayload(event.currentTarget);
-    const photoField = event.currentTarget.elements.profilePhotoUrl;
-    const hasPhoto = hasRequiredPhoto(existing, $("#boardingDogPhotoInput"), formData.profilePhotoUrl);
-    if (!validateForm(event.currentTarget, [{ field: photoField, valid: hasPhoto, message: "Add a profile photo by tapping the square, or paste a shared photo link." }])) return;
-    const photoData = await fileToDataUrl($("#boardingDogPhotoInput"));
-    const payload = {
-      ...existing,
-      type: "boardingDog",
-      submittedAt: existing.submittedAt || new Date().toISOString(),
-      ...formData,
-      rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
-      flags: checkedFrom(event.currentTarget, "boardingFlags"),
-      profilePhotoData: photoData || existing.profilePhotoData || "",
-      stays: existing.stays || [],
-    };
-    const record = upsertRecord("boardingDog", payload);
-    await sendPayload(record);
-    $("#boardingSchedulePanel").hidden = false;
-    setDogPhoto("boarding", record);
-    renderBoardingStays(record);
-    renderBoardingDogs();
-    setBoardingFormLocked(true);
-    showToast("Boarding dog record saved.");
+    try {
+      const existing = activeBoardingDog() || {};
+      const formData = formPayload(event.currentTarget);
+      const photoField = event.currentTarget.elements.profilePhotoUrl;
+      const hasPhoto = hasRequiredPhoto(existing, $("#boardingDogPhotoInput"), formData.profilePhotoUrl);
+      if (!validateForm(event.currentTarget, [{ field: photoField, valid: hasPhoto, message: "Add a profile photo by tapping the square, or paste a shared photo link." }])) return;
+      const photoData = await fileToDataUrl($("#boardingDogPhotoInput"));
+      const payload = {
+        ...existing,
+        type: "boardingDog",
+        submittedAt: existing.submittedAt || new Date().toISOString(),
+        ...formData,
+        rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
+        flags: checkedFrom(event.currentTarget, "boardingFlags"),
+        profilePhotoData: photoData || existing.profilePhotoData || "",
+        stays: existing.stays || [],
+      };
+      const record = upsertRecord("boardingDog", payload);
+      await sendPayload(record);
+      $("#boardingSchedulePanel").hidden = false;
+      setDogPhoto("boarding", record);
+      renderBoardingStays(record);
+      renderBoardingDogs();
+      renderBoardingRequests();
+      setBoardingFormLocked(true);
+      showDetailDialog("Boarding Dog Saved", `<p>${escapeHtml(record.dogName || "Boarding dog")} has been saved.</p>`);
+    } catch (error) {
+      showDetailDialog("Boarding Dog Not Saved", `<p>The boarding dog record could not be saved: ${escapeHtml(error.message)}</p>`);
+    }
   });
   $("#boardingStayForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -2075,29 +2544,39 @@ function initEvents() {
   $("#requestForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!validateForm(event.currentTarget)) return;
-    const mediaItems = await filesToMediaItems($("#requestMedia"));
-    const files = mediaItems.map((file) => file.name).join(", ");
-    const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(event.currentTarget), mediaFiles: files, mediaItems, urgentNeeds: event.currentTarget.querySelector('input[name="urgentNeeds"]').checked };
-    upsertRecord("request", payload);
-    await sendPayload(payload);
-    if (payload.urgentNeeds) emailNow("Urgent Kennel Request", `Urgent kennel request submitted.\n\nRequested by: ${payload.requestedBy}\nCategory: ${payload.category}\nRequest: ${payload.requestText}\nReason: ${payload.reason}`);
-    event.currentTarget.reset();
-    renderRequests();
-    showToast("Request saved.");
+    try {
+      const mediaItems = await filesToMediaItems($("#requestMedia"));
+      const files = mediaItems.map((file) => file.name).join(", ");
+      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(event.currentTarget), mediaFiles: files, mediaItems, urgentNeeds: event.currentTarget.querySelector('input[name="urgentNeeds"]').checked };
+      const record = upsertRecord("request", payload);
+      await sendPayload(record);
+      if (record.urgentNeeds) emailNow("Urgent Kennel Request", `Urgent kennel request submitted.\n\nRequested by: ${record.requestedBy}\nCategory: ${record.category}\nRequest: ${record.requestText}\nReason: ${record.reason}`);
+      event.currentTarget.reset();
+      event.currentTarget.elements.requestedBy.value = currentUser?.name || "";
+      renderRequests();
+      showDetailDialog("Request Logged", requestDetailHtml(record));
+    } catch (error) {
+      showDetailDialog("Request Not Logged", `<p>The request could not be saved: ${escapeHtml(error.message)}</p>`);
+    }
   });
 
   $("#maintenanceForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!validateForm(event.currentTarget)) return;
-    const mediaItems = await filesToMediaItems($("#maintenanceMedia"));
-    const files = mediaItems.map((file) => file.name).join(", ");
-    const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(event.currentTarget), mediaFiles: files, mediaItems, urgentAttention: event.currentTarget.querySelector('input[name="urgentAttention"]').checked };
-    upsertRecord("maintenance", payload);
-    await sendPayload(payload);
-    if (payload.urgentAttention) emailNow("Urgent Kennel Maintenance Attention Needed", `Urgent maintenance item submitted.\n\nLocation: ${payload.location}\nReported by: ${payload.reportedBy}\nIssue: ${payload.issue}\nSuggested action: ${payload.suggestedAction}\nMedia link: ${payload.mediaLink || "No link pasted"}\nFiles selected: ${payload.mediaFiles || "None"}`);
-    event.currentTarget.reset();
-    renderMaintenance();
-    showToast("Maintenance item saved.");
+    try {
+      const mediaItems = await filesToMediaItems($("#maintenanceMedia"));
+      const files = mediaItems.map((file) => file.name).join(", ");
+      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(event.currentTarget), mediaFiles: files, mediaItems, urgentAttention: event.currentTarget.querySelector('input[name="urgentAttention"]').checked };
+      const record = upsertRecord("maintenance", payload);
+      await sendPayload(record);
+      if (record.urgentAttention) emailNow("Urgent Kennel Maintenance Attention Needed", `Urgent maintenance item submitted.\n\nLocation: ${record.location}\nReported by: ${record.reportedBy}\nIssue: ${record.issue}\nSuggested action: ${record.suggestedAction}\nFiles selected: ${record.mediaFiles || "None"}`);
+      event.currentTarget.reset();
+      event.currentTarget.elements.reportedBy.value = currentUser?.name || "";
+      renderMaintenance();
+      showDetailDialog("Maintenance Item Logged", maintenanceDetailHtml(record));
+    } catch (error) {
+      showDetailDialog("Maintenance Item Not Logged", `<p>The maintenance item could not be saved: ${escapeHtml(error.message)}</p>`);
+    }
   });
 
   $("#showCompletedRequests").addEventListener("change", renderRequests);
@@ -2167,23 +2646,75 @@ function initEvents() {
   $("#customerDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!validateForm(event.currentTarget)) return;
+    const data = formPayload(event.currentTarget);
+    const existing = data.id ? readRecords("customerDog").find((record) => record.id === data.id) : {};
     const payload = {
+      ...existing,
       type: "customerDog",
-      id: uid("customerDog"),
-      submittedAt: new Date().toISOString(),
+      id: data.id || uid("customerDog"),
+      submittedAt: existing?.submittedAt || new Date().toISOString(),
       customerEmail: currentUser?.email || "",
-      ...formPayload(event.currentTarget),
+      ...data,
     };
     const record = upsertRecord("customerDog", payload);
     await sendPayload(record);
-    event.currentTarget.reset();
-    fillCustomerDefaults();
+    resetCustomerDogForm();
     renderCustomerDogs();
-    showToast("Dog added to your request list.");
+    renderBoardingDogs();
+    showDetailDialog(existing?.id ? "Dog Updated" : "Dog Saved", `<p>${escapeHtml(record.dogName || "Dog")} has been saved to your list.</p>`);
   });
-  $("#customerBookingForm").addEventListener("change", updateCustomerEstimate);
-  $("#customerDogList").addEventListener("change", updateCustomerEstimate);
+  $("#newCustomerDogButton").addEventListener("click", resetCustomerDogForm);
+  $("#customerBookingForm").addEventListener("change", (event) => {
+    if (event.target.name === "customerServices") {
+      const quantityInput = $("#customerBookingForm").elements[`serviceQuantity-${event.target.value}`];
+      if (quantityInput) {
+        quantityInput.disabled = !event.target.checked;
+        if (event.target.checked && !quantityInput.value) quantityInput.value = "1";
+      }
+    }
+    updateCustomerEstimate();
+  });
+  $("#customerBookingForm").addEventListener("input", (event) => {
+    if (event.target.classList.contains("service-quantity")) updateCustomerEstimate();
+  });
+  $("#customerBookingDogList").addEventListener("change", updateCustomerEstimate);
+  $("#customerDogList").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const record = readRecords("customerDog").find((item) => item.id === button.dataset.id);
+    if (!record) return;
+    if (button.dataset.action === "edit-customer-dog") {
+      openCustomerDog(record);
+      return;
+    }
+    if (button.dataset.action === "remove-customer-dog") {
+      const updated = upsertRecord("customerDog", { ...record, removed: true, removedAt: new Date().toISOString() });
+      sendPayload(updated);
+      if ($("#customerDogId").value === record.id) resetCustomerDogForm();
+      renderCustomerDogs();
+      renderBoardingDogs();
+      showDetailDialog("Dog Removed", `<p>${escapeHtml(record.dogName || "This dog")} has been removed from your dog list.</p>`);
+    }
+  });
   $("#customerRequestList").addEventListener("click", (event) => {
+    const actionButton = event.target.closest("[data-action]");
+    if (actionButton?.dataset.action === "edit-customer-request") {
+      event.stopPropagation();
+      editCustomerRequest(readRecords("boardingDog").find((item) => item.id === actionButton.dataset.id));
+      return;
+    }
+    if (actionButton?.dataset.action === "cancel-customer-request") {
+      event.stopPropagation();
+      const record = readRecords("boardingDog").find((item) => item.id === actionButton.dataset.id);
+      if (!record) return;
+      const updated = upsertRecord("boardingDog", { ...record, boardingStatus: "Cancelled", cancelledAt: new Date().toISOString(), flags: (record.flags || []).filter((flag) => flag !== "Required update from owner") });
+      sendPayload(updated);
+      renderCustomerRequests();
+      renderBoardingDogs();
+      renderBoardingRequests();
+      showDetailDialog("Request Cancelled", `<p>${escapeHtml(record.dogName || "This request")} has been cancelled.</p>`);
+      return;
+    }
     const card = event.target.closest('[data-action="view-customer-request"]');
     if (!card) return;
     const record = readRecords("boardingDog").find((item) => item.id === card.dataset.id);
@@ -2204,6 +2735,7 @@ function initEvents() {
     $("#bookingConfirmDialog").close();
   });
   $("#confirmBookingRequestButton").addEventListener("click", submitPendingCustomerBooking);
+  $("#resetCustomerBookingButton").addEventListener("click", resetCustomerBookingForm);
 
   $("#cfoNoteForm").addEventListener("submit", async (event) => {
     event.preventDefault();
