@@ -86,6 +86,7 @@
             <div class="login-actions">
               <button type="button" class="secondary-button" id="googleLoginButton">Continue With Google</button>
               <button type="button" class="secondary-button" id="facebookLoginButton">Continue With Facebook</button>
+              <button type="button" class="secondary-button" id="showCustomerSignupButton">Create Customer Login</button>
               <label class="pin-field">
                 Helper PIN
                 <input type="password" id="helperPinInput" inputmode="numeric" maxlength="6" pattern="[0-9]{4,6}" placeholder="****" autocomplete="off" />
@@ -94,6 +95,27 @@
               <button type="button" class="secondary-button" id="clearHelperButton" hidden>Sign Out</button>
             </div>
           </div>
+
+          <form id="customerSignupForm" class="signup-panel" hidden>
+            <div class="section-heading compact-heading">
+              <span>C</span>
+              <div>
+                <h2>Create Customer Login</h2>
+                <p>A verification link will be sent before the customer account can be used.</p>
+              </div>
+            </div>
+            <input type="hidden" name="role" value="customer" />
+            <div class="field-grid">
+              <label>First name<input type="text" name="firstName" required autocomplete="given-name" /></label>
+              <label>Last name<input type="text" name="lastName" required autocomplete="family-name" /></label>
+              <label>Email address<input type="email" name="email" required autocomplete="email" /></label>
+              <label>Account type<input type="text" value="Customer" readonly /></label>
+            </div>
+            <div class="button-row">
+              <button type="submit">Send Verification Email</button>
+              <button type="button" class="secondary-button" id="cancelCustomerSignupButton">Cancel</button>
+            </div>
+          </form>
 
           <div class="role-note">
             <strong>Access rules:</strong> helpers can use dashboard, timesheets, daily tasks, dogs, requests, and maintenance. Admin can also see pricing and financials.
@@ -497,7 +519,7 @@
             </div>
             <label>Medication or special care notes<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
             <label>General notes<textarea name="notes" rows="3"></textarea></label>
-            <div class="button-row"><button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Edit Dog</button><button type="submit" id="ownedDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
+            <div class="button-row"><button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Edit Dog</button><button type="submit" id="ownedDogSaveButton">Save Update</button><button type="button" class="secondary-button danger-button" id="deleteOwnedDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
           </form>
 
           <section class="existing-only" id="ownedDogActivityPanel" hidden>
@@ -514,6 +536,17 @@
             </div>
             <label>Training progress entry<textarea id="ownedTrainingEntry" rows="3" placeholder="What was worked on today?"></textarea></label>
             <button type="button" id="addTrainingLog">Add Training Entry</button>
+            <div class="filter-toolbar activity-filter-toolbar">
+              <label>Show history
+                <select id="ownedActivityFilter">
+                  <option value="All">All entries</option>
+                  <option value="Exercise">Exercise only</option>
+                  <option value="Training">Training only</option>
+                  <option value="Treadmill">Treadmill</option>
+                  <option value="Scooter">Scooter</option>
+                </select>
+              </label>
+            </div>
             <div id="ownedActivityHistory" class="record-grid"></div>
           </section>
         </section>
@@ -649,7 +682,7 @@
             <div class="checklist">
               <label><input type="checkbox" name="urgentNeeds" value="Yes" /> Urgent Needs</label>
             </div>
-            <label>Photo or video upload<input type="file" name="requestMedia" id="requestMedia" accept="image/*,video/*" multiple /></label>
+            <label>Photo or video upload<input type="file" name="requestMedia" id="requestMedia" accept="image/*,video/*" multiple /><small>Optional. You can upload multiple photos or videos, up to 50 MB each.</small></label>
             <label>Request / suggestion<textarea name="requestText" rows="4" required></textarea></label>
             <label>Reason or benefit<textarea name="reason" rows="3" placeholder="Why this helps kennel care, safety, efficiency, or dog comfort"></textarea></label>
             <button type="submit">Submit Request</button>
@@ -670,7 +703,7 @@
               <label><input type="checkbox" name="urgentAttention" value="Yes" /> Urgent Attention</label>
             </div>
             <label>Issue or repair needed<textarea name="issue" rows="4" required placeholder="What needs attention? Include photos separately if useful."></textarea></label>
-            <label>Photo or video upload<input type="file" name="maintenanceMedia" id="maintenanceMedia" accept="image/*,video/*" multiple /></label>
+            <label>Photo or video upload<input type="file" name="maintenanceMedia" id="maintenanceMedia" accept="image/*,video/*" multiple /><small>Optional. You can upload multiple photos or videos, up to 50 MB each.</small></label>
             <label>Suggested action<textarea name="suggestedAction" rows="3" placeholder="Repair, replace, inspect, schedule service, order part"></textarea></label>
             <button type="submit">Submit Maintenance Item</button>
           </form>

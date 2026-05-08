@@ -1,6 +1,8 @@
 const SUPABASE_URL = "https://vwvkzniygessvwifrwvn.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_IeKmeCMalVYUnYQUe3gEew_NdjAzmAQ";
 const MEDIA_BUCKET = "kennel-media";
+const MAX_MEDIA_UPLOAD_MB = 50;
+const MAX_MEDIA_UPLOAD_BYTES = MAX_MEDIA_UPLOAD_MB * 1024 * 1024;
 const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 
@@ -391,6 +393,50 @@ async function loginWithProvider(provider) {
   if (error) showToast(error.message);
 }
 
+function authRedirectUrl() {
+  return window.location.href.split("#")[0];
+}
+
+async function createCustomerLogin(event) {
+  event.preventDefault();
+  const formEl = event.currentTarget;
+  if (!validateForm(formEl)) return;
+  if (!supabaseClient) {
+    showDetailDialog("Login Setup Needed", "<p>Customer login creation needs the database login connection first.</p>");
+    return;
+  }
+  if (window.location.protocol === "file:") {
+    showDetailDialog(
+      "Hosted Website Required",
+      "<p>Email verification links cannot finish from this file preview. Open the hosted website or a local test server URL that is allowed in Supabase Auth before creating a customer login.</p>",
+    );
+    return;
+  }
+  const data = formPayload(formEl);
+  const firstName = data.firstName.trim();
+  const lastName = data.lastName.trim();
+  const email = data.email.trim().toLowerCase();
+  const { error } = await supabaseClient.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: authRedirectUrl(),
+      data: {
+        first_name: firstName,
+        last_name: lastName,
+        full_name: `${firstName} ${lastName}`.trim(),
+        role: "customer",
+      },
+    },
+  });
+  if (error) {
+    showDetailDialog("Verification Not Sent", `<p>The verification email could not be sent: ${escapeHtml(error.message)}</p>`);
+    return;
+  }
+  formEl.reset();
+  formEl.hidden = true;
+  showDetailDialog("Verification Email Sent", `<p>A customer login link was sent to ${escapeHtml(email)}. The customer can open that email to verify the address and sign in.</p>`);
+}
+
 async function restoreSupabaseSession() {
   if (!supabaseClient) return false;
   const { data } = await supabaseClient.auth.getSession();
@@ -480,6 +526,7 @@ async function uploadFileToSupabase(file, folder) {
 async function uploadDogPhotoToSupabase(file, dogId) {
   if (!file) return { url: "", error: "" };
   if (!isSupportedDogPhoto(file)) return { url: "", error: "Only JPG and PNG profile photos can be uploaded." };
+  if ((file.size || 0) > MAX_MEDIA_UPLOAD_BYTES) return { url: "", error: `Profile photos must be ${MAX_MEDIA_UPLOAD_MB} MB or smaller.` };
   if (!supabaseClient) return { url: "", error: "The database connection is not available for photo upload." };
   const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
   const { url, error } = await uploadFileToSupabase(file, `dog-photos/${safeDogId}`);
@@ -506,6 +553,11 @@ async function durableDogPhoto(kind, existing, formData, photoInput, dogId) {
 async function uploadMediaFiles(input, folder) {
   const files = [...(input?.files || [])];
   if (!files.length) return [];
+  const now = new Date().toISOString();
+  const oversized = files.filter((file) => (file.size || 0) > MAX_MEDIA_UPLOAD_BYTES);
+  if (oversized.length) {
+    showToast(`Files over ${MAX_MEDIA_UPLOAD_MB} MB cannot be uploaded.`);
+  }
   if (!supabaseClient) {
     showToast("Sign in to upload files to the database.");
     return files.map((file) => ({
@@ -513,7 +565,7 @@ async function uploadMediaFiles(input, folder) {
       name: file.name,
       type: file.type || "application/octet-stream",
       size: file.size || 0,
-      savedAt: new Date().toISOString(),
+      savedAt: now,
       url: "",
       dataUrl: "",
       note: "Not uploaded. Supabase is not connected.",
@@ -522,13 +574,25 @@ async function uploadMediaFiles(input, folder) {
   showToast(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}...`);
   const results = await Promise.all(
     files.map(async (file) => {
+      if ((file.size || 0) > MAX_MEDIA_UPLOAD_BYTES) {
+        return {
+          id: uid("media"),
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size || 0,
+          savedAt: now,
+          url: "",
+          dataUrl: "",
+          note: `Not uploaded. Maximum file size is ${MAX_MEDIA_UPLOAD_MB} MB.`,
+        };
+      }
       const { url, error } = await uploadFileToSupabase(file, folder);
       return {
         id: uid("media"),
         name: file.name,
         type: file.type || "application/octet-stream",
         size: file.size || 0,
-        savedAt: new Date().toISOString(),
+        savedAt: now,
         url,
         dataUrl: "",
         note: error ? `Upload failed: ${error}` : "",
@@ -846,12 +910,13 @@ function setOwnedFormLocked(locked) {
   const formEl = $("#ourDogForm");
   [...formEl.elements].forEach((field) => {
     if (field.type === "hidden") return;
-    if (["editOwnedDogButton", "cancelOwnedDogEdit"].includes(field.id)) return;
+    if (["editOwnedDogButton", "cancelOwnedDogEdit", "deleteOwnedDogButton"].includes(field.id)) return;
     field.disabled = locked;
   });
   $("#ownedDogPhotoPicker").disabled = locked;
   $("#ownedDogSaveButton").hidden = locked;
   $("#editOwnedDogButton").hidden = !locked;
+  $("#deleteOwnedDogButton").hidden = !formEl.elements.id.value;
   formEl.classList.toggle("is-readonly", locked);
 }
 
@@ -1088,13 +1153,14 @@ function showDetailDialog(title, html, context = null) {
 function showMediaDialog(src, type, name) {
   $("#mediaDialogTitle").textContent = name || "Media";
   if (!src) {
-    $("#mediaDialogBody").innerHTML = `<p>This file was logged with the request. Images are saved as previews; larger video files are saved by file name so the form can submit reliably.</p>${name ? `<p><strong>Saved file name:</strong> ${escapeHtml(name)}</p>` : ""}`;
+    $("#mediaDialogBody").innerHTML = `<p>This file was not uploaded to the database. The maximum file size is ${MAX_MEDIA_UPLOAD_MB} MB.</p>${name ? `<p><strong>Saved file name:</strong> ${escapeHtml(name)}</p>` : ""}`;
     $("#mediaDialog").showModal();
     return;
   }
   const safeSrc = escapeHtml(src || "");
   const safeName = escapeHtml(name || "Uploaded media");
-  $("#mediaDialogBody").innerHTML = type?.startsWith("video/")
+  const openLink = `<p><a href="${safeSrc}" target="_blank" rel="noopener">Open uploaded file in database</a></p>`;
+  $("#mediaDialogBody").innerHTML = (type?.startsWith("video/")
     ? `<video src="${safeSrc}" controls playsinline></video>`
     : type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i.test(src)
       ? `<img src="${safeSrc}" alt="${safeName}" />`
@@ -1102,7 +1168,7 @@ function showMediaDialog(src, type, name) {
         ? `<video src="${safeSrc}" controls playsinline></video>`
         : type === "external/link"
           ? `<iframe class="media-iframe" src="${safeSrc}" title="${safeName}"></iframe><a href="${safeSrc}" target="_blank" rel="noopener">Open in a new tab</a>`
-          : `<p>This file type cannot be previewed here.</p><a href="${safeSrc}" target="_blank" rel="noopener">Open file</a>`;
+          : `<p>This file type cannot be previewed here.</p>`) + openLink;
   $("#mediaDialog").showModal();
 }
 
@@ -1262,7 +1328,7 @@ function matches(record, query) {
 
 function renderOwnedDogs() {
   const query = $("#ownedDogSearch").value || "";
-  const records = readRecords("ownedDog").filter((record) => matches(record, query));
+  const records = readRecords("ownedDog").filter((record) => !record.removed && matches(record, query));
   const columns = activeColumns("ownedDog");
   $("#ownedDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>`;
   $("#ownedDogTableBody").innerHTML = records.length
@@ -1276,7 +1342,7 @@ function renderOwnedDogs() {
 function renderBoardingDogs() {
   const query = $("#boardingDogSearch").value || "";
   const records = combinedBoardingDogRecords()
-    .filter((record) => record.boardingStatus !== "Cancelled" && matches(record, query))
+    .filter((record) => !record.removed && record.boardingStatus !== "Cancelled" && matches(record, query))
     .sort((a, b) => Number(isCurrentlyBoarding(b)) - Number(isCurrentlyBoarding(a)));
   const columns = activeColumns("boardingDog");
   $("#boardingDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>`;
@@ -1297,7 +1363,7 @@ function dogRosterKey(record) {
 
 function combinedBoardingDogRecords() {
   const records = readRecords("boardingDog")
-    .filter((record) => record.boardingStatus !== "Cancelled")
+    .filter((record) => !record.removed && record.boardingStatus !== "Cancelled")
     .map((record) => ({ ...record, sourceType: "boardingDog" }));
   const seen = new Set(records.map(dogRosterKey));
   readRecords("customerDog")
@@ -1319,7 +1385,7 @@ function combinedBoardingDogRecords() {
       }
     });
   readRecords("ownedDog")
-    .filter((dog) => dog.callName || dog.showName)
+    .filter((dog) => !dog.removed && (dog.callName || dog.showName))
     .forEach((dog) => {
       const mapped = {
         ...dog,
@@ -1351,6 +1417,7 @@ function renderBoardingRequests() {
   const statusFilter = $("#boardingRequestStatusFilter")?.value || "All";
   const records = readRecords("boardingDog")
     .filter((record) => record.customerRequest)
+    .filter((record) => !record.removed)
     .filter((record) => statusFilter === "All" || (record.boardingStatus || "Pending") === statusFilter)
     .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
   list.innerHTML = records.length
@@ -1394,11 +1461,13 @@ function openOwnedDog(record = {}) {
   $("#ownedDogDetailTitle").textContent = record.id ? `Edit ${record.callName || "Dog"}` : "Add New Dog";
   $("#ourDogForm").reset();
   setFormValues($("#ourDogForm"), record);
+  $("#ourDogForm").elements.id.value = record.id || "";
   setDogPhoto("owned", record);
   $("#ownedDogActivityPanel").hidden = !record.id;
   renderOwnedActivity(record);
   updateOwnedDogConditionalFields();
   setOwnedFormLocked(Boolean(record.id));
+  $("#deleteOwnedDogButton").hidden = !record.id;
   window.scrollTo({ top: $("#ownedDogDetail").offsetTop - 12, behavior: "smooth" });
 }
 
@@ -1461,7 +1530,7 @@ function updateDhppWarning() {
 
 function activeOwnedDog() {
   const id = $("#ourDogForm").elements.id.value;
-  return readRecords("ownedDog").find((record) => record.id === id);
+  return readRecords("ownedDog").find((record) => record.id === id && !record.removed);
 }
 
 function activeBoardingDog() {
@@ -1470,9 +1539,23 @@ function activeBoardingDog() {
 }
 
 function renderOwnedActivity(record = activeOwnedDog()) {
-  const logs = [...(record?.exerciseLogs || []), ...(record?.trainingLogs || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const filter = $("#ownedActivityFilter")?.value || "All";
+  const logs = [
+    ...(record?.exerciseLogs || []).map((log) => ({ ...log, group: "Exercise" })),
+    ...(record?.trainingLogs || []).map((log) => ({ ...log, group: "Training" })),
+  ]
+    .filter((log) => filter === "All" || filter === log.group || filter === log.type)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const grouped = logs.reduce((groups, log) => {
+    const key = log.group || "Activity";
+    groups[key] = groups[key] || [];
+    groups[key].push(log);
+    return groups;
+  }, {});
   $("#ownedActivityHistory").innerHTML = logs.length
-    ? logs.map((log) => `<article class="record-card"><strong>${log.type} - ${log.date}</strong><p>${log.minutes ? `${log.minutes} minutes` : ""}${log.note ? log.note : ""}</p></article>`).join("")
+    ? Object.entries(grouped)
+        .map(([group, items]) => `<section class="activity-group"><h3>${escapeHtml(group)}</h3>${items.map((log) => `<article class="record-card"><strong>${escapeHtml(log.type)} - ${escapeHtml(log.date || "")}</strong><p>${escapeHtml([log.minutes ? `${log.minutes} minutes` : "", log.note || ""].filter(Boolean).join(" "))}</p><div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="${escapeHtml(log.id)}">Remove Entry</button></div></article>`).join("")}</section>`)
+        .join("")
     : "<p>No activity or training entries yet.</p>";
 }
 
@@ -1497,6 +1580,34 @@ function addOwnedLog(type, minutes, note = "") {
   showToast(`${type} entry added.`);
 }
 
+async function removeOwnedLog(logId) {
+  const dog = activeOwnedDog();
+  if (!dog || !logId) return;
+  const exerciseLogs = dog.exerciseLogs || [];
+  const trainingLogs = dog.trainingLogs || [];
+  const nextExercise = exerciseLogs.filter((log) => log.id !== logId);
+  const nextTraining = trainingLogs.filter((log) => log.id !== logId);
+  if (nextExercise.length === exerciseLogs.length && nextTraining.length === trainingLogs.length) return;
+  const record = upsertRecord("ownedDog", { ...dog, exerciseLogs: nextExercise, trainingLogs: nextTraining, updatedAt: new Date().toISOString() });
+  await sendPayload(record);
+  renderOwnedActivity(record);
+  renderOwnedDogs();
+  showToast("Activity entry removed.");
+}
+
+async function markRecordRemoved(type, id) {
+  const record = readRecords(type).find((item) => item.id === id);
+  if (!record) return null;
+  const updated = upsertRecord(type, {
+    ...record,
+    removed: true,
+    removedAt: new Date().toISOString(),
+    removedBy: currentUser?.name || "",
+  });
+  await sendPayload(updated);
+  return updated;
+}
+
 function renderBoardingStays(record = activeBoardingDog()) {
   const stays = record?.stays || [];
   $("#boardingStayHistory").innerHTML = stays.length
@@ -1513,12 +1624,13 @@ function bathPlanForStay(stay) {
 
 function renderRequests() {
   const showCompleted = $("#showCompletedRequests")?.checked;
-  const records = readRecords("request").filter((record) => showCompleted || !record.completed);
+  const isAdmin = currentRole() === "admin";
+  const records = readRecords("request").filter((record) => !record.removed).filter((record) => showCompleted || !record.completed);
   $("#requestRecords").innerHTML = records.length
     ? records
         .map(
           (record) =>
-            `<article class="record-card clickable-card ${record.urgentNeeds ? "is-urgent" : ""} ${record.completed ? "is-completed" : ""}" data-action="view-request" data-id="${record.id}"><strong>${record.completed ? "Completed: " : ""}${record.urgentNeeds ? "Urgent: " : ""}${record.category}</strong><span>${record.requestedBy || "Unknown"} | ${formatDateTime(record.submittedAt)}${record.completedAt ? ` | Completed ${formatDateTime(record.completedAt)}` : ""}</span><p>${record.requestText}</p>${mediaLinkHtml(record)}<div class="record-actions"><button type="button" class="secondary-button" data-action="toggle-request" data-id="${record.id}">${record.completed ? "Move Back To Active" : "Mark Completed"}</button></div></article>`,
+            `<article class="record-card clickable-card ${record.urgentNeeds ? "is-urgent" : ""} ${record.completed ? "is-completed" : ""}" data-action="view-request" data-id="${record.id}"><strong>${record.completed ? "Completed: " : ""}${record.urgentNeeds ? "Urgent: " : ""}${escapeHtml(record.category)}</strong><span>${escapeHtml(record.requestedBy || "Unknown")} | ${formatDateTime(record.submittedAt)}${record.completedAt ? ` | Completed ${formatDateTime(record.completedAt)}` : ""}</span><p>${escapeHtml(record.requestText || "")}</p>${mediaLinkHtml(record)}<div class="record-actions"><button type="button" class="secondary-button" data-action="toggle-request" data-id="${record.id}">${record.completed ? "Move Back To Active" : "Mark Completed"}</button>${isAdmin ? `<button type="button" class="secondary-button danger-button" data-action="remove-request" data-id="${record.id}">Remove Request</button>` : ""}</div></article>`,
         )
         .join("")
     : `<p>${showCompleted ? "No requests saved yet." : "No active requests. Turn on completed history to review finished items."}</p>`;
@@ -1526,12 +1638,13 @@ function renderRequests() {
 
 function renderMaintenance() {
   const showCompleted = $("#showCompletedMaintenance")?.checked;
-  const records = readRecords("maintenance").filter((record) => showCompleted || !record.completed);
+  const isAdmin = currentRole() === "admin";
+  const records = readRecords("maintenance").filter((record) => !record.removed).filter((record) => showCompleted || !record.completed);
   $("#maintenanceRecords").innerHTML = records.length
     ? records
         .map(
           (record) =>
-            `<article class="record-card clickable-card ${record.urgentAttention ? "is-urgent" : ""} ${record.completed ? "is-completed" : ""}" data-action="view-maintenance" data-id="${record.id}"><strong>${record.completed ? "Completed: " : ""}${record.urgentAttention ? "Urgent: " : ""}${record.location}</strong><span>${record.reportedBy || "Unknown"} | ${formatDateTime(record.submittedAt)}${record.completedAt ? ` | Completed ${formatDateTime(record.completedAt)}` : ""}</span><p>${record.issue}</p>${mediaLinkHtml(record)}<div class="record-actions"><button type="button" class="secondary-button" data-action="toggle-maintenance" data-id="${record.id}">${record.completed ? "Move Back To Active" : "Mark Completed"}</button></div></article>`,
+            `<article class="record-card clickable-card ${record.urgentAttention ? "is-urgent" : ""} ${record.completed ? "is-completed" : ""}" data-action="view-maintenance" data-id="${record.id}"><strong>${record.completed ? "Completed: " : ""}${record.urgentAttention ? "Urgent: " : ""}${escapeHtml(record.location)}</strong><span>${escapeHtml(record.reportedBy || "Unknown")} | ${formatDateTime(record.submittedAt)}${record.completedAt ? ` | Completed ${formatDateTime(record.completedAt)}` : ""}</span><p>${escapeHtml(record.issue || "")}</p>${mediaLinkHtml(record)}<div class="record-actions"><button type="button" class="secondary-button" data-action="toggle-maintenance" data-id="${record.id}">${record.completed ? "Move Back To Active" : "Mark Completed"}</button>${isAdmin ? `<button type="button" class="secondary-button danger-button" data-action="remove-maintenance" data-id="${record.id}">Remove Maintenance</button>` : ""}</div></article>`,
         )
         .join("")
     : `<p>${showCompleted ? "No maintenance items saved yet." : "No active maintenance items. Turn on completed history to review finished items."}</p>`;
@@ -2202,6 +2315,15 @@ function initEvents() {
 
   $("#googleLoginButton").addEventListener("click", () => loginWithProvider("google"));
   $("#facebookLoginButton").addEventListener("click", () => loginWithProvider("facebook"));
+  $("#showCustomerSignupButton").addEventListener("click", () => {
+    $("#customerSignupForm").hidden = false;
+    $("#customerSignupForm").elements.firstName.focus();
+  });
+  $("#cancelCustomerSignupButton").addEventListener("click", () => {
+    $("#customerSignupForm").reset();
+    $("#customerSignupForm").hidden = true;
+  });
+  $("#customerSignupForm").addEventListener("submit", createCustomerLogin);
   $("#helperPinLoginButton").addEventListener("click", loginWithPin);
   $("#helperPinInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -2385,8 +2507,19 @@ function initEvents() {
   });
   $("#addOwnedDogButton").addEventListener("click", () => openOwnedDog());
   $("#cancelOwnedDogEdit").addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
+  $("#deleteOwnedDogButton").addEventListener("click", async () => {
+    const dog = activeOwnedDog();
+    if (!dog) return;
+    if (!window.confirm(`Remove ${dog.callName || dog.showName || "this dog"} from Our Dogs?`)) return;
+    const updated = await markRecordRemoved("ownedDog", dog.id);
+    $("#ownedDogDetail").hidden = true;
+    renderOwnedDogs();
+    renderBoardingDogs();
+    showDetailDialog("Dog Removed", `<p>${escapeHtml(updated?.callName || updated?.showName || "Dog")} has been removed from the active dog list.</p>`);
+  });
   $("#editOwnedDogButton").addEventListener("click", () => {
     setOwnedFormLocked(false);
+    $("#deleteOwnedDogButton").hidden = false;
     showToast("Dog record unlocked for editing.");
   });
   $("#ownedDogPhotoPicker").addEventListener("click", () => $("#ownedDogPhotoInput").click());
@@ -2410,6 +2543,9 @@ function initEvents() {
         ...existing,
         type: "ownedDog",
         id: dogId,
+        removed: false,
+        removedAt: "",
+        removedBy: "",
         submittedAt: existing.submittedAt || new Date().toISOString(),
         ...formData,
         rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
@@ -2422,6 +2558,7 @@ function initEvents() {
       };
       const record = upsertRecord("ownedDog", payload);
       await sendPayload(record);
+      formEl.elements.id.value = record.id;
       $("#ownedDogActivityPanel").hidden = false;
       setDogPhoto("owned", record);
       renderOwnedActivity(record);
@@ -2449,6 +2586,13 @@ function initEvents() {
   $("#addTrainingLog").addEventListener("click", () => {
     addOwnedLog("Training", "", $("#ownedTrainingEntry").value);
     $("#ownedTrainingEntry").value = "";
+  });
+  $("#ownedActivityFilter").addEventListener("change", () => renderOwnedActivity());
+  $("#ownedActivityHistory").addEventListener("click", async (event) => {
+    const button = event.target.closest('[data-action="remove-owned-log"]');
+    if (!button) return;
+    event.preventDefault();
+    await removeOwnedLog(button.dataset.id);
   });
 
   $("#boardingDogSearch").addEventListener("input", renderBoardingDogs);
@@ -2642,7 +2786,7 @@ function initEvents() {
     try {
       const mediaItems = await uploadMediaFiles($("#requestMedia"), "requests");
       const files = mediaItems.map((file) => file.name).join(", ");
-      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentNeeds: formEl.querySelector('input[name="urgentNeeds"]').checked };
+      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentNeeds: formEl.querySelector('input[name="urgentNeeds"]').checked };
       const record = upsertRecord("request", payload);
       await sendPayload(record);
       if (record.urgentNeeds) emailNow("Urgent Kennel Request", `Urgent kennel request submitted.\n\nRequested by: ${record.requestedBy}\nCategory: ${record.category}\nRequest: ${record.requestText}\nReason: ${record.reason}`);
@@ -2662,7 +2806,7 @@ function initEvents() {
     try {
       const mediaItems = await uploadMediaFiles($("#maintenanceMedia"), "maintenance");
       const files = mediaItems.map((file) => file.name).join(", ");
-      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentAttention: formEl.querySelector('input[name="urgentAttention"]').checked };
+      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentAttention: formEl.querySelector('input[name="urgentAttention"]').checked };
       const record = upsertRecord("maintenance", payload);
       await sendPayload(record);
       if (record.urgentAttention) emailNow("Urgent Kennel Maintenance Attention Needed", `Urgent maintenance item submitted.\n\nLocation: ${record.location}\nReported by: ${record.reportedBy}\nIssue: ${record.issue}\nSuggested action: ${record.suggestedAction}\nFiles uploaded: ${record.mediaFiles || "None"}`);
@@ -2677,12 +2821,21 @@ function initEvents() {
 
   $("#showCompletedRequests").addEventListener("change", renderRequests);
   $("#showCompletedMaintenance").addEventListener("change", renderMaintenance);
-  $("#requestRecords").addEventListener("click", (event) => {
+  $("#requestRecords").addEventListener("click", async (event) => {
     if (event.target.closest('[data-action="view-media"]')) return;
-    const button = event.target.closest('[data-action="toggle-request"]');
+    const button = event.target.closest('[data-action="toggle-request"], [data-action="remove-request"]');
     if (button) {
       event.stopPropagation();
-      toggleRecordCompletion("request", button.dataset.id);
+      if (button.dataset.action === "toggle-request") {
+        toggleRecordCompletion("request", button.dataset.id);
+      }
+      if (button.dataset.action === "remove-request" && currentRole() === "admin") {
+        if (!window.confirm("Remove this request from the active records?")) return;
+        await markRecordRemoved("request", button.dataset.id);
+        renderRequests();
+        renderDashboard();
+        showToast("Request removed.");
+      }
       return;
     }
     const card = event.target.closest('[data-action="view-request"]');
@@ -2690,12 +2843,21 @@ function initEvents() {
     const record = readRecords("request").find((item) => item.id === card.dataset.id);
     if (record) showDetailDialog(titleForRecord("request", record), requestDetailHtml(record), { type: "request", id: record.id });
   });
-  $("#maintenanceRecords").addEventListener("click", (event) => {
+  $("#maintenanceRecords").addEventListener("click", async (event) => {
     if (event.target.closest('[data-action="view-media"]')) return;
-    const button = event.target.closest('[data-action="toggle-maintenance"]');
+    const button = event.target.closest('[data-action="toggle-maintenance"], [data-action="remove-maintenance"]');
     if (button) {
       event.stopPropagation();
-      toggleRecordCompletion("maintenance", button.dataset.id);
+      if (button.dataset.action === "toggle-maintenance") {
+        toggleRecordCompletion("maintenance", button.dataset.id);
+      }
+      if (button.dataset.action === "remove-maintenance" && currentRole() === "admin") {
+        if (!window.confirm("Remove this maintenance item from the active records?")) return;
+        await markRecordRemoved("maintenance", button.dataset.id);
+        renderMaintenance();
+        renderDashboard();
+        showToast("Maintenance item removed.");
+      }
       return;
     }
     const card = event.target.closest('[data-action="view-maintenance"]');
