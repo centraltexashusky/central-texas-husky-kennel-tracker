@@ -211,16 +211,18 @@ function compactRecordsForStorage(records) {
   const maxInlineMediaLength = 1800000;
   return records.map((record) => {
     const copy = { ...record };
-    if (copy.profilePhotoData && copy.profilePhotoData.length > maxInlineMediaLength) {
-      copy.profilePhotoData = "";
-      copy.profilePhotoNote = "Large uploaded profile photo was not kept inline. Upload to Supabase Storage or use a shared image link.";
-    }
+    delete copy.profilePhotoData;
+    delete copy.profilePhoto;
     if (Array.isArray(copy.mediaItems)) {
-      copy.mediaItems = copy.mediaItems.map((item) =>
-        item?.dataUrl && item.dataUrl.length > maxInlineMediaLength
-          ? { ...item, dataUrl: "", note: "Large media file was logged by filename only." }
-          : item,
-      );
+      copy.mediaItems = copy.mediaItems.map((item) => {
+        const clean = { ...item };
+        if (clean.url) delete clean.dataUrl;
+        if (clean.dataUrl && clean.dataUrl.length > maxInlineMediaLength) {
+          clean.dataUrl = "";
+          clean.note = "Large media file was logged by filename only.";
+        }
+        return clean;
+      });
     }
     return copy;
   });
@@ -376,7 +378,10 @@ async function loginWithProvider(provider) {
     return;
   }
   if (window.location.protocol === "file:") {
-    showToast("Google/Facebook sign-in must be tested from the hosted website or a local test server, not a file preview.");
+    showDetailDialog(
+      "Hosted Website Required",
+      `<p>Google and Facebook sign-in cannot finish from this file preview. Open the hosted site, or run the app from a local test server URL that is added to Google OAuth and Supabase redirect settings.</p>`,
+    );
     return;
   }
   const { error } = await supabaseClient.auth.signInWithOAuth({
@@ -440,105 +445,98 @@ function setFormValues(targetForm, record) {
   });
 }
 
-function compressImageFile(file, options = {}) {
-  const maxDimension = options.maxDimension || 1000;
-  const quality = options.quality || 0.74;
-  if (!file?.type?.startsWith("image/")) return Promise.resolve("");
-  return new Promise((resolve) => {
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    image.onload = () => {
-      const scale = Math.min(1, maxDimension / Math.max(image.width || 1, image.height || 1));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.max(1, Math.round((image.width || 1) * scale));
-      canvas.height = Math.max(1, Math.round((image.height || 1) * scale));
-      const context = canvas.getContext("2d");
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(objectUrl);
-      resolve(canvas.toDataURL("image/jpeg", quality));
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve("");
-    };
-    image.src = objectUrl;
-  });
-}
-
-function fileToDataUrl(input) {
-  const file = input.files?.[0];
-  if (!file) return Promise.resolve("");
-  return compressImageFile(file);
-}
-
 function selectedPhotoFor(kind, input) {
   return input?.files?.[0] || selectedDogPhotos[kind]?.file || null;
 }
 
-async function uploadDogPhotoToSupabase(file, dogId) {
-  if (!supabaseClient || !file) return "";
-  const extension = (file.name.split(".").pop() || "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
-  const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
-  const path = `dog-photos/${safeDogId}-${Date.now()}.${extension}`;
+function isSupportedDogPhoto(file) {
+  if (!file) return true;
+  const type = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
+  return ["image/jpeg", "image/png"].includes(type) || /\.(jpe?g|png)$/.test(name);
+}
+
+function resetSelectedDogPhoto(kind, record = {}) {
+  const isOwned = kind === "owned";
+  const input = isOwned ? $("#ownedDogPhotoInput") : $("#boardingDogPhotoInput");
+  if (input) input.value = "";
+  selectedDogPhotos[kind] = null;
+  setDogPhoto(kind, record);
+}
+
+async function uploadFileToSupabase(file, folder) {
+  if (!supabaseClient || !file) return { url: "", error: "No Supabase connection or file selected." };
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${folder}/${Date.now()}-${safeName}`;
   const { data, error } = await supabaseClient.storage.from(MEDIA_BUCKET).upload(path, file, {
     upsert: true,
-    contentType: file.type || "image/jpeg",
+    contentType: file.type || "application/octet-stream",
   });
-  if (error) {
-    showToast(`Photo upload failed: ${error.message}`);
-    return "";
-  }
+  if (error) return { url: "", error: error.message };
   const { data: urlData } = supabaseClient.storage.from(MEDIA_BUCKET).getPublicUrl(data.path);
-  return urlData?.publicUrl || "";
+  return { url: urlData?.publicUrl || "", error: "" };
+}
+
+async function uploadDogPhotoToSupabase(file, dogId) {
+  if (!file) return { url: "", error: "" };
+  if (!isSupportedDogPhoto(file)) return { url: "", error: "Only JPG and PNG profile photos can be uploaded." };
+  if (!supabaseClient) return { url: "", error: "The database connection is not available for photo upload." };
+  const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
+  const { url, error } = await uploadFileToSupabase(file, `dog-photos/${safeDogId}`);
+  return { url, error };
 }
 
 async function durableDogPhoto(kind, existing, formData, photoInput, dogId) {
   const file = selectedPhotoFor(kind, photoInput);
-  const uploadedUrl = file ? await uploadDogPhotoToSupabase(file, dogId) : "";
-  const cachedPreview = selectedDogPhotos[kind]?.previewDataUrl || "";
-  if (uploadedUrl) {
-    return { profilePhotoUrl: uploadedUrl, profilePhotoData: "" };
+  if (file) {
+    const { url, error } = await uploadDogPhotoToSupabase(file, dogId);
+    if (url) return { profilePhotoUrl: url, profilePhotoData: "", photoError: "" };
+    resetSelectedDogPhoto(kind, {});
+    return { profilePhotoUrl: "", profilePhotoData: "", photoError: error || "The profile photo could not be uploaded." };
   }
   if (formData.profilePhotoUrl) {
-    return { profilePhotoUrl: formData.profilePhotoUrl, profilePhotoData: "" };
+    return { profilePhotoUrl: formData.profilePhotoUrl, profilePhotoData: "", photoError: "" };
   }
   if (existing.profilePhotoUrl) {
-    return { profilePhotoUrl: existing.profilePhotoUrl, profilePhotoData: existing.profilePhotoData || "" };
+    return { profilePhotoUrl: existing.profilePhotoUrl, profilePhotoData: "", photoError: "" };
   }
-  return { profilePhotoUrl: "", profilePhotoData: cachedPreview || existing.profilePhotoData || "" };
+  return { profilePhotoUrl: "", profilePhotoData: "", photoError: "" };
 }
 
-function readSmallFileDataUrl(file) {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => resolve("");
-    reader.readAsDataURL(file);
-  });
-}
-
-async function fileToMediaItem(file) {
-  const item = {
-    id: uid("media"),
-    name: file.name,
-    type: file.type || "application/octet-stream",
-    size: file.size || 0,
-    savedAt: new Date().toISOString(),
-    dataUrl: "",
-  };
-  if (file.type?.startsWith("image/")) {
-    item.dataUrl = await compressImageFile(file, { maxDimension: 1200, quality: 0.7 });
-  } else if ((file.size || 0) <= 700000) {
-    item.dataUrl = await readSmallFileDataUrl(file);
-  } else {
-    item.note = "Large video file was logged by filename only.";
+async function uploadMediaFiles(input, folder) {
+  const files = [...(input?.files || [])];
+  if (!files.length) return [];
+  if (!supabaseClient) {
+    showToast("Sign in to upload files to the database.");
+    return files.map((file) => ({
+      id: uid("media"),
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      size: file.size || 0,
+      savedAt: new Date().toISOString(),
+      url: "",
+      dataUrl: "",
+      note: "Not uploaded. Supabase is not connected.",
+    }));
   }
-  return item;
-}
-
-async function filesToMediaItems(input) {
-  const files = [...(input.files || [])];
-  return Promise.all(files.map(fileToMediaItem));
+  showToast(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}...`);
+  const results = await Promise.all(
+    files.map(async (file) => {
+      const { url, error } = await uploadFileToSupabase(file, folder);
+      return {
+        id: uid("media"),
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        size: file.size || 0,
+        savedAt: new Date().toISOString(),
+        url,
+        dataUrl: "",
+        note: error ? `Upload failed: ${error}` : "",
+      };
+    }),
+  );
+  if (results.some((item) => item.note)) showToast("One or more files could not be uploaded.");
+  return results;
 }
 
 function setDogPhoto(kind, record) {
@@ -568,10 +566,15 @@ async function previewSelectedDogPhoto(kind) {
   const initials = isOwned ? $("#ownedDogPhotoInitials") : $("#boardingDogPhotoInitials");
   const file = input.files?.[0];
   if (!file) return;
-  const dataUrl = await compressImageFile(file, { maxDimension: 700, quality: 0.62 });
-  if (!dataUrl) return;
-  selectedDogPhotos[kind] = { file, previewDataUrl: dataUrl };
-  img.src = dataUrl;
+  if (!isSupportedDogPhoto(file)) {
+    resetSelectedDogPhoto(kind, {});
+    showDetailDialog("Photo Not Uploaded", "<p>Please choose a JPG or PNG file for the dog profile photo.</p>");
+    return;
+  }
+  selectedDogPhotos[kind] = { file, previewDataUrl: "" };
+  const objectUrl = URL.createObjectURL(file);
+  img.onload = () => URL.revokeObjectURL(objectUrl);
+  img.src = objectUrl;
   img.hidden = false;
   initials.hidden = true;
   const formEl = isOwned ? $("#ourDogForm") : $("#boardingDogForm");
@@ -912,7 +915,7 @@ function startAutoSync() {
 
 function payloadForSheet(payload) {
   const copy = { ...payload };
-  if (copy.profilePhotoUrl) delete copy.profilePhotoData;
+  delete copy.profilePhotoData;
   delete copy.profilePhoto;
   delete copy.requestMedia;
   delete copy.maintenanceMedia;
@@ -1049,7 +1052,7 @@ function mediaLinkHtml(record) {
     links.push(
       ...record.mediaItems.map(
         (item) =>
-          `<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(item.dataUrl)}" data-media-type="${escapeHtml(item.type)}" data-media-name="${escapeHtml(item.name)}">Open ${escapeHtml(item.name)}</button>`,
+          `<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type)}" data-media-name="${escapeHtml(item.name)}">Open ${escapeHtml(item.name)}</button>`,
       ),
     );
   } else if (record.mediaFiles) {
@@ -1345,8 +1348,10 @@ function combinedBoardingDogRecords() {
 function renderBoardingRequests() {
   const list = $("#boardingRequestRecords");
   if (!list) return;
+  const statusFilter = $("#boardingRequestStatusFilter")?.value || "All";
   const records = readRecords("boardingDog")
     .filter((record) => record.customerRequest)
+    .filter((record) => statusFilter === "All" || (record.boardingStatus || "Pending") === statusFilter)
     .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
   list.innerHTML = records.length
     ? records
@@ -1361,7 +1366,7 @@ function renderBoardingRequests() {
           return `<article class="record-card clickable-card ${statusClass}" data-id="${record.id}" data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")} - ${escapeHtml(record.boardingStatus || "Pending")}</strong><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${record.estimatedTotal ? `<p><strong>Estimated total:</strong> ${money(record.estimatedTotal)}</p>` : ""}${actions}</article>`;
         })
         .join("")
-    : "<p>No boarding requests yet.</p>";
+    : `<p>No ${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests yet.</p>`;
 }
 
 function statusClassForRequest(status = "") {
@@ -1452,11 +1457,6 @@ function updateDhppWarning() {
     warning.textContent = "! 11 months old";
     label.classList.add("is-orange-warning");
   }
-}
-
-function hasRequiredPhoto(existing, photoInput, photoLink) {
-  const kind = photoInput?.id === "ownedDogPhotoInput" ? "owned" : "boarding";
-  return Boolean(existing.profilePhotoData || existing.profilePhotoUrl || selectedPhotoFor(kind, photoInput) || photoLink);
 }
 
 function activeOwnedDog() {
@@ -2398,12 +2398,11 @@ function initEvents() {
   });
   $("#ourDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const formEl = event.currentTarget;
     try {
       const existing = activeOwnedDog() || {};
-      const formData = formPayload(event.currentTarget);
-      const photoField = event.currentTarget.elements.profilePhotoUrl;
-      const hasPhoto = hasRequiredPhoto(existing, $("#ownedDogPhotoInput"), formData.profilePhotoUrl);
-      if (!validateForm(event.currentTarget, [{ field: photoField, valid: hasPhoto, message: "Add a profile photo by tapping the square, or paste a shared photo link." }])) return;
+      const formData = formPayload(formEl);
+      if (!validateForm(formEl)) return;
       const dogId = existing.id || formData.id || uid("ownedDog");
       const photo = await durableDogPhoto("owned", existing, formData, $("#ownedDogPhotoInput"), dogId);
       const isFemale = formData.sex === "Female";
@@ -2413,7 +2412,7 @@ function initEvents() {
         id: dogId,
         submittedAt: existing.submittedAt || new Date().toISOString(),
         ...formData,
-        rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
+        rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
         lastHeat: isFemale ? formData.lastHeat : "",
         nextHeat: isFemale ? formData.nextHeat : "",
         profilePhotoUrl: photo.profilePhotoUrl,
@@ -2430,7 +2429,11 @@ function initEvents() {
       renderBoardingDogs();
       selectedDogPhotos.owned = null;
       setOwnedFormLocked(true);
-      showDetailDialog("Dog Saved", `<p>${escapeHtml(record.callName || record.showName || "Dog")} has been saved.</p>`);
+      if (photo.photoError) {
+        showDetailDialog("Dog Saved Without Photo", `<p>${escapeHtml(record.callName || record.showName || "Dog")} has been saved, but the profile photo could not be uploaded: ${escapeHtml(photo.photoError)}</p>`);
+      } else {
+        showDetailDialog("Dog Saved", `<p>${escapeHtml(record.callName || record.showName || "Dog")} has been saved.</p>`);
+      }
     } catch (error) {
       showDetailDialog("Dog Not Saved", `<p>The dog record could not be saved: ${escapeHtml(error.message)}</p>`);
     }
@@ -2467,6 +2470,7 @@ function initEvents() {
     if (!row || row.dataset.source !== "boardingDog") return;
     openBoardingDog(readRecords("boardingDog").find((record) => record.id === row.dataset.id));
   });
+  $("#boardingRequestStatusFilter").addEventListener("change", renderBoardingRequests);
   $("#boardingRequestRecords").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     const action = button?.dataset.action;
@@ -2537,12 +2541,11 @@ function initEvents() {
   });
   $("#boardingDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    const formEl = event.currentTarget;
     try {
       const existing = activeBoardingDog() || {};
-      const formData = formPayload(event.currentTarget);
-      const photoField = event.currentTarget.elements.profilePhotoUrl;
-      const hasPhoto = hasRequiredPhoto(existing, $("#boardingDogPhotoInput"), formData.profilePhotoUrl);
-      if (!validateForm(event.currentTarget, [{ field: photoField, valid: hasPhoto, message: "Add a profile photo by tapping the square, or paste a shared photo link." }])) return;
+      const formData = formPayload(formEl);
+      if (!validateForm(formEl)) return;
       const dogId = existing.id || formData.id || uid("boardingDog");
       const photo = await durableDogPhoto("boarding", existing, formData, $("#boardingDogPhotoInput"), dogId);
       const payload = {
@@ -2551,8 +2554,8 @@ function initEvents() {
         id: dogId,
         submittedAt: existing.submittedAt || new Date().toISOString(),
         ...formData,
-        rabiesGoodThreeYears: event.currentTarget.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
-        flags: checkedFrom(event.currentTarget, "boardingFlags"),
+        rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
+        flags: checkedFrom(formEl, "boardingFlags"),
         profilePhotoUrl: photo.profilePhotoUrl,
         profilePhotoData: photo.profilePhotoData,
         stays: existing.stays || [],
@@ -2566,20 +2569,25 @@ function initEvents() {
       renderBoardingRequests();
       selectedDogPhotos.boarding = null;
       setBoardingFormLocked(true);
-      showDetailDialog("Boarding Dog Saved", `<p>${escapeHtml(record.dogName || "Boarding dog")} has been saved.</p>`);
+      if (photo.photoError) {
+        showDetailDialog("Boarding Dog Saved Without Photo", `<p>${escapeHtml(record.dogName || "Boarding dog")} has been saved, but the profile photo could not be uploaded: ${escapeHtml(photo.photoError)}</p>`);
+      } else {
+        showDetailDialog("Boarding Dog Saved", `<p>${escapeHtml(record.dogName || "Boarding dog")} has been saved.</p>`);
+      }
     } catch (error) {
       showDetailDialog("Boarding Dog Not Saved", `<p>The boarding dog record could not be saved: ${escapeHtml(error.message)}</p>`);
     }
   });
   $("#boardingStayForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!validateForm(event.currentTarget)) return;
+    const formEl = event.currentTarget;
+    if (!validateForm(formEl)) return;
     const dog = activeBoardingDog();
     if (!dog) {
       showToast("Save the boarding dog first.");
       return;
     }
-    const payload = formPayload(event.currentTarget);
+    const payload = formPayload(formEl);
     const existingStay = (dog.stays || []).find((stay) => stay.id === payload.stayId);
     const stay = {
       ...existingStay,
@@ -2588,7 +2596,7 @@ function initEvents() {
       updatedAt: new Date().toISOString(),
       dropoffTime: payload.dropoffTime,
       pickupTime: payload.pickupTime,
-      requests: checkedFrom(event.currentTarget, "stayRequests"),
+      requests: checkedFrom(formEl, "stayRequests"),
       stayNotes: payload.stayNotes,
     };
     stay.bathPlan = bathPlanForStay(stay);
@@ -2600,7 +2608,7 @@ function initEvents() {
     await sendPayload(record);
     renderBoardingStays(record);
     renderBoardingDogs();
-    event.currentTarget.reset();
+    formEl.reset();
     $("#boardingStayId").value = "";
     $("#boardingStaySaveButton").textContent = "Add Boarding Stay";
     showToast(existingStay ? "Boarding stay updated." : "Boarding stay added.");
@@ -2629,16 +2637,17 @@ function initEvents() {
 
   $("#requestForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!validateForm(event.currentTarget)) return;
+    const formEl = event.currentTarget;
+    if (!validateForm(formEl)) return;
     try {
-      const mediaItems = await filesToMediaItems($("#requestMedia"));
+      const mediaItems = await uploadMediaFiles($("#requestMedia"), "requests");
       const files = mediaItems.map((file) => file.name).join(", ");
-      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(event.currentTarget), mediaFiles: files, mediaItems, urgentNeeds: event.currentTarget.querySelector('input[name="urgentNeeds"]').checked };
+      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentNeeds: formEl.querySelector('input[name="urgentNeeds"]').checked };
       const record = upsertRecord("request", payload);
       await sendPayload(record);
       if (record.urgentNeeds) emailNow("Urgent Kennel Request", `Urgent kennel request submitted.\n\nRequested by: ${record.requestedBy}\nCategory: ${record.category}\nRequest: ${record.requestText}\nReason: ${record.reason}`);
-      event.currentTarget.reset();
-      event.currentTarget.elements.requestedBy.value = currentUser?.name || "";
+      formEl.reset();
+      formEl.elements.requestedBy.value = currentUser?.name || "";
       renderRequests();
       showDetailDialog("Request Logged", requestDetailHtml(record));
     } catch (error) {
@@ -2648,16 +2657,17 @@ function initEvents() {
 
   $("#maintenanceForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!validateForm(event.currentTarget)) return;
+    const formEl = event.currentTarget;
+    if (!validateForm(formEl)) return;
     try {
-      const mediaItems = await filesToMediaItems($("#maintenanceMedia"));
+      const mediaItems = await uploadMediaFiles($("#maintenanceMedia"), "maintenance");
       const files = mediaItems.map((file) => file.name).join(", ");
-      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(event.currentTarget), mediaFiles: files, mediaItems, urgentAttention: event.currentTarget.querySelector('input[name="urgentAttention"]').checked };
+      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentAttention: formEl.querySelector('input[name="urgentAttention"]').checked };
       const record = upsertRecord("maintenance", payload);
       await sendPayload(record);
-      if (record.urgentAttention) emailNow("Urgent Kennel Maintenance Attention Needed", `Urgent maintenance item submitted.\n\nLocation: ${record.location}\nReported by: ${record.reportedBy}\nIssue: ${record.issue}\nSuggested action: ${record.suggestedAction}\nFiles selected: ${record.mediaFiles || "None"}`);
-      event.currentTarget.reset();
-      event.currentTarget.elements.reportedBy.value = currentUser?.name || "";
+      if (record.urgentAttention) emailNow("Urgent Kennel Maintenance Attention Needed", `Urgent maintenance item submitted.\n\nLocation: ${record.location}\nReported by: ${record.reportedBy}\nIssue: ${record.issue}\nSuggested action: ${record.suggestedAction}\nFiles uploaded: ${record.mediaFiles || "None"}`);
+      formEl.reset();
+      formEl.elements.reportedBy.value = currentUser?.name || "";
       renderMaintenance();
       showDetailDialog("Maintenance Item Logged", maintenanceDetailHtml(record));
     } catch (error) {

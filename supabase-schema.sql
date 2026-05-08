@@ -48,29 +48,56 @@ to anon, authenticated
 using (true)
 with check (true);
 
-insert into storage.buckets (id, name, public)
-values ('kennel-media', 'kennel-media', true)
-on conflict (id) do update set public = true;
+-- Storage bucket for direct file uploads.
+-- If your Supabase project does not allow bucket creation from SQL, create this
+-- manually in Storage as a public bucket named kennel-media, then run the
+-- policies below.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('kennel-media', 'kennel-media', true, 52428800, array['image/*', 'video/*']::text[])
+on conflict (id) do update
+set public = true,
+    file_size_limit = 52428800,
+    allowed_mime_types = array['image/*', 'video/*']::text[];
 
 drop policy if exists "Kennel app can read media" on storage.objects;
 drop policy if exists "Kennel app can upload media" on storage.objects;
 drop policy if exists "Kennel app can update media" on storage.objects;
+drop policy if exists "Kennel media is publicly readable" on storage.objects;
+drop policy if exists "Authenticated users can upload kennel media" on storage.objects;
+drop policy if exists "Anon users can upload kennel media" on storage.objects;
+drop policy if exists "Authenticated users can update kennel media" on storage.objects;
+drop policy if exists "Anon users can update kennel media" on storage.objects;
 
-create policy "Kennel app can read media"
+create policy "Kennel media is publicly readable"
 on storage.objects
 for select
 to anon, authenticated
-using (bucket_id = 'kennel-media');
+using ( bucket_id = 'kennel-media' );
 
-create policy "Kennel app can upload media"
+create policy "Authenticated users can upload kennel media"
 on storage.objects
 for insert
-to anon, authenticated
-with check (bucket_id = 'kennel-media');
+to authenticated
+with check ( bucket_id = 'kennel-media' );
 
-create policy "Kennel app can update media"
+-- PIN login uses the public app key, so anon upload is needed until PIN auth is
+-- moved into Supabase Auth or an Edge Function.
+create policy "Anon users can upload kennel media"
+on storage.objects
+for insert
+to anon
+with check ( bucket_id = 'kennel-media' );
+
+create policy "Authenticated users can update kennel media"
 on storage.objects
 for update
-to anon, authenticated
-using (bucket_id = 'kennel-media')
-with check (bucket_id = 'kennel-media');
+to authenticated
+using ( bucket_id = 'kennel-media' )
+with check ( bucket_id = 'kennel-media' );
+
+create policy "Anon users can update kennel media"
+on storage.objects
+for update
+to anon
+using ( bucket_id = 'kennel-media' )
+with check ( bucket_id = 'kennel-media' );

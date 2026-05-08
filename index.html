@@ -474,15 +474,14 @@
               </button>
               <div>
                 <strong id="ownedDogPhotoName">New dog</strong>
-                <span class="required-mark" aria-label="required">*</span>
-                <p>Tap the square to add or change the profile photo.</p>
-                <input class="visually-hidden-file" type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/*" tabindex="-1" />
+                <p>Tap the square to upload an optional JPG or PNG photo from your device.</p>
+                <input class="visually-hidden-file" type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
               </div>
             </div>
             <div class="field-grid">
               <label>Call name<input type="text" name="callName" required /></label>
               <label>Show name<input type="text" name="showName" /></label>
-              <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Use a shared image link if not uploading" /></label>
+              <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
               <label>Date of birth<input type="date" name="dateOfBirth" /></label>
               <label>Sex<select name="sex" id="ownedDogSex" required><option>Male</option><option>Female</option></select></label>
               <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
@@ -551,6 +550,16 @@
               <p>Review pending, approved, and cancelled customer boarding requests separately from the dog roster.</p>
             </div>
           </div>
+          <div class="filter-toolbar">
+            <label>View requests
+              <select id="boardingRequestStatusFilter">
+                <option value="All">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Cancelled">Cancelled</option>
+              </select>
+            </label>
+          </div>
           <div class="record-grid" id="boardingRequestRecords"></div>
         </section>
 
@@ -566,15 +575,14 @@
               </button>
               <div>
                 <strong id="boardingDogPhotoName">New boarding dog</strong>
-                <span class="required-mark" aria-label="required">*</span>
-                <p>Tap the square to add or change the profile photo.</p>
-                <input class="visually-hidden-file" type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/*" tabindex="-1" />
+                <p>Tap the square to upload an optional JPG or PNG photo from your device.</p>
+                <input class="visually-hidden-file" type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
               </div>
             </div>
             <div class="field-grid">
               <label>Dog name<input type="text" name="dogName" required /></label>
               <label>Breed / description<input type="text" name="breedDescription" /></label>
-              <label>Profile photo link<input type="url" name="profilePhotoUrl" placeholder="Use a shared image link if not uploading" /></label>
+              <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
               <label>Sex<select name="sex" required><option value="">Select sex</option><option>Male</option><option>Female</option><option>Unknown</option></select></label>
               <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
               <label>Owner name<input type="text" name="ownerName" required /></label>

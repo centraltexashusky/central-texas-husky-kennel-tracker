@@ -253,6 +253,29 @@ h2 {
   flex: 0 0 auto;
 }
 
+.filter-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin: 12px 0 16px;
+}
+
+.filter-toolbar label {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin: 0;
+}
+
+.filter-toolbar select {
+  background: #fff;
+  border: 1px solid #cbd8d8;
+  border-radius: 8px;
+  color: var(--ink);
+  min-height: 42px;
+  padding: 8px 36px 8px 10px;
+}
+
 .table-wrap {
   border: 1px solid var(--line);
   border-radius: 8px;

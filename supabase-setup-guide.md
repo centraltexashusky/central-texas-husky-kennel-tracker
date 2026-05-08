@@ -54,7 +54,9 @@ Important: Google and Facebook login will not complete from a `file://` preview.
 1. In Supabase, go to Storage.
 2. Confirm there is a bucket named `kennel-media`.
 3. Confirm it is public.
-4. If the SQL policies were not applied, allow the anon/public key to read and upload objects in this bucket.
+4. Use a file size limit around 50 MB if videos will be uploaded.
+5. Allow image and video uploads.
+6. If the SQL policies were not applied, allow the anon/public key to read and upload objects in this bucket.
 
 ## 5. Quick Auth Troubleshooting
 
