@@ -212,6 +212,10 @@
                 <option>All</option>
                 <option>Pending</option>
                 <option>Approved</option>
+                <option>Checked In</option>
+                <option>In Kennel</option>
+                <option>Ready For Pickup</option>
+                <option>Checked Out</option>
                 <option>Cancelled</option>
               </select>
             </label>
@@ -336,6 +340,37 @@
               Dogs trained or exercised today
               <textarea name="dogsExercised" rows="3" placeholder="Example: Beau treadmill, Blue scooter, Luna leash training"></textarea>
             </label>
+
+            <div class="structured-care-panel" aria-labelledby="structuredCareHeading">
+              <div class="section-heading compact-heading">
+                <span>C</span>
+                <div>
+                  <h2 id="structuredCareHeading">Structured Our Dog Care Log</h2>
+                  <p>Log exercise, training, baths, heat notes, and care notes to the selected Our Dog profile.</p>
+                </div>
+              </div>
+              <div class="field-grid">
+                <label>Our Dog<select id="careQuickDogId"></select></label>
+                <label>Care type
+                  <select id="careQuickType">
+                    <option value="">Select care type</option>
+                    <option>Treadmill</option>
+                    <option>Scooter</option>
+                    <option>Yard Run</option>
+                    <option>Training</option>
+                    <option>Bath</option>
+                    <option>Heat Note</option>
+                    <option>Medical/Behavior Note</option>
+                  </select>
+                </label>
+                <label>Minutes<input type="number" id="careQuickMinutes" min="0" placeholder="When relevant" /></label>
+                <label>Completed by<input type="text" id="careQuickCompletedBy" placeholder="Helper name" /></label>
+                <label>Date<input type="date" id="careQuickDate" /></label>
+              </div>
+              <label>Care note<textarea id="careQuickNote" rows="2" placeholder="Session details, bath products, heat observation, medical/care note"></textarea></label>
+              <div class="button-row"><button type="button" id="addCareQuickLog">Add Care Log</button></div>
+              <div id="structuredCareLogList" class="record-grid compact-record-grid"></div>
+            </div>
 
             <label>
               Dogs bathed today
@@ -533,6 +568,16 @@
             <input type="search" id="ownedDogSearch" placeholder="Search our dogs by call name, show name, sex, or notes" />
             <button type="button" id="addOwnedDogButton">Add New Dog</button>
           </div>
+          <div class="summary-grid care-summary-grid" id="ownedDogSummary"></div>
+          <div class="filter-toolbar care-filter-toolbar" id="ownedDogCareFilters" aria-label="Our Dogs care filters">
+            <button type="button" class="secondary-button is-active" data-filter="All">All</button>
+            <button type="button" class="secondary-button" data-filter="Exercise Due">Exercise Due</button>
+            <button type="button" class="secondary-button" data-filter="Training Due">Training Due</button>
+            <button type="button" class="secondary-button" data-filter="Bath Due">Bath Due</button>
+            <button type="button" class="secondary-button" data-filter="Females">Females</button>
+            <button type="button" class="secondary-button" data-filter="Heat Watch">Heat Watch</button>
+            <button type="button" class="secondary-button" data-filter="Special Care">Special Care</button>
+          </div>
           <div class="column-manager" id="ownedDogColumnManager"></div>
           <div class="table-wrap">
             <table class="data-table" id="ownedDogTable">
@@ -543,7 +588,7 @@
         </section>
 
         <section class="form-section detail-panel" id="ownedDogDetail" hidden>
-          <div class="section-heading"><span>E</span><div><h2 id="ownedDogDetailTitle">Add New Dog</h2><p>Double click a row to edit an existing dog.</p></div></div>
+          <div class="section-heading"><span>E</span><div><h2 id="ownedDogDetailTitle">Add New Dog</h2><p>Use View, Edit, or Log Care from the table to open a dog profile.</p></div></div>
           <form id="ourDogForm" class="tracker-form">
             <input type="hidden" name="id" />
             <div class="dog-profile-editor">
@@ -557,30 +602,96 @@
                 <input class="visually-hidden-file" type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
               </div>
             </div>
-            <div class="field-grid">
-              <label>Call name<input type="text" name="callName" required /></label>
-              <label>Show name<input type="text" name="showName" /></label>
-              <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
-              <label>Date of birth<input type="date" name="dateOfBirth" /></label>
-              <label>Sex<select name="sex" id="ownedDogSex" required><option>Male</option><option>Female</option></select></label>
-              <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
-              <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
-              <label class="inline-check"><input type="checkbox" name="rabiesGoodThreeYears" value="Yes" /> Rabies good for 3 years from last vaccination</label>
-              <label id="ownedDhppLabel">Last DHPP vaccination <span id="ownedDhppWarning" class="vaccine-warning"></span><input type="date" name="dhppDate" id="ownedDhppDate" /></label>
-              <label>Last heartworm medication<input type="date" name="heartwormDate" /></label>
-              <label>Last bath<input type="date" name="lastBath" id="ownedLastBath" /></label>
-              <label>Next scheduled bath<input type="date" name="nextBath" id="ownedNextBath" readonly /></label>
-              <label>Food amount currently eating<input type="text" name="foodAmount" placeholder="Example: 2 cups AM, 2 cups PM" /></label>
-              <label id="ownedLastHeatLabel">Last heat cycle<input type="date" name="lastHeat" id="ownedLastHeat" /></label>
-              <label id="ownedNextHeatLabel">Estimated next heat cycle<input type="date" name="nextHeat" id="ownedNextHeat" readonly /></label>
+            <div class="profile-tabs" id="ownedDogProfileTabs" aria-label="Our Dog profile sections">
+              <button type="button" class="secondary-button is-active" data-owned-profile-tab="Overview">Overview</button>
+              <button type="button" class="secondary-button" data-owned-profile-tab="Exercise">Exercise</button>
+              <button type="button" class="secondary-button" data-owned-profile-tab="Training">Training</button>
+              <button type="button" class="secondary-button" data-owned-profile-tab="Baths">Baths</button>
+              <button type="button" class="secondary-button" data-owned-profile-tab="Heat Cycle">Heat Cycle</button>
+              <button type="button" class="secondary-button" data-owned-profile-tab="Medical / Care Notes">Medical / Care Notes</button>
+              <button type="button" class="secondary-button" data-owned-profile-tab="Timeline">Timeline</button>
             </div>
-            <label>Medication or special care notes<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
-            <label>General notes<textarea name="notes" rows="3"></textarea></label>
+
+            <section class="owned-profile-section" data-owned-profile-section="Overview">
+              <div class="section-heading compact-heading"><span>O</span><div><h2>Overview</h2><p>Identity, feeding, vaccine, and care status.</p></div></div>
+              <div class="field-grid">
+                <label>Call name<input type="text" name="callName" required /></label>
+                <label>Show name<input type="text" name="showName" /></label>
+                <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
+                <label>Date of birth<input type="date" name="dateOfBirth" /></label>
+                <label>Sex<select name="sex" id="ownedDogSex" required><option>Male</option><option>Female</option></select></label>
+                <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
+                <label>Care status<select name="careStatus"><option value="">Normal / no status</option><option>Special Care</option><option>Medical Watch</option><option>Recovery</option><option>Behavior Watch</option><option>Heat Watch</option></select></label>
+                <label>Food amount currently eating<input type="text" name="foodAmount" placeholder="Example: 2 cups AM, 2 cups PM" /></label>
+                <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
+                <label class="inline-check"><input type="checkbox" name="rabiesGoodThreeYears" value="Yes" /> Rabies good for 3 years from last vaccination</label>
+                <label id="ownedDhppLabel">Last DHPP vaccination <span id="ownedDhppWarning" class="vaccine-warning"></span><input type="date" name="dhppDate" id="ownedDhppDate" /></label>
+                <label>Last heartworm medication<input type="date" name="heartwormDate" /></label>
+              </div>
+              <label>General notes<textarea name="notes" rows="3"></textarea></label>
+            </section>
+
+            <section class="owned-profile-section" data-owned-profile-section="Exercise" hidden>
+              <div class="section-heading compact-heading"><span>X</span><div><h2>Exercise</h2><p>Treadmill, scooter, yard run, minutes, and target frequency.</p></div></div>
+              <div class="field-grid">
+                <label>Exercise routine<textarea name="exerciseRoutine" rows="3" placeholder="Target routine, priority dogs, treadmill/scooter/yard run preferences"></textarea></label>
+                <label>Target frequency in days<input type="number" name="exerciseFrequencyDays" min="1" placeholder="Default 1" /></label>
+                <label>Last exercise date<input type="date" name="lastExerciseDate" /></label>
+                <label>Exercise notes<textarea name="exerciseNotes" rows="3" placeholder="Handling, conditioning, weather, or equipment notes"></textarea></label>
+              </div>
+            </section>
+
+            <section class="owned-profile-section" data-owned-profile-section="Training" hidden>
+              <div class="section-heading compact-heading"><span>T</span><div><h2>Training</h2><p>Current focus, goals, session notes, and next session.</p></div></div>
+              <div class="field-grid">
+                <label>Training routine<textarea name="trainingRoutine" rows="3" placeholder="Current focus and training cadence"></textarea></label>
+                <label>Target frequency in days<input type="number" name="trainingFrequencyDays" min="1" placeholder="Default 3" /></label>
+                <label>Last training date<input type="date" name="lastTrainingDate" /></label>
+                <label>Next training session<input type="date" name="nextTrainingDate" /></label>
+                <label>Training goals<textarea name="trainingGoals" rows="3" placeholder="Goals, commands, handling targets, manners"></textarea></label>
+                <label>Session notes<textarea name="trainingSessionNotes" rows="3" placeholder="Recent notes or focus for next helper"></textarea></label>
+              </div>
+            </section>
+
+            <section class="owned-profile-section" data-owned-profile-section="Baths" hidden>
+              <div class="section-heading compact-heading"><span>B</span><div><h2>Baths</h2><p>Schedule, products, coat notes, and bath history.</p></div></div>
+              <div class="field-grid">
+                <label>Last bath<input type="date" name="lastBath" id="ownedLastBath" /></label>
+                <label>Next scheduled bath<input type="date" name="nextBath" id="ownedNextBath" readonly /></label>
+                <label>Bath routine<textarea name="bathRoutine" rows="3" placeholder="Bath interval, handling, preferred timing"></textarea></label>
+                <label>Bath interval in days<input type="number" name="bathIntervalDays" min="1" placeholder="Default 30" /></label>
+                <label>Bath products<input type="text" name="bathProducts" placeholder="Shampoo, conditioner, deshed tools" /></label>
+                <label>Coat notes<textarea name="coatNotes" rows="3" placeholder="Coat condition, blowout, skin notes"></textarea></label>
+              </div>
+            </section>
+
+            <section class="owned-profile-section" data-owned-profile-section="Heat Cycle" hidden>
+              <div class="section-heading compact-heading"><span>H</span><div><h2>Heat Cycle</h2><p>Female-only cycle status, estimated dates, notes, and history.</p></div></div>
+              <div class="field-grid owned-heat-fields">
+                <label id="ownedLastHeatLabel">Last heat cycle<input type="date" name="lastHeat" id="ownedLastHeat" /></label>
+                <label id="ownedNextHeatLabel">Estimated next heat cycle<input type="date" name="nextHeat" id="ownedNextHeat" readonly /></label>
+                <label>Heat cycle summary<textarea name="heatCycle" rows="3" placeholder="Cycle pattern, watch notes, separation plan"></textarea></label>
+                <label>Cycle length in days<input type="number" name="heatCycleLengthDays" min="1" placeholder="Default 183" /></label>
+                <label>Heat status<select name="heatCycleStatus"><option value="">No current status</option><option>In Heat</option><option>Expected Soon</option><option>Overdue</option><option>Monitor</option></select></label>
+                <label>Heat notes<textarea name="heatCycleNotes" rows="3" placeholder="Bleeding, behavior, separation, breeding watch notes"></textarea></label>
+              </div>
+              <p class="profile-empty-note" id="ownedMaleHeatNote" hidden>Heat cycle fields are hidden for male dogs.</p>
+            </section>
+
+            <section class="owned-profile-section" data-owned-profile-section="Medical / Care Notes" hidden>
+              <div class="section-heading compact-heading"><span>M</span><div><h2>Medical / Care Notes</h2><p>Medication, special handling, behavior watch, and care history.</p></div></div>
+              <label>Medication or special care notes<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
+              <label>Medical notes<textarea name="medicalCareNotes" rows="3" placeholder="Ongoing medical/care notes that helpers should see"></textarea></label>
+            </section>
+
+            <section class="owned-profile-section" data-owned-profile-section="Timeline" hidden>
+              <div class="section-heading compact-heading"><span>L</span><div><h2>Timeline</h2><p>Exercise, training, bath, heat, and medical/care history.</p></div></div>
+            </section>
             <div class="button-row"><button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Edit Dog</button><button type="submit" id="ownedDogSaveButton">Save Update</button><button type="button" class="secondary-button danger-button" id="deleteOwnedDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
           </form>
 
           <section class="existing-only" id="ownedDogActivityPanel" hidden>
-            <div class="section-heading compact-heading"><span>A</span><div><h2>Activity And Training</h2><p>Add treadmill, scooter, and training entries for this dog.</p></div></div>
+            <div class="section-heading compact-heading"><span>A</span><div><h2>Care Timeline</h2><p>Add treadmill, scooter, yard run, training, bath, heat, and care entries for this dog.</p></div></div>
             <div class="activity-entry-grid">
               <div class="activity-entry">
                 <label>Treadmill minutes<input type="number" id="ownedTreadmillMinutes" min="0" placeholder="Minutes" /></label>
@@ -590,9 +701,19 @@
                 <label>Scooter minutes<input type="number" id="ownedScooterMinutes" min="0" placeholder="Minutes" /></label>
                 <button type="button" id="addScooterLog">Add Scooter Time</button>
               </div>
+              <div class="activity-entry">
+                <label>Yard run minutes<input type="number" id="ownedYardRunMinutes" min="0" placeholder="Minutes" /></label>
+                <button type="button" id="addYardRunLog">Add Yard Run</button>
+              </div>
+              <div class="activity-entry">
+                <label>Bath note<input type="text" id="ownedBathNote" placeholder="Products or coat note" /></label>
+                <button type="button" id="addBathLog">Log Bath Today</button>
+              </div>
             </div>
             <label>Training progress entry<textarea id="ownedTrainingEntry" rows="3" placeholder="What was worked on today?"></textarea></label>
             <button type="button" id="addTrainingLog">Add Training Entry</button>
+            <label>Medical / behavior care entry<textarea id="ownedCareEntry" rows="3" placeholder="Medication, behavior, injury, appetite, or special care note"></textarea></label>
+            <button type="button" id="addCareNoteLog">Add Care Note</button>
             <div class="filter-toolbar activity-filter-toolbar">
               <label>Show history
                 <select id="ownedActivityFilter">
@@ -601,6 +722,10 @@
                   <option value="Training">Training only</option>
                   <option value="Treadmill">Treadmill</option>
                   <option value="Scooter">Scooter</option>
+                  <option value="Yard Run">Yard Run</option>
+                  <option value="Bath">Baths</option>
+                  <option value="Heat">Heat notes</option>
+                  <option value="Medical/Care">Medical / care notes</option>
                 </select>
               </label>
             </div>
@@ -646,6 +771,10 @@
                 <option value="All">All</option>
                 <option value="Pending">Pending</option>
                 <option value="Approved">Approved</option>
+                <option value="Checked In">Checked In</option>
+                <option value="In Kennel">In Kennel</option>
+                <option value="Ready For Pickup">Ready For Pickup</option>
+                <option value="Checked Out">Checked Out</option>
                 <option value="Cancelled">Cancelled</option>
               </select>
             </label>
@@ -654,7 +783,7 @@
         </section>
 
         <section class="form-section detail-panel" id="boardingDogDetail" hidden>
-          <div class="section-heading"><span>E</span><div><h2 id="boardingDogDetailTitle">Add Boarding Dog</h2><p>Double click a row to edit an existing boarding dog.</p></div></div>
+          <div class="section-heading"><span>E</span><div><h2 id="boardingDogDetailTitle">Add Boarding Dog</h2><p>Use the table action to view or edit an existing boarding dog.</p></div></div>
           <div class="alert-banner">Required Update From Owner: use this when vaccines, owner instructions, or boarding details need to be refreshed.</div>
           <form id="boardingDogForm" class="tracker-form">
             <input type="hidden" name="id" />
@@ -912,6 +1041,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260511-auth-daily-dogs"></script>
+    <script src="script.js?v=20260512-kennel-modernization"></script>
   </body>
 </html>

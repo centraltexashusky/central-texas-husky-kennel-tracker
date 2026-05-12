@@ -1831,6 +1831,141 @@ option {
   box-shadow: inset 4px 0 0 rgba(255, 105, 97, 0.64), var(--glass-specular);
 }
 
+.table-wrap,
+.data-table th,
+.data-table td,
+.task-item,
+.activity-entry,
+.structured-care-panel,
+.owned-profile-section,
+.compact-record-card,
+.filter-toolbar,
+.profile-tabs {
+  background: rgba(8, 17, 27, 0.66);
+}
+
+.table-wrap,
+.structured-care-panel,
+.owned-profile-section {
+  border: 1px solid rgba(215, 228, 226, 0.18);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-specular);
+  padding: 14px;
+}
+
+.owned-profile-section {
+  display: grid;
+  gap: 14px;
+}
+
+.owned-profile-section[hidden] {
+  display: none !important;
+}
+
+.profile-tabs,
+.care-filter-toolbar,
+.activity-filter-toolbar,
+.chip-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.profile-tabs,
+.care-filter-toolbar {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--glass-radius);
+  padding: 8px;
+}
+
+.profile-tabs .is-active,
+.care-filter-toolbar .is-active {
+  background: rgba(185, 222, 207, 0.24);
+  border-color: rgba(185, 222, 207, 0.44);
+}
+
+.care-summary-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-bottom: 10px;
+}
+
+.table-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 240px;
+}
+
+.compact-record-grid {
+  margin-top: 10px;
+}
+
+.compact-record-card {
+  gap: 6px;
+  min-height: auto;
+  padding: 10px 12px;
+}
+
+.dog-type-chip.ownedDog {
+  background: rgba(185, 222, 207, 0.22);
+  border-color: rgba(185, 222, 207, 0.42);
+}
+
+.dog-type-chip.boardingDog {
+  background: rgba(173, 216, 230, 0.22);
+  border-color: rgba(173, 216, 230, 0.44);
+}
+
+.dog-type-chip.customerDog {
+  background: rgba(255, 231, 174, 0.20);
+  border-color: rgba(255, 231, 174, 0.42);
+}
+
+.boarding-status-chip.is-status-pending,
+.record-card.is-status-pending {
+  background: rgba(255, 204, 102, 0.18);
+  border-color: rgba(255, 204, 102, 0.38);
+}
+
+.boarding-status-chip.is-status-approved,
+.boarding-status-chip.is-status-checked-in,
+.boarding-status-chip.is-status-in-kennel,
+.record-card.is-status-approved,
+.record-card.is-status-checked-in,
+.record-card.is-status-in-kennel {
+  background: rgba(185, 222, 207, 0.22);
+  border-color: rgba(185, 222, 207, 0.44);
+}
+
+.boarding-status-chip.is-status-ready-for-pickup,
+.record-card.is-status-ready-for-pickup {
+  background: rgba(173, 216, 230, 0.22);
+  border-color: rgba(173, 216, 230, 0.44);
+}
+
+.boarding-status-chip.is-status-cancelled,
+.boarding-status-chip.is-status-checked-out,
+.record-card.is-status-cancelled,
+.record-card.is-status-checked-out {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.data-table tr.has-care-due td {
+  box-shadow: inset 4px 0 0 rgba(255, 204, 102, 0.46);
+}
+
+.data-table tr.is-in-heat td {
+  box-shadow: inset 4px 0 0 rgba(255, 105, 97, 0.62);
+}
+
+.profile-empty-note {
+  color: var(--muted);
+  margin: 0;
+}
+
 .calendar-day {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -1998,6 +2133,7 @@ option {
   .field-grid,
   .timesheet-grid,
   .summary-grid,
+  .care-summary-grid,
   .dashboard-grid,
   .activity-entry-grid,
   .admin-task-controls,
@@ -2017,6 +2153,13 @@ option {
   }
 
   .table-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profile-tabs,
+  .care-filter-toolbar,
+  .table-actions {
     align-items: stretch;
     flex-direction: column;
   }
