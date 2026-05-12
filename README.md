@@ -8,13 +8,13 @@ This is a review version of the kennel operations app.
 - Works well on phone or desktop
 - Lets the kennel helper check off daily tasks
 - Adds sidebar sections for Daily Tasks, Our Dogs, Boarding Dogs, Request, and Maintenance
-- Uses a 4 digit helper PIN to fill helper name and email
+- Uses Supabase email/password or OAuth login for customers, helpers, and admin
 - Includes a clock-in and clock-out timesheet section
 - Shows Monday weekly tasks
 - Shows Tuesday trash task
 - Shows monthly deep-clean rotation
-- Saves records locally for review and sends records to Supabase when the user signs in with Google/Facebook
-- Keeps PIN login available for quick local testing
+- Saves records locally for review and sends records to Supabase when the user signs in
+- Lets customers create dog profiles with profile photos and vaccination record uploads
 
 ## What It Will Do After Supabase Setup
 
@@ -36,31 +36,27 @@ This is a review version of the kennel operations app.
 ## Persistent Database
 
 Current setup:
-The app uses Supabase as the persistent database. Google/Facebook sign-in saves records across desktop and mobile. PIN login is kept as a local fallback only and does not sync across devices.
+The app uses Supabase as the persistent database. Email/password, Google, and Facebook sign-in save records across desktop and mobile. User profile and role records are stored in the app database; passwords stay in Supabase Auth.
 
 Important deployment note:
 Whenever `index.html`, `styles.css`, or `script.js` changes, upload the updated files to GitHub or your Wix-hosted version.
 
-## Maintenance Media
+## Request And Maintenance Images
 
-The current form lets helpers select photo/video files and paste a shared media link. Email links cannot automatically attach local files from a browser. Best workflow:
+The current Request and Maintenance forms accept JPG and PNG image uploads. Email links cannot automatically attach local files from a browser. Best workflow:
 
-1. Helper uploads photo/video to a shared Google Drive folder.
+1. Helper uploads extra media to a shared Google Drive folder if the file is not a JPG/PNG.
 2. Helper pastes the Drive link into the Maintenance form.
 3. If Urgent Attention is checked, the email includes the pasted link.
 
 More advanced option:
 Apps Script can receive base64 file uploads and save them to Drive, but video files can hit size and speed limits. For reliability, pasted Drive links are better.
 
-## Dog Profile Photos
+## Dog Profile Photos And Vaccines
 
-The app supports profile photo upload previews and profile photo links. For reliable cross-device use, use the profile photo link field:
+The app supports durable Supabase uploads for dog profile photos and customer vaccination records. Vaccination records accept PDF, PNG, JPG, and JPEG files and stay linked to the dog record.
 
-1. Upload the dog photo to a shared Google Drive folder.
-2. Copy the share link.
-3. Paste it into the dog profile photo link field.
-
-Browser-uploaded image previews can work for small photos, but shared links are still the safest long-term method for cross-device media review.
+Our Dogs and Boarding Dogs still include an optional profile photo link fallback.
 
 ## Wix Hosting Plan
 
@@ -69,21 +65,6 @@ Use Wix Velo with a Wix-hosted custom element. Wix documentation says custom ele
 
 Simpler alternative:
 Host this folder on a small static host such as GitHub Pages or Netlify and embed it into Wix using an HTML iframe. This is easier, but it means the app itself is not hosted by Wix.
-
-## Helper PIN Login
-
-Helper PINs are set near the top of `script.js`:
-
-```js
-const HELPER_PINS = {
-  "1001": { name: "Ms. Yuko", email: "yuko@centraltexashusky.com", key: "helper-yuko" },
-  "1002": { name: "Lexi", email: "lexi@centraltexashusky.com", key: "helper-lexi" },
-};
-```
-
-Update the PINs and helper emails before publishing. The PIN field is hidden on screen as `****`.
-
-PIN login is useful for local review only. Use Google/Facebook sign-in for records that need to sync across devices.
 
 ## Wix Custom Element Conversion
 
@@ -110,7 +91,7 @@ Please clock in and complete the kennel checklist here:
 
 [Insert app link]
 
-Enter your assigned 4 digit PIN when the page opens. At the end of the shift, please let the dogs out again between 1:00 PM and 1:30 PM, pick up after them, spend a little social/play time with them, take a photo or video for social media, clock out, and submit the report.
+Sign in with your email and password when the page opens. At the end of the shift, please let the dogs out again between 1:00 PM and 1:30 PM, pick up after them, spend a little social/play time with them, take a photo or video for social media, clock out, and submit the report.
 
 Thank you,
 

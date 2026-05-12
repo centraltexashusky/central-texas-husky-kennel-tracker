@@ -3,6 +3,8 @@ const SUPABASE_ANON_KEY = "sb_publishable_IeKmeCMalVYUnYQUe3gEew_NdjAzmAQ";
 const MEDIA_BUCKET = "kennel-media";
 const MAX_MEDIA_UPLOAD_MB = 50;
 const MAX_MEDIA_UPLOAD_BYTES = MAX_MEDIA_UPLOAD_MB * 1024 * 1024;
+const IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png"];
+const VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 
@@ -28,7 +30,7 @@ let supabaseClient = null;
 let detailDialogContext = null;
 let pendingCustomerBooking = null;
 let activeClockIn = JSON.parse(localStorage.getItem("cth-active-clock-in") || "null") || "";
-const selectedDogPhotos = { owned: null, boarding: null };
+const selectedDogPhotos = { owned: null, boarding: null, customer: null };
 
 const defaultDailyTasks = {
   morning: [
@@ -89,15 +91,6 @@ const defaultManagedTasks = {
   ],
 };
 
-const HELPER_PINS = {
-  "1001": { name: "Ms. Yuko", email: "yuko@centraltexashusky.com", key: "helper-yuko", role: "helper" },
-  "1002": { name: "Lexi", email: "lexi@centraltexashusky.com", key: "helper-lexi", role: "helper" },
-};
-
-const ADMIN_PINS = {
-  "9001": { name: "Owner Admin", email: "centraltexashusky@gmail.com", key: "admin-owner", role: "admin" },
-};
-
 const stateKeys = {
   ownedDog: "cth-ownedDog-records",
   boardingDog: "cth-boardingDog-records",
@@ -109,9 +102,12 @@ const stateKeys = {
   customerDog: "cth-customerDog-records",
   settingsUser: "cth-settingsUser-records",
   cfoNote: "cth-cfoNote-records",
+  calendarNote: "cth-calendarNote-records",
   taskConfig: "cth-daily-task-config",
   tableConfig: "cth-table-column-config",
+  tableSort: "cth-table-sort-config",
   session: "cth-current-session",
+  authThrottle: "cth-auth-throttle",
 };
 
 const defaultServices = [
@@ -136,6 +132,7 @@ const tableColumns = {
     { key: "specialCare", label: "Special Care Note", value: (record) => record.specialCare || "" },
     { key: "dateOfBirth", label: "DOB", value: (record) => record.dateOfBirth || "" },
     { key: "rabiesDate", label: "Rabies", value: (record) => record.rabiesDate || "" },
+    { key: "lastBath", label: "Last Bath", value: (record) => record.lastBath || "" },
     { key: "nextBath", label: "Next Bath", value: (record) => record.nextBath || "" },
     { key: "foodAmount", label: "Food", value: (record) => record.foodAmount || "" },
   ],
@@ -236,7 +233,7 @@ function writeRecords(type, records) {
     localStorage.setItem(stateKeys[type], JSON.stringify(compactedRecords));
     return compactedRecords;
   } catch (error) {
-    showToast("This record could not be saved. Try a smaller photo or remove large video files.");
+    showToast("This record could not be saved. Try a smaller file or remove large uploads.");
     throw error;
   }
 }
@@ -275,6 +272,14 @@ function writeTableConfig(config) {
   localStorage.setItem(stateKeys.tableConfig, JSON.stringify(config));
 }
 
+function readTableSort() {
+  return JSON.parse(localStorage.getItem(stateKeys.tableSort) || "{}") || {};
+}
+
+function writeTableSort(config) {
+  localStorage.setItem(stateKeys.tableSort, JSON.stringify(config));
+}
+
 function activeColumns(type) {
   const order = readTableConfig()[type] || [];
   return order.map((key) => tableColumns[type].find((column) => column.key === key)).filter(Boolean);
@@ -289,7 +294,7 @@ function renderColumnManager(type, selector) {
     .map((column) => {
       const visible = order.includes(column.key);
       const index = order.indexOf(column.key);
-      return `<div class="column-chip ${visible ? "" : "is-off"}" data-column="${column.key}" data-table="${type}">
+      return `<div class="column-chip ${visible ? "" : "is-off"}" data-column="${column.key}" data-table="${type}" draggable="${visible}">
         <label><input type="checkbox" ${visible ? "checked" : ""} data-action="toggle-column" data-table="${type}" data-column="${column.key}" /> ${escapeHtml(column.label)}</label>
         <button type="button" class="icon-button" data-action="move-column-up" data-table="${type}" data-column="${column.key}" ${index <= 0 ? "disabled" : ""} title="Move left">↑</button>
         <button type="button" class="icon-button" data-action="move-column-down" data-table="${type}" data-column="${column.key}" ${index < 0 || index >= order.length - 1 ? "disabled" : ""} title="Move right">↓</button>
@@ -317,6 +322,56 @@ function updateTableColumnConfig(type, columnKey, action) {
   if (type === "boardingDog") renderBoardingDogs();
 }
 
+function reorderTableColumn(type, sourceColumn, targetColumn) {
+  if (!type || !sourceColumn || !targetColumn || sourceColumn === targetColumn) return;
+  const config = readTableConfig();
+  const order = [...(config[type] || [])];
+  const sourceIndex = order.indexOf(sourceColumn);
+  const targetIndex = order.indexOf(targetColumn);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const [moved] = order.splice(sourceIndex, 1);
+  order.splice(targetIndex, 0, moved);
+  config[type] = order;
+  writeTableConfig(config);
+  if (type === "ownedDog") renderOwnedDogs();
+  if (type === "boardingDog") renderBoardingDogs();
+}
+
+function setTableSort(type, columnKey) {
+  if (!type || !columnKey) return;
+  const sortConfig = readTableSort();
+  const current = sortConfig[type] || {};
+  sortConfig[type] = {
+    key: columnKey,
+    direction: current.key === columnKey && current.direction === "asc" ? "desc" : "asc",
+  };
+  writeTableSort(sortConfig);
+  if (type === "ownedDog") renderOwnedDogs();
+  if (type === "boardingDog") renderBoardingDogs();
+}
+
+function sortRecordsForTable(type, records) {
+  const sort = readTableSort()[type];
+  if (!sort?.key) return records;
+  const column = tableColumns[type]?.find((item) => item.key === sort.key);
+  if (!column) return records;
+  return [...records].sort((a, b) => {
+    const left = String(column.value(a) || "").toLowerCase();
+    const right = String(column.value(b) || "").toLowerCase();
+    return sort.direction === "desc" ? right.localeCompare(left, undefined, { numeric: true }) : left.localeCompare(right, undefined, { numeric: true });
+  });
+}
+
+function tableHeaderHtml(type, columns) {
+  const sort = readTableSort()[type] || {};
+  return `<tr>${columns
+    .map((column) => {
+      const marker = sort.key === column.key ? (sort.direction === "desc" ? " ↓" : " ↑") : "";
+      return `<th data-sort-column="${column.key}" title="Double click to sort">${escapeHtml(column.label)}${marker}</th>`;
+    })
+    .join("")}</tr>`;
+}
+
 function supabaseReady() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
 }
@@ -332,7 +387,7 @@ function initSupabaseClient() {
 }
 
 function recordTypes() {
-  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote"];
+  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote", "calendarNote"];
 }
 
 function settingsUsers() {
@@ -348,7 +403,7 @@ function roleForAccount(account = {}) {
   const email = account.email?.toLowerCase();
   const saved = savedUserFor(account);
   if (saved?.role) return saved.role;
-  if (account.authProvider === "pin" && account.role) return account.role;
+  if (account.role) return account.role;
   if (ADMIN_EMAILS.map((item) => item.toLowerCase()).includes(email)) return "admin";
   return "customer";
 }
@@ -357,11 +412,12 @@ function userFromSupabase(supabaseUser) {
   if (!supabaseUser?.email) return null;
   const email = supabaseUser.email.toLowerCase();
   const name = supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || email.split("@")[0];
+  const role = supabaseUser.app_metadata?.role || roleForAccount({ email, key: supabaseUser.id });
   return {
     name,
     email,
     key: supabaseUser.id,
-    role: roleForAccount({ email, key: supabaseUser.id }),
+    role,
     authProvider: "supabase",
   };
 }
@@ -376,7 +432,7 @@ function currentDbUserId() {
 
 async function loginWithProvider(provider) {
   if (!supabaseClient) {
-    showToast("Database login setup is not complete yet. Helper PIN still works for local testing.");
+    showToast("Database login setup is not complete yet. Email/password login needs Supabase Auth.");
     return;
   }
   if (window.location.protocol === "file:") {
@@ -397,27 +453,122 @@ function authRedirectUrl() {
   return window.location.href.split("#")[0];
 }
 
-async function createCustomerLogin(event) {
+function readAuthThrottle() {
+  return JSON.parse(localStorage.getItem(stateKeys.authThrottle) || "{}") || {};
+}
+
+function writeAuthThrottle(data) {
+  localStorage.setItem(stateKeys.authThrottle, JSON.stringify(data));
+}
+
+function throttleKey(action, email) {
+  return `${action}:${String(email || "").toLowerCase()}`;
+}
+
+function authThrottleWait(action, email, minimumMs = 60000) {
+  const throttle = readAuthThrottle();
+  const lastAttempt = Number(throttle[throttleKey(action, email)] || 0);
+  const remaining = minimumMs - (Date.now() - lastAttempt);
+  return remaining > 0 ? remaining : 0;
+}
+
+function markAuthAttempt(action, email) {
+  const throttle = readAuthThrottle();
+  throttle[throttleKey(action, email)] = Date.now();
+  writeAuthThrottle(throttle);
+}
+
+function setSubmitState(button, isBusy, busyText = "Working...") {
+  if (!button) return;
+  if (!button.dataset.defaultText) button.dataset.defaultText = button.textContent;
+  button.disabled = isBusy;
+  button.textContent = isBusy ? busyText : button.dataset.defaultText;
+}
+
+function passwordMatchCheck(targetForm, passwordName, confirmName) {
+  const passwordField = targetForm.elements[passwordName];
+  const confirmField = targetForm.elements[confirmName];
+  return {
+    field: confirmField,
+    message: "Passwords must match.",
+    valid: !passwordField || !confirmField || passwordField.value === confirmField.value,
+  };
+}
+
+function profileRecordForUser(user) {
+  const existing = savedUserFor(user) || {};
+  return {
+    ...existing,
+    type: "settingsUser",
+    id: existing.id || uid("settingsUser"),
+    submittedAt: existing.submittedAt || new Date().toISOString(),
+    name: user.name || user.email,
+    email: user.email,
+    authId: user.key || "",
+    role: user.role || "customer",
+    authProvider: user.authProvider || "supabase",
+    removed: false,
+  };
+}
+
+async function ensureAppUserProfile(user) {
+  if (!user?.email) return null;
+  const record = upsertRecord("settingsUser", profileRecordForUser(user));
+  await sendPayload(record);
+  return record;
+}
+
+async function loginWithPassword(event) {
   event.preventDefault();
   const formEl = event.currentTarget;
-  if (!validateForm(formEl)) return;
   if (!supabaseClient) {
-    showDetailDialog("Login Setup Needed", "<p>Customer login creation needs the database login connection first.</p>");
+    showDetailDialog("Login Setup Needed", "<p>Email and password login needs the Supabase connection first.</p>");
     return;
   }
-  if (window.location.protocol === "file:") {
-    showDetailDialog(
-      "Hosted Website Required",
-      "<p>Email verification links cannot finish from this file preview. Open the hosted website or a local test server URL that is allowed in Supabase Auth before creating a customer login.</p>",
-    );
+  if (!validateForm(formEl)) return;
+  const data = formPayload(formEl);
+  const email = data.email.trim().toLowerCase();
+  const button = formEl.querySelector('button[type="submit"]');
+  setSubmitState(button, true, "Signing in...");
+  const { data: authData, error } = await supabaseClient.auth.signInWithPassword({ email, password: data.password });
+  setSubmitState(button, false);
+  if (error) {
+    showDetailDialog("Login Failed", `<p>${escapeHtml(error.message)}</p>`);
     return;
   }
+  const user = userFromSupabase(authData.user);
+  if (!user) return;
+  await loadRemoteRecords();
+  await ensureAppUserProfile(user);
+  setHelper(user);
+  await loadRemoteRecords();
+  requirePasswordChangeIfNeeded();
+  formEl.reset();
+  showToast(`${user.name} is logged in.`);
+}
+
+async function sendSignupCode() {
+  const formEl = $("#customerSignupForm");
+  if (!supabaseClient) {
+    showDetailDialog("Login Setup Needed", "<p>Customer login creation needs the Supabase connection first.</p>");
+    return;
+  }
+  if (!validateForm(formEl, [passwordMatchCheck(formEl, "password", "confirmPassword")])) return;
   const data = formPayload(formEl);
   const firstName = data.firstName.trim();
   const lastName = data.lastName.trim();
   const email = data.email.trim().toLowerCase();
-  const { error } = await supabaseClient.auth.signInWithOtp({
+  const wait = authThrottleWait("signup", email);
+  if (wait) {
+    showDetailDialog("Please Wait", `<p>Try again in ${Math.ceil(wait / 1000)} seconds.</p>`);
+    return;
+  }
+  const button = $("#sendSignupCodeButton");
+  setSubmitState(button, true, "Sending...");
+  markAuthAttempt("signup", email);
+  const { error } = await supabaseClient.auth.signUp({
     email,
+    password: data.password,
     options: {
       emailRedirectTo: authRedirectUrl(),
       data: {
@@ -428,13 +579,184 @@ async function createCustomerLogin(event) {
       },
     },
   });
+  setSubmitState(button, false);
   if (error) {
-    showDetailDialog("Verification Not Sent", `<p>The verification email could not be sent: ${escapeHtml(error.message)}</p>`);
+    showDetailDialog("Confirmation Email Not Sent", `<p>The confirmation email could not be sent: ${escapeHtml(error.message)}</p>`);
     return;
+  }
+  showDetailDialog(
+    "Confirmation Email Sent",
+    `<p>Supabase sent a confirmation email to ${escapeHtml(email)}. Open that email, click <strong>Confirm your mail</strong>, then return here and choose <strong>Create / Sign In</strong>.</p>`,
+  );
+}
+
+async function createCustomerLogin(event) {
+  event.preventDefault();
+  const formEl = event.currentTarget;
+  if (!validateForm(formEl, [passwordMatchCheck(formEl, "password", "confirmPassword")])) return;
+  if (!supabaseClient) {
+    showDetailDialog("Login Setup Needed", "<p>Customer login creation needs the Supabase connection first.</p>");
+    return;
+  }
+  const data = formPayload(formEl);
+  const email = data.email.trim().toLowerCase();
+  const button = formEl.querySelector('button[type="submit"]');
+  setSubmitState(button, true, "Signing in...");
+  const { data: authData, error } = await supabaseClient.auth.signInWithPassword({ email, password: data.password });
+  if (error) {
+    setSubmitState(button, false);
+    const needsConfirm = /confirm/i.test(error.message || "");
+    showDetailDialog(
+      needsConfirm ? "Email Confirmation Needed" : "Account Not Ready",
+      needsConfirm
+        ? `<p>Open the Supabase email sent to ${escapeHtml(email)} and click <strong>Confirm your mail</strong>. After the confirmation page opens, return here and choose <strong>Create / Sign In</strong>.</p>`
+        : `<p>${escapeHtml(error.message)}</p><p>If you have not sent the confirmation email yet, choose <strong>Send Confirmation Email</strong> first.</p>`,
+    );
+    return;
+  }
+  const user = userFromSupabase(authData.user);
+  if (user) {
+    await loadRemoteRecords();
+    await ensureAppUserProfile({ ...user, role: "customer" });
+    setHelper({ ...user, role: "customer" });
+    await loadRemoteRecords();
+    requirePasswordChangeIfNeeded();
+  }
+  setSubmitState(button, false);
+  formEl.reset();
+  formEl.hidden = true;
+  showDetailDialog("Customer Login Active", `<p>The customer account for ${escapeHtml(email)} is active and signed in.</p>`);
+}
+
+async function sendRecoveryCode() {
+  const formEl = $("#passwordRecoveryForm");
+  if (!supabaseClient) {
+    showDetailDialog("Login Setup Needed", "<p>Password recovery needs the Supabase connection first.</p>");
+    return;
+  }
+  const emailField = formEl.elements.email;
+  if (!emailField.checkValidity()) {
+    formEl.reportValidity();
+    return;
+  }
+  const email = emailField.value.trim().toLowerCase();
+  const wait = authThrottleWait("recovery", email);
+  if (wait) {
+    showDetailDialog("Please Wait", `<p>Try again in ${Math.ceil(wait / 1000)} seconds.</p>`);
+    return;
+  }
+  const button = $("#sendRecoveryCodeButton");
+  setSubmitState(button, true, "Sending...");
+  markAuthAttempt("recovery", email);
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
+  setSubmitState(button, false);
+  if (error) {
+    showDetailDialog("Recovery Code Not Sent", `<p>The recovery code could not be sent: ${escapeHtml(error.message)}</p>`);
+    return;
+  }
+  showDetailDialog("Recovery Code Sent", `<p>A numeric password recovery code was sent to ${escapeHtml(email)}.</p>`);
+}
+
+async function completePasswordRecovery(event) {
+  event.preventDefault();
+  const formEl = event.currentTarget;
+  if (!validateForm(formEl)) return;
+  if (!supabaseClient) {
+    showDetailDialog("Login Setup Needed", "<p>Password recovery needs the Supabase connection first.</p>");
+    return;
+  }
+  const data = formPayload(formEl);
+  const email = data.email.trim().toLowerCase();
+  const token = data.recoveryCode.trim();
+  const password = data.newPassword;
+  if (!token || !password) {
+    showDetailDialog("Recovery Details Required", "<p>Enter the recovery code and a new password.</p>");
+    return;
+  }
+  const button = formEl.querySelector('button[type="submit"]');
+  setSubmitState(button, true, "Changing...");
+  const { data: verifyData, error } = await supabaseClient.auth.verifyOtp({ email, token, type: "recovery" });
+  if (error) {
+    setSubmitState(button, false);
+    showDetailDialog("Recovery Failed", `<p>The recovery code could not be verified: ${escapeHtml(error.message)}</p>`);
+    return;
+  }
+  const { data: updateData, error: updateError } = await supabaseClient.auth.updateUser({ password });
+  setSubmitState(button, false);
+  if (updateError) {
+    showDetailDialog("Password Not Changed", `<p>${escapeHtml(updateError.message)}</p>`);
+    return;
+  }
+  const user = userFromSupabase(updateData.user || verifyData.user);
+  if (user) {
+    await ensureAppUserProfile(user);
+    setHelper(user);
   }
   formEl.reset();
   formEl.hidden = true;
-  showDetailDialog("Verification Email Sent", `<p>A customer login link was sent to ${escapeHtml(email)}. The customer can open that email to verify the address and sign in.</p>`);
+  showDetailDialog("Password Changed", "<p>Your password was updated. Use the new password for future sign-ins.</p>");
+}
+
+function passwordProfileForUser(user = currentUser) {
+  if (!user?.email && !user?.key) return null;
+  return savedUserFor(user);
+}
+
+function passwordChangeRequiredForUser(user = currentUser) {
+  const profile = passwordProfileForUser(user);
+  return profile?.passwordChangeRequired === true || profile?.passwordChangeRequired === "true";
+}
+
+function requirePasswordChangeIfNeeded() {
+  if (!supabaseClient || !currentUser?.email || !passwordChangeRequiredForUser(currentUser)) return;
+  const dialog = $("#passwordChangeDialog");
+  $("#forcePasswordChangeForm").reset();
+  if (!dialog.open) dialog.showModal();
+}
+
+async function clearPasswordChangeRequirement() {
+  const existing = passwordProfileForUser(currentUser);
+  if (!existing) return;
+  const updated = upsertRecord("settingsUser", {
+    ...existing,
+    passwordChangeRequired: false,
+    passwordChangedAt: new Date().toISOString(),
+    passwordChangedBy: currentUser.email,
+  });
+  await sendPayload(updated);
+  renderSettingsUsers();
+}
+
+async function completeForcedPasswordChange(event) {
+  event.preventDefault();
+  const formEl = event.currentTarget;
+  if (!validateForm(formEl, [passwordMatchCheck(formEl, "newPassword", "confirmNewPassword")])) return;
+  if (!currentUser?.email || !supabaseClient) return;
+  const data = formPayload(formEl);
+  const button = formEl.querySelector('button[type="submit"]');
+  setSubmitState(button, true, "Changing...");
+  const { error: signInError } = await supabaseClient.auth.signInWithPassword({
+    email: currentUser.email,
+    password: data.currentPassword,
+  });
+  if (signInError) {
+    setSubmitState(button, false);
+    setFieldError(formEl.elements.currentPassword, signInError.message || "Current password is incorrect.");
+    showToast("Current password is incorrect.");
+    return;
+  }
+  const { error: updateError } = await supabaseClient.auth.updateUser({ password: data.newPassword });
+  if (updateError) {
+    setSubmitState(button, false);
+    setFieldError(formEl.elements.newPassword, updateError.message || "Password could not be changed.");
+    showToast("Password could not be changed.");
+    return;
+  }
+  await clearPasswordChangeRequirement();
+  setSubmitState(button, false);
+  formEl.reset();
+  $("#passwordChangeDialog").close();
+  showToast("Password changed.");
 }
 
 async function restoreSupabaseSession() {
@@ -502,9 +824,53 @@ function isSupportedDogPhoto(file) {
   return ["image/jpeg", "image/png"].includes(type) || /\.(jpe?g|png)$/.test(name);
 }
 
+function fileMatchesTypes(file, allowedTypes = [], allowedExtensions = []) {
+  if (!file || (!allowedTypes.length && !allowedExtensions.length)) return true;
+  const type = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
+  return allowedTypes.some((allowed) => {
+    const clean = allowed.toLowerCase();
+    return clean.endsWith("/*") ? type.startsWith(clean.slice(0, -1)) : type === clean;
+  }) || allowedExtensions.some((extension) => name.endsWith(extension.toLowerCase()));
+}
+
+function dogPhotoElements(kind) {
+  const map = {
+    owned: {
+      input: "#ownedDogPhotoInput",
+      img: "#ownedDogPhotoPreview",
+      caption: "#ownedDogPhotoName",
+      initials: "#ownedDogPhotoInitials",
+      form: "#ourDogForm",
+      nameKey: "callName",
+      fallback: "New dog",
+    },
+    boarding: {
+      input: "#boardingDogPhotoInput",
+      img: "#boardingDogPhotoPreview",
+      caption: "#boardingDogPhotoName",
+      initials: "#boardingDogPhotoInitials",
+      form: "#boardingDogForm",
+      nameKey: "dogName",
+      fallback: "New boarding dog",
+    },
+    customer: {
+      input: "#customerDogPhotoInput",
+      img: "#customerDogPhotoPreview",
+      caption: "#customerDogPhotoName",
+      initials: "#customerDogPhotoInitials",
+      form: "#customerDogForm",
+      nameKey: "dogName",
+      fallback: "New dog",
+    },
+  };
+  return map[kind];
+}
+
 function resetSelectedDogPhoto(kind, record = {}) {
-  const isOwned = kind === "owned";
-  const input = isOwned ? $("#ownedDogPhotoInput") : $("#boardingDogPhotoInput");
+  const elements = dogPhotoElements(kind);
+  if (!elements) return;
+  const input = $(elements.input);
   if (input) input.value = "";
   selectedDogPhotos[kind] = null;
   setDogPhoto(kind, record);
@@ -550,17 +916,26 @@ async function durableDogPhoto(kind, existing, formData, photoInput, dogId) {
   return { profilePhotoUrl: "", profilePhotoData: "", photoError: "" };
 }
 
-async function uploadMediaFiles(input, folder) {
+async function uploadMediaFiles(input, folder, options = {}) {
+  const allowedTypes = options.allowedTypes || [];
+  const allowedExtensions = options.allowedExtensions || [];
+  const label = options.label || "file";
   const files = [...(input?.files || [])];
   if (!files.length) return [];
+  const acceptedFiles = files.filter((file) => fileMatchesTypes(file, allowedTypes, allowedExtensions));
+  const rejectedCount = files.length - acceptedFiles.length;
+  if (rejectedCount) {
+    showToast(`${rejectedCount} ${label}${rejectedCount > 1 ? "s were" : " was"} skipped because the file type is not supported.`);
+  }
+  if (!acceptedFiles.length) return [];
   const now = new Date().toISOString();
-  const oversized = files.filter((file) => (file.size || 0) > MAX_MEDIA_UPLOAD_BYTES);
+  const oversized = acceptedFiles.filter((file) => (file.size || 0) > MAX_MEDIA_UPLOAD_BYTES);
   if (oversized.length) {
     showToast(`Files over ${MAX_MEDIA_UPLOAD_MB} MB cannot be uploaded.`);
   }
   if (!supabaseClient) {
     showToast("Sign in to upload files to the database.");
-    return files.map((file) => ({
+    return acceptedFiles.map((file) => ({
       id: uid("media"),
       name: file.name,
       type: file.type || "application/octet-stream",
@@ -571,9 +946,9 @@ async function uploadMediaFiles(input, folder) {
       note: "Not uploaded. Supabase is not connected.",
     }));
   }
-  showToast(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}...`);
+  showToast(`Uploading ${acceptedFiles.length} file${acceptedFiles.length > 1 ? "s" : ""}...`);
   const results = await Promise.all(
-    files.map(async (file) => {
+    acceptedFiles.map(async (file) => {
       if ((file.size || 0) > MAX_MEDIA_UPLOAD_BYTES) {
         return {
           id: uid("media"),
@@ -603,12 +978,22 @@ async function uploadMediaFiles(input, folder) {
   return results;
 }
 
+async function uploadVaccinationFiles(input, dogId) {
+  const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
+  return uploadMediaFiles(input, `vaccination-records/${safeDogId}`, {
+    allowedTypes: VACCINATION_UPLOAD_TYPES,
+    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg"],
+    label: "vaccination record",
+  });
+}
+
 function setDogPhoto(kind, record) {
-  const isOwned = kind === "owned";
-  const img = isOwned ? $("#ownedDogPhotoPreview") : $("#boardingDogPhotoPreview");
-  const caption = isOwned ? $("#ownedDogPhotoName") : $("#boardingDogPhotoName");
-  const initials = isOwned ? $("#ownedDogPhotoInitials") : $("#boardingDogPhotoInitials");
-  const name = isOwned ? record.callName : record.dogName;
+  const elements = dogPhotoElements(kind);
+  if (!elements) return;
+  const img = $(elements.img);
+  const caption = $(elements.caption);
+  const initials = $(elements.initials);
+  const name = record[elements.nameKey] || record.showName || "";
   const photo = record.profilePhotoUrl || record.profilePhotoData;
   if (photo) {
     img.src = photo;
@@ -620,14 +1005,15 @@ function setDogPhoto(kind, record) {
     initials.hidden = false;
   }
   initials.textContent = avatarText(name);
-  caption.textContent = name || (isOwned ? "New dog" : "New boarding dog");
+  caption.textContent = name || elements.fallback;
 }
 
 async function previewSelectedDogPhoto(kind) {
-  const isOwned = kind === "owned";
-  const input = isOwned ? $("#ownedDogPhotoInput") : $("#boardingDogPhotoInput");
-  const img = isOwned ? $("#ownedDogPhotoPreview") : $("#boardingDogPhotoPreview");
-  const initials = isOwned ? $("#ownedDogPhotoInitials") : $("#boardingDogPhotoInitials");
+  const elements = dogPhotoElements(kind);
+  if (!elements) return;
+  const input = $(elements.input);
+  const img = $(elements.img);
+  const initials = $(elements.initials);
   const file = input.files?.[0];
   if (!file) return;
   if (!isSupportedDogPhoto(file)) {
@@ -641,7 +1027,7 @@ async function previewSelectedDogPhoto(kind) {
   img.src = objectUrl;
   img.hidden = false;
   initials.hidden = true;
-  const formEl = isOwned ? $("#ourDogForm") : $("#boardingDogForm");
+  const formEl = $(elements.form);
   if (formEl?.elements?.profilePhotoUrl) clearFieldError(formEl.elements.profilePhotoUrl);
 }
 
@@ -677,8 +1063,7 @@ function setHelper(user, options = {}) {
   $("#timesheetHelperDisplay").textContent = currentUser.name || "No user loaded";
   updateHeaderUser();
   loginStatus.textContent = currentUser.name ? `${roleLabel(currentUser.role)} logged in: ${currentUser.name}` : "Logged in";
-  loginHelp.textContent = `${currentUser.email || "PIN account"} | Access: ${currentUser.role}`;
-  $("#helperPinInput").value = "";
+  loginHelp.textContent = `${currentUser.email || "Account"} | Access: ${currentUser.role}`;
   $("#clearHelperButton").hidden = false;
   updateNavigationAccess();
   renderDailyTaskLists();
@@ -702,8 +1087,7 @@ async function clearHelper() {
   $("#timesheetHelperDisplay").textContent = "No user loaded";
   updateHeaderUser();
   loginStatus.textContent = "Not logged in";
-  loginHelp.textContent = "Sign in with Google or another enabled account provider.";
-  $("#helperPinInput").value = "";
+  loginHelp.textContent = "Sign in with email and password, Google, or another enabled account provider.";
   $("#clearHelperButton").hidden = true;
   updateNavigationAccess();
   renderDailyTaskLists();
@@ -715,20 +1099,6 @@ function updateHeaderUser() {
   headerUserName.textContent = currentUser?.name || "Not signed in";
   modeLabel.textContent = currentUser ? `${roleLabel(currentUser.role)} account` : "Sign in to continue";
   headerLogoutButton.hidden = !currentUser;
-}
-
-function loginWithPin() {
-  const pin = $("#helperPinInput").value.trim();
-  const savedPinUser = settingsUsers().find((user) => user.pin && user.pin === pin);
-  const account = savedPinUser
-    ? { name: savedPinUser.name, email: savedPinUser.email, key: savedPinUser.authId || savedPinUser.id, role: savedPinUser.role, authProvider: "pin" }
-    : ADMIN_PINS[pin] || HELPER_PINS[pin];
-  if (!account) {
-    showToast("PIN not recognized.");
-    return;
-  }
-  setHelper({ ...account, authProvider: account.authProvider || "pin" });
-  showToast(`${account.name} is logged in.`);
 }
 
 function helperIsLoggedIn() {
@@ -775,7 +1145,7 @@ function restoreSession() {
   $("#timesheetHelperDisplay").textContent = saved.name || "No user loaded";
   updateHeaderUser();
   loginStatus.textContent = `${roleLabel(saved.role)} logged in: ${saved.name}`;
-  loginHelp.textContent = `${saved.email || "PIN account"} | Access: ${saved.role}`;
+  loginHelp.textContent = `${saved.email || "Account"} | Access: ${saved.role}`;
   $("#clearHelperButton").hidden = false;
 }
 
@@ -819,11 +1189,32 @@ function taskInputName(shift) {
 
 function taskLabel(task, shift) {
   const canManageTasks = ["helper", "admin"].includes(currentRole());
+  const taskText = escapeHtml(task.text);
   const adminTools =
     canManageTasks
       ? `<span class="task-admin-tools"><button type="button" class="icon-button" data-action="move-task-up" data-shift="${shift}" data-id="${task.id}" title="Move up">↑</button><button type="button" class="icon-button" data-action="move-task-down" data-shift="${shift}" data-id="${task.id}" title="Move down">↓</button><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">×</button></span>`
       : "";
-  return `<label class="task-item" draggable="${canManageTasks}" data-shift="${shift}" data-id="${task.id}"><input type="checkbox" name="${taskInputName(shift)}" value="${escapeHtml(task.text)}" /> <span class="task-text">${escapeHtml(task.text)}</span>${adminTools}</label>`;
+  const taskTextControl = canManageTasks
+    ? `<input class="task-edit-input" type="text" value="${taskText}" data-action="edit-task" data-shift="${shift}" data-id="${task.id}" aria-label="Task text" />`
+    : `<span class="task-text">${taskText}</span>`;
+  return `<label class="task-item" draggable="${canManageTasks}" data-shift="${shift}" data-id="${task.id}"><input type="checkbox" name="${taskInputName(shift)}" value="${taskText}" /> ${taskTextControl}${adminTools}</label>`;
+}
+
+function renderBathDogOptions(selectedIds = []) {
+  const select = $("#dogsBathedSelect");
+  if (!select) return;
+  const selected = new Set((selectedIds || []).map(String));
+  const dogs = readRecords("ownedDog")
+    .filter((dog) => !dog.removed && (dog.callName || dog.showName))
+    .sort((a, b) => String(a.callName || a.showName || "").localeCompare(String(b.callName || b.showName || "")));
+  select.innerHTML = dogs.length
+    ? dogs
+        .map((dog) => {
+          const label = dog.callName || dog.showName || "Dog";
+          return `<option value="${escapeHtml(dog.id)}" ${selected.has(String(dog.id)) ? "selected" : ""}>${escapeHtml(label)}</option>`;
+        })
+        .join("")
+    : `<option disabled>No Our Dogs saved yet</option>`;
 }
 
 function renderDailyTaskLists(selected = {}) {
@@ -844,6 +1235,7 @@ function renderDailyTaskLists(selected = {}) {
       input.checked = (selected[name] || []).includes(input.value);
     });
   });
+  renderBathDogOptions(selected.dogsBathedIds || []);
 }
 
 function updateTaskOrder(shift, id, direction) {
@@ -855,6 +1247,23 @@ function updateTaskOrder(shift, id, direction) {
   [list[index], list[nextIndex]] = [list[nextIndex], list[index]];
   writeTaskConfig(config);
   renderDailyTaskLists();
+}
+
+function editTask(shift, id, text, sourceInput) {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    showToast("Task text cannot be blank.");
+    sourceInput.value = readTaskConfig()[shift]?.find((task) => task.id === id)?.text || "";
+    return;
+  }
+  const config = readTaskConfig();
+  const task = config[shift]?.find((item) => item.id === id);
+  if (!task || task.text === trimmed) return;
+  task.text = trimmed;
+  writeTaskConfig(config);
+  const checkbox = sourceInput.closest(".task-item")?.querySelector('input[type="checkbox"]');
+  if (checkbox) checkbox.value = trimmed;
+  showToast("Task text updated.");
 }
 
 function removeTask(shift, id) {
@@ -1120,6 +1529,14 @@ function mediaLinkHtml(record) {
           `<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type)}" data-media-name="${escapeHtml(item.name)}">Open ${escapeHtml(item.name)}</button>`,
       ),
     );
+  }
+  if (record.vaccinationRecords?.length) {
+    links.push(
+      ...record.vaccinationRecords.map(
+        (item) =>
+          `<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(item.url || "")}" data-media-type="${escapeHtml(item.type)}" data-media-name="${escapeHtml(item.name)}">Open vaccine record: ${escapeHtml(item.name)}</button>`,
+      ),
+    );
   } else if (record.mediaFiles) {
     links.push(`<button type="button" class="media-preview-button" data-action="view-media" data-src="" data-media-type="" data-media-name="${escapeHtml(record.mediaFiles)}">Open uploaded file</button>`);
   }
@@ -1177,7 +1594,6 @@ function dailyDetailHtml(record) {
     ${detailRows(record, [
       ["Date", "date"],
       ["Helper", "helperName"],
-      ["Helper email", "helperEmail"],
       ["Day", "dayOfWeek"],
       ["Morning tasks", "dailyTasks"],
       ["PM tasks", "pmTasks"],
@@ -1188,8 +1604,6 @@ function dailyDetailHtml(record) {
       ["Weekly tasks", "weeklyTasks"],
       ["Tuesday tasks", "tuesdayTasks"],
       ["Monthly tasks", "monthlyTasks"],
-      ["Supplies low", "suppliesLow"],
-      ["Owner notes", "ownerNotes"],
       ["Boarding tasks", "boardingTasks"],
     ])}
   `;
@@ -1205,7 +1619,7 @@ function maintenanceDetailHtml(record) {
 
 function genericDetailHtml(record) {
   const rows = Object.entries(record)
-    .filter(([key, value]) => !["profilePhotoData"].includes(key) && value !== "" && value !== null && value !== undefined)
+    .filter(([key, value]) => !["profilePhotoData", "type", "removed", "completed", "mediaItems", "vaccinationRecords"].includes(key) && value !== "" && value !== null && value !== undefined)
     .map(([key, value]) => `<div class="detail-row"><strong>${escapeHtml(key)}</strong><span>${Array.isArray(value) ? escapeHtml(value.join(", ")) : escapeHtml(typeof value === "object" ? JSON.stringify(value, null, 2) : value)}</span></div>`)
     .join("");
   return `${rows}${mediaLinkHtml(record)}`;
@@ -1231,6 +1645,7 @@ function titleForRecord(type, record = {}) {
     customerDog: `Customer Dog: ${record.dogName || "Record"}`,
     settingsUser: `User: ${record.name || record.email || "Record"}`,
     cfoNote: `CFO Note: ${record.title || "Record"}`,
+    calendarNote: `Calendar Note: ${record.noteDate || "Record"}`,
   };
   return labels[type] || "Record Details";
 }
@@ -1264,6 +1679,13 @@ function validateForm(targetForm, extraChecks = []) {
 
 function buildDailyPayload() {
   const data = new FormData(form);
+  const dogsBathedIds = [...($("#dogsBathedSelect")?.selectedOptions || [])].map((option) => option.value);
+  const dogsById = new Map(readRecords("ownedDog").map((dog) => [dog.id, dog]));
+  const selectedDogNames = dogsBathedIds
+    .map((id) => dogsById.get(id))
+    .filter(Boolean)
+    .map((dog) => dog.callName || dog.showName || "Dog");
+  const dogsBathedOther = String(data.get("dogsBathedOther") || "").trim();
   return {
     type: "dailyTask",
     id: data.get("id") || uid("dailyTask"),
@@ -1276,7 +1698,9 @@ function buildDailyPayload() {
     dailyTasks: checkedFrom(form, "dailyTasks"),
     pmTasks: checkedFrom(form, "pmTasks"),
     dogsExercised: data.get("dogsExercised"),
-    dogsBathed: data.get("dogsBathed"),
+    dogsBathed: [...selectedDogNames, dogsBathedOther].filter(Boolean).join(", "),
+    dogsBathedIds,
+    dogsBathedOther,
     healthNotes: data.get("healthNotes"),
     socialContent: data.get("socialContent"),
     weeklyTasks: checkedFrom(form, "weeklyTasks"),
@@ -1284,10 +1708,34 @@ function buildDailyPayload() {
     monthlyWeek: data.get("monthlyWeek"),
     deepCleanBuilding: data.get("deepCleanBuilding"),
     monthlyTasks: checkedFrom(form, "monthlyTasks"),
-    suppliesLow: checkedFrom(form, "suppliesLow"),
-    ownerNotes: data.get("ownerNotes"),
     boardingTasks: upcomingBoardingTaskText(),
   };
+}
+
+async function syncBathDatesFromDailyReport(record) {
+  const reportDate = record?.date;
+  const dogIds = new Set((record?.dogsBathedIds || []).map(String));
+  if (!reportDate || !dogIds.size) return;
+  const reportTime = new Date(`${reportDate}T12:00:00`).getTime();
+  const updates = readRecords("ownedDog")
+    .filter((dog) => dogIds.has(String(dog.id)) && !dog.removed)
+    .filter((dog) => !dog.lastBath || new Date(`${dog.lastBath}T12:00:00`).getTime() <= reportTime)
+    .map((dog) => ({
+      ...dog,
+      lastBath: reportDate,
+      nextBath: addMonths(reportDate, 1),
+      bathUpdatedFromDailyTaskId: record.id,
+      bathUpdatedFromDailyTaskDate: reportDate,
+    }));
+  for (const dog of updates) {
+    const saved = upsertRecord("ownedDog", dog);
+    await sendPayload(saved);
+  }
+  if (updates.length) {
+    renderOwnedDogs();
+    renderBathDogOptions([...dogIds]);
+    showToast(`${updates.length} dog bath date${updates.length === 1 ? "" : "s"} updated.`);
+  }
 }
 
 function upcomingBoardingTaskText() {
@@ -1309,10 +1757,10 @@ function upcomingBoardingTaskText() {
 }
 
 function renderDemoSubmissions() {
-  const saved = readRecords("dailyTask");
+  const saved = readRecords("dailyTask").filter((submission) => !submission.removed);
   $("#recentSubmissions").innerHTML = saved.length
     ? saved
-        .map((submission) => `<article class="submission-item clickable-card" data-action="view-daily" data-id="${submission.id}"><strong>${submission.date} - ${submission.helperName}</strong><p>${submission.dayOfWeek} | ${(submission.dailyTasks || []).length} AM tasks | ${(submission.pmTasks || []).length} PM tasks</p><p>Notes: ${submission.ownerNotes || submission.healthNotes || "No notes"}</p>${canEditOwnToday(submission) ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-daily" data-id="${submission.id}">Edit Today's Report</button></div>` : ""}</article>`)
+        .map((submission) => `<article class="submission-item clickable-card" data-action="view-daily" data-id="${submission.id}"><strong>${submission.date} - ${submission.helperName}</strong><p>${submission.dayOfWeek} | ${(submission.dailyTasks || []).length} AM tasks | ${(submission.pmTasks || []).length} PM tasks</p><p>Notes: ${submission.healthNotes || submission.ownerNotes || "No notes"}</p>${canEditOwnToday(submission) ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-daily" data-id="${submission.id}">Edit Today's Report</button></div>` : ""}</article>`)
         .join("")
     : "<p>No recent submissions yet.</p>";
 }
@@ -1328,24 +1776,28 @@ function matches(record, query) {
 
 function renderOwnedDogs() {
   const query = $("#ownedDogSearch").value || "";
-  const records = readRecords("ownedDog").filter((record) => !record.removed && matches(record, query));
+  const records = sortRecordsForTable("ownedDog", readRecords("ownedDog").filter((record) => !record.removed && matches(record, query)));
   const columns = activeColumns("ownedDog");
-  $("#ownedDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>`;
+  $("#ownedDogTableHead").innerHTML = tableHeaderHtml("ownedDog", columns);
   $("#ownedDogTableBody").innerHTML = records.length
     ? records
         .map((record) => `<tr data-id="${record.id}">${columns.map((column) => `<td>${escapeHtml(column.value(record))}</td>`).join("")}</tr>`)
         .join("")
     : `<tr><td colspan="${columns.length || 1}">No matching dogs. Use Add New Dog.</td></tr>`;
   renderColumnManager("ownedDog", "#ownedDogColumnManager");
+  renderBathDogOptions([...($("#dogsBathedSelect")?.selectedOptions || [])].map((option) => option.value));
 }
 
 function renderBoardingDogs() {
   const query = $("#boardingDogSearch").value || "";
-  const records = combinedBoardingDogRecords()
-    .filter((record) => !record.removed && record.boardingStatus !== "Cancelled" && matches(record, query))
-    .sort((a, b) => Number(isCurrentlyBoarding(b)) - Number(isCurrentlyBoarding(a)));
+  const records = sortRecordsForTable(
+    "boardingDog",
+    readRecords("boardingDog")
+      .filter((record) => !record.removed && record.boardingStatus !== "Cancelled" && isCurrentlyBoarding(record) && matches(record, query))
+      .map((record) => ({ ...record, sourceType: "boardingDog" })),
+  );
   const columns = activeColumns("boardingDog");
-  $("#boardingDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>`;
+  $("#boardingDogTableHead").innerHTML = tableHeaderHtml("boardingDog", columns);
   $("#boardingDogTableBody").innerHTML = records.length
     ? records
         .map((record) => {
@@ -1353,7 +1805,7 @@ function renderBoardingDogs() {
           return `<tr data-id="${record.id}" data-source="${escapeHtml(record.sourceType || record.type || "boardingDog")}"${rowClass}>${columns.map((column) => `<td>${escapeHtml(column.value(record))}</td>`).join("")}</tr>`;
         })
         .join("")
-    : `<tr><td colspan="${columns.length || 1}">No matching boarding dogs. Use Add New Dog.</td></tr>`;
+    : `<tr><td colspan="${columns.length || 1}">No current boarding dogs match this search.</td></tr>`;
   renderColumnManager("boardingDog", "#boardingDogColumnManager");
 }
 
@@ -1656,11 +2108,11 @@ function money(value) {
 }
 
 function dashboardMetrics() {
-  const ownedDogs = readRecords("ownedDog");
-  const boardingDogs = readRecords("boardingDog");
-  const requests = readRecords("request");
-  const maintenance = readRecords("maintenance");
-  const services = readRecords("service");
+  const ownedDogs = readRecords("ownedDog").filter((record) => !record.removed);
+  const boardingDogs = readRecords("boardingDog").filter((record) => !record.removed && record.boardingStatus !== "Cancelled");
+  const requests = readRecords("request").filter((record) => !record.removed);
+  const maintenance = readRecords("maintenance").filter((record) => !record.removed);
+  const services = readRecords("service").filter((record) => !record.removed);
   const today = todayDate();
   const currentBoarding = boardingDogs.filter(isCurrentlyBoarding);
   const arrivals = [];
@@ -1745,7 +2197,7 @@ function renderDashboardTaskCalendar() {
   const year = selected.getFullYear();
   const month = selected.getMonth();
   const monthName = selected.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const reportCounts = readRecords("dailyTask").reduce((counts, record) => {
+  const reportCounts = readRecords("dailyTask").filter((record) => !record.removed).reduce((counts, record) => {
     const date = record.date || record.submittedAt?.slice(0, 10);
     if (date) counts[date] = (counts[date] || 0) + 1;
     return counts;
@@ -1760,6 +2212,29 @@ function renderDashboardTaskCalendar() {
     return `<button type="button" class="calendar-day ${date === selectedDate ? "is-selected" : ""} ${count ? "has-records" : ""}" data-date="${date}"><span>${day}</span>${count ? `<small>${count}</small>` : ""}</button>`;
   });
   calendar.innerHTML = `<div class="calendar-title"><strong>Task Calendar</strong><span>${monthName}</span></div><div class="calendar-weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-grid">${blanks.join("")}${days.join("")}</div>`;
+  renderCalendarNotes();
+}
+
+function renderCalendarNotes() {
+  const list = $("#calendarNotesList");
+  const formEl = $("#calendarNoteForm");
+  if (!list || !formEl) return;
+  const selectedDate = $("#dashboardDate")?.value || todayDate();
+  formEl.hidden = currentRole() !== "admin";
+  if (!formEl.elements.noteDate.value) formEl.elements.noteDate.value = selectedDate;
+  const notes = readRecords("calendarNote")
+    .filter((note) => !note.removed)
+    .filter((note) => note.noteDate === selectedDate || note.noteDate >= todayDate())
+    .sort((a, b) => new Date(a.noteDate || 0) - new Date(b.noteDate || 0));
+  list.innerHTML = notes.length
+    ? notes
+        .map((note) => {
+          const isSelected = note.noteDate === selectedDate;
+          const actions = currentRole() === "admin" ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button></div>` : "";
+          return `<article class="record-card ${isSelected ? "is-approved" : ""}"><strong>${escapeHtml(note.noteDate || "")}${isSelected ? " - selected date" : ""}</strong><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
+        })
+        .join("")
+    : "<p>No calendar notes for the selected date or upcoming dates.</p>";
 }
 
 function renderDashboardTimeline() {
@@ -1767,6 +2242,7 @@ function renderDashboardTimeline() {
   const items = [];
   ["dailyTask"].forEach((type) => {
     readRecords(type).forEach((record) => {
+      if (record.removed) return;
       const timestamp = record.updatedAt || record.submittedAt || record.clockInTime;
       const date = record.date || timestamp?.slice(0, 10);
       if (date !== selectedDate) return;
@@ -1780,8 +2256,9 @@ function renderDashboardTimeline() {
           const helper = record.helperName || record.requestedBy || record.reportedBy || currentUser?.name || "Unknown";
           const title = type === "dailyTask" ? "Daily task report" : type === "timesheet" ? "Timesheet" : type === "request" ? "Request" : type === "maintenance" ? "Maintenance" : type === "boardingDog" ? "Boarding dog update" : type === "service" ? "Service/pricing update" : "Dog update";
           const summary = record.requestText || record.issue || record.dogName || record.callName || record.serviceName || `${record.dailyTasks?.length || 0} AM tasks, ${record.pmTasks?.length || 0} PM tasks checked`;
-          const notes = record.ownerNotes || record.healthNotes || record.reason || record.suggestedAction || record.pricingNotes || "";
-          return `<article class="record-card clickable-card" data-action="view-record" data-type="${type}" data-id="${record.id}"><strong>${formatDateTime(timestamp)} - ${title}</strong><span>${helper}</span><p>${summary || ""}</p>${notes ? `<p>${escapeHtml(notes)}</p>` : ""}${mediaLinkHtml(record)}</article>`;
+          const notes = record.healthNotes || record.ownerNotes || record.reason || record.suggestedAction || record.pricingNotes || "";
+          const removeAction = currentRole() === "admin" ? `<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-timeline-record" data-type="${type}" data-id="${record.id}">Remove</button></div>` : "";
+          return `<article class="record-card clickable-card" data-action="view-record" data-type="${type}" data-id="${record.id}"><strong>${formatDateTime(timestamp)} - ${title}</strong><span>${helper}</span><p>${summary || ""}</p>${notes ? `<p>${escapeHtml(notes)}</p>` : ""}${mediaLinkHtml(record)}${removeAction}</article>`;
         })
         .join("")
     : "<p>No activity recorded for this date yet.</p>";
@@ -1860,14 +2337,131 @@ function renderSettingsUsers() {
   const users = settingsUsers();
   $("#settingsUserTableBody").innerHTML = users.length
     ? users
-        .map((user) => `<tr data-id="${user.id}"><td>${escapeHtml(user.name || "")}</td><td>${escapeHtml(user.email || "")}</td><td>${roleLabel(user.role)}</td><td>${user.pin ? "Set" : ""}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="${user.id}">Remove</button></td></tr>`)
+        .map((user) => `<tr data-id="${user.id}"><td>${escapeHtml(user.name || "")}</td><td>${escapeHtml(user.email || "")}</td><td>${roleLabel(user.role)}</td><td>${escapeHtml(user.authId || "")}</td><td>${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="${user.id}">Remove</button></td></tr>`)
         .join("")
-    : `<tr><td colspan="5">No custom users saved yet.</td></tr>`;
+    : `<tr><td colspan="6">No custom users saved yet.</td></tr>`;
 }
 
 function openSettingsUser(record = {}) {
   $("#settingsUserForm").reset();
   setFormValues($("#settingsUserForm"), record);
+  $("#settingsUserForm").elements.requirePasswordChange.checked = true;
+}
+
+function settingsFormProfileData() {
+  const formEl = $("#settingsUserForm");
+  const data = formPayload(formEl);
+  delete data.temporaryPassword;
+  delete data.temporaryPasswordConfirm;
+  delete data.requirePasswordChange;
+  return data;
+}
+
+async function saveSettingsUserProfile(extra = {}) {
+  const formEl = $("#settingsUserForm");
+  if (!validateForm(formEl)) return null;
+  const data = settingsFormProfileData();
+  const existing = data.id ? readRecords("settingsUser").find((user) => user.id === data.id) : savedUserFor({ email: data.email, key: data.authId });
+  const payload = {
+    ...existing,
+    ...data,
+    ...extra,
+    type: "settingsUser",
+    id: data.id || existing?.id || uid("settingsUser"),
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
+    removed: false,
+  };
+  const record = upsertRecord("settingsUser", payload);
+  await sendPayload(record);
+  renderSettingsUsers();
+  return record;
+}
+
+async function adminSetTemporaryPassword() {
+  if (currentRole() !== "admin") {
+    showToast("Admin access required.");
+    return;
+  }
+  if (!supabaseClient) {
+    showDetailDialog("Supabase Required", "<p>Admin password changes require Supabase Auth.</p>");
+    return;
+  }
+  const formEl = $("#settingsUserForm");
+  const data = settingsFormProfileData();
+  const password = formEl.elements.temporaryPassword.value;
+  const confirmPassword = formEl.elements.temporaryPasswordConfirm.value;
+  const requirePasswordChange = formEl.elements.requirePasswordChange.checked;
+  const passwordRequiredCheck = { field: formEl.elements.temporaryPassword, message: "Enter a temporary password.", valid: Boolean(password) };
+  if (!validateForm(formEl, [passwordRequiredCheck, passwordMatchCheck(formEl, "temporaryPassword", "temporaryPasswordConfirm")])) return;
+  const button = $("#adminSetPasswordButton");
+  setSubmitState(button, true, "Setting...");
+  const { data: functionData, error } = await supabaseClient.functions.invoke("admin-set-password", {
+    body: {
+      email: data.email.trim().toLowerCase(),
+      authId: data.authId.trim(),
+      name: data.name.trim(),
+      role: data.role,
+      password,
+      requirePasswordChange,
+    },
+  });
+  setSubmitState(button, false);
+  if (error || functionData?.error) {
+    showDetailDialog("Password Not Changed", `<p>${escapeHtml(error?.message || functionData?.error || "The admin password function could not complete.")}</p>`);
+    return;
+  }
+  await loadRemoteRecords();
+  const existing = data.id ? readRecords("settingsUser").find((user) => user.id === data.id) : savedUserFor({ email: data.email, key: functionData.userId || data.authId });
+  const record = upsertRecord("settingsUser", {
+    ...existing,
+    ...data,
+    type: "settingsUser",
+    id: functionData.recordId || data.id || existing?.id || uid("settingsUser"),
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
+    authId: functionData.userId || data.authId,
+    authProvider: "supabase",
+    passwordChangeRequired: requirePasswordChange,
+    passwordChangeRequiredAt: requirePasswordChange ? new Date().toISOString() : "",
+    passwordChangeSetBy: currentUser.email,
+    removed: false,
+  });
+  await sendPayload(record);
+  renderSettingsUsers();
+  formEl.elements.temporaryPassword.value = "";
+  formEl.elements.temporaryPasswordConfirm.value = "";
+  openSettingsUser(record);
+  showDetailDialog(
+    "Temporary Password Set",
+    `<p>The temporary password was set for ${escapeHtml(record.email)}. The user will be asked to enter that password and choose a new one after their next password login.</p>`,
+  );
+}
+
+async function adminSendPasswordResetEmail() {
+  if (currentRole() !== "admin") {
+    showToast("Admin access required.");
+    return;
+  }
+  if (!supabaseClient) {
+    showDetailDialog("Supabase Required", "<p>Password reset emails require Supabase Auth.</p>");
+    return;
+  }
+  const data = settingsFormProfileData();
+  const email = data.email?.trim().toLowerCase();
+  if (!email) {
+    setFieldError($("#settingsUserForm").elements.email, "Enter the user's email first.");
+    showToast("Enter the user email first.");
+    return;
+  }
+  const button = $("#adminSendPasswordResetButton");
+  setSubmitState(button, true, "Sending...");
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
+  setSubmitState(button, false);
+  if (error) {
+    showDetailDialog("Reset Email Not Sent", `<p>${escapeHtml(error.message)}</p>`);
+    return;
+  }
+  await saveSettingsUserProfile({ passwordResetSentAt: new Date().toISOString(), passwordResetSentBy: currentUser.email });
+  showDetailDialog("Reset Email Sent", `<p>A Supabase password reset email was sent to ${escapeHtml(email)}.</p>`);
 }
 
 function fillCustomerDefaults() {
@@ -1895,8 +2489,11 @@ function renderCustomerDogs() {
 function renderCustomerRequests() {
   const list = $("#customerRequestList");
   if (!list) return;
+  const statusFilter = $("#customerRequestStatusFilter")?.value || "All";
   const records = readRecords("boardingDog")
     .filter((record) => record.customerRequest && (record.ownerEmail === currentUser?.email || currentRole() === "admin"))
+    .filter((record) => !record.removed)
+    .filter((record) => statusFilter === "All" || (record.boardingStatus || "Pending") === statusFilter)
     .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
   list.innerHTML = records.length
     ? records
@@ -1908,7 +2505,7 @@ function renderCustomerRequests() {
           return `<article class="record-card clickable-card ${statusClassForRequest(record.boardingStatus)}" data-action="view-customer-request" data-id="${record.id}"><strong>${escapeHtml(record.dogName || "Dog")} - ${escapeHtml(record.boardingStatus || "Pending")}</strong><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${estimate}${actions}</article>`;
         })
         .join("")
-    : "<p>No boarding requests submitted yet.</p>";
+    : `<p>No ${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>`;
 }
 
 function renderCustomerServiceOptions() {
@@ -1935,6 +2532,7 @@ function resetCustomerDogForm() {
   $("#customerDogId").value = "";
   $("#saveCustomerDogButton").textContent = "Save Dog";
   fillCustomerDefaults();
+  resetSelectedDogPhoto("customer", {});
 }
 
 function openCustomerDog(record = {}) {
@@ -1942,6 +2540,7 @@ function openCustomerDog(record = {}) {
   setFormValues($("#customerDogForm"), record);
   $("#customerDogId").value = record.id || "";
   $("#saveCustomerDogButton").textContent = record.id ? "Save Dog Changes" : "Save Dog";
+  setDogPhoto("customer", record);
   $("#customerDogForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -2083,6 +2682,9 @@ async function submitPendingCustomerBooking() {
       dhppDate: dog.dhppDate,
       rabiesDate: dog.rabiesDate,
       rabiesDuration: dog.rabiesDuration,
+      profilePhotoUrl: dog.profilePhotoUrl || "",
+      vaccinationRecords: dog.vaccinationRecords || [],
+      vaccinationFiles: dog.vaccinationFiles || "",
       estimatedTotal: estimate.total,
       requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
       flags: ["Required update from owner"],
@@ -2221,7 +2823,8 @@ function sumHours(records) {
 }
 
 function renderTimesheet() {
-  const records = readRecords("timesheet");
+  const isAdmin = currentRole() === "admin";
+  const records = readRecords("timesheet").filter((record) => isAdmin || timesheetBelongsToCurrentUser(record));
   const now = new Date();
   const thisWeekStart = weekStart(now);
   const nextWeekStart = new Date(thisWeekStart);
@@ -2251,7 +2854,7 @@ function renderTimesheet() {
     return totals;
   }, {});
   $("#weeklyHelperTotals").innerHTML = Object.keys(helperTotals).length
-    ? Object.entries(helperTotals).map(([helper, hours]) => `<div class="helper-total-item"><strong>${helper}</strong><span>${hours.toFixed(2)} hours this week</span></div>`).join("")
+    ? Object.entries(helperTotals).map(([helper, hours]) => `<div class="helper-total-item"><strong>${escapeHtml(isAdmin ? helper : "Your total")}</strong><span>${hours.toFixed(2)} hours this week</span></div>`).join("")
     : "";
 }
 
@@ -2284,6 +2887,7 @@ function initEvents() {
   syncNowButton.addEventListener("click", loadRemoteRecords);
   headerLogoutButton.addEventListener("click", clearHelper);
   $("#dashboardDate").addEventListener("change", () => {
+    $("#calendarNoteForm").elements.noteDate.value = $("#dashboardDate").value || todayDate();
     renderDashboardTaskCalendar();
     renderDashboardTimeline();
   });
@@ -2291,6 +2895,7 @@ function initEvents() {
     const button = event.target.closest("[data-date]");
     if (!button) return;
     $("#dashboardDate").value = button.dataset.date;
+    $("#calendarNoteForm").elements.noteDate.value = button.dataset.date;
     renderDashboardTaskCalendar();
     renderDashboardTimeline();
   });
@@ -2299,6 +2904,17 @@ function initEvents() {
     if (card) showDashboardDetail(card.dataset.key);
   });
   $("#dashboardTimeline").addEventListener("click", (event) => {
+    const removeButton = event.target.closest('[data-action="remove-timeline-record"]');
+    if (removeButton) {
+      event.stopPropagation();
+      if (currentRole() !== "admin") return;
+      markRecordRemoved(removeButton.dataset.type, removeButton.dataset.id).then(() => {
+        renderDashboard();
+        renderDemoSubmissions();
+        showToast("Timeline item removed.");
+      });
+      return;
+    }
     const card = event.target.closest('[data-action="view-record"]');
     if (!card) return;
     const record = readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
@@ -2312,9 +2928,58 @@ function initEvents() {
     const record = readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
     if (record) showDetailDialog(titleForRecord(card.dataset.type, record), detailForRecord(card.dataset.type, record), { type: card.dataset.type, id: record.id });
   });
+  $("#calendarNoteForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (currentRole() !== "admin") return;
+    if (!validateForm(event.currentTarget)) return;
+    const data = formPayload(event.currentTarget);
+    const existing = data.id ? readRecords("calendarNote").find((note) => note.id === data.id) : {};
+    const payload = {
+      ...existing,
+      type: "calendarNote",
+      id: data.id || uid("calendarNote"),
+      submittedAt: existing?.submittedAt || new Date().toISOString(),
+      ...data,
+      removed: false,
+    };
+    const record = upsertRecord("calendarNote", payload);
+    await sendPayload(record);
+    event.currentTarget.reset();
+    event.currentTarget.elements.noteDate.value = $("#dashboardDate").value || todayDate();
+    renderCalendarNotes();
+    showToast("Calendar note saved.");
+  });
+  $("#newCalendarNoteButton").addEventListener("click", () => {
+    $("#calendarNoteForm").reset();
+    $("#calendarNoteForm").elements.noteDate.value = $("#dashboardDate").value || todayDate();
+  });
+  $("#calendarNotesList").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button || currentRole() !== "admin") return;
+    const note = readRecords("calendarNote").find((item) => item.id === button.dataset.id);
+    if (!note) return;
+    if (button.dataset.action === "edit-calendar-note") {
+      setFormValues($("#calendarNoteForm"), note);
+      $("#calendarNoteForm").hidden = false;
+      $("#calendarNoteForm").scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (button.dataset.action === "remove-calendar-note") {
+      await markRecordRemoved("calendarNote", note.id);
+      renderCalendarNotes();
+      showToast("Calendar note removed.");
+    }
+  });
 
   $("#googleLoginButton").addEventListener("click", () => loginWithProvider("google"));
   $("#facebookLoginButton").addEventListener("click", () => loginWithProvider("facebook"));
+  $("#passwordLoginForm").addEventListener("submit", loginWithPassword);
+  $("#showPasswordRecoveryButton").addEventListener("click", () => {
+    const recoveryForm = $("#passwordRecoveryForm");
+    recoveryForm.hidden = false;
+    recoveryForm.elements.email.value = $("#passwordLoginForm").elements.email.value || "";
+    recoveryForm.elements.email.focus();
+  });
   $("#showCustomerSignupButton").addEventListener("click", () => {
     $("#customerSignupForm").hidden = false;
     $("#customerSignupForm").elements.firstName.focus();
@@ -2323,13 +2988,21 @@ function initEvents() {
     $("#customerSignupForm").reset();
     $("#customerSignupForm").hidden = true;
   });
+  $("#sendSignupCodeButton").addEventListener("click", sendSignupCode);
   $("#customerSignupForm").addEventListener("submit", createCustomerLogin);
-  $("#helperPinLoginButton").addEventListener("click", loginWithPin);
-  $("#helperPinInput").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      loginWithPin();
-    }
+  $("#sendRecoveryCodeButton").addEventListener("click", sendRecoveryCode);
+  $("#passwordRecoveryForm").addEventListener("submit", completePasswordRecovery);
+  $("#cancelPasswordRecoveryButton").addEventListener("click", () => {
+    $("#passwordRecoveryForm").reset();
+    $("#passwordRecoveryForm").hidden = true;
+  });
+  $("#forcePasswordChangeForm").addEventListener("submit", completeForcedPasswordChange);
+  $("#passwordChangeDialog").addEventListener("cancel", (event) => {
+    if (passwordChangeRequiredForUser()) event.preventDefault();
+  });
+  $("#signOutPasswordChangeButton").addEventListener("click", async () => {
+    $("#passwordChangeDialog").close();
+    await clearHelper();
   });
   $("#clearHelperButton").addEventListener("click", clearHelper);
   $("#addDailyTaskButton").addEventListener("click", addCustomTask);
@@ -2341,11 +3014,25 @@ function initEvents() {
     $(`#${listId}`).addEventListener("click", (event) => {
       const control = event.target.closest("[data-action]");
       if (!control) return;
+      if (control.dataset.action === "edit-task") return;
       event.preventDefault();
       if (control.dataset.action === "remove-task") removeTask(control.dataset.shift, control.dataset.id);
       if (control.dataset.action === "move-task-up") updateTaskOrder(control.dataset.shift, control.dataset.id, "up");
       if (control.dataset.action === "move-task-down") updateTaskOrder(control.dataset.shift, control.dataset.id, "down");
     });
+    $(`#${listId}`).addEventListener("change", (event) => {
+      const input = event.target.closest('[data-action="edit-task"]');
+      if (!input) return;
+      editTask(input.dataset.shift, input.dataset.id, input.value, input);
+    });
+  });
+  form.addEventListener("click", (event) => {
+    const toggle = event.target.closest('[data-action="toggle-section"]');
+    if (!toggle) return;
+    const section = toggle.closest("[data-collapsible-section]");
+    if (!section) return;
+    section.classList.toggle("is-collapsed");
+    toggle.textContent = section.classList.contains("is-collapsed") ? "Expand" : "Minimize";
   });
   $("#closeDetailDialog").addEventListener("click", () => $("#detailDialog").close());
   $("#completeDetailTaskButton").addEventListener("click", async () => {
@@ -2377,6 +3064,7 @@ function initEvents() {
     const payload = buildDailyPayload();
     const record = upsertRecord("dailyTask", payload);
     await sendPayload(record);
+    await syncBathDatesFromDailyReport(record);
     renderDemoSubmissions();
     $("#dailyTaskId").value = record.id;
     showToast("Daily task report submitted.");
@@ -2399,7 +3087,7 @@ function initEvents() {
     renderDailyTaskLists(record);
     setFormValues(form, record);
     $("#dailyTaskId").value = record.id;
-    ["dailyTasks", "pmTasks", "weeklyTasks", "tuesdayTasks", "monthlyTasks", "suppliesLow"].forEach((name) => {
+    ["dailyTasks", "pmTasks", "weeklyTasks", "tuesdayTasks", "monthlyTasks"].forEach((name) => {
       form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
         input.checked = (record[name] || []).includes(input.value);
       });
@@ -2505,6 +3193,24 @@ function initEvents() {
     if (!control) return;
     updateTableColumnConfig(control.dataset.table, control.dataset.column, control.dataset.action);
   });
+  $("#ownedDogColumnManager").addEventListener("dragstart", (event) => {
+    const chip = event.target.closest(".column-chip");
+    if (chip) event.dataTransfer.setData("text/plain", `${chip.dataset.table}:${chip.dataset.column}`);
+  });
+  $("#ownedDogColumnManager").addEventListener("dragover", (event) => {
+    if (event.target.closest(".column-chip")) event.preventDefault();
+  });
+  $("#ownedDogColumnManager").addEventListener("drop", (event) => {
+    const target = event.target.closest(".column-chip");
+    if (!target) return;
+    event.preventDefault();
+    const [table, sourceColumn] = event.dataTransfer.getData("text/plain").split(":");
+    reorderTableColumn(table, sourceColumn, target.dataset.column);
+  });
+  $("#ownedDogTableHead").addEventListener("dblclick", (event) => {
+    const header = event.target.closest("[data-sort-column]");
+    if (header) setTableSort("ownedDog", header.dataset.sortColumn);
+  });
   $("#addOwnedDogButton").addEventListener("click", () => openOwnedDog());
   $("#cancelOwnedDogEdit").addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
   $("#deleteOwnedDogButton").addEventListener("click", async () => {
@@ -2600,6 +3306,24 @@ function initEvents() {
     const control = event.target.closest("[data-action]");
     if (!control) return;
     updateTableColumnConfig(control.dataset.table, control.dataset.column, control.dataset.action);
+  });
+  $("#boardingDogColumnManager").addEventListener("dragstart", (event) => {
+    const chip = event.target.closest(".column-chip");
+    if (chip) event.dataTransfer.setData("text/plain", `${chip.dataset.table}:${chip.dataset.column}`);
+  });
+  $("#boardingDogColumnManager").addEventListener("dragover", (event) => {
+    if (event.target.closest(".column-chip")) event.preventDefault();
+  });
+  $("#boardingDogColumnManager").addEventListener("drop", (event) => {
+    const target = event.target.closest(".column-chip");
+    if (!target) return;
+    event.preventDefault();
+    const [table, sourceColumn] = event.dataTransfer.getData("text/plain").split(":");
+    reorderTableColumn(table, sourceColumn, target.dataset.column);
+  });
+  $("#boardingDogTableHead").addEventListener("dblclick", (event) => {
+    const header = event.target.closest("[data-sort-column]");
+    if (header) setTableSort("boardingDog", header.dataset.sortColumn);
   });
   $("#addBoardingDogButton").addEventListener("click", () => openBoardingDog());
   $("#cancelBoardingDogEdit").addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
@@ -2784,7 +3508,11 @@ function initEvents() {
     const formEl = event.currentTarget;
     if (!validateForm(formEl)) return;
     try {
-      const mediaItems = await uploadMediaFiles($("#requestMedia"), "requests");
+      const mediaItems = await uploadMediaFiles($("#requestMedia"), "requests", {
+        allowedTypes: IMAGE_UPLOAD_TYPES,
+        allowedExtensions: [".jpg", ".jpeg", ".png"],
+        label: "request image",
+      });
       const files = mediaItems.map((file) => file.name).join(", ");
       const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentNeeds: formEl.querySelector('input[name="urgentNeeds"]').checked };
       const record = upsertRecord("request", payload);
@@ -2804,7 +3532,11 @@ function initEvents() {
     const formEl = event.currentTarget;
     if (!validateForm(formEl)) return;
     try {
-      const mediaItems = await uploadMediaFiles($("#maintenanceMedia"), "maintenance");
+      const mediaItems = await uploadMediaFiles($("#maintenanceMedia"), "maintenance", {
+        allowedTypes: IMAGE_UPLOAD_TYPES,
+        allowedExtensions: [".jpg", ".jpeg", ".png"],
+        label: "maintenance image",
+      });
       const files = mediaItems.map((file) => file.name).join(", ");
       const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentAttention: formEl.querySelector('input[name="urgentAttention"]').checked };
       const record = upsertRecord("maintenance", payload);
@@ -2901,25 +3633,45 @@ function initEvents() {
     window.scrollTo({ top: $("#servicesPage").offsetTop, behavior: "smooth" });
   });
 
+  $("#customerDogPhotoButton").addEventListener("click", () => $("#customerDogPhotoInput").click());
+  $("#customerDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("customer"));
   $("#customerDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!validateForm(event.currentTarget)) return;
-    const data = formPayload(event.currentTarget);
-    const existing = data.id ? readRecords("customerDog").find((record) => record.id === data.id) : {};
-    const payload = {
-      ...existing,
-      type: "customerDog",
-      id: data.id || uid("customerDog"),
-      submittedAt: existing?.submittedAt || new Date().toISOString(),
-      customerEmail: currentUser?.email || "",
-      ...data,
-    };
-    const record = upsertRecord("customerDog", payload);
-    await sendPayload(record);
-    resetCustomerDogForm();
-    renderCustomerDogs();
-    renderBoardingDogs();
-    showDetailDialog(existing?.id ? "Dog Updated" : "Dog Saved", `<p>${escapeHtml(record.dogName || "Dog")} has been saved to your list.</p>`);
+    const formEl = event.currentTarget;
+    if (!validateForm(formEl)) return;
+    try {
+      const data = formPayload(formEl);
+      const existing = data.id ? readRecords("customerDog").find((record) => record.id === data.id) || {} : {};
+      const dogId = existing.id || data.id || uid("customerDog");
+      const photo = await durableDogPhoto("customer", existing, data, $("#customerDogPhotoInput"), dogId);
+      const vaccinationUploads = await uploadVaccinationFiles($("#customerVaccinationFiles"), dogId);
+      const payload = {
+        ...existing,
+        type: "customerDog",
+        id: dogId,
+        submittedAt: existing?.submittedAt || new Date().toISOString(),
+        customerEmail: currentUser?.email || data.ownerEmail || "",
+        ...data,
+        ownerName: currentUser?.name || data.ownerName || "",
+        ownerEmail: currentUser?.email || data.ownerEmail || "",
+        profilePhotoUrl: photo.profilePhotoUrl,
+        profilePhotoData: photo.profilePhotoData,
+        vaccinationRecords: [...(existing.vaccinationRecords || []), ...vaccinationUploads],
+        vaccinationFiles: [...(existing.vaccinationRecords || []), ...vaccinationUploads].map((file) => file.name).join(", "),
+        removed: false,
+      };
+      const record = upsertRecord("customerDog", payload);
+      await sendPayload(record);
+      resetCustomerDogForm();
+      renderCustomerDogs();
+      renderBoardingDogs();
+      const message = photo.photoError
+        ? `<p>${escapeHtml(record.dogName || "Dog")} has been saved, but the profile photo could not be uploaded: ${escapeHtml(photo.photoError)}</p>`
+        : `<p>${escapeHtml(record.dogName || "Dog")} has been saved to your list.</p>`;
+      showDetailDialog(existing?.id ? "Dog Updated" : "Dog Saved", message);
+    } catch (error) {
+      showDetailDialog("Dog Not Saved", `<p>The dog record could not be saved: ${escapeHtml(error.message)}</p>`);
+    }
   });
   $("#newCustomerDogButton").addEventListener("click", resetCustomerDogForm);
   $("#customerBookingForm").addEventListener("change", (event) => {
@@ -2954,6 +3706,7 @@ function initEvents() {
       showDetailDialog("Dog Removed", `<p>${escapeHtml(record.dogName || "This dog")} has been removed from your dog list.</p>`);
     }
   });
+  $("#customerRequestStatusFilter").addEventListener("change", renderCustomerRequests);
   $("#customerRequestList").addEventListener("click", (event) => {
     const actionButton = event.target.closest("[data-action]");
     if (actionButton?.dataset.action === "edit-customer-request") {
@@ -3018,16 +3771,13 @@ function initEvents() {
 
   $("#settingsUserForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!validateForm(event.currentTarget)) return;
-    const data = formPayload(event.currentTarget);
-    const existing = data.id ? readRecords("settingsUser").find((user) => user.id === data.id) : {};
-    const payload = { ...existing, ...data, type: "settingsUser", id: data.id || uid("settingsUser"), submittedAt: existing?.submittedAt || new Date().toISOString() };
-    const record = upsertRecord("settingsUser", payload);
-    await sendPayload(record);
+    const record = await saveSettingsUserProfile();
+    if (!record) return;
     openSettingsUser();
-    renderSettingsUsers();
     showToast("User access saved.");
   });
+  $("#adminSetPasswordButton").addEventListener("click", adminSetTemporaryPassword);
+  $("#adminSendPasswordResetButton").addEventListener("click", adminSendPasswordResetEmail);
   $("#newSettingsUserButton").addEventListener("click", () => openSettingsUser());
   $("#settingsUserTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");
@@ -3078,6 +3828,7 @@ async function initializeApp() {
   renderAllRecords();
   if (helperIsLoggedIn()) switchPage(currentRole() === "customer" ? "customerPage" : "dashboardPage");
   await loadRemoteRecords();
+  requirePasswordChangeIfNeeded();
   startAutoSync();
 }
 

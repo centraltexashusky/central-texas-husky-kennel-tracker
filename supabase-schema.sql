@@ -26,9 +26,9 @@ drop policy if exists "Kennel app can read records" on public.kennel_records;
 drop policy if exists "Kennel app can insert records" on public.kennel_records;
 drop policy if exists "Kennel app can update records" on public.kennel_records;
 
--- PIN login is browser-side, so the public app key must be allowed to read/write
--- kennel records. For tighter security later, move PIN verification into a
--- Supabase Edge Function and restrict these policies again.
+-- The static app uses Supabase Auth in the browser, so the public app key must
+-- be allowed to read/write kennel records. For tighter security later, move
+-- role checks into RLS policies or a Supabase Edge Function.
 create policy "Kennel app can read records"
 on public.kennel_records
 for select
@@ -53,11 +53,11 @@ with check (true);
 -- manually in Storage as a public bucket named kennel-media, then run the
 -- policies below.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('kennel-media', 'kennel-media', true, 52428800, array['image/*', 'video/*']::text[])
+values ('kennel-media', 'kennel-media', true, 52428800, array['image/jpeg', 'image/png', 'application/pdf']::text[])
 on conflict (id) do update
 set public = true,
     file_size_limit = 52428800,
-    allowed_mime_types = array['image/*', 'video/*']::text[];
+    allowed_mime_types = array['image/jpeg', 'image/png', 'application/pdf']::text[];
 
 drop policy if exists "Kennel app can read media" on storage.objects;
 drop policy if exists "Kennel app can upload media" on storage.objects;
@@ -80,8 +80,8 @@ for insert
 to authenticated
 with check ( bucket_id = 'kennel-media' );
 
--- PIN login uses the public app key, so anon upload is needed until PIN auth is
--- moved into Supabase Auth or an Edge Function.
+-- Anonymous upload is kept for the static preview and customer signup flow.
+-- Tighten this to authenticated-only once every published path requires login.
 create policy "Anon users can upload kennel media"
 on storage.objects
 for insert

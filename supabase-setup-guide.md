@@ -11,7 +11,7 @@ Use this after reviewing the local page.
 5. Copy the full SQL into Supabase.
 6. Run it.
 
-This creates one table named `kennel_records` for daily tasks, timesheets, dogs, boarding dogs, requests, maintenance, and services. It also creates a public Supabase Storage bucket named `kennel-media` for dog profile photos and uploaded media previews.
+This creates one table named `kennel_records` for daily tasks, timesheets, dogs, boarding dogs, requests, maintenance, services, app users, and calendar notes. It also creates a public Supabase Storage bucket named `kennel-media` for dog profile photos, request/maintenance images, and vaccination record uploads.
 
 ## 2. Add The Supabase Keys To The Webpage
 
@@ -32,20 +32,23 @@ with your Supabase project values.
 
 1. In Supabase, go to Authentication.
 2. Open Providers.
-3. Enable Google.
-4. In the Google provider settings, paste the real Google OAuth Client ID. It usually ends with `.apps.googleusercontent.com`. Do not paste the Google project name.
-5. Paste the Google OAuth Client Secret.
-6. Enable Facebook only if you want Facebook login and have the Facebook app credentials ready.
-7. In the Facebook provider settings, paste the Facebook App ID as the Client ID and the Facebook App Secret as the Client Secret.
-8. Use this callback URL in both Google and Facebook provider dashboards:
+3. Enable Email login and confirm that email confirmations and password recovery emails are allowed.
+4. Leave Supabase's default signup confirmation link enabled, or customize the email text if needed. The tracker now expects the user to click Supabase's "Confirm your mail" link, then return to the tracker and sign in.
+5. Enable Google if you want Google login.
+6. In the Google provider settings, paste the real Google OAuth Client ID. It usually ends with `.apps.googleusercontent.com`. Do not paste the Google project name.
+7. Paste the Google OAuth Client Secret.
+8. Enable Facebook only if you want Facebook login and have the Facebook app credentials ready.
+9. In the Facebook provider settings, paste the Facebook App ID as the Client ID and the Facebook App Secret as the Client Secret.
+10. Use this callback URL in both Google and Facebook provider dashboards:
 
 ```text
 https://vwvkzniygessvwifrwvn.supabase.co/auth/v1/callback
 ```
 
-9. In Supabase URL Configuration, add your live tracker URL as an allowed redirect URL.
-10. Add your GitHub Pages URL if you still use GitHub Pages for testing.
-11. Add your Wix page URL if Wix will host or embed the tracker.
+11. In Supabase URL Configuration, add your live tracker URL as an allowed redirect URL.
+12. Add your GitHub Pages URL if you still use GitHub Pages for testing.
+13. Add your Wix page URL if Wix will host or embed the tracker.
+14. In Auth rate limits and bot protection, keep default rate limits on and add CAPTCHA later if signup abuse appears.
 
 Important: Google and Facebook login will not complete from a `file://` preview. Test social login from the hosted website or from a local web server URL such as `http://localhost:8000`.
 
@@ -54,8 +57,8 @@ Important: Google and Facebook login will not complete from a `file://` preview.
 1. In Supabase, go to Storage.
 2. Confirm there is a bucket named `kennel-media`.
 3. Confirm it is public.
-4. Use a file size limit around 50 MB if videos will be uploaded.
-5. Allow image and video uploads.
+4. Use a file size limit around 50 MB.
+5. Allow JPG, PNG, and PDF uploads. Request and Maintenance forms accept only JPG/PNG; customer dog vaccination records also accept PDF.
 6. If the SQL policies were not applied, allow the anon/public key to read and upload objects in this bucket.
 
 ## 5. Quick Auth Troubleshooting
@@ -93,3 +96,9 @@ const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 ```
 
 Add another email inside that list if another person should see admin-only pages like pricing and financials.
+
+## 8. Admin Password Changes
+
+Admin password changes use the deployed Supabase Edge Function named `admin-set-password`. Do not put a service-role key in `script.js`.
+
+The Settings page can set a temporary password for a user. The user will be required to enter that temporary password and choose a new password after the next email/password login.

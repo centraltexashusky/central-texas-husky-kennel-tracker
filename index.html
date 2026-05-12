@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Central Texas Husky Kennel Tracker</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260512-liquid-glass" />
   </head>
   <body>
     <div class="app-layout">
@@ -81,17 +81,18 @@
           <div class="login-panel" id="loginPanel">
             <div>
               <strong id="loginStatus">Not logged in</strong>
-              <p id="loginHelp">Sign in with Google or another enabled account provider.</p>
+              <p id="loginHelp">Sign in with email and password, Google, or another enabled account provider.</p>
             </div>
             <div class="login-actions">
               <button type="button" class="secondary-button" id="googleLoginButton">Continue With Google</button>
               <button type="button" class="secondary-button" id="facebookLoginButton">Continue With Facebook</button>
               <button type="button" class="secondary-button" id="showCustomerSignupButton">Create Customer Login</button>
-              <label class="pin-field">
-                Helper PIN
-                <input type="password" id="helperPinInput" inputmode="numeric" maxlength="6" pattern="[0-9]{4,6}" placeholder="****" autocomplete="off" />
-              </label>
-              <button type="button" class="secondary-button" id="helperPinLoginButton">PIN Login</button>
+              <form id="passwordLoginForm" class="inline-login-form">
+                <label>Email<input type="email" name="email" autocomplete="email" required /></label>
+                <label>Password<input type="password" name="password" autocomplete="current-password" required /></label>
+                <button type="submit" class="secondary-button">Sign In</button>
+                <button type="button" class="secondary-button" id="showPasswordRecoveryButton">Forgot Password</button>
+              </form>
               <button type="button" class="secondary-button" id="clearHelperButton" hidden>Sign Out</button>
             </div>
           </div>
@@ -101,7 +102,7 @@
               <span>C</span>
               <div>
                 <h2>Create Customer Login</h2>
-                <p>A verification link will be sent before the customer account can be used.</p>
+                <p>A confirmation email is required before the account is active.</p>
               </div>
             </div>
             <input type="hidden" name="role" value="customer" />
@@ -109,11 +110,34 @@
               <label>First name<input type="text" name="firstName" required autocomplete="given-name" /></label>
               <label>Last name<input type="text" name="lastName" required autocomplete="family-name" /></label>
               <label>Email address<input type="email" name="email" required autocomplete="email" /></label>
+              <label>New password<input type="password" name="password" required minlength="8" autocomplete="new-password" /></label>
+              <label>Confirm password<input type="password" name="confirmPassword" required minlength="8" autocomplete="new-password" /></label>
               <label>Account type<input type="text" value="Customer" readonly /></label>
             </div>
             <div class="button-row">
-              <button type="submit">Send Verification Email</button>
+              <button type="button" id="sendSignupCodeButton">Send Confirmation Email</button>
+              <button type="submit">Create / Sign In</button>
               <button type="button" class="secondary-button" id="cancelCustomerSignupButton">Cancel</button>
+            </div>
+          </form>
+
+          <form id="passwordRecoveryForm" class="signup-panel" hidden>
+            <div class="section-heading compact-heading">
+              <span>R</span>
+              <div>
+                <h2>Password Recovery</h2>
+                <p>Enter the emailed code, then set a new password.</p>
+              </div>
+            </div>
+            <div class="field-grid">
+              <label>Email address<input type="email" name="email" required autocomplete="email" /></label>
+              <label>Recovery code<input type="text" name="recoveryCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit code" /></label>
+              <label>New password<input type="password" name="newPassword" minlength="8" autocomplete="new-password" /></label>
+            </div>
+            <div class="button-row">
+              <button type="button" id="sendRecoveryCodeButton">Send Recovery Code</button>
+              <button type="submit">Change Password</button>
+              <button type="button" class="secondary-button" id="cancelPasswordRecoveryButton">Cancel</button>
             </div>
           </form>
 
@@ -131,18 +155,30 @@
           <div class="section-heading"><span>C</span><div><h2>Add Dog</h2><p>Add your dog and keep care details current.</p></div></div>
           <form id="customerDogForm" class="tracker-form">
             <input type="hidden" name="id" id="customerDogId" />
+            <input type="hidden" name="ownerName" id="customerOwnerName" />
+            <input type="hidden" name="ownerEmail" id="customerOwnerEmail" />
+            <div class="dog-profile-editor">
+              <button type="button" class="dog-photo-button" id="customerDogPhotoButton" aria-label="Upload customer dog profile photo">
+                <img id="customerDogPhotoPreview" alt="Dog profile preview" hidden />
+                <span id="customerDogPhotoInitials">Dog</span>
+              </button>
+              <div>
+                <strong id="customerDogPhotoName">New dog</strong>
+                <p>Tap the square to upload an optional JPG or PNG photo from your device.</p>
+                <input class="visually-hidden-file" type="file" name="profilePhoto" id="customerDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
+              </div>
+            </div>
             <div class="field-grid">
               <label>Dog name<input type="text" name="dogName" required /></label>
               <label>Breed / description<input type="text" name="breedDescription" placeholder="Example: Siberian Husky, 3 years old" /></label>
-              <label>Owner name<input type="text" name="ownerName" id="customerOwnerName" required /></label>
               <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
-              <label>Owner email<input type="email" name="ownerEmail" id="customerOwnerEmail" required /></label>
-              <label>Emergency contact name<input type="text" name="emergencyName" required /></label>
-              <label>Emergency contact phone<input type="tel" name="emergencyPhone" required /></label>
+              <label>Emergency contact name <small>Highly recommended</small><input type="text" name="emergencyName" /></label>
+              <label>Emergency contact phone <small>Highly recommended</small><input type="tel" name="emergencyPhone" /></label>
               <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
               <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
               <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
               <label>Rabies duration<select name="rabiesDuration"><option value="">Select duration</option><option>1 year</option><option>3 years</option><option>Unknown</option></select></label>
+              <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple /><small>Optional PDF, PNG, or JPG records.</small></label>
             </div>
             <label>Care notes<textarea name="specialCare" rows="3" placeholder="Feeding, medication, behavior, allergies, or handling notes"></textarea></label>
             <div class="button-row"><button type="submit" id="saveCustomerDogButton">Save Dog</button><button type="button" class="secondary-button" id="newCustomerDogButton">New Dog</button></div>
@@ -169,6 +205,16 @@
         </section>
         <section class="form-section">
           <div class="section-heading"><span>R</span><div><h2>My Request</h2><p>Review boarding requests and requested services for your dogs.</p></div></div>
+          <div class="table-toolbar">
+            <label>Request status
+              <select id="customerRequestStatusFilter">
+                <option>All</option>
+                <option>Pending</option>
+                <option>Approved</option>
+                <option>Cancelled</option>
+              </select>
+            </label>
+          </div>
           <div class="record-grid" id="customerRequestList"></div>
         </section>
       </section>
@@ -180,6 +226,17 @@
             <label>Review date<input type="date" id="dashboardDate" /></label>
           </div>
           <div class="task-calendar" id="dashboardTaskCalendar" aria-label="Daily task calendar"></div>
+          <div class="calendar-notes-panel">
+            <form id="calendarNoteForm" class="tracker-form admin-inline-form" hidden>
+              <input type="hidden" name="id" />
+              <div class="field-grid">
+                <label>Note date<input type="date" name="noteDate" required /></label>
+                <label>Special note<input type="text" name="note" required placeholder="Add a future staff note" /></label>
+              </div>
+              <div class="button-row"><button type="submit">Save Note</button><button type="button" class="secondary-button" id="newCalendarNoteButton">New Note</button></div>
+            </form>
+            <div class="record-grid" id="calendarNotesList"></div>
+          </div>
           <div class="dashboard-grid" id="dashboardCards"></div>
         </section>
         <section class="recent-submissions">
@@ -207,12 +264,13 @@
           <div class="field-grid">
             <label>Date<input type="date" name="date" required /></label>
             <label>Kennel helper<input type="text" name="helperName" id="helperName" placeholder="Sign in fills this automatically" readonly required /></label>
-            <label>Helper email<input type="text" name="helperEmail" id="helperEmail" placeholder="Sign in fills this automatically" readonly required /></label>
+            <input type="hidden" name="helperEmail" id="helperEmail" />
             <input type="hidden" name="helperKey" id="helperKey" />
             <label>
               Day
               <select name="dayOfWeek" id="dayOfWeek" class="is-readonly-select" required>
                 <option value="">Select day</option>
+                <option>Sunday</option>
                 <option>Monday</option>
                 <option>Tuesday</option>
                 <option>Wednesday</option>
@@ -224,161 +282,159 @@
           </div>
         </section>
 
-        <section class="form-section">
+        <section class="form-section collapsible-section" data-collapsible-section>
           <div class="section-heading">
             <span>2</span>
             <div>
               <h2>Morning Tasks</h2>
               <p>Check each completed task for the shift.</p>
             </div>
+            <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
           </div>
 
-          <div class="checklist two-column task-list" id="morningTaskList" data-group="dailyTasks"></div>
-          <div class="admin-task-controls" id="dailyTaskAdminControls" hidden>
-            <input type="text" id="newTaskText" placeholder="Add a new daily task" />
-            <button type="button" id="addDailyTaskButton">Add Task</button>
+          <div class="section-body">
+            <div class="checklist two-column task-list" id="morningTaskList" data-group="dailyTasks"></div>
+            <div class="admin-task-controls" id="dailyTaskAdminControls" hidden>
+              <input type="text" id="newTaskText" placeholder="Add a new daily task" />
+              <button type="button" id="addDailyTaskButton">Add Task</button>
+            </div>
           </div>
         </section>
 
-        <section class="form-section">
+        <section class="form-section collapsible-section" data-collapsible-section>
           <div class="section-heading">
             <span>PM</span>
             <div>
               <h2>PM Tasks</h2>
               <p>Check each completed task for the shift.</p>
             </div>
+            <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
           </div>
 
-          <div class="checklist two-column task-list" id="pmTaskList" data-group="pmTasks"></div>
-          <div class="admin-task-controls" id="pmTaskAdminControls" hidden>
-            <input type="text" id="newPmTaskText" placeholder="Add a new PM task" />
-            <button type="button" id="addPmTaskButton">Add Task</button>
+          <div class="section-body">
+            <div class="checklist two-column task-list" id="pmTaskList" data-group="pmTasks"></div>
+            <div class="admin-task-controls" id="pmTaskAdminControls" hidden>
+              <input type="text" id="newPmTaskText" placeholder="Add a new PM task" />
+              <button type="button" id="addPmTaskButton">Add Task</button>
+            </div>
           </div>
         </section>
 
-        <section class="form-section">
+        <section class="form-section collapsible-section" data-collapsible-section>
           <div class="section-heading">
             <span>3</span>
             <div>
               <h2>Dogs, Health, And Content</h2>
               <p>Daily notes for staff to review.</p>
             </div>
+            <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
           </div>
 
-          <label>
-            Dogs trained or exercised today
-            <textarea name="dogsExercised" rows="3" placeholder="Example: Beau treadmill, Blue scooter, Luna leash training"></textarea>
-          </label>
+          <div class="section-body">
+            <label>
+              Dogs trained or exercised today
+              <textarea name="dogsExercised" rows="3" placeholder="Example: Beau treadmill, Blue scooter, Luna leash training"></textarea>
+            </label>
 
-          <label>
-            Dogs bathed today
-            <textarea name="dogsBathed" rows="2" placeholder="List names or write none"></textarea>
-          </label>
+            <label>
+              Dogs bathed today
+              <select name="dogsBathedSelect" id="dogsBathedSelect" multiple size="6"></select>
+              <small>Select one or more Our Dogs. Saving the report updates each selected dog’s last bath date.</small>
+            </label>
 
-          <label>
-            Health or behavior notes
-            <textarea name="healthNotes" rows="3" placeholder="Appetite, stool, coughing, limping, heat cycle, behavior, or other concern"></textarea>
-          </label>
+            <label>
+              Other dog bathed
+              <input type="text" name="dogsBathedOther" placeholder="Dog not listed" />
+            </label>
 
-          <label>
-            What photo or video did you take today?
-            <textarea name="socialContent" rows="3" placeholder="Example: funny puppy moment, clean kennel, treadmill session, bath day, dogs running"></textarea>
-          </label>
+            <label>
+              Health or behavior notes
+              <textarea name="healthNotes" rows="3" placeholder="Appetite, stool, coughing, limping, heat cycle, behavior, or other concern"></textarea>
+            </label>
+
+            <label>
+              What photo or video did you take today?
+              <textarea name="socialContent" rows="3" placeholder="Example: funny puppy moment, clean kennel, treadmill session, bath day, dogs running"></textarea>
+            </label>
+          </div>
         </section>
 
-        <section class="form-section conditional" id="mondaySection">
+        <section class="form-section conditional collapsible-section" id="mondaySection" data-collapsible-section>
           <div class="section-heading">
             <span>M</span>
             <div>
               <h2>Monday Weekly Tasks</h2>
               <p>Weekly cleaning and AC filter tasks.</p>
             </div>
+            <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
           </div>
 
-          <div class="checklist managed-task-list" id="weeklyTaskList" data-group="weeklyTasks"></div>
-          <div class="admin-task-controls" id="weeklyTaskAdminControls" hidden>
-            <input type="text" id="newWeeklyTaskText" placeholder="Add a new weekly task" />
-            <button type="button" id="addWeeklyTaskButton">Add Task</button>
+          <div class="section-body">
+            <div class="checklist managed-task-list" id="weeklyTaskList" data-group="weeklyTasks"></div>
+            <div class="admin-task-controls" id="weeklyTaskAdminControls" hidden>
+              <input type="text" id="newWeeklyTaskText" placeholder="Add a new weekly task" />
+              <button type="button" id="addWeeklyTaskButton">Add Task</button>
+            </div>
           </div>
         </section>
 
-        <section class="form-section conditional" id="tuesdaySection">
+        <section class="form-section conditional collapsible-section" id="tuesdaySection" data-collapsible-section>
           <div class="section-heading">
             <span>T</span>
             <div>
               <h2>Tuesday Trash Task</h2>
               <p>Trash pickup is Wednesday.</p>
             </div>
+            <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
           </div>
 
-          <div class="checklist managed-task-list" id="tuesdayTaskList"></div>
-          <div class="admin-task-controls" id="tuesdayTaskAdminControls" hidden>
-            <input type="text" id="newTuesdayTaskText" placeholder="Add a new Tuesday task" />
-            <button type="button" id="addTuesdayTaskButton">Add Task</button>
+          <div class="section-body">
+            <div class="checklist managed-task-list" id="tuesdayTaskList"></div>
+            <div class="admin-task-controls" id="tuesdayTaskAdminControls" hidden>
+              <input type="text" id="newTuesdayTaskText" placeholder="Add a new Tuesday task" />
+              <button type="button" id="addTuesdayTaskButton">Add Task</button>
+            </div>
           </div>
         </section>
 
-        <section class="form-section">
+        <section class="form-section collapsible-section" data-collapsible-section>
           <div class="section-heading">
             <span>4</span>
             <div>
               <h2>Monthly Deep Clean</h2>
               <p>Usually completed during the first week of the month, alternating buildings.</p>
             </div>
+            <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
           </div>
 
-          <div class="rotation-banner" id="rotationBanner"></div>
+          <div class="section-body">
+            <div class="rotation-banner" id="rotationBanner"></div>
 
-          <div class="field-grid">
-            <label>
-              Is this monthly deep cleaning week?
-              <select name="monthlyWeek" id="monthlyWeek" required>
-                <option>No</option>
-                <option>Yes</option>
-              </select>
-            </label>
+            <div class="field-grid">
+              <label>
+                Is this monthly deep cleaning week?
+                <select name="monthlyWeek" id="monthlyWeek" required>
+                  <option>No</option>
+                  <option>Yes</option>
+                </select>
+              </label>
 
-            <label>
-              Building deep cleaned
-              <select name="deepCleanBuilding" id="deepCleanBuilding">
-                <option>Not applicable</option>
-                <option>Dog Mansion</option>
-                <option>Dog Shed</option>
-              </select>
-            </label>
-          </div>
+              <label>
+                Building deep cleaned
+                <select name="deepCleanBuilding" id="deepCleanBuilding">
+                  <option>Not applicable</option>
+                  <option>Dog Mansion</option>
+                  <option>Dog Shed</option>
+                </select>
+              </label>
+            </div>
 
-          <div class="checklist managed-task-list" id="monthlyTaskList" data-group="monthlyTasks"></div>
-          <div class="admin-task-controls" id="monthlyTaskAdminControls" hidden>
-            <input type="text" id="newMonthlyTaskText" placeholder="Add a new monthly task" />
-            <button type="button" id="addMonthlyTaskButton">Add Task</button>
-          </div>
-        </section>
-
-        <section class="form-section">
-          <div class="section-heading">
-            <span>5</span>
-            <div>
-              <h2>Supplies And Owner Notes</h2>
-              <p>Flag anything that needs follow-up.</p>
+            <div class="checklist managed-task-list" id="monthlyTaskList" data-group="monthlyTasks"></div>
+            <div class="admin-task-controls" id="monthlyTaskAdminControls" hidden>
+              <input type="text" id="newMonthlyTaskText" placeholder="Add a new monthly task" />
+              <button type="button" id="addMonthlyTaskButton">Add Task</button>
             </div>
           </div>
-
-          <div class="checklist compact" data-group="suppliesLow">
-            <label><input type="checkbox" name="suppliesLow" value="Food" /> Food</label>
-            <label><input type="checkbox" name="suppliesLow" value="Treats" /> Treats</label>
-            <label><input type="checkbox" name="suppliesLow" value="Cleaning supplies" /> Cleaning supplies</label>
-            <label><input type="checkbox" name="suppliesLow" value="Shampoo" /> Shampoo</label>
-            <label><input type="checkbox" name="suppliesLow" value="Towels" /> Towels</label>
-            <label><input type="checkbox" name="suppliesLow" value="Poop bags" /> Poop bags</label>
-            <label><input type="checkbox" name="suppliesLow" value="Other" /> Other</label>
-            <label><input type="checkbox" name="suppliesLow" value="Nothing low today" /> Nothing low today</label>
-          </div>
-
-          <label>
-            Repairs, safety issues, or owner notes
-            <textarea name="ownerNotes" rows="4" placeholder="Loose latch, AC issue, hole, supply note, unusual dog behavior, repair needed"></textarea>
-          </label>
         </section>
 
         <div class="submit-bar">
@@ -682,7 +738,7 @@
             <div class="checklist">
               <label><input type="checkbox" name="urgentNeeds" value="Yes" /> Urgent Needs</label>
             </div>
-            <label>Photo or video upload<input type="file" name="requestMedia" id="requestMedia" accept="image/*,video/*" multiple /><small>Optional. You can upload multiple photos or videos, up to 50 MB each.</small></label>
+            <label>Image upload<input type="file" name="requestMedia" id="requestMedia" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple /><small>Optional. Upload JPG or PNG images only, up to 50 MB each.</small></label>
             <label>Request / suggestion<textarea name="requestText" rows="4" required></textarea></label>
             <label>Reason or benefit<textarea name="reason" rows="3" placeholder="Why this helps kennel care, safety, efficiency, or dog comfort"></textarea></label>
             <button type="submit">Submit Request</button>
@@ -703,7 +759,7 @@
               <label><input type="checkbox" name="urgentAttention" value="Yes" /> Urgent Attention</label>
             </div>
             <label>Issue or repair needed<textarea name="issue" rows="4" required placeholder="What needs attention? Include photos separately if useful."></textarea></label>
-            <label>Photo or video upload<input type="file" name="maintenanceMedia" id="maintenanceMedia" accept="image/*,video/*" multiple /><small>Optional. You can upload multiple photos or videos, up to 50 MB each.</small></label>
+            <label>Image upload<input type="file" name="maintenanceMedia" id="maintenanceMedia" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple /><small>Optional. Upload JPG or PNG images only, up to 50 MB each.</small></label>
             <label>Suggested action<textarea name="suggestedAction" rows="3" placeholder="Repair, replace, inspect, schedule service, order part"></textarea></label>
             <button type="submit">Submit Maintenance Item</button>
           </form>
@@ -777,9 +833,21 @@
             <div class="field-grid">
               <label>Name<input type="text" name="name" required /></label>
               <label>Email<input type="email" name="email" required /></label>
-              <label>Auth ID<input type="text" name="authId" placeholder="Optional Google/Facebook user ID" /></label>
-              <label>PIN<input type="password" name="pin" inputmode="numeric" maxlength="6" placeholder="Optional helper/admin PIN" /></label>
+              <label>Auth ID<input type="text" name="authId" placeholder="Supabase Auth user ID when available" /></label>
               <label>Role<select name="role" required><option value="customer">Customer</option><option value="helper">Kennel helper</option><option value="admin">Admin</option></select></label>
+            </div>
+            <div class="admin-password-panel">
+              <h3>Password Management</h3>
+              <p>Set a temporary Supabase password for this user. They will be required to change it after their next password login.</p>
+              <div class="field-grid">
+                <label>Temporary password<input type="password" name="temporaryPassword" minlength="8" autocomplete="new-password" /></label>
+                <label>Confirm temporary password<input type="password" name="temporaryPasswordConfirm" minlength="8" autocomplete="new-password" /></label>
+                <label class="inline-check"><input type="checkbox" name="requirePasswordChange" checked /> Require password change at next login</label>
+              </div>
+              <div class="button-row">
+                <button type="button" class="secondary-button" id="adminSetPasswordButton">Set Temporary Password</button>
+                <button type="button" class="secondary-button" id="adminSendPasswordResetButton">Send Reset Email</button>
+              </div>
             </div>
             <div class="button-row"><button type="submit">Save User</button><button type="button" class="secondary-button" id="newSettingsUserButton">New User</button></div>
           </form>
@@ -788,7 +856,7 @@
           <div class="section-heading"><span>U</span><div><h2>Users</h2><p>Double click a user to edit. Remove access when someone no longer needs it.</p></div></div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>PIN</th><th>Action</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Auth ID</th><th>Password</th><th>Action</th></tr></thead>
               <tbody id="settingsUserTableBody"></tbody>
             </table>
           </div>
@@ -808,6 +876,23 @@
       </div>
       <div id="detailDialogBody" class="detail-dialog-body"></div>
     </dialog>
+    <dialog id="passwordChangeDialog" class="detail-dialog">
+      <div class="dialog-header">
+        <h2>Password Change Required</h2>
+      </div>
+      <form id="forcePasswordChangeForm" class="tracker-form">
+        <p>Your admin has set a temporary password. Enter the current password, then choose a new one before continuing.</p>
+        <div class="field-grid">
+          <label>Current password<input type="password" name="currentPassword" required autocomplete="current-password" /></label>
+          <label>New password<input type="password" name="newPassword" required minlength="8" autocomplete="new-password" /></label>
+          <label>Confirm new password<input type="password" name="confirmNewPassword" required minlength="8" autocomplete="new-password" /></label>
+        </div>
+        <div class="button-row">
+          <button type="submit">Change Password</button>
+          <button type="button" class="secondary-button" id="signOutPasswordChangeButton">Sign Out</button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="mediaDialog" class="detail-dialog media-dialog">
       <div class="dialog-header">
         <h2 id="mediaDialogTitle">Media</h2>
@@ -826,6 +911,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=20260511-auth-daily-dogs"></script>
   </body>
 </html>

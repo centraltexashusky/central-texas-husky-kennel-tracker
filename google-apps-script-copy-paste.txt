@@ -58,8 +58,6 @@ function appendKennelReport(spreadsheet, payload) {
     "Monthly Week",
     "Deep Clean Building",
     "Monthly Tasks",
-    "Supplies Low",
-    "Owner Notes",
     "Boarding Tasks",
   ];
 
@@ -88,8 +86,6 @@ function appendKennelReport(spreadsheet, payload) {
     payload.monthlyWeek,
     payload.deepCleanBuilding,
     (payload.monthlyTasks || []).join(", "),
-    (payload.suppliesLow || []).join(", "),
-    payload.ownerNotes,
     payload.boardingTasks,
   ]);
 
@@ -174,7 +170,7 @@ function appendDatabaseRecord(payload) {
 function readDatabase() {
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName("Database");
-  const data = { ownedDog: [], boardingDog: [], request: [], maintenance: [], timesheet: [], service: [] };
+  const data = { ownedDog: [], boardingDog: [], request: [], maintenance: [], timesheet: [], service: [], dailyTask: [], customerDog: [], settingsUser: [], cfoNote: [], calendarNote: [] };
   if (!sheet || sheet.getLastRow() < 2) return data;
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
   const latest = {};
