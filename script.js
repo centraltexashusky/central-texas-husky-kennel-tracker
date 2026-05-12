@@ -7,7 +7,9 @@ const IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png"];
 const VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
-const APP_AUTH_REDIRECT_URL = "https://www.centraltexashusky.com/kennel-tracker";
+const APP_GITHUB_PAGES_URL = "https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/";
+const APP_WIX_EMBED_URL = "https://www.centraltexashusky.com/kennel-tracker";
+const APP_AUTH_REDIRECT_URL = APP_GITHUB_PAGES_URL;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -451,12 +453,24 @@ async function loginWithProvider(provider) {
   }
   const { error } = await supabaseClient.auth.signInWithOAuth({
     provider,
-    options: { redirectTo: window.location.href.split("#")[0] },
+    options: { redirectTo: authRedirectUrl() },
   });
   if (error) showToast(error.message);
 }
 
 function authRedirectUrl() {
+  try {
+    const currentUrl = new URL(window.location.href);
+    const currentPath = currentUrl.pathname.replace(/\/+$/, "");
+    if (currentUrl.origin === "https://www.centraltexashusky.com" && currentPath === "/kennel-tracker") {
+      return APP_WIX_EMBED_URL;
+    }
+    if (currentUrl.origin === "https://centraltexashusky.github.io" && currentPath === "/central-texas-husky-kennel-tracker") {
+      return APP_GITHUB_PAGES_URL;
+    }
+  } catch (error) {
+    console.warn("Could not inspect current auth redirect URL.", error);
+  }
   return APP_AUTH_REDIRECT_URL;
 }
 

@@ -41,6 +41,15 @@ The app uses Supabase as the persistent database. Email/password, Google, and Fa
 Important deployment note:
 Whenever `index.html`, `styles.css`, or `script.js` changes, upload the updated files to GitHub or your Wix-hosted version.
 
+OAuth route note:
+The static route `oauth/consent/index.html` exists so GitHub Pages can serve:
+
+```text
+https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/oauth/consent
+```
+
+Use `oauth/consent` as the authorization path if a third-party setup screen asks for one. For normal Supabase Google or Facebook login, the provider redirect URI is still the Supabase callback URL, not this route.
+
 ## Request And Maintenance Images
 
 The current Request and Maintenance forms accept JPG and PNG image uploads. Email links cannot automatically attach local files from a browser. Best workflow:

@@ -45,22 +45,39 @@ with your Supabase project values.
 https://vwvkzniygessvwifrwvn.supabase.co/auth/v1/callback
 ```
 
-11. In Supabase URL Configuration, set the Site URL to:
+11. In Supabase URL Configuration, set the Site URL to the GitHub Pages app URL. This is the actual page that runs the tracker JavaScript and can receive Supabase recovery/session tokens:
 
 ```text
+https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/
+```
+
+12. Add both live tracker URLs as allowed redirect URLs:
+
+```text
+https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/
 https://www.centraltexashusky.com/kennel-tracker
 ```
 
-12. Add this exact live tracker URL as an allowed redirect URL:
+13. Keep `http://localhost:3000` only for framework development. Do not leave it as the Site URL for production password reset or signup confirmation emails.
+14. Remove stale localhost redirect URLs if you do not intentionally test auth callbacks from those URLs.
+15. If you customized Supabase email templates, remove any hardcoded `localhost` links. Use Supabase's generated confirmation/recovery URL, or use `{{ .RedirectTo }}` rather than `{{ .SiteURL }}` when building links that should honor the app's `redirectTo` value.
+16. In Auth rate limits and bot protection, keep default rate limits on and add CAPTCHA later if signup abuse appears.
+
+Important: the Wix page can remain the public page customers visit, but the Supabase auth callback should land on the GitHub Pages tracker when the Wix page embeds that tracker in an iframe. The token has to arrive on the same page that runs `supabase-js`; otherwise the embedded app may not see the recovery or login session.
+
+If another OAuth setup screen asks for an Authorization Path, use:
 
 ```text
-https://www.centraltexashusky.com/kennel-tracker
+oauth/consent
 ```
 
-13. Add your GitHub Pages URL if you still use GitHub Pages for testing.
-14. Add your Wix page URL if Wix will host or embed the tracker.
-15. Keep `http://localhost:3000` only for framework development. Do not leave it as the Site URL for production password reset emails.
-14. In Auth rate limits and bot protection, keep default rate limits on and add CAPTCHA later if signup abuse appears.
+That path is implemented at:
+
+```text
+https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/oauth/consent
+```
+
+Do not enter `/oauth/consent` if the base app URL already ends in `/`; that creates a preview URL with a double slash.
 
 Important: Google and Facebook login will not complete from a `file://` preview. Test social login from the hosted website or from a local web server URL such as `http://localhost:8000`.
 
