@@ -69,31 +69,32 @@
       </label>
 
       <section class="page-view is-active" id="loginPage">
-        <section class="form-section">
-          <div class="section-heading">
-            <span>0</span>
-            <div>
-              <h2>Login</h2>
-              <p>Sign in to continue. This device will remember the session until you sign out.</p>
-            </div>
-          </div>
-
+        <section class="login-auth-section">
           <div class="login-panel" id="loginPanel">
-            <div>
-              <strong id="loginStatus">Not logged in</strong>
-              <p id="loginHelp">Sign in with email and password, Google, or another enabled account provider.</p>
+            <div class="login-copy">
+              <span class="login-brand">Central Texas Husky</span>
+              <h2>Welcome back</h2>
+              <p>Sign in to your kennel account</p>
+              <strong id="loginStatus" class="login-status-line">Not logged in</strong>
+              <p id="loginHelp" class="login-help-line">Use your email and password, Google, or Facebook.</p>
             </div>
             <div class="login-actions">
-              <button type="button" class="secondary-button" id="googleLoginButton">Continue With Google</button>
-              <button type="button" class="secondary-button" id="facebookLoginButton">Continue With Facebook</button>
-              <button type="button" class="secondary-button" id="showCustomerSignupButton">Create Customer Login</button>
+              <button type="button" class="auth-provider-button" id="googleLoginButton">Continue with Google</button>
+              <button type="button" class="auth-provider-button" id="facebookLoginButton">Continue with Facebook</button>
+              <div class="auth-divider"><span>or</span></div>
               <form id="passwordLoginForm" class="inline-login-form">
                 <label>Email<input type="email" name="email" autocomplete="email" required /></label>
-                <label>Password<input type="password" name="password" autocomplete="current-password" required /></label>
-                <button type="submit" class="secondary-button">Sign In</button>
-                <button type="button" class="secondary-button" id="showPasswordRecoveryButton">Forgot Password</button>
+                <div class="password-auth-field">
+                  <div class="auth-label-row"><label for="loginPasswordInput" class="auth-password-label-text">Password</label><button type="button" id="showPasswordRecoveryButton">Forgot password?</button></div>
+                  <div class="password-input-wrap">
+                    <input type="password" name="password" id="loginPasswordInput" autocomplete="current-password" required />
+                    <button type="button" class="password-visibility-button" id="toggleLoginPasswordButton" aria-label="Show password">Show</button>
+                  </div>
+                </div>
+                <button type="submit" class="auth-submit-button">Sign in</button>
               </form>
               <button type="button" class="secondary-button" id="clearHelperButton" hidden>Sign Out</button>
+              <p class="signup-prompt">Don’t have an account? <button type="button" id="showCustomerSignupButton">Sign up</button></p>
             </div>
           </div>
 
@@ -126,16 +127,16 @@
               <span>R</span>
               <div>
                 <h2>Password Recovery</h2>
-                <p>Enter the emailed code, then set a new password.</p>
+                <p>Send a reset email. After opening the email link, enter a new password here.</p>
               </div>
             </div>
             <div class="field-grid">
               <label>Email address<input type="email" name="email" required autocomplete="email" /></label>
-              <label>Recovery code<input type="text" name="recoveryCode" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit code" /></label>
-              <label>New password<input type="password" name="newPassword" minlength="8" autocomplete="new-password" /></label>
+              <label>New password<input type="password" name="newPassword" required minlength="8" autocomplete="new-password" /></label>
+              <label>Confirm new password<input type="password" name="confirmNewPassword" required minlength="8" autocomplete="new-password" /></label>
             </div>
             <div class="button-row">
-              <button type="button" id="sendRecoveryCodeButton">Send Recovery Code</button>
+              <button type="button" id="sendRecoveryCodeButton">Send Reset Email</button>
               <button type="submit">Change Password</button>
               <button type="button" class="secondary-button" id="cancelPasswordRecoveryButton">Cancel</button>
             </div>

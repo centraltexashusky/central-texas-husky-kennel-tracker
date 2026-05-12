@@ -45,9 +45,21 @@ with your Supabase project values.
 https://vwvkzniygessvwifrwvn.supabase.co/auth/v1/callback
 ```
 
-11. In Supabase URL Configuration, add your live tracker URL as an allowed redirect URL.
-12. Add your GitHub Pages URL if you still use GitHub Pages for testing.
-13. Add your Wix page URL if Wix will host or embed the tracker.
+11. In Supabase URL Configuration, set the Site URL to:
+
+```text
+https://www.centraltexashusky.com/kennel-tracker
+```
+
+12. Add this exact live tracker URL as an allowed redirect URL:
+
+```text
+https://www.centraltexashusky.com/kennel-tracker
+```
+
+13. Add your GitHub Pages URL if you still use GitHub Pages for testing.
+14. Add your Wix page URL if Wix will host or embed the tracker.
+15. Keep `http://localhost:3000` only for framework development. Do not leave it as the Site URL for production password reset emails.
 14. In Auth rate limits and bot protection, keep default rate limits on and add CAPTCHA later if signup abuse appears.
 
 Important: Google and Facebook login will not complete from a `file://` preview. Test social login from the hosted website or from a local web server URL such as `http://localhost:8000`.

@@ -7,6 +7,7 @@ const IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png"];
 const VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
+const APP_AUTH_REDIRECT_URL = "https://www.centraltexashusky.com/kennel-tracker";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -384,6 +385,12 @@ function initSupabaseClient() {
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") {
+      openPasswordRecoveryForm(session?.user?.email || "", { focusPassword: true });
+      showDetailDialog("Set New Password", "<p>Enter and confirm a new password to finish password recovery.</p>");
+    }
+  });
 }
 
 function recordTypes() {
@@ -450,7 +457,46 @@ async function loginWithProvider(provider) {
 }
 
 function authRedirectUrl() {
-  return window.location.href.split("#")[0];
+  return APP_AUTH_REDIRECT_URL;
+}
+
+function adminEmailList() {
+  return ADMIN_EMAILS.map((email) => email.toLowerCase());
+}
+
+async function activeSupabaseAdminSession() {
+  if (!supabaseClient) return { session: null, error: "Supabase Auth is not available." };
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  if (!sessionData.session?.access_token) {
+    return { session: null, error: "Sign in with the admin email and password again before changing passwords." };
+  }
+  const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+  if (userError || !userData.user?.email) {
+    return { session: null, error: userError?.message || "The admin session could not be verified." };
+  }
+  const sessionEmail = userData.user.email.toLowerCase();
+  if (!adminEmailList().includes(sessionEmail)) {
+    return { session: null, error: `The active Supabase session is ${sessionEmail}, which is not an admin account.` };
+  }
+  return { session: sessionData.session, error: "" };
+}
+
+async function edgeFunctionErrorMessage(error, fallback = "The admin password function could not complete.") {
+  const response = error?.context;
+  if (response?.clone) {
+    try {
+      const body = await response.clone().json();
+      return body.error || body.message || body.msg || JSON.stringify(body);
+    } catch {
+      try {
+        const text = await response.clone().text();
+        if (text) return text;
+      } catch {
+        // Fall through to the Supabase client error message.
+      }
+    }
+  }
+  return error?.message || fallback;
 }
 
 function readAuthThrottle() {
@@ -493,6 +539,14 @@ function passwordMatchCheck(targetForm, passwordName, confirmName) {
     message: "Passwords must match.",
     valid: !passwordField || !confirmField || passwordField.value === confirmField.value,
   };
+}
+
+function openPasswordRecoveryForm(email = "", options = {}) {
+  const recoveryForm = $("#passwordRecoveryForm");
+  recoveryForm.hidden = false;
+  if (email) recoveryForm.elements.email.value = email;
+  const focusField = options.focusPassword ? recoveryForm.elements.newPassword : recoveryForm.elements.email;
+  focusField?.focus();
 }
 
 function profileRecordForUser(user) {
@@ -651,43 +705,48 @@ async function sendRecoveryCode() {
   const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
   setSubmitState(button, false);
   if (error) {
-    showDetailDialog("Recovery Code Not Sent", `<p>The recovery code could not be sent: ${escapeHtml(error.message)}</p>`);
+    showDetailDialog("Reset Email Not Sent", `<p>The password reset email could not be sent: ${escapeHtml(error.message)}</p>`);
     return;
   }
-  showDetailDialog("Recovery Code Sent", `<p>A numeric password recovery code was sent to ${escapeHtml(email)}.</p>`);
+  showDetailDialog(
+    "Reset Email Sent",
+    `<p>A password reset email was sent to ${escapeHtml(email)}. Open the link in that email. It should return to ${escapeHtml(authRedirectUrl())} so the new password can be saved.</p>`,
+  );
 }
 
 async function completePasswordRecovery(event) {
   event.preventDefault();
   const formEl = event.currentTarget;
-  if (!validateForm(formEl)) return;
+  if (!validateForm(formEl, [passwordMatchCheck(formEl, "newPassword", "confirmNewPassword")])) return;
   if (!supabaseClient) {
     showDetailDialog("Login Setup Needed", "<p>Password recovery needs the Supabase connection first.</p>");
     return;
   }
   const data = formPayload(formEl);
   const email = data.email.trim().toLowerCase();
-  const token = data.recoveryCode.trim();
   const password = data.newPassword;
-  if (!token || !password) {
-    showDetailDialog("Recovery Details Required", "<p>Enter the recovery code and a new password.</p>");
+  if (!password) {
+    showDetailDialog("New Password Required", "<p>Enter and confirm a new password.</p>");
+    return;
+  }
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  const sessionEmail = sessionData.session?.user?.email?.toLowerCase();
+  if (!sessionData.session || (sessionEmail && sessionEmail !== email)) {
+    showDetailDialog(
+      "Open Reset Link First",
+      `<p>Use <strong>Send Reset Email</strong>, open the reset link from the email, then return here to save the new password. The reset link must open ${escapeHtml(authRedirectUrl())}.</p>`,
+    );
     return;
   }
   const button = formEl.querySelector('button[type="submit"]');
   setSubmitState(button, true, "Changing...");
-  const { data: verifyData, error } = await supabaseClient.auth.verifyOtp({ email, token, type: "recovery" });
-  if (error) {
-    setSubmitState(button, false);
-    showDetailDialog("Recovery Failed", `<p>The recovery code could not be verified: ${escapeHtml(error.message)}</p>`);
-    return;
-  }
   const { data: updateData, error: updateError } = await supabaseClient.auth.updateUser({ password });
   setSubmitState(button, false);
   if (updateError) {
     showDetailDialog("Password Not Changed", `<p>${escapeHtml(updateError.message)}</p>`);
     return;
   }
-  const user = userFromSupabase(updateData.user || verifyData.user);
+  const user = userFromSupabase(updateData.user || sessionData.session.user);
   if (user) {
     await ensureAppUserProfile(user);
     setHelper(user);
@@ -2386,6 +2445,12 @@ async function adminSetTemporaryPassword() {
     showDetailDialog("Supabase Required", "<p>Admin password changes require Supabase Auth.</p>");
     return;
   }
+  const { session, error: sessionError } = await activeSupabaseAdminSession();
+  if (!session) {
+    showDetailDialog("Admin Sign-In Required", `<p>${escapeHtml(sessionError)}</p><p>Use the Login page with centraltexashusky@gmail.com, then return to Settings and set the temporary password.</p>`);
+    switchPage("loginPage");
+    return;
+  }
   const formEl = $("#settingsUserForm");
   const data = settingsFormProfileData();
   const password = formEl.elements.temporaryPassword.value;
@@ -2407,7 +2472,8 @@ async function adminSetTemporaryPassword() {
   });
   setSubmitState(button, false);
   if (error || functionData?.error) {
-    showDetailDialog("Password Not Changed", `<p>${escapeHtml(error?.message || functionData?.error || "The admin password function could not complete.")}</p>`);
+    const message = functionData?.error || (await edgeFunctionErrorMessage(error));
+    showDetailDialog("Password Not Changed", `<p>${escapeHtml(message)}</p>`);
     return;
   }
   await loadRemoteRecords();
@@ -2974,11 +3040,15 @@ function initEvents() {
   $("#googleLoginButton").addEventListener("click", () => loginWithProvider("google"));
   $("#facebookLoginButton").addEventListener("click", () => loginWithProvider("facebook"));
   $("#passwordLoginForm").addEventListener("submit", loginWithPassword);
+  $("#toggleLoginPasswordButton").addEventListener("click", () => {
+    const passwordInput = $("#loginPasswordInput");
+    const isHidden = passwordInput.type === "password";
+    passwordInput.type = isHidden ? "text" : "password";
+    $("#toggleLoginPasswordButton").textContent = isHidden ? "Hide" : "Show";
+    $("#toggleLoginPasswordButton").setAttribute("aria-label", isHidden ? "Hide password" : "Show password");
+  });
   $("#showPasswordRecoveryButton").addEventListener("click", () => {
-    const recoveryForm = $("#passwordRecoveryForm");
-    recoveryForm.hidden = false;
-    recoveryForm.elements.email.value = $("#passwordLoginForm").elements.email.value || "";
-    recoveryForm.elements.email.focus();
+    openPasswordRecoveryForm($("#passwordLoginForm").elements.email.value || "");
   });
   $("#showCustomerSignupButton").addEventListener("click", () => {
     $("#customerSignupForm").hidden = false;
@@ -3805,6 +3875,7 @@ function switchPage(pageId) {
   $$(".nav-button").forEach((item) => item.classList.toggle("is-active", item.dataset.page === pageId));
   $$(".page-view").forEach((page) => page.classList.toggle("is-active", page.id === pageId));
   $("#mobilePageSelect").value = pageId;
+  document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -3827,6 +3898,7 @@ async function initializeApp() {
   updateNavigationAccess();
   renderAllRecords();
   if (helperIsLoggedIn()) switchPage(currentRole() === "customer" ? "customerPage" : "dashboardPage");
+  else document.body.classList.add("is-login-view");
   await loadRemoteRecords();
   requirePasswordChangeIfNeeded();
   startAutoSync();
