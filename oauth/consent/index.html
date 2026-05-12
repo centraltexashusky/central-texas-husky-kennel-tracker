@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Central Texas Husky Authorization</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        align-items: center;
+        background:
+          radial-gradient(circle at 18% 18%, rgba(42, 157, 143, 0.18), transparent 32rem),
+          radial-gradient(circle at 82% 10%, rgba(10, 132, 255, 0.14), transparent 28rem),
+          linear-gradient(135deg, #f7fbff 0%, #edf8f3 54%, #eef3ff 100%);
+        color: #1c1c1e;
+        display: grid;
+        margin: 0;
+        min-height: 100vh;
+        padding: 24px;
+      }
+
+      main {
+        background: rgba(255, 255, 255, 0.86);
+        backdrop-filter: blur(28px) saturate(150%);
+        -webkit-backdrop-filter: blur(28px) saturate(150%);
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 28px;
+        box-shadow: 0 24px 80px rgba(24, 35, 52, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+        max-width: 560px;
+        padding: clamp(28px, 7vw, 44px);
+        width: min(100%, 560px);
+      }
+
+      .brand {
+        color: #168360;
+        display: block;
+        font-size: 0.76rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-size: clamp(2.35rem, 8vw, 4rem);
+        font-weight: 520;
+        letter-spacing: 0;
+        line-height: 0.98;
+        margin: 0;
+      }
+
+      p {
+        color: #55585d;
+        font-size: 1.05rem;
+        line-height: 1.55;
+        margin: 18px 0 0;
+      }
+
+      a {
+        align-items: center;
+        background: #6edaa3;
+        border: 1px solid #22bd76;
+        border-radius: 14px;
+        box-shadow: 0 10px 24px rgba(34, 189, 118, 0.20);
+        color: #111513;
+        display: inline-flex;
+        font-size: 1.05rem;
+        font-weight: 750;
+        justify-content: center;
+        margin-top: 28px;
+        min-height: 56px;
+        padding: 0 22px;
+        text-decoration: none;
+        width: 100%;
+      }
+
+      a:hover {
+        filter: brightness(1.04);
+      }
+
+      .small {
+        color: #73767c;
+        font-size: 0.92rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="brand">Central Texas Husky</span>
+      <h1>Authorization</h1>
+      <p>This authorization route is active for the kennel tracker. Sign in through the tracker to continue with Google, Facebook, or email/password.</p>
+      <a id="continueLink" href="../../">Continue to kennel tracker</a>
+      <p class="small">If this page opened during a login test, return to the tracker and start the sign-in again after the OAuth settings are saved.</p>
+    </main>
+    <script>
+      const trackerUrl = "https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/";
+      const continueLink = document.getElementById("continueLink");
+      const next = new URL(trackerUrl);
+      if (window.location.search) next.searchParams.set("oauth_consent", "1");
+      continueLink.href = next.toString();
+    </script>
+  </body>
+</html>
