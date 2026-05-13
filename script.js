@@ -398,8 +398,10 @@ function transitionLabel(status) {
   }[status] || status;
 }
 
-function canTransitionBoardingStatus(record = {}, nextStatus) {
+function canTransitionBoardingStatus(record = {}, nextStatus, options = {}) {
   const currentStatus = normalizeBoardingStatus(record);
+  if (options.allowEarly && nextStatus === "Checked In" && ["Pending", "Approved"].includes(currentStatus)) return true;
+  if (options.allowEarly && nextStatus === "Checked Out" && ["Checked In", "In Kennel", "Ready For Pickup"].includes(currentStatus)) return true;
   return (boardingStatusTransitions[currentStatus] || []).includes(nextStatus);
 }
 
@@ -411,10 +413,43 @@ function boardingTransitionActions(record = {}) {
     : "";
 }
 
-function withBoardingStatusTransition(record = {}, nextStatus) {
+function isFutureDateTime(value, date = new Date()) {
+  const target = new Date(value);
+  return !Number.isNaN(target.getTime()) && target > date;
+}
+
+function boardingStatusTargetStay(record = {}, nextStatus = "") {
+  if (nextStatus === "Checked Out") return activeBoardingStay(record) || currentOrNextStay(record);
+  return currentOrNextStay(record);
+}
+
+function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new Date().toISOString()) {
+  const targetStay = boardingStatusTargetStay(record, nextStatus);
+  const targetStayId = targetStay?.id || "";
+  return (record.stays || []).map((stay) => {
+    if (!targetStayId || stay.id !== targetStayId) return stay;
+    return {
+      ...stay,
+      status: nextStatus,
+      updatedAt: timestamp,
+      actualDropoffAt: nextStatus === "Checked In" ? stay.actualDropoffAt || timestamp : stay.actualDropoffAt || "",
+      actualPickupAt: nextStatus === "Checked Out" ? stay.actualPickupAt || timestamp : stay.actualPickupAt || "",
+    };
+  });
+}
+
+function boardingTransitionIsEarly(record = {}, nextStatus = "") {
+  const stay = boardingStatusTargetStay(record, nextStatus);
+  if (nextStatus === "Checked In") return isFutureDateTime(stay?.dropoffTime);
+  if (nextStatus === "Checked Out") return isFutureDateTime(stay?.pickupTime);
+  return false;
+}
+
+function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
   const currentStatus = normalizeBoardingStatus(record);
-  if (!canTransitionBoardingStatus(record, nextStatus)) return null;
+  if (!canTransitionBoardingStatus(record, nextStatus, options)) return null;
   const timestamp = new Date().toISOString();
+  const early = Boolean(options.early || boardingTransitionIsEarly(record, nextStatus));
   return {
     ...record,
     boardingStatus: nextStatus,
@@ -425,6 +460,7 @@ function withBoardingStatusTransition(record = {}, nextStatus) {
         to: nextStatus,
         date: timestamp,
         by: currentUser?.name || helperName?.value || "",
+        early,
       },
     ],
     checkedInAt: nextStatus === "Checked In" ? timestamp : record.checkedInAt || "",
@@ -432,7 +468,9 @@ function withBoardingStatusTransition(record = {}, nextStatus) {
     readyForPickupAt: nextStatus === "Ready For Pickup" ? timestamp : record.readyForPickupAt || "",
     checkedOutAt: nextStatus === "Checked Out" ? timestamp : record.checkedOutAt || "",
     cancelledAt: nextStatus === "Cancelled" ? timestamp : record.cancelledAt || "",
-    stays: (record.stays || []).map((stay) => ({ ...stay, status: nextStatus, updatedAt: timestamp })),
+    earlyCheckInAt: nextStatus === "Checked In" && early ? timestamp : record.earlyCheckInAt || "",
+    earlyCheckOutAt: nextStatus === "Checked Out" && early ? timestamp : record.earlyCheckOutAt || "",
+    stays: boardingStatusScopedStays(record, nextStatus, timestamp),
     flags: nextStatus === "Cancelled" || nextStatus === "Checked Out" ? (record.flags || []).filter((flag) => flag !== "Required update from owner") : record.flags || [],
   };
 }
@@ -793,15 +831,28 @@ function authRedirectUrl() {
     const currentUrl = new URL(window.location.href);
     const currentPath = currentUrl.pathname.replace(/\/+$/, "");
     if (currentUrl.origin === "https://www.centraltexashusky.com" && currentPath === "/kennel-tracker") {
-      return APP_WIX_EMBED_URL;
+      return APP_GITHUB_PAGES_URL;
     }
     if (currentUrl.origin === "https://centraltexashusky.github.io" && currentPath === "/central-texas-husky-kennel-tracker") {
       return APP_GITHUB_PAGES_URL;
+    }
+    if (["localhost", "127.0.0.1", "::1"].includes(currentUrl.hostname)) {
+      return currentUrl.href.split("#")[0];
     }
   } catch (error) {
     console.warn("Could not inspect current auth redirect URL.", error);
   }
   return APP_AUTH_REDIRECT_URL;
+}
+
+function showAuthRedirectError() {
+  const hash = window.location.hash?.replace(/^#/, "") || "";
+  const params = new URLSearchParams(hash);
+  const error = params.get("error") || params.get("error_code");
+  const description = params.get("error_description");
+  if (!error && !description) return;
+  showDetailDialog("Google Login Failed", `<p>${escapeHtml(description || error || "The OAuth login did not complete.")}</p><p>Confirm this exact redirect URL is allowed in Supabase: ${escapeHtml(authRedirectUrl())}</p>`);
+  window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
 }
 
 function isLocalTestingOrigin() {
@@ -2474,6 +2525,49 @@ function matches(record, query) {
   return JSON.stringify(record).toLowerCase().includes(query.trim().toLowerCase());
 }
 
+function ownedDogCareTagsHtml(record = {}) {
+  const tags = [];
+  if (ownedDogExerciseDue(record)) tags.push("Exercise due");
+  if (ownedDogTrainingDue(record)) tags.push("Training due");
+  if (ownedDogBathDue(record)) tags.push("Bath due");
+  const heat = ownedDogHeatStatus(record);
+  if (heat.inHeat) tags.push("In heat");
+  else if (heat.expectedSoon || heat.overdue) tags.push("Heat watch");
+  if (ownedDogHasCareNote(record)) tags.push("Special care");
+  return tags.length ? `<div class="chip-row">${tags.map((tag) => statusChipHtml(tag)).join("")}</div>` : "";
+}
+
+function ownedDogMobileCardHtml(record = {}) {
+  const dog = normalizeOwnedDogCare(record);
+  const name = ownedDogDisplayName(dog) || "Dog";
+  const heatAction = dog.sex === "Female" ? `<button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Heat Note" data-id="${escapeHtml(dog.id)}">Heat Note</button>` : "";
+  return `
+    <article class="record-card mobile-roster-card ${ownedDogExerciseDue(dog) || ownedDogTrainingDue(dog) || ownedDogBathDue(dog) ? "has-care-due" : ""}">
+      <div class="mobile-roster-card-main">
+        <strong>${escapeHtml(name)}</strong>
+        <span>${escapeHtml([dog.sex, ownedDogCareSummary(dog)].filter(Boolean).join(" | "))}</span>
+        ${ownedDogCareTagsHtml(dog)}
+      </div>
+      <div class="quick-action-grid">
+        <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Treadmill" data-id="${escapeHtml(dog.id)}">Treadmill</button>
+        <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Scooter" data-id="${escapeHtml(dog.id)}">Scooter</button>
+        <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Yard Run" data-id="${escapeHtml(dog.id)}">Yard Run</button>
+        <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Bath" data-id="${escapeHtml(dog.id)}">Bath</button>
+        <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Training" data-id="${escapeHtml(dog.id)}">Training</button>
+        ${heatAction}
+        <button type="button" class="secondary-button" data-action="log-owned-care" data-id="${escapeHtml(dog.id)}">Open Timeline</button>
+      </div>
+    </article>`;
+}
+
+function renderOwnedDogMobileCards(records = []) {
+  const container = $("#ownedDogMobileCards");
+  if (!container) return;
+  container.innerHTML = records.length
+    ? records.map(ownedDogMobileCardHtml).join("")
+    : `<article class="record-card mobile-roster-card"><strong>No matching dogs</strong><p>Try a shorter name or switch the care filter back to All.</p></article>`;
+}
+
 function renderOwnedDogs() {
   const query = $("#ownedDogSearch").value || "";
   const allDogs = readRecords("ownedDog").filter((record) => !record.removed);
@@ -2513,6 +2607,7 @@ function renderOwnedDogs() {
         })
         .join("")
     : `<tr><td colspan="${(columns.length || 1) + 1}">No matching dogs. Use Add New Dog.</td></tr>`;
+  renderOwnedDogMobileCards(records);
   renderColumnManager("ownedDog", "#ownedDogColumnManager");
   renderBathDogOptions([...($("#dogsBathedSelect")?.selectedOptions || [])].map((option) => option.value));
   renderCareDogOptions();
@@ -2593,6 +2688,68 @@ function renderBoardingOwnerAccountPanel(record = activeBoardingDog()) {
   const linkedDog = linkedCustomerDogForBoarding(record);
   const ownerAccount = ownerAccountForBoarding(record);
   content.innerHTML = `<article class="record-card compact-record-card"><strong>${escapeHtml(ownerEmail)}</strong><p>${linkedDog ? `Linked customer dog: ${escapeHtml(linkedDog.dogName || record.dogName || "Dog")}` : "No customer dog profile linked yet."}</p><p>${ownerAccount ? `Customer access profile exists: ${escapeHtml(roleLabel(ownerAccount.role))}` : "No customer access profile exists yet."}</p><div class="record-actions">${boardingOwnerLinkButtonHtml(record)}</div></article>`;
+}
+
+function boardingScheduleText(record = {}) {
+  const status = normalizeBoardingStatus(record);
+  const stay = currentOrNextStay(record) || (record.stays || [])[0] || {};
+  const dropoff = stay.dropoffTime ? `Drop-off ${formatDateTime(stay.dropoffTime)}` : "";
+  const pickup = stay.pickupTime ? `Pick-up ${formatDateTime(stay.pickupTime)}` : "";
+  const pieces = [dropoff, pickup].filter(Boolean);
+  return pieces.length ? pieces.join(" | ") : `${status} - no stay time saved`;
+}
+
+function boardingQuickSortTime(record = {}) {
+  const status = normalizeBoardingStatus(record);
+  const stay = currentOrNextStay(record) || (record.stays || [])[0] || {};
+  const value = ["Checked In", "In Kennel", "Ready For Pickup"].includes(status) ? stay.pickupTime : stay.dropoffTime;
+  const date = new Date(value || record.updatedAt || record.submittedAt || 0);
+  return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
+}
+
+function boardingQuickActionButtons(record = {}) {
+  const status = normalizeBoardingStatus(record);
+  const buttons = [];
+  if (["Pending", "Approved"].includes(status)) {
+    const label = boardingTransitionIsEarly(record, "Checked In") ? "Check In Early" : "Check In";
+    buttons.push(`<button type="button" class="secondary-button" data-action="quick-boarding-transition" data-next-status="Checked In" data-allow-early="true" data-id="${escapeHtml(record.id)}">${label}</button>`);
+  }
+  if (status === "Checked In") {
+    buttons.push(`<button type="button" class="secondary-button" data-action="quick-boarding-transition" data-next-status="In Kennel" data-id="${escapeHtml(record.id)}">Mark In Kennel</button>`);
+  }
+  if (status === "In Kennel") {
+    buttons.push(`<button type="button" class="secondary-button" data-action="quick-boarding-transition" data-next-status="Ready For Pickup" data-id="${escapeHtml(record.id)}">Ready For Pickup</button>`);
+  }
+  if (["Checked In", "In Kennel", "Ready For Pickup"].includes(status)) {
+    const label = boardingTransitionIsEarly(record, "Checked Out") ? "Check Out Early" : "Check Out";
+    buttons.push(`<button type="button" class="secondary-button" data-action="quick-boarding-transition" data-next-status="Checked Out" data-allow-early="true" data-id="${escapeHtml(record.id)}">${label}</button>`);
+  }
+  buttons.push(`<button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}">Details</button>`);
+  return `<div class="quick-action-grid boarding-action-grid">${buttons.join("")}</div>`;
+}
+
+function boardingQuickCardHtml(record = {}) {
+  return `
+    <article class="record-card mobile-roster-card">
+      <div class="mobile-roster-card-main">
+        <strong>${escapeHtml(record.dogName || "Boarding dog")}</strong>
+        <div class="chip-row">${boardingStatusChipHtml(record)}</div>
+        <span>${escapeHtml(boardingScheduleText(record))}</span>
+        <p>${escapeHtml([record.ownerName, record.ownerPhone].filter(Boolean).join(" | "))}</p>
+      </div>
+      ${boardingQuickActionButtons(record)}
+    </article>`;
+}
+
+function renderBoardingQuickCards(records = []) {
+  const container = $("#boardingDogQuickCards");
+  if (!container) return;
+  const actionable = records
+    .filter((record) => !["Cancelled", "Checked Out"].includes(normalizeBoardingStatus(record)))
+    .sort((a, b) => boardingQuickSortTime(a) - boardingQuickSortTime(b));
+  container.innerHTML = actionable.length
+    ? actionable.map(boardingQuickCardHtml).join("")
+    : `<article class="record-card mobile-roster-card"><strong>No boarding actions</strong><p>No active check-ins or check-outs match this view.</p></article>`;
 }
 
 async function linkBoardingDogOwnerAccount(record = {}) {
@@ -2677,9 +2834,10 @@ function renderBoardingDogs() {
     .filter((record) => !record.removed)
     .map((record) => ({ ...record, sourceType: "boardingDog" }));
   renderBoardingRosterTabs(allRecords);
+  const matchingRecords = allRecords.filter((record) => matches(record, query));
   const records = sortRecordsForTable(
     "boardingDog",
-    allRecords.filter((record) => boardingDogMatchesRosterFilter(record) && matches(record, query)),
+    matchingRecords.filter((record) => boardingDogMatchesRosterFilter(record)),
   );
   const columns = activeColumns("boardingDog");
   $("#boardingDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}" data-table="boardingDog" data-column="${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
@@ -2690,7 +2848,28 @@ function renderBoardingDogs() {
         })
         .join("")
     : `<tr><td colspan="${(columns.length || 1) + 1}">No ${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.</td></tr>`;
+  renderBoardingQuickCards(matchingRecords);
   renderColumnManager("boardingDog", "#boardingDogColumnManager");
+}
+
+async function saveBoardingStatusTransition(record = {}, nextStatus = "", options = {}) {
+  const transitioned = withBoardingStatusTransition(record, nextStatus, options);
+  if (!transitioned) {
+    showToast("That boarding status transition is not allowed.");
+    return null;
+  }
+  const updated = upsertRecord("boardingDog", transitioned);
+  await sendPayload(updated);
+  renderBoardingDogs();
+  renderBoardingRequests();
+  renderCustomerRequests();
+  renderDashboard();
+  if ($("#boardingDogForm")?.elements.id.value === updated.id) {
+    renderBoardingStays(updated);
+    setDogPhoto("boarding", updated);
+  }
+  showToast(`Boarding status updated to ${nextStatus}.`);
+  return updated;
 }
 
 function dogRosterKey(record) {
@@ -2946,14 +3125,16 @@ function renderOwnedActivity(record = activeOwnedDog()) {
     : "<p>No activity or training entries yet.</p>";
 }
 
-function addOwnedLog(type, minutes, note = "") {
-  const active = activeOwnedDog();
-  if (!active) {
-    showToast("Save the dog first.");
-    return;
-  }
-  const dog = normalizeOwnedDogCare(active);
-  const log = { id: uid("log"), type, date: todayDate(), minutes, note };
+function applyOwnedCareLog(record = {}, type, minutes, note = "") {
+  const dog = normalizeOwnedDogCare(record);
+  const log = {
+    id: uid("log"),
+    type,
+    date: todayDate(),
+    minutes,
+    note,
+    completedBy: currentUser?.name || helperName?.value || "",
+  };
   if (type === "Training") {
     dog.trainingLogs = dog.trainingLogs || [];
     dog.trainingLogs.unshift(log);
@@ -2963,6 +3144,11 @@ function addOwnedLog(type, minutes, note = "") {
     dog.bathHistory.unshift(log);
     dog.lastBath = log.date;
     dog.nextBath = addDays(log.date, dog.bathIntervalDays || careDefaults.bathIntervalDays);
+  } else if (type === "Heat Note") {
+    dog.heatHistory = dog.heatHistory || [];
+    dog.heatHistory.unshift(log);
+    dog.lastHeat = log.date;
+    dog.nextHeat = addDays(log.date, dog.heatCycleLengthDays || careDefaults.heatCycleLengthDays);
   } else if (type === "Medical/Care") {
     dog.careNotesHistory = dog.careNotesHistory || [];
     dog.careNotesHistory.unshift(log);
@@ -2971,11 +3157,65 @@ function addOwnedLog(type, minutes, note = "") {
     dog.exerciseLogs.unshift(log);
     dog.lastExerciseDate = log.date;
   }
-  const record = upsertRecord("ownedDog", dog);
+  dog.updatedAt = new Date().toISOString();
+  return upsertRecord("ownedDog", dog);
+}
+
+function addOwnedLog(type, minutes, note = "", dogId = "") {
+  const active = dogId ? readRecords("ownedDog").find((record) => record.id === dogId && !record.removed) : activeOwnedDog();
+  if (!active) {
+    showToast("Save the dog first.");
+    return;
+  }
+  const record = applyOwnedCareLog(active, type, minutes, note);
   sendPayload(record);
-  renderOwnedActivity(record);
+  if ($("#ourDogForm")?.elements.id.value === record.id) renderOwnedActivity(record);
   renderOwnedDogs();
+  renderDashboard();
   showToast(`${type} entry added.`);
+}
+
+function quickOwnedCareInput(type) {
+  const exerciseTypes = ["Treadmill", "Scooter", "Yard Run"];
+  if (exerciseTypes.includes(type)) {
+    const value = window.prompt(`${type} minutes`, "15");
+    if (value === null) return null;
+    const minutes = Number(value || 0);
+    if (Number.isNaN(minutes) || minutes < 0) {
+      showToast("Enter valid minutes.");
+      return null;
+    }
+    return { minutes, note: "" };
+  }
+  const noteLabel = type === "Bath" ? "Bath note (optional)" : type === "Training" ? "Training note (optional)" : type === "Heat Note" ? "Heat note (optional)" : "Care note";
+  const note = window.prompt(noteLabel, "");
+  if (note === null) return null;
+  return { minutes: "", note };
+}
+
+function handleOwnedDogRosterAction(button) {
+  const record = readRecords("ownedDog").find((item) => item.id === button.dataset.id);
+  if (!record) return;
+  if (button.dataset.action === "quick-owned-log") {
+    const input = quickOwnedCareInput(button.dataset.careType);
+    if (!input) return;
+    addOwnedLog(button.dataset.careType, input.minutes, input.note, record.id);
+    return;
+  }
+  if (button.dataset.action === "view-owned") {
+    openOwnedDog(record);
+    setOwnedFormLocked(true);
+  }
+  if (button.dataset.action === "edit-owned") {
+    openOwnedDog(record);
+    setOwnedFormLocked(false);
+    $("#deleteOwnedDogButton").hidden = false;
+  }
+  if (button.dataset.action === "log-owned-care") {
+    openOwnedDog(record);
+    setOwnedDogActiveTab("Timeline");
+    $("#ownedDogActivityPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 async function removeOwnedLog(logId) {
@@ -4345,22 +4585,12 @@ function initEvents() {
   $("#ownedDogTableBody").addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
-    const record = readRecords("ownedDog").find((item) => item.id === button.dataset.id);
-    if (!record) return;
-    if (button.dataset.action === "view-owned") {
-      openOwnedDog(record);
-      setOwnedFormLocked(true);
-    }
-    if (button.dataset.action === "edit-owned") {
-      openOwnedDog(record);
-      setOwnedFormLocked(false);
-      $("#deleteOwnedDogButton").hidden = false;
-    }
-    if (button.dataset.action === "log-owned-care") {
-      openOwnedDog(record);
-      setOwnedDogActiveTab("Timeline");
-      $("#ownedDogActivityPanel").scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    handleOwnedDogRosterAction(button);
+  });
+  $("#ownedDogMobileCards")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    handleOwnedDogRosterAction(button);
   });
   $("#ownedDogTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");
@@ -4544,18 +4774,7 @@ function initEvents() {
       }
       if (action === "transition-boarding") {
         const next = button.dataset.nextStatus;
-        const transitioned = withBoardingStatusTransition(record, next);
-        if (!transitioned) {
-          showToast("That boarding status transition is not allowed.");
-          return;
-        }
-        const updated = upsertRecord("boardingDog", transitioned);
-        await sendPayload(updated);
-        renderBoardingDogs();
-        renderBoardingRequests();
-        renderCustomerRequests();
-        renderDashboard();
-        showToast(`Boarding status updated to ${next}.`);
+        await saveBoardingStatusTransition(record, next);
       }
       return;
     }
@@ -4594,18 +4813,22 @@ function initEvents() {
       showToast("Boarding request cancelled.");
     }
     if (button.dataset.action === "transition-boarding") {
-      const transitioned = withBoardingStatusTransition(record, button.dataset.nextStatus);
-      if (!transitioned) {
-        showToast("That boarding status transition is not allowed.");
-        return;
-      }
-      const updated = upsertRecord("boardingDog", transitioned);
-      await sendPayload(updated);
-      renderBoardingDogs();
-      renderBoardingRequests();
-      renderCustomerRequests();
-      renderDashboard();
-      showToast(`Boarding status updated to ${button.dataset.nextStatus}.`);
+      await saveBoardingStatusTransition(record, button.dataset.nextStatus);
+    }
+  });
+  $("#boardingDogQuickCards")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const record = readRecords("boardingDog").find((item) => item.id === button.dataset.id);
+    if (!record) return;
+    if (button.dataset.action === "change-boarding") {
+      openBoardingDog(record);
+      setBoardingFormLocked(false);
+      return;
+    }
+    if (button.dataset.action === "quick-boarding-transition") {
+      const allowEarly = button.dataset.allowEarly === "true";
+      await saveBoardingStatusTransition(record, button.dataset.nextStatus, { allowEarly, early: allowEarly && boardingTransitionIsEarly(record, button.dataset.nextStatus) });
     }
   });
   $("#boardingDogForm").addEventListener("submit", async (event) => {
@@ -4633,10 +4856,7 @@ function initEvents() {
             },
           ]
         : existing.statusHistory || [];
-      const statusTargetStayId = currentOrNextStay(existing)?.id || "";
-      const statusScopedStays = statusChanged
-        ? (existing.stays || []).map((stay) => (stay.id && stay.id === statusTargetStayId ? { ...stay, status: selectedStatus, updatedAt: timestamp } : stay))
-        : existing.stays || [];
+      const statusScopedStays = statusChanged ? boardingStatusScopedStays(existing, selectedStatus, timestamp) : existing.stays || [];
       const payload = {
         ...existing,
         type: "boardingDog",
@@ -5080,6 +5300,7 @@ async function initializeApp() {
   renderDailyTaskLists();
   setupRequiredFields();
   initEvents();
+  showAuthRedirectError();
   hydrateLoginFromUrl();
   updateNavigationAccess();
   renderAllRecords();

@@ -1885,6 +1885,31 @@ option {
   padding: 10px 12px;
 }
 
+.mobile-roster-list {
+  display: none;
+  gap: 10px;
+}
+
+.mobile-roster-card {
+  gap: 12px;
+}
+
+.mobile-roster-card-main {
+  display: grid;
+  gap: 6px;
+}
+
+.quick-action-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quick-action-grid button {
+  min-height: 42px;
+  padding-inline: 10px;
+}
+
 .dog-type-chip.ownedDog {
   background: rgba(185, 222, 207, 0.22);
   border-color: rgba(185, 222, 207, 0.42);
@@ -2225,6 +2250,44 @@ option {
   .table-wrap {
     margin-inline: -2px;
     padding: 8px;
+  }
+
+  #ourDogsPage .table-wrap,
+  #boardingDogsPage .table-wrap,
+  #ourDogsPage .column-manager,
+  #boardingDogsPage .column-manager {
+    display: none !important;
+  }
+
+  .mobile-roster-list {
+    display: grid;
+  }
+
+  .task-item {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .task-item input[type="checkbox"] {
+    margin-top: 2px;
+  }
+
+  .task-text {
+    flex-basis: auto;
+    font-size: 1rem;
+    line-height: 1.42;
+  }
+
+  .task-admin-tools,
+  .admin-task-controls {
+    display: none !important;
+  }
+
+  #manualTimeForm.mobile-admin-only,
+  #timesheetPage [data-action="edit-time"] {
+    display: none !important;
   }
 
   .data-table {

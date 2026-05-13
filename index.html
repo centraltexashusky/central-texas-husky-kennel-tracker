@@ -501,7 +501,7 @@
             <span>T</span>
             <div>
               <h2>Timesheet</h2>
-              <p>Clock in/out, add manual entries, and review weekly hours by staff member.</p>
+              <p>Clock in/out and review weekly hours by staff member. Desktop/admin can add corrections when needed.</p>
             </div>
           </div>
 
@@ -523,7 +523,7 @@
             </div>
           </div>
 
-          <form id="manualTimeForm" class="tracker-form">
+          <form id="manualTimeForm" class="tracker-form mobile-admin-only">
             <div class="section-heading compact-heading"><span>M</span><div><h2>Manual Entry</h2><p>Use this if someone forgot to clock in or clock out.</p></div></div>
             <div class="field-grid">
               <label>Staff name<input type="text" name="manualHelper" id="manualHelper" readonly /></label>
@@ -579,6 +579,7 @@
             <button type="button" class="secondary-button" data-filter="Heat Watch">Heat Watch</button>
             <button type="button" class="secondary-button" data-filter="Special Care">Special Care</button>
           </div>
+          <div class="mobile-roster-list" id="ownedDogMobileCards" aria-label="Mobile Our Dogs quick actions"></div>
           <div class="column-manager" id="ownedDogColumnManager" hidden></div>
           <div class="table-wrap">
             <table class="data-table" id="ownedDogTable">
@@ -756,6 +757,7 @@
             <button type="button" data-boarding-filter="Ready For Pickup" role="tab" aria-selected="false">Ready for Pickup</button>
             <button type="button" data-boarding-filter="All Boarding Dogs" role="tab" aria-selected="false">All Boarding Dogs</button>
           </div>
+          <div class="mobile-roster-list boarding-quick-list" id="boardingDogQuickCards" aria-label="Mobile boarding check-in and check-out actions"></div>
           <div class="column-manager" id="boardingDogColumnManager" hidden></div>
           <div class="table-wrap">
             <table class="data-table" id="boardingDogTable">
@@ -1055,6 +1057,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260512-status-editor-4"></script>
+    <script src="script.js?v=20260513-mobile-staff-1"></script>
   </body>
 </html>

@@ -51,7 +51,7 @@ https://vwvkzniygessvwifrwvn.supabase.co/auth/v1/callback
 https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/
 ```
 
-12. Add both live tracker URLs as allowed redirect URLs:
+12. Add the GitHub Pages tracker as an allowed redirect URL. Add the Wix URL only if the app code itself is hosted directly on that page instead of inside an iframe:
 
 ```text
 https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/
@@ -63,7 +63,7 @@ https://www.centraltexashusky.com/kennel-tracker
 15. If you customized Supabase email templates, remove any hardcoded `localhost` links. Use Supabase's generated confirmation/recovery URL, or use `{{ .RedirectTo }}` rather than `{{ .SiteURL }}` when building links that should honor the app's `redirectTo` value.
 16. In Auth rate limits and bot protection, keep default rate limits on and add CAPTCHA later if signup abuse appears.
 
-Important: the Wix page can remain the public page customers visit, but the Supabase auth callback should land on the GitHub Pages tracker when the Wix page embeds that tracker in an iframe. The token has to arrive on the same page that runs `supabase-js`; otherwise the embedded app may not see the recovery or login session.
+Important: the Wix page can remain the public page customers visit, but the Supabase auth callback should land on the GitHub Pages tracker when the Wix page embeds that tracker in an iframe. The token has to arrive on the same page that runs `supabase-js`; otherwise the embedded app may not see the recovery or login session. The current code sends Wix-started Google login back to the GitHub Pages tracker for that reason.
 
 If another OAuth setup screen asks for an Authorization Path, use:
 

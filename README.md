@@ -10,6 +10,7 @@ This is a review version of the kennel operations app.
 - Adds sidebar sections for Daily Tasks, Our Dogs, Boarding Dogs, Request, and Maintenance
 - Uses Supabase email/password or OAuth login for customers, helpers, and admin
 - Includes a clock-in and clock-out timesheet section
+- Adds mobile staff cards for Our Dogs care logging and Boarding Dogs check-in/check-out
 - Shows Monday weekly tasks
 - Shows Tuesday trash task
 - Shows monthly deep-clean rotation
@@ -31,7 +32,7 @@ This is a review version of the kennel operations app.
 - Boarding Dogs: owner contact, emergency contact, vet authorization, boarding schedule, vaccine records, required owner updates, special care, daily owner updates, and requested services
 - Request: items needed and good-to-have suggestions from kennel help
 - Maintenance: repairs or attention needed, with an Urgent Attention option
-- Timesheet: clock in/out, manual entries, current-week records, and last week/month/year summaries
+- Timesheet: clock in/out, desktop/admin manual entries, current-week records, and last week/month/year summaries
 
 ## Persistent Database
 
