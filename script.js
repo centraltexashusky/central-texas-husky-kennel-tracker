@@ -33,6 +33,10 @@ let supabaseClient = null;
 let detailDialogContext = null;
 let pendingCustomerBooking = null;
 let activeClockIn = JSON.parse(localStorage.getItem("cth-active-clock-in") || "null") || "";
+let localTestMode = false;
+let dailyTaskTab = "morning";
+let dashboardAlertFilter = "All";
+let boardingDogRosterFilter = "Active dogs";
 const selectedDogPhotos = { owned: null, boarding: null, customer: null };
 let ownedDogCareFilter = "All";
 let pendingStructuredCareLogs = [];
@@ -433,6 +437,44 @@ function withBoardingStatusTransition(record = {}, nextStatus) {
   };
 }
 
+function approveBoardingRecord(record = {}) {
+  const currentStatus = normalizeBoardingStatus(record);
+  const transitioned = withBoardingStatusTransition(record, "Approved");
+  if (transitioned) return transitioned;
+  if (currentStatus === "Approved") return record;
+  const timestamp = new Date().toISOString();
+  const updatedStays = (record.stays || []).map((stay) => ({
+    ...stay,
+    status: !stay.status || stay.status === "Cancelled" || stay.status === "Pending" ? "Approved" : stay.status,
+    updatedAt: timestamp,
+  }));
+  return {
+    ...record,
+    boardingStatus: "Approved",
+    approvedAt: record.approvedAt || timestamp,
+    approvedBy: record.approvedBy || currentUser?.name || helperName?.value || "",
+    cancelledAt: currentStatus === "Cancelled" ? "" : record.cancelledAt || "",
+    stays: updatedStays,
+    statusHistory: [
+      ...(record.statusHistory || []),
+      {
+        from: currentStatus,
+        to: "Approved",
+        date: timestamp,
+        by: currentUser?.name || helperName?.value || "",
+      },
+    ],
+    flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
+  };
+}
+
+function boardingStayDisplayStatus(record = {}, stay = {}) {
+  const stayStatus = String(stay.status || "").trim();
+  if (!stayStatus) return normalizeBoardingStatus(record);
+  if (stayStatus === "Pending" && !record.customerRequest && (record.entrySource === "staff-admin" || !record.entrySource)) return "Approved";
+  return boardingLifecycleStatuses.includes(stayStatus) ? stayStatus : normalizeBoardingStatus({ boardingStatus: stayStatus });
+}
+
 function formatDateTime(value) {
   if (!value) return "";
   return new Date(value).toLocaleString("en-US", {
@@ -519,6 +561,20 @@ function readTableConfig() {
 
 function writeTableConfig(config) {
   localStorage.setItem(stateKeys.tableConfig, JSON.stringify(config));
+  saveCurrentUserTablePreferences(config);
+}
+
+function saveCurrentUserTablePreferences(config) {
+  if (!currentUser?.email) return;
+  const existing = savedUserFor(currentUser) || {};
+  const record = upsertRecord("settingsUser", {
+    ...profileRecordForUser(currentUser),
+    ...existing,
+    tableConfig: config,
+    tablePreferences: { ...(existing.tablePreferences || {}), tableConfig: config },
+    removed: false,
+  });
+  sendPayload(record).catch((error) => console.warn("Could not save table preferences to user profile.", error));
 }
 
 function readTableSort() {
@@ -584,6 +640,34 @@ function reorderTableColumn(type, sourceColumn, targetColumn) {
   writeTableConfig(config);
   if (type === "ownedDog") renderOwnedDogs();
   if (type === "boardingDog") renderBoardingDogs();
+}
+
+function handleTableHeaderDragStart(event) {
+  const header = event.target.closest('th[data-table][data-column]');
+  if (!header) return;
+  header.classList.add("is-dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", `${header.dataset.table}:${header.dataset.column}`);
+}
+
+function handleTableHeaderDragOver(event) {
+  const header = event.target.closest('th[data-table][data-column]');
+  if (!header) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+}
+
+function handleTableHeaderDrop(event) {
+  const header = event.target.closest('th[data-table][data-column]');
+  if (!header) return;
+  event.preventDefault();
+  const [sourceTable, sourceColumn] = event.dataTransfer.getData("text/plain").split(":");
+  if (sourceTable !== header.dataset.table) return;
+  reorderTableColumn(sourceTable, sourceColumn, header.dataset.column);
+}
+
+function handleTableHeaderDragEnd() {
+  $$("th.is-dragging").forEach((header) => header.classList.remove("is-dragging"));
 }
 
 function setTableSort(type, columnKey) {
@@ -720,6 +804,59 @@ function authRedirectUrl() {
   return APP_AUTH_REDIRECT_URL;
 }
 
+function isLocalTestingOrigin() {
+  return ["localhost", "127.0.0.1", "::1", ""].includes(window.location.hostname) || window.location.protocol === "file:";
+}
+
+function userFromLocalTestLogin(email) {
+  const localPart = String(email || "local@test").split("@")[0] || "Local Tester";
+  const name = localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Local Tester";
+  return {
+    name,
+    email,
+    key: `local-test-${email || Date.now()}`,
+    role: "admin",
+    authProvider: "local-test",
+  };
+}
+
+function completeLocalTestLogin(email, reason = "") {
+  localTestMode = true;
+  supabaseClient = null;
+  setHelper(userFromLocalTestLogin(email), { silent: true });
+  modeLabel.textContent = "Local test mode";
+  switchPage("dashboardPage");
+  showDetailDialog(
+    "Local Test Login",
+    `<p>You are signed in locally as an admin for UI testing. Remote Supabase login was not used${reason ? `: ${escapeHtml(reason)}` : "."}</p><p>Changes will stay in this browser's local storage during this test session.</p>`,
+  );
+}
+
+function hydrateLoginFromUrl() {
+  if (!isLocalTestingOrigin()) return;
+  const params = new URLSearchParams(window.location.search);
+  const email = params.get("email") || "";
+  const password = params.get("password") || "";
+  const loginForm = $("#passwordLoginForm");
+  if (email && loginForm?.elements.email) loginForm.elements.email.value = email;
+  if (password && loginForm?.elements.password) loginForm.elements.password.value = password;
+  if (params.get("localTest") === "1" && email) {
+    params.delete("localTest");
+    completeLocalTestLogin(email, "localTest=1 was used on a local testing URL");
+  }
+  if (password || params.get("localTest") === "1") {
+    params.delete("password");
+    params.delete("localTest");
+    const cleanQuery = params.toString();
+    const cleanUrl = `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ""}${window.location.hash || ""}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+}
+
 function adminEmailList() {
   return ADMIN_EMAILS.map((email) => email.toLowerCase());
 }
@@ -835,18 +972,26 @@ async function ensureAppUserProfile(user) {
 async function loginWithPassword(event) {
   event.preventDefault();
   const formEl = event.currentTarget;
-  if (!supabaseClient) {
-    showDetailDialog("Login Setup Needed", "<p>Email and password login needs the Supabase connection first.</p>");
-    return;
-  }
   if (!validateForm(formEl)) return;
   const data = formPayload(formEl);
   const email = data.email.trim().toLowerCase();
+  if (!supabaseClient) {
+    if (isLocalTestingOrigin()) {
+      completeLocalTestLogin(email, "Supabase is not available from this local test page");
+      return;
+    }
+    showDetailDialog("Login Setup Needed", "<p>Email and password login needs the Supabase connection first.</p>");
+    return;
+  }
   const button = formEl.querySelector('button[type="submit"]');
   setSubmitState(button, true, "Signing in...");
   const { data: authData, error } = await supabaseClient.auth.signInWithPassword({ email, password: data.password });
   setSubmitState(button, false);
   if (error) {
+    if (isLocalTestingOrigin()) {
+      completeLocalTestLogin(email, error.message || "local Supabase Auth failed");
+      return;
+    }
     showDetailDialog("Login Failed", `<p>${escapeHtml(error.message)}</p>`);
     return;
   }
@@ -1369,6 +1514,8 @@ function showToast(message) {
 
 function setHelper(user, options = {}) {
   currentUser = { ...user, role: user.role || "helper" };
+  localTestMode = currentUser.authProvider === "local-test" || String(currentUser.key || "").startsWith("local-test-");
+  if (localTestMode) supabaseClient = null;
   localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
   setDefaultDateAndDay();
   helperName.value = user.name || "";
@@ -1379,10 +1526,10 @@ function setHelper(user, options = {}) {
     field.value = user.name || "";
     field.readOnly = true;
   });
-  $("#timesheetHelperDisplay").textContent = currentUser.name || "No user loaded";
+  $("#timesheetHelperDisplay").textContent = currentUser.name || "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = currentUser.name ? `${roleLabel(currentUser.role)} logged in: ${currentUser.name}` : "Logged in";
-  loginHelp.textContent = `${currentUser.email || "Account"} | Access: ${currentUser.role}`;
+  loginHelp.textContent = `${currentUser.email || "Account"} | Access: ${roleLabel(currentUser.role)}`;
   $("#clearHelperButton").hidden = false;
   updateNavigationAccess();
   renderDailyTaskLists();
@@ -1393,6 +1540,7 @@ function setHelper(user, options = {}) {
 
 async function clearHelper() {
   if (supabaseClient) await supabaseClient.auth.signOut();
+  localTestMode = false;
   currentUser = null;
   localStorage.removeItem(stateKeys.session);
   helperName.value = "";
@@ -1403,7 +1551,7 @@ async function clearHelper() {
     field.value = "";
     field.readOnly = false;
   });
-  $("#timesheetHelperDisplay").textContent = "No user loaded";
+  $("#timesheetHelperDisplay").textContent = "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = "Not logged in";
   loginHelp.textContent = "Sign in with email and password, Google, or another enabled account provider.";
@@ -1416,7 +1564,7 @@ async function clearHelper() {
 
 function updateHeaderUser() {
   headerUserName.textContent = currentUser?.name || "Not signed in";
-  modeLabel.textContent = currentUser ? `${roleLabel(currentUser.role)} account` : "Sign in to continue";
+  modeLabel.textContent = currentUser ? (localTestMode ? "Local test mode" : `${roleLabel(currentUser.role)} account`) : "Sign in to continue";
   headerLogoutButton.hidden = !currentUser;
 }
 
@@ -1437,15 +1585,17 @@ function pageAllowed(pageId) {
 
 function updateNavigationAccess() {
   $$(".nav-button").forEach((button) => {
+    const isLogin = button.dataset.page === "loginPage";
     const locked = !pageAllowed(button.dataset.page);
     button.disabled = locked;
     button.classList.toggle("is-locked", locked);
-    const hidden = locked && !(button.dataset.page === "loginPage" && !helperIsLoggedIn());
+    const hidden = (isLogin && helperIsLoggedIn()) || (locked && !(isLogin && !helperIsLoggedIn()));
     button.classList.toggle("is-hidden-nav", hidden);
   });
   [...$("#mobilePageSelect").options].forEach((option) => {
+    const isLogin = option.value === "loginPage";
     option.disabled = !pageAllowed(option.value);
-    option.hidden = option.disabled && !(option.value === "loginPage" && !helperIsLoggedIn());
+    option.hidden = (isLogin && helperIsLoggedIn()) || (option.disabled && !(isLogin && !helperIsLoggedIn()));
   });
 }
 
@@ -1461,16 +1611,16 @@ function restoreSession() {
     field.value = saved.name || "";
     field.readOnly = true;
   });
-  $("#timesheetHelperDisplay").textContent = saved.name || "No user loaded";
+  $("#timesheetHelperDisplay").textContent = saved.name || "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = `${roleLabel(saved.role)} logged in: ${saved.name}`;
-  loginHelp.textContent = `${saved.email || "Account"} | Access: ${saved.role}`;
+  loginHelp.textContent = `${saved.email || "Account"} | Access: ${roleLabel(saved.role)}`;
   $("#clearHelperButton").hidden = false;
 }
 
 function roleLabel(role = "") {
   if (role === "admin") return "Admin";
-  if (role === "helper") return "Helper";
+  if (role === "helper") return "Staff";
   return "Customer";
 }
 
@@ -1513,10 +1663,7 @@ function taskLabel(task, shift) {
     canManageTasks
       ? `<span class="task-admin-tools"><button type="button" class="icon-button" data-action="move-task-up" data-shift="${shift}" data-id="${task.id}" title="Move up">↑</button><button type="button" class="icon-button" data-action="move-task-down" data-shift="${shift}" data-id="${task.id}" title="Move down">↓</button><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">×</button></span>`
       : "";
-  const taskTextControl = canManageTasks
-    ? `<input class="task-edit-input" type="text" value="${taskText}" data-action="edit-task" data-shift="${shift}" data-id="${task.id}" aria-label="Task text" />`
-    : `<span class="task-text">${taskText}</span>`;
-  return `<label class="task-item" draggable="${canManageTasks}" data-shift="${shift}" data-id="${task.id}"><input type="checkbox" name="${taskInputName(shift)}" value="${taskText}" /> ${taskTextControl}${adminTools}</label>`;
+  return `<label class="task-item" draggable="${canManageTasks}" data-shift="${shift}" data-id="${task.id}"><input type="checkbox" name="${taskInputName(shift)}" value="${taskText}" /> <span class="task-text">${taskText}</span>${adminTools}</label>`;
 }
 
 function renderBathDogOptions(selectedIds = []) {
@@ -1621,6 +1768,22 @@ function renderDailyTaskLists(selected = {}) {
   pendingStructuredCareLogs = [...(selected.structuredCareLogs || selected.careLogs || pendingStructuredCareLogs || [])];
   renderStructuredCareLogs();
   resetCareQuickLogForm();
+  setDailyTaskTab(dailyTaskTab);
+}
+
+function setDailyTaskTab(tab = "morning") {
+  const panels = $$('[data-task-panel]');
+  if (!panels.length) return;
+  const validTabs = panels.map((panel) => panel.dataset.taskPanel);
+  dailyTaskTab = validTabs.includes(tab) ? tab : "morning";
+  $$("#dailyTaskTabs [data-task-tab]").forEach((button) => {
+    const active = button.dataset.taskTab === dailyTaskTab;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  panels.forEach((panel) => {
+    panel.hidden = panel.dataset.taskPanel !== dailyTaskTab;
+  });
 }
 
 function updateTaskOrder(shift, id, direction) {
@@ -1716,8 +1879,8 @@ function setOwnedFormLocked(locked) {
 }
 
 async function sendPayload(payload) {
-  if (!supabaseClient) {
-    modeLabel.textContent = "Local saved";
+  if (localTestMode || !supabaseClient) {
+    modeLabel.textContent = localTestMode ? "Local test saved" : "Local saved";
     return;
   }
   try {
@@ -1740,8 +1903,8 @@ async function sendPayload(payload) {
 }
 
 async function loadRemoteRecords() {
-  if (!supabaseClient) {
-    modeLabel.textContent = "Local only";
+  if (localTestMode || !supabaseClient) {
+    modeLabel.textContent = localTestMode ? "Local test mode" : "Local only";
     return;
   }
   syncNowButton.disabled = true;
@@ -1821,8 +1984,8 @@ const fieldHelp = {
   spayNeuterStatus: "Required. Choose Unknown if unsure.",
   ownerName: "Required for boarding contact records.",
   ownerPhone: "Required for boarding contact records.",
-  emergencyName: "Required for boarding safety.",
-  emergencyPhone: "Required for boarding safety.",
+  emergencyName: "Highly recommended for boarding safety.",
+  emergencyPhone: "Highly recommended for boarding safety.",
   dropoffTime: "Required for boarding schedule reminders.",
   pickupTime: "Required for boarding schedule reminders.",
   requestText: "Required. Describe what is needed or suggested.",
@@ -1983,7 +2146,7 @@ function dailyDetailHtml(record) {
   return `
     ${detailRows(record, [
       ["Date", "date"],
-      ["Helper", "helperName"],
+      ["Staff", "helperName"],
       ["Day", "dayOfWeek"],
       ["Morning tasks", "dailyTasks"],
       ["PM tasks", "pmTasks"],
@@ -2018,13 +2181,13 @@ function genericDetailHtml(record) {
 
 function boardingDogDetailHtml(record) {
   const stays = (record.stays || [])
-    .map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(stay.status || normalizeBoardingStatus(record), "boarding-status-chip")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.stayNotes || "")}</p></article>`)
+    .map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(boardingStayDisplayStatus(record, stay), "boarding-status-chip")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.stayNotes || "")}</p></article>`)
     .join("");
   const history = (record.statusHistory || [])
     .map((entry) => `<article class="record-card compact-record-card"><strong>${escapeHtml(entry.from || entry.fromStatus || "Unknown")} -> ${escapeHtml(entry.to || entry.toStatus || "Unknown")}</strong><span>${formatDateTime(entry.date || entry.changedAt)}${entry.by || entry.changedBy ? ` | ${escapeHtml(entry.by || entry.changedBy)}` : ""}</span></article>`)
     .join("");
   return `
-    <div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${boardingStatusChipHtml(record)}</div>
+    <div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${boardingStatusChipHtml(record)}${linkedCustomerDogForBoarding(record) ? statusChipHtml("Owner Linked") : ""}</div>
     ${detailRows(record, [
       ["Dog", "dogName"],
       ["Owner", "ownerName"],
@@ -2275,13 +2438,31 @@ function upcomingBoardingTaskText() {
   return tasks.join("\n");
 }
 
+function dailySubmissionDate(record = {}) {
+  return dateOnly(record.date || record.submittedAt || record.updatedAt);
+}
+
+function isRecentDailySubmission(record = {}, daysBack = 3) {
+  const recordDate = dailySubmissionDate(record);
+  if (!recordDate) return false;
+  return recordDate >= addDays(todayDate(), -daysBack) && recordDate <= todayDate();
+}
+
 function renderDemoSubmissions() {
-  const saved = readRecords("dailyTask").filter((submission) => !submission.removed);
+  const saved = readRecords("dailyTask")
+    .filter((submission) => !submission.removed && isRecentDailySubmission(submission))
+    .sort((a, b) => String(dailySubmissionDate(b)).localeCompare(String(dailySubmissionDate(a))) || new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
   $("#recentSubmissions").innerHTML = saved.length
     ? saved
-        .map((submission) => `<article class="submission-item clickable-card" data-action="view-daily" data-id="${submission.id}"><strong>${submission.date} - ${submission.helperName}</strong><p>${submission.dayOfWeek} | ${(submission.dailyTasks || []).length} AM tasks | ${(submission.pmTasks || []).length} PM tasks</p><p>Notes: ${submission.healthNotes || submission.ownerNotes || "No notes"}</p>${canEditOwnToday(submission) ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-daily" data-id="${submission.id}">Edit Today's Report</button></div>` : ""}</article>`)
+        .map((submission) => `<article class="submission-item clickable-card" data-action="view-daily" data-id="${submission.id}"><strong>${submission.date} - ${submission.helperName}</strong><p>${submission.dayOfWeek} | ${(submission.dailyTasks || []).length} AM tasks | ${(submission.pmTasks || []).length} Evening tasks</p><p>Notes: ${submission.healthNotes || submission.ownerNotes || "No notes"}</p>${canEditRecentDailyReport(submission) ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-daily" data-id="${submission.id}">Edit Report</button></div>` : ""}</article>`)
         .join("")
-    : "<p>No recent submissions yet.</p>";
+    : "<p>No submissions from the last 3 days yet.</p>";
+}
+
+function canEditRecentDailyReport(record) {
+  if (!isRecentDailySubmission(record)) return false;
+  if (currentRole() === "admin") return true;
+  return record?.helperEmail === currentUser?.email;
 }
 
 function canEditOwnToday(record) {
@@ -2319,7 +2500,7 @@ function renderOwnedDogs() {
       ["Heat Expected Soon", summary.heatExpectedSoon],
     ].map(([label, value]) => `<article class="summary-card"><span>${label}</span><strong>${value}</strong></article>`).join("");
   }
-  $("#ownedDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
+  $("#ownedDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}" data-table="ownedDog" data-column="${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
   $("#ownedDogTableBody").innerHTML = records.length
     ? records
         .map((record) => {
@@ -2337,28 +2518,178 @@ function renderOwnedDogs() {
   renderCareDogOptions();
 }
 
+function boardingRosterFilters() {
+  return ["Active dogs", "Pending", "In Kennel", "Ready For Pickup", "All Boarding Dogs"];
+}
+
+function boardingRosterFilterLabel(filter) {
+  return filter === "Ready For Pickup" ? "Ready for Pickup" : filter;
+}
+
+function boardingDogMatchesRosterFilter(record = {}, filter = boardingDogRosterFilter) {
+  const status = normalizeBoardingStatus(record);
+  const hasActiveStay = isCurrentlyBoarding(record);
+  if (filter === "All Boarding Dogs") return true;
+  if (filter === "Pending") return status === "Pending" && !hasActiveStay;
+  if (filter === "In Kennel") return status === "In Kennel";
+  if (filter === "Ready For Pickup") return status === "Ready For Pickup";
+  return hasActiveStay || ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
+}
+
+function renderBoardingRosterTabs(records = []) {
+  const container = $("#boardingDogRosterTabs");
+  if (!container) return;
+  const filters = boardingRosterFilters();
+  if (!filters.includes(boardingDogRosterFilter)) boardingDogRosterFilter = "Active dogs";
+  const counts = filters.reduce((acc, filter) => {
+    acc[filter] = records.filter((record) => boardingDogMatchesRosterFilter(record, filter)).length;
+    return acc;
+  }, {});
+  container.innerHTML = filters
+    .map((filter) => {
+      const active = filter === boardingDogRosterFilter;
+      return `<button type="button" class="${active ? "is-active" : ""}" data-boarding-filter="${escapeHtml(filter)}" role="tab" aria-selected="${active ? "true" : "false"}">${escapeHtml(boardingRosterFilterLabel(filter))} <span>${counts[filter] || 0}</span></button>`;
+    })
+    .join("");
+}
+
+function linkedCustomerDogForBoarding(record = {}) {
+  const ownerEmail = String(record.ownerEmail || "").trim().toLowerCase();
+  if (!ownerEmail) return null;
+  return readRecords("customerDog").find((dog) => {
+    if (dog.removed) return false;
+    if (record.linkedCustomerDogId && dog.id === record.linkedCustomerDogId) return true;
+    return dog.linkedBoardingDogId === record.id || (String(dog.ownerEmail || dog.customerEmail || "").toLowerCase() === ownerEmail && String(dog.dogName || "").trim().toLowerCase() === String(record.dogName || "").trim().toLowerCase());
+  }) || null;
+}
+
+function ownerAccountForBoarding(record = {}) {
+  const ownerEmail = String(record.ownerEmail || "").trim().toLowerCase();
+  return ownerEmail ? savedUserFor({ email: ownerEmail }) || null : null;
+}
+
+function boardingOwnerLinkButtonHtml(record = {}) {
+  if (!record.id || !record.ownerEmail) return "";
+  const linkedDog = linkedCustomerDogForBoarding(record);
+  const label = linkedDog ? "Refresh Owner Link" : "Create/Link Customer Login";
+  return `<button type="button" class="secondary-button" data-action="link-boarding-owner" data-id="${escapeHtml(record.id)}">${label}</button>`;
+}
+
+function renderBoardingOwnerAccountPanel(record = activeBoardingDog()) {
+  const panel = $("#boardingOwnerAccountPanel");
+  const content = $("#boardingOwnerAccountContent");
+  if (!panel || !content) return;
+  if (!record?.id) {
+    panel.hidden = true;
+    content.innerHTML = "";
+    return;
+  }
+  panel.hidden = false;
+  const ownerEmail = String(record.ownerEmail || "").trim().toLowerCase();
+  if (!ownerEmail) {
+    content.innerHTML = `<article class="record-card compact-record-card"><strong>No owner email saved</strong><p>Add an owner email before preparing a customer login for this dog.</p></article>`;
+    return;
+  }
+  const linkedDog = linkedCustomerDogForBoarding(record);
+  const ownerAccount = ownerAccountForBoarding(record);
+  content.innerHTML = `<article class="record-card compact-record-card"><strong>${escapeHtml(ownerEmail)}</strong><p>${linkedDog ? `Linked customer dog: ${escapeHtml(linkedDog.dogName || record.dogName || "Dog")}` : "No customer dog profile linked yet."}</p><p>${ownerAccount ? `Customer access profile exists: ${escapeHtml(roleLabel(ownerAccount.role))}` : "No customer access profile exists yet."}</p><div class="record-actions">${boardingOwnerLinkButtonHtml(record)}</div></article>`;
+}
+
+async function linkBoardingDogOwnerAccount(record = {}) {
+  if (!record?.id) return;
+  const ownerEmail = String(record.ownerEmail || "").trim().toLowerCase();
+  if (!ownerEmail) {
+    showToast("Add an owner email before creating a customer login link.");
+    return;
+  }
+  const timestamp = new Date().toISOString();
+  const existingCustomerDog = linkedCustomerDogForBoarding(record) || {};
+  const customerDog = upsertRecord("customerDog", {
+    ...existingCustomerDog,
+    type: "customerDog",
+    id: existingCustomerDog.id || uid("customerDog"),
+    submittedAt: existingCustomerDog.submittedAt || timestamp,
+    dogName: record.dogName || existingCustomerDog.dogName || "Boarding dog",
+    breedDescription: record.breedDescription || existingCustomerDog.breedDescription || "",
+    sex: record.sex || existingCustomerDog.sex || "Unknown",
+    spayNeuterStatus: record.spayNeuterStatus || existingCustomerDog.spayNeuterStatus || "Unknown",
+    ownerName: record.ownerName || existingCustomerDog.ownerName || "",
+    ownerPhone: record.ownerPhone || existingCustomerDog.ownerPhone || "",
+    ownerEmail,
+    customerEmail: ownerEmail,
+    emergencyName: record.emergencyName || existingCustomerDog.emergencyName || "",
+    emergencyPhone: record.emergencyPhone || existingCustomerDog.emergencyPhone || "",
+    vetInfo: record.vetInfo || existingCustomerDog.vetInfo || "",
+    rabiesDate: record.rabiesDate || existingCustomerDog.rabiesDate || "",
+    dhppDate: record.dhppDate || existingCustomerDog.dhppDate || "",
+    bordetellaDate: record.bordetellaDate || existingCustomerDog.bordetellaDate || "",
+    heartwormDate: record.heartwormDate || existingCustomerDog.heartwormDate || "",
+    specialCare: record.specialCare || existingCustomerDog.specialCare || "",
+    profilePhotoUrl: record.profilePhotoUrl || existingCustomerDog.profilePhotoUrl || "",
+    profilePhotoData: existingCustomerDog.profilePhotoData || record.profilePhotoData || "",
+    linkedBoardingDogId: record.id,
+    sourceBoardingDogId: record.id,
+    sourceType: "boardingDog",
+    removed: false,
+  });
+  await sendPayload(customerDog);
+
+  const existingUser = ownerAccountForBoarding(record) || {};
+  const linkedCustomerDogIds = [...new Set([...(existingUser.linkedCustomerDogIds || []), customerDog.id].filter(Boolean))];
+  const linkedBoardingDogIds = [...new Set([...(existingUser.linkedBoardingDogIds || []), record.id].filter(Boolean))];
+  const userRecord = upsertRecord("settingsUser", {
+    ...existingUser,
+    type: "settingsUser",
+    id: existingUser.id || uid("settingsUser"),
+    submittedAt: existingUser.submittedAt || timestamp,
+    name: existingUser.name || record.ownerName || ownerEmail,
+    email: ownerEmail,
+    role: "customer",
+    authProvider: existingUser.authProvider || "customer-signup",
+    linkedCustomerDogIds,
+    linkedBoardingDogIds,
+    removed: false,
+  });
+  await sendPayload(userRecord);
+
+  const updated = upsertRecord("boardingDog", {
+    ...record,
+    linkedCustomerDogId: customerDog.id,
+    linkedOwnerEmail: ownerEmail,
+    ownerAccountStatus: "linked",
+    ownerAccountLinkedAt: timestamp,
+  });
+  await sendPayload(updated);
+  renderBoardingDogs();
+  renderBoardingRequests();
+  renderCustomerDogs();
+  renderCustomerRequests();
+  renderSettingsUsers();
+  if ($("#boardingDogForm")?.elements.id.value === updated.id) {
+    openBoardingDog(updated);
+  }
+  showDetailDialog("Customer Login Prepared", `<p>${escapeHtml(record.ownerName || ownerEmail)} can sign up or sign in with ${escapeHtml(ownerEmail)}. Snuggle Stay will link that customer account to ${escapeHtml(customerDog.dogName || record.dogName || "this dog")}.</p><p>This boarding dog can still have stays added by staff or admin even if the owner has not logged in yet.</p>`);
+}
+
 function renderBoardingDogs() {
   const query = $("#boardingDogSearch").value || "";
+  const allRecords = readRecords("boardingDog")
+    .filter((record) => !record.removed)
+    .map((record) => ({ ...record, sourceType: "boardingDog" }));
+  renderBoardingRosterTabs(allRecords);
   const records = sortRecordsForTable(
     "boardingDog",
-    readRecords("boardingDog")
-      .filter((record) => {
-        const status = normalizeBoardingStatus(record);
-        return !record.removed && !["Cancelled", "Checked Out"].includes(status) && (isCurrentlyBoarding(record) || ["Checked In", "In Kennel", "Ready For Pickup"].includes(status)) && matches(record, query);
-      })
-      .map((record) => ({ ...record, sourceType: "boardingDog" })),
+    allRecords.filter((record) => boardingDogMatchesRosterFilter(record) && matches(record, query)),
   );
   const columns = activeColumns("boardingDog");
-  $("#boardingDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
+  $("#boardingDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}" data-table="boardingDog" data-column="${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
   $("#boardingDogTableBody").innerHTML = records.length
     ? records
         .map((record) => {
-          const status = normalizeBoardingStatus(record);
-          const rowClass = isCurrentlyBoarding(record) || ["Checked In", "In Kennel", "Ready For Pickup"].includes(status) ? "is-current-boarding" : status === "Pending" ? "is-pending-boarding" : "";
-          return `<tr data-id="${record.id}" data-source="${escapeHtml(record.sourceType || record.type || "boardingDog")}" class="${rowClass} ${statusClassForBoardingStatus(status)}">${columns.map((column) => `<td>${escapeHtml(column.value(record))}</td>`).join("")}<td><div class="record-actions table-actions">${dogTypeBadgeHtml("boardingDog")}${boardingStatusChipHtml(record)}<button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}">View/Edit</button></div></td></tr>`;
+          return `<tr data-id="${record.id}" data-source="${escapeHtml(record.sourceType || record.type || "boardingDog")}">${columns.map((column) => `<td>${escapeHtml(column.value(record))}</td>`).join("")}<td><div class="record-actions table-actions">${dogTypeBadgeHtml("boardingDog")}${boardingStatusChipHtml(record)}<button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}">View/Edit</button>${boardingOwnerLinkButtonHtml(record)}</div></td></tr>`;
         })
         .join("")
-    : `<tr><td colspan="${(columns.length || 1) + 1}">No current boarding dogs match this search.</td></tr>`;
+    : `<tr><td colspan="${(columns.length || 1) + 1}">No ${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.</td></tr>`;
   renderColumnManager("boardingDog", "#boardingDogColumnManager");
 }
 
@@ -2433,8 +2764,9 @@ function renderBoardingRequests() {
           const stay = record.stays?.[0] || {};
           const services = stay.requests?.length ? stay.requests.join(", ") : "No added services";
           const status = normalizeBoardingStatus(record);
-          const actions = `<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="${record.id}">Change</button></div>${boardingTransitionActions(record)}`;
-          return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-id="${record.id}" data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${boardingStatusChipHtml(record)}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${record.estimatedTotal ? `<p><strong>Estimated total:</strong> ${money(record.estimatedTotal)}</p>` : ""}${actions}</article>`;
+          const approveAction = status === "Cancelled" ? `<button type="button" class="secondary-button" data-action="approve-boarding" data-id="${escapeHtml(record.id)}">Approve</button>` : "";
+          const actions = `<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="${record.id}">Change</button>${approveAction}</div>${boardingTransitionActions(record)}`;
+          return `<article class="record-card clickable-card" data-id="${record.id}" data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${boardingStatusChipHtml(record)}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${record.estimatedTotal ? `<p><strong>Estimated total:</strong> ${money(record.estimatedTotal)}</p>` : ""}${actions}</article>`;
         })
         .join("")
     : `<p>No ${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests yet.</p>`;
@@ -2448,16 +2780,35 @@ function statusClassForRequest(status = "") {
   return "";
 }
 
+function inactiveBoardingStayStatus(stay = {}) {
+  const status = String(stay.status || "").trim();
+  if (!status) return false;
+  const normalized = boardingLifecycleStatuses.includes(status) ? status : normalizeBoardingStatus({ boardingStatus: status });
+  return ["Cancelled", "Checked Out"].includes(normalized);
+}
+
+function activeBoardingStay(record = {}, date = new Date()) {
+  const now = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(now.getTime())) return null;
+  return (record.stays || []).find((stay) => {
+    if (inactiveBoardingStayStatus(stay)) return false;
+    const dropoff = new Date(stay.dropoffTime);
+    const pickup = new Date(stay.pickupTime);
+    if (Number.isNaN(dropoff.getTime()) || Number.isNaN(pickup.getTime())) return false;
+    return dropoff <= now && pickup >= now;
+  }) || null;
+}
+
 function currentOrNextStay(record) {
   const now = new Date();
-  return [...(record.stays || [])]
+  return activeBoardingStay(record, now) || [...(record.stays || [])]
+    .filter((stay) => !inactiveBoardingStayStatus(stay))
     .sort((a, b) => new Date(a.dropoffTime) - new Date(b.dropoffTime))
     .find((stay) => new Date(stay.pickupTime) >= now) || null;
 }
 
 function isCurrentlyBoarding(record) {
-  const now = new Date();
-  return (record.stays || []).some((stay) => new Date(stay.dropoffTime) <= now && new Date(stay.pickupTime) >= now);
+  return Boolean(activeBoardingStay(record));
 }
 
 function setOwnedDogActiveTab(tabName = "Overview") {
@@ -2505,8 +2856,10 @@ function openBoardingDog(record = {}) {
   $("#boardingDogDetailTitle").textContent = record.id ? `Edit ${record.dogName || "Boarding Dog"}` : "Add Boarding Dog";
   $("#boardingDogForm").reset();
   setFormValues($("#boardingDogForm"), record);
+  if ($("#boardingDogStatus")) $("#boardingDogStatus").value = record.id ? normalizeBoardingStatus(record) : "Approved";
   setDogPhoto("boarding", record);
   $("#boardingSchedulePanel").hidden = !record.id;
+  renderBoardingOwnerAccountPanel(record);
   $$('input[name="boardingFlags"]').forEach((input) => {
     input.checked = (record.flags || []).includes(input.value);
   });
@@ -2526,6 +2879,7 @@ function setBoardingFormLocked(locked) {
   $("#boardingDogSaveButton").hidden = locked;
   $("#editBoardingDogButton").hidden = !locked;
   formEl.classList.toggle("is-readonly", locked);
+  renderBoardingOwnerAccountPanel(activeBoardingDog());
 }
 
 function updateOwnedDogConditionalFields() {
@@ -2675,7 +3029,7 @@ async function markRecordRemoved(type, id) {
 function renderBoardingStays(record = activeBoardingDog()) {
   const stays = record?.stays || [];
   $("#boardingStayHistory").innerHTML = stays.length
-    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(stay.status || normalizeBoardingStatus(record), "boarding-status-chip")}</div><p>${(stay.requests || []).join(", ") || "No service requests"}</p><p>${stay.bathPlan || ""}</p><p>${stay.stayNotes || ""}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${stay.id}">Edit Stay</button></div></article>`).join("")
+    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(boardingStayDisplayStatus(record, stay), "boarding-status-chip")}</div><p>${(stay.requests || []).join(", ") || "No service requests"}</p><p>${stay.bathPlan || ""}</p><p>${stay.stayNotes || ""}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${stay.id}">Edit Stay</button></div></article>`).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
 
@@ -2797,6 +3151,30 @@ function dashboardMetrics() {
   };
 }
 
+function dashboardExerciseCategory(dog) {
+  const routineText = `${dog.exerciseRoutine || ""} ${dog.exerciseNotes || ""}`.toLowerCase();
+  if (routineText.includes("scooter")) return "Scooter";
+  if (routineText.includes("yard") || routineText.includes("run")) return "Yard Run";
+  if (routineText.includes("treadmill")) return "Treadmill";
+  return "Treadmill";
+}
+
+function renderDashboardAlertTabs(alerts) {
+  const container = $("#dashboardAlertTabs");
+  if (!container) return;
+  const ordered = ["All", "Treadmill", "Scooter", "Yard Run", "Training", "Baths", "Heat", "Medical/Care", "Owner Updates", "Requests", "Maintenance", "Vaccines"];
+  const counts = alerts.reduce((acc, alert) => {
+    acc[alert.category] = (acc[alert.category] || 0) + 1;
+    acc.All = (acc.All || 0) + 1;
+    return acc;
+  }, { All: alerts.length });
+  const available = ordered.filter((label) => label === "All" || counts[label]);
+  if (!available.includes(dashboardAlertFilter)) dashboardAlertFilter = "All";
+  container.innerHTML = available
+    .map((label) => `<button type="button" class="${label === dashboardAlertFilter ? "is-active" : ""}" data-alert-filter="${escapeHtml(label)}">${escapeHtml(label)} <span>${counts[label] || 0}</span></button>`)
+    .join("");
+}
+
 function renderDashboard() {
   if (!$("#dashboardCards")) return;
   $("#dashboardDate").value ||= todayDate();
@@ -2828,19 +3206,22 @@ function renderDashboard() {
   ];
   $("#dashboardCards").innerHTML = cards.map(([key, label, value, note]) => `<article class="dashboard-card clickable-card" data-action="dashboard-detail" data-key="${key}"><span>${label}</span><strong>${value}</strong><p>${note}</p></article>`).join("");
   const alerts = [];
-  metrics.exerciseDueDogs.forEach((dog) => alerts.push(`<strong>Exercise due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.exerciseRoutine || dog.exerciseNotes || "Log treadmill, scooter, or yard run today.")}</p>`));
-  metrics.trainingDueDogs.forEach((dog) => alerts.push(`<strong>Training due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.trainingRoutine || dog.trainingGoals || "Log a training session today.")}</p>`));
-  metrics.ownedBathDueDogs.forEach((dog) => alerts.push(`<strong>Bath due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>Last bath: ${escapeHtml(dog.lastBath || "Not recorded")}</p>`));
-  metrics.inHeatDogs.forEach((dog) => alerts.push(`<strong>Female in heat: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>`));
-  metrics.heatSoonDogs.forEach((dog) => alerts.push(`<strong>Heat watch: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>`));
-  metrics.urgentRequestRecords.forEach((item) => alerts.push({ type: "request", id: item.id, html: `<strong>Urgent request: ${escapeHtml(item.category)}</strong><p>${escapeHtml(item.requestText || "")}</p>${mediaLinkHtml(item)}` }));
-  metrics.urgentMaintenanceRecords.forEach((item) => alerts.push({ type: "maintenance", id: item.id, html: `<strong>Urgent maintenance: ${escapeHtml(item.location)}</strong><p>${escapeHtml(item.issue || "")}</p>${mediaLinkHtml(item)}` }));
-  metrics.vaccineIssueDogs.forEach((dog) => alerts.push(`<strong>Vaccine warning: ${escapeHtml(dog.callName || dog.showName || "Dog")}</strong><p>DHPP date: ${escapeHtml(dog.dhppDate || "Not recorded")}</p>`));
-  metrics.ownerUpdateDogs.forEach((dog) => alerts.push(`<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml(dog.ownerName || "")} ${escapeHtml(dog.ownerPhone || "")}</p>`));
-  metrics.boardingBathDue.forEach((dogName) => alerts.push(`<strong>Bath due before pickup today</strong><p>${escapeHtml(dogName)}</p>`));
-  $("#dashboardAlerts").innerHTML = alerts.length
-    ? alerts.map((alert) => typeof alert === "string" ? `<article class="record-card is-urgent">${alert}</article>` : `<article class="record-card clickable-card is-urgent" data-action="view-alert" data-type="${alert.type}" data-id="${alert.id}">${alert.html}</article>`).join("")
-    : "<p>No urgent dashboard alerts right now.</p>";
+  metrics.exerciseDueDogs.forEach((dog) => alerts.push({ category: dashboardExerciseCategory(dog), html: `<strong>Exercise due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.exerciseRoutine || dog.exerciseNotes || "Log treadmill, scooter, or yard run today.")}</p>` }));
+  metrics.trainingDueDogs.forEach((dog) => alerts.push({ category: "Training", html: `<strong>Training due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.trainingRoutine || dog.trainingGoals || "Log a training session today.")}</p>` }));
+  metrics.ownedBathDueDogs.forEach((dog) => alerts.push({ category: "Baths", html: `<strong>Bath due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>Last bath: ${escapeHtml(dog.lastBath || "Not recorded")}</p>` }));
+  metrics.inHeatDogs.forEach((dog) => alerts.push({ category: "Heat", html: `<strong>Female in heat: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
+  metrics.heatSoonDogs.forEach((dog) => alerts.push({ category: "Heat", html: `<strong>Heat watch: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
+  metrics.medicalCareDogs.forEach((dog) => alerts.push({ category: "Medical/Care", html: `<strong>Care note: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.careStatus || dog.medicalNotes || dog.behaviorNotes || "Review care notes today.")}</p>` }));
+  metrics.urgentRequestRecords.forEach((item) => alerts.push({ category: "Requests", type: "request", id: item.id, html: `<strong>Urgent request: ${escapeHtml(item.category)}</strong><p>${escapeHtml(item.requestText || "")}</p>${mediaLinkHtml(item)}` }));
+  metrics.urgentMaintenanceRecords.forEach((item) => alerts.push({ category: "Maintenance", type: "maintenance", id: item.id, html: `<strong>Urgent maintenance: ${escapeHtml(item.location)}</strong><p>${escapeHtml(item.issue || "")}</p>${mediaLinkHtml(item)}` }));
+  metrics.vaccineIssueDogs.forEach((dog) => alerts.push({ category: "Vaccines", html: `<strong>Vaccine warning: ${escapeHtml(dog.callName || dog.showName || "Dog")}</strong><p>DHPP date: ${escapeHtml(dog.dhppDate || "Not recorded")}</p>` }));
+  metrics.ownerUpdateDogs.forEach((dog) => alerts.push({ category: "Owner Updates", html: `<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml(dog.ownerName || "")} ${escapeHtml(dog.ownerPhone || "")}</p>` }));
+  metrics.boardingBathDue.forEach((dogName) => alerts.push({ category: "Baths", html: `<strong>Bath due before pickup today</strong><p>${escapeHtml(dogName)}</p>` }));
+  renderDashboardAlertTabs(alerts);
+  const filteredAlerts = dashboardAlertFilter === "All" ? alerts : alerts.filter((alert) => alert.category === dashboardAlertFilter);
+  $("#dashboardAlerts").innerHTML = filteredAlerts.length
+    ? filteredAlerts.map((alert) => `<article class="record-card ${alert.type ? "clickable-card " : ""}is-urgent" ${alert.type ? `data-action="view-alert" data-type="${alert.type}" data-id="${alert.id}"` : ""}><span class="status-chip">${escapeHtml(alert.category)}</span>${alert.html}</article>`).join("")
+    : "<p>No alerts in this category right now.</p>";
   renderDashboardTaskCalendar();
   renderDashboardTimeline();
 }
@@ -2858,17 +3239,25 @@ function renderDashboardTaskCalendar() {
     if (date) counts[date] = (counts[date] || 0) + 1;
     return counts;
   }, {});
+  const noteCounts = readRecords("calendarNote").filter((record) => !record.removed && record.noteDate).reduce((counts, record) => {
+    counts[record.noteDate] = (counts[record.noteDate] || 0) + 1;
+    return counts;
+  }, {});
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const blanks = Array.from({ length: firstDay }, () => `<span class="calendar-blank"></span>`);
   const days = Array.from({ length: daysInMonth }, (_, index) => {
     const day = index + 1;
     const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const count = reportCounts[date] || 0;
+    const count = (reportCounts[date] || 0) + (noteCounts[date] || 0);
     return `<button type="button" class="calendar-day ${date === selectedDate ? "is-selected" : ""} ${count ? "has-records" : ""}" data-date="${date}"><span>${day}</span>${count ? `<small>${count}</small>` : ""}</button>`;
   });
   calendar.innerHTML = `<div class="calendar-title"><strong>Task Calendar</strong><span>${monthName}</span></div><div class="calendar-weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-grid">${blanks.join("")}${days.join("")}</div>`;
   renderCalendarNotes();
+}
+
+function calendarNoteAuthorText(note) {
+  return note.createdBy || note.updatedBy || note.helperName || note.authorName || note.createdByEmail || note.updatedByEmail || currentUser?.name || "Author not recorded";
 }
 
 function renderCalendarNotes() {
@@ -2887,7 +3276,7 @@ function renderCalendarNotes() {
         .map((note) => {
           const isSelected = note.noteDate === selectedDate;
           const actions = currentRole() === "admin" ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button></div>` : "";
-          return `<article class="record-card ${isSelected ? "is-approved" : ""}"><strong>${escapeHtml(note.noteDate || "")}${isSelected ? " - selected date" : ""}</strong><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
+          return `<article class="record-card ${isSelected ? "is-approved" : ""}"><strong>${escapeHtml(note.noteDate || "")}${isSelected ? " - selected date" : ""}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
         })
         .join("")
     : "<p>No calendar notes for the selected date or upcoming dates.</p>";
@@ -3603,17 +3992,29 @@ function initEvents() {
     const record = readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
     if (record) showDetailDialog(titleForRecord(card.dataset.type, record), detailForRecord(card.dataset.type, record), { type: card.dataset.type, id: record.id });
   });
+  $("#dashboardAlertTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-alert-filter]");
+    if (!button) return;
+    dashboardAlertFilter = button.dataset.alertFilter;
+    renderDashboard();
+  });
   $("#calendarNoteForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (currentRole() !== "admin") return;
     if (!validateForm(event.currentTarget)) return;
     const data = formPayload(event.currentTarget);
     const existing = data.id ? readRecords("calendarNote").find((note) => note.id === data.id) : {};
+    const now = new Date().toISOString();
+    const author = currentUser?.name || helperName.value || "Unknown staff";
     const payload = {
       ...existing,
       type: "calendarNote",
       id: data.id || uid("calendarNote"),
-      submittedAt: existing?.submittedAt || new Date().toISOString(),
+      submittedAt: existing?.submittedAt || now,
+      createdBy: existing?.createdBy || author,
+      createdByEmail: existing?.createdByEmail || currentUser?.email || "",
+      updatedBy: author,
+      updatedByEmail: currentUser?.email || "",
       ...data,
       removed: false,
     };
@@ -3621,7 +4022,7 @@ function initEvents() {
     await sendPayload(record);
     event.currentTarget.reset();
     event.currentTarget.elements.noteDate.value = $("#dashboardDate").value || todayDate();
-    renderCalendarNotes();
+    renderDashboardTaskCalendar();
     showToast("Calendar note saved.");
   });
   $("#newCalendarNoteButton").addEventListener("click", () => {
@@ -3641,7 +4042,7 @@ function initEvents() {
     }
     if (button.dataset.action === "remove-calendar-note") {
       await markRecordRemoved("calendarNote", note.id);
-      renderCalendarNotes();
+      renderDashboardTaskCalendar();
       showToast("Calendar note removed.");
     }
   });
@@ -3740,6 +4141,11 @@ function initEvents() {
     updateConditionalSections();
     updateRotationBanner();
   });
+  $("#dailyTaskTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-task-tab]");
+    if (!button) return;
+    setDailyTaskTab(button.dataset.taskTab);
+  });
   form.elements.date.addEventListener("change", () => {
     updateDayFromDate();
     updateConditionalSections();
@@ -3767,8 +4173,8 @@ function initEvents() {
     }
     if (!button) return;
     const record = readRecords("dailyTask").find((item) => item.id === button.dataset.id);
-    if (!record || !canEditOwnToday(record)) {
-      showToast("Only today's submitted report can be edited by the submitting helper. Admin can edit older reports.");
+    if (!record || !canEditRecentDailyReport(record)) {
+      showToast("Only reports from the last 3 days can be edited by the submitting staff member.");
       return;
     }
     form.reset();
@@ -3826,7 +4232,7 @@ function initEvents() {
     const clockOutTime = new Date().toISOString();
     saveTimeEntry({
       id: openRecord.id,
-      helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown helper",
+      helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown staff",
       helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
       clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
       clockOutTime,
@@ -3848,7 +4254,7 @@ function initEvents() {
     }
     if (!validateForm(event.currentTarget)) return;
     const payload = formPayload(event.currentTarget);
-    saveTimeEntry({ id: payload.manualTimeId, helperName: payload.manualHelper || helperName.value || "Unknown helper", date: payload.manualDate, clockInTime: payload.manualClockIn, clockOutTime: payload.manualClockOut, note: payload.manualNote });
+    saveTimeEntry({ id: payload.manualTimeId, helperName: payload.manualHelper || helperName.value || "Unknown staff", date: payload.manualDate, clockInTime: payload.manualClockIn, clockOutTime: payload.manualClockOut, note: payload.manualNote });
     event.currentTarget.reset();
     $("#manualDate").value = todayDate();
     $("#manualHelper").value = helperName.value;
@@ -3859,7 +4265,7 @@ function initEvents() {
     if (!button) return;
     const record = readRecords("timesheet").find((item) => item.id === button.dataset.id);
     if (!record || !canEditOwnToday(record)) {
-      showToast("Only today's time entry can be edited by the helper. Admin can edit older entries.");
+      showToast("Only today's time entry can be edited by the staff member. Admin can edit older entries.");
       return;
     }
     $("#manualTimeId").value = record.id;
@@ -3913,6 +4319,10 @@ function initEvents() {
     const header = event.target.closest("[data-sort-column]");
     if (header) setTableSort("ownedDog", header.dataset.sortColumn);
   });
+  $("#ownedDogTableHead").addEventListener("dragstart", handleTableHeaderDragStart);
+  $("#ownedDogTableHead").addEventListener("dragover", handleTableHeaderDragOver);
+  $("#ownedDogTableHead").addEventListener("drop", handleTableHeaderDrop);
+  $("#ownedDogTableHead").addEventListener("dragend", handleTableHeaderDragEnd);
   $("#addOwnedDogButton").addEventListener("click", () => openOwnedDog());
   $("#cancelOwnedDogEdit").addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
   $("#deleteOwnedDogButton").addEventListener("click", async () => {
@@ -4052,6 +4462,18 @@ function initEvents() {
   });
 
   $("#boardingDogSearch").addEventListener("input", renderBoardingDogs);
+  $("#boardingDogRosterTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-boarding-filter]");
+    if (!button) return;
+    boardingDogRosterFilter = button.dataset.boardingFilter;
+    renderBoardingDogs();
+  });
+  $("#boardingOwnerAccountPanel")?.addEventListener("click", async (event) => {
+    const button = event.target.closest('[data-action="link-boarding-owner"]');
+    if (!button) return;
+    const record = readRecords("boardingDog").find((item) => item.id === button.dataset.id);
+    if (record) await linkBoardingDogOwnerAccount(record);
+  });
   $("#boardingDogColumnManager").addEventListener("click", (event) => {
     const control = event.target.closest("[data-action]");
     if (!control) return;
@@ -4075,6 +4497,10 @@ function initEvents() {
     const header = event.target.closest("[data-sort-column]");
     if (header) setTableSort("boardingDog", header.dataset.sortColumn);
   });
+  $("#boardingDogTableHead").addEventListener("dragstart", handleTableHeaderDragStart);
+  $("#boardingDogTableHead").addEventListener("dragover", handleTableHeaderDragOver);
+  $("#boardingDogTableHead").addEventListener("drop", handleTableHeaderDrop);
+  $("#boardingDogTableHead").addEventListener("dragend", handleTableHeaderDragEnd);
   $("#addBoardingDogButton").addEventListener("click", () => openBoardingDog());
   $("#cancelBoardingDogEdit").addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
   $("#editBoardingDogButton").addEventListener("click", () => {
@@ -4097,7 +4523,7 @@ function initEvents() {
       const record = readRecords("boardingDog").find((item) => item.id === button.dataset.id);
       if (!record) return;
       if (action === "approve-boarding") {
-        const updated = upsertRecord("boardingDog", withBoardingStatusTransition(record, "Approved") || record);
+        const updated = upsertRecord("boardingDog", approveBoardingRecord(record));
         await sendPayload(updated);
         renderBoardingDogs();
         renderBoardingRequests();
@@ -4144,8 +4570,12 @@ function initEvents() {
     event.stopPropagation();
     const record = readRecords("boardingDog").find((item) => item.id === button.dataset.id);
     if (!record) return;
+    if (button.dataset.action === "link-boarding-owner") {
+      await linkBoardingDogOwnerAccount(record);
+      return;
+    }
     if (button.dataset.action === "approve-boarding") {
-      const updated = upsertRecord("boardingDog", withBoardingStatusTransition(record, "Approved") || record);
+      const updated = upsertRecord("boardingDog", approveBoardingRecord(record));
       await sendPayload(updated);
       renderBoardingDogs();
       renderBoardingRequests();
@@ -4183,29 +4613,58 @@ function initEvents() {
     const formEl = event.currentTarget;
     try {
       const existing = activeBoardingDog() || {};
+      const isNewBoardingDog = !existing.id;
       const formData = formPayload(formEl);
       if (!validateForm(formEl)) return;
       const dogId = existing.id || formData.id || uid("boardingDog");
       const photo = await durableDogPhoto("boarding", existing, formData, $("#boardingDogPhotoInput"), dogId);
+      const timestamp = new Date().toISOString();
+      const currentStatus = existing.id ? normalizeBoardingStatus(existing) : "";
+      const selectedStatus = boardingLifecycleStatuses.includes(formData.boardingStatus) ? formData.boardingStatus : normalizeBoardingStatus({ boardingStatus: formData.boardingStatus || existing.boardingStatus || "Approved" });
+      const statusChanged = Boolean(existing.id) && selectedStatus !== currentStatus;
+      const statusHistory = statusChanged
+        ? [
+            ...(existing.statusHistory || []),
+            {
+              from: currentStatus,
+              to: selectedStatus,
+              date: timestamp,
+              by: currentUser?.name || helperName?.value || "",
+            },
+          ]
+        : existing.statusHistory || [];
+      const statusTargetStayId = currentOrNextStay(existing)?.id || "";
+      const statusScopedStays = statusChanged
+        ? (existing.stays || []).map((stay) => (stay.id && stay.id === statusTargetStayId ? { ...stay, status: selectedStatus, updatedAt: timestamp } : stay))
+        : existing.stays || [];
       const payload = {
         ...existing,
         type: "boardingDog",
         id: dogId,
-        submittedAt: existing.submittedAt || new Date().toISOString(),
+        submittedAt: existing.submittedAt || timestamp,
         ...formData,
-        boardingStatus: existing.boardingStatus || formData.boardingStatus || "Approved",
-        statusHistory: existing.statusHistory || [],
+        boardingStatus: selectedStatus,
+        statusHistory,
+        entrySource: existing.entrySource || (existing.customerRequest ? "customer" : "staff-admin"),
         rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
         flags: checkedFrom(formEl, "boardingFlags"),
         profilePhotoUrl: photo.profilePhotoUrl,
         profilePhotoData: photo.profilePhotoData,
-        stays: existing.stays || [],
+        stays: statusScopedStays,
+        checkedInAt: selectedStatus === "Checked In" ? existing.checkedInAt || timestamp : existing.checkedInAt || "",
+        inKennelAt: selectedStatus === "In Kennel" ? existing.inKennelAt || timestamp : existing.inKennelAt || "",
+        readyForPickupAt: selectedStatus === "Ready For Pickup" ? existing.readyForPickupAt || timestamp : existing.readyForPickupAt || "",
+        checkedOutAt: selectedStatus === "Checked Out" ? existing.checkedOutAt || timestamp : currentStatus === "Checked Out" && statusChanged ? "" : existing.checkedOutAt || "",
+        cancelledAt: selectedStatus === "Cancelled" ? existing.cancelledAt || timestamp : currentStatus === "Cancelled" && statusChanged ? "" : existing.cancelledAt || "",
       };
       const record = upsertRecord("boardingDog", payload);
       await sendPayload(record);
+      formEl.elements.id.value = record.id;
       $("#boardingSchedulePanel").hidden = false;
       setDogPhoto("boarding", record);
       renderBoardingStays(record);
+      if (isNewBoardingDog) boardingDogRosterFilter = "All Boarding Dogs";
+      renderBoardingOwnerAccountPanel(record);
       renderBoardingDogs();
       renderBoardingRequests();
       selectedDogPhotos.boarding = null;
@@ -4230,12 +4689,16 @@ function initEvents() {
     }
     const payload = formPayload(formEl);
     const existingStay = (dog.stays || []).find((stay) => stay.id === payload.stayId);
+    const timestamp = new Date().toISOString();
+    const existingStayStatus = normalizeBoardingStatus({ boardingStatus: existingStay?.status || "" });
+    const shouldAutoApproveStay = !existingStay || (!dog.customerRequest && existingStayStatus === "Pending");
     const stay = {
       ...existingStay,
       id: payload.stayId || uid("stay"),
-      createdAt: existingStay?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      status: existingStay?.status || normalizeBoardingStatus(dog),
+      createdAt: existingStay?.createdAt || timestamp,
+      updatedAt: timestamp,
+      source: existingStay?.source || "staff-admin",
+      status: shouldAutoApproveStay ? "Approved" : existingStay?.status || "Approved",
       dropoffTime: payload.dropoffTime,
       pickupTime: payload.pickupTime,
       requests: checkedFrom(formEl, "stayRequests"),
@@ -4246,6 +4709,19 @@ function initEvents() {
     const stayIndex = dog.stays.findIndex((item) => item.id === stay.id);
     if (stayIndex >= 0) dog.stays[stayIndex] = stay;
     else dog.stays.unshift(stay);
+    const currentDogStatus = normalizeBoardingStatus(dog);
+    if (!existingStay && ["Pending", "Cancelled", "Checked Out"].includes(currentDogStatus)) {
+      dog.boardingStatus = "Approved";
+      dog.statusHistory = [
+        ...(dog.statusHistory || []),
+        {
+          from: currentDogStatus,
+          to: "Approved",
+          date: timestamp,
+          by: currentUser?.name || helperName?.value || "",
+        },
+      ];
+    }
     const record = upsertRecord("boardingDog", dog);
     await sendPayload(record);
     renderBoardingStays(record);
@@ -4604,6 +5080,7 @@ async function initializeApp() {
   renderDailyTaskLists();
   setupRequiredFields();
   initEvents();
+  hydrateLoginFromUrl();
   updateNavigationAccess();
   renderAllRecords();
   if (helperIsLoggedIn()) switchPage(currentRole() === "customer" ? "customerPage" : "dashboardPage");

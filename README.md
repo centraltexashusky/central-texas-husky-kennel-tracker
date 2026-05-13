@@ -1,4 +1,4 @@
-# Central Texas Husky Kennel Task Tracker
+# Snuggle Stay
 
 This is a review version of the kennel operations app.
 

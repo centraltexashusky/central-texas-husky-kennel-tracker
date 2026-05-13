@@ -1,4 +1,4 @@
-# Wix Setup Guide: Kennel Task Tracker
+# Wix Setup Guide: Snuggle Stay
 
 ## Goal
 
@@ -32,7 +32,7 @@ Steps:
 
 1. Publish the tracker files to a static host such as GitHub Pages, Netlify, or another HTTPS host.
 2. In Wix, create a page called:
-   `Kennel Tracker`
+   `Snuggle Stay`
 3. Hide the page from the site menu.
 4. Add an Embed / iFrame element.
 5. Paste the hosted tracker URL.

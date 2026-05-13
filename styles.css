@@ -30,6 +30,8 @@ html {
 
 body {
   margin: 0;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 body,
@@ -44,6 +46,13 @@ input,
 select,
 textarea {
   font: inherit;
+  max-width: 100%;
+}
+
+img,
+video,
+iframe {
+  max-width: 100%;
 }
 
 .app-layout {
@@ -329,23 +338,6 @@ h2 {
   background: #f6f8f7;
 }
 
-.data-table tr.is-current-boarding td {
-  background: #e2f3e7;
-  border-bottom-color: #b7d9c2;
-}
-
-.data-table tr.is-current-boarding:hover td {
-  background: #d6ecd9;
-}
-
-.data-table tr.is-pending-boarding td {
-  background: #fff0d6;
-  border-bottom-color: #efc46a;
-}
-
-.data-table tr.is-pending-boarding:hover td {
-  background: #ffe7ba;
-}
 
 .detail-panel {
   border-color: #bdd2d0;
@@ -910,22 +902,6 @@ button:focus-visible {
   opacity: 0.72;
 }
 
-.record-card.is-approved {
-  background: #e2f3e7;
-  border-color: #8ec49e;
-  box-shadow: inset 4px 0 0 #4f9b62;
-}
-
-.record-card.is-pending {
-  background: #fff0d6;
-  border-color: #efc46a;
-  box-shadow: inset 4px 0 0 #d99d2f;
-}
-
-.record-card.is-cancelled {
-  background: #eef2f1;
-  opacity: 0.72;
-}
 
 .record-card.is-completed strong {
   text-decoration: line-through;
@@ -1048,13 +1024,18 @@ textarea {
 }
 
 .task-item {
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
   position: relative;
 }
 
 .task-text {
-  flex: 1 1 auto;
+  flex: 1 1 14rem;
+  line-height: 1.35;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-top: 2px;
+  white-space: normal;
 }
 
 .task-edit-input {
@@ -1063,15 +1044,24 @@ textarea {
   border-radius: 6px;
   flex: 1 1 auto;
   font-weight: 700;
+  color: var(--ink);
+  line-height: 1.3;
   min-height: 36px;
   min-width: 0;
   padding: 7px 8px;
+  width: 100%;
 }
 
 .task-edit-input:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(55, 111, 106, 0.14);
   outline: none;
+}
+
+.checklist .task-edit-input {
+  flex: 1 1 14rem;
+  height: auto;
+  width: 100%;
 }
 
 .task-admin-tools {
@@ -1793,23 +1783,11 @@ option {
   letter-spacing: 0.08em;
 }
 
-.data-table tr:hover td,
-.data-table tr.is-current-boarding td,
-.data-table tr.is-current-boarding:hover td,
-.data-table tr.is-pending-boarding td,
-.data-table tr.is-pending-boarding:hover td {
+.data-table tr:hover td {
   background: rgba(255, 255, 255, 0.12);
 }
 
-.data-table tr.is-current-boarding td,
-.record-card.is-approved {
-  background: rgba(52, 199, 89, 0.18);
-  border-color: rgba(52, 199, 89, 0.38);
-  box-shadow: inset 4px 0 0 rgba(52, 199, 89, 0.56), var(--glass-specular);
-}
 
-.data-table tr.is-pending-boarding td,
-.record-card.is-pending,
 .notice,
 .alert-banner,
 .estimate-total,
@@ -1819,7 +1797,6 @@ option {
   color: rgba(255, 249, 228, 0.94);
 }
 
-.record-card.is-cancelled,
 .record-card.is-completed {
   background: rgba(255, 255, 255, 0.07);
   opacity: 0.72;
@@ -1923,32 +1900,25 @@ option {
   border-color: rgba(255, 231, 174, 0.42);
 }
 
-.boarding-status-chip.is-status-pending,
-.record-card.is-status-pending {
+.boarding-status-chip.is-status-pending {
   background: rgba(255, 204, 102, 0.18);
   border-color: rgba(255, 204, 102, 0.38);
 }
 
 .boarding-status-chip.is-status-approved,
 .boarding-status-chip.is-status-checked-in,
-.boarding-status-chip.is-status-in-kennel,
-.record-card.is-status-approved,
-.record-card.is-status-checked-in,
-.record-card.is-status-in-kennel {
+.boarding-status-chip.is-status-in-kennel {
   background: rgba(185, 222, 207, 0.22);
   border-color: rgba(185, 222, 207, 0.44);
 }
 
-.boarding-status-chip.is-status-ready-for-pickup,
-.record-card.is-status-ready-for-pickup {
+.boarding-status-chip.is-status-ready-for-pickup {
   background: rgba(173, 216, 230, 0.22);
   border-color: rgba(173, 216, 230, 0.44);
 }
 
 .boarding-status-chip.is-status-cancelled,
-.boarding-status-chip.is-status-checked-out,
-.record-card.is-status-cancelled,
-.record-card.is-status-checked-out {
+.boarding-status-chip.is-status-checked-out {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.18);
 }
@@ -2097,6 +2067,99 @@ option {
   }
 }
 
+@media (max-width: 1180px) {
+  .app-layout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .app-shell {
+    max-width: 100%;
+    padding-inline: 16px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .summary-grid,
+  .care-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .app-layout {
+    display: block;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobile-page-menu {
+    background: rgba(255, 255, 255, 0.10);
+    backdrop-filter: blur(var(--glass-blur-high)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur-high)) saturate(180%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: var(--glass-shadow), var(--glass-specular);
+    display: grid;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 14px;
+  }
+
+  .app-shell {
+    padding: 20px 14px 42px;
+  }
+
+  .page-header,
+  .login-panel,
+  .submit-bar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-grid,
+  .timesheet-grid,
+  .summary-grid,
+  .care-summary-grid,
+  .dashboard-grid,
+  .activity-entry-grid,
+  .admin-task-controls,
+  .inline-login-form,
+  .checklist.two-column,
+  .checklist.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .dog-profile-editor {
+    align-items: stretch;
+  }
+
+  .table-toolbar,
+  .filter-toolbar,
+  .filter-toolbar label {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profile-tabs,
+  .care-filter-toolbar,
+  .table-actions,
+  .record-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profile-tabs button,
+  .care-filter-toolbar button,
+  .table-actions button,
+  .record-actions button {
+    width: 100%;
+  }
+}
+
 @media (max-width: 760px) {
   .app-layout {
     display: block;
@@ -2152,9 +2215,24 @@ option {
     flex-basis: 96px;
   }
 
+  .filter-toolbar,
+  .filter-toolbar label,
   .table-toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .table-wrap {
+    margin-inline: -2px;
+    padding: 8px;
+  }
+
+  .data-table {
+    min-width: 680px;
+  }
+
+  .table-actions {
+    min-width: 0;
   }
 
   .profile-tabs,
@@ -2514,4 +2592,125 @@ body.is-login-view #loginPage .login-auth-section {
   #loginPage .signup-panel {
     padding: 20px;
   }
+}
+
+@media (max-width: 430px) {
+  .app-shell {
+    padding-inline: 10px;
+  }
+
+  .form-section,
+  .recent-submissions,
+  .structured-care-panel,
+  .owned-profile-section {
+    border-radius: 16px;
+    padding: 12px;
+  }
+
+  .dashboard-card,
+  .summary-card,
+  .record-card {
+    min-height: auto;
+    padding: 12px;
+  }
+
+  .section-heading {
+    align-items: flex-start;
+  }
+
+  .section-heading span {
+    height: 34px;
+    width: 34px;
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+
+  #loginPage .login-copy h2 {
+    font-size: 2.35rem;
+  }
+}
+
+
+.daily-task-tabs {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.daily-task-tabs button,
+.alert-filter-toolbar button {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 9px 13px;
+}
+
+.daily-task-tabs button.is-active,
+.alert-filter-toolbar button.is-active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.alert-filter-toolbar {
+  margin: 8px 0 14px;
+}
+
+.alert-filter-toolbar button span {
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+  display: inline-block;
+  margin-left: 5px;
+  min-width: 1.6em;
+  padding: 1px 6px;
+}
+
+.data-table th[draggable="true"] {
+  cursor: grab;
+  user-select: none;
+}
+
+.data-table th.is-dragging {
+  opacity: 0.58;
+}
+
+
+.boarding-roster-tabs {
+  flex-wrap: wrap;
+}
+
+.boarding-roster-tabs button {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 9px 13px;
+}
+
+.boarding-roster-tabs button.is-active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.boarding-roster-tabs button span {
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  display: inline-block;
+  margin-left: 5px;
+  min-width: 1.6em;
+  padding: 1px 6px;
+}
+
+.owner-account-panel {
+  margin-top: 16px;
 }
