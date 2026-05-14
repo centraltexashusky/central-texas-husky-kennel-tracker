@@ -1342,6 +1342,68 @@ textarea {
   text-transform: uppercase;
 }
 
+.quick-care-dog-summary {
+  align-items: start;
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 92px minmax(0, 1fr);
+  padding: 12px;
+}
+
+.quick-care-dog-photo {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  height: 92px;
+  object-fit: cover;
+  width: 92px;
+}
+
+.quick-care-dog-initials {
+  align-items: center;
+  background: var(--sage);
+  color: var(--teal-dark);
+  display: flex;
+  font-weight: 800;
+  justify-content: center;
+}
+
+.quick-care-dog-summary h3 {
+  margin: 0 0 8px;
+}
+
+.quick-care-dog-facts {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.quick-care-dog-facts div {
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(188, 202, 196, 0.72);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  padding: 8px;
+}
+
+.quick-care-dog-facts span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+}
+
+.quick-care-dog-facts strong {
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.dashboard-quick-care-form {
+  margin-top: 4px;
+}
+
 .activity-entry-grid {
   display: grid;
   gap: 12px;
@@ -2861,4 +2923,19 @@ body.is-login-view #loginPage .login-auth-section {
 
 .owner-account-panel {
   margin-top: 16px;
+}
+
+@media (max-width: 620px) {
+  .quick-care-dog-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .quick-care-dog-photo {
+    height: 120px;
+    width: 120px;
+  }
+
+  .quick-care-dog-facts {
+    grid-template-columns: 1fr;
+  }
 }

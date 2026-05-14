@@ -1960,6 +1960,11 @@ function lastExerciseMinutesForDog(dog, careType) {
   return match ? String(match.minutes) : "10";
 }
 
+function latestExerciseLogForDog(dog, careType) {
+  const logs = normalizeOwnedDogCare(dog).exerciseLogs || [];
+  return logs.find((log) => log.type === careType) || null;
+}
+
 function setCareFieldVisibility(labelSelector, visible) {
   const label = $(labelSelector);
   if (label) label.hidden = !visible;
@@ -2019,27 +2024,40 @@ async function addPendingCareLog() {
   if (["Bath", "Heat Note", "Medical/Behavior Note", "Training"].includes(careType) && !($("#careQuickDate")?.value || "")) {
     $("#careQuickDate").value = form?.elements.date?.value || todayDate();
   }
-  const log = {
-    id: uid("care"),
-    dogId,
-    dogName: ownedDogDisplayName(dog),
+  const log = buildStructuredCareLog(dog, {
     careType,
     minutes: $("#careQuickMinutes")?.value || "",
     note: $("#careQuickNote")?.value || "",
-    completedBy: helperName.value || currentUser?.name || "",
-    completedEmail: helperEmail.value || currentUser?.email || "",
     date: $("#careQuickDate")?.value || form?.elements.date?.value || todayDate(),
-    loggedAt: new Date().toISOString(),
-  };
-  const date = currentDailyDate();
-  const structuredCareLogs = [log, ...structuredCareLogsForDate(date)];
-  const record = await saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
+  });
+  const record = await saveStructuredCareLog(log);
   resetCareQuickLogForm();
   showDetailDialog(
     `${careType} Logged`,
     `<div class="detail-row"><strong>Dog</strong><span>${escapeHtml(log.dogName)}</span></div><div class="detail-row"><strong>Date</strong><span>${escapeHtml(log.date)}</span></div>${log.minutes ? `<div class="detail-row"><strong>Minutes</strong><span>${escapeHtml(log.minutes)}</span></div>` : ""}${log.note ? `<div class="detail-row"><strong>Note</strong><span>${escapeHtml(log.note)}</span></div>` : ""}<div class="detail-row"><strong>Saved by</strong><span>${escapeHtml(log.completedBy || "Staff")}</span></div>`,
   );
   return record;
+}
+
+function buildStructuredCareLog(dog, { careType, minutes = "", note = "", date = todayDate() } = {}) {
+  return {
+    id: uid("care"),
+    dogId: dog.id,
+    dogName: ownedDogDisplayName(dog),
+    careType,
+    minutes,
+    note,
+    completedBy: helperName.value || currentUser?.name || "",
+    completedEmail: helperEmail.value || currentUser?.email || "",
+    date: date || todayDate(),
+    loggedAt: new Date().toISOString(),
+  };
+}
+
+async function saveStructuredCareLog(log) {
+  const date = log.date || todayDate();
+  const structuredCareLogs = [log, ...structuredCareLogsForDate(date)];
+  return saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
 }
 
 async function completeDailyTask(button) {
@@ -2464,7 +2482,8 @@ function showDetailDialog(title, html, context = null) {
   } else {
     completeButton.hidden = true;
   }
-  $("#detailDialog").showModal();
+  const dialog = $("#detailDialog");
+  if (!dialog.open) dialog.showModal();
 }
 
 function showMediaDialog(src, type, name) {
@@ -3705,6 +3724,112 @@ function dashboardExerciseCategory(dog) {
   return "Treadmill";
 }
 
+function dashboardQuickCareSummaryHtml(dog, careType) {
+  const heat = ownedDogHeatStatus(dog, $("#dashboardDate")?.value || todayDate());
+  const latestExercise = careTypeIsExercise(careType) ? latestExerciseLogForDog(dog, careType) : null;
+  const photo = dog.profilePhotoUrl || dog.profilePhotoData || "";
+  const photoHtml = photo
+    ? `<img class="quick-care-dog-photo" src="${escapeHtml(photo)}" alt="${escapeHtml(ownedDogDisplayName(dog))}" />`
+    : `<div class="quick-care-dog-photo quick-care-dog-initials">${escapeHtml(avatarText(ownedDogDisplayName(dog)))}</div>`;
+  const rows = [
+    ["Sex", dog.sex || ""],
+    ["Care status", ownedDogCareSummary(dog, $("#dashboardDate")?.value || todayDate())],
+    ["Last exercise", dog.lastExerciseDate || "Not recorded"],
+    ["Last training", dog.lastTrainingDate || "Not recorded"],
+    ["Last bath", dog.lastBath || "Not recorded"],
+    ["Last heat", dog.sex === "Female" ? dog.lastHeat || "Not recorded" : ""],
+    ["Heat status", dog.sex === "Female" ? heat.label : ""],
+    ["Last " + careType, latestExercise ? `${latestExercise.minutes || 0} minutes on ${latestExercise.date || "unknown date"}` : ""],
+  ]
+    .filter(([, value]) => value)
+    .map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
+    .join("");
+  return `<section class="quick-care-dog-summary">${photoHtml}<div><h3>${escapeHtml(ownedDogDisplayName(dog))}</h3><div class="quick-care-dog-facts">${rows}</div></div></section>`;
+}
+
+function dashboardQuickCareFormHtml(dog, careType) {
+  const summary = dashboardQuickCareSummaryHtml(dog, careType);
+  if (careTypeIsExercise(careType)) {
+    return `${summary}<form id="dashboardQuickCareForm" class="tracker-form dashboard-quick-care-form" data-care-type="${escapeHtml(careType)}" data-dog-id="${escapeHtml(dog.id)}"><label>Minutes<input type="number" name="minutes" min="1" required value="${escapeHtml(lastExerciseMinutesForDog(dog, careType))}" /></label><div class="button-row"><button type="submit">Submit Exercise</button></div></form>`;
+  }
+  if (careType === "Training") {
+    return `${summary}<form id="dashboardQuickCareForm" class="tracker-form dashboard-quick-care-form" data-care-type="Training" data-dog-id="${escapeHtml(dog.id)}"><label>Training note<textarea name="note" rows="4" placeholder="basic training, stacking, gaiting, ring routine"></textarea></label><div class="button-row"><button type="submit">Log Training</button></div></form>`;
+  }
+  if (careType === "Bath") {
+    return `${summary}<form id="dashboardQuickCareForm" class="tracker-form dashboard-quick-care-form" data-care-type="Bath" data-dog-id="${escapeHtml(dog.id)}"><label>Bath date<input type="date" name="date" required value="${todayDate()}" /></label><div class="button-row"><button type="submit">Log Bath</button></div></form>`;
+  }
+  if (careType === "Heat Note") {
+    return `${summary}<form id="dashboardQuickCareForm" class="tracker-form dashboard-quick-care-form" data-care-type="Heat Note" data-dog-id="${escapeHtml(dog.id)}"><label>Heat date<input type="date" name="date" required value="${todayDate()}" /></label><div class="button-row"><button type="submit">Log Heat</button></div></form>`;
+  }
+  return summary;
+}
+
+function openDashboardQuickCare(dogId, careType) {
+  const dog = readRecords("ownedDog").find((record) => record.id === dogId && !record.removed);
+  if (!dog) {
+    showToast("This dog record is no longer available.");
+    return;
+  }
+  if (careType === "Heat Note" && dog.sex !== "Female") {
+    showDetailDialog("Invalid Heat Entry", `<p>Heat logs can only be saved for female dogs. ${escapeHtml(ownedDogDisplayName(dog))} is saved as ${escapeHtml(dog.sex || "not female")}.</p>`);
+    return;
+  }
+  const titles = {
+    Training: "Log Training",
+    Bath: "Log Bath",
+    "Heat Note": "Log Heat Cycle",
+  };
+  showDetailDialog(titles[careType] || `Log ${careType}`, dashboardQuickCareFormHtml(dog, careType));
+}
+
+async function submitDashboardQuickCare(formEl) {
+  if (!helperIsLoggedIn()) {
+    showToast("Sign in first.");
+    return;
+  }
+  const dog = readRecords("ownedDog").find((record) => record.id === formEl.dataset.dogId && !record.removed);
+  const careType = formEl.dataset.careType || "";
+  if (!dog || !careType) {
+    showToast("This quick log cannot be saved because the dog or care type is missing.");
+    return;
+  }
+  if (careType === "Heat Note" && dog.sex !== "Female") {
+    showDetailDialog("Invalid Heat Entry", `<p>Heat logs can only be saved for female dogs. ${escapeHtml(ownedDogDisplayName(dog))} is saved as ${escapeHtml(dog.sex || "not female")}.</p>`);
+    return;
+  }
+  const submitButton = formEl.querySelector('button[type="submit"]');
+  setSubmitState(submitButton, true, "Saving...");
+  try {
+    const formData = new FormData(formEl);
+    const minutes = careTypeIsExercise(careType) ? String(formData.get("minutes") || "") : "";
+    if (careTypeIsExercise(careType) && Number(minutes || 0) <= 0) {
+      showToast("Enter exercise minutes before saving.");
+      return;
+    }
+    const note = careType === "Training" ? String(formData.get("note") || "").trim() : "";
+    const date = careTypeIsExercise(careType) || careType === "Training" ? todayDate() : String(formData.get("date") || todayDate());
+    const defaultNotes = {
+      Bath: "Bath logged from dashboard.",
+      "Heat Note": "Heat cycle logged from dashboard.",
+    };
+    const log = buildStructuredCareLog(dog, {
+      careType,
+      minutes,
+      note: note || defaultNotes[careType] || "",
+      date,
+    });
+    await saveStructuredCareLog(log);
+    showDetailDialog(
+      `${careTypeIsExercise(careType) ? "Exercise" : careType === "Heat Note" ? "Heat" : careType} Logged`,
+      `<div class="detail-row"><strong>Dog</strong><span>${escapeHtml(log.dogName)}</span></div><div class="detail-row"><strong>Date</strong><span>${escapeHtml(log.date)}</span></div><div class="detail-row"><strong>Care type</strong><span>${escapeHtml(log.careType)}</span></div>${log.minutes ? `<div class="detail-row"><strong>Minutes</strong><span>${escapeHtml(log.minutes)}</span></div>` : ""}${log.note ? `<div class="detail-row"><strong>Note</strong><span>${escapeHtml(log.note)}</span></div>` : ""}<div class="detail-row"><strong>Saved by</strong><span>${escapeHtml(log.completedBy || "Staff")}</span></div>`,
+    );
+  } catch (error) {
+    showDetailDialog("Care Log Not Saved", `<p>The care log could not be saved: ${escapeHtml(error.message)}</p>`);
+  } finally {
+    setSubmitState(submitButton, false);
+  }
+}
+
 function renderDashboardAlertTabs(alerts) {
   const container = $("#dashboardAlertTabs");
   if (!container) return;
@@ -3752,11 +3877,14 @@ function renderDashboard() {
   ];
   $("#dashboardCards").innerHTML = cards.map(([key, label, value, note]) => `<article class="dashboard-card clickable-card" data-action="dashboard-detail" data-key="${key}"><span>${label}</span><strong>${value}</strong><p>${note}</p></article>`).join("");
   const alerts = [];
-  metrics.exerciseDueDogs.forEach((dog) => alerts.push({ category: dashboardExerciseCategory(dog), html: `<strong>Exercise due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.exerciseRoutine || dog.exerciseNotes || "Log treadmill, scooter, or yard run today.")}</p>` }));
-  metrics.trainingDueDogs.forEach((dog) => alerts.push({ category: "Training", html: `<strong>Training due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.trainingRoutine || dog.trainingGoals || "Log a training session today.")}</p>` }));
-  metrics.ownedBathDueDogs.forEach((dog) => alerts.push({ category: "Baths", html: `<strong>Bath due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>Last bath: ${escapeHtml(dog.lastBath || "Not recorded")}</p>` }));
-  metrics.inHeatDogs.forEach((dog) => alerts.push({ category: "Heat", html: `<strong>Female in heat: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
-  metrics.heatSoonDogs.forEach((dog) => alerts.push({ category: "Heat", html: `<strong>Heat watch: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
+  metrics.exerciseDueDogs.forEach((dog) => {
+    const careType = dashboardExerciseCategory(dog);
+    alerts.push({ category: careType, action: "dashboard-quick-care", dogId: dog.id, careType, html: `<strong>${escapeHtml(careType)} due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.exerciseRoutine || dog.exerciseNotes || `Log ${careType.toLowerCase()} today.`)}</p>` });
+  });
+  metrics.trainingDueDogs.forEach((dog) => alerts.push({ category: "Training", action: "dashboard-quick-care", dogId: dog.id, careType: "Training", html: `<strong>Training due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.trainingRoutine || dog.trainingGoals || "Log a training session today.")}</p>` }));
+  metrics.ownedBathDueDogs.forEach((dog) => alerts.push({ category: "Baths", action: "dashboard-quick-care", dogId: dog.id, careType: "Bath", html: `<strong>Bath due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>Last bath: ${escapeHtml(dog.lastBath || "Not recorded")}</p>` }));
+  metrics.inHeatDogs.forEach((dog) => alerts.push({ category: "Heat", action: "dashboard-quick-care", dogId: dog.id, careType: "Heat Note", html: `<strong>Female in heat: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
+  metrics.heatSoonDogs.forEach((dog) => alerts.push({ category: "Heat", action: "dashboard-quick-care", dogId: dog.id, careType: "Heat Note", html: `<strong>Heat watch: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
   metrics.medicalCareDogs.forEach((dog) => alerts.push({ category: "Medical/Care", html: `<strong>Care note: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.careStatus || dog.medicalNotes || dog.behaviorNotes || "Review care notes today.")}</p>` }));
   metrics.urgentRequestRecords.forEach((item) => alerts.push({ category: "Requests", type: "request", id: item.id, html: `<strong>Urgent request: ${escapeHtml(item.category)}</strong><p>${escapeHtml(item.requestText || "")}</p>${mediaLinkHtml(item)}` }));
   metrics.urgentMaintenanceRecords.forEach((item) => alerts.push({ category: "Maintenance", type: "maintenance", id: item.id, html: `<strong>Urgent maintenance: ${escapeHtml(item.location)}</strong><p>${escapeHtml(item.issue || "")}</p>${mediaLinkHtml(item)}` }));
@@ -3768,7 +3896,14 @@ function renderDashboard() {
   const visibleAlerts = dashboardAlertFilter === "All" && !dashboardShowAllAlerts ? filteredAlerts.slice(0, 12) : filteredAlerts;
   const showMore = filteredAlerts.length > visibleAlerts.length ? `<article class="record-card dashboard-more-card"><strong>${filteredAlerts.length - visibleAlerts.length} more items hidden</strong><p>Use the filters above or expand the full list when you are reviewing instead of working the queue.</p><button type="button" class="secondary-button" data-action="show-all-alerts">Show All</button></article>` : "";
   $("#dashboardAlerts").innerHTML = filteredAlerts.length
-    ? visibleAlerts.map((alert) => `<article class="record-card ${alert.type ? "clickable-card " : ""}is-urgent" ${alert.type ? `data-action="view-alert" data-type="${alert.type}" data-id="${alert.id}"` : ""}><span class="status-chip">${escapeHtml(alert.category)}</span>${alert.html}</article>`).join("") + showMore
+    ? visibleAlerts
+        .map((alert) => {
+          const quickCareAttrs = alert.action === "dashboard-quick-care" ? `data-action="dashboard-quick-care" data-dog-id="${escapeHtml(alert.dogId)}" data-care-type="${escapeHtml(alert.careType)}"` : "";
+          const recordAttrs = alert.type ? `data-action="view-alert" data-type="${alert.type}" data-id="${alert.id}"` : "";
+          const clickableClass = alert.action === "dashboard-quick-care" || alert.type ? "clickable-card " : "";
+          return `<article class="record-card ${clickableClass}is-urgent" ${quickCareAttrs || recordAttrs}><span class="status-chip">${escapeHtml(alert.category)}</span>${alert.html}</article>`;
+        })
+        .join("") + showMore
     : "<p>No alerts in this category right now.</p>";
   renderDashboardTaskCalendar();
   renderDashboardTimeline();
@@ -4545,6 +4680,11 @@ function initEvents() {
     }
     const mediaButton = event.target.closest('[data-action="view-media"]');
     if (mediaButton) return;
+    const quickCareCard = event.target.closest('[data-action="dashboard-quick-care"]');
+    if (quickCareCard) {
+      openDashboardQuickCare(quickCareCard.dataset.dogId, quickCareCard.dataset.careType);
+      return;
+    }
     const card = event.target.closest('[data-action="view-alert"]');
     if (!card) return;
     const record = readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
@@ -4683,6 +4823,12 @@ function initEvents() {
     toggle.textContent = section.classList.contains("is-collapsed") ? "Expand" : "Minimize";
   });
   $("#closeDetailDialog").addEventListener("click", () => $("#detailDialog").close());
+  $("#detailDialogBody").addEventListener("submit", async (event) => {
+    const quickCareForm = event.target.closest("#dashboardQuickCareForm");
+    if (!quickCareForm) return;
+    event.preventDefault();
+    await submitDashboardQuickCare(quickCareForm);
+  });
   $("#completeDetailTaskButton").addEventListener("click", async () => {
     if (!detailDialogContext) return;
     await toggleRecordCompletion(detailDialogContext.type, detailDialogContext.id);
