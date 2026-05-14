@@ -1613,10 +1613,6 @@ function setHelper(user, options = {}) {
   helperEmail.value = user.email || "";
   helperKey.value = user.key || "";
   $("#manualHelper").value = user.name || "";
-  $$('input[name="requestedBy"], input[name="reportedBy"]').forEach((field) => {
-    field.value = user.name || "";
-    field.readOnly = true;
-  });
   $("#timesheetHelperDisplay").textContent = currentUser.name || "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = currentUser.name ? `${roleLabel(currentUser.role)} logged in: ${currentUser.name}` : "Logged in";
@@ -1638,10 +1634,6 @@ async function clearHelper() {
   helperEmail.value = "";
   helperKey.value = "";
   $("#manualHelper").value = "";
-  $$('input[name="requestedBy"], input[name="reportedBy"]').forEach((field) => {
-    field.value = "";
-    field.readOnly = false;
-  });
   $("#timesheetHelperDisplay").textContent = "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = "Not logged in";
@@ -1665,6 +1657,13 @@ function helperIsLoggedIn() {
 
 function currentRole() {
   return currentUser?.role || "";
+}
+
+function staffIdentity() {
+  return {
+    name: currentUser?.name || helperName?.value || "Unknown staff",
+    email: currentUser?.email || helperEmail?.value || "",
+  };
 }
 
 function pageAllowed(pageId) {
@@ -1698,10 +1697,6 @@ function restoreSession() {
   helperEmail.value = saved.email || "";
   helperKey.value = saved.key || "";
   $("#manualHelper").value = saved.name || "";
-  $$('input[name="requestedBy"], input[name="reportedBy"]').forEach((field) => {
-    field.value = saved.name || "";
-    field.readOnly = true;
-  });
   $("#timesheetHelperDisplay").textContent = saved.name || "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = `${roleLabel(saved.role)} logged in: ${saved.name}`;
@@ -5309,12 +5304,12 @@ function initEvents() {
         label: "request image",
       });
       const files = mediaItems.map((file) => file.name).join(", ");
-      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentNeeds: formEl.querySelector('input[name="urgentNeeds"]').checked };
+      const staff = staffIdentity();
+      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), requestedBy: staff.name, requestedByEmail: staff.email, mediaFiles: files, mediaItems, urgentNeeds: formEl.querySelector('input[name="urgentNeeds"]').checked };
       const record = upsertRecord("request", payload);
       await sendPayload(record);
       if (record.urgentNeeds) emailNow("Urgent Kennel Request", `Urgent kennel request submitted.\n\nRequested by: ${record.requestedBy}\nCategory: ${record.category}\nRequest: ${record.requestText}\nReason: ${record.reason}`);
       formEl.reset();
-      formEl.elements.requestedBy.value = currentUser?.name || "";
       renderRequests();
       showDetailDialog("Request Logged", requestDetailHtml(record));
     } catch (error) {
@@ -5333,12 +5328,12 @@ function initEvents() {
         label: "maintenance image",
       });
       const files = mediaItems.map((file) => file.name).join(", ");
-      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), mediaFiles: files, mediaItems, urgentAttention: formEl.querySelector('input[name="urgentAttention"]').checked };
+      const staff = staffIdentity();
+      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), reportedBy: staff.name, reportedByEmail: staff.email, mediaFiles: files, mediaItems, urgentAttention: formEl.querySelector('input[name="urgentAttention"]').checked };
       const record = upsertRecord("maintenance", payload);
       await sendPayload(record);
       if (record.urgentAttention) emailNow("Urgent Kennel Maintenance Attention Needed", `Urgent maintenance item submitted.\n\nLocation: ${record.location}\nReported by: ${record.reportedBy}\nIssue: ${record.issue}\nSuggested action: ${record.suggestedAction}\nFiles uploaded: ${record.mediaFiles || "None"}`);
       formEl.reset();
-      formEl.elements.reportedBy.value = currentUser?.name || "";
       renderMaintenance();
       showDetailDialog("Maintenance Item Logged", maintenanceDetailHtml(record));
     } catch (error) {
