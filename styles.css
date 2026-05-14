@@ -635,6 +635,10 @@ h2 {
   border-color: var(--teal);
 }
 
+.calendar-day.has-notes {
+  box-shadow: inset 0 -3px 0 var(--gold);
+}
+
 .calendar-day.is-selected {
   background: var(--gold);
 }
@@ -642,6 +646,11 @@ h2 {
 .calendar-day small {
   display: block;
   font-size: 0.72rem;
+}
+
+.calendar-note-count {
+  color: var(--teal-dark);
+  font-weight: 800;
 }
 
 .calendar-notes-panel {

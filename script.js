@@ -3932,8 +3932,14 @@ function renderDashboardTaskCalendar() {
   const days = Array.from({ length: daysInMonth }, (_, index) => {
     const day = index + 1;
     const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const count = (reportCounts[date] || 0) + (noteCounts[date] || 0);
-    return `<button type="button" class="calendar-day ${date === selectedDate ? "is-selected" : ""} ${count ? "has-records" : ""}" data-date="${date}"><span>${day}</span>${count ? `<small>${count}</small>` : ""}</button>`;
+    const reportCount = reportCounts[date] || 0;
+    const noteCount = noteCounts[date] || 0;
+    const hasRecords = reportCount || noteCount;
+    const badges = [
+      noteCount ? `<small class="calendar-note-count">${noteCount} note${noteCount === 1 ? "" : "s"}</small>` : "",
+      reportCount ? `<small>${reportCount} report${reportCount === 1 ? "" : "s"}</small>` : "",
+    ].join("");
+    return `<button type="button" class="calendar-day ${date === selectedDate ? "is-selected" : ""} ${hasRecords ? "has-records" : ""} ${noteCount ? "has-notes" : ""}" data-date="${date}"><span>${day}</span>${badges}</button>`;
   });
   calendar.innerHTML = `<div class="calendar-title"><strong>Task Calendar</strong><span>${monthName}</span></div><div class="calendar-weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-grid">${blanks.join("")}${days.join("")}</div>`;
   renderCalendarNotes();
@@ -3950,19 +3956,22 @@ function renderCalendarNotes() {
   const selectedDate = $("#dashboardDate")?.value || todayDate();
   formEl.hidden = currentRole() !== "admin";
   if (!formEl.elements.noteDate.value) formEl.elements.noteDate.value = selectedDate;
+  const today = todayDate();
+  const tomorrow = addDays(today, 1);
   const notes = readRecords("calendarNote")
     .filter((note) => !note.removed)
-    .filter((note) => note.noteDate === selectedDate || note.noteDate >= todayDate())
+    .filter((note) => note.noteDate === today || note.noteDate === tomorrow)
     .sort((a, b) => new Date(a.noteDate || 0) - new Date(b.noteDate || 0));
   list.innerHTML = notes.length
     ? notes
         .map((note) => {
           const isSelected = note.noteDate === selectedDate;
           const actions = currentRole() === "admin" ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button></div>` : "";
-          return `<article class="record-card ${isSelected ? "is-approved" : ""}"><strong>${escapeHtml(note.noteDate || "")}${isSelected ? " - selected date" : ""}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
+          const dayLabel = note.noteDate === today ? "Today" : "Tomorrow";
+          return `<article class="record-card ${isSelected ? "is-approved" : ""}"><strong>${escapeHtml(dayLabel)} - ${escapeHtml(note.noteDate || "")}${isSelected ? " - selected date" : ""}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
         })
         .join("")
-    : "<p>No calendar notes for the selected date or upcoming dates.</p>";
+    : "<p>No special notes for today or tomorrow.</p>";
 }
 
 function renderDashboardTimeline() {
@@ -4700,8 +4709,9 @@ function initEvents() {
   $("#calendarNoteForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (currentRole() !== "admin") return;
-    if (!validateForm(event.currentTarget)) return;
-    const data = formPayload(event.currentTarget);
+    const formEl = event.currentTarget;
+    if (!validateForm(formEl)) return;
+    const data = formPayload(formEl);
     const existing = data.id ? readRecords("calendarNote").find((note) => note.id === data.id) : {};
     const now = new Date().toISOString();
     const author = currentUser?.name || helperName.value || "Unknown staff";
@@ -4719,10 +4729,13 @@ function initEvents() {
     };
     const record = upsertRecord("calendarNote", payload);
     await sendPayload(record);
-    event.currentTarget.reset();
-    event.currentTarget.elements.noteDate.value = $("#dashboardDate").value || todayDate();
+    const savedDate = data.noteDate || todayDate();
+    formEl.reset();
+    formEl.elements.id.value = "";
+    formEl.elements.noteDate.value = savedDate;
+    formEl.elements.note.value = "";
     renderDashboardTaskCalendar();
-    showToast("Calendar note saved.");
+    showDetailDialog("Special Note Saved", `<p>The special note has been saved for ${escapeHtml(savedDate)}.</p>`);
   });
   $("#newCalendarNoteButton").addEventListener("click", () => {
     $("#calendarNoteForm").reset();
