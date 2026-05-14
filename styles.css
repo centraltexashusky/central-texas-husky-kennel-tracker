@@ -668,6 +668,16 @@ h2 {
   color: #fff;
 }
 
+#calendarNoteForm input[name="note"] {
+  border-color: #ffb457;
+  box-shadow: 0 0 0 1px rgba(255, 180, 87, 0.34), var(--glass-specular);
+}
+
+#calendarNoteForm input[name="note"]:focus {
+  border-color: #ffb457;
+  box-shadow: 0 0 0 3px rgba(255, 180, 87, 0.22), var(--glass-specular);
+}
+
 .calendar-notes-panel {
   display: grid;
   gap: 12px;
