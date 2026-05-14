@@ -1465,6 +1465,36 @@ textarea {
   margin-top: 4px;
 }
 
+.quick-care-history,
+.timeline-popup-history {
+  display: grid;
+  gap: 8px;
+}
+
+.quick-care-history h3,
+.timeline-filter-label {
+  color: var(--ink);
+  margin: 0;
+}
+
+.quick-care-history article {
+  background: rgba(8, 17, 27, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.quick-care-history p {
+  color: rgba(255, 255, 255, 0.76);
+  margin: 4px 0 0;
+}
+
+.timeline-filter-label {
+  display: grid;
+  gap: 6px;
+  margin-block: 10px;
+}
+
 .activity-entry-grid {
   display: grid;
   gap: 12px;
@@ -2094,6 +2124,32 @@ option {
 .mobile-roster-card-main {
   display: grid;
   gap: 6px;
+}
+
+.mobile-dog-photo-button {
+  align-items: center;
+  aspect-ratio: 1;
+  background: rgba(8, 17, 27, 0.44);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  display: flex;
+  height: 78px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  width: 78px;
+}
+
+.mobile-dog-photo-button img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.mobile-dog-photo-initials {
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
 }
 
 .quick-action-grid {
