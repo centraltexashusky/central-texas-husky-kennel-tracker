@@ -208,6 +208,7 @@ function todayDate() {
 function setDefaultDateAndDay() {
   form.elements.date.value = todayDate();
   $("#manualDate").value = todayDate();
+  if ($("#dailyStaffNoteForm")) $("#dailyStaffNoteForm").elements.noteDate.value = todayDate();
   updateDayFromDate();
 }
 
@@ -537,6 +538,24 @@ function formatDateTime(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function dateTimeLocalValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number) => String(number).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function localDateTimeToIso(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toISOString();
+}
+
+function localDateFromDateTimeInput(value) {
+  return value ? value.slice(0, 10) : todayDate();
 }
 
 function hoursBetween(start, end) {
@@ -2088,10 +2107,29 @@ function renderStructuredCareLogs() {
     ? pendingStructuredCareLogs
         .map((log) => {
           const details = [log.date, log.minutes ? `${log.minutes} minutes` : "", log.note].filter(Boolean).join(" | ");
-          return `<article class="record-card compact-record-card"><strong>${escapeHtml(log.dogName || "Dog")} - ${escapeHtml(log.careType || "Care")}</strong><p>${escapeHtml(details || "No extra details")}</p><span>${escapeHtml(log.completedBy || "")}</span><div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-care-log" data-id="${escapeHtml(log.id)}">Remove</button></div></article>`;
+          const canModify = canModifyCareLog(log);
+          const actions = canModify ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-care-log" data-id="${escapeHtml(log.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-care-log" data-id="${escapeHtml(log.id)}">Remove</button></div>` : "";
+          return `<article class="record-card compact-record-card"><strong>${escapeHtml(log.dogName || "Dog")} - ${escapeHtml(log.careType || "Care")}</strong><p>${escapeHtml(details || "No extra details")}</p><span>${escapeHtml(log.completedBy || "")}</span>${actions}</article>`;
         })
         .join("")
     : "<p>No structured care logs added to this daily report yet.</p>";
+}
+
+function canModifyCareLog(log = {}) {
+  if (currentRole() === "admin") return true;
+  const currentEmail = String(currentUser?.email || helperEmail.value || "").toLowerCase();
+  return currentEmail && String(log.completedEmail || "").toLowerCase() === currentEmail;
+}
+
+function careLogEditFormHtml(log = {}) {
+  return `<form id="careLogEditForm" class="tracker-form" data-id="${escapeHtml(log.id || "")}">
+    <div class="field-grid">
+      <label>Date<input type="date" name="date" value="${escapeHtml(log.date || todayDate())}" required /></label>
+      <label>Minutes<input type="number" name="minutes" min="0" value="${escapeHtml(log.minutes || "")}" /></label>
+    </div>
+    <label>Care note<textarea name="note" rows="4">${escapeHtml(log.note || "")}</textarea></label>
+    <div class="button-row"><button type="submit">Update</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>`;
 }
 
 function selectedCareDog() {
@@ -2243,9 +2281,33 @@ async function completeDailyTask(button) {
 
 async function removeDailyCareLog(logId) {
   const date = currentDailyDate();
+  const target = structuredCareLogsForDate(date).find((log) => log.id === logId);
+  if (!target || !canModifyCareLog(target)) {
+    showToast("Only admins or the staff member who logged this can remove it.");
+    return;
+  }
   const structuredCareLogs = structuredCareLogsForDate(date).filter((log) => log.id !== logId);
   await saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
   showToast("Care log removed from today's completed work.");
+}
+
+async function updateDailyCareLog(logId, updates = {}) {
+  const date = currentDailyDate();
+  const logs = structuredCareLogsForDate(date);
+  const target = logs.find((log) => log.id === logId);
+  if (!target || !canModifyCareLog(target)) {
+    showToast("Only admins or the staff member who logged this can edit it.");
+    return null;
+  }
+  const updatedLog = { ...target, ...updates, updatedAt: new Date().toISOString() };
+  if (updatedLog.date && updatedLog.date !== date) {
+    await saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs: logs.filter((log) => log.id !== logId) }));
+    await saveDailyWorkPayload(dailyWorkPayload(updatedLog.date, { structuredCareLogs: [updatedLog, ...structuredCareLogsForDate(updatedLog.date)] }));
+    return updatedLog;
+  }
+  const structuredCareLogs = logs.map((log) => (log.id === logId ? updatedLog : log));
+  await saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
+  return updatedLog;
 }
 
 function renderDailyTaskLists(selected = {}) {
@@ -2941,12 +3003,18 @@ function isRecentDailySubmission(record = {}, daysBack = 3) {
 }
 
 function renderDemoSubmissions() {
-  const saved = readRecords("dailyTask")
+  const saved = [
+    ...readRecords("dailyTask"),
+    ...readRecords("calendarNote").filter((note) => !note.removed).map((note) => ({ ...note, date: note.noteDate, isCalendarNoteSubmission: true })),
+  ]
     .filter((submission) => !submission.removed && isRecentDailySubmission(submission))
     .sort((a, b) => String(dailySubmissionDate(b)).localeCompare(String(dailySubmissionDate(a))) || new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
   $("#recentSubmissions").innerHTML = saved.length
     ? saved
         .map((submission) => {
+          if (submission.isCalendarNoteSubmission) {
+            return `<article class="submission-item clickable-card" data-action="view-calendar-note" data-id="${escapeHtml(submission.id)}"><strong>${escapeHtml(submission.noteDate || submission.date || "")} - Staff Note</strong><p>${escapeHtml(submission.note || "")}</p><span>Written by ${escapeHtml(calendarNoteAuthorText(submission))}</span></article>`;
+          }
           const completedTasks = completedTasksForRecord(submission);
           const careLogs = submission.structuredCareLogs || submission.careLogs || [];
           const staffSummary = Object.entries(
@@ -3739,6 +3807,32 @@ function openMedicalCareAlert(dogId) {
   showDetailDialog(`${ownedDogDisplayName(dog)} Medical/Care`, `${dashboardQuickCareSummaryHtml(normalizeOwnedDogCare(dog), "Medical/Care")}<div class="button-row"><button type="button" class="secondary-button" data-action="open-owned-editor" data-id="${escapeHtml(dog.id)}">Update Dog Record</button></div>`);
 }
 
+function ownedDogOverviewPopupHtml(record = {}) {
+  const dog = normalizeOwnedDogCare(record);
+  const detailRows = [
+    ["Call name", ownedDogDisplayName(dog)],
+    ["Sex", dog.sex || ""],
+    ["Feeding", dog.feedingPlan || dog.foodType || ""],
+    ["DHPP", dog.dhppDate || "Not recorded"],
+    ["Rabies", dog.rabiesDate || "Not recorded"],
+    ["Care status", ownedDogCareSummary(dog)],
+    ["Special care", dog.specialCare || dog.medicalCareNotes || dog.behaviorNotes || dog.notes || ""],
+  ].filter(([, value]) => value);
+  const quickButtons = ["Treadmill", "Scooter", "Yard Run", "Bath", "Training"]
+    .map((type) => `<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="${escapeHtml(type)}" data-id="${escapeHtml(dog.id)}">${escapeHtml(type)}</button>`)
+    .join("");
+  const heatButton = dog.sex === "Female" ? `<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="Heat Note" data-id="${escapeHtml(dog.id)}">Heat Note</button>` : "";
+  return `${dashboardQuickCareSummaryHtml(dog, "Profile")}
+    <section class="popup-record-section"><h3>Overview</h3>${detailRows.map(([label, value]) => `<div class="detail-row"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`).join("")}</section>
+    <section class="popup-record-section"><h3>Care Timeline</h3><div class="quick-action-grid">${quickButtons}${heatButton}<button type="button" class="secondary-button" data-action="open-owned-timeline" data-id="${escapeHtml(dog.id)}">Open Timeline</button></div>${ownedDogActivityEntriesHtml(dog, "All")}</section>
+    <div class="button-row"><button type="button" class="secondary-button" data-action="open-owned-editor" data-id="${escapeHtml(dog.id)}">Edit Full Dog Record</button></div>`;
+}
+
+function openOwnedDogOverviewPopup(record = {}) {
+  if (!record?.id) return;
+  showDetailDialog(`${ownedDogDisplayName(record)} Profile`, ownedDogOverviewPopupHtml(record));
+}
+
 function openVaccineAlert(dogId) {
   const dog = readRecords("ownedDog").find((record) => record.id === dogId && !record.removed);
   if (!dog) return;
@@ -3845,8 +3939,7 @@ function handleOwnedDogRosterAction(button) {
     return;
   }
   if (button.dataset.action === "view-owned") {
-    openOwnedDog(record);
-    setOwnedFormLocked(true);
+    openOwnedDogOverviewPopup(record);
   }
   if (button.dataset.action === "edit-owned") {
     openOwnedDog(record);
@@ -4239,7 +4332,7 @@ function renderDashboard() {
   metrics.boardingBathDue.forEach((dogName) => alerts.push({ category: "Baths", html: `<strong>Bath due before pickup today</strong><p>${escapeHtml(dogName)}</p>` }));
   renderDashboardAlertTabs(alerts);
   const filteredAlerts = dashboardAlertFilter === "All" ? alerts : alerts.filter((alert) => alert.category === dashboardAlertFilter);
-  const visibleAlerts = dashboardAlertFilter === "All" && !dashboardShowAllAlerts ? filteredAlerts.slice(0, 12) : filteredAlerts;
+  const visibleAlerts = !dashboardShowAllAlerts ? filteredAlerts.slice(0, 10) : filteredAlerts;
   const showMore = filteredAlerts.length > visibleAlerts.length ? `<article class="record-card dashboard-more-card"><strong>${filteredAlerts.length - visibleAlerts.length} more items hidden</strong><p>Use the filters above or expand the full list when you are reviewing instead of working the queue.</p><button type="button" class="secondary-button" data-action="show-all-alerts">Show All</button></article>` : "";
   $("#dashboardAlerts").innerHTML = filteredAlerts.length
     ? visibleAlerts
@@ -4465,7 +4558,7 @@ function renderSettingsUsers() {
 function openSettingsUser(record = {}) {
   $("#settingsUserForm").reset();
   setFormValues($("#settingsUserForm"), record);
-  $("#settingsUserForm").elements.requirePasswordChange.checked = true;
+  if ($("#settingsUserForm").elements.requirePasswordChange) $("#settingsUserForm").elements.requirePasswordChange.checked = true;
 }
 
 function settingsUserPopupHtml(user = {}) {
@@ -5027,17 +5120,19 @@ function renderTimesheet() {
 
 function saveTimeEntry(payload) {
   const existing = payload.id ? readRecords("timesheet").find((record) => record.id === payload.id) : null;
+  const clockInTime = localDateTimeToIso(payload.clockInTime);
+  const clockOutTime = localDateTimeToIso(payload.clockOutTime);
   const record = {
     ...existing,
     type: "timesheet",
     id: payload.id || uid("timesheet"),
     submittedAt: existing?.submittedAt || new Date().toISOString(),
-    date: payload.date || payload.clockInTime.slice(0, 10),
+    date: payload.date || localDateFromDateTimeInput(payload.clockInTime),
     helperName: payload.helperName,
     helperEmail: payload.helperEmail || helperEmail.value,
-    clockInTime: payload.clockInTime,
-    clockOutTime: payload.clockOutTime,
-    hours: hoursBetween(payload.clockInTime, payload.clockOutTime),
+    clockInTime,
+    clockOutTime,
+    hours: hoursBetween(clockInTime, clockOutTime),
     note: payload.note || "",
   };
   upsertRecord("timesheet", record);
@@ -5178,11 +5273,38 @@ function initEvents() {
     formEl.elements.noteDate.value = savedDate;
     formEl.elements.note.value = "";
     renderDashboardTaskCalendar();
+    renderDemoSubmissions();
     showDetailDialog("Special Note Saved", `<p>The special note has been saved for ${escapeHtml(savedDate)}.</p>`);
   });
   $("#newCalendarNoteButton").addEventListener("click", () => {
     $("#calendarNoteForm").reset();
     $("#calendarNoteForm").elements.noteDate.value = $("#dashboardDate").value || todayDate();
+  });
+  $("#dailyStaffNoteForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!canCreateCalendarNote()) return;
+    const formEl = event.currentTarget;
+    if (!validateForm(formEl)) return;
+    const data = formPayload(formEl);
+    const now = new Date().toISOString();
+    const payload = {
+      type: "calendarNote",
+      id: uid("calendarNote"),
+      submittedAt: now,
+      updatedAt: now,
+      noteDate: data.noteDate || currentDailyDate(),
+      note: data.note,
+      createdBy: currentUser?.name || helperName.value || "Unknown staff",
+      createdByEmail: currentUser?.email || helperEmail.value || "",
+      removed: false,
+    };
+    const record = upsertRecord("calendarNote", payload);
+    await sendPayload(record);
+    formEl.reset();
+    formEl.elements.noteDate.value = currentDailyDate();
+    renderDashboardTaskCalendar();
+    renderDemoSubmissions();
+    showDetailDialog("Staff Note Saved", `<p>The note was saved for ${escapeHtml(record.noteDate)} and added to recent submissions.</p>`);
   });
   $("#calendarNotesList").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
@@ -5251,9 +5373,17 @@ function initEvents() {
   $("#careQuickDogId").addEventListener("change", updateCareQuickFields);
   $("#careQuickType").addEventListener("change", updateCareQuickFields);
   $("#structuredCareLogList").addEventListener("click", async (event) => {
-    const button = event.target.closest('[data-action="remove-care-log"]');
+    const button = event.target.closest('[data-action="remove-care-log"], [data-action="edit-care-log"]');
     if (!button) return;
-    await removeDailyCareLog(button.dataset.id);
+    if (button.dataset.action === "remove-care-log") await removeDailyCareLog(button.dataset.id);
+    if (button.dataset.action === "edit-care-log") {
+      const log = structuredCareLogsForDate(currentDailyDate()).find((item) => item.id === button.dataset.id);
+      if (!log || !canModifyCareLog(log)) {
+        showToast("Only admins or the staff member who logged this can edit it.");
+        return;
+      }
+      showDetailDialog(`Edit ${log.careType || "Care Log"}`, careLogEditFormHtml(log));
+    }
   });
   $("#addWeeklyTaskButton").addEventListener("click", () => addManagedTask("weekly", "#newWeeklyTaskText"));
   $("#addTuesdayTaskButton").addEventListener("click", () => addManagedTask("tuesday", "#newTuesdayTaskText"));
@@ -5290,7 +5420,8 @@ function initEvents() {
     const settingsPopupForm = event.target.closest("#settingsUserPopupForm");
     const ownerUpdateForm = event.target.closest("#ownerUpdatePopupForm");
     const vaccineUpdateForm = event.target.closest("#vaccineUpdateForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm) return;
+    const careLogEditForm = event.target.closest("#careLogEditForm");
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm) return;
     event.preventDefault();
     if (quickCareForm) {
       await submitDashboardQuickCare(quickCareForm);
@@ -5329,6 +5460,16 @@ function initEvents() {
       renderOwnedDogs();
       renderDashboard();
       showDetailDialog("Vaccine Update Saved", `<p>The vaccine dates for ${escapeHtml(ownedDogDisplayName(updated))} were saved.</p>`);
+      return;
+    }
+    if (careLogEditForm) {
+      const data = formPayload(careLogEditForm);
+      const updated = await updateDailyCareLog(careLogEditForm.dataset.id, {
+        date: data.date,
+        minutes: data.minutes,
+        note: data.note,
+      });
+      if (updated) showDetailDialog("Care Log Updated", `<p>${escapeHtml(updated.dogName || "Care log")} was updated.</p>`);
     }
   });
   $("#detailDialogBody").addEventListener("click", async (event) => {
@@ -5337,6 +5478,15 @@ function initEvents() {
     if (action.dataset.action === "edit-stay-popup") {
       const dog = readRecords("boardingDog").find((record) => record.id === action.dataset.dogId);
       openBoardingStayPopup(dog, action.dataset.id);
+    }
+    if (action.dataset.action === "close-dialog") {
+      $("#detailDialog").close();
+    }
+    if (action.dataset.action === "popup-quick-care") {
+      openDashboardQuickCare(action.dataset.id, action.dataset.careType);
+    }
+    if (action.dataset.action === "open-owned-timeline") {
+      openOwnedDogTimeline(action.dataset.id);
     }
     if (action.dataset.action === "open-owned-editor") {
       const dog = readRecords("ownedDog").find((record) => record.id === action.dataset.id && !record.removed);
@@ -5406,6 +5556,7 @@ function initEvents() {
   form.elements.date.addEventListener("change", () => {
     updateDayFromDate();
     updateConditionalSections();
+    if ($("#dailyStaffNoteForm")) $("#dailyStaffNoteForm").elements.noteDate.value = form.elements.date.value || todayDate();
     if ($("#careQuickDate") && !$("#careQuickDate").value) $("#careQuickDate").value = form.elements.date.value || todayDate();
   });
   form.addEventListener("submit", async (event) => {
@@ -5414,6 +5565,12 @@ function initEvents() {
   });
   $("#recentSubmissions").addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="edit-daily"]');
+    const noteCard = event.target.closest('[data-action="view-calendar-note"]');
+    if (noteCard) {
+      const note = readRecords("calendarNote").find((item) => item.id === noteCard.dataset.id);
+      if (note) showDetailDialog(titleForRecord("calendarNote", note), `<div class="detail-row"><strong>Date</strong><span>${escapeHtml(note.noteDate || "")}</span></div><div class="detail-row"><strong>Written by</strong><span>${escapeHtml(calendarNoteAuthorText(note))}</span></div><div class="detail-row"><strong>Note</strong><span>${escapeHtml(note.note || "")}</span></div>`);
+      return;
+    }
     const card = event.target.closest('[data-action="view-daily"]');
     if (!button && card) {
       const record = readRecords("dailyTask").find((item) => item.id === card.dataset.id);
@@ -5520,8 +5677,8 @@ function initEvents() {
     $("#manualTimeId").value = record.id;
     $("#manualHelper").value = record.helperName;
     $("#manualDate").value = record.date;
-    $("#manualTimeForm").elements.manualClockIn.value = record.clockInTime?.slice(0, 16);
-    $("#manualTimeForm").elements.manualClockOut.value = record.clockOutTime?.slice(0, 16);
+    $("#manualTimeForm").elements.manualClockIn.value = dateTimeLocalValue(record.clockInTime);
+    $("#manualTimeForm").elements.manualClockOut.value = dateTimeLocalValue(record.clockOutTime);
     $("#manualTimeForm").elements.manualNote.value = record.note || "";
     showToast("Time entry loaded for editing.");
   });
@@ -5600,8 +5757,14 @@ function initEvents() {
   $("#ownedDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("owned"));
   $("#ownedDogTableBody").addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
-    if (!button) return;
-    handleOwnedDogRosterAction(button);
+    if (button) {
+      handleOwnedDogRosterAction(button);
+      return;
+    }
+    const row = event.target.closest("tr[data-id]");
+    if (!row) return;
+    const record = readRecords("ownedDog").find((dog) => dog.id === row.dataset.id);
+    if (record) openOwnedDogOverviewPopup(record);
   });
   $("#ownedDogMobileCards")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
@@ -5611,7 +5774,8 @@ function initEvents() {
   $("#ownedDogTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");
     if (!row) return;
-    openOwnedDog(readRecords("ownedDog").find((record) => record.id === row.dataset.id));
+    const record = readRecords("ownedDog").find((dog) => dog.id === row.dataset.id);
+    if (record) openOwnedDogOverviewPopup(record);
   });
   $("#ourDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -6222,17 +6386,23 @@ function initEvents() {
     openSettingsUser();
     showToast("User access saved.");
   });
-  $("#adminSetPasswordButton").addEventListener("click", () => adminSetTemporaryPassword());
-  $("#adminSendPasswordResetButton").addEventListener("click", () => adminSendPasswordResetEmail());
+  $("#adminSetPasswordButton")?.addEventListener("click", () => adminSetTemporaryPassword());
+  $("#adminSendPasswordResetButton")?.addEventListener("click", () => adminSendPasswordResetEmail());
   $("#newSettingsUserButton").addEventListener("click", () => openSettingsUser());
   $("#settingsUserTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");
     if (!row) return;
-    openSettingsUser(readRecords("settingsUser").find((user) => user.id === row.dataset.id));
+    const user = readRecords("settingsUser").find((item) => item.id === row.dataset.id);
+    if (user) openSettingsUserPopup(user);
   });
   $("#settingsUserTableBody").addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="remove-settings-user"]');
-    if (!button) return;
+    if (!button) {
+      const row = event.target.closest("tr[data-id]");
+      const user = row ? readRecords("settingsUser").find((item) => item.id === row.dataset.id) : null;
+      if (user) openSettingsUserPopup(user);
+      return;
+    }
     const user = readRecords("settingsUser").find((item) => item.id === button.dataset.id);
     if (user) {
       const updated = upsertRecord("settingsUser", { ...user, removed: true });

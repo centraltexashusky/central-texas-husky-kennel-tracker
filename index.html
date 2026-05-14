@@ -486,6 +486,14 @@
             <p>Completed work saves automatically as staff tap Done or log care.</p>
           </div>
         </div>
+        <form id="dailyStaffNoteForm" class="tracker-form admin-inline-form">
+          <input type="hidden" name="id" />
+          <div class="field-grid">
+            <label>Note date<input type="date" name="noteDate" required /></label>
+            <label>Staff note<input type="text" name="note" required placeholder="Add a note for the team calendar" /></label>
+          </div>
+          <div class="button-row"><button type="submit">Add Staff Note</button></div>
+        </form>
         <div id="recentSubmissions" class="submission-list"></div>
       </section>
       </section>
@@ -989,19 +997,6 @@
               <label>Name<input type="text" name="name" required /></label>
               <label>Email<input type="email" name="email" required /></label>
               <label>Role<select name="role" required><option value="customer">Customer</option><option value="helper">Staff</option><option value="admin">Admin</option></select></label>
-            </div>
-            <div class="admin-password-panel">
-              <h3>Password Management</h3>
-              <p>Set a temporary Supabase password for this user. They will be required to change it after their next password login.</p>
-              <div class="field-grid">
-                <label>Temporary password<input type="password" name="temporaryPassword" minlength="8" autocomplete="new-password" /></label>
-                <label>Confirm temporary password<input type="password" name="temporaryPasswordConfirm" minlength="8" autocomplete="new-password" /></label>
-                <label class="inline-check"><input type="checkbox" name="requirePasswordChange" checked /> Require password change at next login</label>
-              </div>
-              <div class="button-row">
-                <button type="button" class="secondary-button" id="adminSetPasswordButton">Set Temporary Password</button>
-                <button type="button" class="secondary-button" id="adminSendPasswordResetButton">Send Reset Email</button>
-              </div>
             </div>
             <div class="button-row"><button type="submit">Save User</button><button type="button" class="secondary-button" id="newSettingsUserButton">New User</button></div>
           </form>
