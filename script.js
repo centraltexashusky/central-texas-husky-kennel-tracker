@@ -550,6 +550,10 @@ function dateTimeLocalValue(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function localDateFromStoredDateTime(value) {
+  return dateTimeLocalValue(value).slice(0, 10);
+}
+
 function localDateTimeToIso(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -5145,9 +5149,9 @@ function saveTimeEntry(payload) {
     type: "timesheet",
     id: payload.id || uid("timesheet"),
     submittedAt: existing?.submittedAt || new Date().toISOString(),
-    date: payload.date || localDateFromDateTimeInput(payload.clockInTime),
+    date: payload.date || localDateFromStoredDateTime(clockInTime) || localDateFromDateTimeInput(payload.clockInTime),
     helperName: payload.helperName,
-    helperEmail: payload.helperEmail || helperEmail.value,
+    helperEmail: payload.helperEmail || existing?.helperEmail || helperEmail.value,
     clockInTime,
     clockOutTime,
     hours: hoursBetween(clockInTime, clockOutTime),
@@ -5631,7 +5635,7 @@ function initEvents() {
       type: "timesheet",
       id: uid("timesheet"),
       submittedAt: clockInTime,
-      date: clockInTime.slice(0, 10),
+      date: localDateFromStoredDateTime(clockInTime),
       helperName: helperName.value || currentUser.name,
       helperEmail: helperEmail.value || currentUser.email,
       clockInTime,
@@ -5693,9 +5697,11 @@ function initEvents() {
     }
     $("#manualTimeId").value = record.id;
     $("#manualHelper").value = record.helperName;
-    $("#manualDate").value = record.date;
-    $("#manualTimeForm").elements.manualClockIn.value = dateTimeLocalValue(record.clockInTime);
-    $("#manualTimeForm").elements.manualClockOut.value = dateTimeLocalValue(record.clockOutTime);
+    const clockInLocal = dateTimeLocalValue(record.clockInTime);
+    const clockOutLocal = dateTimeLocalValue(record.clockOutTime);
+    $("#manualDate").value = localDateFromStoredDateTime(record.clockInTime) || record.date || todayDate();
+    $("#manualTimeForm").elements.manualClockIn.value = clockInLocal;
+    $("#manualTimeForm").elements.manualClockOut.value = clockOutLocal;
     $("#manualTimeForm").elements.manualNote.value = record.note || "";
     showToast("Time entry loaded for editing.");
   });
