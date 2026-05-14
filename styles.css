@@ -650,13 +650,22 @@ h2 {
 }
 
 .calendar-day small {
+  align-items: center;
+  border-radius: 999px;
   display: block;
   font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+  margin-top: 3px;
 }
 
 .calendar-note-count {
-  color: var(--teal-dark);
+  color: #ffb457;
   font-weight: 800;
+}
+
+.calendar-report-count {
+  color: #fff;
 }
 
 .calendar-notes-panel {
@@ -1083,6 +1092,10 @@ textarea {
   padding: 8px 12px;
 }
 
+.task-text {
+  min-width: 0;
+}
+
 .task-done-button:disabled {
   background: rgba(42, 157, 143, 0.22);
   color: rgba(255, 255, 255, 0.78);
@@ -1359,8 +1372,10 @@ textarea {
 
 .quick-care-dog-summary {
   align-items: start;
-  background: #f6f8f7;
-  border: 1px solid var(--line);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06)),
+    rgba(8, 17, 27, 0.58);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
   color: var(--ink);
   display: grid;
@@ -1380,8 +1395,8 @@ textarea {
 
 .quick-care-dog-initials {
   align-items: center;
-  background: var(--sage);
-  color: var(--teal-dark);
+  background: rgba(10, 132, 255, 0.22);
+  color: #fff;
   display: flex;
   font-weight: 800;
   justify-content: center;
@@ -1399,8 +1414,8 @@ textarea {
 }
 
 .quick-care-dog-facts div {
-  background: #ffffff;
-  border: 1px solid rgba(188, 202, 196, 0.72);
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 8px;
   color: var(--ink);
   display: grid;
@@ -1409,13 +1424,13 @@ textarea {
 }
 
 .quick-care-dog-facts span {
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.58);
   font-size: 0.76rem;
   text-transform: uppercase;
 }
 
 .quick-care-dog-facts strong {
-  color: var(--ink);
+  color: rgba(255, 255, 255, 0.94);
   font-size: 0.9rem;
 }
 
@@ -1959,7 +1974,6 @@ option {
 .table-wrap,
 .data-table th,
 .data-table td,
-.task-item,
 .activity-entry,
 .structured-care-panel,
 .owned-profile-section,
@@ -1967,6 +1981,14 @@ option {
 .filter-toolbar,
 .profile-tabs {
   background: rgba(8, 17, 27, 0.66);
+}
+
+.task-item {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    rgba(8, 17, 27, 0.70);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: var(--glass-specular);
 }
 
 .table-wrap,
@@ -2412,13 +2434,15 @@ option {
   }
 
   .task-item {
+    align-items: stretch;
     display: grid;
     gap: 12px;
-    grid-template-columns: 92px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     padding: 12px;
   }
 
   .task-done-button {
+    justify-self: stretch;
     width: 100%;
   }
 

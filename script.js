@@ -1981,12 +1981,12 @@ function taskLabel(task, shift) {
   const canManageTasks = ["helper", "admin"].includes(currentRole());
   const taskText = escapeHtml(task.text);
   const completed = dailyTaskCompletionIndex(currentDailyDate()).get(taskKey(shift, task.id));
-  const completedMeta = completed ? `<span class="task-complete-meta">Completed by ${escapeHtml(completed.completedBy || "Staff")} ${completed.completedAt ? `at ${formatDateTime(completed.completedAt)}` : ""}</span>` : "";
+  if (completed) return "";
   const adminTools =
     canManageTasks
       ? `<span class="task-admin-tools"><button type="button" class="icon-button" data-action="move-task-up" data-shift="${shift}" data-id="${task.id}" title="Move up">↑</button><button type="button" class="icon-button" data-action="move-task-down" data-shift="${shift}" data-id="${task.id}" title="Move down">↓</button><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">×</button></span>`
       : "";
-  return `<div class="task-item ${completed ? "is-complete" : ""}" draggable="${canManageTasks}" data-shift="${shift}" data-id="${task.id}"><button type="button" class="task-done-button" data-action="complete-task" data-shift="${shift}" data-id="${task.id}" data-task-text="${taskText}" ${completed ? "disabled" : ""}>Done</button><span class="task-text">${taskText}${completedMeta}</span>${adminTools}</div>`;
+  return `<div class="task-item" draggable="${canManageTasks}" data-shift="${shift}" data-id="${task.id}"><span class="task-text">${taskText}</span><button type="button" class="task-done-button" data-action="complete-task" data-shift="${shift}" data-id="${task.id}" data-task-text="${taskText}">Done</button>${adminTools}</div>`;
 }
 
 function ownedDogOptionsHtml(selectedId = "") {
@@ -4020,8 +4020,8 @@ function renderDashboardTaskCalendar() {
     const noteCount = noteCounts[date] || 0;
     const hasRecords = reportCount || noteCount;
     const badges = [
-      noteCount ? `<small class="calendar-note-count">${noteCount} note${noteCount === 1 ? "" : "s"}</small>` : "",
-      reportCount ? `<small>${reportCount} report${reportCount === 1 ? "" : "s"}</small>` : "",
+      noteCount ? `<small class="calendar-note-count" aria-label="${noteCount} special note${noteCount === 1 ? "" : "s"}">${noteCount}</small>` : "",
+      reportCount ? `<small class="calendar-report-count" aria-label="${reportCount} report${reportCount === 1 ? "" : "s"}">${reportCount}</small>` : "",
     ].join("");
     return `<button type="button" class="calendar-day ${date === selectedDate ? "is-selected" : ""} ${hasRecords ? "has-records" : ""} ${noteCount ? "has-notes" : ""}" data-date="${date}"><span>${day}</span>${badges}</button>`;
   });
