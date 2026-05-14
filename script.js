@@ -7,9 +7,9 @@ const IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png"];
 const VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
-const APP_GITHUB_PAGES_URL = "https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/";
+const APP_PRODUCTION_URL = "https://kennel.centraltexashusky.com/";
 const APP_WIX_EMBED_URL = "https://www.centraltexashusky.com/kennel-tracker";
-const APP_AUTH_REDIRECT_URL = APP_GITHUB_PAGES_URL;
+const APP_AUTH_REDIRECT_URL = APP_PRODUCTION_URL;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -831,10 +831,13 @@ function authRedirectUrl() {
     const currentUrl = new URL(window.location.href);
     const currentPath = currentUrl.pathname.replace(/\/+$/, "");
     if (currentUrl.origin === "https://www.centraltexashusky.com" && currentPath === "/kennel-tracker") {
-      return APP_GITHUB_PAGES_URL;
+      return APP_PRODUCTION_URL;
     }
     if (currentUrl.origin === "https://centraltexashusky.github.io" && currentPath === "/central-texas-husky-kennel-tracker") {
-      return APP_GITHUB_PAGES_URL;
+      return APP_PRODUCTION_URL;
+    }
+    if (currentUrl.origin === "https://kennel.centraltexashusky.com") {
+      return APP_PRODUCTION_URL;
     }
     if (["localhost", "127.0.0.1", "::1"].includes(currentUrl.hostname)) {
       return currentUrl.href.split("#")[0];

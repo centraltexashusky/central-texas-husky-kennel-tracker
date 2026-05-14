@@ -45,15 +45,16 @@ with your Supabase project values.
 https://vwvkzniygessvwifrwvn.supabase.co/auth/v1/callback
 ```
 
-11. In Supabase URL Configuration, set the Site URL to the GitHub Pages app URL. This is the actual page that runs the tracker JavaScript and can receive Supabase recovery/session tokens:
+11. In Supabase URL Configuration, set the Site URL to the custom kennel app domain. This is the actual page that runs the tracker JavaScript and can receive Supabase recovery/session tokens:
 
 ```text
-https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/
+https://kennel.centraltexashusky.com/
 ```
 
-12. Add the GitHub Pages tracker as an allowed redirect URL. Add the Wix URL only if the app code itself is hosted directly on that page instead of inside an iframe:
+12. Add the custom kennel app domain as an allowed redirect URL. Keep the legacy GitHub Pages URL only during the transition. Add the Wix URL only if the app code itself is hosted directly on that page instead of inside an iframe:
 
 ```text
+https://kennel.centraltexashusky.com/
 https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/
 https://www.centraltexashusky.com/kennel-tracker
 ```
@@ -63,7 +64,7 @@ https://www.centraltexashusky.com/kennel-tracker
 15. If you customized Supabase email templates, remove any hardcoded `localhost` links. Use Supabase's generated confirmation/recovery URL, or use `{{ .RedirectTo }}` rather than `{{ .SiteURL }}` when building links that should honor the app's `redirectTo` value.
 16. In Auth rate limits and bot protection, keep default rate limits on and add CAPTCHA later if signup abuse appears.
 
-Important: the Wix page can remain the public page customers visit, but the Supabase auth callback should land on the GitHub Pages tracker when the Wix page embeds that tracker in an iframe. The token has to arrive on the same page that runs `supabase-js`; otherwise the embedded app may not see the recovery or login session. The current code sends Wix-started Google login back to the GitHub Pages tracker for that reason.
+Important: the Wix page can remain the public page customers visit, but the Supabase auth callback should land on the custom kennel app domain. The token has to arrive on the same page that runs `supabase-js`; otherwise the embedded app may not see the recovery or login session. The current code sends Wix-started Google login back to `https://kennel.centraltexashusky.com/` for that reason.
 
 If another OAuth setup screen asks for an Authorization Path, use:
 
@@ -74,7 +75,7 @@ oauth/consent
 That path is implemented at:
 
 ```text
-https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/oauth/consent
+https://kennel.centraltexashusky.com/oauth/consent
 ```
 
 Do not enter `/oauth/consent` if the base app URL already ends in `/`; that creates a preview URL with a double slash.

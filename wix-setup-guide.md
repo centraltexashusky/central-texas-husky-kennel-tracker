@@ -24,21 +24,19 @@ For the first live version, use this practical path:
 
 This is the fastest way to launch and test the workflow.
 
-## Wix Option 1: Embed The Tracker In A Wix Page
+## Wix Option 1: Link To The Tracker App
 
-This is the easiest path.
+This is the recommended path for Google and Supabase login.
 
 Steps:
 
-1. Publish the tracker files to a static host such as GitHub Pages, Netlify, or another HTTPS host.
-2. In Wix, create a page called:
-   `Snuggle Stay`
-3. Hide the page from the site menu.
-4. Add an Embed / iFrame element.
-5. Paste the hosted tracker URL.
-6. Set the iframe width to 100%.
-7. Make the iframe tall enough for mobile use.
-8. Send the Wix page link to the kennel helper.
+1. Publish the tracker files to GitHub Pages with the custom domain `https://kennel.centraltexashusky.com/`.
+2. In Wix, add a button or menu item called:
+   `Kennel Staff App`
+3. Link the button or menu item to:
+   `https://kennel.centraltexashusky.com/`
+4. Open it as a normal external page, not an embedded iframe.
+5. Send the kennel app link to the kennel helper.
 
 Private helper links do not require Google Cloud, OAuth, or a paid subscription.
 
@@ -66,7 +64,7 @@ Use Option 1 first. Move to Option 2 after the system is proven.
 Use this format:
 
 ```text
-https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/?helper=Ms.%20Yuko&email=yuko@example.com&key=cth-yuko
+https://kennel.centraltexashusky.com/?helper=Ms.%20Yuko&email=yuko@example.com&key=cth-yuko
 ```
 
 Replace `yuko@example.com` with the correct helper email.

@@ -46,7 +46,7 @@ OAuth route note:
 The static route `oauth/consent/index.html` exists so GitHub Pages can serve:
 
 ```text
-https://centraltexashusky.github.io/central-texas-husky-kennel-tracker/oauth/consent
+https://kennel.centraltexashusky.com/oauth/consent
 ```
 
 Use `oauth/consent` as the authorization path if a third-party setup screen asks for one. For normal Supabase Google or Facebook login, the provider redirect URI is still the Supabase callback URL, not this route.
@@ -71,10 +71,10 @@ Our Dogs and Boarding Dogs still include an optional profile photo link fallback
 ## Wix Hosting Plan
 
 Recommended path:
-Use Wix Velo with a Wix-hosted custom element. Wix documentation says custom elements can be hosted by Wix through Velo in the `public/custom-elements/` folder, then added to a page from the editor as a Custom Element.
+Use `https://kennel.centraltexashusky.com/` as the standalone kennel app URL and link to it from Wix instead of embedding it in an iframe. This keeps Google and Supabase OAuth on one top-level app domain.
 
-Simpler alternative:
-Host this folder on a small static host such as GitHub Pages or Netlify and embed it into Wix using an HTML iframe. This is easier, but it means the app itself is not hosted by Wix.
+Alternative:
+Use Wix Velo with a Wix-hosted custom element. Wix documentation says custom elements can be hosted by Wix through Velo in the `public/custom-elements/` folder, then added to a page from the editor as a Custom Element.
 
 ## Wix Custom Element Conversion
 
