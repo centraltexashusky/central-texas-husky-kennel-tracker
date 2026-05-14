@@ -2132,9 +2132,13 @@ option {
   gap: 10px;
 }
 
-.mobile-card-list,
-.mobile-filter-search {
+.mobile-card-list {
   display: none;
+}
+
+.filter-search-input {
+  flex: 1 1 260px;
+  min-width: 220px;
 }
 
 .settings-user-card {
@@ -2561,8 +2565,7 @@ option {
     gap: 10px;
   }
 
-  .mobile-filter-search {
-    display: block;
+  .filter-search-input {
     width: 100%;
   }
 

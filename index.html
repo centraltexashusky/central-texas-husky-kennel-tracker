@@ -569,12 +569,10 @@
           </div>
 
           <div class="table-toolbar">
-            <input type="search" id="ownedDogSearch" placeholder="Search our dogs by call name, show name, sex, or notes" />
             <button type="button" id="addOwnedDogButton">Add New Dog</button>
           </div>
           <div class="summary-grid care-summary-grid" id="ownedDogSummary"></div>
           <div class="filter-toolbar care-filter-toolbar" id="ownedDogCareFilters" aria-label="Our Dogs care filters">
-            <input type="search" id="ownedDogMobileSearch" class="mobile-filter-search" placeholder="Search dog name" />
             <button type="button" class="secondary-button is-active" data-filter="All">All</button>
             <button type="button" class="secondary-button" data-filter="Exercise Due">Exercise Due</button>
             <button type="button" class="secondary-button" data-filter="Training Due">Training Due</button>
@@ -583,6 +581,7 @@
             <button type="button" class="secondary-button" data-filter="Males">Males</button>
             <button type="button" class="secondary-button" data-filter="Heat Watch">Heat Watch</button>
             <button type="button" class="secondary-button" data-filter="Special Care">Special Care</button>
+            <input type="search" id="ownedDogSearch" class="filter-search-input" placeholder="Search dog name" />
           </div>
           <div class="mobile-roster-list" id="ownedDogMobileCards" aria-label="Mobile Our Dogs quick actions"></div>
           <div class="column-manager" id="ownedDogColumnManager" hidden></div>

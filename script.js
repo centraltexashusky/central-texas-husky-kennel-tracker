@@ -3781,15 +3781,17 @@ function ownedDogTrainingHistoryHtml(record = {}) {
 }
 
 function ownedDogTimelineHtml(record = {}, filter = "All") {
-  const options = ["All", "Exercise", "Treadmill", "Scooter", "Yard Run", "Training", "Bath", "Heat", "Medical/Care"];
+  const dog = normalizeOwnedDogCare(record);
+  const options = ["All", "Exercise", "Treadmill", "Scooter", "Yard Run", "Training", "Bath", ...(dog.sex === "Female" ? ["Heat"] : []), "Medical/Care"];
+  const selectedFilter = options.includes(filter) ? filter : "All";
   return `
-    ${dashboardQuickCareSummaryHtml(normalizeOwnedDogCare(record), "Timeline")}
+    ${dashboardQuickCareSummaryHtml(dog, "Timeline")}
     <label class="timeline-filter-label">Timeline filter
       <select id="ownedTimelinePopupFilter" data-dog-id="${escapeHtml(record.id || "")}">
-        ${options.map((option) => `<option value="${escapeHtml(option)}" ${option === filter ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+        ${options.map((option) => `<option value="${escapeHtml(option)}" ${option === selectedFilter ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
       </select>
     </label>
-    <div id="ownedTimelinePopupHistory" class="timeline-popup-history">${ownedDogActivityEntriesHtml(record, filter)}</div>`;
+    <div id="ownedTimelinePopupHistory" class="timeline-popup-history">${ownedDogActivityEntriesHtml(record, selectedFilter)}</div>`;
 }
 
 function openOwnedDogTimeline(dogId, filter = "All") {
@@ -5689,14 +5691,7 @@ function initEvents() {
   $("#ourDogForm").elements.heatCycleLengthDays.addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, numberFrom($("#ourDogForm").elements.heatCycleLengthDays?.value, careDefaults.heatCycleLengthDays))));
   $("#ownedDogSex").addEventListener("change", syncOwnedDogTabAvailability);
   $("#ownedDhppDate").addEventListener("change", updateDhppWarning);
-  $("#ownedDogSearch").addEventListener("input", (event) => {
-    if ($("#ownedDogMobileSearch")) $("#ownedDogMobileSearch").value = event.target.value;
-    renderOwnedDogs();
-  });
-  $("#ownedDogMobileSearch")?.addEventListener("input", (event) => {
-    $("#ownedDogSearch").value = event.target.value;
-    renderOwnedDogs();
-  });
+  $("#ownedDogSearch").addEventListener("input", renderOwnedDogs);
   $("#ownedDogCareFilters").addEventListener("click", (event) => {
     const button = event.target.closest("[data-filter]");
     if (!button) return;
