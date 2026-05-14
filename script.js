@@ -3949,12 +3949,31 @@ function calendarNoteAuthorText(note) {
   return note.createdBy || note.updatedBy || note.helperName || note.authorName || note.createdByEmail || note.updatedByEmail || currentUser?.name || "Author not recorded";
 }
 
+function calendarNoteCreatedByCurrentUser(note = {}) {
+  const staff = staffIdentity();
+  const currentEmail = String(staff.email || "").trim().toLowerCase();
+  const currentName = String(staff.name || "").trim().toLowerCase();
+  const createdEmail = String(note.createdByEmail || note.helperEmail || note.authorEmail || "").trim().toLowerCase();
+  const createdName = String(note.createdBy || note.helperName || note.authorName || "").trim().toLowerCase();
+  if (currentEmail && createdEmail) return currentEmail === createdEmail;
+  if (currentName && createdName) return currentName === createdName;
+  return false;
+}
+
+function canRemoveCalendarNote(note) {
+  return currentRole() === "admin" || calendarNoteCreatedByCurrentUser(note);
+}
+
+function canCreateCalendarNote() {
+  return ["helper", "admin"].includes(currentRole());
+}
+
 function renderCalendarNotes() {
   const list = $("#calendarNotesList");
   const formEl = $("#calendarNoteForm");
   if (!list || !formEl) return;
   const selectedDate = $("#dashboardDate")?.value || todayDate();
-  formEl.hidden = currentRole() !== "admin";
+  formEl.hidden = !canCreateCalendarNote();
   if (!formEl.elements.noteDate.value) formEl.elements.noteDate.value = selectedDate;
   const today = todayDate();
   const tomorrow = addDays(today, 1);
@@ -3968,7 +3987,9 @@ function renderCalendarNotes() {
     ? notes
         .map((note) => {
           const isSelected = note.noteDate === selectedDate;
-          const actions = currentRole() === "admin" ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button></div>` : "";
+          const editAction = currentRole() === "admin" ? `<button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button>` : "";
+          const removeAction = canRemoveCalendarNote(note) ? `<button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button>` : "";
+          const actions = editAction || removeAction ? `<div class="record-actions">${editAction}${removeAction}</div>` : "";
           const dayLabel = note.noteDate === today ? "Today" : note.noteDate === tomorrow ? "Tomorrow" : "Selected date";
           return `<article class="record-card ${isSelected ? "is-approved" : ""}"><strong>${escapeHtml(dayLabel)} - ${escapeHtml(note.noteDate || "")}${isSelected ? " - selected date" : ""}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
         })
@@ -4710,7 +4731,7 @@ function initEvents() {
   });
   $("#calendarNoteForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (currentRole() !== "admin") return;
+    if (!canCreateCalendarNote()) return;
     const formEl = event.currentTarget;
     if (!validateForm(formEl)) return;
     const data = formPayload(formEl);
@@ -4745,16 +4766,21 @@ function initEvents() {
   });
   $("#calendarNotesList").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
-    if (!button || currentRole() !== "admin") return;
+    if (!button) return;
     const note = readRecords("calendarNote").find((item) => item.id === button.dataset.id);
     if (!note) return;
     if (button.dataset.action === "edit-calendar-note") {
+      if (currentRole() !== "admin") return;
       setFormValues($("#calendarNoteForm"), note);
       $("#calendarNoteForm").hidden = false;
       $("#calendarNoteForm").scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
     if (button.dataset.action === "remove-calendar-note") {
+      if (!canRemoveCalendarNote(note)) {
+        showToast("Only admins or the staff member who created this note can remove it.");
+        return;
+      }
       await markRecordRemoved("calendarNote", note.id);
       renderDashboardTaskCalendar();
       showToast("Calendar note removed.");
