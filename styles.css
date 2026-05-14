@@ -1108,6 +1108,15 @@ textarea {
   position: relative;
 }
 
+#dailyPage .checklist .task-item {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    rgba(8, 17, 27, 0.70);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: var(--glass-specular);
+  color: rgba(255, 255, 255, 0.94);
+}
+
 .task-item.is-complete {
   background: rgba(42, 157, 143, 0.14);
   border-color: rgba(42, 157, 143, 0.36);
@@ -1463,6 +1472,12 @@ textarea {
 
 .dashboard-quick-care-form {
   margin-top: 4px;
+}
+
+.popup-record-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .quick-care-history,
@@ -2117,6 +2132,30 @@ option {
   gap: 10px;
 }
 
+.mobile-card-list,
+.mobile-filter-search {
+  display: none;
+}
+
+.settings-user-card {
+  align-items: stretch;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    rgba(8, 17, 27, 0.70);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.94);
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  text-align: left;
+}
+
+.settings-user-card span,
+.settings-user-card small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .mobile-roster-card {
   gap: 12px;
 }
@@ -2507,6 +2546,7 @@ option {
 
   #ourDogsPage .table-wrap,
   #boardingDogsPage .table-wrap,
+  #settingsPage .table-wrap,
   #ourDogsPage .column-manager,
   #boardingDogsPage .column-manager {
     display: none !important;
@@ -2514,6 +2554,16 @@ option {
 
   .mobile-roster-list {
     display: grid;
+  }
+
+  .mobile-card-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .mobile-filter-search {
+    display: block;
+    width: 100%;
   }
 
   #dailyPage .checklist .task-item {
@@ -2552,6 +2602,10 @@ option {
   #manualTimeForm.mobile-admin-only,
   #timesheetPage [data-action="edit-time"],
   #timesheetPage .table-wrap {
+    display: none !important;
+  }
+
+  #boardingSchedulePanel {
     display: none !important;
   }
 

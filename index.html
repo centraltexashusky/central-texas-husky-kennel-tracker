@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260514-dog-actions-1" />
+    <link rel="stylesheet" href="styles.css?v=20260514-popup-workflows-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -566,6 +566,7 @@
           </div>
           <div class="summary-grid care-summary-grid" id="ownedDogSummary"></div>
           <div class="filter-toolbar care-filter-toolbar" id="ownedDogCareFilters" aria-label="Our Dogs care filters">
+            <input type="search" id="ownedDogMobileSearch" class="mobile-filter-search" placeholder="Search dog name" />
             <button type="button" class="secondary-button is-active" data-filter="All">All</button>
             <button type="button" class="secondary-button" data-filter="Exercise Due">Exercise Due</button>
             <button type="button" class="secondary-button" data-filter="Training Due">Training Due</button>
@@ -852,7 +853,7 @@
             <label>Special care instructions<textarea name="specialCare" rows="3" placeholder="Medication, feeding, handling, allergies, behavior concerns"></textarea></label>
             <label>Daily activity update for owner<textarea name="dailyActivity" rows="3" placeholder="Eating, potty, play, exercise, mood, photos/videos taken"></textarea></label>
             <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
-            <div class="button-row"><button type="button" class="secondary-button" id="editBoardingDogButton" hidden>Edit Dog</button><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
+            <div class="button-row"><button type="button" class="secondary-button" id="editBoardingDogButton" hidden>Edit Dog</button><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
           </form>
 
           <section class="existing-only owner-account-panel" id="boardingOwnerAccountPanel" hidden>
@@ -987,7 +988,6 @@
             <div class="field-grid">
               <label>Name<input type="text" name="name" required /></label>
               <label>Email<input type="email" name="email" required /></label>
-              <label>Auth ID<input type="text" name="authId" placeholder="Supabase Auth user ID when available" /></label>
               <label>Role<select name="role" required><option value="customer">Customer</option><option value="helper">Staff</option><option value="admin">Admin</option></select></label>
             </div>
             <div class="admin-password-panel">
@@ -1010,10 +1010,11 @@
           <div class="section-heading"><span>U</span><div><h2>Users</h2><p>Double click a user to edit. Remove access when someone no longer needs it.</p></div></div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Auth ID</th><th>Password</th><th>Action</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Password</th><th>Action</th></tr></thead>
               <tbody id="settingsUserTableBody"></tbody>
             </table>
           </div>
+          <div class="mobile-card-list settings-user-cards" id="settingsUserCards"></div>
         </section>
       </section>
     </main>
@@ -1065,6 +1066,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260514-dog-actions-1"></script>
+    <script src="script.js?v=20260514-popup-workflows-1"></script>
   </body>
 </html>

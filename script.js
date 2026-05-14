@@ -3200,6 +3200,110 @@ function boardingQuickCardHtml(record = {}) {
     </article>`;
 }
 
+function stayRequestCheckboxesHtml(stay = {}) {
+  const requests = stay.requests || [];
+  return ["Bath requested", "Nail trim requested", "Paw trim requested", "Training requested", "Exercise requested"]
+    .map((value) => `<label><input type="checkbox" name="stayRequests" value="${escapeHtml(value)}" ${requests.includes(value) ? "checked" : ""} /> ${escapeHtml(value)}</label>`)
+    .join("");
+}
+
+function boardingStayFormHtml(record = {}, stay = {}) {
+  const isEdit = Boolean(stay.id);
+  return `
+    <form id="boardingStayPopupForm" class="tracker-form" data-dog-id="${escapeHtml(record.id || "")}">
+      <input type="hidden" name="stayId" value="${escapeHtml(stay.id || "")}" />
+      <div class="field-grid">
+        <label>Drop-off time<input type="datetime-local" name="dropoffTime" required value="${escapeHtml(stay.dropoffTime?.slice(0, 16) || "")}" /></label>
+        <label>Pick-up time<input type="datetime-local" name="pickupTime" required value="${escapeHtml(stay.pickupTime?.slice(0, 16) || "")}" /></label>
+      </div>
+      <div class="checklist compact">${stayRequestCheckboxesHtml(stay)}</div>
+      <label>Stay notes<textarea name="stayNotes" rows="3" placeholder="Owner instructions or pickup grooming notes">${escapeHtml(stay.stayNotes || "")}</textarea></label>
+      <div class="button-row"><button type="submit">${isEdit ? "Save Boarding Stay" : "Add Boarding Stay"}</button></div>
+    </form>`;
+}
+
+function boardingSchedulePopupHtml(record = {}) {
+  const staysHtml = (record.stays || []).length
+    ? (record.stays || []).map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(boardingStayDisplayStatus(record, stay), "boarding-status-chip")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(record.id)}" data-id="${escapeHtml(stay.id)}">Edit Stay</button></div></article>`).join("")
+    : "<p>No boarding stays logged yet.</p>";
+  return `${boardingStayFormHtml(record)}<section class="popup-record-section"><h3>Boarding stays</h3>${staysHtml}</section>`;
+}
+
+function openBoardingSchedulePopup(record = activeBoardingDog()) {
+  if (!record?.id) {
+    showToast("Save the boarding dog first.");
+    return;
+  }
+  showDetailDialog(`${record.dogName || "Boarding Dog"} Boarding Request`, boardingSchedulePopupHtml(record));
+}
+
+function openOwnerUpdateAlert(recordId) {
+  const record = readRecords("boardingDog").find((item) => item.id === recordId && !item.removed);
+  if (!record) return;
+  showDetailDialog(
+    `${record.dogName || "Boarding Dog"} Owner Update`,
+    `<article class="record-card compact-record-card"><strong>${escapeHtml(record.dogName || "Boarding dog")}</strong><p>${escapeHtml([record.ownerName, record.ownerPhone, record.ownerEmail].filter(Boolean).join(" | "))}</p><p>${escapeHtml(record.dailyActivity || "Owner update is marked as needed.")}</p></article>
+    <form id="ownerUpdatePopupForm" class="tracker-form" data-id="${escapeHtml(record.id)}">
+      <label>Daily activity update for owner<textarea name="dailyActivity" rows="4" placeholder="Eating, potty, play, exercise, mood, photos/videos taken">${escapeHtml(record.dailyActivity || "")}</textarea></label>
+      <label class="inline-check"><input type="checkbox" name="clearOwnerUpdate" checked /> Clear owner update alert after saving</label>
+      <div class="button-row"><button type="submit">Save Owner Update</button><button type="button" class="secondary-button" data-action="open-boarding-editor" data-id="${escapeHtml(record.id)}">Open Boarding Dog</button></div>
+    </form>`,
+  );
+}
+
+function openBoardingStayPopup(record = activeBoardingDog(), stayId = "") {
+  if (!record?.id) return;
+  const stay = (record.stays || []).find((item) => item.id === stayId) || {};
+  showDetailDialog(`${record.dogName || "Boarding Dog"} Boarding Request`, boardingStayFormHtml(record, stay));
+}
+
+async function saveBoardingStayFromForm(formEl) {
+  if (!validateForm(formEl)) return null;
+  const dog = readRecords("boardingDog").find((record) => record.id === formEl.dataset.dogId) || activeBoardingDog();
+  if (!dog) {
+    showToast("Save the boarding dog first.");
+    return null;
+  }
+  const payload = formPayload(formEl);
+  const existingStay = (dog.stays || []).find((stay) => stay.id === payload.stayId);
+  const timestamp = new Date().toISOString();
+  const existingStayStatus = normalizeBoardingStatus({ boardingStatus: existingStay?.status || "" });
+  const shouldAutoApproveStay = !existingStay || (!dog.customerRequest && existingStayStatus === "Pending");
+  const stay = {
+    ...existingStay,
+    id: payload.stayId || uid("stay"),
+    createdAt: existingStay?.createdAt || timestamp,
+    updatedAt: timestamp,
+    source: existingStay?.source || "staff-admin",
+    status: shouldAutoApproveStay ? "Approved" : existingStay?.status || "Approved",
+    dropoffTime: payload.dropoffTime,
+    pickupTime: payload.pickupTime,
+    requests: checkedFrom(formEl, "stayRequests"),
+    stayNotes: payload.stayNotes,
+  };
+  stay.bathPlan = bathPlanForStay(stay);
+  const stays = [...(dog.stays || [])];
+  const stayIndex = stays.findIndex((item) => item.id === stay.id);
+  if (stayIndex >= 0) stays[stayIndex] = stay;
+  else stays.unshift(stay);
+  const currentDogStatus = normalizeBoardingStatus(dog);
+  const statusUpdates = !existingStay && ["Pending", "Cancelled", "Checked Out"].includes(currentDogStatus)
+    ? {
+        boardingStatus: "Approved",
+        statusHistory: [...(dog.statusHistory || []), { from: currentDogStatus, to: "Approved", date: timestamp, by: currentUser?.name || helperName?.value || "" }],
+      }
+    : {};
+  const record = upsertRecord("boardingDog", { ...dog, ...statusUpdates, stays });
+  await sendPayload(record);
+  if ($("#boardingDogForm")?.elements.id.value === record.id) {
+    renderBoardingStays(record);
+    renderBoardingOwnerAccountPanel(record);
+  }
+  renderBoardingDogs();
+  renderBoardingRequests();
+  return record;
+}
+
 function renderBoardingQuickCards(records = []) {
   const container = $("#boardingDogQuickCards");
   if (!container) return;
@@ -3531,6 +3635,7 @@ function setBoardingFormLocked(locked) {
   $("#boardingDogPhotoPicker").disabled = false;
   $("#boardingDogSaveButton").hidden = locked;
   $("#editBoardingDogButton").hidden = !locked;
+  $("#openBoardingScheduleButton").hidden = !formEl.elements.id.value;
   formEl.classList.toggle("is-readonly", locked);
   renderBoardingOwnerAccountPanel(activeBoardingDog());
 }
@@ -3626,6 +3731,28 @@ function openOwnedDogTimeline(dogId, filter = "All") {
     return;
   }
   showDetailDialog(`${ownedDogDisplayName(dog)} Timeline`, ownedDogTimelineHtml(dog, filter));
+}
+
+function openMedicalCareAlert(dogId) {
+  const dog = readRecords("ownedDog").find((record) => record.id === dogId && !record.removed);
+  if (!dog) return;
+  showDetailDialog(`${ownedDogDisplayName(dog)} Medical/Care`, `${dashboardQuickCareSummaryHtml(normalizeOwnedDogCare(dog), "Medical/Care")}<div class="button-row"><button type="button" class="secondary-button" data-action="open-owned-editor" data-id="${escapeHtml(dog.id)}">Update Dog Record</button></div>`);
+}
+
+function openVaccineAlert(dogId) {
+  const dog = readRecords("ownedDog").find((record) => record.id === dogId && !record.removed);
+  if (!dog) return;
+  showDetailDialog(
+    `${ownedDogDisplayName(dog)} Vaccine Update`,
+    `${dashboardQuickCareSummaryHtml(normalizeOwnedDogCare(dog), "Profile")}
+    <form id="vaccineUpdateForm" class="tracker-form" data-dog-id="${escapeHtml(dog.id)}">
+      <div class="field-grid">
+        <label>Last DHPP vaccination<input type="date" name="dhppDate" value="${escapeHtml(dog.dhppDate || "")}" /></label>
+        <label>Last rabies vaccination<input type="date" name="rabiesDate" value="${escapeHtml(dog.rabiesDate || "")}" /></label>
+      </div>
+      <div class="button-row"><button type="submit">Save Vaccine Update</button><button type="button" class="secondary-button" data-action="open-owned-editor" data-id="${escapeHtml(dog.id)}">Open Full Dog Record</button></div>
+    </form>`,
+  );
 }
 
 function renderOwnedActivity(record = activeOwnedDog()) {
@@ -3782,7 +3909,7 @@ async function markRecordRemoved(type, id) {
 function renderBoardingStays(record = activeBoardingDog()) {
   const stays = record?.stays || [];
   $("#boardingStayHistory").innerHTML = stays.length
-    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(boardingStayDisplayStatus(record, stay), "boarding-status-chip")}</div><p>${(stay.requests || []).join(", ") || "No service requests"}</p><p>${stay.bathPlan || ""}</p><p>${stay.stayNotes || ""}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${stay.id}">Edit Stay</button></div></article>`).join("")
+    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(boardingStayDisplayStatus(record, stay), "boarding-status-chip")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}">Edit Stay</button></div></article>`).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
 
@@ -3919,16 +4046,47 @@ function dashboardQuickCareSummaryHtml(dog, careType) {
   const photoHtml = photo
     ? `<img class="quick-care-dog-photo" src="${escapeHtml(photo)}" alt="${escapeHtml(ownedDogDisplayName(dog))}" />`
     : `<div class="quick-care-dog-photo quick-care-dog-initials">${escapeHtml(avatarText(ownedDogDisplayName(dog)))}</div>`;
-  const rows = [
-    ["Sex", dog.sex || ""],
-    ["Care status", ownedDogCareSummary(dog, $("#dashboardDate")?.value || todayDate())],
-    ["Last exercise", dog.lastExerciseDate || "Not recorded"],
-    ["Last training", dog.lastTrainingDate || "Not recorded"],
-    ["Last bath", dog.lastBath || "Not recorded"],
-    ["Last heat", dog.sex === "Female" ? dog.lastHeat || "Not recorded" : ""],
-    ["Heat status", dog.sex === "Female" ? heat.label : ""],
-    ["Last " + careType, latestExercise ? `${latestExercise.minutes || 0} minutes on ${latestExercise.date || "unknown date"}` : ""],
-  ]
+  const rowsByCareType = {
+    Training: [
+      ["Training status", ownedDogTrainingDue(dog) ? "Training due" : "Current"],
+      ["Last training", dog.lastTrainingDate || "Not recorded"],
+      ["Training routine", dog.trainingRoutine || dog.trainingGoals || "No routine saved"],
+    ],
+    Bath: [
+      ["Last bath", dog.lastBath || "Not recorded"],
+      ["Next bath", dog.nextBath || "Not scheduled"],
+      ["Bath interval", `${dog.bathIntervalDays || careDefaults.bathIntervalDays} days`],
+    ],
+    "Heat Note": [
+      ["Sex", dog.sex || ""],
+      ["Last heat", dog.lastHeat || "Not recorded"],
+      ["Next heat", dog.nextHeat || "Not scheduled"],
+      ["Heat status", heat.label],
+      ["Heat notes", dog.heatCycleNotes || "No notes saved"],
+    ],
+    Timeline: [
+      ["Care status", ownedDogCareSummary(dog, $("#dashboardDate")?.value || todayDate())],
+      ["Last exercise", dog.lastExerciseDate || "Not recorded"],
+      ["Last training", dog.lastTrainingDate || "Not recorded"],
+      ["Last bath", dog.lastBath || "Not recorded"],
+    ],
+    Profile: [
+      ["Sex", dog.sex || ""],
+      ["Care status", ownedDogCareSummary(dog, $("#dashboardDate")?.value || todayDate())],
+    ],
+    "Medical/Care": [
+      ["Care status", dog.careStatus || "Review notes"],
+      ["Medical notes", dog.medicalNotes || dog.medicalCareNotes || "No medical note saved"],
+      ["Behavior notes", dog.behaviorNotes || "No behavior note saved"],
+      ["Special care", dog.specialCare || dog.notes || "No special care note saved"],
+    ],
+  };
+  const exerciseRows = [
+    ["Exercise type", careType],
+    ["Last " + careType, latestExercise ? `${latestExercise.minutes || 0} minutes on ${latestExercise.date || "unknown date"}` : "Not recorded"],
+    ["Routine", dog.exerciseRoutine || dog.exerciseNotes || "No routine saved"],
+  ];
+  const rows = (careTypeIsExercise(careType) ? exerciseRows : rowsByCareType[careType] || rowsByCareType.Profile)
     .filter(([, value]) => value)
     .map(([label, value]) => `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
     .join("");
@@ -4073,11 +4231,11 @@ function renderDashboard() {
   metrics.ownedBathDueDogs.forEach((dog) => alerts.push({ category: "Baths", action: "dashboard-quick-care", dogId: dog.id, careType: "Bath", html: `<strong>Bath due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>Last bath: ${escapeHtml(dog.lastBath || "Not recorded")}</p>` }));
   metrics.inHeatDogs.forEach((dog) => alerts.push({ category: "Heat", action: "dashboard-quick-care", dogId: dog.id, careType: "Heat Note", html: `<strong>Female in heat: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
   metrics.heatSoonDogs.forEach((dog) => alerts.push({ category: "Heat", action: "dashboard-quick-care", dogId: dog.id, careType: "Heat Note", html: `<strong>Heat watch: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
-  metrics.medicalCareDogs.forEach((dog) => alerts.push({ category: "Medical/Care", html: `<strong>Care note: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.careStatus || dog.medicalNotes || dog.behaviorNotes || "Review care notes today.")}</p>` }));
+  metrics.medicalCareDogs.forEach((dog) => alerts.push({ category: "Medical/Care", action: "view-medical-care", dogId: dog.id, html: `<strong>Care note: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.careStatus || dog.medicalNotes || dog.behaviorNotes || "Review care notes today.")}</p>` }));
   metrics.urgentRequestRecords.forEach((item) => alerts.push({ category: "Requests", type: "request", id: item.id, html: `<strong>Urgent request: ${escapeHtml(item.category)}</strong><p>${escapeHtml(item.requestText || "")}</p>${mediaLinkHtml(item)}` }));
   metrics.urgentMaintenanceRecords.forEach((item) => alerts.push({ category: "Maintenance", type: "maintenance", id: item.id, html: `<strong>Urgent maintenance: ${escapeHtml(item.location)}</strong><p>${escapeHtml(item.issue || "")}</p>${mediaLinkHtml(item)}` }));
-  metrics.vaccineIssueDogs.forEach((dog) => alerts.push({ category: "Vaccines", html: `<strong>Vaccine warning: ${escapeHtml(dog.callName || dog.showName || "Dog")}</strong><p>DHPP date: ${escapeHtml(dog.dhppDate || "Not recorded")}</p>` }));
-  metrics.ownerUpdateDogs.forEach((dog) => alerts.push({ category: "Owner Updates", html: `<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml(dog.ownerName || "")} ${escapeHtml(dog.ownerPhone || "")}</p>` }));
+  metrics.vaccineIssueDogs.forEach((dog) => alerts.push({ category: "Vaccines", action: "view-vaccine-alert", dogId: dog.id, html: `<strong>Vaccine warning: ${escapeHtml(dog.callName || dog.showName || "Dog")}</strong><p>DHPP date: ${escapeHtml(dog.dhppDate || "Not recorded")}</p>` }));
+  metrics.ownerUpdateDogs.forEach((dog) => alerts.push({ category: "Owner Updates", action: "view-owner-update", id: dog.id, html: `<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml(dog.ownerName || "")} ${escapeHtml(dog.ownerPhone || "")}</p>` }));
   metrics.boardingBathDue.forEach((dogName) => alerts.push({ category: "Baths", html: `<strong>Bath due before pickup today</strong><p>${escapeHtml(dogName)}</p>` }));
   renderDashboardAlertTabs(alerts);
   const filteredAlerts = dashboardAlertFilter === "All" ? alerts : alerts.filter((alert) => alert.category === dashboardAlertFilter);
@@ -4087,9 +4245,10 @@ function renderDashboard() {
     ? visibleAlerts
         .map((alert) => {
           const quickCareAttrs = alert.action === "dashboard-quick-care" ? `data-action="dashboard-quick-care" data-dog-id="${escapeHtml(alert.dogId)}" data-care-type="${escapeHtml(alert.careType)}"` : "";
+          const customActionAttrs = ["view-medical-care", "view-vaccine-alert"].includes(alert.action) ? `data-action="${escapeHtml(alert.action)}" data-dog-id="${escapeHtml(alert.dogId)}"` : alert.action === "view-owner-update" ? `data-action="view-owner-update" data-id="${escapeHtml(alert.id)}"` : "";
           const recordAttrs = alert.type ? `data-action="view-alert" data-type="${alert.type}" data-id="${alert.id}"` : "";
-          const clickableClass = alert.action === "dashboard-quick-care" || alert.type ? "clickable-card " : "";
-          return `<article class="record-card ${clickableClass}is-urgent" ${quickCareAttrs || recordAttrs}><span class="status-chip">${escapeHtml(alert.category)}</span>${alert.html}</article>`;
+          const clickableClass = alert.action || alert.type ? "clickable-card " : "";
+          return `<article class="record-card ${clickableClass}is-urgent" ${quickCareAttrs || customActionAttrs || recordAttrs}><span class="status-chip">${escapeHtml(alert.category)}</span>${alert.html}</article>`;
         })
         .join("") + showMore
     : "<p>No alerts in this category right now.</p>";
@@ -4293,9 +4452,14 @@ function renderSettingsUsers() {
   const users = settingsUsers();
   $("#settingsUserTableBody").innerHTML = users.length
     ? users
-        .map((user) => `<tr data-id="${user.id}"><td>${escapeHtml(user.name || "")}</td><td>${escapeHtml(user.email || "")}</td><td>${roleLabel(user.role)}</td><td>${escapeHtml(user.authId || "")}</td><td>${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="${user.id}">Remove</button></td></tr>`)
+        .map((user) => `<tr data-id="${user.id}"><td>${escapeHtml(user.name || "")}</td><td>${escapeHtml(user.email || "")}</td><td>${roleLabel(user.role)}</td><td>${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="${user.id}">Remove</button></td></tr>`)
         .join("")
-    : `<tr><td colspan="6">No custom users saved yet.</td></tr>`;
+    : `<tr><td colspan="5">No custom users saved yet.</td></tr>`;
+  if ($("#settingsUserCards")) {
+    $("#settingsUserCards").innerHTML = users.length
+      ? users.map((user) => `<button type="button" class="settings-user-card" data-action="view-settings-user" data-id="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || user.email || "User")}</strong><span>${escapeHtml(user.email || "")}</span><small>${escapeHtml(roleLabel(user.role))}${user.passwordChangeRequired ? " | Password change required" : ""}</small></button>`).join("")
+      : `<article class="record-card"><strong>No users saved yet.</strong></article>`;
+  }
 }
 
 function openSettingsUser(record = {}) {
@@ -4304,8 +4468,37 @@ function openSettingsUser(record = {}) {
   $("#settingsUserForm").elements.requirePasswordChange.checked = true;
 }
 
-function settingsFormProfileData() {
-  const formEl = $("#settingsUserForm");
+function settingsUserPopupHtml(user = {}) {
+  return `
+    <form id="settingsUserPopupForm" class="tracker-form" data-user-id="${escapeHtml(user.id || "")}">
+      <input type="hidden" name="id" value="${escapeHtml(user.id || "")}" />
+      <div class="field-grid">
+        <label>Name<input type="text" name="name" required value="${escapeHtml(user.name || "")}" /></label>
+        <label>Email<input type="email" name="email" required value="${escapeHtml(user.email || "")}" /></label>
+        <label>Role<select name="role" required><option value="customer" ${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" ${user.role === "helper" ? "selected" : ""}>Staff</option><option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
+      </div>
+      <div class="admin-password-panel">
+        <h3>Password Management</h3>
+        <p>Set a temporary Supabase password or send a reset email for this user.</p>
+        <div class="field-grid">
+          <label>Temporary password<input type="password" name="temporaryPassword" minlength="8" autocomplete="new-password" /></label>
+          <label>Confirm temporary password<input type="password" name="temporaryPasswordConfirm" minlength="8" autocomplete="new-password" /></label>
+          <label class="inline-check"><input type="checkbox" name="requirePasswordChange" checked /> Require password change at next login</label>
+        </div>
+        <div class="button-row">
+          <button type="button" class="secondary-button" data-action="popup-set-password">Set Temporary Password</button>
+          <button type="button" class="secondary-button" data-action="popup-send-reset">Send Reset Email</button>
+        </div>
+      </div>
+      <div class="button-row"><button type="submit">Save User</button><button type="button" class="secondary-button danger-button" data-action="popup-remove-user" data-id="${escapeHtml(user.id || "")}">Remove</button></div>
+    </form>`;
+}
+
+function openSettingsUserPopup(user = {}) {
+  showDetailDialog(user.id ? `${user.name || user.email || "User"} Access` : "User Access", settingsUserPopupHtml(user));
+}
+
+function settingsFormProfileData(formEl = $("#settingsUserForm")) {
   const data = formPayload(formEl);
   delete data.temporaryPassword;
   delete data.temporaryPasswordConfirm;
@@ -4313,11 +4506,10 @@ function settingsFormProfileData() {
   return data;
 }
 
-async function saveSettingsUserProfile(extra = {}) {
-  const formEl = $("#settingsUserForm");
+async function saveSettingsUserProfile(extra = {}, formEl = $("#settingsUserForm")) {
   if (!validateForm(formEl)) return null;
-  const data = settingsFormProfileData();
-  const existing = data.id ? readRecords("settingsUser").find((user) => user.id === data.id) : savedUserFor({ email: data.email, key: data.authId });
+  const data = settingsFormProfileData(formEl);
+  const existing = data.id ? readRecords("settingsUser").find((user) => user.id === data.id) : savedUserFor({ email: data.email });
   const payload = {
     ...existing,
     ...data,
@@ -4333,7 +4525,7 @@ async function saveSettingsUserProfile(extra = {}) {
   return record;
 }
 
-async function adminSetTemporaryPassword() {
+async function adminSetTemporaryPassword(formEl = $("#settingsUserForm"), button = $("#adminSetPasswordButton")) {
   if (currentRole() !== "admin") {
     showToast("Admin access required.");
     return;
@@ -4348,19 +4540,17 @@ async function adminSetTemporaryPassword() {
     switchPage("loginPage");
     return;
   }
-  const formEl = $("#settingsUserForm");
-  const data = settingsFormProfileData();
+  const data = settingsFormProfileData(formEl);
   const password = formEl.elements.temporaryPassword.value;
   const confirmPassword = formEl.elements.temporaryPasswordConfirm.value;
   const requirePasswordChange = formEl.elements.requirePasswordChange.checked;
   const passwordRequiredCheck = { field: formEl.elements.temporaryPassword, message: "Enter a temporary password.", valid: Boolean(password) };
   if (!validateForm(formEl, [passwordRequiredCheck, passwordMatchCheck(formEl, "temporaryPassword", "temporaryPasswordConfirm")])) return;
-  const button = $("#adminSetPasswordButton");
   setSubmitState(button, true, "Setting...");
   const { data: functionData, error } = await supabaseClient.functions.invoke("admin-set-password", {
     body: {
       email: data.email.trim().toLowerCase(),
-      authId: data.authId.trim(),
+      authId: (data.authId || "").trim(),
       name: data.name.trim(),
       role: data.role,
       password,
@@ -4381,7 +4571,7 @@ async function adminSetTemporaryPassword() {
     type: "settingsUser",
     id: functionData.recordId || data.id || existing?.id || uid("settingsUser"),
     submittedAt: existing?.submittedAt || new Date().toISOString(),
-    authId: functionData.userId || data.authId,
+    authId: functionData.userId || data.authId || existing?.authId || "",
     authProvider: "supabase",
     passwordChangeRequired: requirePasswordChange,
     passwordChangeRequiredAt: requirePasswordChange ? new Date().toISOString() : "",
@@ -4399,7 +4589,7 @@ async function adminSetTemporaryPassword() {
   );
 }
 
-async function adminSendPasswordResetEmail() {
+async function adminSendPasswordResetEmail(formEl = $("#settingsUserForm"), button = $("#adminSendPasswordResetButton")) {
   if (currentRole() !== "admin") {
     showToast("Admin access required.");
     return;
@@ -4408,14 +4598,13 @@ async function adminSendPasswordResetEmail() {
     showDetailDialog("Supabase Required", "<p>Password reset emails require Supabase Auth.</p>");
     return;
   }
-  const data = settingsFormProfileData();
+  const data = settingsFormProfileData(formEl);
   const email = data.email?.trim().toLowerCase();
   if (!email) {
-    setFieldError($("#settingsUserForm").elements.email, "Enter the user's email first.");
+    setFieldError(formEl.elements.email, "Enter the user's email first.");
     showToast("Enter the user email first.");
     return;
   }
-  const button = $("#adminSendPasswordResetButton");
   setSubmitState(button, true, "Sending...");
   const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
   setSubmitState(button, false);
@@ -4423,7 +4612,7 @@ async function adminSendPasswordResetEmail() {
     showDetailDialog("Reset Email Not Sent", `<p>${escapeHtml(error.message)}</p>`);
     return;
   }
-  await saveSettingsUserProfile({ passwordResetSentAt: new Date().toISOString(), passwordResetSentBy: currentUser.email });
+  await saveSettingsUserProfile({ passwordResetSentAt: new Date().toISOString(), passwordResetSentBy: currentUser.email }, formEl);
   showDetailDialog("Reset Email Sent", `<p>A Supabase password reset email was sent to ${escapeHtml(email)}.</p>`);
 }
 
@@ -4933,6 +5122,21 @@ function initEvents() {
       openDashboardQuickCare(quickCareCard.dataset.dogId, quickCareCard.dataset.careType);
       return;
     }
+    const medicalCard = event.target.closest('[data-action="view-medical-care"]');
+    if (medicalCard) {
+      openMedicalCareAlert(medicalCard.dataset.dogId);
+      return;
+    }
+    const vaccineCard = event.target.closest('[data-action="view-vaccine-alert"]');
+    if (vaccineCard) {
+      openVaccineAlert(vaccineCard.dataset.dogId);
+      return;
+    }
+    const ownerUpdateCard = event.target.closest('[data-action="view-owner-update"]');
+    if (ownerUpdateCard) {
+      openOwnerUpdateAlert(ownerUpdateCard.dataset.id);
+      return;
+    }
     const card = event.target.closest('[data-action="view-alert"]');
     if (!card) return;
     const record = readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
@@ -5082,9 +5286,84 @@ function initEvents() {
   $("#closeDetailDialog").addEventListener("click", () => $("#detailDialog").close());
   $("#detailDialogBody").addEventListener("submit", async (event) => {
     const quickCareForm = event.target.closest("#dashboardQuickCareForm");
-    if (!quickCareForm) return;
+    const stayPopupForm = event.target.closest("#boardingStayPopupForm");
+    const settingsPopupForm = event.target.closest("#settingsUserPopupForm");
+    const ownerUpdateForm = event.target.closest("#ownerUpdatePopupForm");
+    const vaccineUpdateForm = event.target.closest("#vaccineUpdateForm");
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm) return;
     event.preventDefault();
-    await submitDashboardQuickCare(quickCareForm);
+    if (quickCareForm) {
+      await submitDashboardQuickCare(quickCareForm);
+      return;
+    }
+    if (stayPopupForm) {
+      const record = await saveBoardingStayFromForm(stayPopupForm);
+      if (record) {
+        showDetailDialog("Boarding Request Saved", `<p>The boarding request was saved for ${escapeHtml(record.dogName || "this dog")}.</p>`);
+      }
+      return;
+    }
+    if (settingsPopupForm) {
+      const record = await saveSettingsUserProfile({}, settingsPopupForm);
+      if (record) showDetailDialog("User Saved", `<p>${escapeHtml(record.name || record.email)} has been saved.</p>`);
+      return;
+    }
+    if (ownerUpdateForm) {
+      const record = readRecords("boardingDog").find((item) => item.id === ownerUpdateForm.dataset.id);
+      if (!record) return;
+      const data = formPayload(ownerUpdateForm);
+      const flags = ownerUpdateForm.elements.clearOwnerUpdate.checked ? (record.flags || []).filter((flag) => flag !== "Required update from owner") : record.flags || [];
+      const updated = upsertRecord("boardingDog", { ...record, dailyActivity: data.dailyActivity, flags, updatedAt: new Date().toISOString() });
+      await sendPayload(updated);
+      renderBoardingDogs();
+      renderDashboard();
+      showDetailDialog("Owner Update Saved", `<p>The owner update for ${escapeHtml(updated.dogName || "this dog")} was saved.</p>`);
+      return;
+    }
+    if (vaccineUpdateForm) {
+      const dog = readRecords("ownedDog").find((item) => item.id === vaccineUpdateForm.dataset.dogId && !item.removed);
+      if (!dog) return;
+      const data = formPayload(vaccineUpdateForm);
+      const updated = upsertRecord("ownedDog", { ...dog, dhppDate: data.dhppDate, rabiesDate: data.rabiesDate, updatedAt: new Date().toISOString() });
+      await sendPayload(updated);
+      renderOwnedDogs();
+      renderDashboard();
+      showDetailDialog("Vaccine Update Saved", `<p>The vaccine dates for ${escapeHtml(ownedDogDisplayName(updated))} were saved.</p>`);
+    }
+  });
+  $("#detailDialogBody").addEventListener("click", async (event) => {
+    const action = event.target.closest("[data-action]");
+    if (!action) return;
+    if (action.dataset.action === "edit-stay-popup") {
+      const dog = readRecords("boardingDog").find((record) => record.id === action.dataset.dogId);
+      openBoardingStayPopup(dog, action.dataset.id);
+    }
+    if (action.dataset.action === "open-owned-editor") {
+      const dog = readRecords("ownedDog").find((record) => record.id === action.dataset.id && !record.removed);
+      if (dog) {
+        $("#detailDialog").close();
+        switchPage("ourDogsPage");
+        openOwnedDog(dog);
+        setOwnedFormLocked(false);
+      }
+    }
+    if (action.dataset.action === "open-boarding-editor") {
+      const dog = readRecords("boardingDog").find((record) => record.id === action.dataset.id && !record.removed);
+      if (dog) {
+        $("#detailDialog").close();
+        switchPage("boardingDogsPage");
+        openBoardingDog(dog);
+        setBoardingFormLocked(false);
+      }
+    }
+    if (action.dataset.action === "popup-set-password") await adminSetTemporaryPassword(action.closest("form"), action);
+    if (action.dataset.action === "popup-send-reset") await adminSendPasswordResetEmail(action.closest("form"), action);
+    if (action.dataset.action === "popup-remove-user") {
+      await markRecordRemoved("settingsUser", action.dataset.id);
+      renderSettingsUsers();
+      $("#detailDialog").close();
+      showToast("User access removed.");
+    }
   });
   $("#detailDialogBody").addEventListener("change", (event) => {
     const filter = event.target.closest("#ownedTimelinePopupFilter");
@@ -5253,7 +5532,14 @@ function initEvents() {
   $("#ourDogForm").elements.heatCycleLengthDays.addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, numberFrom($("#ourDogForm").elements.heatCycleLengthDays?.value, careDefaults.heatCycleLengthDays))));
   $("#ownedDogSex").addEventListener("change", syncOwnedDogTabAvailability);
   $("#ownedDhppDate").addEventListener("change", updateDhppWarning);
-  $("#ownedDogSearch").addEventListener("input", renderOwnedDogs);
+  $("#ownedDogSearch").addEventListener("input", (event) => {
+    if ($("#ownedDogMobileSearch")) $("#ownedDogMobileSearch").value = event.target.value;
+    renderOwnedDogs();
+  });
+  $("#ownedDogMobileSearch")?.addEventListener("input", (event) => {
+    $("#ownedDogSearch").value = event.target.value;
+    renderOwnedDogs();
+  });
   $("#ownedDogCareFilters").addEventListener("click", (event) => {
     const button = event.target.closest("[data-filter]");
     if (!button) return;
@@ -5631,51 +5917,10 @@ function initEvents() {
   $("#boardingStayForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
-    if (!validateForm(formEl)) return;
-    const dog = activeBoardingDog();
-    if (!dog) {
-      showToast("Save the boarding dog first.");
-      return;
-    }
-    const payload = formPayload(formEl);
-    const existingStay = (dog.stays || []).find((stay) => stay.id === payload.stayId);
-    const timestamp = new Date().toISOString();
-    const existingStayStatus = normalizeBoardingStatus({ boardingStatus: existingStay?.status || "" });
-    const shouldAutoApproveStay = !existingStay || (!dog.customerRequest && existingStayStatus === "Pending");
-    const stay = {
-      ...existingStay,
-      id: payload.stayId || uid("stay"),
-      createdAt: existingStay?.createdAt || timestamp,
-      updatedAt: timestamp,
-      source: existingStay?.source || "staff-admin",
-      status: shouldAutoApproveStay ? "Approved" : existingStay?.status || "Approved",
-      dropoffTime: payload.dropoffTime,
-      pickupTime: payload.pickupTime,
-      requests: checkedFrom(formEl, "stayRequests"),
-      stayNotes: payload.stayNotes,
-    };
-    stay.bathPlan = bathPlanForStay(stay);
-    dog.stays = dog.stays || [];
-    const stayIndex = dog.stays.findIndex((item) => item.id === stay.id);
-    if (stayIndex >= 0) dog.stays[stayIndex] = stay;
-    else dog.stays.unshift(stay);
-    const currentDogStatus = normalizeBoardingStatus(dog);
-    if (!existingStay && ["Pending", "Cancelled", "Checked Out"].includes(currentDogStatus)) {
-      dog.boardingStatus = "Approved";
-      dog.statusHistory = [
-        ...(dog.statusHistory || []),
-        {
-          from: currentDogStatus,
-          to: "Approved",
-          date: timestamp,
-          by: currentUser?.name || helperName?.value || "",
-        },
-      ];
-    }
-    const record = upsertRecord("boardingDog", dog);
-    await sendPayload(record);
-    renderBoardingStays(record);
-    renderBoardingDogs();
+    formEl.dataset.dogId = activeBoardingDog()?.id || "";
+    const existingStay = activeBoardingDog()?.stays?.find((stay) => stay.id === formEl.elements.stayId.value);
+    const record = await saveBoardingStayFromForm(formEl);
+    if (!record) return;
     formEl.reset();
     $("#boardingStayId").value = "";
     $("#boardingStaySaveButton").textContent = "Add Boarding Stay";
@@ -5685,18 +5930,9 @@ function initEvents() {
     const button = event.target.closest('[data-action="edit-stay"]');
     if (!button) return;
     const dog = activeBoardingDog();
-    const stay = dog?.stays?.find((item) => item.id === button.dataset.id);
-    if (!stay) return;
-    $("#boardingStayId").value = stay.id;
-    $("#boardingStayForm").elements.dropoffTime.value = stay.dropoffTime?.slice(0, 16);
-    $("#boardingStayForm").elements.pickupTime.value = stay.pickupTime?.slice(0, 16);
-    $("#boardingStayForm").elements.stayNotes.value = stay.stayNotes || "";
-    $("#boardingStayForm").querySelectorAll('input[name="stayRequests"]').forEach((input) => {
-      input.checked = (stay.requests || []).includes(input.value);
-    });
-    $("#boardingStaySaveButton").textContent = "Save Boarding Stay";
-    showToast("Boarding stay loaded for editing.");
+    openBoardingStayPopup(dog, button.dataset.id);
   });
+  $("#openBoardingScheduleButton").addEventListener("click", () => openBoardingSchedulePopup(activeBoardingDog()));
   $("#resetBoardingStayButton").addEventListener("click", () => {
     $("#boardingStayForm").reset();
     $("#boardingStayId").value = "";
@@ -5986,8 +6222,8 @@ function initEvents() {
     openSettingsUser();
     showToast("User access saved.");
   });
-  $("#adminSetPasswordButton").addEventListener("click", adminSetTemporaryPassword);
-  $("#adminSendPasswordResetButton").addEventListener("click", adminSendPasswordResetEmail);
+  $("#adminSetPasswordButton").addEventListener("click", () => adminSetTemporaryPassword());
+  $("#adminSendPasswordResetButton").addEventListener("click", () => adminSendPasswordResetEmail());
   $("#newSettingsUserButton").addEventListener("click", () => openSettingsUser());
   $("#settingsUserTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");
@@ -6004,6 +6240,12 @@ function initEvents() {
     }
     renderSettingsUsers();
     showToast("User removed.");
+  });
+  $("#settingsUserCards")?.addEventListener("click", (event) => {
+    const card = event.target.closest('[data-action="view-settings-user"]');
+    if (!card) return;
+    const user = readRecords("settingsUser").find((item) => item.id === card.dataset.id);
+    if (user) openSettingsUserPopup(user);
   });
 }
 
