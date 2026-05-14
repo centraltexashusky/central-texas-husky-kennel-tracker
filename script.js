@@ -1884,8 +1884,6 @@ function dailyWorkPayload(date = currentDailyDate(), updates = {}) {
       dogsLogged: new Set(structuredCareLogs.map((log) => log.dogId).filter(Boolean)).size,
       alerts: structuredCareLogs.filter((log) => /heat|medical|behavior/i.test(log.careType || "")).length,
     },
-    healthNotes: existing.healthNotes || "",
-    socialContent: existing.socialContent || "",
     boardingTasks: upcomingBoardingTaskText(),
   };
 }
@@ -1910,23 +1908,6 @@ function taskLabel(task, shift) {
       ? `<span class="task-admin-tools"><button type="button" class="icon-button" data-action="move-task-up" data-shift="${shift}" data-id="${task.id}" title="Move up">↑</button><button type="button" class="icon-button" data-action="move-task-down" data-shift="${shift}" data-id="${task.id}" title="Move down">↓</button><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">×</button></span>`
       : "";
   return `<div class="task-item ${completed ? "is-complete" : ""}" draggable="${canManageTasks}" data-shift="${shift}" data-id="${task.id}"><button type="button" class="task-done-button" data-action="complete-task" data-shift="${shift}" data-id="${task.id}" data-task-text="${taskText}" ${completed ? "disabled" : ""}>Done</button><span class="task-text">${taskText}${completedMeta}</span>${adminTools}</div>`;
-}
-
-function renderBathDogOptions(selectedIds = []) {
-  const select = $("#dogsBathedSelect");
-  if (!select) return;
-  const selected = new Set((selectedIds || []).map(String));
-  const dogs = readRecords("ownedDog")
-    .filter((dog) => !dog.removed && (dog.callName || dog.showName))
-    .sort((a, b) => String(a.callName || a.showName || "").localeCompare(String(b.callName || b.showName || "")));
-  select.innerHTML = dogs.length
-    ? dogs
-        .map((dog) => {
-          const label = dog.callName || dog.showName || "Dog";
-          return `<option value="${escapeHtml(dog.id)}" ${selected.has(String(dog.id)) ? "selected" : ""}>${escapeHtml(label)}</option>`;
-        })
-        .join("")
-    : `<option disabled>No Our Dogs saved yet</option>`;
 }
 
 function ownedDogOptionsHtml(selectedId = "") {
@@ -2118,7 +2099,6 @@ function renderDailyTaskLists(selected = {}) {
   $("#weeklyTaskAdminControls").hidden = !canManageTasks;
   $("#tuesdayTaskAdminControls").hidden = !canManageTasks;
   $("#monthlyTaskAdminControls").hidden = !canManageTasks;
-  renderBathDogOptions(selected.dogsBathedIds || []);
   renderCareDogOptions();
   pendingStructuredCareLogs = structuredCareLogsForDate(currentDailyDate());
   renderStructuredCareLogs();
@@ -2540,10 +2520,6 @@ function dailyDetailHtml(record) {
       ["Day", "dayOfWeek"],
       ["Morning tasks", "dailyTasks"],
       ["PM tasks", "pmTasks"],
-      ["Dogs trained or exercised", "dogsExercised"],
-      ["Dogs bathed", "dogsBathed"],
-      ["Health notes", "healthNotes"],
-      ["Social content", "socialContent"],
       ["Weekly tasks", "weeklyTasks"],
       ["Tuesday tasks", "tuesdayTasks"],
       ["Monthly tasks", "monthlyTasks"],
@@ -2651,49 +2627,6 @@ function validateForm(targetForm, extraChecks = []) {
   return true;
 }
 
-function buildDailyPayload() {
-  const data = new FormData(form);
-  const dogsBathedIds = [...($("#dogsBathedSelect")?.selectedOptions || [])].map((option) => option.value);
-  const dogsById = new Map(readRecords("ownedDog").map((dog) => [dog.id, dog]));
-  const selectedDogNames = dogsBathedIds
-    .map((id) => dogsById.get(id))
-    .filter(Boolean)
-    .map((dog) => dog.callName || dog.showName || "Dog");
-  const dogsBathedOther = String(data.get("dogsBathedOther") || "").trim();
-  const structuredCareLogs = pendingStructuredCareLogs.map((log) => ({ ...log }));
-  return {
-    type: "dailyTask",
-    id: data.get("id") || uid("dailyTask"),
-    submittedAt: new Date().toISOString(),
-    date: data.get("date"),
-    helperName: data.get("helperName"),
-    helperEmail: data.get("helperEmail"),
-    helperKey: data.get("helperKey"),
-    dayOfWeek: data.get("dayOfWeek"),
-    dailyTasks: checkedFrom(form, "dailyTasks"),
-    pmTasks: checkedFrom(form, "pmTasks"),
-    dogsExercised: data.get("dogsExercised"),
-    dogsBathed: [...selectedDogNames, dogsBathedOther].filter(Boolean).join(", "),
-    dogsBathedIds,
-    dogsBathedOther,
-    structuredCareLogs,
-    careLogs: structuredCareLogs,
-    careSummary: {
-      total: structuredCareLogs.length,
-      dogsLogged: new Set(structuredCareLogs.map((log) => log.dogId).filter(Boolean)).size,
-      alerts: structuredCareLogs.filter((log) => /heat|medical|behavior/i.test(log.careType || "")).length,
-    },
-    healthNotes: data.get("healthNotes"),
-    socialContent: data.get("socialContent"),
-    weeklyTasks: checkedFrom(form, "weeklyTasks"),
-    tuesdayTasks: checkedFrom(form, "tuesdayTasks"),
-    monthlyWeek: data.get("monthlyWeek"),
-    deepCleanBuilding: data.get("deepCleanBuilding"),
-    monthlyTasks: checkedFrom(form, "monthlyTasks"),
-    boardingTasks: upcomingBoardingTaskText(),
-  };
-}
-
 function generatedCareEntry(record, log, type) {
   const date = dateOnly(log.date || record.date) || todayDate();
   return {
@@ -2756,7 +2689,7 @@ async function syncOwnedDogCareFromDailyReport(record) {
     if (structuredBathDogIds.has(String(dogId))) return;
     const dog = ensureDog(String(dogId));
     if (!dog) return;
-    const entry = generatedCareEntry(record, { id: `legacy-bath-${dogId}`, date: reportDate, note: "Selected in Dogs bathed today.", completedBy: record.helperName }, "Bath");
+    const entry = generatedCareEntry(record, { id: `legacy-bath-${dogId}`, date: reportDate, note: "Legacy daily bath entry.", completedBy: record.helperName }, "Bath");
     dog.bathHistory.unshift(entry);
     setIfNewer(dog, "lastBath", entry.date, "bathUpdatedFromDailyTaskId", record.id);
     dog.nextBath = dog.lastBath ? addDays(dog.lastBath, dog.bathIntervalDays || careDefaults.bathIntervalDays) : "";
@@ -2807,7 +2740,6 @@ async function syncOwnedDogCareFromDailyReport(record) {
   if (dogUpdates.size) {
     renderOwnedDogs();
     renderCareDogOptions();
-    renderBathDogOptions([...(record.dogsBathedIds || [])]);
     showToast(`${dogUpdates.size} Our Dog care profile${dogUpdates.size === 1 ? "" : "s"} updated.`);
   }
 }
@@ -2968,7 +2900,6 @@ function renderOwnedDogs() {
     : `<tr><td colspan="${(columns.length || 1) + 1}">No matching dogs. Use Add New Dog.</td></tr>`;
   renderOwnedDogMobileCards(records);
   renderColumnManager("ownedDog", "#ownedDogColumnManager");
-  renderBathDogOptions([...($("#dogsBathedSelect")?.selectedOptions || [])].map((option) => option.value));
   renderCareDogOptions();
 }
 
@@ -3925,7 +3856,7 @@ function renderDashboardTimeline() {
           const completedCount = type === "dailyTask" ? completedTasksForRecord(record).length : 0;
           const careCount = type === "dailyTask" ? (record.structuredCareLogs || record.careLogs || []).length : 0;
           const summary = record.requestText || record.issue || record.dogName || record.callName || record.serviceName || (type === "dailyTask" ? `${completedCount} tasks completed, ${careCount} care logs` : `${record.dailyTasks?.length || 0} AM tasks, ${record.pmTasks?.length || 0} PM tasks checked`);
-          const notes = record.healthNotes || record.ownerNotes || record.reason || record.suggestedAction || record.pricingNotes || "";
+          const notes = record.ownerNotes || record.reason || record.suggestedAction || record.pricingNotes || "";
           const removeAction = currentRole() === "admin" ? `<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-timeline-record" data-type="${type}" data-id="${record.id}">Remove</button></div>` : "";
           return `<article class="record-card clickable-card" data-action="view-record" data-type="${type}" data-id="${record.id}"><strong>${formatDateTime(timestamp)} - ${title}</strong><span>${helper}</span><p>${summary || ""}</p>${notes ? `<p>${escapeHtml(notes)}</p>` : ""}${mediaLinkHtml(record)}${removeAction}</article>`;
         })
