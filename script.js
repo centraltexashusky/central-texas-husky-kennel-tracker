@@ -3958,20 +3958,22 @@ function renderCalendarNotes() {
   if (!formEl.elements.noteDate.value) formEl.elements.noteDate.value = selectedDate;
   const today = todayDate();
   const tomorrow = addDays(today, 1);
+  const datesToShow = selectedDate === today ? new Set([today, tomorrow]) : new Set([selectedDate]);
   const notes = readRecords("calendarNote")
     .filter((note) => !note.removed)
-    .filter((note) => note.noteDate === today || note.noteDate === tomorrow)
+    .filter((note) => datesToShow.has(note.noteDate))
     .sort((a, b) => new Date(a.noteDate || 0) - new Date(b.noteDate || 0));
+  const emptyMessage = selectedDate === today ? "No special notes for today or tomorrow." : "No special notes for the selected date.";
   list.innerHTML = notes.length
     ? notes
         .map((note) => {
           const isSelected = note.noteDate === selectedDate;
           const actions = currentRole() === "admin" ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button></div>` : "";
-          const dayLabel = note.noteDate === today ? "Today" : "Tomorrow";
+          const dayLabel = note.noteDate === today ? "Today" : note.noteDate === tomorrow ? "Tomorrow" : "Selected date";
           return `<article class="record-card ${isSelected ? "is-approved" : ""}"><strong>${escapeHtml(dayLabel)} - ${escapeHtml(note.noteDate || "")}${isSelected ? " - selected date" : ""}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
         })
         .join("")
-    : "<p>No special notes for today or tomorrow.</p>";
+    : `<p>${emptyMessage}</p>`;
 }
 
 function renderDashboardTimeline() {
