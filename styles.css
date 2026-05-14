@@ -678,6 +678,11 @@ h2 {
   box-shadow: 0 0 0 3px rgba(255, 180, 87, 0.22), var(--glass-specular);
 }
 
+#calendarNotesList .record-card.is-approved {
+  border-color: #ffb457;
+  box-shadow: 0 0 0 1px rgba(255, 180, 87, 0.34), var(--glass-specular);
+}
+
 .calendar-notes-panel {
   display: grid;
   gap: 12px;
@@ -2443,23 +2448,32 @@ option {
     display: grid;
   }
 
-  .task-item {
+  #dailyPage .checklist .task-item {
     align-items: stretch;
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+      rgba(8, 17, 27, 0.70);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: var(--glass-specular);
     display: grid;
     gap: 12px;
     grid-template-columns: minmax(0, 1fr);
     padding: 12px;
   }
 
-  .task-done-button {
+  #dailyPage .checklist .task-done-button {
     justify-self: stretch;
+    order: 2;
     width: 100%;
   }
 
-  .task-text {
+  #dailyPage .checklist .task-text {
     flex-basis: auto;
     font-size: 1rem;
     line-height: 1.42;
+    order: 1;
+    overflow-wrap: normal;
+    word-break: normal;
   }
 
   .task-admin-tools,
