@@ -4864,9 +4864,23 @@ function boardingDays(dropoffTime, pickupTime) {
   if (pick <= drop) return 0;
   const dropDay = new Date(drop.getFullYear(), drop.getMonth(), drop.getDate());
   const pickDay = new Date(pick.getFullYear(), pick.getMonth(), pick.getDate());
+  if (dropDay.getTime() === pickDay.getTime()) return 1;
   let days = Math.max(1, Math.round((pickDay - dropDay) / 86400000));
   if (pick.getHours() >= 12) days += 1;
   return days;
+}
+
+function isDayCareStay(dropoffTime, pickupTime) {
+  if (!dropoffTime || !pickupTime) return false;
+  const drop = new Date(dropoffTime);
+  const pick = new Date(pickupTime);
+  if (pick <= drop) return false;
+  return drop.getFullYear() === pick.getFullYear() && drop.getMonth() === pick.getMonth() && drop.getDate() === pick.getDate();
+}
+
+function boardingBillingLabel(estimate = {}) {
+  if (estimate.isDayCare) return "Day Care (1 boarding day)";
+  return `${Number(estimate.days || 0)} boarding day(s)`;
 }
 
 function customerEstimateDetails() {
@@ -4882,17 +4896,18 @@ function customerEstimateDetails() {
     })
     .filter(Boolean);
   const days = boardingDays(data.dropoffTime, data.pickupTime);
+  const isDayCare = isDayCareStay(data.dropoffTime, data.pickupTime);
   const boardingService = readRecords("service").find((service) => service.category === "Boarding" && (service.flags || []).includes("Active"));
   const boardingCost = dogs.length * days * Number(boardingService?.basePrice || 0);
   const serviceCost = dogs.length * services.reduce((total, service) => total + Number(service.basePrice || 0) * Number(service.quantity || 1), 0);
-  return { dogs, services, days, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: data.pickupTime, requestNotes: data.requestNotes };
+  return { dogs, services, days, isDayCare, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: data.pickupTime, requestNotes: data.requestNotes };
 }
 
 function updateCustomerEstimate() {
   if (!$("#customerEstimate")) return;
   const estimate = customerEstimateDetails();
   $("#customerEstimate").textContent = estimate.dogs.length
-    ? `${estimate.dogs.length} dog(s), ${estimate.days} boarding day(s), ${estimate.services.length} service(s): estimated total ${money(estimate.total)}.`
+    ? `${estimate.dogs.length} dog(s), ${boardingBillingLabel(estimate)}, ${estimate.services.length} service(s): estimated total ${money(estimate.total)}.`
     : "Select dog(s), dates, and services to see an estimate.";
 }
 
@@ -4905,7 +4920,7 @@ function showBookingConfirmDialog(estimate) {
   $("#bookingConfirmBody").innerHTML = `
     <div class="booking-summary">
       <div><strong>Dog(s)</strong><ul>${dogList}</ul></div>
-      <div><strong>Stay</strong><p>${formatDateTime(estimate.dropoffTime)} to ${formatDateTime(estimate.pickupTime)}</p><p>${estimate.days} boarding day(s)</p></div>
+      <div><strong>Stay</strong><p>${formatDateTime(estimate.dropoffTime)} to ${formatDateTime(estimate.pickupTime)}</p><p>${boardingBillingLabel(estimate)}</p></div>
       <div><strong>Services</strong><ul>${serviceList}</ul></div>
       <div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>
       ${estimate.requestNotes ? `<div><strong>Notes</strong><p>${escapeHtml(estimate.requestNotes)}</p></div>` : ""}
@@ -4928,6 +4943,8 @@ async function submitPendingCustomerBooking() {
       updatedAt: new Date().toISOString(),
       dropoffTime: estimate.dropoffTime,
       pickupTime: estimate.pickupTime,
+      stayType: estimate.isDayCare ? "Day Care" : "Boarding",
+      billingDays: estimate.days,
       requests: estimate.services.map((service) => `${service.serviceName}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`),
       stayNotes: estimate.requestNotes,
       estimatedTotal: estimate.total,
@@ -4962,6 +4979,8 @@ async function submitPendingCustomerBooking() {
       vaccinationRecords: dog.vaccinationRecords || [],
       vaccinationFiles: dog.vaccinationFiles || "",
       estimatedTotal: estimate.total,
+      stayType: estimate.isDayCare ? "Day Care" : "Boarding",
+      billingDays: estimate.days,
       requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
       flags: ["Required update from owner"],
       stays: [stay],
@@ -4984,7 +5003,7 @@ async function submitPendingCustomerBooking() {
   renderCustomerRequests();
   renderDashboard();
   switchPage("customerRequestsPage");
-  showDetailDialog(editingId ? "Request Updated" : "Request Sent", `<p>Your boarding request has been sent for approval.</p><p>${estimate.dogs.length} dog(s), ${estimate.days} boarding day(s), estimated total ${money(estimate.total)}.</p>`);
+  showDetailDialog(editingId ? "Request Updated" : "Request Sent", `<p>Your boarding request has been sent for approval.</p><p>${estimate.dogs.length} dog(s), ${boardingBillingLabel(estimate)}, estimated total ${money(estimate.total)}.</p>`);
 }
 
 function renderServices() {
