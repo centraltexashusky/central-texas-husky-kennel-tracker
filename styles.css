@@ -398,6 +398,10 @@ h2 {
   text-align: center;
 }
 
+.is-readonly .dog-photo-picker::after {
+  content: "View";
+}
+
 .dog-photo-picker img,
 .dog-photo-button img {
   height: 100%;
@@ -561,6 +565,26 @@ h2 {
   max-height: 70vh;
   max-width: 100%;
   width: 100%;
+}
+
+.media-zoom-controls {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.media-zoom-frame {
+  background: #111;
+  border-radius: 8px;
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.media-zoom-frame img {
+  transform-origin: center top;
+  transition: transform 140ms ease;
 }
 
 .media-iframe {
@@ -996,17 +1020,21 @@ textarea {
   width: 78px;
 }
 
-.checklist label {
+.checklist label,
+.checklist .task-item {
   align-items: flex-start;
   background: #f6f8f7;
   border: 1px solid #d9e3e1;
   border-radius: 8px;
-  cursor: pointer;
   display: flex;
   font-weight: 650;
   gap: 10px;
   min-height: 48px;
   padding: 12px;
+}
+
+.checklist label {
+  cursor: pointer;
 }
 
 .checklist input {
@@ -1029,13 +1057,48 @@ textarea {
   position: relative;
 }
 
+.task-item.is-complete {
+  background: rgba(42, 157, 143, 0.14);
+  border-color: rgba(42, 157, 143, 0.36);
+}
+
+.task-done-button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.task-done-button:disabled {
+  background: rgba(42, 157, 143, 0.22);
+  color: rgba(255, 255, 255, 0.78);
+  cursor: default;
+}
+
 .task-text {
+  display: grid;
   flex: 1 1 14rem;
+  gap: 4px;
   line-height: 1.35;
   min-width: 0;
   overflow-wrap: anywhere;
   padding-top: 2px;
   white-space: normal;
+}
+
+.task-complete-meta {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.task-progress-banner {
+  background: rgba(42, 157, 143, 0.16);
+  border: 1px solid rgba(42, 157, 143, 0.36);
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 850;
+  margin-bottom: 14px;
+  padding: 10px 12px;
 }
 
 .task-edit-input {
@@ -1209,6 +1272,10 @@ textarea {
   font-weight: 800;
   padding: 6px 10px;
   text-decoration: none;
+}
+
+.admin-review-details > summary {
+  display: none;
 }
 
 .detail-dialog {
@@ -2266,12 +2333,12 @@ option {
   .task-item {
     display: grid;
     gap: 12px;
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: 92px minmax(0, 1fr);
     padding: 12px;
   }
 
-  .task-item input[type="checkbox"] {
-    margin-top: 2px;
+  .task-done-button {
+    width: 100%;
   }
 
   .task-text {
@@ -2286,8 +2353,26 @@ option {
   }
 
   #manualTimeForm.mobile-admin-only,
-  #timesheetPage [data-action="edit-time"] {
+  #timesheetPage [data-action="edit-time"],
+  #timesheetPage .table-wrap {
     display: none !important;
+  }
+
+  .admin-review-details > summary {
+    align-items: center;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    font-weight: 850;
+    justify-content: space-between;
+    list-style: none;
+    padding: 14px;
+  }
+
+  .admin-review-details > summary::-webkit-details-marker {
+    display: none;
   }
 
   .data-table {

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260513-mobile-staff-1" />
+    <link rel="stylesheet" href="styles.css?v=20260514-workflow-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -80,7 +80,7 @@
             </div>
             <div class="login-actions">
               <button type="button" class="auth-provider-button" id="googleLoginButton">Continue with Google</button>
-              <button type="button" class="auth-provider-button" id="facebookLoginButton">Continue with Facebook</button>
+              <button type="button" class="auth-provider-button" id="facebookLoginButton" hidden>Continue with Facebook</button>
               <div class="auth-divider"><span>or</span></div>
               <form id="passwordLoginForm" class="inline-login-form">
                 <label>Email<input type="email" name="email" autocomplete="email" required /></label>
@@ -258,35 +258,20 @@
       <section class="page-view" id="dailyPage">
       <form id="kennelForm" class="tracker-form">
         <input type="hidden" name="id" id="dailyTaskId" />
-        <section class="form-section">
-          <div class="section-heading">
-            <span>1</span>
-            <div>
-              <h2>Shift Info</h2>
-              <p>Basic details for the daily record.</p>
-            </div>
-          </div>
-
-          <div class="field-grid">
-            <label>Date<input type="date" name="date" required /></label>
-            <label>Staff member<input type="text" name="helperName" id="helperName" placeholder="Sign in fills this automatically" readonly required /></label>
-            <input type="hidden" name="helperEmail" id="helperEmail" />
-            <input type="hidden" name="helperKey" id="helperKey" />
-            <label>
-              Day
-              <select name="dayOfWeek" id="dayOfWeek" class="is-readonly-select" required>
-                <option value="">Select day</option>
-                <option>Sunday</option>
-                <option>Monday</option>
-                <option>Tuesday</option>
-                <option>Wednesday</option>
-                <option>Thursday</option>
-                <option>Friday</option>
-                <option>Saturday</option>
-              </select>
-            </label>
-          </div>
-        </section>
+        <input type="hidden" name="date" id="dailyTaskDate" />
+        <input type="hidden" name="helperName" id="helperName" />
+        <input type="hidden" name="helperEmail" id="helperEmail" />
+        <input type="hidden" name="helperKey" id="helperKey" />
+        <select name="dayOfWeek" id="dayOfWeek" hidden>
+          <option value="">Select day</option>
+          <option>Sunday</option>
+          <option>Monday</option>
+          <option>Tuesday</option>
+          <option>Wednesday</option>
+          <option>Thursday</option>
+          <option>Friday</option>
+          <option>Saturday</option>
+        </select>
 
         <section class="form-section structured-care-panel structured-care-section" id="structuredCareSection" aria-labelledby="structuredCareHeading">
           <div class="section-heading">
@@ -299,8 +284,8 @@
 
           <div class="section-body">
             <div class="field-grid">
-              <label>Our Dog<select id="careQuickDogId"></select></label>
-              <label>Care type
+              <label id="careQuickDogLabel">Our Dog<select id="careQuickDogId"></select></label>
+              <label id="careQuickTypeLabel">Care type
                 <select id="careQuickType">
                   <option value="">Select care type</option>
                   <option>Treadmill</option>
@@ -312,11 +297,10 @@
                   <option>Medical/Behavior Note</option>
                 </select>
               </label>
-              <label>Minutes<input type="number" id="careQuickMinutes" min="0" placeholder="When relevant" /></label>
-              <label>Completed by<input type="text" id="careQuickCompletedBy" placeholder="Staff name" /></label>
-              <label>Date<input type="date" id="careQuickDate" /></label>
+              <label id="careQuickMinutesLabel">Minutes<input type="number" id="careQuickMinutes" min="0" placeholder="When relevant" /></label>
+              <label id="careQuickDateLabel">Date<input type="date" id="careQuickDate" /></label>
             </div>
-            <label>Care note<textarea id="careQuickNote" rows="2" placeholder="Session details, bath products, heat observation, medical/care note"></textarea></label>
+            <label id="careQuickNoteLabel">Care note<textarea id="careQuickNote" rows="2" placeholder="Session details, bath products, heat observation, medical/care note"></textarea></label>
             <div class="button-row"><button type="button" id="addCareQuickLog">Add Care Log</button></div>
             <div id="structuredCareLogList" class="record-grid compact-record-grid"></div>
           </div>
@@ -329,6 +313,7 @@
           <button type="button" data-task-tab="tuesday" role="tab" aria-selected="false">Tuesdays</button>
           <button type="button" data-task-tab="monthly" role="tab" aria-selected="false">Monthly</button>
         </div>
+        <div class="task-progress-banner" id="dailyTaskProgress" aria-live="polite">0 completed | tasks loading</div>
 
         <section class="form-section collapsible-section" data-task-panel="morning" data-collapsible-section>
           <div class="section-heading">
@@ -365,34 +350,6 @@
               <input type="text" id="newPmTaskText" placeholder="Add a new evening task" />
               <button type="button" id="addPmTaskButton">Add Task</button>
             </div>
-          </div>
-        </section>
-
-        <section class="form-section collapsible-section" data-collapsible-section>
-          <div class="section-heading">
-            <span>3</span>
-            <div>
-              <h2>Dogs, Health, And Content</h2>
-              <p>Daily notes for staff to review.</p>
-            </div>
-            <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
-          </div>
-
-          <div class="section-body">
-            <label>
-              Dogs trained or exercised today
-              <textarea name="dogsExercised" rows="3" placeholder="Example: Beau treadmill, Blue scooter, Luna leash training"></textarea>
-            </label>
-
-            <label>
-              Health or behavior notes
-              <textarea name="healthNotes" rows="3" placeholder="Appetite, stool, coughing, limping, heat cycle, behavior, or other concern"></textarea>
-            </label>
-
-            <label>
-              What photo or video did you take today?
-              <textarea name="socialContent" rows="3" placeholder="Example: funny puppy moment, clean kennel, treadmill session, bath day, dogs running"></textarea>
-            </label>
           </div>
         </section>
 
@@ -473,14 +430,6 @@
             </div>
           </div>
         </section>
-
-        <div class="submit-bar">
-          <div>
-            <strong id="completionText">0 tasks checked</strong>
-            <p>Review before submitting.</p>
-          </div>
-          <button type="submit">Submit Kennel Report</button>
-        </div>
       </form>
 
       <section class="recent-submissions">
@@ -488,7 +437,7 @@
           <span>R</span>
           <div>
             <h2>Recent Submissions</h2>
-            <p>Recent kennel reports submitted.</p>
+            <p>Completed work saves automatically as staff tap Done or log care.</p>
           </div>
         </div>
         <div id="recentSubmissions" class="submission-list"></div>
@@ -768,28 +717,42 @@
         </section>
 
         <section class="recent-submissions" id="boardingRequestsSection">
+          <details class="admin-review-details" id="boardingRequestsDetails" open>
+            <summary>Review Boarding Requests</summary>
+            <div class="section-heading">
+              <span>R</span>
+              <div>
+                <h2>Boarding Requests</h2>
+                <p>Review pending, approved, and cancelled customer boarding requests separately from the dog roster.</p>
+              </div>
+            </div>
+            <div class="filter-toolbar">
+              <label>View requests
+                <select id="boardingRequestStatusFilter">
+                  <option value="All">All</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Checked In">Checked In</option>
+                  <option value="In Kennel">In Kennel</option>
+                  <option value="Ready For Pickup">Ready For Pickup</option>
+                  <option value="Checked Out">Checked Out</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+              </label>
+            </div>
+            <div class="record-grid" id="boardingRequestRecords"></div>
+          </details>
+        </section>
+
+        <section class="recent-submissions" id="customerDogUploadsSection">
           <div class="section-heading">
-            <span>R</span>
+            <span>F</span>
             <div>
-              <h2>Boarding Requests</h2>
-              <p>Review pending, approved, and cancelled customer boarding requests separately from the dog roster.</p>
+              <h2>Customer Uploaded Files</h2>
+              <p>Vaccination records and profile images customers uploaded for their dogs.</p>
             </div>
           </div>
-          <div class="filter-toolbar">
-            <label>View requests
-              <select id="boardingRequestStatusFilter">
-                <option value="All">All</option>
-                <option value="Pending">Pending</option>
-                <option value="Approved">Approved</option>
-                <option value="Checked In">Checked In</option>
-                <option value="In Kennel">In Kennel</option>
-                <option value="Ready For Pickup">Ready For Pickup</option>
-                <option value="Checked Out">Checked Out</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </label>
-          </div>
-          <div class="record-grid" id="boardingRequestRecords"></div>
+          <div class="record-grid compact-record-grid" id="customerDogUploadCards"></div>
         </section>
 
         <section class="form-section detail-panel" id="boardingDogDetail" hidden>
@@ -1057,6 +1020,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260513-custom-domain-auth-1"></script>
+    <script src="script.js?v=20260514-workflow-1"></script>
   </body>
 </html>
