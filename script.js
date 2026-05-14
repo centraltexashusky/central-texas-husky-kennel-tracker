@@ -43,6 +43,8 @@ let ownedDogCareFilter = "All";
 let pendingStructuredCareLogs = [];
 let mediaZoomLevel = 1;
 let customerProfileSyncInProgress = false;
+let authSessionSyncPromise = null;
+let suppressAuthSyncUntil = 0;
 
 const careDefaults = {
   exerciseFrequencyDays: 1,
@@ -794,6 +796,13 @@ function initSupabaseClient() {
     if (event === "PASSWORD_RECOVERY") {
       openPasswordRecoveryForm(session?.user?.email || "", { focusPassword: true });
       showDetailDialog("Set New Password", "<p>Enter and confirm a new password to finish password recovery.</p>");
+      return;
+    }
+    if (event === "SIGNED_IN" && session?.user) {
+      if (Date.now() < suppressAuthSyncUntil) return;
+      syncAuthenticatedSupabaseUser(session.user, { switchAfterLogin: false }).catch((error) => {
+        console.warn("Could not sync authenticated user profile.", error);
+      });
     }
   });
 }
@@ -1121,6 +1130,34 @@ async function ensureAppUserProfile(user) {
   return record;
 }
 
+function isEmailConfirmationError(message = "") {
+  return /confirm|verified|verification/i.test(message);
+}
+
+async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
+  const user = userFromSupabase(supabaseUser);
+  if (!user) return null;
+  if (authSessionSyncPromise) return authSessionSyncPromise;
+  authSessionSyncPromise = (async () => {
+    await loadRemoteRecords();
+    const profile = await ensureAppUserProfile(user);
+    const syncedUser = {
+      ...user,
+      role: profile?.role || roleForAccount(user),
+      name: profile?.name || user.name,
+    };
+    setHelper(syncedUser, { switchAfterLogin: options.switchAfterLogin });
+    await loadRemoteRecords();
+    requirePasswordChangeIfNeeded();
+    return syncedUser;
+  })();
+  try {
+    return await authSessionSyncPromise;
+  } finally {
+    authSessionSyncPromise = null;
+  }
+}
+
 async function loginWithPassword(event) {
   event.preventDefault();
   const formEl = event.currentTarget;
@@ -1144,27 +1181,29 @@ async function loginWithPassword(event) {
       completeLocalTestLogin(email, error.message || "local Supabase Auth failed");
       return;
     }
-    showDetailDialog("Login Failed", `<p>${escapeHtml(error.message)}</p>`);
+    showDetailDialog(
+      isEmailConfirmationError(error.message) ? "Email Confirmation Needed" : "Login Failed",
+      isEmailConfirmationError(error.message)
+        ? `<p>Open the confirmation email sent to ${escapeHtml(email)}, confirm the account, then return here and sign in.</p>`
+        : `<p>${escapeHtml(error.message)}</p>`,
+    );
     return;
   }
-  const user = userFromSupabase(authData.user);
+  const user = await syncAuthenticatedSupabaseUser(authData.user);
   if (!user) return;
-  await loadRemoteRecords();
-  await ensureAppUserProfile(user);
-  setHelper(user);
-  await loadRemoteRecords();
-  requirePasswordChangeIfNeeded();
+  switchPage(user.role === "customer" ? "customerPage" : "dashboardPage");
   formEl.reset();
   showToast(`${user.name} is logged in.`);
 }
 
-async function sendSignupCode() {
-  const formEl = $("#customerSignupForm");
+async function createCustomerLogin(event) {
+  event.preventDefault();
+  const formEl = event.currentTarget;
+  if (!validateForm(formEl, [passwordMatchCheck(formEl, "password", "confirmPassword")])) return;
   if (!supabaseClient) {
     showDetailDialog("Login Setup Needed", "<p>Customer login creation needs the Supabase connection first.</p>");
     return;
   }
-  if (!validateForm(formEl, [passwordMatchCheck(formEl, "password", "confirmPassword")])) return;
   const data = formPayload(formEl);
   const firstName = data.firstName.trim();
   const lastName = data.lastName.trim();
@@ -1174,10 +1213,11 @@ async function sendSignupCode() {
     showDetailDialog("Please Wait", `<p>Try again in ${Math.ceil(wait / 1000)} seconds.</p>`);
     return;
   }
-  const button = $("#sendSignupCodeButton");
-  setSubmitState(button, true, "Sending...");
+  const button = formEl.querySelector('button[type="submit"]');
+  setSubmitState(button, true, "Creating...");
   markAuthAttempt("signup", email);
-  const { error } = await supabaseClient.auth.signUp({
+  suppressAuthSyncUntil = Date.now() + 10000;
+  const { data: authData, error } = await supabaseClient.auth.signUp({
     email,
     password: data.password,
     options: {
@@ -1192,51 +1232,22 @@ async function sendSignupCode() {
   });
   setSubmitState(button, false);
   if (error) {
-    showDetailDialog("Confirmation Email Not Sent", `<p>The confirmation email could not be sent: ${escapeHtml(error.message)}</p>`);
-    return;
-  }
-  showDetailDialog(
-    "Confirmation Email Sent",
-    `<p>Supabase sent a confirmation email to ${escapeHtml(email)}. Open that email, click <strong>Confirm your mail</strong>, then return here and choose <strong>Create / Sign In</strong>.</p>`,
-  );
-}
-
-async function createCustomerLogin(event) {
-  event.preventDefault();
-  const formEl = event.currentTarget;
-  if (!validateForm(formEl, [passwordMatchCheck(formEl, "password", "confirmPassword")])) return;
-  if (!supabaseClient) {
-    showDetailDialog("Login Setup Needed", "<p>Customer login creation needs the Supabase connection first.</p>");
-    return;
-  }
-  const data = formPayload(formEl);
-  const email = data.email.trim().toLowerCase();
-  const button = formEl.querySelector('button[type="submit"]');
-  setSubmitState(button, true, "Signing in...");
-  const { data: authData, error } = await supabaseClient.auth.signInWithPassword({ email, password: data.password });
-  if (error) {
-    setSubmitState(button, false);
-    const needsConfirm = /confirm/i.test(error.message || "");
+    suppressAuthSyncUntil = 0;
     showDetailDialog(
-      needsConfirm ? "Email Confirmation Needed" : "Account Not Ready",
-      needsConfirm
-        ? `<p>Open the Supabase email sent to ${escapeHtml(email)} and click <strong>Confirm your mail</strong>. After the confirmation page opens, return here and choose <strong>Create / Sign In</strong>.</p>`
-        : `<p>${escapeHtml(error.message)}</p><p>If you have not sent the confirmation email yet, choose <strong>Send Confirmation Email</strong> first.</p>`,
+      "Account Not Created",
+      `<p>${escapeHtml(error.message)}</p><p>If this email already has an account, use the main sign-in form instead.</p>`,
     );
     return;
   }
-  const user = userFromSupabase(authData.user);
-  if (user) {
-    await loadRemoteRecords();
-    await ensureAppUserProfile({ ...user, role: "customer" });
-    setHelper({ ...user, role: "customer" });
-    await loadRemoteRecords();
-    requirePasswordChangeIfNeeded();
+  if (authData.session) {
+    await supabaseClient.auth.signOut();
   }
-  setSubmitState(button, false);
   formEl.reset();
   formEl.hidden = true;
-  showDetailDialog("Customer Login Active", `<p>The customer account for ${escapeHtml(email)} is active and signed in.</p>`);
+  showDetailDialog(
+    "Check Your Email",
+    `<p>A confirmation email was sent to ${escapeHtml(email)}. Confirm the email first, then return here and sign in with your email and password.</p><p>Google sign-in is already authenticated by Google, so it does not use this email confirmation step.</p>`,
+  );
 }
 
 async function sendRecoveryCode() {
@@ -1378,9 +1389,8 @@ async function completeForcedPasswordChange(event) {
 async function restoreSupabaseSession() {
   if (!supabaseClient) return false;
   const { data } = await supabaseClient.auth.getSession();
-  const user = userFromSupabase(data.session?.user);
+  const user = await syncAuthenticatedSupabaseUser(data.session?.user, { switchAfterLogin: false });
   if (!user) return false;
-  setHelper(user, { switchAfterLogin: false });
   return true;
 }
 
@@ -3005,7 +3015,7 @@ function isRecentDailySubmission(record = {}, daysBack = 3) {
 function renderDemoSubmissions() {
   const saved = [
     ...readRecords("dailyTask"),
-    ...readRecords("calendarNote").filter((note) => !note.removed).map((note) => ({ ...note, date: note.noteDate, isCalendarNoteSubmission: true })),
+    ...readRecords("calendarNote").filter((note) => !note.removed).map((note) => ({ ...note, date: calendarNoteDate(note), isCalendarNoteSubmission: true })),
   ]
     .filter((submission) => !submission.removed && isRecentDailySubmission(submission))
     .sort((a, b) => String(dailySubmissionDate(b)).localeCompare(String(dailySubmissionDate(a))) || new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
@@ -4364,8 +4374,9 @@ function renderDashboardTaskCalendar() {
     if (date) counts[date] = (counts[date] || 0) + 1;
     return counts;
   }, {});
-  const noteCounts = readRecords("calendarNote").filter((record) => !record.removed && record.noteDate).reduce((counts, record) => {
-    counts[record.noteDate] = (counts[record.noteDate] || 0) + 1;
+  const noteCounts = readRecords("calendarNote").filter((record) => !record.removed && calendarNoteDate(record)).reduce((counts, record) => {
+    const noteDate = calendarNoteDate(record);
+    counts[noteDate] = (counts[noteDate] || 0) + 1;
     return counts;
   }, {});
   const firstDay = new Date(year, month, 1).getDay();
@@ -4389,6 +4400,10 @@ function renderDashboardTaskCalendar() {
 
 function calendarNoteAuthorText(note) {
   return note.createdBy || note.updatedBy || note.helperName || note.authorName || note.createdByEmail || note.updatedByEmail || currentUser?.name || "Author not recorded";
+}
+
+function calendarNoteDate(note = {}) {
+  return dateOnly(note.noteDate || note.date || note.submittedAt || note.updatedAt);
 }
 
 function calendarNoteCreatedByCurrentUser(note = {}) {
@@ -4422,8 +4437,9 @@ function renderCalendarNotes() {
   const datesToShow = selectedDate === today ? new Set([today, tomorrow]) : new Set([selectedDate]);
   const notes = readRecords("calendarNote")
     .filter((note) => !note.removed)
+    .map((note) => ({ ...note, noteDate: calendarNoteDate(note) }))
     .filter((note) => datesToShow.has(note.noteDate))
-    .sort((a, b) => new Date(a.noteDate || 0) - new Date(b.noteDate || 0));
+    .sort((a, b) => dateOnlyTime(a.noteDate) - dateOnlyTime(b.noteDate));
   const emptyMessage = selectedDate === today ? "No special notes for today or tomorrow." : "No special notes for the selected date.";
   list.innerHTML = notes.length
     ? notes
@@ -5352,7 +5368,6 @@ function initEvents() {
     $("#customerSignupForm").reset();
     $("#customerSignupForm").hidden = true;
   });
-  $("#sendSignupCodeButton").addEventListener("click", sendSignupCode);
   $("#customerSignupForm").addEventListener("submit", createCustomerLogin);
   $("#sendRecoveryCodeButton").addEventListener("click", sendRecoveryCode);
   $("#passwordRecoveryForm").addEventListener("submit", completePasswordRecovery);
