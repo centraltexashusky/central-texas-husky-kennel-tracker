@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260514-dog-card-colors-1" />
+    <link rel="stylesheet" href="styles.css?v=20260514-bottom-nav-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -67,6 +67,52 @@
           <option value="settingsPage" data-roles="admin">Settings</option>
         </select>
       </label>
+
+      <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile kennel sections">
+        <button class="mobile-bottom-nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin" aria-label="Home">
+          <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 10.8 12 3l9 7.8" />
+            <path d="M5.5 9.8V21h13V9.8" />
+            <path d="M9.5 21v-6h5v6" />
+          </svg>
+          <span class="mobile-bottom-nav-label">Home</span>
+        </button>
+        <button class="mobile-bottom-nav-button" type="button" data-page="dailyPage" data-roles="helper,admin" aria-label="Tasks">
+          <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8.5 11.5 10.5 13.5 15.5 8.5" />
+            <path d="M8 4h8" />
+            <path d="M7 3.5h10a2 2 0 0 1 2 2V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V5.5a2 2 0 0 1 2-2Z" />
+          </svg>
+          <span class="mobile-bottom-nav-label">Tasks</span>
+        </button>
+        <button class="mobile-bottom-nav-button" type="button" data-page="ourDogsPage" data-roles="helper,admin" aria-label="Our Dogs">
+          <img class="mobile-bottom-nav-icon mobile-bottom-nav-image" src="assets/icons/our-dogs-gold-transparent-icon.png" alt="" />
+          <span class="mobile-bottom-nav-label">Our Dogs</span>
+        </button>
+        <button class="mobile-bottom-nav-button" type="button" data-page="boardingDogsPage" data-roles="helper,admin" aria-label="Boarding Dogs">
+          <img class="mobile-bottom-nav-icon mobile-bottom-nav-image" src="assets/icons/boarding-dogs-white-icon.png" alt="" />
+          <span class="mobile-bottom-nav-label">Boarding Dogs</span>
+        </button>
+        <button class="mobile-bottom-nav-button mobile-more-trigger" type="button" id="mobileMoreButton" aria-expanded="false" aria-controls="mobileMoreSheet" aria-label="Open complete menu">
+          <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 12h.01" />
+            <path d="M12 12h.01" />
+            <path d="M18 12h.01" />
+          </svg>
+          <span class="mobile-bottom-nav-label">...</span>
+        </button>
+      </nav>
+      <div class="mobile-more-backdrop" id="mobileMoreBackdrop" hidden></div>
+      <section class="mobile-more-sheet" id="mobileMoreSheet" aria-labelledby="mobileMoreTitle" hidden>
+        <div class="mobile-more-header">
+          <div>
+            <span>Complete Menu</span>
+            <h2 id="mobileMoreTitle">Go to</h2>
+          </div>
+          <button type="button" class="mobile-more-close" id="mobileMoreCloseButton" aria-label="Close menu">×</button>
+        </div>
+        <div class="mobile-more-list" id="mobileMoreMenuList"></div>
+      </section>
 
       <section class="page-view is-active" id="loginPage">
         <section class="login-auth-section">
@@ -1018,6 +1064,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260514-calendar-note-permissions-1"></script>
+    <script src="script.js?v=20260514-bottom-nav-1"></script>
   </body>
 </html>

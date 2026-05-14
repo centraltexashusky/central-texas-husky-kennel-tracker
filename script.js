@@ -61,6 +61,8 @@ const taskShiftLabels = {
   tuesday: "Tuesday",
   monthly: "Monthly",
 };
+const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage"];
+const mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 
 const boardingLifecycleStatuses = ["Pending", "Approved", "Checked In", "In Kennel", "Ready For Pickup", "Checked Out", "Cancelled"];
 const boardingStatusTransitions = {
@@ -1666,11 +1668,92 @@ function staffIdentity() {
   };
 }
 
+function navigationButtonForPage(pageId) {
+  return $(`.side-nav .nav-button[data-page="${pageId}"]`);
+}
+
 function pageAllowed(pageId) {
   if (pageId === "loginPage") return true;
-  const button = $(`.nav-button[data-page="${pageId}"]`);
+  const button = navigationButtonForPage(pageId);
   const roles = (button?.dataset.roles || "helper,admin").split(",");
   return helperIsLoggedIn() && roles.includes(currentRole());
+}
+
+function activePageId() {
+  return $(".page-view.is-active")?.id || "loginPage";
+}
+
+function navigationPageEntries() {
+  return $$(".side-nav .nav-button").map((button) => ({
+    label: button.textContent.trim(),
+    pageId: button.dataset.page,
+  }));
+}
+
+function mobileMoreEntries() {
+  if (!helperIsLoggedIn()) return [];
+  return navigationPageEntries().filter((entry) => entry.pageId && entry.pageId !== "loginPage" && !mobilePrimaryPageSet.has(entry.pageId) && pageAllowed(entry.pageId));
+}
+
+function renderMobileMoreMenu() {
+  const list = $("#mobileMoreMenuList");
+  if (!list) return;
+  const currentPage = activePageId();
+  const entries = mobileMoreEntries();
+  list.innerHTML = entries.length
+    ? entries
+        .map(
+          (entry) => {
+            const active = entry.pageId === currentPage;
+            return `<button type="button" class="mobile-more-menu-item ${active ? "is-active" : ""}" data-page="${escapeHtml(entry.pageId)}"${active ? ' aria-current="page"' : ""}>${escapeHtml(entry.label)}</button>`;
+          },
+        )
+        .join("")
+    : `<p class="mobile-more-empty">No additional pages are available for this login.</p>`;
+}
+
+function setMobileMoreOpen(open) {
+  const sheet = $("#mobileMoreSheet");
+  const backdrop = $("#mobileMoreBackdrop");
+  const button = $("#mobileMoreButton");
+  if (!sheet || !backdrop || !button) return;
+  const shouldOpen = Boolean(open && mobileMoreEntries().length);
+  if (shouldOpen) renderMobileMoreMenu();
+  sheet.hidden = !shouldOpen;
+  backdrop.hidden = !shouldOpen;
+  button.setAttribute("aria-expanded", String(shouldOpen));
+  document.body.classList.toggle("mobile-more-open", shouldOpen);
+}
+
+function syncMobileNavigationActive(pageId = activePageId()) {
+  $$(".mobile-bottom-nav-button[data-page]").forEach((button) => {
+    const active = button.dataset.page === pageId;
+    button.classList.toggle("is-active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  $("#mobileMoreButton")?.classList.toggle("is-active", helperIsLoggedIn() && !mobilePrimaryPageSet.has(pageId) && pageId !== "loginPage");
+  renderMobileMoreMenu();
+}
+
+function updateMobileNavigationAccess() {
+  const nav = $("#mobileBottomNav");
+  if (!nav) return;
+  const signedIn = helperIsLoggedIn();
+  nav.hidden = !signedIn;
+  $$(".mobile-bottom-nav-button[data-page]").forEach((button) => {
+    const allowed = pageAllowed(button.dataset.page);
+    button.disabled = !allowed;
+    button.hidden = !signedIn || !allowed;
+  });
+  const moreButton = $("#mobileMoreButton");
+  if (moreButton) {
+    const hasMorePages = mobileMoreEntries().length > 0;
+    moreButton.disabled = !signedIn || !hasMorePages;
+    moreButton.hidden = !signedIn || !hasMorePages;
+  }
+  if (!signedIn) setMobileMoreOpen(false);
+  syncMobileNavigationActive();
 }
 
 function updateNavigationAccess() {
@@ -1687,6 +1770,7 @@ function updateNavigationAccess() {
     option.disabled = !pageAllowed(option.value);
     option.hidden = (isLogin && helperIsLoggedIn()) || (option.disabled && !(isLogin && !helperIsLoggedIn()));
   });
+  updateMobileNavigationAccess();
 }
 
 function restoreSession() {
@@ -4664,6 +4748,25 @@ function initEvents() {
   syncMobileReviewSections();
   window.addEventListener("resize", syncMobileReviewSections);
   $("#mobilePageSelect").addEventListener("change", (event) => switchPage(event.target.value));
+  $("#mobileBottomNav").addEventListener("click", (event) => {
+    const button = event.target.closest(".mobile-bottom-nav-button");
+    if (!button || button.disabled) return;
+    if (button.id === "mobileMoreButton") {
+      setMobileMoreOpen($("#mobileMoreSheet")?.hidden);
+      return;
+    }
+    if (button.dataset.page) switchPage(button.dataset.page);
+  });
+  $("#mobileMoreMenuList").addEventListener("click", (event) => {
+    const button = event.target.closest(".mobile-more-menu-item[data-page]");
+    if (!button) return;
+    switchPage(button.dataset.page);
+  });
+  $("#mobileMoreBackdrop").addEventListener("click", () => setMobileMoreOpen(false));
+  $("#mobileMoreCloseButton").addEventListener("click", () => setMobileMoreOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setMobileMoreOpen(false);
+  });
   $$(".nav-button").forEach((button) => {
     button.addEventListener("click", () => switchPage(button.dataset.page));
   });
@@ -5787,6 +5890,8 @@ function switchPage(pageId) {
   $$(".nav-button").forEach((item) => item.classList.toggle("is-active", item.dataset.page === pageId));
   $$(".page-view").forEach((page) => page.classList.toggle("is-active", page.id === pageId));
   $("#mobilePageSelect").value = pageId;
+  syncMobileNavigationActive(pageId);
+  setMobileMoreOpen(false);
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
