@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260514-popup-workflows-1" />
+    <link rel="stylesheet" href="styles.css?v=20260514-kennel-locations-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -16,7 +16,7 @@
         <nav class="side-nav" aria-label="Kennel tracker sections">
           <button class="nav-button is-active" type="button" data-page="loginPage" data-roles="public">Login</button>
           <button class="nav-button" type="button" data-page="customerPage" data-roles="customer">Add Dog</button>
-          <button class="nav-button" type="button" data-page="customerRequestsPage" data-roles="customer">My Request</button>
+          <button class="nav-button" type="button" data-page="customerRequestsPage" data-roles="customer">My Requests</button>
           <button class="nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin">Main Dashboard</button>
           <button class="nav-button" type="button" data-page="timesheetPage" data-roles="helper,admin">Timesheet</button>
           <button class="nav-button" type="button" data-page="dailyPage" data-roles="helper,admin">Daily Tasks</button>
@@ -54,7 +54,7 @@
         <select id="mobilePageSelect">
           <option value="loginPage" data-roles="public">Login</option>
           <option value="customerPage" data-roles="customer">Add Dog</option>
-          <option value="customerRequestsPage" data-roles="customer">My Request</option>
+          <option value="customerRequestsPage" data-roles="customer">My Requests</option>
           <option value="dashboardPage" data-roles="helper,admin">Main Dashboard</option>
           <option value="timesheetPage">Timesheet</option>
           <option value="dailyPage">Daily Tasks</option>
@@ -69,6 +69,24 @@
       </label>
 
       <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile kennel sections">
+        <button class="mobile-bottom-nav-button" type="button" data-page="customerPage" data-roles="customer" aria-label="My Dog">
+          <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6.5 11.5c1.8-1.8 3.3-2.7 5.5-2.7s3.7.9 5.5 2.7" />
+            <path d="M8.5 8.5 7.3 5.8a1.2 1.2 0 0 0-2.2.1L4 9.2" />
+            <path d="m15.5 8.5 1.2-2.7a1.2 1.2 0 0 1 2.2.1L20 9.2" />
+            <path d="M7.5 13.5c0 4 2.2 6.5 4.5 6.5s4.5-2.5 4.5-6.5" />
+            <path d="M10 14h.01M14 14h.01M11 17h2" />
+          </svg>
+          <span class="mobile-bottom-nav-label">My Dog</span>
+        </button>
+        <button class="mobile-bottom-nav-button" type="button" data-page="customerRequestsPage" data-roles="customer" aria-label="My Requests">
+          <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 4h8" />
+            <path d="M7 3.5h10a2 2 0 0 1 2 2V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V5.5a2 2 0 0 1 2-2Z" />
+            <path d="M8.5 10.5h7M8.5 14.5h5" />
+          </svg>
+          <span class="mobile-bottom-nav-label">Requests</span>
+        </button>
         <button class="mobile-bottom-nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin" aria-label="Home">
           <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 10.8 12 3l9 7.8" />
@@ -214,19 +232,28 @@
                 <input class="visually-hidden-file" type="file" name="profilePhoto" id="customerDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
               </div>
             </div>
-            <div class="field-grid">
-              <label>Dog name<input type="text" name="dogName" required /></label>
-              <label>Breed / description<input type="text" name="breedDescription" placeholder="Example: Siberian Husky, 3 years old" /></label>
-              <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
-              <label>Emergency contact name <small>Highly recommended</small><input type="text" name="emergencyName" /></label>
-              <label>Emergency contact phone <small>Highly recommended</small><input type="tel" name="emergencyPhone" /></label>
-              <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
-              <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
-              <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
-              <label>Rabies duration<select name="rabiesDuration"><option value="">Select duration</option><option>1 year</option><option>3 years</option><option>Unknown</option></select></label>
-              <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple /><small>Optional PDF, PNG, or JPG records.</small></label>
+            <div class="customer-form-step">
+              <strong>Required to request boarding</strong>
+              <div class="field-grid">
+                <label>Dog name<input type="text" name="dogName" required /></label>
+                <label>Breed / description<input type="text" name="breedDescription" placeholder="Example: Siberian Husky, 3 years old" /></label>
+                <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
+                <label>Emergency contact name <small>Highly recommended</small><input type="text" name="emergencyName" /></label>
+                <label>Emergency contact phone <small>Highly recommended</small><input type="tel" name="emergencyPhone" /></label>
+                <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
+              </div>
             </div>
-            <label>Care notes<textarea name="specialCare" rows="3" placeholder="Feeding, medication, behavior, allergies, or handling notes"></textarea></label>
+            <div class="customer-form-step">
+              <strong>Vaccines, care details, and files</strong>
+              <div class="field-grid">
+                <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
+                <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
+                <label>Rabies duration<select name="rabiesDuration"><option value="">Select duration</option><option>1 year</option><option>3 years</option><option>Unknown</option></select></label>
+                <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple /><small>Optional PDF, PNG, or JPG records.</small></label>
+              </div>
+              <label>Care notes<textarea name="specialCare" rows="3" placeholder="Feeding, medication, behavior, allergies, or handling notes"></textarea></label>
+            </div>
+            <div class="upload-status" id="customerUploadStatus" role="status"></div>
             <div class="button-row"><button type="submit" id="saveCustomerDogButton">Save Dog</button><button type="button" class="secondary-button" id="newCustomerDogButton">New Dog</button></div>
           </form>
           <div class="customer-dog-list" id="customerDogList"></div>
@@ -250,7 +277,7 @@
           </form>
         </section>
         <section class="form-section">
-          <div class="section-heading"><span>R</span><div><h2>My Request</h2><p>Review boarding requests and requested services for your dogs.</p></div></div>
+          <div class="section-heading"><span>R</span><div><h2>My Requests</h2><p>Review boarding requests and requested services for your dogs.</p></div></div>
           <div class="table-toolbar">
             <label>Request status
               <select id="customerRequestStatusFilter">
@@ -289,11 +316,11 @@
           </div>
           <div class="dashboard-grid" id="dashboardCards"></div>
         </section>
-        <section class="recent-submissions">
+        <section class="recent-submissions" id="dashboardTimelineSection">
           <div class="section-heading"><span>T</span><div><h2>Daily Timeline</h2><p>Timestamped work submitted by all staff for the selected day.</p></div></div>
           <div class="record-grid" id="dashboardTimeline"></div>
         </section>
-        <section class="recent-submissions">
+        <section class="recent-submissions" id="dashboardAttentionSection">
           <div class="section-heading"><span>!</span><div><h2>Attention Needed</h2><p>Operations, health, and owner follow-up items.</p></div></div>
           <div class="filter-toolbar alert-filter-toolbar" id="dashboardAlertTabs" aria-label="Attention needed filters"></div>
           <div class="record-grid" id="dashboardAlerts"></div>
@@ -359,6 +386,7 @@
           <button type="button" data-task-tab="monthly" role="tab" aria-selected="false">Monthly</button>
         </div>
         <div class="task-progress-banner" id="dailyTaskProgress" aria-live="polite">0 completed | tasks loading</div>
+        <label class="toggle-row task-filter-toggle"><input type="checkbox" id="showRemainingTasksOnly" checked /> Remaining tasks only</label>
 
         <section class="form-section collapsible-section" data-task-panel="morning" data-collapsible-section>
           <div class="section-heading">
@@ -760,6 +788,7 @@
             <button type="button" data-boarding-filter="Ready For Pickup" role="tab" aria-selected="false">Ready for Pickup</button>
             <button type="button" data-boarding-filter="All Boarding Dogs" role="tab" aria-selected="false">All Boarding Dogs</button>
           </div>
+          <div class="boarding-queue-grid" id="boardingQueueGroups" aria-label="Boarding queue groups"></div>
           <div class="mobile-roster-list boarding-quick-list" id="boardingDogQuickCards" aria-label="Mobile boarding check-in and check-out actions"></div>
           <div class="column-manager" id="boardingDogColumnManager" hidden></div>
           <div class="table-wrap">
@@ -955,7 +984,8 @@
           </form>
         </section>
         <section class="recent-submissions">
-          <div class="section-heading"><span>P</span><div><h2>Pricing Catalog</h2><p>Double click a row to edit. Use this as the admin source of truth for services.</p></div></div>
+          <div class="section-heading"><span>P</span><div><h2>Pricing Catalog</h2><p>Customer-bookable services are separated from internal/admin-only services below.</p></div></div>
+          <div class="service-catalog-groups" id="serviceCatalogGroups"></div>
           <div class="table-toolbar">
             <input type="search" id="serviceSearch" placeholder="Search pricing by service, category, price, unit, deposit, tax, flags, or notes" />
           </div>
@@ -970,7 +1000,7 @@
 
       <section class="page-view" id="financialsPage">
         <section class="form-section">
-          <div class="section-heading"><span>F</span><div><h2>Financials</h2><p>Admin-only financial cockpit. These are planning metrics, not tax/accounting records.</p></div></div>
+          <div class="section-heading"><span>F</span><div><h2>Financials</h2><p>Admin-only planning estimates only. These are not accounting, payroll, or tax records.</p></div></div>
           <div class="dashboard-grid" id="financialCards"></div>
         </section>
         <section class="recent-submissions">
@@ -1008,6 +1038,19 @@
             </table>
           </div>
           <div class="mobile-card-list settings-user-cards" id="settingsUserCards"></div>
+        </section>
+        <section class="recent-submissions">
+          <div class="section-heading"><span>K</span><div><h2>Kennel Locations</h2><p>Manage the Shed and Mansion kennel choices used when a boarding dog is marked In Kennel.</p></div></div>
+          <form id="kennelLocationForm" class="tracker-form admin-inline-form">
+            <input type="hidden" name="id" />
+            <div class="field-grid">
+              <label>Building<select name="building" required><option>Shed</option><option>Mansion</option></select></label>
+              <label>Kennel name<input type="text" name="name" required placeholder="Example: Shed 1 or Mansion Suite A" /></label>
+            </div>
+            <label class="inline-check"><input type="checkbox" name="active" checked /> Active</label>
+            <div class="button-row"><button type="submit">Save Kennel</button><button type="button" class="secondary-button" id="newKennelLocationButton">New Kennel</button></div>
+          </form>
+          <div class="record-grid compact-record-grid" id="kennelLocationList"></div>
         </section>
       </section>
     </main>
@@ -1059,6 +1102,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260514-popup-workflows-1"></script>
+    <script src="script.js?v=20260514-kennel-locations-1"></script>
   </body>
 </html>
