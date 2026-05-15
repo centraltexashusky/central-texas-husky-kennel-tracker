@@ -270,7 +270,10 @@
               <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
               <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
             </div>
-            <div class="checklist compact" id="customerServiceOptions"></div>
+            <section class="customer-additional-services">
+              <strong>Add additional services:</strong>
+              <div class="checklist compact" id="customerServiceOptions"></div>
+            </section>
             <div class="estimate-box" id="customerEstimate">Select dog(s), dates, and services to see an estimate.</div>
             <label>Request notes<textarea name="requestNotes" rows="3" placeholder="Anything we should know about this boarding request?"></textarea></label>
             <div class="button-row"><button type="submit" id="requestBoardingButton">Request Boarding</button><button type="button" class="secondary-button" id="resetCustomerBookingButton">New Request</button></div>

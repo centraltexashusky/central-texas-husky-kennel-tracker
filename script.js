@@ -3075,7 +3075,8 @@ function renderDemoSubmissions() {
     ? saved
         .map((submission) => {
           if (submission.isCalendarNoteSubmission) {
-            return `<article class="submission-item clickable-card" data-action="view-calendar-note" data-id="${escapeHtml(submission.id)}"><strong>${escapeHtml(submission.noteDate || submission.date || "")} - Staff Note</strong><p>${escapeHtml(submission.note || "")}</p><span>Written by ${escapeHtml(calendarNoteAuthorText(submission))}</span></article>`;
+            const noteKind = submission.noteKind === "staff" ? "Staff Note" : "Special Note";
+            return `<article class="submission-item clickable-card" data-action="view-calendar-note" data-id="${escapeHtml(submission.id)}"><strong>${escapeHtml(submission.noteDate || submission.date || "")} - ${escapeHtml(noteKind)}</strong><p>${escapeHtml(submission.note || "")}</p><span>Written by ${escapeHtml(calendarNoteAuthorText(submission))}</span></article>`;
           }
           const completedTasks = completedTasksForRecord(submission);
           const careLogs = submission.structuredCareLogs || submission.careLogs || [];
@@ -4493,7 +4494,7 @@ function renderDashboardTaskCalendar() {
     const noteCount = noteCounts[date] || 0;
     const hasRecords = reportCount || noteCount;
     const badges = [
-      noteCount ? `<small class="calendar-note-count" aria-label="${noteCount} special note${noteCount === 1 ? "" : "s"}">${noteCount}</small>` : "",
+      noteCount ? `<small class="calendar-note-count" aria-label="${noteCount} note${noteCount === 1 ? "" : "s"}">${noteCount}</small>` : "",
       reportCount ? `<small class="calendar-report-count" aria-label="${reportCount} report${reportCount === 1 ? "" : "s"}">${reportCount}</small>` : "",
     ].join("");
     return `<button type="button" class="calendar-day ${date === selectedDate ? "is-selected" : ""} ${hasRecords ? "has-records" : ""} ${noteCount ? "has-notes" : ""}" data-date="${date}"><span>${day}</span>${badges}</button>`;
@@ -4536,15 +4537,12 @@ function renderCalendarNotes() {
   const selectedDate = $("#dashboardDate")?.value || todayDate();
   formEl.hidden = !canCreateCalendarNote();
   if (!formEl.elements.noteDate.value) formEl.elements.noteDate.value = selectedDate;
-  const today = todayDate();
-  const tomorrow = addDays(today, 1);
-  const datesToShow = selectedDate === today ? new Set([today, tomorrow]) : new Set([selectedDate]);
   const notes = readRecords("calendarNote")
     .filter((note) => !note.removed)
     .map((note) => ({ ...note, noteDate: calendarNoteDate(note) }))
-    .filter((note) => datesToShow.has(note.noteDate))
-    .sort((a, b) => dateOnlyTime(a.noteDate) - dateOnlyTime(b.noteDate));
-  const emptyMessage = selectedDate === today ? "No special notes for today or tomorrow." : "No special notes for the selected date.";
+    .filter((note) => note.noteDate === selectedDate)
+    .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
+  const emptyMessage = "No staff notes or special notes for the selected date.";
   list.innerHTML = notes.length
     ? notes
         .map((note) => {
@@ -4552,8 +4550,8 @@ function renderCalendarNotes() {
           const editAction = currentRole() === "admin" ? `<button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button>` : "";
           const removeAction = canRemoveCalendarNote(note) ? `<button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button>` : "";
           const actions = editAction || removeAction ? `<div class="record-actions">${editAction}${removeAction}</div>` : "";
-          const dayLabel = note.noteDate === today ? "Today" : note.noteDate === tomorrow ? "Tomorrow" : "Selected date";
-          return `<article class="record-card ${isSelected ? "is-approved" : ""}"><strong>${escapeHtml(dayLabel)} - ${escapeHtml(note.noteDate || "")}${isSelected ? " - selected date" : ""}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
+          const noteKind = note.noteKind === "staff" ? "Staff Note" : "Special Note";
+          return `<article class="record-card ${isSelected ? "is-approved" : ""} ${note.noteKind === "staff" ? "is-staff-note" : "is-special-note"}"><strong>${escapeHtml(noteKind)} - ${escapeHtml(note.noteDate || "")}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
         })
         .join("")
     : `<p>${emptyMessage}</p>`;
@@ -5475,6 +5473,7 @@ function initEvents() {
       createdByEmail: existing?.createdByEmail || currentUser?.email || "",
       updatedBy: author,
       updatedByEmail: currentUser?.email || "",
+      noteKind: existing?.noteKind || "special",
       ...data,
       removed: false,
     };
@@ -5507,6 +5506,7 @@ function initEvents() {
       updatedAt: now,
       noteDate: data.noteDate || currentDailyDate(),
       note: data.note,
+      noteKind: "staff",
       createdBy: currentUser?.name || helperName.value || "Unknown staff",
       createdByEmail: currentUser?.email || helperEmail.value || "",
       removed: false,

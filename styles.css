@@ -704,6 +704,10 @@ h2 {
   box-shadow: 0 0 0 1px rgba(255, 180, 87, 0.34), var(--glass-specular);
 }
 
+#calendarNotesList .record-card.is-staff-note {
+  border-color: rgba(42, 157, 143, 0.72);
+}
+
 .calendar-notes-panel {
   display: grid;
   gap: 12px;
@@ -1061,6 +1065,23 @@ button:focus-visible {
   color: var(--teal-dark);
   font-size: 0.92rem;
   text-transform: uppercase;
+}
+
+.customer-additional-services {
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.customer-additional-services > strong {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 0.95rem;
+}
+
+.customer-additional-services .checklist.compact {
+  margin-bottom: 0;
 }
 
 .request-timeline {
