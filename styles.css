@@ -381,6 +381,11 @@ h2 {
   text-transform: uppercase;
 }
 
+.data-table th[data-sort-column] {
+  cursor: pointer;
+  user-select: none;
+}
+
 .data-table tr {
   cursor: pointer;
 }
@@ -2247,6 +2252,11 @@ option {
   letter-spacing: 0.08em;
 }
 
+.data-table th[data-sort-column]:hover {
+  background: rgba(255, 255, 255, 0.20);
+  color: #fff;
+}
+
 .data-table tr:hover td {
   background: rgba(255, 255, 255, 0.12);
 }
@@ -2368,6 +2378,47 @@ option {
 .filter-search-input {
   flex: 1 1 260px;
   min-width: 220px;
+}
+
+#ownedDogSearch.filter-search-input {
+  border-color: rgba(245, 158, 11, 0.88);
+  min-height: 46px;
+}
+
+.settings-user-login-card {
+  border-color: rgba(245, 158, 11, 0.55);
+}
+
+.service-flag-list {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.service-flag-chip {
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.88);
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.settings-user-login-card span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.danger-confirm-card {
+  border-color: rgba(255, 69, 58, 0.52);
 }
 
 .settings-user-card {
@@ -2796,6 +2847,12 @@ option {
 
   .filter-search-input {
     width: 100%;
+  }
+
+  #ownedDogSearch.filter-search-input {
+    height: 58px;
+    min-height: 58px;
+    padding-block: 0;
   }
 
   #dailyPage .checklist .task-item {

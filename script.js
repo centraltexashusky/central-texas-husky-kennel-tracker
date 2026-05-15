@@ -57,7 +57,10 @@ const careDefaults = {
 };
 
 const bathCareDefaultNote = "Ultimate shampoo, nailed trimed, paws trimmed, and ears cleaned";
-const medicalCarePlaceholder = "injury to leg, allergy started, throwing up, diarrhea, fighting with others";
+const heatCareDefaultNote = "something important about the heat.";
+const medicalCareDefaultNote = "injury to leg, fighting with others...";
+const medicalCarePlaceholder = "injury to leg, fighting with others...";
+const autoCareNotes = new Set([bathCareDefaultNote, heatCareDefaultNote, medicalCareDefaultNote, ""]);
 const taskShiftLabels = {
   morning: "Morning",
   pm: "Evening",
@@ -165,7 +168,7 @@ const defaultServices = [
   { serviceName: "Private Yard Rental", category: "Private yard rental", basePrice: "12", unit: "per dog/hour", depositAmount: "", defaultDuration: "60 minutes", flags: ["Active", "Owner bookable later", "Vaccine proof required"], pricingNotes: "Test $10-$12 per dog/hour first; premium slots can be $15-$20." },
   { serviceName: "Husky De-shed", category: "Grooming", basePrice: "75", unit: "per service", depositAmount: "", defaultDuration: "60-90 minutes", flags: ["Active"], pricingNotes: "Price as labor-intensive coat work, not a small bath add-on." },
   { serviceName: "Treadmill Exercise", category: "Exercise", basePrice: "25", unit: "per session", depositAmount: "", defaultDuration: "30 minutes", flags: ["Active"], pricingNotes: "Good add-on for boarding/alumni care." },
-  { serviceName: "Alumni Overnight Care", category: "Boarding", basePrice: "65", unit: "per night", depositAmount: "100", defaultDuration: "overnight", flags: ["Active", "Alumni only", "Vaccine proof required"], pricingNotes: "Keep alumni-only while capacity, insurance, and procedures are proven." },
+  { serviceName: "Member Overnight Care", category: "Boarding", basePrice: "65", unit: "per night", depositAmount: "100", defaultDuration: "overnight", flags: ["Active", "Member Pricing", "Vaccine proof required"], pricingNotes: "Member pricing for approved customer accounts while capacity, insurance, and procedures are proven." },
 ];
 
 const defaultCfoNotes = [
@@ -208,6 +211,15 @@ const tableColumns = {
       const stay = currentOrNextStay(record);
       return [...(record.flags || []).filter((flag) => flag.includes("requested")), ...((stay?.requests || []).filter((flag) => flag.includes("requested")))].join(", ");
     } },
+  ],
+  service: [
+    { key: "serviceName", label: "Service", value: (record) => record.serviceName || "" },
+    { key: "category", label: "Category", value: (record) => record.category || "" },
+    { key: "basePrice", label: "Price", value: (record) => Number(record.basePrice || 0) },
+    { key: "unit", label: "Unit", value: (record) => record.unit || "" },
+    { key: "depositAmount", label: "Deposit", value: (record) => Number(record.depositAmount || 0) },
+    { key: "taxRate", label: "Tax", value: (record) => Number(record.taxRate || 0) },
+    { key: "flags", label: "Flags", value: (record) => normalizedServiceFlags(record.flags).join(", ") },
   ],
 };
 
@@ -383,6 +395,26 @@ function ownedDogMatchesCareFilter(record = {}, filter = ownedDogCareFilter, dat
 
 function statusChipHtml(label, className = "") {
   return `<span class="status-chip ${escapeHtml(className)}">${escapeHtml(label)}</span>`;
+}
+
+function normalizedServiceFlags(flags = []) {
+  return [...new Set((flags || []).map((flag) => (flag === "Alumni only" ? "Member Pricing" : flag)).filter(Boolean))];
+}
+
+function serviceHasFlag(service = {}, flag = "") {
+  return normalizedServiceFlags(service.flags).includes(flag);
+}
+
+function serviceFlagChipsHtml(flags = []) {
+  const normalized = normalizedServiceFlags(flags);
+  return normalized.length
+    ? `<span class="service-flag-list">${normalized.map((flag) => `<span class="service-flag-chip">${escapeHtml(flag)}</span>`).join("")}</span>`
+    : "";
+}
+
+function isMemberUser(user = currentUser) {
+  const profile = savedUserFor(user) || {};
+  return profile.isMember === true || profile.isMember === "on" || profile.isMember === "true" || profile.member === true;
 }
 
 function dogTypeBadgeHtml(type) {
@@ -789,6 +821,7 @@ function setTableSort(type, columnKey) {
   writeTableSort(sortConfig);
   if (type === "ownedDog") renderOwnedDogs();
   if (type === "boardingDog") renderBoardingDogs();
+  if (type === "service") renderServices();
 }
 
 function sortRecordsForTable(type, records) {
@@ -808,7 +841,7 @@ function tableHeaderHtml(type, columns) {
   return `<tr>${columns
     .map((column) => {
       const marker = sort.key === column.key ? (sort.direction === "desc" ? " ↓" : " ↑") : "";
-      return `<th data-sort-column="${column.key}" title="Double click to sort">${escapeHtml(column.label)}${marker}</th>`;
+      return `<th data-sort-column="${column.key}" title="Click to sort">${escapeHtml(column.label)}${marker}</th>`;
     })
     .join("")}</tr>`;
 }
@@ -1094,6 +1127,18 @@ function profileRecordForUser(user) {
   };
 }
 
+function profileRecordForLogin(user) {
+  const existing = savedUserFor(user) || {};
+  const loginAt = new Date().toISOString();
+  return {
+    ...profileRecordForUser(user),
+    lastLoginAt: loginAt,
+    lastLoginEmail: user.email || existing.lastLoginEmail || "",
+    lastLoginProvider: user.authProvider || existing.authProvider || "",
+    loginCount: Number(existing.loginCount || 0) + 1,
+  };
+}
+
 function mergeUniqueIds(...groups) {
   return [...new Set(groups.flat().filter(Boolean).map(String))];
 }
@@ -1159,7 +1204,7 @@ async function syncMissingCustomerAccessProfiles() {
 
 async function ensureAppUserProfile(user) {
   if (!user?.email) return null;
-  const record = upsertRecord("settingsUser", profileRecordForUser(user));
+  const record = upsertRecord("settingsUser", profileRecordForLogin(user));
   await sendPayload(record);
   return record;
 }
@@ -2174,7 +2219,7 @@ function ownedDogOptionsHtml(selectedId = "") {
   ].join("");
 }
 
-function renderCareDogOptions(selectedId = "") {
+function renderCareDogOptions(selectedId = $("#careQuickDogId")?.value || "") {
   const select = $("#careQuickDogId");
   if (!select) return;
   select.innerHTML = ownedDogOptionsHtml(selectedId);
@@ -2248,6 +2293,12 @@ function setCareFieldVisibility(labelSelector, visible) {
   if (label) label.hidden = !visible;
 }
 
+function setAutoCareNote(defaultNote) {
+  const noteField = $("#careQuickNote");
+  if (!noteField) return;
+  if (autoCareNotes.has(noteField.value)) noteField.value = defaultNote;
+}
+
 function updateCareQuickFields() {
   const dog = selectedCareDog();
   const careType = $("#careQuickType")?.value || "";
@@ -2268,9 +2319,11 @@ function updateCareQuickFields() {
   setCareFieldVisibility("#careQuickNoteLabel", isBath || isHeat || isMedical || isTraining || !careType);
   if (isExercise && dog) $("#careQuickMinutes").value = lastExerciseMinutesForDog(dog, careType);
   if (!isExercise) $("#careQuickMinutes").value = "";
-  if (isBath) $("#careQuickNote").value = bathCareDefaultNote;
+  if (isBath) setAutoCareNote(bathCareDefaultNote);
+  if (isHeat) setAutoCareNote(heatCareDefaultNote);
+  if (isMedical) setAutoCareNote(medicalCareDefaultNote);
   if (isMedical) $("#careQuickNote").placeholder = medicalCarePlaceholder;
-  else if (isHeat) $("#careQuickNote").placeholder = "Heat observation, behavior, separation, or breeding watch note";
+  else if (isHeat) $("#careQuickNote").placeholder = heatCareDefaultNote;
   else if (isTraining) $("#careQuickNote").placeholder = "Training focus, behavior, or progress";
   else if (isBath) $("#careQuickNote").placeholder = bathCareDefaultNote;
   else $("#careQuickNote").placeholder = "Session details, bath products, heat observation, medical/care note";
@@ -2417,7 +2470,6 @@ function renderDailyTaskLists(selected = {}) {
   renderCareDogOptions();
   pendingStructuredCareLogs = structuredCareLogsForDate(currentDailyDate());
   renderStructuredCareLogs();
-  resetCareQuickLogForm();
   setDailyTaskTab(dailyTaskTab);
   updateCompletionCount();
 }
@@ -3108,13 +3160,22 @@ function isRecentDailySubmission(record = {}, daysBack = 3) {
   return recordDate >= addDays(todayDate(), -daysBack) && recordDate <= todayDate();
 }
 
+function dailySubmissionDisplayPriority(record = {}) {
+  if (record.isCalendarNoteSubmission) return 0;
+  return 1;
+}
+
 function renderDemoSubmissions() {
   const saved = [
     ...readRecords("dailyTask"),
     ...readRecords("calendarNote").filter((note) => !note.removed).map((note) => ({ ...note, date: calendarNoteDate(note), isCalendarNoteSubmission: true })),
   ]
     .filter((submission) => !submission.removed && isRecentDailySubmission(submission))
-    .sort((a, b) => String(dailySubmissionDate(b)).localeCompare(String(dailySubmissionDate(a))) || new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
+    .sort((a, b) => (
+      String(dailySubmissionDate(b)).localeCompare(String(dailySubmissionDate(a)))
+      || dailySubmissionDisplayPriority(a) - dailySubmissionDisplayPriority(b)
+      || new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0)
+    ));
   $("#recentSubmissions").innerHTML = saved.length
     ? saved
         .map((submission) => {
@@ -4723,12 +4784,12 @@ function renderSettingsUsers() {
   const users = settingsUsers();
   $("#settingsUserTableBody").innerHTML = users.length
     ? users
-        .map((user) => `<tr data-id="${user.id}"><td>${escapeHtml(user.name || "")}</td><td>${escapeHtml(user.email || "")}</td><td>${roleLabel(user.role)}</td><td>${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="${user.id}">Remove</button></td></tr>`)
+        .map((user) => `<tr data-id="${user.id}"><td>${escapeHtml(user.name || "")}</td><td>${escapeHtml(user.email || "")}</td><td>${roleLabel(user.role)}${isMemberUser(user) ? " | Member" : ""}</td><td>${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="${user.id}">Remove</button></td></tr>`)
         .join("")
     : `<tr><td colspan="5">No custom users saved yet.</td></tr>`;
   if ($("#settingsUserCards")) {
     $("#settingsUserCards").innerHTML = users.length
-      ? users.map((user) => `<button type="button" class="settings-user-card" data-action="view-settings-user" data-id="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || user.email || "User")}</strong><span>${escapeHtml(user.email || "")}</span><small>${escapeHtml(roleLabel(user.role))}${user.passwordChangeRequired ? " | Password change required" : ""}</small></button>`).join("")
+      ? users.map((user) => `<button type="button" class="settings-user-card" data-action="view-settings-user" data-id="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || user.email || "User")}</strong><span>${escapeHtml(user.email || "")}</span><small>${escapeHtml(roleLabel(user.role))}${isMemberUser(user) ? " | Member" : ""}${user.passwordChangeRequired ? " | Password change required" : ""}</small></button>`).join("")
       : `<article class="record-card"><strong>No users saved yet.</strong></article>`;
   }
 }
@@ -4791,15 +4852,27 @@ function openSettingsUser(record = {}) {
   if ($("#settingsUserForm").elements.requirePasswordChange) $("#settingsUserForm").elements.requirePasswordChange.checked = true;
 }
 
+function settingsUserLastLoginText(user = {}) {
+  if (!user.lastLoginAt) return "No login has been recorded yet.";
+  const provider = user.lastLoginProvider ? ` via ${user.lastLoginProvider}` : "";
+  return `${formatDateTime(user.lastLoginAt)}${provider}`;
+}
+
 function settingsUserPopupHtml(user = {}) {
   return `
     <form id="settingsUserPopupForm" class="tracker-form" data-user-id="${escapeHtml(user.id || "")}">
       <input type="hidden" name="id" value="${escapeHtml(user.id || "")}" />
+      <article class="record-card compact-record-card settings-user-login-card">
+        <span>Last Login</span>
+        <strong>${escapeHtml(settingsUserLastLoginText(user))}</strong>
+        <p>${user.loginCount ? `${Number(user.loginCount)} recorded login${Number(user.loginCount) === 1 ? "" : "s"}.` : "This updates after the user signs in through the app."}</p>
+      </article>
       <div class="field-grid">
         <label>Name<input type="text" name="name" required value="${escapeHtml(user.name || "")}" /></label>
         <label>Email<input type="email" name="email" required value="${escapeHtml(user.email || "")}" /></label>
         <label>Role<select name="role" required><option value="customer" ${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" ${user.role === "helper" ? "selected" : ""}>Staff</option><option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
       </div>
+      <label class="inline-check"><input type="checkbox" name="isMember" ${isMemberUser(user) ? "checked" : ""} /> Member customer pricing</label>
       <div class="admin-password-panel">
         <h3>Password Management</h3>
         <p>Set a temporary Supabase password or send a reset email for this user.</p>
@@ -4821,11 +4894,38 @@ function openSettingsUserPopup(user = {}) {
   showDetailDialog(user.id ? `${user.name || user.email || "User"} Access` : "User Access", settingsUserPopupHtml(user));
 }
 
+function settingsUserRemoveConfirmHtml(user = {}, options = {}) {
+  return `
+    <div class="tracker-form">
+      <article class="record-card compact-record-card danger-confirm-card">
+        <strong>Remove ${escapeHtml(user.name || user.email || "this user")}?</strong>
+        <p>This removes app access for ${escapeHtml(user.email || "this account")}. It does not delete dog, boarding, request, or timesheet history.</p>
+      </article>
+      <div class="button-row">
+        <button type="button" class="danger-button" data-action="confirm-remove-settings-user" data-id="${escapeHtml(user.id || "")}">Confirm Remove</button>
+        <button type="button" class="secondary-button" data-action="${options.returnToUser ? "cancel-remove-settings-user" : "close-dialog"}" data-id="${escapeHtml(user.id || "")}">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function openSettingsUserRemoveConfirm(user = {}, options = {}) {
+  showDetailDialog("Confirm Remove User", settingsUserRemoveConfirmHtml(user, options));
+}
+
+async function removeSettingsUserById(id) {
+  const removed = await markRecordRemoved("settingsUser", id);
+  if (!removed) return null;
+  await addAuditLog("Removed user", "settingsUser", removed, removed.email || "");
+  renderSettingsUsers();
+  return removed;
+}
+
 function settingsFormProfileData(formEl = $("#settingsUserForm")) {
   const data = formPayload(formEl);
   delete data.temporaryPassword;
   delete data.temporaryPasswordConfirm;
   delete data.requirePasswordChange;
+  data.isMember = Boolean(formEl.elements.isMember?.checked);
   return data;
 }
 
@@ -5021,7 +5121,8 @@ function customerRequestTimelineHtml(status = "Pending") {
 function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
   const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
-  const services = readRecords("service").filter((service) => (service.flags || []).includes("Active") && !(service.flags || []).includes("Admin only") && service.category !== "Boarding");
+  const customerIsMember = isMemberUser(currentUser);
+  const services = readRecords("service").filter((service) => serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && service.category !== "Boarding" && (customerIsMember || !serviceHasFlag(service, "Member Pricing")));
   $("#customerServiceOptions").innerHTML = services.length
     ? services.map((service) => {
         const checked = checkedIds.has(service.id);
@@ -5137,7 +5238,7 @@ function customerEstimateDetails() {
     .filter(Boolean);
   const days = boardingDays(data.dropoffTime, data.pickupTime);
   const isDayCare = isDayCareStay(data.dropoffTime, data.pickupTime);
-  const boardingService = readRecords("service").find((service) => service.category === "Boarding" && (service.flags || []).includes("Active"));
+  const boardingService = boardingPricingServiceForCustomer();
   const boardingRate = Number(boardingService?.basePrice || 0);
   const boardingCost = dogs.length * days * boardingRate;
   const serviceLines = services.map((service) => ({
@@ -5146,6 +5247,12 @@ function customerEstimateDetails() {
   }));
   const serviceCost = serviceLines.reduce((total, service) => total + service.lineTotal, 0);
   return { dogs, services: serviceLines, days, isDayCare, boardingRate, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: data.pickupTime, requestNotes: data.requestNotes };
+}
+
+function boardingPricingServiceForCustomer(user = currentUser) {
+  const activeBoarding = readRecords("service").filter((service) => service.category === "Boarding" && serviceHasFlag(service, "Active"));
+  if (isMemberUser(user)) return activeBoarding.find((service) => serviceHasFlag(service, "Member Pricing")) || activeBoarding[0];
+  return activeBoarding.find((service) => !serviceHasFlag(service, "Member Pricing")) || activeBoarding[0];
 }
 
 function updateCustomerEstimate() {
@@ -5253,12 +5360,13 @@ async function submitPendingCustomerBooking() {
 
 function renderServices() {
   const query = $("#serviceSearch")?.value || "";
-  const records = readRecords("service").filter((record) => matches(record, query));
+  const columns = tableColumns.service;
+  const records = sortRecordsForTable("service", readRecords("service").filter((record) => matches(record, query)));
   const groupContainer = $("#serviceCatalogGroups");
   if (groupContainer) {
-    const active = readRecords("service").filter((record) => (record.flags || []).includes("Active"));
-    const customerBookable = active.filter((record) => !(record.flags || []).includes("Admin only"));
-    const internal = active.filter((record) => (record.flags || []).includes("Admin only"));
+    const active = readRecords("service").filter((record) => serviceHasFlag(record, "Active"));
+    const customerBookable = active.filter((record) => !serviceHasFlag(record, "Admin only"));
+    const internal = active.filter((record) => serviceHasFlag(record, "Admin only"));
     groupContainer.innerHTML = [
       ["Customer-bookable", customerBookable],
       ["Internal / Admin-only", internal],
@@ -5266,9 +5374,10 @@ function renderServices() {
       .map(([label, group]) => `<article class="service-group-card"><strong>${escapeHtml(label)}</strong><span>${group.length}</span><p>${escapeHtml(group.map((record) => record.serviceName).join(", ") || "None active")}</p></article>`)
       .join("");
   }
+  $("#serviceTableHead").innerHTML = tableHeaderHtml("service", columns);
   $("#serviceTableBody").innerHTML = records.length
     ? records
-        .map((record) => `<tr data-id="${record.id}"><td>${record.serviceName || ""}</td><td>${record.category || ""}</td><td>${money(record.basePrice)}</td><td>${record.unit || ""}</td><td>${record.depositAmount ? money(record.depositAmount) : ""}</td><td>${record.taxRate ? `${record.taxRate}%` : ""}</td><td>${(record.flags || []).join(", ")}</td></tr>`)
+        .map((record) => `<tr data-id="${record.id}"><td>${escapeHtml(record.serviceName || "")}</td><td>${escapeHtml(record.category || "")}</td><td>${money(record.basePrice)}</td><td>${escapeHtml(record.unit || "")}</td><td>${record.depositAmount ? money(record.depositAmount) : ""}</td><td>${record.taxRate ? `${escapeHtml(record.taxRate)}%` : ""}</td><td>${serviceFlagChipsHtml(record.flags)}</td></tr>`)
         .join("")
     : `<tr><td colspan="7">No services saved yet.</td></tr>`;
 }
@@ -5276,8 +5385,9 @@ function renderServices() {
 function openService(record = {}) {
   $("#serviceForm").reset();
   setFormValues($("#serviceForm"), record);
+  const flags = normalizedServiceFlags(record.flags || ["Active"]);
   $$('input[name="serviceFlags"]').forEach((input) => {
-    input.checked = (record.flags || ["Active"]).includes(input.value);
+    input.checked = flags.includes(input.value);
   });
 }
 
@@ -5945,11 +6055,17 @@ function initEvents() {
     if (action.dataset.action === "popup-set-password") await adminSetTemporaryPassword(action.closest("form"), action);
     if (action.dataset.action === "popup-send-reset") await adminSendPasswordResetEmail(action.closest("form"), action);
     if (action.dataset.action === "popup-remove-user") {
-      const removed = await markRecordRemoved("settingsUser", action.dataset.id);
-      if (removed) await addAuditLog("Removed user", "settingsUser", removed, removed.email || "");
-      renderSettingsUsers();
+      const user = readRecords("settingsUser").find((item) => item.id === action.dataset.id && !item.removed);
+      if (user) openSettingsUserRemoveConfirm(user, { returnToUser: true });
+    }
+    if (action.dataset.action === "cancel-remove-settings-user") {
+      const user = readRecords("settingsUser").find((item) => item.id === action.dataset.id && !item.removed);
+      if (user) openSettingsUserPopup(user);
+    }
+    if (action.dataset.action === "confirm-remove-settings-user") {
+      const removed = await removeSettingsUserById(action.dataset.id);
       $("#detailDialog").close();
-      showToast("User access removed.");
+      if (removed) showToast("User access removed.");
     }
   });
   $("#detailDialogBody").addEventListener("change", (event) => {
@@ -6650,7 +6766,7 @@ function initEvents() {
     if (!validateForm(event.currentTarget)) return;
     const data = formPayload(event.currentTarget);
     const existing = data.id ? readRecords("service").find((record) => record.id === data.id) : {};
-    const flags = checkedFrom(event.currentTarget, "serviceFlags");
+    const flags = normalizedServiceFlags(checkedFrom(event.currentTarget, "serviceFlags"));
     const deposit = Number(data.depositAmount || 0);
     const basePrice = Number(data.basePrice || 0);
     if (deposit > 500 || (basePrice && deposit / basePrice > 0.2)) {
@@ -6674,6 +6790,10 @@ function initEvents() {
   });
   $("#resetServiceForm").addEventListener("click", () => openService());
   $("#serviceSearch").addEventListener("input", renderServices);
+  $("#serviceTableHead").addEventListener("click", (event) => {
+    const header = event.target.closest("[data-sort-column]");
+    if (header) setTableSort("service", header.dataset.sortColumn);
+  });
   $("#serviceTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");
     if (!row) return;
@@ -6865,13 +6985,7 @@ function initEvents() {
       return;
     }
     const user = readRecords("settingsUser").find((item) => item.id === button.dataset.id);
-    if (user) {
-      const updated = upsertRecord("settingsUser", { ...user, removed: true });
-      await sendPayload(updated);
-      await addAuditLog("Removed user", "settingsUser", updated, updated.email || "");
-    }
-    renderSettingsUsers();
-    showToast("User removed.");
+    if (user) openSettingsUserRemoveConfirm(user);
   });
   $("#settingsUserCards")?.addEventListener("click", (event) => {
     const card = event.target.closest('[data-action="view-settings-user"]');

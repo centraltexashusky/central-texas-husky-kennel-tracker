@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260514-low-priority-1" />
+    <link rel="stylesheet" href="styles.css?v=20260515-service-table-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -987,7 +987,7 @@
             <div class="checklist compact">
               <label><input type="checkbox" name="serviceFlags" value="Active" checked /> Active</label>
               <label><input type="checkbox" name="serviceFlags" value="Admin only" /> Admin only</label>
-              <label><input type="checkbox" name="serviceFlags" value="Alumni only" /> Alumni only</label>
+              <label><input type="checkbox" name="serviceFlags" value="Member Pricing" /> Member Pricing</label>
               <label><input type="checkbox" name="serviceFlags" value="Vaccine proof required" /> Vaccine proof required</label>
               <label><input type="checkbox" name="serviceFlags" value="Owner bookable later" /> Owner bookable later</label>
               <label><input type="checkbox" name="serviceFlags" value="Taxable" /> Taxable</label>
@@ -1004,7 +1004,7 @@
           </div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Service</th><th>Category</th><th>Price</th><th>Unit</th><th>Deposit</th><th>Tax</th><th>Flags</th></tr></thead>
+              <thead id="serviceTableHead"></thead>
               <tbody id="serviceTableBody"></tbody>
             </table>
           </div>
@@ -1039,6 +1039,7 @@
               <label>Email<input type="email" name="email" required /></label>
               <label>Role<select name="role" required><option value="customer">Customer</option><option value="helper">Staff</option><option value="admin">Admin</option></select></label>
             </div>
+            <label class="inline-check"><input type="checkbox" name="isMember" /> Member customer pricing</label>
             <div class="button-row"><button type="submit">Save User</button><button type="button" class="secondary-button" id="newSettingsUserButton">New User</button></div>
           </form>
         </section>
@@ -1119,6 +1120,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260514-low-priority-1"></script>
+    <script src="script.js?v=20260515-service-table-1"></script>
   </body>
 </html>
