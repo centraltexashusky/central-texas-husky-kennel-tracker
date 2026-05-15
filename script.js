@@ -151,6 +151,7 @@ const stateKeys = {
   cfoNote: "cth-cfoNote-records",
   calendarNote: "cth-calendarNote-records",
   kennelLocation: "cth-kennelLocation-records",
+  auditLog: "cth-auditLog-records",
   taskConfig: "cth-daily-task-config",
   tableConfig: "cth-table-column-config",
   tableSort: "cth-table-sort-config",
@@ -840,7 +841,7 @@ function initSupabaseClient() {
 }
 
 function recordTypes() {
-  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote", "calendarNote", "kennelLocation"];
+  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "auditLog"];
 }
 
 function settingsUsers() {
@@ -1450,6 +1451,49 @@ function upsertRecord(type, payload) {
   else records.unshift(record);
   const storedRecords = writeRecords(type, records);
   return storedRecords.find((item) => item.id === record.id) || record;
+}
+
+async function addAuditLog(action, targetType, target = {}, details = "") {
+  if (currentRole() !== "admin") return null;
+  const record = upsertRecord("auditLog", {
+    type: "auditLog",
+    id: uid("audit"),
+    submittedAt: new Date().toISOString(),
+    action,
+    targetType,
+    targetId: target.id || "",
+    targetLabel: target.name || target.email || target.serviceName || target.dogName || target.title || targetType,
+    details,
+    actorName: currentUser?.name || "Admin",
+    actorEmail: currentUser?.email || "",
+    removed: false,
+  });
+  await sendPayload(record);
+  renderAuditLog();
+  return record;
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function downloadCsv(filename, rows = []) {
+  if (!rows.length) {
+    showToast("No records available to export.");
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  const csv = [headers.join(","), ...rows.map((row) => headers.map((header) => csvEscape(row[header])).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function formPayload(targetForm) {
@@ -3075,7 +3119,7 @@ function renderDemoSubmissions() {
     ? saved
         .map((submission) => {
           if (submission.isCalendarNoteSubmission) {
-            const noteKind = submission.noteKind === "staff" ? "Staff Note" : "Special Note";
+            const noteKind = submission.noteKind === "staff" || submission.source === "daily-staff-note" ? "Staff Note" : "Special Note";
             return `<article class="submission-item clickable-card" data-action="view-calendar-note" data-id="${escapeHtml(submission.id)}"><strong>${escapeHtml(submission.noteDate || submission.date || "")} - ${escapeHtml(noteKind)}</strong><p>${escapeHtml(submission.note || "")}</p><span>Written by ${escapeHtml(calendarNoteAuthorText(submission))}</span></article>`;
           }
           const completedTasks = completedTasksForRecord(submission);
@@ -4431,6 +4475,7 @@ function renderDashboard() {
     ["maintenance", "Open maintenance", metrics.openMaintenance, `${metrics.urgentMaintenance} urgent.`],
   ];
   $("#dashboardCards").innerHTML = cards.map(([key, label, value, note]) => `<article class="dashboard-card clickable-card" data-action="dashboard-detail" data-key="${key}"><span>${label}</span><strong>${value}</strong><p>${note}</p></article>`).join("");
+  renderDashboardReminders(metrics);
   const alerts = [];
   metrics.exerciseDueDogs.forEach((dog) => {
     const careType = dashboardExerciseCategory(dog);
@@ -4464,6 +4509,19 @@ function renderDashboard() {
     : "<p>No alerts in this category right now.</p>";
   renderDashboardTaskCalendar();
   renderDashboardTimeline();
+}
+
+function renderDashboardReminders(metrics = dashboardMetrics()) {
+  const panel = $("#dashboardReminderPanel");
+  if (!panel) return;
+  const selectedDate = $("#dashboardDate")?.value || todayDate();
+  const reminders = [];
+  metrics.vaccineIssueDogs.slice(0, 5).forEach((dog) => reminders.push({ label: "Vaccine", text: `${ownedDogDisplayName(dog)} needs vaccine date review.` }));
+  metrics.arrivalRecords.slice(0, 5).forEach((record) => reminders.push({ label: "Boarding", text: `${record.dogName || "Boarding dog"} arrives ${formatDateTime(currentOrNextStay(record)?.dropoffTime)}.` }));
+  metrics.departureRecords.slice(0, 5).forEach((record) => reminders.push({ label: "Pickup", text: `${record.dogName || "Boarding dog"} leaves ${formatDateTime((activeBoardingStay(record) || currentOrNextStay(record))?.pickupTime)}.` }));
+  panel.innerHTML = reminders.length
+    ? `<strong>Reminders for ${escapeHtml(selectedDate)}</strong>${reminders.map((item) => `<article><span>${escapeHtml(item.label)}</span><p>${escapeHtml(item.text)}</p></article>`).join("")}`
+    : `<strong>Reminders for ${escapeHtml(selectedDate)}</strong><p>No vaccine or boarding reminders for this date.</p>`;
 }
 
 function renderDashboardTaskCalendar() {
@@ -4550,7 +4608,7 @@ function renderCalendarNotes() {
           const editAction = currentRole() === "admin" ? `<button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button>` : "";
           const removeAction = canRemoveCalendarNote(note) ? `<button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button>` : "";
           const actions = editAction || removeAction ? `<div class="record-actions">${editAction}${removeAction}</div>` : "";
-          const noteKind = note.noteKind === "staff" ? "Staff Note" : "Special Note";
+          const noteKind = note.noteKind === "staff" || note.source === "daily-staff-note" ? "Staff Note" : "Special Note";
           return `<article class="record-card ${isSelected ? "is-approved" : ""} ${note.noteKind === "staff" ? "is-staff-note" : "is-special-note"}"><strong>${escapeHtml(noteKind)} - ${escapeHtml(note.noteDate || "")}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
         })
         .join("")
@@ -4691,6 +4749,15 @@ function renderKennelLocations() {
         .map((location) => `<article class="record-card compact-record-card"><strong>${escapeHtml(location.name || "Kennel")}</strong><span>${escapeHtml(location.building || "")} | ${(location.active === "on" || location.active === true || location.active === "true") ? "Active" : "Inactive"}</span><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-kennel-location" data-id="${escapeHtml(location.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-kennel-location" data-id="${escapeHtml(location.id)}">Remove</button></div></article>`)
         .join("")
     : `<article class="record-card compact-record-card"><strong>No kennels saved</strong><p>Add Shed or Mansion kennel names before assigning In Kennel locations.</p></article>`;
+}
+
+function renderAuditLog() {
+  const list = $("#auditLogList");
+  if (!list) return;
+  const records = readRecords("auditLog").filter((record) => !record.removed).slice(0, 25);
+  list.innerHTML = records.length
+    ? records.map((record) => `<article class="record-card compact-record-card"><strong>${escapeHtml(record.action || "Change")} - ${escapeHtml(record.targetLabel || record.targetType || "")}</strong><span>${escapeHtml(record.actorName || "Admin")} | ${escapeHtml(formatDateTime(record.submittedAt || record.updatedAt))}</span><p>${escapeHtml(record.details || record.targetType || "")}</p></article>`).join("")
+    : `<article class="record-card compact-record-card"><strong>No audit activity yet</strong><p>Admin setting, service, user, and kennel changes will appear here.</p></article>`;
 }
 
 function openKennelLocation(record = {}) {
@@ -4894,11 +4961,33 @@ function renderCustomerDogs() {
   $("#requestBoardingButton").disabled = !dogs.length;
   renderCustomerServiceOptions();
   updateCustomerEstimate();
+  renderCustomerProgress();
+}
+
+function renderCustomerProgress() {
+  const panels = ["#customerOnboardingProgress", "#customerRequestProgress"].map((selector) => $(selector)).filter(Boolean);
+  if (!panels.length || currentRole() !== "customer") {
+    panels.forEach((panel) => (panel.innerHTML = ""));
+    return;
+  }
+  const dogs = readRecords("customerDog").filter((dog) => !dog.removed && dog.ownerEmail === currentUser?.email);
+  const requests = readRecords("boardingDog").filter((record) => record.customerRequest && !record.removed && record.ownerEmail === currentUser?.email);
+  const hasDog = dogs.length > 0;
+  const hasVaccine = dogs.some((dog) => (dog.vaccinationRecords || []).length || dog.vaccinationFiles || dog.rabiesDate || dog.dhppDate);
+  const hasRequest = requests.length > 0;
+  const steps = [
+    ["Add dog", hasDog],
+    ["Add vaccines/care", hasVaccine],
+    ["Request boarding", hasRequest],
+  ];
+  const html = `<div class="progress-steps">${steps.map(([label, done]) => `<span class="${done ? "is-done" : ""}">${escapeHtml(label)}</span>`).join("")}</div>`;
+  panels.forEach((panel) => (panel.innerHTML = html));
 }
 
 function renderCustomerRequests() {
   const list = $("#customerRequestList");
   if (!list) return;
+  renderCustomerProgress();
   const statusFilter = $("#customerRequestStatusFilter")?.value || "All";
   const records = readRecords("boardingDog")
     .filter((record) => record.customerRequest && (record.ownerEmail === currentUser?.email || currentRole() === "admin"))
@@ -5222,10 +5311,65 @@ function renderAllRecords() {
   renderCfoNotes();
   renderSettingsUsers();
   renderKennelLocations();
+  renderAuditLog();
   renderCustomerDogs();
   renderCustomerRequests();
   renderDemoSubmissions();
   updateTimeDisplays();
+  renderGlobalSearchResults();
+}
+
+function globalSearchEntries() {
+  const entries = [];
+  readRecords("ownedDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: ownedDogDisplayName(record), detail: ownedDogCareSummary(record), type: "ownedDog", id: record.id, pageId: "ourDogsPage" }));
+  readRecords("boardingDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.dogName || "Boarding dog", detail: [record.ownerName, normalizeBoardingStatus(record), boardingScheduleText(record)].filter(Boolean).join(" | "), type: "boardingDog", id: record.id, pageId: "boardingDogsPage" }));
+  readRecords("request").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.category || "Request", detail: record.requestText || record.reason || "", type: "request", id: record.id, pageId: "requestsPage" }));
+  readRecords("maintenance").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.location || "Maintenance", detail: record.issue || record.suggestedAction || "", type: "maintenance", id: record.id, pageId: "maintenancePage" }));
+  readRecords("service").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.serviceName || "Service", detail: [record.category, money(record.basePrice)].filter(Boolean).join(" | "), type: "service", id: record.id, pageId: "servicesPage" }));
+  readRecords("calendarNote").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.noteKind === "staff" ? "Staff Note" : "Special Note", detail: `${calendarNoteDate(record)} | ${record.note || ""}`, type: "calendarNote", id: record.id, pageId: "dashboardPage" }));
+  readRecords("settingsUser").filter((record) => !record.removed && currentRole() === "admin").forEach((record) => entries.push({ label: record.name || record.email || "User", detail: [record.email, roleLabel(record.role)].filter(Boolean).join(" | "), type: "settingsUser", id: record.id, pageId: "settingsPage" }));
+  return entries;
+}
+
+function renderGlobalSearchResults() {
+  const panel = $("#globalSearchPanel");
+  const input = $("#globalQuickSearch");
+  const list = $("#globalSearchResults");
+  if (!panel || !input || !list) return;
+  panel.hidden = !helperIsLoggedIn();
+  const query = input.value.trim().toLowerCase();
+  if (!query) {
+    list.innerHTML = `<p>Type a dog, owner, request, service, note, or user name.</p>`;
+    return;
+  }
+  const results = globalSearchEntries()
+    .filter((entry) => pageAllowed(entry.pageId) && `${entry.label} ${entry.detail}`.toLowerCase().includes(query))
+    .slice(0, 8);
+  list.innerHTML = results.length
+    ? results.map((entry) => `<button type="button" class="global-search-result" data-type="${escapeHtml(entry.type)}" data-id="${escapeHtml(entry.id)}" data-page="${escapeHtml(entry.pageId)}"><strong>${escapeHtml(entry.label)}</strong><span>${escapeHtml(entry.detail || entry.type)}</span></button>`).join("")
+    : `<p>No matching records.</p>`;
+}
+
+function openGlobalSearchResult(button) {
+  const type = button.dataset.type;
+  const id = button.dataset.id;
+  const pageId = button.dataset.page;
+  switchPage(pageId);
+  if (type === "ownedDog") {
+    const record = readRecords("ownedDog").find((item) => item.id === id);
+    if (record) openOwnedDogOverviewPopup(record);
+  } else if (type === "boardingDog") {
+    const record = readRecords("boardingDog").find((item) => item.id === id);
+    if (record) openBoardingDog(record);
+  } else if (type === "settingsUser") {
+    const record = readRecords("settingsUser").find((item) => item.id === id);
+    if (record) openSettingsUserPopup(record);
+  } else {
+    const record = readRecords(type).find((item) => item.id === id);
+    if (record) showDetailDialog(titleForRecord(type, record), detailForRecord(type, record));
+  }
+  $("#globalQuickSearch").value = "";
+  renderGlobalSearchResults();
 }
 
 function emailNow(subjectText, bodyText) {
@@ -5352,6 +5496,55 @@ function saveTimeEntry(payload) {
   showToast("Time entry saved.");
 }
 
+function exportBoardingQueue() {
+  const rows = readRecords("boardingDog")
+    .filter((record) => !record.removed && !["Cancelled", "Checked Out"].includes(normalizeBoardingStatus(record)))
+    .map((record) => {
+      const stay = currentOrNextStay(record) || activeBoardingStay(record) || {};
+      return {
+        dog: record.dogName || "",
+        owner: record.ownerName || "",
+        phone: record.ownerPhone || "",
+        status: normalizeBoardingStatus(record),
+        kennel: [record.kennelBuilding, record.kennelLocationName].filter(Boolean).join(" - "),
+        dropoff: formatDateTime(stay.dropoffTime),
+        pickup: formatDateTime(stay.pickupTime),
+        requests: (stay.requests || []).join("; "),
+      };
+    });
+  downloadCsv(`boarding-queue-${todayDate()}.csv`, rows);
+}
+
+function exportTimesheet() {
+  const isAdmin = currentRole() === "admin";
+  const rows = readRecords("timesheet")
+    .filter((record) => isAdmin || timesheetBelongsToCurrentUser(record))
+    .map((record) => ({
+      date: record.date || "",
+      staff: record.helperName || "",
+      clockIn: formatDateTime(record.clockInTime),
+      clockOut: formatDateTime(record.clockOutTime),
+      hours: Number(record.hours || 0).toFixed(2),
+      note: record.note || "",
+    }));
+  downloadCsv(`timesheet-${todayDate()}.csv`, rows);
+}
+
+function exportCareLogs() {
+  const rows = readRecords("dailyTask")
+    .filter((record) => !record.removed)
+    .flatMap((record) => (record.structuredCareLogs || record.careLogs || []).map((log) => ({
+      reportDate: record.date || "",
+      dog: log.dogName || "",
+      careType: log.careType || "",
+      minutes: log.minutes || "",
+      note: log.note || "",
+      completedBy: log.completedBy || record.helperName || "",
+      completedAt: formatDateTime(log.loggedAt || record.updatedAt || record.submittedAt),
+    })));
+  downloadCsv(`care-logs-${todayDate()}.csv`, rows);
+}
+
 function initEvents() {
   syncMobileReviewSections();
   window.addEventListener("resize", syncMobileReviewSections);
@@ -5372,6 +5565,14 @@ function initEvents() {
   });
   $("#mobileMoreBackdrop").addEventListener("click", () => setMobileMoreOpen(false));
   $("#mobileMoreCloseButton").addEventListener("click", () => setMobileMoreOpen(false));
+  $("#globalQuickSearch")?.addEventListener("input", renderGlobalSearchResults);
+  $("#globalSearchResults")?.addEventListener("click", (event) => {
+    const button = event.target.closest(".global-search-result");
+    if (button) openGlobalSearchResult(button);
+  });
+  $("#exportBoardingQueueButton")?.addEventListener("click", exportBoardingQueue);
+  $("#exportTimesheetButton")?.addEventListener("click", exportTimesheet);
+  $("#exportCareLogsButton")?.addEventListener("click", exportCareLogs);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setMobileMoreOpen(false);
   });
@@ -5507,6 +5708,7 @@ function initEvents() {
       noteDate: data.noteDate || currentDailyDate(),
       note: data.note,
       noteKind: "staff",
+      source: "daily-staff-note",
       createdBy: currentUser?.name || helperName.value || "Unknown staff",
       createdByEmail: currentUser?.email || helperEmail.value || "",
       removed: false,
@@ -5653,7 +5855,10 @@ function initEvents() {
     }
     if (settingsPopupForm) {
       const record = await saveSettingsUserProfile({}, settingsPopupForm);
-      if (record) showDetailDialog("User Saved", `<p>${escapeHtml(record.name || record.email)} has been saved.</p>`);
+      if (record) {
+        await addAuditLog("Updated user", "settingsUser", record, roleLabel(record.role));
+        showDetailDialog("User Saved", `<p>${escapeHtml(record.name || record.email)} has been saved.</p>`);
+      }
       return;
     }
     if (ownerUpdateForm) {
@@ -5740,7 +5945,8 @@ function initEvents() {
     if (action.dataset.action === "popup-set-password") await adminSetTemporaryPassword(action.closest("form"), action);
     if (action.dataset.action === "popup-send-reset") await adminSendPasswordResetEmail(action.closest("form"), action);
     if (action.dataset.action === "popup-remove-user") {
-      await markRecordRemoved("settingsUser", action.dataset.id);
+      const removed = await markRecordRemoved("settingsUser", action.dataset.id);
+      if (removed) await addAuditLog("Removed user", "settingsUser", removed, removed.email || "");
       renderSettingsUsers();
       $("#detailDialog").close();
       showToast("User access removed.");
@@ -6459,6 +6665,7 @@ function initEvents() {
     };
     const record = upsertRecord("service", payload);
     await sendPayload(record);
+    await addAuditLog(existing?.id ? "Updated service" : "Created service", "service", record, `${record.category || "Service"} ${money(record.basePrice)}`);
     renderServices();
     renderDashboard();
     renderFinancials();
@@ -6636,6 +6843,7 @@ function initEvents() {
     event.preventDefault();
     const record = await saveSettingsUserProfile();
     if (!record) return;
+    await addAuditLog(record.submittedAt === record.updatedAt ? "Created user" : "Updated user", "settingsUser", record, roleLabel(record.role));
     openSettingsUser();
     showToast("User access saved.");
   });
@@ -6660,6 +6868,7 @@ function initEvents() {
     if (user) {
       const updated = upsertRecord("settingsUser", { ...user, removed: true });
       await sendPayload(updated);
+      await addAuditLog("Removed user", "settingsUser", updated, updated.email || "");
     }
     renderSettingsUsers();
     showToast("User removed.");
@@ -6687,6 +6896,7 @@ function initEvents() {
       removed: false,
     });
     await sendPayload(record);
+    await addAuditLog(existing?.id ? "Updated kennel location" : "Created kennel location", "kennelLocation", record, `${record.building || ""} ${record.active ? "active" : "inactive"}`);
     openKennelLocation();
     renderKennelLocations();
     showToast("Kennel location saved.");
@@ -6704,6 +6914,7 @@ function initEvents() {
     if (button.dataset.action === "remove-kennel-location") {
       const updated = upsertRecord("kennelLocation", { ...location, removed: true, removedAt: new Date().toISOString() });
       await sendPayload(updated);
+      await addAuditLog("Removed kennel location", "kennelLocation", updated, updated.building || "");
       renderKennelLocations();
       showToast("Kennel location removed.");
     }
