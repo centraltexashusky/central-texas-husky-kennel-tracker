@@ -403,18 +403,16 @@ h2 {
 
 .boarding-dog-modal:not([hidden]) {
   border-radius: 8px;
-  bottom: 24px;
   box-shadow: var(--shadow), 0 0 0 9999px rgba(4, 15, 26, 0.58);
   left: 50%;
   margin: 0;
   max-height: calc(100dvh - 48px);
-  max-width: min(1040px, calc(100vw - 48px));
   overflow-y: auto;
   overscroll-behavior: contain;
   position: fixed;
-  top: 24px;
-  transform: translateX(-50%);
-  width: 100%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1040px, calc(100vw - 48px));
   z-index: 90;
 }
 
@@ -1893,6 +1891,10 @@ button:disabled {
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(0, 1fr);
+}
+
+#timesheetAdminActions {
+  margin-top: 22px;
 }
 
 .time-card {
