@@ -411,9 +411,9 @@ h2 {
   overscroll-behavior: contain;
   position: fixed;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate3d(-50%, -50%, 0);
   width: min(1040px, calc(100vw - 48px));
-  z-index: 90;
+  z-index: 1000;
 }
 
 .boarding-dog-modal .section-heading {

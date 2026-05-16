@@ -4117,8 +4117,12 @@ function openOwnedDog(record = {}) {
 }
 
 function openBoardingDog(record = {}) {
-  $("#boardingDogDetail").hidden = false;
-  $("#boardingDogDetail").scrollTop = 0;
+  const boardingDogDetail = $("#boardingDogDetail");
+  if (boardingDogDetail.parentElement !== document.body) {
+    document.body.appendChild(boardingDogDetail);
+  }
+  boardingDogDetail.hidden = false;
+  boardingDogDetail.scrollTop = 0;
   selectedDogPhotos.boarding = null;
   $("#boardingDogDetailTitle").textContent = record.id ? `Edit ${record.dogName || "Boarding Dog"}` : "Add Boarding Dog";
   $("#boardingDogForm").reset();
