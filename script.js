@@ -4118,6 +4118,7 @@ function openOwnedDog(record = {}) {
 
 function openBoardingDog(record = {}) {
   $("#boardingDogDetail").hidden = false;
+  $("#boardingDogDetail").scrollTop = 0;
   selectedDogPhotos.boarding = null;
   $("#boardingDogDetailTitle").textContent = record.id ? `Edit ${record.dogName || "Boarding Dog"}` : "Add Boarding Dog";
   $("#boardingDogForm").reset();
@@ -4131,7 +4132,6 @@ function openBoardingDog(record = {}) {
   });
   renderBoardingStays(record);
   setBoardingFormLocked(Boolean(record.id));
-  window.scrollTo({ top: $("#boardingDogDetail").offsetTop - 12, behavior: "smooth" });
 }
 
 function setBoardingFormLocked(locked) {
@@ -5877,7 +5877,7 @@ function sumHours(records) {
 
 function renderTimesheet() {
   const isAdmin = currentRole() === "admin";
-  const records = readRecords("timesheet").filter((record) => isAdmin || timesheetBelongsToCurrentUser(record));
+  const records = readRecords("timesheet").filter((record) => !record.removed && (isAdmin || timesheetBelongsToCurrentUser(record)));
   const now = new Date();
   const thisWeekStart = weekStart(now);
   const nextWeekStart = new Date(thisWeekStart);
@@ -5980,6 +5980,7 @@ function syncTimesheetStaffFields(formEl) {
 
 function timesheetEditFormHtml(record = {}) {
   const isAdmin = currentRole() === "admin";
+  const canDelete = isAdmin && Boolean(record.id);
   const selectedStaff = selectedTimesheetStaff(record);
   const helperValue = selectedStaff.name || record.helperName || helperName.value || currentUser?.name || "";
   const helperEmailValue = selectedStaff.email || record.helperEmail || (isAdmin && !record.id ? "" : helperEmail.value || currentUser?.email || "");
@@ -6002,12 +6003,39 @@ function timesheetEditFormHtml(record = {}) {
       <label>Clock out<input type="datetime-local" name="manualClockOut" value="${escapeHtml(clockOutValue)}" required /></label>
     </div>
     <label>Timesheet note<textarea name="manualNote" rows="3" placeholder="Reason for manual entry or edit">${escapeHtml(record.note || "")}</textarea></label>
-    <div class="button-row"><button type="submit">Save Timesheet</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+    <div class="button-row"><button type="submit">Save Timesheet</button>${canDelete ? `<button type="button" class="secondary-button danger-button" data-action="delete-timesheet" data-id="${escapeHtml(record.id)}">Delete Timesheet</button>` : ""}<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </form>`;
 }
 
 function openTimesheetEditPopup(record = {}) {
   showDetailDialog("Edit Timesheet", timesheetEditFormHtml(record));
+}
+
+function openTimesheetDeleteConfirm(record = {}) {
+  showDetailDialog(
+    "Delete Timesheet?",
+    `<article class="record-card compact-record-card">
+      <strong>${escapeHtml(record.helperName || "Timesheet entry")}</strong>
+      <p>${escapeHtml([record.date, formatDateTime(record.clockInTime), formatDateTime(record.clockOutTime)].filter(Boolean).join(" | "))}</p>
+      <p>This removes the timesheet entry from active records. Admin audit history will keep the removal action.</p>
+      <div class="record-actions">
+        <button type="button" class="secondary-button danger-button" data-action="confirm-delete-timesheet" data-id="${escapeHtml(record.id || "")}">Confirm Delete</button>
+        <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+      </div>
+    </article>`,
+  );
+}
+
+async function removeTimesheetEntryById(id = "") {
+  if (currentRole() !== "admin") {
+    showToast("Admin access required to delete a timesheet entry.");
+    return null;
+  }
+  const removed = await markRecordRemoved("timesheet", id);
+  if (!removed) return null;
+  await addAuditLog("Deleted timesheet", "timesheet", removed, `${removed.helperName || "Staff"} | ${removed.date || ""}`);
+  renderTimesheet();
+  return removed;
 }
 
 function exportBoardingQueue() {
@@ -6525,6 +6553,15 @@ function initEvents() {
     if (action.dataset.action === "close-dialog") {
       $("#detailDialog").close();
     }
+    if (action.dataset.action === "delete-timesheet") {
+      const record = readRecords("timesheet").find((item) => item.id === action.dataset.id && !item.removed);
+      if (record) openTimesheetDeleteConfirm(record);
+    }
+    if (action.dataset.action === "confirm-delete-timesheet") {
+      const removed = await removeTimesheetEntryById(action.dataset.id);
+      $("#detailDialog").close();
+      if (removed) showToast("Timesheet entry deleted.");
+    }
     if (action.dataset.action === "popup-quick-care") {
       openDashboardQuickCare(action.dataset.id, action.dataset.careType);
     }
@@ -7001,6 +7038,7 @@ function initEvents() {
   $("#boardingDogTableHead").addEventListener("drop", handleTableHeaderDrop);
   $("#boardingDogTableHead").addEventListener("dragend", handleTableHeaderDragEnd);
   $("#addBoardingDogButton").addEventListener("click", () => openBoardingDog());
+  $("#closeBoardingDogDialogButton")?.addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
   $("#cancelBoardingDogEdit").addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
   $("#editBoardingDogButton").addEventListener("click", () => {
     setBoardingFormLocked(false);

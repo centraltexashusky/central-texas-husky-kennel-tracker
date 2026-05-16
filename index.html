@@ -819,8 +819,8 @@
           <div class="record-grid compact-record-grid" id="customerDogUploadCards"></div>
         </section>
 
-        <section class="form-section detail-panel" id="boardingDogDetail" hidden>
-          <div class="section-heading"><span>E</span><div><h2 id="boardingDogDetailTitle">Add Boarding Dog</h2><p>Use the table action to view or edit an existing boarding dog.</p></div></div>
+        <section class="form-section detail-panel boarding-dog-modal" id="boardingDogDetail" hidden aria-modal="true" role="dialog">
+          <div class="section-heading"><span>E</span><div><h2 id="boardingDogDetailTitle">Add Boarding Dog</h2><p>Use the table action to view or edit an existing boarding dog.</p></div><button type="button" class="secondary-button" id="closeBoardingDogDialogButton">Close</button></div>
           <div class="alert-banner">Required Update From Owner: use this when vaccines, owner instructions, or boarding details need to be refreshed.</div>
           <form id="boardingDogForm" class="tracker-form">
             <input type="hidden" name="id" />
@@ -1088,6 +1088,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260516-boarding-photo-1"></script>
+    <script src="script.js?v=20260516-timesheet-delete-1"></script>
   </body>
 </html>
