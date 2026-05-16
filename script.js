@@ -3425,6 +3425,79 @@ function ownedDogMobileCardHtml(record = {}) {
     </article>`;
 }
 
+function ownedDogPhotoUploadDialogHtml(record = {}) {
+  const name = ownedDogDisplayName(record) || "Dog";
+  return `
+    <form id="ownedDogPhotoUploadForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}">
+      <section class="quick-care-dog-summary mobile-photo-upload-summary">
+        <div class="quick-care-dog-photo quick-care-dog-initials" id="ownedDogPhotoUploadInitials">${escapeHtml(avatarText(name))}</div>
+        <img class="quick-care-dog-photo" id="ownedDogPhotoUploadPreview" alt="${escapeHtml(name)} photo preview" hidden />
+        <div>
+          <h3>${escapeHtml(name)}</h3>
+          <p>${escapeHtml([record.sex, ownedDogCareSummary(record)].filter(Boolean).join(" | "))}</p>
+        </div>
+      </section>
+      <label>Profile photo<input type="file" id="ownedDogMobilePhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" capture="environment" required /></label>
+      <div class="button-row"><button type="submit">Upload Photo</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+    </form>`;
+}
+
+function openOwnedDogPhotoUploadPopup(record = {}) {
+  showDetailDialog(`${ownedDogDisplayName(record) || "Dog"} Profile Photo`, ownedDogPhotoUploadDialogHtml(record));
+}
+
+function previewOwnedDogMobilePhoto(input) {
+  const file = input?.files?.[0];
+  const preview = $("#ownedDogPhotoUploadPreview");
+  const initials = $("#ownedDogPhotoUploadInitials");
+  if (!file || !preview || !initials) return;
+  if (!isSupportedDogPhoto(file)) {
+    input.value = "";
+    showToast("Choose a JPG or PNG profile photo.");
+    return;
+  }
+  const objectUrl = URL.createObjectURL(file);
+  preview.onload = () => URL.revokeObjectURL(objectUrl);
+  preview.src = objectUrl;
+  preview.hidden = false;
+  initials.hidden = true;
+}
+
+async function submitOwnedDogPhotoUpload(formEl) {
+  const record = readRecords("ownedDog").find((item) => item.id === formEl.dataset.id && !item.removed);
+  const input = formEl.querySelector("#ownedDogMobilePhotoInput");
+  const file = input?.files?.[0];
+  if (!record || !file) {
+    showToast("Choose a dog photo before uploading.");
+    return;
+  }
+  if (!isSupportedDogPhoto(file)) {
+    showToast("Choose a JPG or PNG profile photo.");
+    return;
+  }
+  const submitButton = formEl.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Uploading...";
+  }
+  const { url, error } = await uploadDogPhotoToSupabase(file, record.id);
+  if (!url) {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Upload Photo";
+    }
+    showToast(error || "The profile photo could not be uploaded.");
+    return;
+  }
+  const updated = upsertRecord("ownedDog", { ...record, profilePhotoUrl: url, profilePhotoData: "", updatedAt: new Date().toISOString() });
+  await sendPayload(updated);
+  await addAuditLog("Uploaded dog profile photo", "ownedDog", updated, ownedDogDisplayName(updated));
+  renderOwnedDogs();
+  renderDashboard();
+  $("#detailDialog").close();
+  showToast(`${ownedDogDisplayName(updated) || "Dog"} photo uploaded.`);
+}
+
 function renderOwnedDogMobileCards(records = []) {
   const container = $("#ownedDogMobileCards");
   if (!container) return;
@@ -4432,7 +4505,7 @@ function handleOwnedDogRosterAction(button) {
     if (photo) {
       showMediaDialog(photo, "image/jpeg", `${ownedDogDisplayName(record)} profile photo`);
     } else {
-      showDetailDialog(`${ownedDogDisplayName(record)} Profile`, dashboardQuickCareSummaryHtml(normalizeOwnedDogCare(record), "Profile"));
+      openOwnedDogPhotoUploadPopup(normalizeOwnedDogCare(record));
     }
     return;
   }
@@ -6454,8 +6527,13 @@ function initEvents() {
     const careLogEditForm = event.target.closest("#careLogEditForm");
     const kennelAssignmentForm = event.target.closest("#kennelAssignmentForm");
     const timesheetEditForm = event.target.closest("#timesheetEditForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm) return;
+    const ownedDogPhotoUploadForm = event.target.closest("#ownedDogPhotoUploadForm");
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !ownedDogPhotoUploadForm) return;
     event.preventDefault();
+    if (ownedDogPhotoUploadForm) {
+      await submitOwnedDogPhotoUpload(ownedDogPhotoUploadForm);
+      return;
+    }
     if (quickCareForm) {
       await submitDashboardQuickCare(quickCareForm);
       return;
@@ -6607,6 +6685,11 @@ function initEvents() {
     }
   });
   $("#detailDialogBody").addEventListener("change", (event) => {
+    const ownedDogMobilePhotoInput = event.target.closest("#ownedDogMobilePhotoInput");
+    if (ownedDogMobilePhotoInput) {
+      previewOwnedDogMobilePhoto(ownedDogMobilePhotoInput);
+      return;
+    }
     const kennelBuilding = event.target.closest("#kennelAssignmentBuilding");
     if (kennelBuilding) {
       updateKennelAssignmentLocations(kennelBuilding.closest("#kennelAssignmentForm"));
