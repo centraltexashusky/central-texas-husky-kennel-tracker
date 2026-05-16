@@ -3229,15 +3229,45 @@ function staffNoteTimePrefix(value = new Date()) {
   return new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+function calendarNoteKind(note = {}) {
+  return note.noteKind === "staff" || note.source === "daily-staff-note" ? "staff" : "special";
+}
+
+function calendarNoteKindLabel(note = {}) {
+  return calendarNoteKind(note) === "staff" ? "Staff Note" : "Special Note";
+}
+
 function staffNoteIdentityKey(note = {}) {
   const author = String(note.createdBy || note.helperName || note.authorName || note.updatedBy || "").trim().toLowerCase();
   const email = String(note.createdByEmail || note.updatedByEmail || note.helperEmail || note.authorEmail || "").trim().toLowerCase();
   const hasUsefulAuthor = author && !["author not recorded", "unknown staff", "staff"].includes(author);
-  return hasUsefulAuthor ? `name:${author}` : `email:${email}`;
+  if (hasUsefulAuthor) return `name:${author}`;
+  return email ? `email:${email}` : "unknown";
 }
 
 function staffNoteGroupKey(note = {}) {
   return [calendarNoteDate(note), staffNoteIdentityKey(note)].join("|");
+}
+
+function calendarNoteGroupKey(note = {}) {
+  return [calendarNoteDate(note), calendarNoteKind(note), staffNoteIdentityKey(note)].join("|");
+}
+
+function specialNoteEntryText(value = "", timestamp = new Date()) {
+  const timeText = staffNoteTimePrefix(timestamp);
+  return String(value || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => /\[[^\]]*\d{1,2}:\d{2}[^\]]*\]\s*$/i.test(line) ? line : `${line} - [${timeText}]`)
+    .join("\n");
+}
+
+function calendarNoteDisplayText(note = {}) {
+  if (calendarNoteKind(note) === "special") {
+    return specialNoteEntryText(note.note || "", note.updatedAt || note.submittedAt || new Date());
+  }
+  return note.note || "";
 }
 
 function groupedRecentStaffNotes(notes = []) {
@@ -3257,23 +3287,43 @@ function groupedRecentStaffNotes(notes = []) {
 }
 
 function groupedCalendarNotesForDisplay(notes = []) {
-  const staffNotes = notes.filter((note) => note.noteKind === "staff" || note.source === "daily-staff-note");
-  const otherNotes = notes.filter((note) => !(note.noteKind === "staff" || note.source === "daily-staff-note"));
-  return [
-    ...groupedRecentStaffNotes(staffNotes).map((note) => ({ ...note, isGroupedStaffNote: true })),
-    ...otherNotes,
-  ].sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
+  const groups = new Map();
+  [...notes]
+    .sort((a, b) => new Date(a.updatedAt || a.submittedAt || 0) - new Date(b.updatedAt || b.submittedAt || 0))
+    .forEach((note) => {
+      const key = calendarNoteGroupKey(note);
+      const displayText = calendarNoteDisplayText(note);
+      const existing = groups.get(key);
+      if (!existing) {
+        groups.set(key, {
+          ...note,
+          id: note.id,
+          ids: [note.id].filter(Boolean),
+          note: displayText,
+          noteKind: calendarNoteKind(note),
+        });
+        return;
+      }
+      existing.ids.push(note.id);
+      existing.note = [existing.note, displayText].filter(Boolean).join("\n");
+      existing.updatedAt = new Date(existing.updatedAt || existing.submittedAt || 0) > new Date(note.updatedAt || note.submittedAt || 0) ? existing.updatedAt : note.updatedAt;
+    });
+  return [...groups.values()]
+    .map((note) => ({
+      ...note,
+      isGroupedCalendarNote: (note.ids || []).length > 1,
+      isGroupedStaffNote: calendarNoteKind(note) === "staff" && (note.ids || []).length > 1,
+      isGroupedSpecialNote: calendarNoteKind(note) === "special" && (note.ids || []).length > 1,
+    }))
+    .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
 }
 
 function renderDemoSubmissions() {
   const dailyRecords = readRecords("dailyTask");
   const calendarNotes = readRecords("calendarNote").filter((note) => !note.removed);
-  const staffNotes = calendarNotes.filter((note) => note.noteKind === "staff" || note.source === "daily-staff-note");
-  const otherNotes = calendarNotes.filter((note) => !(note.noteKind === "staff" || note.source === "daily-staff-note"));
   const saved = [
     ...dailyRecords,
-    ...groupedRecentStaffNotes(staffNotes).map((note) => ({ ...note, date: calendarNoteDate(note), isCalendarNoteSubmission: true, isGroupedStaffNote: true })),
-    ...otherNotes.map((note) => ({ ...note, date: calendarNoteDate(note), isCalendarNoteSubmission: true })),
+    ...groupedCalendarNotesForDisplay(calendarNotes).map((note) => ({ ...note, date: calendarNoteDate(note), isCalendarNoteSubmission: true })),
   ]
     .filter((submission) => !submission.removed && isRecentDailySubmission(submission))
     .sort((a, b) => (
@@ -3285,8 +3335,8 @@ function renderDemoSubmissions() {
     ? saved
         .map((submission) => {
           if (submission.isCalendarNoteSubmission) {
-            const noteKind = submission.noteKind === "staff" || submission.source === "daily-staff-note" ? "Staff Note" : "Special Note";
-            const noteAction = submission.isGroupedStaffNote ? "view-calendar-note-group" : "view-calendar-note";
+            const noteKind = calendarNoteKindLabel(submission);
+            const noteAction = submission.isGroupedCalendarNote ? "view-calendar-note-group" : "view-calendar-note";
             const ids = submission.ids?.length ? submission.ids.join(",") : submission.id;
             const noteClass = noteKind === "Staff Note" ? " is-staff-note" : " is-special-note";
             return `<article class="submission-item clickable-card${noteClass}" data-action="${noteAction}" data-id="${escapeHtml(submission.id)}" data-ids="${escapeHtml(ids || "")}"><strong>${escapeHtml(submission.noteDate || submission.date || "")} - ${escapeHtml(noteKind)}</strong><p class="staff-note-message">${multilineHtml(submission.note || "")}</p><span>Written by ${escapeHtml(calendarNoteAuthorText(submission))}</span></article>`;
@@ -4833,11 +4883,11 @@ function renderCalendarNotes() {
         .map((note) => {
           const isSelected = note.noteDate === selectedDate;
           const groupedIds = note.ids?.length ? note.ids : [note.id].filter(Boolean);
-          const isGroupedStaff = note.isGroupedStaffNote && groupedIds.length > 1;
-          const editAction = currentRole() === "admin" && !isGroupedStaff ? `<button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button>` : "";
-          const removeAction = canRemoveCalendarNote(note) ? `<button type="button" class="secondary-button danger-button" data-action="${isGroupedStaff ? "remove-calendar-note-group" : "remove-calendar-note"}" data-id="${note.id}" data-ids="${escapeHtml(groupedIds.join(","))}">Remove</button>` : "";
+          const isGroupedCalendarNote = note.isGroupedCalendarNote && groupedIds.length > 1;
+          const editAction = currentRole() === "admin" && !isGroupedCalendarNote ? `<button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button>` : "";
+          const removeAction = canRemoveCalendarNote(note) ? `<button type="button" class="secondary-button danger-button" data-action="${isGroupedCalendarNote ? "remove-calendar-note-group" : "remove-calendar-note"}" data-id="${note.id}" data-ids="${escapeHtml(groupedIds.join(","))}">Remove</button>` : "";
           const actions = editAction || removeAction ? `<div class="record-actions">${editAction}${removeAction}</div>` : "";
-          const noteKind = note.noteKind === "staff" || note.source === "daily-staff-note" ? "Staff Note" : "Special Note";
+          const noteKind = calendarNoteKindLabel(note);
           return `<article class="record-card ${isSelected ? "is-approved" : ""} ${noteKind === "Staff Note" ? "is-staff-note" : "is-special-note"}"><strong>${escapeHtml(noteKind)} - ${escapeHtml(note.noteDate || "")}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${multilineHtml(note.note || "")}</p>${actions}</article>`;
         })
         .join("")
@@ -5970,25 +6020,42 @@ function initEvents() {
     const formEl = event.currentTarget;
     if (!validateForm(formEl)) return;
     const data = formPayload(formEl);
-    const existing = data.id ? readRecords("calendarNote").find((note) => note.id === data.id) : {};
-    const now = new Date().toISOString();
+    const authorEmail = currentUser?.email || "";
     const author = currentUser?.name || helperName.value || "Unknown staff";
+    const noteDate = data.noteDate || todayDate();
+    const noteKey = calendarNoteGroupKey({
+      noteDate,
+      noteKind: "special",
+      createdByEmail: authorEmail,
+      createdBy: author,
+    });
+    const existing = data.id
+      ? readRecords("calendarNote").find((note) => note.id === data.id)
+      : readRecords("calendarNote").find((note) => !note.removed
+        && calendarNoteKind(note) === "special"
+        && calendarNoteGroupKey({ ...note, noteDate: calendarNoteDate(note) }) === noteKey);
+    const now = new Date().toISOString();
+    const noteText = data.id ? data.note : specialNoteEntryText(data.note, now);
+    const existingNoteText = existing ? calendarNoteDisplayText(existing) : "";
     const payload = {
       ...existing,
+      ...data,
       type: "calendarNote",
-      id: data.id || uid("calendarNote"),
+      id: existing?.id || data.id || uid("calendarNote"),
       submittedAt: existing?.submittedAt || now,
       createdBy: existing?.createdBy || author,
-      createdByEmail: existing?.createdByEmail || currentUser?.email || "",
+      createdByEmail: existing?.createdByEmail || authorEmail,
       updatedBy: author,
-      updatedByEmail: currentUser?.email || "",
+      updatedByEmail: authorEmail,
       noteKind: existing?.noteKind || "special",
-      ...data,
+      noteDate,
+      note: data.id ? noteText : [existingNoteText, noteText].filter(Boolean).join("\n"),
+      updatedAt: now,
       removed: false,
     };
     const record = upsertRecord("calendarNote", payload);
     await sendPayload(record);
-    const savedDate = data.noteDate || todayDate();
+    const savedDate = noteDate;
     formEl.reset();
     formEl.elements.id.value = "";
     formEl.elements.noteDate.value = savedDate;
@@ -6396,15 +6463,15 @@ function initEvents() {
       const ids = String(noteGroupCard.dataset.ids || "").split(",").filter(Boolean);
       const notes = ids.map((id) => readRecords("calendarNote").find((item) => item.id === id)).filter(Boolean);
       if (notes.length) {
-        const first = notes[0];
-        showDetailDialog("Staff Note", `<div class="detail-row"><strong>Date</strong><span>${escapeHtml(first.noteDate || "")}</span></div><div class="detail-row"><strong>Written by</strong><span>${escapeHtml(calendarNoteAuthorText(first))}</span></div><div class="detail-row"><strong>Note</strong><span>${multilineHtml(notes.map((note) => note.note || "").join("\n"))}</span></div>`);
+        const groupedNote = groupedCalendarNotesForDisplay(notes)[0] || notes[0];
+        showDetailDialog(calendarNoteKindLabel(groupedNote), `<div class="detail-row"><strong>Date</strong><span>${escapeHtml(calendarNoteDate(groupedNote) || "")}</span></div><div class="detail-row"><strong>Written by</strong><span>${escapeHtml(calendarNoteAuthorText(groupedNote))}</span></div><div class="detail-row"><strong>Note</strong><span>${multilineHtml(groupedNote.note || "")}</span></div>`);
       }
       return;
     }
     const noteCard = event.target.closest('[data-action="view-calendar-note"]');
     if (noteCard) {
       const note = readRecords("calendarNote").find((item) => item.id === noteCard.dataset.id);
-      if (note) showDetailDialog(titleForRecord("calendarNote", note), `<div class="detail-row"><strong>Date</strong><span>${escapeHtml(note.noteDate || "")}</span></div><div class="detail-row"><strong>Written by</strong><span>${escapeHtml(calendarNoteAuthorText(note))}</span></div><div class="detail-row"><strong>Note</strong><span>${multilineHtml(note.note || "")}</span></div>`);
+      if (note) showDetailDialog(titleForRecord("calendarNote", note), `<div class="detail-row"><strong>Date</strong><span>${escapeHtml(note.noteDate || "")}</span></div><div class="detail-row"><strong>Written by</strong><span>${escapeHtml(calendarNoteAuthorText(note))}</span></div><div class="detail-row"><strong>Note</strong><span>${multilineHtml(calendarNoteDisplayText(note))}</span></div>`);
       return;
     }
     const card = event.target.closest('[data-action="view-daily"]');
