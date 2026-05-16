@@ -414,6 +414,7 @@ function serviceFlagChipsHtml(flags = []) {
 }
 
 function isMemberUser(user = currentUser) {
+  if (!user) return false;
   const profile = savedUserFor(user) || {};
   return profile.isMember === true || profile.isMember === "on" || profile.isMember === "true" || profile.member === true;
 }
@@ -911,11 +912,13 @@ function settingsUsers() {
 }
 
 function savedUserFor(account = {}) {
+  if (!account) return undefined;
   const email = account.email?.toLowerCase();
   return settingsUsers().find((user) => (user.authId && user.authId === account.key) || (email && user.email?.toLowerCase() === email));
 }
 
 function roleForAccount(account = {}) {
+  account = account || {};
   const email = account.email?.toLowerCase();
   const saved = savedUserFor(account);
   if (saved?.role) return saved.role;

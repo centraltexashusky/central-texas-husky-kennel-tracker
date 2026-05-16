@@ -2955,6 +2955,7 @@ button.mobile-dog-photo-button {
   }
 
   #ownedDogSearch.filter-search-input {
+    flex: 0 0 58px;
     height: 58px;
     min-height: 58px;
     padding-block: 0;
