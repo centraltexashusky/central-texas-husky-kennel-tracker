@@ -5,6 +5,7 @@ const MAX_MEDIA_UPLOAD_MB = 50;
 const MAX_MEDIA_UPLOAD_BYTES = MAX_MEDIA_UPLOAD_MB * 1024 * 1024;
 const IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png"];
 const VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+const DOG_DOCUMENT_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
 const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
 const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 const APP_PRODUCTION_URL = "https://kennel.centraltexashusky.com/";
@@ -302,6 +303,7 @@ function normalizeOwnedDogCare(record = {}) {
     bathHistory: arrayValue(record.bathHistory),
     heatHistory: arrayValue(record.heatHistory),
     careNotesHistory: arrayValue(record.careNotesHistory),
+    documents: arrayValue(record.documents),
   };
   copy.exerciseFrequencyDays = numberFrom(copy.exerciseFrequencyDays, careDefaults.exerciseFrequencyDays);
   copy.trainingFrequencyDays = numberFrom(copy.trainingFrequencyDays, careDefaults.trainingFrequencyDays);
@@ -1751,6 +1753,15 @@ async function uploadVaccinationFiles(input, dogId) {
   });
 }
 
+async function uploadOwnedDogDocumentFiles(input, dogId) {
+  const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
+  return uploadMediaFiles(input, `owned-dog-documents/${safeDogId}`, {
+    allowedTypes: DOG_DOCUMENT_UPLOAD_TYPES,
+    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx"],
+    label: "dog document",
+  });
+}
+
 function setDogPhoto(kind, record) {
   const elements = dogPhotoElements(kind);
   if (!elements) return;
@@ -2213,7 +2224,7 @@ function taskLabel(task, shift) {
   if (completed && showRemainingTasksOnly) return "";
   const adminTools =
     canManageTasks
-      ? `<span class="task-admin-tools"><button type="button" class="icon-button" data-action="move-task-up" data-shift="${shift}" data-id="${task.id}" title="Move up">↑</button><button type="button" class="icon-button" data-action="move-task-down" data-shift="${shift}" data-id="${task.id}" title="Move down">↓</button><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">×</button></span>`
+      ? `<span class="task-admin-tools"><span class="task-drag-handle" aria-hidden="true">Drag</span><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">&times;</button></span>`
       : "";
   const completedMeta = completed ? `<span class="task-completed-meta">Completed by ${escapeHtml(completed.completedBy || "staff")} at ${escapeHtml(formatDateTime(completed.completedAt))}</span>` : "";
   return `<div class="task-item ${completed ? "is-complete" : ""}" draggable="${canManageTasks && !completed}" data-shift="${shift}" data-id="${task.id}"><span class="task-text">${taskText}</span>${completedMeta}<button type="button" class="task-done-button" data-action="complete-task" data-shift="${shift}" data-id="${task.id}" data-task-text="${taskText}" ${completed ? "disabled" : ""}>${completed ? "Done" : "Done"}</button>${adminTools}</div>`;
@@ -2510,6 +2521,21 @@ function updateTaskOrder(shift, id, direction) {
   renderDailyTaskLists();
 }
 
+function reorderTaskByDrag(shift, sourceId, targetId) {
+  if (currentRole() !== "admin" || !shift || !sourceId || !targetId || sourceId === targetId) return;
+  const config = readTaskConfig();
+  const list = config[shift] || [];
+  const sourceIndex = list.findIndex((task) => task.id === sourceId);
+  const targetIndex = list.findIndex((task) => task.id === targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const [sourceTask] = list.splice(sourceIndex, 1);
+  const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  list.splice(insertIndex, 0, sourceTask);
+  writeTaskConfig(config);
+  renderDailyTaskLists();
+  showToast("Task order updated.");
+}
+
 function editTask(shift, id, text, sourceInput) {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -2579,7 +2605,8 @@ function setOwnedFormLocked(locked) {
   [...formEl.elements].forEach((field) => {
     if (field.type === "hidden") return;
     if (field.dataset?.ownedProfileTab) return;
-    if (["editOwnedDogButton", "cancelOwnedDogEdit", "deleteOwnedDogButton"].includes(field.id)) return;
+    if (field.closest("#ownedDogFileList")) return;
+    if (["editOwnedDogButton", "cancelOwnedDogEdit", "deleteOwnedDogButton", "ownedDogDocumentFiles", "uploadOwnedDogFilesButton"].includes(field.id)) return;
     field.disabled = locked;
   });
   $("#ownedDogPhotoPicker").disabled = false;
@@ -3138,6 +3165,13 @@ async function syncOwnedDogCareFromDailyReport(record) {
   if (dogUpdates.size) {
     renderOwnedDogs();
     renderCareDogOptions();
+    const activeId = $("#ourDogForm")?.elements.id.value || "";
+    const activeUpdate = activeId ? dogUpdates.get(activeId) : null;
+    if (activeUpdate) {
+      renderOwnedActivity(activeUpdate);
+      renderOwnedDogFiles(activeUpdate);
+      renderOwnedDogTimeline(activeUpdate);
+    }
     showToast(`${dogUpdates.size} Our Dog care profile${dogUpdates.size === 1 ? "" : "s"} updated.`);
   }
 }
@@ -3183,8 +3217,15 @@ function staffNoteTimePrefix(value = new Date()) {
   return new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+function staffNoteIdentityKey(note = {}) {
+  const author = String(note.createdBy || note.helperName || note.authorName || note.updatedBy || "").trim().toLowerCase();
+  const email = String(note.createdByEmail || note.updatedByEmail || note.helperEmail || note.authorEmail || "").trim().toLowerCase();
+  const hasUsefulAuthor = author && !["author not recorded", "unknown staff", "staff"].includes(author);
+  return hasUsefulAuthor ? `name:${author}` : `email:${email}`;
+}
+
 function staffNoteGroupKey(note = {}) {
-  return [calendarNoteDate(note), String(note.createdByEmail || "").toLowerCase() || calendarNoteAuthorText(note)].join("|");
+  return [calendarNoteDate(note), staffNoteIdentityKey(note)].join("|");
 }
 
 function groupedRecentStaffNotes(notes = []) {
@@ -3201,6 +3242,15 @@ function groupedRecentStaffNotes(notes = []) {
     existing.updatedAt = new Date(existing.updatedAt || existing.submittedAt || 0) > new Date(note.updatedAt || note.submittedAt || 0) ? existing.updatedAt : note.updatedAt;
   });
   return [...groups.values()];
+}
+
+function groupedCalendarNotesForDisplay(notes = []) {
+  const staffNotes = notes.filter((note) => note.noteKind === "staff" || note.source === "daily-staff-note");
+  const otherNotes = notes.filter((note) => !(note.noteKind === "staff" || note.source === "daily-staff-note"));
+  return [
+    ...groupedRecentStaffNotes(staffNotes).map((note) => ({ ...note, isGroupedStaffNote: true })),
+    ...otherNotes,
+  ].sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
 }
 
 function renderDemoSubmissions() {
@@ -3919,6 +3969,8 @@ function openOwnedDog(record = {}) {
   setDogPhoto("owned", normalized);
   $("#ownedDogActivityPanel").hidden = !record.id;
   renderOwnedActivity(normalized);
+  renderOwnedDogFiles(normalized);
+  renderOwnedDogTimeline(normalized);
   updateOwnedDogConditionalFields();
   syncOwnedDogTabAvailability(normalized);
   setOwnedDogActiveTab("Overview");
@@ -4025,6 +4077,60 @@ function ownedDogActivityEntriesHtml(record = {}, filter = "All", { removable = 
     : "<p>No activity or training entries yet.</p>";
 }
 
+function renderOwnedDogTimeline(record = activeOwnedDog()) {
+  const container = $("#ownedDogTimelineList");
+  if (!container) return;
+  container.innerHTML = ownedDogActivityEntriesHtml(record || {}, "All");
+}
+
+function ownedDogDocumentItems(record = {}) {
+  return arrayValue(record.documents).map((item) => ({
+    id: item.id || uid("file"),
+    name: item.name || item.fileName || "Dog document",
+    type: item.type || item.contentType || "application/octet-stream",
+    size: item.size || 0,
+    savedAt: item.savedAt || item.uploadedAt || item.createdAt || "",
+    url: item.url || "",
+    dataUrl: item.dataUrl || "",
+    note: item.note || "",
+  }));
+}
+
+function renderOwnedDogFiles(record = activeOwnedDog()) {
+  const list = $("#ownedDogFileList");
+  if (!list) return;
+  if (!record?.id) {
+    list.innerHTML = "<p>Save this dog before uploading documents.</p>";
+    return;
+  }
+  const documents = ownedDogDocumentItems(record);
+  list.innerHTML = documents.length
+    ? documents.map((file) => {
+        const source = file.url || file.dataUrl || "";
+        const savedText = file.savedAt ? `Uploaded ${formatDateTime(file.savedAt)}` : "Uploaded date not recorded";
+        const statusText = file.note ? `<p>${escapeHtml(file.note)}</p>` : "";
+        return `<article class="record-card compact-record-card dog-file-card" data-file-id="${escapeHtml(file.id)}"><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(savedText)}</span>${statusText}<label>Rename file<input type="text" value="${escapeHtml(file.name)}" data-action="rename-owned-file-input" data-id="${escapeHtml(file.id)}" /></label><div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(source)}" data-media-type="${escapeHtml(file.type)}" data-media-name="${escapeHtml(file.name)}">Open</button><button type="button" class="secondary-button" data-action="save-owned-file-name" data-id="${escapeHtml(file.id)}">Rename</button><button type="button" class="secondary-button danger-button" data-action="remove-owned-file" data-id="${escapeHtml(file.id)}">Remove</button></div></article>`;
+      }).join("")
+    : "<p>No documents uploaded for this dog yet.</p>";
+}
+
+async function updateOwnedDogDocuments(documents = []) {
+  const active = activeOwnedDog();
+  if (!active) {
+    showToast("Save the dog before managing files.");
+    return null;
+  }
+  const updated = upsertRecord("ownedDog", {
+    ...normalizeOwnedDogCare(active),
+    documents,
+    updatedAt: new Date().toISOString(),
+  });
+  await sendPayload(updated);
+  renderOwnedDogFiles(updated);
+  renderOwnedDogs();
+  return updated;
+}
+
 function ownedDogTrainingHistoryHtml(record = {}) {
   const logs = ownedDogActivityLogs(record).filter((log) => log.group === "Training").slice(0, 4);
   return logs.length
@@ -4106,6 +4212,7 @@ function openVaccineAlert(dogId) {
 function renderOwnedActivity(record = activeOwnedDog()) {
   const filter = $("#ownedActivityFilter")?.value || "All";
   $("#ownedActivityHistory").innerHTML = ownedDogActivityEntriesHtml(record || {}, filter, { removable: true });
+  renderOwnedDogTimeline(record);
 }
 
 function applyOwnedCareLog(record = {}, type, minutes, note = "") {
@@ -4391,7 +4498,7 @@ function dashboardQuickCareSummaryHtml(dog, careType) {
   const latestExercise = careTypeIsExercise(careType) ? latestExerciseLogForDog(dog, careType) : null;
   const photo = dog.profilePhotoUrl || dog.profilePhotoData || "";
   const photoHtml = photo
-    ? `<img class="quick-care-dog-photo" src="${escapeHtml(photo)}" alt="${escapeHtml(ownedDogDisplayName(dog))}" />`
+    ? `<img class="quick-care-dog-photo is-clickable-photo" src="${escapeHtml(photo)}" alt="${escapeHtml(ownedDogDisplayName(dog))}" data-action="view-dog-photo" data-src="${escapeHtml(photo)}" data-media-name="${escapeHtml(`${ownedDogDisplayName(dog)} profile photo`)}" />`
     : `<div class="quick-care-dog-photo quick-care-dog-initials">${escapeHtml(avatarText(ownedDogDisplayName(dog)))}</div>`;
   const rowsByCareType = {
     Training: [
@@ -4644,7 +4751,9 @@ function renderDashboardTaskCalendar() {
     if (date) counts[date] = (counts[date] || 0) + 1;
     return counts;
   }, {});
-  const noteCounts = readRecords("calendarNote").filter((record) => !record.removed && calendarNoteDate(record)).reduce((counts, record) => {
+  const noteCounts = groupedCalendarNotesForDisplay(readRecords("calendarNote")
+    .filter((record) => !record.removed && calendarNoteDate(record))
+    .map((record) => ({ ...record, noteDate: calendarNoteDate(record) }))).reduce((counts, record) => {
     const noteDate = calendarNoteDate(record);
     counts[noteDate] = (counts[noteDate] || 0) + 1;
     return counts;
@@ -4702,21 +4811,22 @@ function renderCalendarNotes() {
   const selectedDate = $("#dashboardDate")?.value || todayDate();
   formEl.hidden = !canCreateCalendarNote();
   if (!formEl.elements.noteDate.value) formEl.elements.noteDate.value = selectedDate;
-  const notes = readRecords("calendarNote")
+  const notes = groupedCalendarNotesForDisplay(readRecords("calendarNote")
     .filter((note) => !note.removed)
     .map((note) => ({ ...note, noteDate: calendarNoteDate(note) }))
-    .filter((note) => note.noteDate === selectedDate)
-    .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
+    .filter((note) => note.noteDate === selectedDate));
   const emptyMessage = "No staff notes or special notes for the selected date.";
   list.innerHTML = notes.length
     ? notes
         .map((note) => {
           const isSelected = note.noteDate === selectedDate;
-          const editAction = currentRole() === "admin" ? `<button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button>` : "";
-          const removeAction = canRemoveCalendarNote(note) ? `<button type="button" class="secondary-button danger-button" data-action="remove-calendar-note" data-id="${note.id}">Remove</button>` : "";
+          const groupedIds = note.ids?.length ? note.ids : [note.id].filter(Boolean);
+          const isGroupedStaff = note.isGroupedStaffNote && groupedIds.length > 1;
+          const editAction = currentRole() === "admin" && !isGroupedStaff ? `<button type="button" class="secondary-button" data-action="edit-calendar-note" data-id="${note.id}">Edit</button>` : "";
+          const removeAction = canRemoveCalendarNote(note) ? `<button type="button" class="secondary-button danger-button" data-action="${isGroupedStaff ? "remove-calendar-note-group" : "remove-calendar-note"}" data-id="${note.id}" data-ids="${escapeHtml(groupedIds.join(","))}">Remove</button>` : "";
           const actions = editAction || removeAction ? `<div class="record-actions">${editAction}${removeAction}</div>` : "";
           const noteKind = note.noteKind === "staff" || note.source === "daily-staff-note" ? "Staff Note" : "Special Note";
-          return `<article class="record-card ${isSelected ? "is-approved" : ""} ${note.noteKind === "staff" ? "is-staff-note" : "is-special-note"}"><strong>${escapeHtml(noteKind)} - ${escapeHtml(note.noteDate || "")}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${escapeHtml(note.note || "")}</p>${actions}</article>`;
+          return `<article class="record-card ${isSelected ? "is-approved" : ""} ${noteKind === "Staff Note" ? "is-staff-note" : "is-special-note"}"><strong>${escapeHtml(noteKind)} - ${escapeHtml(note.noteDate || "")}</strong><span>Written by ${escapeHtml(calendarNoteAuthorText(note))}</span><p>${multilineHtml(note.note || "")}</p>${actions}</article>`;
         })
         .join("")
     : `<p>${emptyMessage}</p>`;
@@ -5885,10 +5995,10 @@ function initEvents() {
     const authorEmail = currentUser?.email || helperEmail.value || "";
     const authorName = currentUser?.name || helperName.value || "Unknown staff";
     const noteEntry = `${staffNoteTimePrefix(now)}- ${data.note.trim()}`;
+    const staffKey = staffNoteGroupKey({ noteDate, createdByEmail: authorEmail, createdBy: authorName });
     const existing = readRecords("calendarNote").find((note) => !note.removed
       && (note.noteKind === "staff" || note.source === "daily-staff-note")
-      && calendarNoteDate(note) === noteDate
-      && String(note.createdByEmail || "").toLowerCase() === String(authorEmail || "").toLowerCase());
+      && staffNoteGroupKey(note) === staffKey);
     const payload = {
       ...existing,
       type: "calendarNote",
@@ -5930,7 +6040,21 @@ function initEvents() {
       }
       await markRecordRemoved("calendarNote", note.id);
       renderDashboardTaskCalendar();
+      renderDemoSubmissions();
       showToast("Calendar note removed.");
+    }
+    if (button.dataset.action === "remove-calendar-note-group") {
+      const ids = (button.dataset.ids || "").split(",").filter(Boolean);
+      if (!ids.length) return;
+      const notes = readRecords("calendarNote").filter((item) => ids.includes(item.id));
+      if (notes.some((item) => !canRemoveCalendarNote(item))) {
+        showToast("Only admins or the staff member who created this note can remove it.");
+        return;
+      }
+      await Promise.all(notes.map((item) => markRecordRemoved("calendarNote", item.id)));
+      renderDashboardTaskCalendar();
+      renderDemoSubmissions();
+      showToast("Calendar notes removed.");
     }
   });
 
@@ -5997,20 +6121,47 @@ function initEvents() {
   $("#addTuesdayTaskButton").addEventListener("click", () => addManagedTask("tuesday", "#newTuesdayTaskText"));
   $("#addMonthlyTaskButton").addEventListener("click", () => addManagedTask("monthly", "#newMonthlyTaskText"));
   ["morningTaskList", "pmTaskList", "weeklyTaskList", "tuesdayTaskList", "monthlyTaskList"].forEach((listId) => {
-    $(`#${listId}`).addEventListener("click", (event) => {
+    const listEl = $(`#${listId}`);
+    listEl.addEventListener("click", (event) => {
       const control = event.target.closest("[data-action]");
       if (!control) return;
       if (control.dataset.action === "edit-task") return;
       event.preventDefault();
       if (control.dataset.action === "complete-task") completeDailyTask(control);
       if (control.dataset.action === "remove-task") removeTask(control.dataset.shift, control.dataset.id);
-      if (control.dataset.action === "move-task-up") updateTaskOrder(control.dataset.shift, control.dataset.id, "up");
-      if (control.dataset.action === "move-task-down") updateTaskOrder(control.dataset.shift, control.dataset.id, "down");
     });
-    $(`#${listId}`).addEventListener("change", (event) => {
+    listEl.addEventListener("change", (event) => {
       const input = event.target.closest('[data-action="edit-task"]');
       if (!input) return;
       editTask(input.dataset.shift, input.dataset.id, input.value, input);
+    });
+    listEl.addEventListener("dragstart", (event) => {
+      const row = event.target.closest(".task-item[draggable='true']");
+      if (!row) return;
+      row.classList.add("is-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", `${row.dataset.shift}:${row.dataset.id}`);
+    });
+    listEl.addEventListener("dragover", (event) => {
+      const row = event.target.closest(".task-item[draggable='true']");
+      if (!row) return;
+      event.preventDefault();
+      row.classList.add("is-drag-over");
+    });
+    listEl.addEventListener("dragleave", (event) => {
+      const row = event.target.closest(".task-item");
+      if (row) row.classList.remove("is-drag-over");
+    });
+    listEl.addEventListener("drop", (event) => {
+      const target = event.target.closest(".task-item[draggable='true']");
+      if (!target) return;
+      event.preventDefault();
+      const [sourceShift, sourceId] = event.dataTransfer.getData("text/plain").split(":");
+      target.classList.remove("is-drag-over");
+      if (sourceShift === target.dataset.shift) reorderTaskByDrag(sourceShift, sourceId, target.dataset.id);
+    });
+    listEl.addEventListener("dragend", () => {
+      listEl.querySelectorAll(".task-item").forEach((row) => row.classList.remove("is-dragging", "is-drag-over"));
     });
   });
   form.addEventListener("click", (event) => {
@@ -6122,6 +6273,10 @@ function initEvents() {
   $("#detailDialogBody").addEventListener("click", async (event) => {
     const action = event.target.closest("[data-action]");
     if (!action) return;
+    if (action.dataset.action === "view-dog-photo") {
+      showMediaDialog(action.dataset.src, "image/jpeg", action.dataset.mediaName || "Dog profile photo");
+      return;
+    }
     if (action.dataset.action === "edit-stay-popup") {
       const dog = readRecords("boardingDog").find((record) => record.id === action.dataset.dogId);
       openBoardingStayPopup(dog, action.dataset.id);
@@ -6390,6 +6545,42 @@ function initEvents() {
   });
   $("#ownedDogPhotoPicker").addEventListener("click", () => handleDogPhotoClick("owned"));
   $("#ownedDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("owned"));
+  $("#uploadOwnedDogFilesButton")?.addEventListener("click", async () => {
+    const dog = activeOwnedDog();
+    if (!dog?.id) {
+      showToast("Save the dog before uploading files.");
+      return;
+    }
+    const input = $("#ownedDogDocumentFiles");
+    const uploads = await uploadOwnedDogDocumentFiles(input, dog.id);
+    if (!uploads.length) return;
+    const documents = [...ownedDogDocumentItems(dog), ...uploads];
+    const updated = await updateOwnedDogDocuments(documents);
+    if (input) input.value = "";
+    if (updated) showToast(`${uploads.length} file${uploads.length > 1 ? "s" : ""} added.`);
+  });
+  $("#ownedDogFileList")?.addEventListener("click", async (event) => {
+    const action = event.target.closest("[data-action]");
+    if (!action || action.dataset.action === "view-media") return;
+    const dog = activeOwnedDog();
+    if (!dog) return;
+    const documents = ownedDogDocumentItems(dog);
+    if (action.dataset.action === "save-owned-file-name") {
+      const card = action.closest("[data-file-id]");
+      const input = card?.querySelector('[data-action="rename-owned-file-input"]');
+      const nextName = input?.value.trim();
+      if (!nextName) {
+        showToast("File name cannot be blank.");
+        return;
+      }
+      await updateOwnedDogDocuments(documents.map((file) => (file.id === action.dataset.id ? { ...file, name: nextName } : file)));
+      showToast("File renamed.");
+    }
+    if (action.dataset.action === "remove-owned-file") {
+      await updateOwnedDogDocuments(documents.filter((file) => file.id !== action.dataset.id));
+      showToast("File removed from this dog.");
+    }
+  });
   $("#ownedDogTableBody").addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
     if (button) {
@@ -6452,6 +6643,7 @@ function initEvents() {
         bathHistory: normalizedExisting.bathHistory || [],
         heatHistory: isFemale ? normalizedExisting.heatHistory || [] : [],
         careNotesHistory: normalizedExisting.careNotesHistory || [],
+        documents: normalizedExisting.documents || [],
       };
       const record = upsertRecord("ownedDog", payload);
       await sendPayload(record);
@@ -6459,6 +6651,8 @@ function initEvents() {
       $("#ownedDogActivityPanel").hidden = false;
       setDogPhoto("owned", record);
       renderOwnedActivity(record);
+      renderOwnedDogFiles(record);
+      renderOwnedDogTimeline(record);
       renderOwnedDogs();
       renderBoardingDogs();
       renderDashboard();

@@ -633,6 +633,7 @@
               <button type="button" class="secondary-button" data-owned-profile-tab="Baths">Baths</button>
               <button type="button" class="secondary-button" data-owned-profile-tab="Heat Cycle">Heat Cycle</button>
               <button type="button" class="secondary-button" data-owned-profile-tab="Medical / Care Notes">Medical / Care Notes</button>
+              <button type="button" class="secondary-button" data-owned-profile-tab="Files">Files</button>
               <button type="button" class="secondary-button" data-owned-profile-tab="Timeline">Timeline</button>
             </div>
 
@@ -708,8 +709,16 @@
               <label>Medical notes<textarea name="medicalCareNotes" rows="3" placeholder="Ongoing medical/care notes that staff should see"></textarea></label>
             </section>
 
+            <section class="owned-profile-section" data-owned-profile-section="Files" hidden>
+              <div class="section-heading compact-heading"><span>F</span><div><h2>Files</h2><p>Upload, view, and rename documents for this dog.</p></div></div>
+              <label>Dog documents<input type="file" id="ownedDogDocumentFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg,.doc,.docx" multiple /><small>Upload PDFs, photos, or Word documents.</small></label>
+              <div class="button-row"><button type="button" id="uploadOwnedDogFilesButton">Upload Files</button></div>
+              <div id="ownedDogFileList" class="record-grid compact-record-grid"></div>
+            </section>
+
             <section class="owned-profile-section" data-owned-profile-section="Timeline" hidden>
               <div class="section-heading compact-heading"><span>L</span><div><h2>Timeline</h2><p>Exercise, training, bath, heat, and medical/care history.</p></div></div>
+              <div id="ownedDogTimelineList" class="record-grid"></div>
             </section>
             <div class="button-row"><button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Edit Dog</button><button type="submit" id="ownedDogSaveButton">Save Update</button><button type="button" class="secondary-button danger-button" id="deleteOwnedDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
           </form>

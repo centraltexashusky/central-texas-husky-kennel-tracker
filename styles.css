@@ -1432,6 +1432,34 @@ textarea {
   margin-left: auto;
 }
 
+.task-drag-handle {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.20);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: grab;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 850;
+  min-height: 28px;
+  padding: 0 10px;
+  text-transform: uppercase;
+}
+
+.task-item[draggable="true"] {
+  cursor: grab;
+}
+
+.task-item.is-dragging {
+  opacity: 0.58;
+}
+
+.task-item.is-drag-over {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.24), var(--glass-specular);
+}
+
 .icon-button,
 .remove-task-button {
   align-items: center;
@@ -1663,6 +1691,14 @@ textarea {
   width: 92px;
 }
 
+.quick-care-dog-photo.is-clickable-photo {
+  cursor: zoom-in;
+}
+
+.quick-care-dog-photo.is-clickable-photo:hover {
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.38);
+}
+
 .quick-care-dog-initials {
   align-items: center;
   background: rgba(10, 132, 255, 0.22);
@@ -1712,6 +1748,14 @@ textarea {
   display: grid;
   gap: 10px;
   margin-top: 14px;
+}
+
+.dog-file-card {
+  gap: 8px;
+}
+
+.dog-file-card label {
+  margin: 4px 0 0;
 }
 
 .quick-care-history,
