@@ -448,7 +448,18 @@ function statusClassForBoardingStatus(status = "") {
 
 function boardingStatusChipHtml(record = {}) {
   const status = normalizeBoardingStatus(record);
-  return statusChipHtml(status, `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
+  const kennelLabel = status === "In Kennel" ? boardingKennelLocationLabel(record) : "";
+  const label = kennelLabel ? `${status}-${kennelLabel}` : status;
+  return statusChipHtml(label, `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
+}
+
+function boardingKennelLocationLabel(record = {}) {
+  const stay = currentOrNextStay(record) || (record.stays || [])[0] || {};
+  const building = String(record.kennelBuilding || stay.kennelBuilding || "").trim();
+  const name = String(record.kennelLocationName || stay.kennelLocationName || "").trim();
+  if (!building) return name;
+  if (!name) return building;
+  return name.toLowerCase().includes(building.toLowerCase()) ? name : `${building} ${name}`;
 }
 
 function transitionLabel(status) {
@@ -3655,14 +3666,31 @@ function boardingQuickActionButtons(record = {}) {
   return `<div class="quick-action-grid boarding-action-grid">${buttons.join("")}</div>`;
 }
 
+function boardingDogPhotoSource(record = {}) {
+  const linkedDog = linkedCustomerDogForBoarding(record) || {};
+  return record.profilePhotoUrl || record.profilePhotoData || linkedDog.profilePhotoUrl || linkedDog.profilePhotoData || "";
+}
+
+function boardingDogMobilePhotoHtml(record = {}) {
+  const name = record.dogName || "Boarding dog";
+  const photo = boardingDogPhotoSource(record);
+  if (photo) {
+    return `<button type="button" class="mobile-dog-photo-button" data-action="view-media" data-src="${escapeHtml(photo)}" data-media-type="image/jpeg" data-media-name="${escapeHtml(`${name} profile photo`)}" aria-label="View ${escapeHtml(name)} photo"><img src="${escapeHtml(photo)}" alt="${escapeHtml(name)}" /></button>`;
+  }
+  return `<div class="mobile-dog-photo-button mobile-dog-photo-initials" aria-hidden="true">${escapeHtml(avatarText(name))}</div>`;
+}
+
 function boardingQuickCardHtml(record = {}) {
   return `
     <article class="record-card mobile-roster-card">
-      <div class="mobile-roster-card-main">
-        <strong>${escapeHtml(record.dogName || "Boarding dog")}</strong>
-        <div class="chip-row">${boardingStatusChipHtml(record)}</div>
-        <span>${escapeHtml(boardingScheduleText(record))}</span>
-        <p>${escapeHtml([record.ownerName, record.ownerPhone].filter(Boolean).join(" | "))}</p>
+      <div class="mobile-roster-card-main boarding-mobile-card-main">
+        ${boardingDogMobilePhotoHtml(record)}
+        <div class="boarding-mobile-card-content">
+          <strong>${escapeHtml(record.dogName || "Boarding dog")}</strong>
+          <div class="chip-row">${boardingStatusChipHtml(record)}</div>
+          <span>${escapeHtml(boardingScheduleText(record))}</span>
+          <p>${escapeHtml([record.ownerName, record.ownerPhone].filter(Boolean).join(" | "))}</p>
+        </div>
       </div>
       ${boardingQuickActionButtons(record)}
     </article>`;

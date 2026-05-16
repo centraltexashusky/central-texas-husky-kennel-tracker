@@ -2502,6 +2502,17 @@ option {
   gap: 6px;
 }
 
+.boarding-mobile-card-main {
+  align-items: start;
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+.boarding-mobile-card-content {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
 .mobile-dog-photo-button {
   align-items: center;
   aspect-ratio: 1;
@@ -2514,6 +2525,10 @@ option {
   overflow: hidden;
   padding: 0;
   width: 78px;
+}
+
+button.mobile-dog-photo-button {
+  cursor: zoom-in;
 }
 
 .mobile-dog-photo-button img {
