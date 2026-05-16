@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260516-customer-load-search-1" />
+    <link rel="stylesheet" href="styles.css?v=20260516-boarding-checkin-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -845,6 +845,7 @@
               <label>Owner name<input type="text" name="ownerName" required /></label>
               <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
               <label>Owner email<input type="email" name="ownerEmail" /></label>
+              <label>Secondary owner email<input type="email" name="secondaryOwnerEmail" /></label>
               <label>Emergency contact name<input type="text" name="emergencyName" /></label>
               <label>Emergency contact phone<input type="tel" name="emergencyPhone" /></label>
               <label>Veterinarian / clinic<input type="text" name="vetInfo" /></label>
@@ -866,6 +867,7 @@
               <label><input type="checkbox" name="boardingFlags" value="Medication required" /> Medication required</label>
             </div>
 
+            <label>Food instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals"></textarea></label>
             <label>Special care instructions<textarea name="specialCare" rows="3" placeholder="Medication, feeding, handling, allergies, behavior concerns"></textarea></label>
             <label>Daily activity update for owner<textarea name="dailyActivity" rows="3" placeholder="Eating, potty, play, exercise, mood, photos/videos taken"></textarea></label>
             <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
@@ -1088,6 +1090,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260516-customer-load-search-1"></script>
+    <script src="script.js?v=20260516-boarding-checkin-1"></script>
   </body>
 </html>
