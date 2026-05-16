@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260515-service-table-1" />
+    <link rel="stylesheet" href="styles.css?v=20260515-timesheet-tasks-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -519,8 +519,8 @@
         <div class="section-heading">
           <span>R</span>
           <div>
-            <h2>Recent Submissions</h2>
-            <p>Completed work saves automatically as staff tap Done or log care.</p>
+            <h2>Completed Work & Staff Notes</h2>
+            <p>Completed work and staff notes stay together so the team can scan one feed.</p>
           </div>
         </div>
         <div class="button-row export-actions"><button type="button" class="secondary-button" id="exportCareLogsButton">Export Care Logs</button></div>
@@ -548,34 +548,13 @@
 
           <div class="timesheet-grid">
             <div class="time-card">
-              <span>Clock In</span>
+              <span>Timesheet Clock</span>
               <strong id="clockInDisplay">Not clocked in</strong>
               <button type="button" id="clockInButton">Clock In</button>
             </div>
-            <div class="time-card">
-              <span>Clock Out</span>
-              <strong id="clockOutDisplay">Not clocked out</strong>
-              <button type="button" id="clockOutButton">Clock Out</button>
-            </div>
-            <div class="time-card">
-              <span>Current Staff</span>
-              <strong id="timesheetHelperDisplay">No staff loaded</strong>
-              <button type="button" class="secondary-button" id="saveTimeEntryButton" disabled>Clock Out Saves Entry</button>
-            </div>
           </div>
 
-          <form id="manualTimeForm" class="tracker-form mobile-admin-only">
-            <div class="section-heading compact-heading"><span>M</span><div><h2>Manual Entry</h2><p>Use this if someone forgot to clock in or clock out.</p></div></div>
-            <div class="field-grid">
-              <label>Staff name<input type="text" name="manualHelper" id="manualHelper" readonly /></label>
-              <label>Entry date<input type="date" name="manualDate" id="manualDate" /></label>
-              <label>Clock in<input type="datetime-local" name="manualClockIn" required /></label>
-              <label>Clock out<input type="datetime-local" name="manualClockOut" required /></label>
-              <input type="hidden" name="manualTimeId" id="manualTimeId" />
-            </div>
-            <label>Manual entry note<textarea name="manualNote" rows="2" placeholder="Reason for manual entry"></textarea></label>
-            <button type="submit">Save Manual Time Entry</button>
-          </form>
+          <div class="button-row mobile-admin-only" id="timesheetAdminActions"><button type="button" class="secondary-button" id="openTimesheetEditButton">Edit Timesheet</button></div>
         </section>
 
         <section class="recent-submissions">
@@ -1120,6 +1099,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260515-service-table-1"></script>
+    <script src="script.js?v=20260515-timesheet-tasks-1"></script>
   </body>
 </html>

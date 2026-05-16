@@ -1827,7 +1827,7 @@ button:disabled {
 .timesheet-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .time-card {
@@ -1875,6 +1875,15 @@ button:disabled {
 .submission-item p {
   color: var(--muted);
   margin: 0;
+}
+
+.submission-item.is-staff-note {
+  border-color: rgba(245, 158, 11, 0.78);
+}
+
+.submission-item.is-staff-note .staff-note-message {
+  color: #ffb457;
+  font-weight: 800;
 }
 
 .toast {
@@ -2888,7 +2897,6 @@ option {
     display: none !important;
   }
 
-  #manualTimeForm.mobile-admin-only,
   #timesheetPage [data-action="edit-time"],
   #timesheetPage .table-wrap {
     display: none !important;

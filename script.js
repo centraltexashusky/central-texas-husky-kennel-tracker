@@ -233,7 +233,6 @@ function todayDate() {
 
 function setDefaultDateAndDay() {
   form.elements.date.value = todayDate();
-  $("#manualDate").value = todayDate();
   if ($("#dailyStaffNoteForm")) $("#dailyStaffNoteForm").elements.noteDate.value = todayDate();
   updateDayFromDate();
 }
@@ -666,16 +665,33 @@ function writeRecords(type, records) {
   }
 }
 
+function taskTemplateId(shift, text, index) {
+  return `${shift}-${index}-${String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "task"}`;
+}
+
+function defaultTaskList(shift, tasks = []) {
+  return tasks.map((text, index) => ({ id: taskTemplateId(shift, text, index), text }));
+}
+
+function normalizeTaskList(tasks = [], fallback = []) {
+  const source = Array.isArray(tasks) ? tasks : fallback;
+  return source
+    .map((task, index) => {
+      if (typeof task === "string") return { id: taskTemplateId("task", task, index), text: task };
+      return { id: task.id || taskTemplateId("task", task.text, index), text: task.text || "" };
+    })
+    .filter((task) => task.text);
+}
+
 function readTaskConfig() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.taskConfig) || "null");
-  const base = saved || {};
+  const hasGroup = (group) => saved && Object.prototype.hasOwnProperty.call(saved, group);
   return {
-    morning: defaultDailyTasks.morning.map((text) => ({ id: uid("task"), text })),
-    pm: defaultDailyTasks.pm.map((text) => ({ id: uid("task"), text })),
-    weekly: defaultManagedTasks.weekly.map((text) => ({ id: uid("task"), text })),
-    tuesday: defaultManagedTasks.tuesday.map((text) => ({ id: uid("task"), text })),
-    monthly: defaultManagedTasks.monthly.map((text) => ({ id: uid("task"), text })),
-    ...base,
+    morning: normalizeTaskList(saved?.morning, hasGroup("morning") ? [] : defaultTaskList("morning", defaultDailyTasks.morning)),
+    pm: normalizeTaskList(saved?.pm, hasGroup("pm") ? [] : defaultTaskList("pm", defaultDailyTasks.pm)),
+    weekly: normalizeTaskList(saved?.weekly, hasGroup("weekly") ? [] : defaultTaskList("weekly", defaultManagedTasks.weekly)),
+    tuesday: normalizeTaskList(saved?.tuesday, hasGroup("tuesday") ? [] : defaultTaskList("tuesday", defaultManagedTasks.tuesday)),
+    monthly: normalizeTaskList(saved?.monthly, hasGroup("monthly") ? [] : defaultTaskList("monthly", defaultManagedTasks.monthly)),
   };
 }
 
@@ -1830,8 +1846,6 @@ function setHelper(user, options = {}) {
   helperName.value = user.name || "";
   helperEmail.value = user.email || "";
   helperKey.value = user.key || "";
-  $("#manualHelper").value = user.name || "";
-  $("#timesheetHelperDisplay").textContent = currentUser.name || "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = currentUser.name ? `${roleLabel(currentUser.role)} logged in: ${currentUser.name}` : "Logged in";
   loginHelp.textContent = `${currentUser.email || "Account"} | Access: ${roleLabel(currentUser.role)}`;
@@ -1851,8 +1865,6 @@ async function clearHelper() {
   helperName.value = "";
   helperEmail.value = "";
   helperKey.value = "";
-  $("#manualHelper").value = "";
-  $("#timesheetHelperDisplay").textContent = "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = "Not logged in";
   loginHelp.textContent = "Sign in with email and password, Google, or another enabled account provider.";
@@ -1999,8 +2011,6 @@ function restoreSession() {
   helperName.value = saved.name || "";
   helperEmail.value = saved.email || "";
   helperKey.value = saved.key || "";
-  $("#manualHelper").value = saved.name || "";
-  $("#timesheetHelperDisplay").textContent = saved.name || "No staff loaded";
   updateHeaderUser();
   loginStatus.textContent = `${roleLabel(saved.role)} logged in: ${saved.name}`;
   loginHelp.textContent = `${saved.email || "Account"} | Access: ${roleLabel(saved.role)}`;
@@ -2780,6 +2790,10 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#039;");
 }
 
+function multilineHtml(value = "") {
+  return escapeHtml(value).replaceAll("\n", "<br>");
+}
+
 function mediaLinkHtml(record) {
   const links = [];
   if (record.mediaLink) {
@@ -3165,10 +3179,39 @@ function dailySubmissionDisplayPriority(record = {}) {
   return 1;
 }
 
+function staffNoteTimePrefix(value = new Date()) {
+  return new Date(value).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function staffNoteGroupKey(note = {}) {
+  return [calendarNoteDate(note), String(note.createdByEmail || "").toLowerCase() || calendarNoteAuthorText(note)].join("|");
+}
+
+function groupedRecentStaffNotes(notes = []) {
+  const groups = new Map();
+  notes.forEach((note) => {
+    const key = staffNoteGroupKey(note);
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, { ...note, id: note.id, ids: [note.id].filter(Boolean), note: note.note || "" });
+      return;
+    }
+    existing.ids.push(note.id);
+    existing.note = [existing.note, note.note].filter(Boolean).join("\n");
+    existing.updatedAt = new Date(existing.updatedAt || existing.submittedAt || 0) > new Date(note.updatedAt || note.submittedAt || 0) ? existing.updatedAt : note.updatedAt;
+  });
+  return [...groups.values()];
+}
+
 function renderDemoSubmissions() {
+  const dailyRecords = readRecords("dailyTask");
+  const calendarNotes = readRecords("calendarNote").filter((note) => !note.removed);
+  const staffNotes = calendarNotes.filter((note) => note.noteKind === "staff" || note.source === "daily-staff-note");
+  const otherNotes = calendarNotes.filter((note) => !(note.noteKind === "staff" || note.source === "daily-staff-note"));
   const saved = [
-    ...readRecords("dailyTask"),
-    ...readRecords("calendarNote").filter((note) => !note.removed).map((note) => ({ ...note, date: calendarNoteDate(note), isCalendarNoteSubmission: true })),
+    ...dailyRecords,
+    ...groupedRecentStaffNotes(staffNotes).map((note) => ({ ...note, date: calendarNoteDate(note), isCalendarNoteSubmission: true, isGroupedStaffNote: true })),
+    ...otherNotes.map((note) => ({ ...note, date: calendarNoteDate(note), isCalendarNoteSubmission: true })),
   ]
     .filter((submission) => !submission.removed && isRecentDailySubmission(submission))
     .sort((a, b) => (
@@ -3181,7 +3224,10 @@ function renderDemoSubmissions() {
         .map((submission) => {
           if (submission.isCalendarNoteSubmission) {
             const noteKind = submission.noteKind === "staff" || submission.source === "daily-staff-note" ? "Staff Note" : "Special Note";
-            return `<article class="submission-item clickable-card" data-action="view-calendar-note" data-id="${escapeHtml(submission.id)}"><strong>${escapeHtml(submission.noteDate || submission.date || "")} - ${escapeHtml(noteKind)}</strong><p>${escapeHtml(submission.note || "")}</p><span>Written by ${escapeHtml(calendarNoteAuthorText(submission))}</span></article>`;
+            const noteAction = submission.isGroupedStaffNote ? "view-calendar-note-group" : "view-calendar-note";
+            const ids = submission.ids?.length ? submission.ids.join(",") : submission.id;
+            const noteClass = noteKind === "Staff Note" ? " is-staff-note" : " is-special-note";
+            return `<article class="submission-item clickable-card${noteClass}" data-action="${noteAction}" data-id="${escapeHtml(submission.id)}" data-ids="${escapeHtml(ids || "")}"><strong>${escapeHtml(submission.noteDate || submission.date || "")} - ${escapeHtml(noteKind)}</strong><p class="staff-note-message">${multilineHtml(submission.note || "")}</p><span>Written by ${escapeHtml(calendarNoteAuthorText(submission))}</span></article>`;
           }
           const completedTasks = completedTasksForRecord(submission);
           const careLogs = submission.structuredCareLogs || submission.careLogs || [];
@@ -3209,7 +3255,7 @@ function canEditRecentDailyReport(record) {
 
 function canEditOwnToday(record) {
   if (currentRole() === "admin") return true;
-  return record?.date === todayDate() && record?.helperEmail === currentUser?.email;
+  return record?.date === todayDate() && timesheetBelongsToCurrentUser(record);
 }
 
 function matches(record, query) {
@@ -5525,7 +5571,7 @@ function updateTimeDisplays() {
   }
   if (!activeClockIn?.clockInTime) syncActiveClockInFromOpenRecord();
   $("#clockInDisplay").textContent = activeClockIn?.clockInTime ? formatDateTime(activeClockIn.clockInTime) : "Not clocked in";
-  $("#clockOutDisplay").textContent = activeClockIn?.clockInTime ? "Ready to clock out" : "Not clocked out";
+  $("#clockInButton").textContent = activeClockIn?.clockInTime ? "Clock Out" : "Clock In";
 }
 
 function weekStart(date) {
@@ -5563,7 +5609,7 @@ function renderTimesheet() {
 
   $("#timesheetRows").innerHTML = currentWeekRecords.length
     ? currentWeekRecords.map((record) => {
-        const canEdit = isAdmin;
+        const canEdit = isAdmin || canEditOwnToday(record);
         return `<tr><td>${record.date}</td><td>${record.helperName}</td><td>${formatDateTime(record.clockInTime)}</td><td>${formatDateTime(record.clockOutTime)}</td><td>${Number(record.hours || 0).toFixed(2)}</td><td>${record.note || ""}</td><td>${canEdit ? `<button type="button" class="secondary-button" data-action="edit-time" data-id="${record.id}">Edit</button>` : ""}</td></tr>`;
       }).join("")
     : `<tr><td colspan="7">No time entries for this week.</td></tr>`;
@@ -5580,10 +5626,10 @@ function renderTimesheet() {
   $("#weeklyHelperTotals").innerHTML = Object.keys(helperTotals).length
     ? Object.entries(helperTotals).map(([helper, hours]) => `<div class="helper-total-item"><strong>${escapeHtml(isAdmin ? helper : "Your total")}</strong><span>${hours.toFixed(2)} hours this week</span></div>`).join("")
     : "";
-  if ($("#manualTimeForm")) $("#manualTimeForm").hidden = !isAdmin;
+  if ($("#timesheetAdminActions")) $("#timesheetAdminActions").hidden = !isAdmin;
 }
 
-function saveTimeEntry(payload) {
+function saveTimeEntry(payload, options = {}) {
   const existing = payload.id ? readRecords("timesheet").find((record) => record.id === payload.id) : null;
   const clockInTime = localDateTimeToIso(payload.clockInTime);
   const clockOutTime = localDateTimeToIso(payload.clockOutTime);
@@ -5603,7 +5649,32 @@ function saveTimeEntry(payload) {
   upsertRecord("timesheet", record);
   sendPayload(record);
   renderTimesheet();
-  showToast("Time entry saved.");
+  if (!options.silent) showToast("Time entry saved.");
+  return record;
+}
+
+function timesheetEditFormHtml(record = {}) {
+  const isAdmin = currentRole() === "admin";
+  const helperValue = record.helperName || helperName.value || currentUser?.name || "";
+  const helperEmailValue = record.helperEmail || (isAdmin && !record.id ? "" : helperEmail.value || currentUser?.email || "");
+  const clockInValue = dateTimeLocalValue(record.clockInTime) || "";
+  const clockOutValue = dateTimeLocalValue(record.clockOutTime) || "";
+  return `<form id="timesheetEditForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}">
+    <input type="hidden" name="manualTimeId" value="${escapeHtml(record.id || "")}" />
+    <div class="field-grid">
+      <label>Staff name<input type="text" name="manualHelper" value="${escapeHtml(helperValue)}" ${isAdmin ? "" : "readonly"} required /></label>
+      <label>Staff email<input type="email" name="manualHelperEmail" value="${escapeHtml(helperEmailValue)}" ${isAdmin ? "" : "readonly"} /></label>
+      <label>Entry date<input type="date" name="manualDate" value="${escapeHtml(localDateFromStoredDateTime(record.clockInTime) || record.date || todayDate())}" required /></label>
+      <label>Clock in<input type="datetime-local" name="manualClockIn" value="${escapeHtml(clockInValue)}" required /></label>
+      <label>Clock out<input type="datetime-local" name="manualClockOut" value="${escapeHtml(clockOutValue)}" required /></label>
+    </div>
+    <label>Timesheet note<textarea name="manualNote" rows="3" placeholder="Reason for manual entry or edit">${escapeHtml(record.note || "")}</textarea></label>
+    <div class="button-row"><button type="submit">Save Timesheet</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>`;
+}
+
+function openTimesheetEditPopup(record = {}) {
+  showDetailDialog("Edit Timesheet", timesheetEditFormHtml(record));
 }
 
 function exportBoardingQueue() {
@@ -5810,17 +5881,26 @@ function initEvents() {
     if (!validateForm(formEl)) return;
     const data = formPayload(formEl);
     const now = new Date().toISOString();
+    const noteDate = data.noteDate || currentDailyDate();
+    const authorEmail = currentUser?.email || helperEmail.value || "";
+    const authorName = currentUser?.name || helperName.value || "Unknown staff";
+    const noteEntry = `${staffNoteTimePrefix(now)}- ${data.note.trim()}`;
+    const existing = readRecords("calendarNote").find((note) => !note.removed
+      && (note.noteKind === "staff" || note.source === "daily-staff-note")
+      && calendarNoteDate(note) === noteDate
+      && String(note.createdByEmail || "").toLowerCase() === String(authorEmail || "").toLowerCase());
     const payload = {
+      ...existing,
       type: "calendarNote",
-      id: uid("calendarNote"),
-      submittedAt: now,
+      id: existing?.id || uid("calendarNote"),
+      submittedAt: existing?.submittedAt || now,
       updatedAt: now,
-      noteDate: data.noteDate || currentDailyDate(),
-      note: data.note,
+      noteDate,
+      note: [existing?.note, noteEntry].filter(Boolean).join("\n"),
       noteKind: "staff",
       source: "daily-staff-note",
-      createdBy: currentUser?.name || helperName.value || "Unknown staff",
-      createdByEmail: currentUser?.email || helperEmail.value || "",
+      createdBy: existing?.createdBy || authorName,
+      createdByEmail: existing?.createdByEmail || authorEmail,
       removed: false,
     };
     const record = upsertRecord("calendarNote", payload);
@@ -5950,7 +6030,8 @@ function initEvents() {
     const vaccineUpdateForm = event.target.closest("#vaccineUpdateForm");
     const careLogEditForm = event.target.closest("#careLogEditForm");
     const kennelAssignmentForm = event.target.closest("#kennelAssignmentForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm) return;
+    const timesheetEditForm = event.target.closest("#timesheetEditForm");
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm) return;
     event.preventDefault();
     if (quickCareForm) {
       await submitDashboardQuickCare(quickCareForm);
@@ -6016,6 +6097,26 @@ function initEvents() {
         kennelLocation: location,
       });
       if (updated) showDetailDialog("Kennel Assigned", `<p>${escapeHtml(updated.dogName || "Dog")} is now In Kennel at ${escapeHtml(location.building)} - ${escapeHtml(location.name)}.</p>`);
+    }
+    if (timesheetEditForm) {
+      if (!validateForm(timesheetEditForm)) return;
+      const payload = formPayload(timesheetEditForm);
+      const existing = payload.manualTimeId ? readRecords("timesheet").find((record) => record.id === payload.manualTimeId) : null;
+      if (existing && currentRole() !== "admin" && !canEditOwnToday(existing)) {
+        showToast("Only today's time entry can be edited by the staff member. Admin can edit older entries.");
+        return;
+      }
+      const record = saveTimeEntry({
+        id: payload.manualTimeId,
+        helperName: payload.manualHelper || helperName.value || "Unknown staff",
+        helperEmail: payload.manualHelperEmail || existing?.helperEmail || helperEmail.value || currentUser?.email || "",
+        date: payload.manualDate,
+        clockInTime: payload.manualClockIn,
+        clockOutTime: payload.manualClockOut,
+        note: payload.manualNote,
+      }, { silent: true });
+      $("#detailDialog").close();
+      showToast(`Timesheet saved with ${Number(record.hours || 0).toFixed(2)} hours recorded.`);
     }
   });
   $("#detailDialogBody").addEventListener("click", async (event) => {
@@ -6118,10 +6219,20 @@ function initEvents() {
   });
   $("#recentSubmissions").addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="edit-daily"]');
+    const noteGroupCard = event.target.closest('[data-action="view-calendar-note-group"]');
+    if (noteGroupCard) {
+      const ids = String(noteGroupCard.dataset.ids || "").split(",").filter(Boolean);
+      const notes = ids.map((id) => readRecords("calendarNote").find((item) => item.id === id)).filter(Boolean);
+      if (notes.length) {
+        const first = notes[0];
+        showDetailDialog("Staff Note", `<div class="detail-row"><strong>Date</strong><span>${escapeHtml(first.noteDate || "")}</span></div><div class="detail-row"><strong>Written by</strong><span>${escapeHtml(calendarNoteAuthorText(first))}</span></div><div class="detail-row"><strong>Note</strong><span>${multilineHtml(notes.map((note) => note.note || "").join("\n"))}</span></div>`);
+      }
+      return;
+    }
     const noteCard = event.target.closest('[data-action="view-calendar-note"]');
     if (noteCard) {
       const note = readRecords("calendarNote").find((item) => item.id === noteCard.dataset.id);
-      if (note) showDetailDialog(titleForRecord("calendarNote", note), `<div class="detail-row"><strong>Date</strong><span>${escapeHtml(note.noteDate || "")}</span></div><div class="detail-row"><strong>Written by</strong><span>${escapeHtml(calendarNoteAuthorText(note))}</span></div><div class="detail-row"><strong>Note</strong><span>${escapeHtml(note.note || "")}</span></div>`);
+      if (note) showDetailDialog(titleForRecord("calendarNote", note), `<div class="detail-row"><strong>Date</strong><span>${escapeHtml(note.noteDate || "")}</span></div><div class="detail-row"><strong>Written by</strong><span>${escapeHtml(calendarNoteAuthorText(note))}</span></div><div class="detail-row"><strong>Note</strong><span>${multilineHtml(note.note || "")}</span></div>`);
       return;
     }
     const card = event.target.closest('[data-action="view-daily"]');
@@ -6159,7 +6270,28 @@ function initEvents() {
     }
     if (!activeClockIn?.clockInTime) syncActiveClockInFromOpenRecord();
     if (activeClockIn?.clockInTime) {
-      showToast(`Already clocked in at ${formatDateTime(activeClockIn.clockInTime)}.`);
+      let openRecord = readRecords("timesheet").find((record) => record.id === activeClockIn.id);
+      if (!openRecord) openRecord = syncActiveClockInFromOpenRecord();
+      if (!openRecord) {
+        showToast("Clock-in record was not found. Clock in again.");
+        activeClockIn = "";
+        localStorage.removeItem("cth-active-clock-in");
+        updateTimeDisplays();
+        return;
+      }
+      const clockOutTime = new Date().toISOString();
+      const record = saveTimeEntry({
+        id: openRecord.id,
+        helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown staff",
+        helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
+        clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
+        clockOutTime,
+        note: openRecord.note === "Open clock-in" ? "" : openRecord.note,
+      }, { silent: true });
+      activeClockIn = "";
+      localStorage.removeItem("cth-active-clock-in");
+      updateTimeDisplays();
+      showToast(`Timesheet submitted with ${Number(record.hours || 0).toFixed(2)} hours recorded.`);
       return;
     }
     const clockInTime = new Date().toISOString();
@@ -6181,44 +6313,7 @@ function initEvents() {
     updateTimeDisplays();
     showToast(`Clock-in confirmed: ${formatDateTime(clockInTime)}.`);
   });
-  $("#clockOutButton").addEventListener("click", () => {
-    let openRecord = activeClockIn?.clockInTime ? readRecords("timesheet").find((record) => record.id === activeClockIn.id) : null;
-    if (!openRecord) openRecord = syncActiveClockInFromOpenRecord();
-    if (!activeClockIn?.clockInTime || !openRecord) {
-      showToast("Clock in first, or use Manual Entry.");
-      return;
-    }
-    const clockOutTime = new Date().toISOString();
-    saveTimeEntry({
-      id: openRecord.id,
-      helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown staff",
-      helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
-      clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
-      clockOutTime,
-      note: openRecord.note === "Open clock-in" ? "" : openRecord.note,
-    });
-    activeClockIn = "";
-    localStorage.removeItem("cth-active-clock-in");
-    updateTimeDisplays();
-    showToast(`Clock-out confirmed: ${formatDateTime(clockOutTime)}.`);
-  });
-  $("#saveTimeEntryButton").addEventListener("click", () => {
-    if (!activeClockIn) showToast("No active clock-in to save.");
-  });
-  $("#manualTimeForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (!helperIsLoggedIn()) {
-      showToast("Sign in first.");
-      return;
-    }
-    if (!validateForm(event.currentTarget)) return;
-    const payload = formPayload(event.currentTarget);
-    saveTimeEntry({ id: payload.manualTimeId, helperName: payload.manualHelper || helperName.value || "Unknown staff", date: payload.manualDate, clockInTime: payload.manualClockIn, clockOutTime: payload.manualClockOut, note: payload.manualNote });
-    event.currentTarget.reset();
-    $("#manualDate").value = todayDate();
-    $("#manualHelper").value = helperName.value;
-    $("#manualTimeId").value = "";
-  });
+  $("#openTimesheetEditButton")?.addEventListener("click", () => openTimesheetEditPopup());
   $("#timesheetRows").addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="edit-time"]');
     if (!button) return;
@@ -6227,15 +6322,7 @@ function initEvents() {
       showToast("Only today's time entry can be edited by the staff member. Admin can edit older entries.");
       return;
     }
-    $("#manualTimeId").value = record.id;
-    $("#manualHelper").value = record.helperName;
-    const clockInLocal = dateTimeLocalValue(record.clockInTime);
-    const clockOutLocal = dateTimeLocalValue(record.clockOutTime);
-    $("#manualDate").value = localDateFromStoredDateTime(record.clockInTime) || record.date || todayDate();
-    $("#manualTimeForm").elements.manualClockIn.value = clockInLocal;
-    $("#manualTimeForm").elements.manualClockOut.value = clockOutLocal;
-    $("#manualTimeForm").elements.manualNote.value = record.note || "";
-    showToast("Time entry loaded for editing.");
+    openTimesheetEditPopup(record);
   });
 
   $("#ownedLastBath").addEventListener("change", () => ($("#ownedNextBath").value = addDays($("#ownedLastBath").value, numberFrom($("#ourDogForm").elements.bathIntervalDays?.value, careDefaults.bathIntervalDays))));
