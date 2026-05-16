@@ -2035,8 +2035,15 @@ function roleLabel(role = "") {
 }
 
 function getDeepCleanBuilding(date = new Date()) {
-  const monthDelta = (date.getFullYear() - 2026) * 12 + date.getMonth() - 4;
+  const cleanDate = date instanceof Date ? date : new Date(`${dateOnly(date) || todayDate()}T12:00:00`);
+  const monthDelta = (cleanDate.getFullYear() - 2026) * 12 + cleanDate.getMonth() - 4;
   return Math.abs(monthDelta) % 2 === 0 ? "Dog Mansion" : "Dog Shed";
+}
+
+function monthlyDeepCleanBuildingForRecord(record = {}) {
+  if (record.monthlyDeepCleanBuilding) return record.monthlyDeepCleanBuilding;
+  if (record.deepCleanBuilding && record.deepCleanBuilding !== "Not applicable") return record.deepCleanBuilding;
+  return getDeepCleanBuilding(record.date || record.submittedAt || todayDate());
 }
 
 function updateRotationBanner() {
@@ -2203,6 +2210,7 @@ function dailyWorkPayload(date = currentDailyDate(), updates = {}) {
       dogsLogged: new Set(structuredCareLogs.map((log) => log.dogId).filter(Boolean)).size,
       alerts: structuredCareLogs.filter((log) => /heat|medical|behavior/i.test(log.careType || "")).length,
     },
+    monthlyDeepCleanBuilding: taskArrays.monthlyTasks.length ? getDeepCleanBuilding(date) : existing.monthlyDeepCleanBuilding || "",
     boardingTasks: upcomingBoardingTaskText(),
   };
 }
@@ -2931,11 +2939,15 @@ function updateMediaZoom() {
 function dailyDetailHtml(record) {
   const careLogs = record.structuredCareLogs || record.careLogs || [];
   const completedTasks = completedTasksForRecord(record);
+  const monthlyTasks = record.monthlyTasks || [];
   const completedHtml = completedTasks.length
     ? `<div class="detail-row"><strong>Completed tasks</strong><span>${completedTasks.map((task) => `${taskShiftLabels[task.shift] || task.shift}: ${task.taskText} - ${task.completedBy || "Staff"}${task.completedAt ? ` at ${formatDateTime(task.completedAt)}` : ""}`).map(escapeHtml).join("<br>")}</span></div>`
     : "";
   const careLogHtml = careLogs.length
     ? `<div class="detail-row"><strong>Structured care logs</strong><span>${careLogs.map((log) => `${log.dogName || "Dog"} - ${log.careType || log.category || "Care"}${log.minutes ? ` (${log.minutes} min)` : ""}${log.note || log.notes ? `: ${log.note || log.notes}` : ""}`).map(escapeHtml).join("<br>")}</span></div>`
+    : "";
+  const monthlyTasksHtml = monthlyTasks.length
+    ? `<div class="detail-row"><strong>Monthly tasks</strong><span>${escapeHtml(`Building cleaned: ${monthlyDeepCleanBuildingForRecord(record)}`)}<br>${monthlyTasks.map(escapeHtml).join("<br>")}</span></div>`
     : "";
   return `
     ${completedHtml}
@@ -2947,9 +2959,9 @@ function dailyDetailHtml(record) {
       ["PM tasks", "pmTasks"],
       ["Weekly tasks", "weeklyTasks"],
       ["Tuesday tasks", "tuesdayTasks"],
-      ["Monthly tasks", "monthlyTasks"],
-      ["Boarding tasks", "boardingTasks"],
     ])}
+    ${monthlyTasksHtml}
+    ${detailRows(record, [["Boarding tasks", "boardingTasks"]])}
     ${careLogHtml}
   `;
 }
@@ -4981,8 +4993,13 @@ function openKennelLocation(record = {}) {
   const formEl = $("#kennelLocationForm");
   if (!formEl) return;
   formEl.reset();
-  setFormValues(formEl, record);
+  formEl.dataset.mode = record.id ? "edit" : "create";
+  formEl.elements.id.value = record.id || "";
+  formEl.elements.building.value = record.building || "Shed";
+  formEl.elements.name.value = record.name || "";
   formEl.elements.active.checked = record.id ? record.active === "on" || record.active === true || record.active === "true" : true;
+  const saveButton = formEl.querySelector('button[type="submit"]');
+  if (saveButton) saveButton.textContent = record.id ? "Update Kennel" : "Save Kennel";
 }
 
 function kennelAssignmentPopupHtml(record = {}, nextStatus = "In Kennel", options = {}) {
@@ -7279,22 +7296,24 @@ function initEvents() {
     const formEl = event.currentTarget;
     if (!validateForm(formEl)) return;
     const data = formPayload(formEl);
-    const existing = data.id ? readRecords("kennelLocation").find((record) => record.id === data.id) : {};
+    const isEditing = formEl.dataset.mode === "edit" && Boolean(data.id);
+    const existing = isEditing ? readRecords("kennelLocation").find((record) => record.id === data.id) || {} : {};
+    const recordId = isEditing ? data.id : uid("kennelLocation");
     const record = upsertRecord("kennelLocation", {
       ...existing,
       ...data,
       type: "kennelLocation",
-      id: data.id || existing?.id || uid("kennelLocation"),
+      id: recordId,
       submittedAt: existing?.submittedAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       active: formEl.elements.active.checked ? "on" : "",
       removed: false,
     });
     await sendPayload(record);
-    await addAuditLog(existing?.id ? "Updated kennel location" : "Created kennel location", "kennelLocation", record, `${record.building || ""} ${record.active ? "active" : "inactive"}`);
-    openKennelLocation();
+    await addAuditLog(isEditing ? "Updated kennel location" : "Created kennel location", "kennelLocation", record, `${record.building || ""} ${record.active ? "active" : "inactive"}`);
+    openKennelLocation({ building: data.building || "Shed" });
     renderKennelLocations();
-    showToast("Kennel location saved.");
+    showToast(isEditing ? "Kennel location updated." : "Kennel location added.");
   });
   $("#newKennelLocationButton")?.addEventListener("click", () => openKennelLocation());
   $("#kennelLocationList")?.addEventListener("click", async (event) => {
