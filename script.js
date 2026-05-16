@@ -3541,6 +3541,47 @@ function linkedCustomerDogForBoarding(record = {}) {
   }) || null;
 }
 
+function boardingDogForCustomerDog(dog = {}) {
+  const ownerEmail = String(dog.ownerEmail || dog.customerEmail || "").trim().toLowerCase();
+  const dogName = String(dog.dogName || "").trim().toLowerCase();
+  return readRecords("boardingDog").find((record) => {
+    if (record.removed) return false;
+    if (record.linkedCustomerDogId && record.linkedCustomerDogId === dog.id) return true;
+    return ownerEmail
+      && dogName
+      && String(record.ownerEmail || record.customerEmail || "").trim().toLowerCase() === ownerEmail
+      && String(record.dogName || "").trim().toLowerCase() === dogName;
+  }) || null;
+}
+
+function boardingDraftFromCustomerDog(dog = {}) {
+  return {
+    dogName: dog.dogName || "",
+    breedDescription: dog.breedDescription || "",
+    sex: dog.sex || "Unknown",
+    spayNeuterStatus: dog.spayNeuterStatus || "Unknown",
+    ownerName: dog.ownerName || "",
+    ownerPhone: dog.ownerPhone || "",
+    ownerEmail: dog.ownerEmail || dog.customerEmail || "",
+    customerEmail: dog.customerEmail || dog.ownerEmail || "",
+    emergencyName: dog.emergencyName || "",
+    emergencyPhone: dog.emergencyPhone || "",
+    vetInfo: dog.vetInfo || "",
+    rabiesDate: dog.rabiesDate || "",
+    dhppDate: dog.dhppDate || "",
+    bordetellaDate: dog.bordetellaDate || "",
+    heartwormDate: dog.heartwormDate || "",
+    specialCare: dog.specialCare || "",
+    profilePhotoUrl: dog.profilePhotoUrl || "",
+    profilePhotoData: dog.profilePhotoData || "",
+    vaccinationRecords: dog.vaccinationRecords || [],
+    vaccinationFiles: dog.vaccinationFiles || "",
+    linkedCustomerDogId: dog.id || "",
+    linkedOwnerEmail: dog.ownerEmail || dog.customerEmail || "",
+    entrySource: "customer-profile",
+  };
+}
+
 function ownerAccountForBoarding(record = {}) {
   const ownerEmail = String(record.ownerEmail || "").trim().toLowerCase();
   return ownerEmail ? savedUserFor({ email: ownerEmail }) || null : null;
@@ -3956,7 +3997,13 @@ function renderCustomerDogUploadCards() {
     .sort((a, b) => String(a.dogName || "").localeCompare(String(b.dogName || "")));
   list.innerHTML = records.length
     ? records
-        .map((record) => `<article class="record-card compact-record-card"><strong>${escapeHtml(record.dogName || "Customer dog")}</strong><span>${escapeHtml(record.ownerName || record.ownerEmail || record.customerEmail || "Customer")}</span><p>${escapeHtml(record.breedDescription || "")}</p>${mediaLinkHtml(record)}</article>`)
+        .map((record) => {
+          const boardingRecord = boardingDogForCustomerDog(record);
+          const boardingAction = boardingRecord
+            ? `<button type="button" class="secondary-button" data-action="open-linked-boarding-dog" data-id="${escapeHtml(boardingRecord.id)}">Open boarding record</button>`
+            : `<button type="button" class="secondary-button" data-action="create-boarding-from-customer-dog" data-id="${escapeHtml(record.id)}">Create boarding profile</button>`;
+          return `<article class="record-card compact-record-card"><strong>${escapeHtml(record.dogName || "Customer dog")}</strong><span>${escapeHtml(record.ownerName || record.ownerEmail || record.customerEmail || "Customer")}</span><p>${escapeHtml(record.breedDescription || "")}</p>${mediaLinkHtml(record)}<div class="record-actions">${boardingAction}</div></article>`;
+        })
         .join("")
     : "<p>No customer-uploaded dog files are saved yet.</p>";
 }
@@ -5019,6 +5066,18 @@ function kennelLocations({ activeOnly = false } = {}) {
     .sort((a, b) => `${a.building || ""} ${a.name || ""}`.localeCompare(`${b.building || ""} ${b.name || ""}`));
 }
 
+function kennelBuildings(locations = kennelLocations({ activeOnly: true })) {
+  const buildings = [...new Set(locations.map((location) => location.building || "").filter(Boolean))].sort();
+  return buildings.length ? buildings : ["Shed", "Mansion"];
+}
+
+function kennelLocationOptionsForBuilding(building = "", selectedId = "") {
+  const matching = kennelLocations({ activeOnly: true }).filter((location) => (location.building || "") === building);
+  return matching.length
+    ? matching.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === selectedId ? "selected" : ""}>${escapeHtml(location.name || "Kennel")}</option>`).join("")
+    : `<option value="">No active kennels saved for ${escapeHtml(building || "this building")}</option>`;
+}
+
 function renderKennelLocations() {
   const list = $("#kennelLocationList");
   if (!list) return;
@@ -5054,19 +5113,38 @@ function openKennelLocation(record = {}) {
 
 function kennelAssignmentPopupHtml(record = {}, nextStatus = "In Kennel", options = {}) {
   const locations = kennelLocations({ activeOnly: true });
-  const locationOptions = locations.length
-    ? locations.map((location) => `<option value="${escapeHtml(location.id)}">${escapeHtml(location.building || "")} - ${escapeHtml(location.name || "Kennel")}</option>`).join("")
-    : `<option value="">No active kennels saved</option>`;
-  const help = locations.length ? "Choose where this dog is physically staying." : "Add active kennel locations in Settings first.";
+  const buildings = kennelBuildings(locations);
+  const selectedBuilding = record.kennelBuilding || buildings[0] || "Shed";
+  const buildingOptions = buildings.map((building) => `<option value="${escapeHtml(building)}" ${building === selectedBuilding ? "selected" : ""}>${escapeHtml(building)}</option>`).join("");
+  const locationOptions = kennelLocationOptionsForBuilding(selectedBuilding, record.kennelLocationId || "");
+  const hasLocationsForBuilding = locations.some((location) => (location.building || "") === selectedBuilding);
+  const help = locations.length ? "Choose the building first, then the exact kennel assignment." : "Add active kennel locations in Settings first.";
   return `<form id="kennelAssignmentForm" class="tracker-form" data-dog-id="${escapeHtml(record.id || "")}" data-next-status="${escapeHtml(nextStatus)}" data-allow-early="${options.allowEarly ? "true" : "false"}" data-early="${options.early ? "true" : "false"}">
     <article class="record-card compact-record-card"><strong>${escapeHtml(record.dogName || "Boarding dog")}</strong><p>${escapeHtml(boardingScheduleText(record))}</p></article>
-    <label>Kennel location<select name="kennelLocationId" required ${locations.length ? "" : "disabled"}><option value="">Select kennel</option>${locationOptions}</select><small>${escapeHtml(help)}</small></label>
-    <div class="button-row"><button type="submit" ${locations.length ? "" : "disabled"}>Assign Kennel</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+    <div class="field-grid">
+      <label>Building<select name="kennelBuilding" id="kennelAssignmentBuilding" required ${locations.length ? "" : "disabled"}>${buildingOptions}</select><small>${escapeHtml(help)}</small></label>
+      <label>Kennel<select name="kennelLocationId" id="kennelAssignmentLocation" required ${hasLocationsForBuilding ? "" : "disabled"}><option value="">Select kennel</option>${locationOptions}</select><small id="kennelAssignmentHelp">${hasLocationsForBuilding ? "Available active kennels for this building." : "No active kennels are saved for this building."}</small></label>
+    </div>
+    <div class="button-row"><button type="submit" ${hasLocationsForBuilding ? "" : "disabled"}>Assign Kennel</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </form>`;
 }
 
 function openKennelAssignmentPopup(record = {}, nextStatus = "In Kennel", options = {}) {
   showDetailDialog("Assign Kennel", kennelAssignmentPopupHtml(record, nextStatus, options));
+}
+
+function updateKennelAssignmentLocations(formEl) {
+  if (!formEl) return;
+  const building = formEl.elements.kennelBuilding?.value || "";
+  const locations = kennelLocations({ activeOnly: true }).filter((location) => (location.building || "") === building);
+  const locationSelect = formEl.elements.kennelLocationId;
+  const submitButton = formEl.querySelector('button[type="submit"]');
+  const help = $("#kennelAssignmentHelp");
+  if (!locationSelect) return;
+  locationSelect.innerHTML = `<option value="">Select kennel</option>${kennelLocationOptionsForBuilding(building)}`;
+  locationSelect.disabled = !locations.length;
+  if (submitButton) submitButton.disabled = !locations.length;
+  if (help) help.textContent = locations.length ? "Available active kennels for this building." : "No active kennels are saved for this building.";
 }
 
 function openSettingsUser(record = {}) {
@@ -5830,17 +5908,67 @@ function saveTimeEntry(payload, options = {}) {
   return record;
 }
 
+function timesheetStaffChoices(record = {}) {
+  const choices = settingsUsers()
+    .filter((user) => ["helper", "admin"].includes(user.role))
+    .map((user) => ({ name: user.name || user.email || "Staff", email: user.email || "", id: user.id || "" }));
+  if (currentUser && ["helper", "admin"].includes(currentRole())) {
+    choices.push({ name: currentUser.name || currentUser.email || "Current staff", email: currentUser.email || "", id: currentUser.key || currentUser.email || "" });
+  }
+  if (record.helperName || record.helperEmail) {
+    choices.push({ name: record.helperName || record.helperEmail || "Saved staff", email: record.helperEmail || "", id: record.helperEmail || record.helperName || "" });
+  }
+  const keyed = new Map();
+  choices.forEach((choice) => {
+    const key = String(choice.email || choice.name || "").trim().toLowerCase();
+    if (key && !keyed.has(key)) keyed.set(key, choice);
+  });
+  return [...keyed.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+}
+
+function timesheetStaffOptionValue(staff = {}) {
+  return staff.email || staff.id || staff.name || "";
+}
+
+function selectedTimesheetStaff(record = {}) {
+  const choices = timesheetStaffChoices(record);
+  const recordEmail = String(record.helperEmail || "").toLowerCase();
+  const recordName = normalizeHelperName(record.helperName || "");
+  return choices.find((staff) => recordEmail && String(staff.email || "").toLowerCase() === recordEmail)
+    || choices.find((staff) => recordName && normalizeHelperName(staff.name || "") === recordName)
+    || choices[0]
+    || { name: record.helperName || helperName.value || currentUser?.name || "", email: record.helperEmail || helperEmail.value || currentUser?.email || "" };
+}
+
+function syncTimesheetStaffFields(formEl) {
+  if (!formEl) return;
+  const option = formEl.elements.manualStaffKey?.selectedOptions?.[0];
+  const name = option?.dataset.name || formEl.elements.manualHelper?.value || "";
+  const email = option?.dataset.email || formEl.elements.manualHelperEmail?.value || "";
+  if (formEl.elements.manualHelper) formEl.elements.manualHelper.value = name;
+  if (formEl.elements.manualHelperEmail) formEl.elements.manualHelperEmail.value = email;
+  if (formEl.elements.manualHelperEmailDisplay) formEl.elements.manualHelperEmailDisplay.value = email;
+}
+
 function timesheetEditFormHtml(record = {}) {
   const isAdmin = currentRole() === "admin";
-  const helperValue = record.helperName || helperName.value || currentUser?.name || "";
-  const helperEmailValue = record.helperEmail || (isAdmin && !record.id ? "" : helperEmail.value || currentUser?.email || "");
+  const selectedStaff = selectedTimesheetStaff(record);
+  const helperValue = selectedStaff.name || record.helperName || helperName.value || currentUser?.name || "";
+  const helperEmailValue = selectedStaff.email || record.helperEmail || (isAdmin && !record.id ? "" : helperEmail.value || currentUser?.email || "");
+  const staffOptions = timesheetStaffChoices(record).map((staff) => {
+    const value = timesheetStaffOptionValue(staff);
+    const selected = value === timesheetStaffOptionValue(selectedStaff);
+    return `<option value="${escapeHtml(value)}" data-name="${escapeHtml(staff.name || "")}" data-email="${escapeHtml(staff.email || "")}" ${selected ? "selected" : ""}>${escapeHtml(staff.name || staff.email || "Staff")}</option>`;
+  }).join("");
   const clockInValue = dateTimeLocalValue(record.clockInTime) || "";
   const clockOutValue = dateTimeLocalValue(record.clockOutTime) || "";
   return `<form id="timesheetEditForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}">
     <input type="hidden" name="manualTimeId" value="${escapeHtml(record.id || "")}" />
+    <input type="hidden" name="manualHelper" value="${escapeHtml(helperValue)}" />
+    <input type="hidden" name="manualHelperEmail" value="${escapeHtml(helperEmailValue)}" />
     <div class="field-grid">
-      <label>Staff name<input type="text" name="manualHelper" value="${escapeHtml(helperValue)}" ${isAdmin ? "" : "readonly"} required /></label>
-      <label>Staff email<input type="email" name="manualHelperEmail" value="${escapeHtml(helperEmailValue)}" ${isAdmin ? "" : "readonly"} /></label>
+      <label>Staff name<select name="manualStaffKey" id="timesheetStaffSelect" ${isAdmin ? "" : "disabled"} required>${staffOptions || `<option value="${escapeHtml(helperValue)}" data-name="${escapeHtml(helperValue)}" data-email="${escapeHtml(helperEmailValue)}">${escapeHtml(helperValue || "Current staff")}</option>`}</select><small>${isAdmin ? "Select from saved Staff/Admin users." : "Staff is set from your login."}</small></label>
+      <label>Staff email<input type="email" name="manualHelperEmailDisplay" value="${escapeHtml(helperEmailValue)}" readonly /></label>
       <label>Entry date<input type="date" name="manualDate" value="${escapeHtml(localDateFromStoredDateTime(record.clockInTime) || record.date || todayDate())}" required /></label>
       <label>Clock in<input type="datetime-local" name="manualClockIn" value="${escapeHtml(clockInValue)}" required /></label>
       <label>Clock out<input type="datetime-local" name="manualClockOut" value="${escapeHtml(clockOutValue)}" required /></label>
@@ -6335,6 +6463,7 @@ function initEvents() {
     }
     if (timesheetEditForm) {
       if (!validateForm(timesheetEditForm)) return;
+      syncTimesheetStaffFields(timesheetEditForm);
       const payload = formPayload(timesheetEditForm);
       const existing = payload.manualTimeId ? readRecords("timesheet").find((record) => record.id === payload.manualTimeId) : null;
       if (existing && currentRole() !== "admin" && !canEditOwnToday(existing)) {
@@ -6409,6 +6538,16 @@ function initEvents() {
     }
   });
   $("#detailDialogBody").addEventListener("change", (event) => {
+    const kennelBuilding = event.target.closest("#kennelAssignmentBuilding");
+    if (kennelBuilding) {
+      updateKennelAssignmentLocations(kennelBuilding.closest("#kennelAssignmentForm"));
+      return;
+    }
+    const timesheetStaff = event.target.closest("#timesheetStaffSelect");
+    if (timesheetStaff) {
+      syncTimesheetStaffFields(timesheetStaff.closest("#timesheetEditForm"));
+      return;
+    }
     const filter = event.target.closest("#ownedTimelinePopupFilter");
     if (!filter) return;
     const dog = readRecords("ownedDog").find((record) => record.id === filter.dataset.dogId && !record.removed);
@@ -6939,6 +7078,27 @@ function initEvents() {
       await saveBoardingStatusTransition(record, button.dataset.nextStatus, { allowEarly, early: allowEarly && boardingTransitionIsEarly(record, button.dataset.nextStatus) });
     }
   });
+  $("#customerDogUploadCards")?.addEventListener("click", (event) => {
+    if (event.target.closest('[data-action="view-media"]')) return;
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    if (button.dataset.action === "open-linked-boarding-dog") {
+      const record = readRecords("boardingDog").find((item) => item.id === button.dataset.id && !item.removed);
+      if (record) {
+        openBoardingDog(record);
+        setBoardingFormLocked(false);
+      }
+      return;
+    }
+    if (button.dataset.action === "create-boarding-from-customer-dog") {
+      const dog = readRecords("customerDog").find((item) => item.id === button.dataset.id && !item.removed);
+      if (dog) {
+        openBoardingDog(boardingDraftFromCustomerDog(dog));
+        setBoardingFormLocked(false);
+        showToast(`${dog.dogName || "Customer dog"} was loaded into a new boarding profile. Review and save it.`);
+      }
+    }
+  });
   $("#boardingDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
@@ -6948,11 +7108,16 @@ function initEvents() {
       const formData = formPayload(formEl);
       if (!validateForm(formEl)) return;
       const dogId = existing.id || formData.id || uid("boardingDog");
-      const photo = await durableDogPhoto("boarding", existing, formData, $("#boardingDogPhotoInput"), dogId);
       const timestamp = new Date().toISOString();
       const currentStatus = existing.id ? normalizeBoardingStatus(existing) : "";
       const selectedStatus = boardingLifecycleStatuses.includes(formData.boardingStatus) ? formData.boardingStatus : normalizeBoardingStatus({ boardingStatus: formData.boardingStatus || existing.boardingStatus || "Approved" });
       const statusChanged = Boolean(existing.id) && selectedStatus !== currentStatus;
+      if (statusChanged && selectedStatus === "In Kennel" && !existing.kennelLocationId) {
+        formEl.elements.boardingStatus.value = currentStatus;
+        openKennelAssignmentPopup(existing, "In Kennel");
+        return;
+      }
+      const photo = await durableDogPhoto("boarding", existing, formData, $("#boardingDogPhotoInput"), dogId);
       const statusHistory = statusChanged
         ? [
             ...(existing.statusHistory || []),
