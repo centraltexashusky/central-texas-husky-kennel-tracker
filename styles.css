@@ -132,9 +132,11 @@ iframe {
 }
 
 .app-shell {
+  justify-self: center;
   margin: 0 auto;
   max-width: 1120px;
   padding: 32px 20px 52px;
+  width: min(1120px, 100%);
 }
 
 .page-view {
@@ -3321,9 +3323,11 @@ body.is-login-view .app-layout {
 
 body.is-login-view .app-shell {
   display: grid;
+  max-width: none;
   min-height: 100vh;
   padding: 0;
   place-items: center;
+  width: 100%;
 }
 
 #loginPage {
