@@ -764,6 +764,7 @@ function normalizeCustomTaskTabs(tabs = []) {
     .map((tab) => ({
       id: String(tab.id || normalizeTaskTabId(tab.label || "Custom")).replace(/[^a-zA-Z0-9_-]/g, "-"),
       label: String(tab.label || "Custom").trim(),
+      description: String(tab.description || "").trim(),
       system: false,
     }))
     .filter((tab) => tab.id && tab.label && !defaultTaskTabMeta.some((item) => item.id === tab.id));
@@ -2730,12 +2731,13 @@ function syncStaticTaskTabDeleteRows(config = readTaskConfig()) {
 }
 
 function customTaskPanelHtml(tab = {}, tasks = []) {
+  const description = String(tab.description || "").trim();
   return `<section class="form-section collapsible-section" data-task-panel="${escapeHtml(tab.id)}" data-custom-task-panel data-collapsible-section hidden>
     <div class="section-heading">
       <span>${escapeHtml((tab.label || "C").slice(0, 1).toUpperCase())}</span>
       <div>
         <h2>${escapeHtml(tab.label)} Tasks</h2>
-        <p>Custom task list for this workflow.</p>
+        ${description ? `<p>${escapeHtml(description)}</p>` : ""}
       </div>
       <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
     </div>
@@ -2852,6 +2854,7 @@ function setDailyTaskTab(tab = "morning") {
 function taskTabFormHtml() {
   return `<form id="taskTabForm" class="tracker-form">
     <label>Tab name<input type="text" name="label" required placeholder="Example: Puppy room, Deep clean, Sunday" /></label>
+    <label>Tab description<textarea name="description" required rows="3" placeholder="Example: Tasks for puppy room cleaning, play yard reset, or Sunday deep clean"></textarea></label>
     <div class="button-row"><button type="submit">Add Tab</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </form>`;
 }
@@ -2862,7 +2865,9 @@ function openTaskTabPopup() {
 
 async function saveTaskTabFromForm(formEl) {
   if (!validateForm(formEl)) return null;
-  const label = formPayload(formEl).label.trim();
+  const payload = formPayload(formEl);
+  const label = payload.label.trim();
+  const description = (payload.description || "").trim();
   const config = readTaskConfig();
   const removedDefault = defaultTaskTabMeta.find((tab) => tab.label.toLowerCase() === label.toLowerCase() && (config._removedTabs || []).includes(tab.id));
   if (removedDefault) {
@@ -2877,7 +2882,7 @@ async function saveTaskTabFromForm(formEl) {
     showToast("A task tab with that name already exists.");
     return null;
   }
-  const tab = { id: normalizeTaskTabId(label), label, system: false };
+  const tab = { id: normalizeTaskTabId(label), label, description, system: false };
   config._tabs.push(tab);
   config[tab.id] = [];
   await persistTaskConfig(config);
