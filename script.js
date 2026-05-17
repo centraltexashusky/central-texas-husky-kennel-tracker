@@ -481,14 +481,21 @@ function statusClassForBoardingStatus(status = "") {
 function boardingStatusChipHtml(record = {}) {
   const status = normalizeBoardingStatus(record);
   const kennelLabel = status === "In Kennel" ? boardingKennelLocationLabel(record) : "";
-  const label = kennelLabel ? `${status}-${kennelLabel}` : status;
+  const label = kennelLabel ? `${status} - ${kennelLabel}` : status;
   return statusChipHtml(label, `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
 }
 
-function boardingKennelLocationLabel(record = {}) {
-  const stay = currentOrNextStay(record) || (record.stays || [])[0] || {};
-  const building = String(record.kennelBuilding || stay.kennelBuilding || "").trim();
-  const name = String(record.kennelLocationName || stay.kennelLocationName || "").trim();
+function boardingStayStatusChipHtml(record = {}, stay = {}) {
+  const status = boardingStayDisplayStatus(record, stay);
+  const kennelLabel = status === "In Kennel" ? boardingKennelLocationLabel(record, stay) : "";
+  const label = kennelLabel ? `${status} - ${kennelLabel}` : status;
+  return statusChipHtml(label, `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
+}
+
+function boardingKennelLocationLabel(record = {}, stayOverride = null) {
+  const stay = stayOverride || currentOrNextStay(record) || (record.stays || [])[0] || {};
+  const building = String(stay.kennelBuilding || record.kennelBuilding || "").trim();
+  const name = String(stay.kennelLocationName || record.kennelLocationName || "").trim();
   if (!building) return name;
   if (!name) return building;
   return name.toLowerCase().includes(building.toLowerCase()) ? name : `${building} ${name}`;
@@ -758,12 +765,20 @@ function normalizeCustomTaskTabs(tabs = []) {
     .filter((tab) => tab.id && tab.label && !defaultTaskTabMeta.some((item) => item.id === tab.id));
 }
 
+function normalizeRemovedTaskTabs(tabs = []) {
+  if (!Array.isArray(tabs)) return [];
+  const removableIds = new Set(defaultTaskTabMeta.map((tab) => tab.id));
+  return [...new Set(tabs.map((tab) => String(tab || "").trim()).filter((tab) => removableIds.has(tab)))];
+}
+
 function readTaskConfig() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.taskConfig) || "null");
   const hasGroup = (group) => saved && Object.prototype.hasOwnProperty.call(saved, group);
   const customTabs = normalizeCustomTaskTabs(saved?._tabs);
+  const removedTabs = normalizeRemovedTaskTabs(saved?._removedTabs);
   const config = {
     _tabs: customTabs,
+    _removedTabs: removedTabs,
     morning: normalizeTaskList(saved?.morning, hasGroup("morning") ? [] : defaultTaskList("morning", defaultDailyTasks.morning)),
     pm: normalizeTaskList(saved?.pm, hasGroup("pm") ? [] : defaultTaskList("pm", defaultDailyTasks.pm)),
     weekly: normalizeTaskList(saved?.weekly, hasGroup("weekly") ? [] : defaultTaskList("weekly", defaultManagedTasks.weekly)),
@@ -2214,7 +2229,8 @@ function taskInputName(shift) {
 }
 
 function taskTabMeta(config = readTaskConfig()) {
-  return [...defaultTaskTabMeta, ...(config._tabs || [])];
+  const removedTabs = new Set(config._removedTabs || []);
+  return [...defaultTaskTabMeta.filter((tab) => !removedTabs.has(tab.id)), ...(config._tabs || [])];
 }
 
 function taskTabLabel(shift = "") {
@@ -2246,7 +2262,7 @@ function dailyTaskRecordForDate(date = currentDailyDate()) {
 
 function allConfiguredTasks() {
   const config = readTaskConfig();
-  return Object.entries(config).flatMap(([shift, tasks]) => (tasks || []).map((task) => ({ ...task, shift })));
+  return taskTabMeta(config).flatMap((tab) => (config[tab.id] || []).map((task) => ({ ...task, shift: tab.id })));
 }
 
 function totalConfiguredTaskCount() {
@@ -2623,21 +2639,26 @@ async function updateDailyCareLog(logId, updates = {}) {
 function renderDailyTaskTabs(config = readTaskConfig()) {
   const tabs = $("#dailyTaskTabs");
   if (!tabs) return;
-  defaultTaskTabMeta.forEach((tab) => {
-    const button = tabs.querySelector(`[data-task-tab="${tab.id}"]`);
-    if (button) button.textContent = tab.label;
-  });
-  tabs.querySelectorAll("[data-custom-task-tab]").forEach((item) => item.remove());
-  const addButton = tabs.querySelector('[data-action="add-task-tab"]');
-  const customHtml = (config._tabs || [])
-    .map((tab) => `<span class="task-tab-pill" data-custom-task-tab><button type="button" data-task-tab="${escapeHtml(tab.id)}" role="tab" aria-selected="false">${escapeHtml(tab.label)}</button>${currentRole() === "admin" ? `<button type="button" class="remove-task-tab-button" data-action="remove-task-tab" data-task-tab-id="${escapeHtml(tab.id)}" title="Remove tab">&times;</button>` : ""}</span>`)
+  const tabButtons = taskTabMeta(config)
+    .map((tab) => `<button type="button" data-task-tab="${escapeHtml(tab.id)}" role="tab" aria-selected="false">${escapeHtml(tab.label)}</button>`)
     .join("");
-  if (addButton) {
-    addButton.insertAdjacentHTML("beforebegin", customHtml);
-    addButton.hidden = currentRole() !== "admin";
-  } else {
-    tabs.insertAdjacentHTML("beforeend", customHtml);
-  }
+  const addButton = currentRole() === "admin" ? `<button type="button" class="secondary-button task-add-tab-button" data-action="add-task-tab">Add Tab</button>` : "";
+  tabs.innerHTML = `${tabButtons}${addButton}`;
+}
+
+function taskTabDeleteRowHtml(tab = {}) {
+  if (currentRole() !== "admin" || !tab.id) return "";
+  return `<div class="button-row task-tab-delete-row" data-task-tab-delete-row><button type="button" class="secondary-button danger-button task-delete-tab-button" data-action="remove-task-tab" data-task-tab-id="${escapeHtml(tab.id)}">Delete Tab</button></div>`;
+}
+
+function syncStaticTaskTabDeleteRows(config = readTaskConfig()) {
+  const activeTabs = new Map(taskTabMeta(config).map((tab) => [tab.id, tab]));
+  defaultTaskTabMeta.forEach((tab) => {
+    const panelBody = document.querySelector(`[data-task-panel="${tab.id}"] .section-body`);
+    if (!panelBody) return;
+    panelBody.querySelectorAll("[data-task-tab-delete-row]").forEach((row) => row.remove());
+    if (activeTabs.has(tab.id)) panelBody.insertAdjacentHTML("beforeend", taskTabDeleteRowHtml(activeTabs.get(tab.id)));
+  });
 }
 
 function customTaskPanelHtml(tab = {}, tasks = []) {
@@ -2656,6 +2677,7 @@ function customTaskPanelHtml(tab = {}, tasks = []) {
         <input type="text" data-custom-task-input="${escapeHtml(tab.id)}" placeholder="Add a task to ${escapeHtml(tab.label)}" />
         <button type="button" data-action="add-custom-tab-task" data-shift="${escapeHtml(tab.id)}">Add Task</button>
       </div>
+      ${taskTabDeleteRowHtml(tab)}
     </div>
   </section>`;
 }
@@ -2730,6 +2752,7 @@ function renderDailyTaskLists(selected = {}) {
     bindTaskListInteractions(list);
   });
   renderCustomTaskPanels(config);
+  syncStaticTaskTabDeleteRows(config);
   const canManageTasks = currentRole() === "admin";
   $("#dailyTaskAdminControls").hidden = !canManageTasks;
   $("#pmTaskAdminControls").hidden = !canManageTasks;
@@ -2746,8 +2769,8 @@ function renderDailyTaskLists(selected = {}) {
 function setDailyTaskTab(tab = "morning") {
   const panels = $$('[data-task-panel]');
   if (!panels.length) return;
-  const validTabs = panels.map((panel) => panel.dataset.taskPanel);
-  dailyTaskTab = validTabs.includes(tab) ? tab : "morning";
+  const validTabs = taskTabMeta(readTaskConfig()).map((item) => item.id);
+  dailyTaskTab = validTabs.includes(tab) ? tab : validTabs[0] || "";
   $$("#dailyTaskTabs [data-task-tab]").forEach((button) => {
     const active = button.dataset.taskTab === dailyTaskTab;
     button.classList.toggle("is-active", active);
@@ -2773,6 +2796,15 @@ function saveTaskTabFromForm(formEl) {
   if (!validateForm(formEl)) return null;
   const label = formPayload(formEl).label.trim();
   const config = readTaskConfig();
+  const removedDefault = defaultTaskTabMeta.find((tab) => tab.label.toLowerCase() === label.toLowerCase() && (config._removedTabs || []).includes(tab.id));
+  if (removedDefault) {
+    config._removedTabs = (config._removedTabs || []).filter((tabId) => tabId !== removedDefault.id);
+    if (!config[removedDefault.id]) config[removedDefault.id] = [];
+    writeTaskConfig(config);
+    dailyTaskTab = removedDefault.id;
+    renderDailyTaskLists();
+    return removedDefault;
+  }
   if (taskTabMeta(config).some((tab) => tab.label.toLowerCase() === label.toLowerCase())) {
     showToast("A task tab with that name already exists.");
     return null;
@@ -2788,28 +2820,34 @@ function saveTaskTabFromForm(formEl) {
 
 function taskTabRemoveConfirmHtml(tab = {}) {
   const tasks = readTaskConfig()[tab.id] || [];
+  const tabType = tab.system ? "built-in tab" : "custom tab";
   return `<div class="tracker-form">
     <article class="record-card compact-record-card danger-confirm-card">
       <strong>Remove ${escapeHtml(tab.label)}?</strong>
-      <p>This removes the custom tab and ${tasks.length} saved task${tasks.length === 1 ? "" : "s"} from the task template. Completed work history stays in the daily records.</p>
+      <p>This removes the ${tabType} and ${tasks.length} saved task${tasks.length === 1 ? "" : "s"} from the daily task template. Completed work history stays in the daily records.</p>
     </article>
     <div class="button-row"><button type="button" class="danger-button" data-action="confirm-remove-task-tab" data-task-tab-id="${escapeHtml(tab.id)}">Confirm Remove</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </div>`;
 }
 
 function openTaskTabRemoveConfirm(tabId = "") {
-  const tab = readTaskConfig()._tabs.find((item) => item.id === tabId);
+  const tab = taskTabMeta(readTaskConfig()).find((item) => item.id === tabId);
   if (tab) showDetailDialog("Confirm Remove Task Tab", taskTabRemoveConfirmHtml(tab));
 }
 
 function removeTaskTab(tabId = "") {
   const config = readTaskConfig();
-  const tab = config._tabs.find((item) => item.id === tabId);
+  const tab = taskTabMeta(config).find((item) => item.id === tabId);
   if (!tab) return null;
-  config._tabs = config._tabs.filter((item) => item.id !== tabId);
-  delete config[tabId];
+  if (tab.system) {
+    config._removedTabs = [...new Set([...(config._removedTabs || []), tabId])];
+    config[tabId] = [];
+  } else {
+    config._tabs = config._tabs.filter((item) => item.id !== tabId);
+    delete config[tabId];
+  }
   writeTaskConfig(config);
-  if (dailyTaskTab === tabId) dailyTaskTab = "morning";
+  if (dailyTaskTab === tabId) dailyTaskTab = taskTabMeta(readTaskConfig())[0]?.id || "";
   renderDailyTaskLists();
   return tab;
 }
@@ -3290,7 +3328,7 @@ function genericDetailHtml(record) {
 
 function boardingDogDetailHtml(record) {
   const stays = (record.stays || [])
-    .map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(boardingStayDisplayStatus(record, stay), "boarding-status-chip")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.stayNotes || "")}</p></article>`)
+    .map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayStatusChipHtml(record, stay)}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.stayNotes || "")}</p></article>`)
     .join("");
   const customerUpdates = (record.customerUpdates || [])
     .map((update) => `<article class="record-card compact-record-card"><strong>${escapeHtml(formatDateTime(update.createdAt || update.submittedAt) || "Customer update")}</strong><span>${escapeHtml(update.byName || "Staff")}</span><p>${escapeHtml(update.note || "")}</p><div class="record-actions">${customerUpdateMediaHtml(update)}</div></article>`)
@@ -4162,7 +4200,7 @@ function boardingStayFormHtml(record = {}, stay = {}) {
 
 function boardingSchedulePopupHtml(record = {}) {
   const staysHtml = (record.stays || []).length
-    ? (record.stays || []).map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(boardingStayDisplayStatus(record, stay), "boarding-status-chip")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(record.id)}" data-id="${escapeHtml(stay.id)}">Edit Stay</button></div></article>`).join("")
+    ? (record.stays || []).map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayStatusChipHtml(record, stay)}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(record.id)}" data-id="${escapeHtml(stay.id)}">Edit Stay</button></div></article>`).join("")
     : "<p>No boarding stays logged yet.</p>";
   return `${boardingStayFormHtml(record)}<section class="popup-record-section"><h3>Boarding stays</h3>${staysHtml}</section>`;
 }
@@ -5397,7 +5435,7 @@ async function markRecordRemoved(type, id) {
 function renderBoardingStays(record = activeBoardingDog()) {
   const stays = record?.stays || [];
   $("#boardingStayHistory").innerHTML = stays.length
-    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${statusChipHtml(boardingStayDisplayStatus(record, stay), "boarding-status-chip")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}">Edit Stay</button><button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}">Remove Stay</button></div></article>`).join("")
+    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayStatusChipHtml(record, stay)}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}">Edit Stay</button><button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}">Remove Stay</button></div></article>`).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
 
@@ -8368,6 +8406,12 @@ function initEvents() {
   $("#addTuesdayTaskButton").addEventListener("click", () => addManagedTask("tuesday", "#newTuesdayTaskText"));
   $("#addMonthlyTaskButton").addEventListener("click", () => addManagedTask("monthly", "#newMonthlyTaskText"));
   form.addEventListener("click", (event) => {
+    const removeTab = event.target.closest('[data-action="remove-task-tab"]');
+    if (removeTab) {
+      event.preventDefault();
+      openTaskTabRemoveConfirm(removeTab.dataset.taskTabId);
+      return;
+    }
     const toggle = event.target.closest('[data-action="toggle-section"]');
     if (!toggle) return;
     const section = toggle.closest("[data-collapsible-section]");

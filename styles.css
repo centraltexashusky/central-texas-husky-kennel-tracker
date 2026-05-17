@@ -1530,6 +1530,15 @@ textarea {
   padding: 12px;
 }
 
+.task-tab-delete-row {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.task-delete-tab-button {
+  border-color: rgba(255, 183, 195, 0.5);
+}
+
 .collapsible-section .section-heading {
   margin-bottom: 0;
 }
