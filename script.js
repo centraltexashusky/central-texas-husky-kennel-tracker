@@ -2798,6 +2798,76 @@ function bindTaskListInteractions(listEl) {
   });
 }
 
+function dailyTaskDraftInputs() {
+  return [
+    $("#newTaskText"),
+    $("#newPmTaskText"),
+    $("#newWeeklyTaskText"),
+    $("#newTuesdayTaskText"),
+    $("#newMonthlyTaskText"),
+    ...$$("[data-custom-task-input]"),
+    ...$$('[data-action="edit-task"]'),
+  ].filter(Boolean);
+}
+
+function dailyTaskDraftInputKey(input) {
+  if (!input) return "";
+  if (input.dataset?.customTaskInput) return `custom:${input.dataset.customTaskInput}`;
+  if (input.dataset?.action === "edit-task") return `edit:${input.dataset.shift || ""}:${input.dataset.id || ""}`;
+  if (input.id) return `id:${input.id}`;
+  return "";
+}
+
+function inputForDailyTaskDraftKey(key = "") {
+  if (key.startsWith("custom:")) {
+    const shift = key.slice("custom:".length);
+    return $$("[data-custom-task-input]").find((input) => input.dataset.customTaskInput === shift) || null;
+  }
+  if (key.startsWith("edit:")) {
+    const [, shift, id] = key.split(":");
+    return $$('[data-action="edit-task"]').find((input) => input.dataset.shift === shift && input.dataset.id === id) || null;
+  }
+  if (key.startsWith("id:")) return document.getElementById(key.slice("id:".length));
+  return null;
+}
+
+function captureDailyTaskDraftState() {
+  const active = document.activeElement;
+  const values = {};
+  dailyTaskDraftInputs().forEach((input) => {
+    const key = dailyTaskDraftInputKey(input);
+    if (!key) return;
+    const isEditInput = input.dataset?.action === "edit-task";
+    if ((isEditInput && input === active) || (!isEditInput && (input.value || input === active))) {
+      values[key] = input.value;
+    }
+  });
+  const activeKey = dailyTaskDraftInputKey(active);
+  return {
+    values,
+    activeKey,
+    selectionStart: typeof active?.selectionStart === "number" ? active.selectionStart : null,
+    selectionEnd: typeof active?.selectionEnd === "number" ? active.selectionEnd : null,
+  };
+}
+
+function restoreDailyTaskDraftState(state = {}) {
+  Object.entries(state.values || {}).forEach(([key, value]) => {
+    const input = inputForDailyTaskDraftKey(key);
+    if (input) input.value = value;
+  });
+  const active = inputForDailyTaskDraftKey(state.activeKey || "");
+  if (!active) return;
+  try {
+    active.focus({ preventScroll: true });
+  } catch {
+    active.focus();
+  }
+  if (typeof state.selectionStart === "number" && typeof state.selectionEnd === "number" && active.setSelectionRange) {
+    active.setSelectionRange(state.selectionStart, state.selectionEnd);
+  }
+}
+
 function renderCustomTaskPanels(config = readTaskConfig()) {
   const container = $("#customTaskPanels");
   if (!container) return;
@@ -2806,6 +2876,7 @@ function renderCustomTaskPanels(config = readTaskConfig()) {
 }
 
 function renderDailyTaskLists(selected = {}) {
+  const draftState = captureDailyTaskDraftState();
   const config = readTaskConfig();
   renderDailyTaskTabs(config);
   const staticLists = {
@@ -2833,6 +2904,7 @@ function renderDailyTaskLists(selected = {}) {
   pendingStructuredCareLogs = structuredCareLogsForDate(currentDailyDate());
   renderStructuredCareLogs();
   setDailyTaskTab(dailyTaskTab);
+  restoreDailyTaskDraftState(draftState);
   updateCompletionCount();
 }
 
@@ -3042,7 +3114,7 @@ async function sendPayload(payload) {
     });
     if (error) throw error;
     modeLabel.textContent = "Saved";
-    window.setTimeout(loadRemoteRecords, 500);
+    if (payload.type !== TASK_TEMPLATE_RECORD_TYPE) window.setTimeout(loadRemoteRecords, 500);
   } catch (error) {
     modeLabel.textContent = "Save failed";
     showToast(`Save failed: ${error.message}`);
