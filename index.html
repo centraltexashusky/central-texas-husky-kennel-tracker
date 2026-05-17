@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260516-boarding-reset-1" />
+    <link rel="stylesheet" href="styles.css?v=20260516-page-restore-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -871,7 +871,7 @@
             <label>Special care instructions<textarea name="specialCare" rows="3" placeholder="Medication, feeding, handling, allergies, behavior concerns"></textarea></label>
             <label>Daily activity update for owner<textarea name="dailyActivity" rows="3" placeholder="Eating, potty, play, exercise, mood, photos/videos taken"></textarea></label>
             <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
-            <div class="button-row"><button type="button" class="secondary-button" id="editBoardingDogButton" hidden>Edit Dog</button><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
+            <div class="button-row"><button type="button" class="secondary-button" id="editBoardingDogButton" hidden>Edit Dog</button><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
           </form>
 
           <section class="existing-only owner-account-panel" id="boardingOwnerAccountPanel" hidden>
@@ -1090,6 +1090,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260516-boarding-reset-1"></script>
+    <script src="script.js?v=20260516-page-restore-1"></script>
   </body>
 </html>

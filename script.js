@@ -162,6 +162,7 @@ const stateKeys = {
   tableSort: "cth-table-sort-config",
   session: "cth-current-session",
   authThrottle: "cth-auth-throttle",
+  lastPage: "cth-last-page-id",
 };
 
 const defaultServices = [
@@ -1047,9 +1048,9 @@ function userFromLocalTestLogin(email, role = "admin") {
 function completeLocalTestLogin(email, reason = "", role = "admin") {
   localTestMode = true;
   supabaseClient = null;
-  setHelper(userFromLocalTestLogin(email, role), { silent: true });
+  setHelper(userFromLocalTestLogin(email, role), { switchAfterLogin: false });
   modeLabel.textContent = "Local test mode";
-  switchPage("dashboardPage");
+  switchPage(rememberedPageForRole(currentRole()));
   showDetailDialog(
     "Local Test Login",
     `<p>You are signed in locally as an admin for UI testing. Remote Supabase login was not used${reason ? `: ${escapeHtml(reason)}` : "."}</p><p>Changes will stay in this browser's local storage during this test session.</p>`,
@@ -1917,7 +1918,7 @@ function setHelper(user, options = {}) {
   renderDailyTaskLists();
   fillCustomerDefaults();
   renderAllRecords();
-  if (options.switchAfterLogin !== false) switchPage(currentUser.role === "customer" ? "customerPage" : "dashboardPage");
+  if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(currentUser.role));
 }
 
 async function clearHelper() {
@@ -1925,6 +1926,7 @@ async function clearHelper() {
   localTestMode = false;
   currentUser = null;
   localStorage.removeItem(stateKeys.session);
+  localStorage.removeItem(stateKeys.lastPage);
   helperName.value = "";
   helperEmail.value = "";
   helperKey.value = "";
@@ -1971,6 +1973,24 @@ function pageAllowed(pageId) {
   const button = navigationButtonForPage(pageId);
   const roles = (button?.dataset.roles || "helper,admin").split(",");
   return helperIsLoggedIn() && roles.includes(currentRole());
+}
+
+function pageIdFromHash() {
+  const raw = decodeURIComponent(window.location.hash || "").replace(/^#/, "").trim();
+  if (!raw) return "";
+  const page = document.getElementById(raw);
+  return page?.classList.contains("page-view") ? raw : "";
+}
+
+function defaultPageForRole(role = currentRole()) {
+  if (role === "customer") return "customerPage";
+  if (role === "helper" || role === "admin") return "dashboardPage";
+  return "loginPage";
+}
+
+function rememberedPageForRole(role = currentRole()) {
+  const fallback = defaultPageForRole(role);
+  return [pageIdFromHash(), localStorage.getItem(stateKeys.lastPage), fallback].find((pageId) => pageId && pageAllowed(pageId)) || fallback;
 }
 
 function activePageId() {
@@ -4572,6 +4592,7 @@ function setBoardingFormLocked(locked) {
   $("#boardingDogSaveButton").hidden = locked;
   $("#editBoardingDogButton").hidden = !locked;
   $("#openBoardingScheduleButton").hidden = !formEl.elements.id.value;
+  $("#deleteBoardingDogButton").hidden = locked || !formEl.elements.id.value || currentRole() !== "admin";
   formEl.classList.toggle("is-readonly", locked);
   renderBoardingOwnerAccountPanel(activeBoardingDog());
 }
@@ -5676,6 +5697,50 @@ async function removeSettingsUserById(id) {
   return removed;
 }
 
+function boardingDogDeleteConfirmHtml(record = {}) {
+  return `
+    <div class="tracker-form">
+      <article class="record-card compact-record-card danger-confirm-card">
+        <strong>Delete ${escapeHtml(record.dogName || "this boarding dog")}?</strong>
+        <p>This removes the dog from Boarding Dogs and from customer access. The record is soft-deleted and kept in history for audit and recovery.</p>
+        <p>Owner link: ${escapeHtml(record.ownerEmail || record.customerEmail || "No owner email saved")}</p>
+      </article>
+      <div class="button-row">
+        <button type="button" class="danger-button" data-action="confirm-delete-boarding-dog" data-id="${escapeHtml(record.id || "")}">Confirm Delete Dog</button>
+        <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function openBoardingDogDeleteConfirm(record = {}) {
+  showDetailDialog("Confirm Delete Boarding Dog", boardingDogDeleteConfirmHtml(record));
+}
+
+async function deleteBoardingDogById(id = "") {
+  if (currentRole() !== "admin") {
+    showToast("Admin access required to delete a boarding dog profile.");
+    return null;
+  }
+  const record = readRecords("boardingDog").find((item) => item.id === id && !item.removed);
+  if (!record) return null;
+  const removed = upsertRecord("boardingDog", {
+    ...record,
+    removed: true,
+    removedAt: new Date().toISOString(),
+    removedBy: currentUser?.name || "Admin",
+    softDeleteExpiresOn: addDays(todayDate(), 30),
+  });
+  await sendPayload(removed);
+  await addAuditLog("Deleted boarding dog", "boardingDog", removed, `${removed.dogName || "Dog"} | owner: ${removed.ownerEmail || removed.customerEmail || "none"} | recover before ${removed.softDeleteExpiresOn}`);
+  $("#boardingDogDetail").hidden = true;
+  renderBoardingDogs();
+  renderBoardingRequests();
+  renderCustomerDogs();
+  renderDashboard();
+  renderGlobalSearchResults();
+  return removed;
+}
+
 function settingsFormProfileData(formEl = $("#settingsUserForm")) {
   const data = formPayload(formEl);
   delete data.temporaryPassword;
@@ -6554,6 +6619,10 @@ function exportCareLogs() {
 function initEvents() {
   syncMobileReviewSections();
   window.addEventListener("resize", syncMobileReviewSections);
+  window.addEventListener("hashchange", () => {
+    const pageId = pageIdFromHash();
+    if (pageId && pageAllowed(pageId) && pageId !== activePageId()) switchPage(pageId);
+  });
   $("#mobilePageSelect").addEventListener("change", (event) => switchPage(event.target.value));
   $("#mobileBottomNav").addEventListener("click", (event) => {
     const button = event.target.closest(".mobile-bottom-nav-button");
@@ -7090,6 +7159,11 @@ function initEvents() {
       $("#detailDialog").close();
       if (removed) showToast("User access removed.");
     }
+    if (action.dataset.action === "confirm-delete-boarding-dog") {
+      const removed = await deleteBoardingDogById(action.dataset.id);
+      $("#detailDialog").close();
+      if (removed) showToast("Boarding dog profile deleted.");
+    }
   });
   $("#detailDialogBody").addEventListener("change", (event) => {
     const ownedDogMobilePhotoInput = event.target.closest("#ownedDogMobilePhotoInput");
@@ -7545,6 +7619,10 @@ function initEvents() {
   $("#addBoardingDogButton").addEventListener("click", () => openBoardingDog());
   $("#closeBoardingDogDialogButton")?.addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
   $("#cancelBoardingDogEdit").addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
+  $("#deleteBoardingDogButton")?.addEventListener("click", () => {
+    const dog = activeBoardingDog();
+    if (dog) openBoardingDogDeleteConfirm(dog);
+  });
   $("#editBoardingDogButton").addEventListener("click", () => {
     setBoardingFormLocked(false);
     showToast("Boarding dog record unlocked for editing.");
@@ -8180,6 +8258,13 @@ function switchPage(pageId) {
     showToast(helperIsLoggedIn() ? "Your login does not have access to that page." : "Sign in first.");
     pageId = "loginPage";
   }
+  if (helperIsLoggedIn() && pageId !== "loginPage") {
+    localStorage.setItem(stateKeys.lastPage, pageId);
+    const nextHash = `#${encodeURIComponent(pageId)}`;
+    if (window.location.hash !== nextHash) window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}${nextHash}`);
+  } else if (pageId === "loginPage" && window.location.hash && pageIdFromHash()) {
+    window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+  }
   $$(".nav-button").forEach((item) => item.classList.toggle("is-active", item.dataset.page === pageId));
   $$(".page-view").forEach((page) => page.classList.toggle("is-active", page.id === pageId));
   $("#mobilePageSelect").value = pageId;
@@ -8211,7 +8296,7 @@ async function initializeApp() {
   hydrateLoginFromUrl();
   updateNavigationAccess();
   renderAllRecords();
-  if (helperIsLoggedIn()) switchPage(currentRole() === "customer" ? "customerPage" : "dashboardPage");
+  if (helperIsLoggedIn()) switchPage(rememberedPageForRole(currentRole()));
   else document.body.classList.add("is-login-view");
   await loadRemoteRecords();
   requirePasswordChangeIfNeeded();
