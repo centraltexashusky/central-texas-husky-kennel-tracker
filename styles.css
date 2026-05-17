@@ -3918,6 +3918,12 @@ body.is-login-view #loginPage .login-auth-section {
   margin: 14px 0;
 }
 
+.task-tab-pill {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
 .daily-task-tabs button,
 .alert-filter-toolbar button {
   background: rgba(255, 255, 255, 0.86);
@@ -3929,11 +3935,46 @@ body.is-login-view #loginPage .login-auth-section {
   padding: 9px 13px;
 }
 
+.daily-task-tabs .task-add-tab-button {
+  background: rgba(37, 130, 238, 0.92);
+  border-color: rgba(134, 190, 255, 0.74);
+  color: #fff;
+}
+
+.daily-task-tabs .remove-task-tab-button {
+  align-items: center;
+  background: rgba(123, 58, 71, 0.86);
+  border-color: rgba(255, 183, 195, 0.38);
+  color: #fff;
+  display: inline-flex;
+  font-size: 1rem;
+  height: 31px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 31px;
+  padding: 0;
+  width: 31px;
+}
+
 .daily-task-tabs button.is-active,
 .alert-filter-toolbar button.is-active {
   background: var(--teal);
   border-color: var(--teal);
   color: #fff;
+}
+
+.kennel-building-tabs {
+  margin-top: 20px;
+}
+
+.kennel-location-add-row {
+  margin-bottom: 14px;
+  margin-top: 8px;
+}
+
+body.role-admin #dailyPage .admin-task-controls,
+body.role-admin #settingsKennelLocationsPage .admin-task-controls {
+  display: grid !important;
 }
 
 .alert-filter-toolbar {

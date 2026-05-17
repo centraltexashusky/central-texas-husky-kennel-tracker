@@ -43,6 +43,7 @@ let timesheetTab = "clock";
 let scheduleWeekDate = todayDate();
 let settingsUserTab = "admin";
 let settingsUserSort = { key: "name", direction: "asc" };
+let kennelBuildingTab = "Shed";
 let boardingDogRosterFilter = "Active dogs";
 let showRemainingTasksOnly = true;
 const selectedDogPhotos = { owned: null, boarding: null, customer: null };
@@ -74,6 +75,13 @@ const taskShiftLabels = {
   tuesday: "Tuesday",
   monthly: "Monthly",
 };
+const defaultTaskTabMeta = [
+  { id: "morning", label: "Morning", system: true },
+  { id: "pm", label: "Evening", system: true },
+  { id: "weekly", label: "Mondays", system: true },
+  { id: "tuesday", label: "Tuesdays", system: true },
+  { id: "monthly", label: "Monthly", system: true },
+];
 const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage"];
 const mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsAuditLogPage"]);
@@ -161,6 +169,7 @@ const stateKeys = {
   cfoNote: "cth-cfoNote-records",
   calendarNote: "cth-calendarNote-records",
   kennelLocation: "cth-kennelLocation-records",
+  kennelBuilding: "cth-kennelBuilding-records",
   auditLog: "cth-auditLog-records",
   staffSchedule: "cth-staffSchedule-records",
   timeOffRequest: "cth-timeOffRequest-records",
@@ -734,16 +743,37 @@ function normalizeTaskList(tasks = [], fallback = []) {
     .filter((task) => task.text);
 }
 
+function normalizeTaskTabId(label = "") {
+  return `custom-${String(label || "task-tab").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 42) || "task-tab"}-${Date.now().toString(36)}`;
+}
+
+function normalizeCustomTaskTabs(tabs = []) {
+  if (!Array.isArray(tabs)) return [];
+  return tabs
+    .map((tab) => ({
+      id: String(tab.id || normalizeTaskTabId(tab.label || "Custom")).replace(/[^a-zA-Z0-9_-]/g, "-"),
+      label: String(tab.label || "Custom").trim(),
+      system: false,
+    }))
+    .filter((tab) => tab.id && tab.label && !defaultTaskTabMeta.some((item) => item.id === tab.id));
+}
+
 function readTaskConfig() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.taskConfig) || "null");
   const hasGroup = (group) => saved && Object.prototype.hasOwnProperty.call(saved, group);
-  return {
+  const customTabs = normalizeCustomTaskTabs(saved?._tabs);
+  const config = {
+    _tabs: customTabs,
     morning: normalizeTaskList(saved?.morning, hasGroup("morning") ? [] : defaultTaskList("morning", defaultDailyTasks.morning)),
     pm: normalizeTaskList(saved?.pm, hasGroup("pm") ? [] : defaultTaskList("pm", defaultDailyTasks.pm)),
     weekly: normalizeTaskList(saved?.weekly, hasGroup("weekly") ? [] : defaultTaskList("weekly", defaultManagedTasks.weekly)),
     tuesday: normalizeTaskList(saved?.tuesday, hasGroup("tuesday") ? [] : defaultTaskList("tuesday", defaultManagedTasks.tuesday)),
     monthly: normalizeTaskList(saved?.monthly, hasGroup("monthly") ? [] : defaultTaskList("monthly", defaultManagedTasks.monthly)),
   };
+  customTabs.forEach((tab) => {
+    config[tab.id] = normalizeTaskList(saved?.[tab.id], hasGroup(tab.id) ? [] : []);
+  });
+  return config;
 }
 
 function writeTaskConfig(config) {
@@ -941,7 +971,7 @@ function initSupabaseClient() {
 }
 
 function recordTypes() {
-  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference"];
+  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference"];
 }
 
 function settingsUsers() {
@@ -2180,7 +2210,15 @@ function taskInputName(shift) {
     tuesday: "tuesdayTasks",
     monthly: "monthlyTasks",
   };
-  return names[shift] || "dailyTasks";
+  return names[shift] || "";
+}
+
+function taskTabMeta(config = readTaskConfig()) {
+  return [...defaultTaskTabMeta, ...(config._tabs || [])];
+}
+
+function taskTabLabel(shift = "") {
+  return taskTabMeta().find((tab) => tab.id === shift)?.label || taskShiftLabels[shift] || shift;
 }
 
 function taskKey(shift, taskId) {
@@ -2267,7 +2305,7 @@ function taskArraysFromCompletions(completedTasks = []) {
   const byShift = { dailyTasks: [], pmTasks: [], weeklyTasks: [], tuesdayTasks: [], monthlyTasks: [] };
   completedTasks.forEach((completion) => {
     const name = taskInputName(completion.shift);
-    if (byShift[name] && completion.taskText && !byShift[name].includes(completion.taskText)) byShift[name].push(completion.taskText);
+    if (name && byShift[name] && completion.taskText && !byShift[name].includes(completion.taskText)) byShift[name].push(completion.taskText);
   });
   return byShift;
 }
@@ -2540,7 +2578,7 @@ async function completeDailyTask(button) {
     taskId,
     shift,
     taskText,
-    shiftLabel: taskShiftLabels[shift] || shift,
+    shiftLabel: taskTabLabel(shift),
     completedBy: helperName.value || currentUser?.name || "Staff",
     completedEmail: helperEmail.value || currentUser?.email || "",
     completedAt: new Date().toISOString(),
@@ -2582,13 +2620,116 @@ async function updateDailyCareLog(logId, updates = {}) {
   return updatedLog;
 }
 
+function renderDailyTaskTabs(config = readTaskConfig()) {
+  const tabs = $("#dailyTaskTabs");
+  if (!tabs) return;
+  defaultTaskTabMeta.forEach((tab) => {
+    const button = tabs.querySelector(`[data-task-tab="${tab.id}"]`);
+    if (button) button.textContent = tab.label;
+  });
+  tabs.querySelectorAll("[data-custom-task-tab]").forEach((item) => item.remove());
+  const addButton = tabs.querySelector('[data-action="add-task-tab"]');
+  const customHtml = (config._tabs || [])
+    .map((tab) => `<span class="task-tab-pill" data-custom-task-tab><button type="button" data-task-tab="${escapeHtml(tab.id)}" role="tab" aria-selected="false">${escapeHtml(tab.label)}</button>${currentRole() === "admin" ? `<button type="button" class="remove-task-tab-button" data-action="remove-task-tab" data-task-tab-id="${escapeHtml(tab.id)}" title="Remove tab">&times;</button>` : ""}</span>`)
+    .join("");
+  if (addButton) {
+    addButton.insertAdjacentHTML("beforebegin", customHtml);
+    addButton.hidden = currentRole() !== "admin";
+  } else {
+    tabs.insertAdjacentHTML("beforeend", customHtml);
+  }
+}
+
+function customTaskPanelHtml(tab = {}, tasks = []) {
+  return `<section class="form-section collapsible-section" data-task-panel="${escapeHtml(tab.id)}" data-custom-task-panel data-collapsible-section hidden>
+    <div class="section-heading">
+      <span>${escapeHtml((tab.label || "C").slice(0, 1).toUpperCase())}</span>
+      <div>
+        <h2>${escapeHtml(tab.label)} Tasks</h2>
+        <p>Custom task list for this workflow.</p>
+      </div>
+      <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
+    </div>
+    <div class="section-body">
+      <div class="checklist managed-task-list" data-custom-task-list data-shift="${escapeHtml(tab.id)}">${tasks.map((task) => taskLabel(task, tab.id)).join("")}</div>
+      <div class="admin-task-controls" ${currentRole() === "admin" ? "" : "hidden"}>
+        <input type="text" data-custom-task-input="${escapeHtml(tab.id)}" placeholder="Add a task to ${escapeHtml(tab.label)}" />
+        <button type="button" data-action="add-custom-tab-task" data-shift="${escapeHtml(tab.id)}">Add Task</button>
+      </div>
+    </div>
+  </section>`;
+}
+
+function bindTaskListInteractions(listEl) {
+  if (!listEl || listEl.dataset.taskEventsBound === "true") return;
+  listEl.dataset.taskEventsBound = "true";
+  listEl.addEventListener("click", (event) => {
+    const control = event.target.closest("[data-action]");
+    if (!control) return;
+    if (control.dataset.action === "edit-task") return;
+    event.preventDefault();
+    if (control.dataset.action === "complete-task") completeDailyTask(control);
+    if (control.dataset.action === "remove-task") removeTask(control.dataset.shift, control.dataset.id);
+  });
+  listEl.addEventListener("change", (event) => {
+    const input = event.target.closest('[data-action="edit-task"]');
+    if (!input) return;
+    editTask(input.dataset.shift, input.dataset.id, input.value, input);
+  });
+  listEl.addEventListener("dragstart", (event) => {
+    const row = event.target.closest(".task-item[draggable='true']");
+    if (!row) return;
+    row.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `${row.dataset.shift}:${row.dataset.id}`);
+  });
+  listEl.addEventListener("dragover", (event) => {
+    const row = event.target.closest(".task-item[draggable='true']");
+    if (!row) return;
+    event.preventDefault();
+    row.classList.add("is-drag-over");
+  });
+  listEl.addEventListener("dragleave", (event) => {
+    const row = event.target.closest(".task-item");
+    if (row) row.classList.remove("is-drag-over");
+  });
+  listEl.addEventListener("drop", (event) => {
+    const target = event.target.closest(".task-item[draggable='true']");
+    if (!target) return;
+    event.preventDefault();
+    const [sourceShift, sourceId] = event.dataTransfer.getData("text/plain").split(":");
+    target.classList.remove("is-drag-over");
+    if (sourceShift === target.dataset.shift) reorderTaskByDrag(sourceShift, sourceId, target.dataset.id);
+  });
+  listEl.addEventListener("dragend", () => {
+    listEl.querySelectorAll(".task-item").forEach((row) => row.classList.remove("is-dragging", "is-drag-over"));
+  });
+}
+
+function renderCustomTaskPanels(config = readTaskConfig()) {
+  const container = $("#customTaskPanels");
+  if (!container) return;
+  container.innerHTML = (config._tabs || []).map((tab) => customTaskPanelHtml(tab, config[tab.id] || [])).join("");
+  container.querySelectorAll("[data-custom-task-list]").forEach(bindTaskListInteractions);
+}
+
 function renderDailyTaskLists(selected = {}) {
   const config = readTaskConfig();
-  $("#morningTaskList").innerHTML = config.morning.map((task) => taskLabel(task, "morning")).join("");
-  $("#pmTaskList").innerHTML = config.pm.map((task) => taskLabel(task, "pm")).join("");
-  $("#weeklyTaskList").innerHTML = config.weekly.map((task) => taskLabel(task, "weekly")).join("");
-  $("#tuesdayTaskList").innerHTML = config.tuesday.map((task) => taskLabel(task, "tuesday")).join("");
-  $("#monthlyTaskList").innerHTML = config.monthly.map((task) => taskLabel(task, "monthly")).join("");
+  renderDailyTaskTabs(config);
+  const staticLists = {
+    morningTaskList: "morning",
+    pmTaskList: "pm",
+    weeklyTaskList: "weekly",
+    tuesdayTaskList: "tuesday",
+    monthlyTaskList: "monthly",
+  };
+  Object.entries(staticLists).forEach(([listId, shift]) => {
+    const list = $(`#${listId}`);
+    if (!list) return;
+    list.innerHTML = (config[shift] || []).map((task) => taskLabel(task, shift)).join("");
+    bindTaskListInteractions(list);
+  });
+  renderCustomTaskPanels(config);
   const canManageTasks = currentRole() === "admin";
   $("#dailyTaskAdminControls").hidden = !canManageTasks;
   $("#pmTaskAdminControls").hidden = !canManageTasks;
@@ -2615,6 +2756,62 @@ function setDailyTaskTab(tab = "morning") {
   panels.forEach((panel) => {
     panel.hidden = panel.dataset.taskPanel !== dailyTaskTab;
   });
+}
+
+function taskTabFormHtml() {
+  return `<form id="taskTabForm" class="tracker-form">
+    <label>Tab name<input type="text" name="label" required placeholder="Example: Puppy room, Deep clean, Sunday" /></label>
+    <div class="button-row"><button type="submit">Add Tab</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>`;
+}
+
+function openTaskTabPopup() {
+  showDetailDialog("Add Task Tab", taskTabFormHtml());
+}
+
+function saveTaskTabFromForm(formEl) {
+  if (!validateForm(formEl)) return null;
+  const label = formPayload(formEl).label.trim();
+  const config = readTaskConfig();
+  if (taskTabMeta(config).some((tab) => tab.label.toLowerCase() === label.toLowerCase())) {
+    showToast("A task tab with that name already exists.");
+    return null;
+  }
+  const tab = { id: normalizeTaskTabId(label), label, system: false };
+  config._tabs.push(tab);
+  config[tab.id] = [];
+  writeTaskConfig(config);
+  dailyTaskTab = tab.id;
+  renderDailyTaskLists();
+  return tab;
+}
+
+function taskTabRemoveConfirmHtml(tab = {}) {
+  const tasks = readTaskConfig()[tab.id] || [];
+  return `<div class="tracker-form">
+    <article class="record-card compact-record-card danger-confirm-card">
+      <strong>Remove ${escapeHtml(tab.label)}?</strong>
+      <p>This removes the custom tab and ${tasks.length} saved task${tasks.length === 1 ? "" : "s"} from the task template. Completed work history stays in the daily records.</p>
+    </article>
+    <div class="button-row"><button type="button" class="danger-button" data-action="confirm-remove-task-tab" data-task-tab-id="${escapeHtml(tab.id)}">Confirm Remove</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </div>`;
+}
+
+function openTaskTabRemoveConfirm(tabId = "") {
+  const tab = readTaskConfig()._tabs.find((item) => item.id === tabId);
+  if (tab) showDetailDialog("Confirm Remove Task Tab", taskTabRemoveConfirmHtml(tab));
+}
+
+function removeTaskTab(tabId = "") {
+  const config = readTaskConfig();
+  const tab = config._tabs.find((item) => item.id === tabId);
+  if (!tab) return null;
+  config._tabs = config._tabs.filter((item) => item.id !== tabId);
+  delete config[tabId];
+  writeTaskConfig(config);
+  if (dailyTaskTab === tabId) dailyTaskTab = "morning";
+  renderDailyTaskLists();
+  return tab;
 }
 
 function updateTaskOrder(shift, id, direction) {
@@ -2660,51 +2857,45 @@ function editTask(shift, id, text, sourceInput) {
 
 function removeTask(shift, id) {
   const config = readTaskConfig();
-  config[shift] = config[shift].filter((task) => task.id !== id);
+  config[shift] = (config[shift] || []).filter((task) => task.id !== id);
   writeTaskConfig(config);
   renderDailyTaskLists();
+}
+
+function addTaskToShift(shift = "", text = "") {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    showToast("Enter a task before adding it.");
+    return null;
+  }
+  const config = readTaskConfig();
+  if (!config[shift]) config[shift] = [];
+  config[shift].push({ id: uid("task"), text: trimmed });
+  writeTaskConfig(config);
+  renderDailyTaskLists();
+  showToast("Task added.");
+  return trimmed;
 }
 
 function addCustomTask() {
-  const text = $("#newTaskText").value.trim();
-  if (!text) {
-    showToast("Enter a task before adding it.");
-    return;
-  }
-  const config = readTaskConfig();
-  config.morning.push({ id: uid("task"), text });
-  writeTaskConfig(config);
-  $("#newTaskText").value = "";
-  renderDailyTaskLists();
-  showToast("Task added.");
+  const input = $("#newTaskText");
+  if (input && addTaskToShift("morning", input.value)) input.value = "";
 }
 
 function addPmCustomTask() {
-  const text = $("#newPmTaskText").value.trim();
-  if (!text) {
-    showToast("Enter a PM task before adding it.");
-    return;
-  }
-  const config = readTaskConfig();
-  config.pm.push({ id: uid("task"), text });
-  writeTaskConfig(config);
-  $("#newPmTaskText").value = "";
-  renderDailyTaskLists();
-  showToast("PM task added.");
+  const input = $("#newPmTaskText");
+  if (input && addTaskToShift("pm", input.value)) input.value = "";
 }
 
 function addManagedTask(shift, inputSelector) {
-  const text = $(inputSelector).value.trim();
-  if (!text) {
-    showToast("Enter a task before adding it.");
-    return;
-  }
-  const config = readTaskConfig();
-  config[shift].push({ id: uid("task"), text });
-  writeTaskConfig(config);
-  $(inputSelector).value = "";
-  renderDailyTaskLists();
-  showToast("Task added.");
+  const input = $(inputSelector);
+  if (input && addTaskToShift(shift, input.value)) input.value = "";
+}
+
+function addCustomTabTask(button) {
+  const shift = button.dataset.shift || "";
+  const input = $(`[data-custom-task-input="${shift}"]`);
+  if (input && addTaskToShift(shift, input.value)) input.value = "";
 }
 
 function setOwnedFormLocked(locked) {
@@ -2827,6 +3018,22 @@ function seedDefaultKennelLocations() {
       ...location,
       type: "kennelLocation",
       id: uid("kennelLocation"),
+      submittedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      removed: false,
+    })),
+  );
+}
+
+function seedDefaultKennelBuildings() {
+  if (readRecords("kennelBuilding").length) return;
+  const names = [...new Set(defaultKennelLocations.map((location) => location.building).filter(Boolean))];
+  writeRecords(
+    "kennelBuilding",
+    names.map((name) => ({
+      type: "kennelBuilding",
+      id: uid("kennelBuilding"),
+      name,
       submittedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       removed: false,
@@ -3040,7 +3247,7 @@ function dailyDetailHtml(record) {
   const completedTasks = completedTasksForRecord(record);
   const monthlyTasks = record.monthlyTasks || [];
   const completedHtml = completedTasks.length
-    ? `<div class="detail-row"><strong>Completed tasks</strong><span>${completedTasks.map((task) => `${taskShiftLabels[task.shift] || task.shift}: ${task.taskText} - ${task.completedBy || "Staff"}${task.completedAt ? ` at ${formatDateTime(task.completedAt)}` : ""}`).map(escapeHtml).join("<br>")}</span></div>`
+    ? `<div class="detail-row"><strong>Completed tasks</strong><span>${completedTasks.map((task) => `${task.shiftLabel || taskTabLabel(task.shift)}: ${task.taskText} - ${task.completedBy || "Staff"}${task.completedAt ? ` at ${formatDateTime(task.completedAt)}` : ""}`).map(escapeHtml).join("<br>")}</span></div>`
     : "";
   const careLogHtml = careLogs.length
     ? `<div class="detail-row"><strong>Structured care logs</strong><span>${careLogs.map((log) => `${log.dogName || "Dog"} - ${log.careType || log.category || "Care"}${log.minutes ? ` (${log.minutes} min)` : ""}${log.note || log.notes ? `: ${log.note || log.notes}` : ""}`).map(escapeHtml).join("<br>")}</span></div>`
@@ -5915,8 +6122,6 @@ function renderSettingsUsers() {
   }
 }
 
-const CUSTOM_BUILDING_VALUE = "__custom_building__";
-
 function kennelLocations({ activeOnly = false } = {}) {
   return readRecords("kennelLocation")
     .filter((location) => !location.removed)
@@ -5924,42 +6129,40 @@ function kennelLocations({ activeOnly = false } = {}) {
     .sort((a, b) => `${a.building || ""} ${a.name || ""}`.localeCompare(`${b.building || ""} ${b.name || ""}`));
 }
 
-function kennelBuildingChoices(locations = kennelLocations()) {
-  const savedBuildings = locations.map((location) => location.building || "").filter(Boolean);
-  const preferred = ["Shed", "Mansion"];
-  const custom = [...new Set(savedBuildings.filter((building) => !preferred.includes(building)))].sort();
-  return [...preferred, ...custom];
+function kennelBuildingRecords() {
+  const records = readRecords("kennelBuilding").filter((building) => !building.removed && building.name);
+  const byName = new Map(records.map((building) => [building.name, building]));
+  kennelLocations().forEach((location) => {
+    if (location.building && !byName.has(location.building)) {
+      byName.set(location.building, { type: "kennelBuilding", id: `derived-${location.building}`, name: location.building, derived: true });
+    }
+  });
+  return [...byName.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { numeric: true, sensitivity: "base" }));
+}
+
+function kennelBuildingNames(locations = kennelLocations()) {
+  const names = [...new Set([...kennelBuildingRecords().map((building) => building.name), ...locations.map((location) => location.building)].filter(Boolean))];
+  return names.length ? names : ["Shed", "Mansion"];
 }
 
 function kennelBuildings(locations = kennelLocations({ activeOnly: true })) {
-  const buildings = [...new Set(locations.map((location) => location.building || "").filter(Boolean))].sort();
-  return buildings.length ? buildings : ["Shed", "Mansion"];
+  const names = [...new Set(locations.map((location) => location.building || "").filter(Boolean))].sort();
+  return names.length ? names : kennelBuildingNames(locations);
 }
 
-function kennelBuildingOptions(selectedBuilding = "Shed", { includeCustom = false } = {}) {
-  const choices = kennelBuildingChoices();
-  if (selectedBuilding && selectedBuilding !== CUSTOM_BUILDING_VALUE && !choices.includes(selectedBuilding)) choices.push(selectedBuilding);
-  return `${choices.map((building) => `<option value="${escapeHtml(building)}" ${building === selectedBuilding ? "selected" : ""}>${escapeHtml(building)}</option>`).join("")}${includeCustom ? `<option value="${CUSTOM_BUILDING_VALUE}" ${selectedBuilding === CUSTOM_BUILDING_VALUE ? "selected" : ""}>Add additional building...</option>` : ""}`;
+function activeKennelBuildingName() {
+  const names = kennelBuildingNames();
+  if (!names.includes(kennelBuildingTab)) kennelBuildingTab = names[0] || "Shed";
+  return kennelBuildingTab;
 }
 
-function syncKennelLocationBuildingInput(formEl = $("#kennelLocationForm")) {
-  if (!formEl) return;
-  const select = formEl.elements.building;
-  const label = $("#kennelLocationCustomBuildingLabel");
-  const input = formEl.elements.customBuilding;
-  if (!select || !label || !input) return;
-  const custom = select.value === CUSTOM_BUILDING_VALUE;
-  label.hidden = !custom;
-  input.required = custom;
-  if (!custom) input.value = "";
-}
-
-function renderKennelLocationBuildingOptions(selectedBuilding = "Shed") {
-  const select = $("#kennelLocationBuilding");
-  if (!select) return;
-  select.innerHTML = kennelBuildingOptions(selectedBuilding, { includeCustom: true });
-  select.value = selectedBuilding || "Shed";
-  syncKennelLocationBuildingInput(select.closest("form"));
+function renderKennelBuildingTabs() {
+  const tabs = $("#kennelBuildingTabs");
+  if (!tabs) return;
+  const names = kennelBuildingNames();
+  const active = activeKennelBuildingName();
+  const canManage = currentRole() === "admin";
+  tabs.innerHTML = `${names.map((name) => `<span class="task-tab-pill"><button type="button" data-kennel-building-tab="${escapeHtml(name)}" role="tab" aria-selected="${name === active ? "true" : "false"}" class="${name === active ? "is-active" : ""}">${escapeHtml(name)}</button>${canManage ? `<button type="button" class="remove-task-tab-button" data-action="remove-kennel-building-tab" data-building="${escapeHtml(name)}" title="Remove building tab">&times;</button>` : ""}</span>`).join("")}${canManage ? `<button type="button" class="secondary-button task-add-tab-button" data-action="add-kennel-building-tab">Add Tab</button>` : ""}`;
 }
 
 function kennelLocationOptionsForBuilding(building = "", selectedId = "") {
@@ -5972,12 +6175,118 @@ function kennelLocationOptionsForBuilding(building = "", selectedId = "") {
 function renderKennelLocations() {
   const list = $("#kennelLocationList");
   if (!list) return;
-  const records = kennelLocations();
+  renderKennelBuildingTabs();
+  const active = activeKennelBuildingName();
+  const records = kennelLocations().filter((location) => (location.building || "") === active);
   list.innerHTML = records.length
     ? records
-        .map((location) => `<article class="record-card compact-record-card"><strong>${escapeHtml(location.name || "Kennel")}</strong><span>${escapeHtml(location.building || "")} | ${(location.active === "on" || location.active === true || location.active === "true") ? "Active" : "Inactive"}</span><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-kennel-location" data-id="${escapeHtml(location.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-kennel-location" data-id="${escapeHtml(location.id)}">Remove</button></div></article>`)
+        .map((location) => `<article class="record-card compact-record-card"><strong>${escapeHtml(location.name || "Kennel")}</strong><span>${escapeHtml(active)} | ${(location.active === "on" || location.active === true || location.active === "true") ? "Active" : "Inactive"}</span><div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-kennel-location" data-id="${escapeHtml(location.id)}">Remove</button></div></article>`)
         .join("")
-    : `<article class="record-card compact-record-card"><strong>No kennels saved</strong><p>Add Shed or Mansion kennel names before assigning In Kennel locations.</p></article>`;
+    : `<article class="record-card compact-record-card"><strong>No locations saved for ${escapeHtml(active)}</strong><p>Add kennel, crate, room, or other useful location text above.</p></article>`;
+}
+
+function kennelBuildingFormHtml() {
+  return `<form id="kennelBuildingTabForm" class="tracker-form">
+    <label>Building name<input type="text" name="name" required placeholder="Example: Puppy room, Back kennels, Crates" /></label>
+    <div class="button-row"><button type="submit">Add Tab</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>`;
+}
+
+function openKennelBuildingPopup() {
+  showDetailDialog("Add Building Tab", kennelBuildingFormHtml());
+}
+
+async function saveKennelBuildingFromForm(formEl) {
+  if (currentRole() !== "admin") return null;
+  if (!validateForm(formEl)) return null;
+  const name = formPayload(formEl).name.trim();
+  if (kennelBuildingNames().some((building) => building.toLowerCase() === name.toLowerCase())) {
+    showToast("A building tab with that name already exists.");
+    return null;
+  }
+  const record = upsertRecord("kennelBuilding", {
+    type: "kennelBuilding",
+    id: uid("kennelBuilding"),
+    name,
+    submittedAt: new Date().toISOString(),
+    removed: false,
+  });
+  await sendPayload(record);
+  await addAuditLog("Created kennel building", "kennelBuilding", record, name);
+  kennelBuildingTab = name;
+  renderKennelLocations();
+  return record;
+}
+
+function kennelBuildingRemoveConfirmHtml(building = "") {
+  const count = kennelLocations().filter((location) => (location.building || "") === building).length;
+  return `<div class="tracker-form">
+    <article class="record-card compact-record-card danger-confirm-card">
+      <strong>Remove ${escapeHtml(building)}?</strong>
+      <p>This removes the building tab and ${count} saved location${count === 1 ? "" : "s"} under it.</p>
+    </article>
+    <div class="button-row"><button type="button" class="danger-button" data-action="confirm-remove-kennel-building-tab" data-building="${escapeHtml(building)}">Confirm Remove</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </div>`;
+}
+
+function openKennelBuildingRemoveConfirm(building = "") {
+  if (building) showDetailDialog("Confirm Remove Building Tab", kennelBuildingRemoveConfirmHtml(building));
+}
+
+async function removeKennelBuilding(building = "") {
+  if (!building || currentRole() !== "admin") return null;
+  const now = new Date().toISOString();
+  const buildingRecord = readRecords("kennelBuilding").find((record) => !record.removed && record.name === building);
+  if (buildingRecord) await sendPayload(upsertRecord("kennelBuilding", { ...buildingRecord, removed: true, removedAt: now }));
+  const locations = kennelLocations().filter((location) => (location.building || "") === building);
+  for (const location of locations) {
+    await sendPayload(upsertRecord("kennelLocation", { ...location, removed: true, removedAt: now }));
+  }
+  await addAuditLog("Removed kennel building", "kennelBuilding", buildingRecord || { name: building }, `${building} | ${locations.length} locations`);
+  kennelBuildingTab = kennelBuildingNames()[0] || "Shed";
+  renderKennelLocations();
+  return { building, count: locations.length };
+}
+
+async function addKennelLocationToActiveBuilding() {
+  if (currentRole() !== "admin") return null;
+  const input = $("#newKennelLocationText");
+  const name = input?.value.trim() || "";
+  if (!name) {
+    showToast("Enter a kennel, crate, room, or location note before adding it.");
+    return null;
+  }
+  const building = activeKennelBuildingName();
+  if (kennelLocations().some((location) => (location.building || "") === building && (location.name || "").toLowerCase() === name.toLowerCase())) {
+    showToast("That location already exists in this building tab.");
+    return null;
+  }
+  const record = upsertRecord("kennelLocation", {
+    type: "kennelLocation",
+    id: uid("kennelLocation"),
+    submittedAt: new Date().toISOString(),
+    building,
+    name,
+    active: "on",
+    removed: false,
+  });
+  await sendPayload(record);
+  await addAuditLog("Created kennel location", "kennelLocation", record, `${building} active`);
+  input.value = "";
+  renderKennelLocations();
+  showToast("Location added.");
+  return record;
+}
+
+async function removeKennelLocationById(id = "") {
+  if (currentRole() !== "admin") return null;
+  const location = readRecords("kennelLocation").find((record) => record.id === id && !record.removed);
+  if (!location) return null;
+  const updated = upsertRecord("kennelLocation", { ...location, removed: true, removedAt: new Date().toISOString() });
+  await sendPayload(updated);
+  await addAuditLog("Removed kennel location", "kennelLocation", updated, updated.building || "");
+  renderKennelLocations();
+  return updated;
 }
 
 function renderAuditLog() {
@@ -5990,21 +6299,6 @@ function renderAuditLog() {
       return `<article class="record-card compact-record-card"><strong>${escapeHtml(record.action || "Change")} - ${escapeHtml(record.targetLabel || record.targetType || "")}</strong><span>${escapeHtml(record.actorName || "Admin")} | ${escapeHtml(formatDateTime(record.submittedAt || record.updatedAt))}</span><p>${escapeHtml(record.details || record.targetType || "")}</p>${canRestoreBoardingDog ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="restore-boarding-dog" data-id="${escapeHtml(record.targetId)}">Restore Dog</button></div>` : ""}</article>`;
     }).join("")
     : `<article class="record-card compact-record-card"><strong>No audit activity yet</strong><p>Admin setting, service, user, and kennel changes will appear here.</p></article>`;
-}
-
-function openKennelLocation(record = {}) {
-  const formEl = $("#kennelLocationForm");
-  if (!formEl) return;
-  formEl.reset();
-  formEl.dataset.mode = record.id ? "edit" : "create";
-  renderKennelLocationBuildingOptions(record.building || "Shed");
-  formEl.elements.id.value = record.id || "";
-  formEl.elements.name.value = record.name || "";
-  if (formEl.elements.customBuilding) formEl.elements.customBuilding.value = "";
-  formEl.elements.active.checked = record.id ? record.active === "on" || record.active === true || record.active === "true" : true;
-  syncKennelLocationBuildingInput(formEl);
-  const saveButton = formEl.querySelector('button[type="submit"]');
-  if (saveButton) saveButton.textContent = record.id ? "Update Kennel" : "Save Kennel";
 }
 
 function kennelAssignmentPopupHtml(record = {}, nextStatus = "In Kennel", options = {}) {
@@ -6745,7 +7039,6 @@ function renderAllRecords() {
   renderFinancials();
   renderCfoNotes();
   renderSettingsUsers();
-  if ($("#kennelLocationBuilding") && !$("#kennelLocationBuilding").options.length) renderKennelLocationBuildingOptions("Shed");
   renderKennelLocations();
   renderAuditLog();
   renderNotifications();
@@ -8074,50 +8367,6 @@ function initEvents() {
   $("#addWeeklyTaskButton").addEventListener("click", () => addManagedTask("weekly", "#newWeeklyTaskText"));
   $("#addTuesdayTaskButton").addEventListener("click", () => addManagedTask("tuesday", "#newTuesdayTaskText"));
   $("#addMonthlyTaskButton").addEventListener("click", () => addManagedTask("monthly", "#newMonthlyTaskText"));
-  ["morningTaskList", "pmTaskList", "weeklyTaskList", "tuesdayTaskList", "monthlyTaskList"].forEach((listId) => {
-    const listEl = $(`#${listId}`);
-    listEl.addEventListener("click", (event) => {
-      const control = event.target.closest("[data-action]");
-      if (!control) return;
-      if (control.dataset.action === "edit-task") return;
-      event.preventDefault();
-      if (control.dataset.action === "complete-task") completeDailyTask(control);
-      if (control.dataset.action === "remove-task") removeTask(control.dataset.shift, control.dataset.id);
-    });
-    listEl.addEventListener("change", (event) => {
-      const input = event.target.closest('[data-action="edit-task"]');
-      if (!input) return;
-      editTask(input.dataset.shift, input.dataset.id, input.value, input);
-    });
-    listEl.addEventListener("dragstart", (event) => {
-      const row = event.target.closest(".task-item[draggable='true']");
-      if (!row) return;
-      row.classList.add("is-dragging");
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", `${row.dataset.shift}:${row.dataset.id}`);
-    });
-    listEl.addEventListener("dragover", (event) => {
-      const row = event.target.closest(".task-item[draggable='true']");
-      if (!row) return;
-      event.preventDefault();
-      row.classList.add("is-drag-over");
-    });
-    listEl.addEventListener("dragleave", (event) => {
-      const row = event.target.closest(".task-item");
-      if (row) row.classList.remove("is-drag-over");
-    });
-    listEl.addEventListener("drop", (event) => {
-      const target = event.target.closest(".task-item[draggable='true']");
-      if (!target) return;
-      event.preventDefault();
-      const [sourceShift, sourceId] = event.dataTransfer.getData("text/plain").split(":");
-      target.classList.remove("is-drag-over");
-      if (sourceShift === target.dataset.shift) reorderTaskByDrag(sourceShift, sourceId, target.dataset.id);
-    });
-    listEl.addEventListener("dragend", () => {
-      listEl.querySelectorAll(".task-item").forEach((row) => row.classList.remove("is-dragging", "is-drag-over"));
-    });
-  });
   form.addEventListener("click", (event) => {
     const toggle = event.target.closest('[data-action="toggle-section"]');
     if (!toggle) return;
@@ -8139,10 +8388,12 @@ function initEvents() {
     const scheduleShiftForm = event.target.closest("#scheduleShiftForm");
     const timeOffRequestForm = event.target.closest("#timeOffRequestForm");
     const holidayForm = event.target.closest("#holidayForm");
+    const taskTabForm = event.target.closest("#taskTabForm");
+    const kennelBuildingTabForm = event.target.closest("#kennelBuildingTabForm");
     const ownedDogPhotoUploadForm = event.target.closest("#ownedDogPhotoUploadForm");
     const boardingCheckInForm = event.target.closest("#boardingCheckInForm");
     const boardingCheckInServiceForm = event.target.closest("#boardingCheckInServiceForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm) return;
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm) return;
     event.preventDefault();
     if (boardingCheckInForm) {
       await submitBoardingCheckIn(boardingCheckInForm);
@@ -8181,6 +8432,22 @@ function initEvents() {
       if (saved) {
         $("#detailDialog").close();
         showToast("Holiday saved.");
+      }
+      return;
+    }
+    if (taskTabForm) {
+      const tab = saveTaskTabFromForm(taskTabForm);
+      if (tab) {
+        $("#detailDialog").close();
+        showToast("Task tab added.");
+      }
+      return;
+    }
+    if (kennelBuildingTabForm) {
+      const saved = await saveKennelBuildingFromForm(kennelBuildingTabForm);
+      if (saved) {
+        $("#detailDialog").close();
+        showToast("Building tab added.");
       }
       return;
     }
@@ -8315,6 +8582,16 @@ function initEvents() {
 	    if (action.dataset.action === "popup-quick-care") {
 	      openDashboardQuickCare(action.dataset.id, action.dataset.careType);
 	    }
+    if (action.dataset.action === "confirm-remove-task-tab") {
+      const removed = removeTaskTab(action.dataset.taskTabId);
+      $("#detailDialog").close();
+      if (removed) showToast("Task tab removed.");
+    }
+    if (action.dataset.action === "confirm-remove-kennel-building-tab") {
+      const removed = await removeKennelBuilding(action.dataset.building);
+      $("#detailDialog").close();
+      if (removed) showToast("Building tab removed.");
+    }
     if (action.dataset.action === "open-owned-timeline") {
       openOwnedDogTimeline(action.dataset.id);
     }
@@ -8422,9 +8699,22 @@ function initEvents() {
     updateRotationBanner();
   });
   $("#dailyTaskTabs")?.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-action]");
+    if (action?.dataset.action === "add-task-tab") {
+      openTaskTabPopup();
+      return;
+    }
+    if (action?.dataset.action === "remove-task-tab") {
+      openTaskTabRemoveConfirm(action.dataset.taskTabId);
+      return;
+    }
     const button = event.target.closest("[data-task-tab]");
     if (!button) return;
     setDailyTaskTab(button.dataset.taskTab);
+  });
+  $("#customTaskPanels")?.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="add-custom-tab-task"]');
+    if (button) addCustomTabTask(button);
   });
   form.elements.date.addEventListener("change", () => {
     updateDayFromDate();
@@ -9500,57 +9790,33 @@ function initEvents() {
     const restored = await restoreBoardingDogById(button.dataset.id);
     if (restored) showToast("Boarding dog restored.");
   });
-  $("#kennelLocationForm")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const formEl = event.currentTarget;
-    syncKennelLocationBuildingInput(formEl);
-    if (!validateForm(formEl)) return;
-    const data = formPayload(formEl);
-    data.building = data.building === CUSTOM_BUILDING_VALUE ? String(data.customBuilding || "").trim() : data.building;
-    delete data.customBuilding;
-    if (!data.building) {
-      setFieldError(formEl.elements.customBuilding || formEl.elements.building, "Building is required before saving.");
-      showToast("Enter the additional building name before saving.");
+  $("#kennelBuildingTabs")?.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-action]");
+    if (action?.dataset.action === "add-kennel-building-tab") {
+      openKennelBuildingPopup();
       return;
     }
-    const isEditing = formEl.dataset.mode === "edit" && Boolean(data.id);
-    const existing = isEditing ? readRecords("kennelLocation").find((record) => record.id === data.id) || {} : {};
-    const recordId = isEditing ? data.id : uid("kennelLocation");
-    const record = upsertRecord("kennelLocation", {
-      ...existing,
-      ...data,
-      type: "kennelLocation",
-      id: recordId,
-      submittedAt: existing?.submittedAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      active: formEl.elements.active.checked ? "on" : "",
-      removed: false,
-    });
-    await sendPayload(record);
-    await addAuditLog(isEditing ? "Updated kennel location" : "Created kennel location", "kennelLocation", record, `${record.building || ""} ${record.active ? "active" : "inactive"}`);
-    openKennelLocation({ building: data.building || "Shed" });
+    if (action?.dataset.action === "remove-kennel-building-tab") {
+      openKennelBuildingRemoveConfirm(action.dataset.building);
+      return;
+    }
+    const tab = event.target.closest("[data-kennel-building-tab]");
+    if (!tab) return;
+    kennelBuildingTab = tab.dataset.kennelBuildingTab || "Shed";
     renderKennelLocations();
-    showToast(isEditing ? "Kennel location updated." : "Kennel location added.");
   });
-  $("#newKennelLocationButton")?.addEventListener("click", () => openKennelLocation());
-  $("#kennelLocationBuilding")?.addEventListener("change", (event) => {
-    syncKennelLocationBuildingInput(event.target.closest("form"));
+  $("#addKennelLocationButton")?.addEventListener("click", addKennelLocationToActiveBuilding);
+  $("#newKennelLocationText")?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addKennelLocationToActiveBuilding();
   });
   $("#kennelLocationList")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
-    const location = readRecords("kennelLocation").find((record) => record.id === button.dataset.id);
-    if (!location) return;
-    if (button.dataset.action === "edit-kennel-location") {
-      openKennelLocation(location);
-      return;
-    }
     if (button.dataset.action === "remove-kennel-location") {
-      const updated = upsertRecord("kennelLocation", { ...location, removed: true, removedAt: new Date().toISOString() });
-      await sendPayload(updated);
-      await addAuditLog("Removed kennel location", "kennelLocation", updated, updated.building || "");
-      renderKennelLocations();
-      showToast("Kennel location removed.");
+      const removed = await removeKennelLocationById(button.dataset.id);
+      if (removed) showToast("Kennel location removed.");
     }
   });
 }
@@ -9590,6 +9856,7 @@ async function initializeApp() {
   seedDefaultServices();
   seedDefaultCfoNotes();
   seedDefaultKennelLocations();
+  seedDefaultKennelBuildings();
   const restoredFromSupabase = await restoreSupabaseSession();
   if (!restoredFromSupabase) restoreSession();
   updateConditionalSections();

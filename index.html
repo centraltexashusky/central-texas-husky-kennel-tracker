@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260516-boarding-tabs-1" />
+    <link rel="stylesheet" href="styles.css?v=20260517-custom-tabs-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -414,6 +414,7 @@
           <button type="button" data-task-tab="weekly" role="tab" aria-selected="false">Mondays</button>
           <button type="button" data-task-tab="tuesday" role="tab" aria-selected="false">Tuesdays</button>
           <button type="button" data-task-tab="monthly" role="tab" aria-selected="false">Monthly</button>
+          <button type="button" class="secondary-button task-add-tab-button" data-action="add-task-tab" hidden>Add Tab</button>
         </div>
         <div class="task-progress-banner" id="dailyTaskProgress" aria-live="polite">0 completed | tasks loading</div>
         <label class="toggle-row task-filter-toggle"><input type="checkbox" id="showRemainingTasksOnly" checked /> Remaining tasks only</label>
@@ -513,6 +514,7 @@
             </div>
           </div>
         </section>
+        <div id="customTaskPanels"></div>
       </form>
 
       <section class="recent-submissions">
@@ -1107,16 +1109,11 @@
       <section class="page-view" id="settingsKennelLocationsPage">
         <section class="recent-submissions">
           <div class="section-heading"><span>K</span><div><h2>Kennel Locations</h2><p>Manage the Shed and Mansion kennel choices used when a boarding dog is marked In Kennel.</p></div></div>
-          <form id="kennelLocationForm" class="tracker-form admin-inline-form">
-            <input type="hidden" name="id" />
-            <div class="field-grid">
-              <label>Building<select name="building" id="kennelLocationBuilding" required></select></label>
-              <label id="kennelLocationCustomBuildingLabel" hidden>Additional building<input type="text" name="customBuilding" placeholder="Example: Puppy room" /></label>
-              <label>Kennel name<input type="text" name="name" required placeholder="Example: Shed 1 or Mansion Suite A" /></label>
-            </div>
-            <label class="inline-check"><input type="checkbox" name="active" checked /> Active</label>
-            <div class="button-row"><button type="submit">Save Kennel</button><button type="button" class="secondary-button" id="newKennelLocationButton">New Kennel</button></div>
-          </form>
+          <div class="daily-task-tabs kennel-building-tabs" id="kennelBuildingTabs" role="tablist" aria-label="Kennel building sections"></div>
+          <div class="admin-task-controls kennel-location-add-row">
+            <input type="text" id="newKennelLocationText" placeholder="Add kennel, crate, room, or useful location note" />
+            <button type="button" id="addKennelLocationButton">Add Location</button>
+          </div>
           <div class="record-grid compact-record-grid" id="kennelLocationList"></div>
         </section>
       </section>
@@ -1175,6 +1172,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260517-settings-subpages-1"></script>
+    <script src="script.js?v=20260517-custom-tabs-1"></script>
   </body>
 </html>
