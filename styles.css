@@ -421,7 +421,8 @@ h2 {
   margin-top: 16px;
 }
 
-.boarding-dog-modal:not([hidden]) {
+.boarding-dog-modal:not([hidden]),
+.owned-dog-modal:not([hidden]) {
   border-radius: 8px;
   box-shadow: var(--shadow), 0 0 0 9999px rgba(4, 15, 26, 0.58);
   left: 50%;
@@ -436,7 +437,8 @@ h2 {
   z-index: 1000;
 }
 
-.boarding-dog-modal .section-heading {
+.boarding-dog-modal .section-heading,
+.owned-dog-modal .section-heading {
   align-items: center;
 }
 
@@ -2348,7 +2350,8 @@ h2,
   box-shadow: inset 4px 0 0 rgba(100, 210, 255, 0.38), var(--glass-shadow), var(--glass-specular);
 }
 
-.boarding-dog-modal:not([hidden]) {
+.boarding-dog-modal:not([hidden]),
+.owned-dog-modal:not([hidden]) {
   box-shadow: var(--glass-shadow), var(--glass-specular), 0 0 0 9999px rgba(0, 0, 0, 0.38);
 }
 
@@ -3160,7 +3163,8 @@ button.mobile-dog-photo-button {
     align-items: stretch;
   }
 
-  .boarding-dog-modal:not([hidden]) {
+  .boarding-dog-modal:not([hidden]),
+  .owned-dog-modal:not([hidden]) {
     inset: calc(10px + env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
     max-height: none;
     max-width: none;
@@ -3979,6 +3983,10 @@ body.is-login-view #loginPage .login-auth-section {
 .kennel-location-add-row {
   margin-bottom: 14px;
   margin-top: 8px;
+}
+
+.kennel-building-action-row {
+  margin: 0 0 14px;
 }
 
 body.role-admin #dailyPage .admin-task-controls,

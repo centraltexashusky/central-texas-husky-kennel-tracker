@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260517-boarding-files-refresh-1" />
+    <link rel="stylesheet" href="styles.css?v=20260517-daily-template-refresh-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -655,8 +655,8 @@
           </div>
         </section>
 
-        <section class="form-section detail-panel" id="ownedDogDetail" hidden>
-          <div class="section-heading"><span>E</span><div><h2 id="ownedDogDetailTitle">Add New Dog</h2><p>Use View, Edit, or Log Care from the table to open a dog profile.</p></div></div>
+        <section class="form-section detail-panel owned-dog-modal" id="ownedDogDetail" hidden aria-modal="true" role="dialog">
+          <div class="section-heading"><span>E</span><div><h2 id="ownedDogDetailTitle">Add New Dog</h2><p>Use View, Edit, or Log Care from the table to open a dog profile.</p></div><button type="button" class="secondary-button" id="closeOwnedDogDialogButton">Close</button></div>
           <form id="ourDogForm" class="tracker-form">
             <input type="hidden" name="id" />
             <div class="dog-profile-editor">
@@ -1116,6 +1116,7 @@
             <input type="text" id="newKennelLocationText" placeholder="Add kennel, crate, room, or useful location note" />
             <button type="button" id="addKennelLocationButton">Add Location</button>
           </div>
+          <div class="button-row kennel-building-action-row" id="kennelBuildingActionRow"></div>
           <div class="record-grid compact-record-grid" id="kennelLocationList"></div>
         </section>
       </section>
@@ -1174,6 +1175,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260517-boarding-files-refresh-1"></script>
+    <script src="script.js?v=20260517-daily-template-refresh-1"></script>
   </body>
 </html>

@@ -11,6 +11,8 @@ const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 const APP_PRODUCTION_URL = "https://kennel.centraltexashusky.com/";
 const APP_WIX_EMBED_URL = "https://www.centraltexashusky.com/kennel-tracker";
 const APP_AUTH_REDIRECT_URL = APP_PRODUCTION_URL;
+const TASK_TEMPLATE_RECORD_TYPE = "dailyTaskTemplate";
+const TASK_TEMPLATE_RECORD_ID = "daily-task-template";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -53,6 +55,8 @@ let mediaZoomLevel = 1;
 let customerProfileSyncInProgress = false;
 let authSessionSyncPromise = null;
 let suppressAuthSyncUntil = 0;
+let taskTemplateSyncTimer = null;
+let applyingRemoteTaskConfig = false;
 
 const careDefaults = {
   exerciseFrequencyDays: 1,
@@ -771,8 +775,7 @@ function normalizeRemovedTaskTabs(tabs = []) {
   return [...new Set(tabs.map((tab) => String(tab || "").trim()).filter((tab) => removableIds.has(tab)))];
 }
 
-function readTaskConfig() {
-  const saved = JSON.parse(localStorage.getItem(stateKeys.taskConfig) || "null");
+function normalizeTaskConfig(saved = null) {
   const hasGroup = (group) => saved && Object.prototype.hasOwnProperty.call(saved, group);
   const customTabs = normalizeCustomTaskTabs(saved?._tabs);
   const removedTabs = normalizeRemovedTaskTabs(saved?._removedTabs);
@@ -791,12 +794,67 @@ function readTaskConfig() {
   return config;
 }
 
-function writeTaskConfig(config) {
-  localStorage.setItem(stateKeys.taskConfig, JSON.stringify(config));
+function readTaskConfig() {
+  return normalizeTaskConfig(JSON.parse(localStorage.getItem(stateKeys.taskConfig) || "null"));
+}
+
+function taskTemplatePayload(config = readTaskConfig()) {
+  const timestamp = new Date().toISOString();
+  return {
+    type: TASK_TEMPLATE_RECORD_TYPE,
+    id: TASK_TEMPLATE_RECORD_ID,
+    submittedAt: timestamp,
+    updatedAt: timestamp,
+    templateName: "Daily Tasks",
+    config: normalizeTaskConfig(config),
+  };
+}
+
+async function saveTaskTemplateConfig(config = readTaskConfig()) {
+  if (localTestMode || !supabaseClient || currentRole() !== "admin") return null;
+  return sendPayload(taskTemplatePayload(config));
+}
+
+function scheduleTaskTemplateSync(config = readTaskConfig()) {
+  if (localTestMode || !supabaseClient || currentRole() !== "admin" || applyingRemoteTaskConfig) return;
+  window.clearTimeout(taskTemplateSyncTimer);
+  taskTemplateSyncTimer = window.setTimeout(() => saveTaskTemplateConfig(config), 350);
+}
+
+function writeTaskConfig(config, options = {}) {
+  const normalized = normalizeTaskConfig(config);
+  localStorage.setItem(stateKeys.taskConfig, JSON.stringify(normalized));
+  if (options.syncRemote !== false) scheduleTaskTemplateSync(normalized);
+}
+
+async function persistTaskConfig(config, options = {}) {
+  const normalized = normalizeTaskConfig(config);
+  writeTaskConfig(normalized, { syncRemote: false });
+  if (options.syncRemote !== false) await saveTaskTemplateConfig(normalized);
+  return normalized;
 }
 
 function ensureTaskConfig() {
-  writeTaskConfig(readTaskConfig());
+  writeTaskConfig(readTaskConfig(), { syncRemote: false });
+}
+
+function taskTemplateRecordFromRows(rows = []) {
+  return (rows || [])
+    .filter((row) => row?.type === TASK_TEMPLATE_RECORD_TYPE && row.payload)
+    .map((row) => ({
+      ...row.payload,
+      updatedAt: row.payload.updatedAt || row.updated_at || row.submitted_at || "",
+    }))
+    .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0))[0] || null;
+}
+
+function applyRemoteTaskTemplate(rows = []) {
+  const template = taskTemplateRecordFromRows(rows);
+  if (!template) return false;
+  applyingRemoteTaskConfig = true;
+  writeTaskConfig(normalizeTaskConfig(template.config || template), { syncRemote: false });
+  applyingRemoteTaskConfig = false;
+  return true;
 }
 
 function readTableConfig() {
@@ -2695,18 +2753,18 @@ function customTaskPanelHtml(tab = {}, tasks = []) {
 function bindTaskListInteractions(listEl) {
   if (!listEl || listEl.dataset.taskEventsBound === "true") return;
   listEl.dataset.taskEventsBound = "true";
-  listEl.addEventListener("click", (event) => {
+  listEl.addEventListener("click", async (event) => {
     const control = event.target.closest("[data-action]");
     if (!control) return;
     if (control.dataset.action === "edit-task") return;
     event.preventDefault();
-    if (control.dataset.action === "complete-task") completeDailyTask(control);
-    if (control.dataset.action === "remove-task") removeTask(control.dataset.shift, control.dataset.id);
+    if (control.dataset.action === "complete-task") await completeDailyTask(control);
+    if (control.dataset.action === "remove-task") await removeTask(control.dataset.shift, control.dataset.id);
   });
-  listEl.addEventListener("change", (event) => {
+  listEl.addEventListener("change", async (event) => {
     const input = event.target.closest('[data-action="edit-task"]');
     if (!input) return;
-    editTask(input.dataset.shift, input.dataset.id, input.value, input);
+    await editTask(input.dataset.shift, input.dataset.id, input.value, input);
   });
   listEl.addEventListener("dragstart", (event) => {
     const row = event.target.closest(".task-item[draggable='true']");
@@ -2725,13 +2783,13 @@ function bindTaskListInteractions(listEl) {
     const row = event.target.closest(".task-item");
     if (row) row.classList.remove("is-drag-over");
   });
-  listEl.addEventListener("drop", (event) => {
+  listEl.addEventListener("drop", async (event) => {
     const target = event.target.closest(".task-item[draggable='true']");
     if (!target) return;
     event.preventDefault();
     const [sourceShift, sourceId] = event.dataTransfer.getData("text/plain").split(":");
     target.classList.remove("is-drag-over");
-    if (sourceShift === target.dataset.shift) reorderTaskByDrag(sourceShift, sourceId, target.dataset.id);
+    if (sourceShift === target.dataset.shift) await reorderTaskByDrag(sourceShift, sourceId, target.dataset.id);
   });
   listEl.addEventListener("dragend", () => {
     listEl.querySelectorAll(".task-item").forEach((row) => row.classList.remove("is-dragging", "is-drag-over"));
@@ -2802,7 +2860,7 @@ function openTaskTabPopup() {
   showDetailDialog("Add Task Tab", taskTabFormHtml());
 }
 
-function saveTaskTabFromForm(formEl) {
+async function saveTaskTabFromForm(formEl) {
   if (!validateForm(formEl)) return null;
   const label = formPayload(formEl).label.trim();
   const config = readTaskConfig();
@@ -2810,7 +2868,7 @@ function saveTaskTabFromForm(formEl) {
   if (removedDefault) {
     config._removedTabs = (config._removedTabs || []).filter((tabId) => tabId !== removedDefault.id);
     if (!config[removedDefault.id]) config[removedDefault.id] = [];
-    writeTaskConfig(config);
+    await persistTaskConfig(config);
     dailyTaskTab = removedDefault.id;
     renderDailyTaskLists();
     return removedDefault;
@@ -2822,7 +2880,7 @@ function saveTaskTabFromForm(formEl) {
   const tab = { id: normalizeTaskTabId(label), label, system: false };
   config._tabs.push(tab);
   config[tab.id] = [];
-  writeTaskConfig(config);
+  await persistTaskConfig(config);
   dailyTaskTab = tab.id;
   renderDailyTaskLists();
   return tab;
@@ -2845,7 +2903,7 @@ function openTaskTabRemoveConfirm(tabId = "") {
   if (tab) showDetailDialog("Confirm Remove Task Tab", taskTabRemoveConfirmHtml(tab));
 }
 
-function removeTaskTab(tabId = "") {
+async function removeTaskTab(tabId = "") {
   const config = readTaskConfig();
   const tab = taskTabMeta(config).find((item) => item.id === tabId);
   if (!tab) return null;
@@ -2856,24 +2914,24 @@ function removeTaskTab(tabId = "") {
     config._tabs = config._tabs.filter((item) => item.id !== tabId);
     delete config[tabId];
   }
-  writeTaskConfig(config);
+  await persistTaskConfig(config);
   if (dailyTaskTab === tabId) dailyTaskTab = taskTabMeta(readTaskConfig())[0]?.id || "";
   renderDailyTaskLists();
   return tab;
 }
 
-function updateTaskOrder(shift, id, direction) {
+async function updateTaskOrder(shift, id, direction) {
   const config = readTaskConfig();
   const list = config[shift];
   const index = list.findIndex((task) => task.id === id);
   const nextIndex = direction === "up" ? index - 1 : index + 1;
   if (index < 0 || nextIndex < 0 || nextIndex >= list.length) return;
   [list[index], list[nextIndex]] = [list[nextIndex], list[index]];
-  writeTaskConfig(config);
+  await persistTaskConfig(config);
   renderDailyTaskLists();
 }
 
-function reorderTaskByDrag(shift, sourceId, targetId) {
+async function reorderTaskByDrag(shift, sourceId, targetId) {
   if (currentRole() !== "admin" || !shift || !sourceId || !targetId || sourceId === targetId) return;
   const config = readTaskConfig();
   const list = config[shift] || [];
@@ -2883,12 +2941,12 @@ function reorderTaskByDrag(shift, sourceId, targetId) {
   const [sourceTask] = list.splice(sourceIndex, 1);
   const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
   list.splice(insertIndex, 0, sourceTask);
-  writeTaskConfig(config);
+  await persistTaskConfig(config);
   renderDailyTaskLists();
   showToast("Task order updated.");
 }
 
-function editTask(shift, id, text, sourceInput) {
+async function editTask(shift, id, text, sourceInput) {
   const trimmed = text.trim();
   if (!trimmed) {
     showToast("Task text cannot be blank.");
@@ -2899,18 +2957,18 @@ function editTask(shift, id, text, sourceInput) {
   const task = config[shift]?.find((item) => item.id === id);
   if (!task || task.text === trimmed) return;
   task.text = trimmed;
-  writeTaskConfig(config);
+  await persistTaskConfig(config);
   showToast("Task text updated.");
 }
 
-function removeTask(shift, id) {
+async function removeTask(shift, id) {
   const config = readTaskConfig();
   config[shift] = (config[shift] || []).filter((task) => task.id !== id);
-  writeTaskConfig(config);
+  await persistTaskConfig(config);
   renderDailyTaskLists();
 }
 
-function addTaskToShift(shift = "", text = "") {
+async function addTaskToShift(shift = "", text = "") {
   const trimmed = text.trim();
   if (!trimmed) {
     showToast("Enter a task before adding it.");
@@ -2919,31 +2977,31 @@ function addTaskToShift(shift = "", text = "") {
   const config = readTaskConfig();
   if (!config[shift]) config[shift] = [];
   config[shift].push({ id: uid("task"), text: trimmed });
-  writeTaskConfig(config);
+  await persistTaskConfig(config);
   renderDailyTaskLists();
   showToast("Task added.");
   return trimmed;
 }
 
-function addCustomTask() {
+async function addCustomTask() {
   const input = $("#newTaskText");
-  if (input && addTaskToShift("morning", input.value)) input.value = "";
+  if (input && await addTaskToShift("morning", input.value)) input.value = "";
 }
 
-function addPmCustomTask() {
+async function addPmCustomTask() {
   const input = $("#newPmTaskText");
-  if (input && addTaskToShift("pm", input.value)) input.value = "";
+  if (input && await addTaskToShift("pm", input.value)) input.value = "";
 }
 
-function addManagedTask(shift, inputSelector) {
+async function addManagedTask(shift, inputSelector) {
   const input = $(inputSelector);
-  if (input && addTaskToShift(shift, input.value)) input.value = "";
+  if (input && await addTaskToShift(shift, input.value)) input.value = "";
 }
 
-function addCustomTabTask(button) {
+async function addCustomTabTask(button) {
   const shift = button.dataset.shift || "";
   const input = $(`[data-custom-task-input="${shift}"]`);
-  if (input && addTaskToShift(shift, input.value)) input.value = "";
+  if (input && await addTaskToShift(shift, input.value)) input.value = "";
 }
 
 function setOwnedFormLocked(locked) {
@@ -2999,6 +3057,8 @@ async function loadRemoteRecords() {
     (data || []).forEach((row) => {
       if (grouped[row.type]) grouped[row.type].push(row.payload);
     });
+    const loadedRemoteTaskTemplate = applyRemoteTaskTemplate(data || []);
+    if (!loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
     recordTypes().forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
     if (currentUser) {
       currentUser.role = roleForAccount(currentUser);
@@ -5174,7 +5234,12 @@ async function addBoardingCustomerUpdate() {
 }
 
 function openOwnedDog(record = {}) {
-  $("#ownedDogDetail").hidden = false;
+  const ownedDogDetail = $("#ownedDogDetail");
+  if (ownedDogDetail.parentElement !== document.body) {
+    document.body.appendChild(ownedDogDetail);
+  }
+  ownedDogDetail.hidden = false;
+  ownedDogDetail.scrollTop = 0;
   selectedDogPhotos.owned = null;
   $("#ownedDogDetailTitle").textContent = record.id ? `Edit ${record.callName || "Dog"}` : "Add New Dog";
   $("#ourDogForm").reset();
@@ -5191,7 +5256,6 @@ function openOwnedDog(record = {}) {
   setOwnedDogActiveTab("Overview");
   setOwnedFormLocked(Boolean(record.id));
   $("#deleteOwnedDogButton").hidden = !record.id;
-  window.scrollTo({ top: $("#ownedDogDetail").offsetTop - 12, behavior: "smooth" });
 }
 
 function resetBoardingDogFormForRecord(record = {}) {
@@ -6375,7 +6439,7 @@ function renderKennelBuildingTabs() {
   const names = kennelBuildingNames();
   const active = activeKennelBuildingName();
   const canManage = currentRole() === "admin";
-  tabs.innerHTML = `${names.map((name) => `<span class="task-tab-pill"><button type="button" data-kennel-building-tab="${escapeHtml(name)}" role="tab" aria-selected="${name === active ? "true" : "false"}" class="${name === active ? "is-active" : ""}">${escapeHtml(name)}</button>${canManage ? `<button type="button" class="remove-task-tab-button" data-action="remove-kennel-building-tab" data-building="${escapeHtml(name)}" title="Remove building tab">&times;</button>` : ""}</span>`).join("")}${canManage ? `<button type="button" class="secondary-button task-add-tab-button" data-action="add-kennel-building-tab">Add Tab</button>` : ""}`;
+  tabs.innerHTML = `${names.map((name) => `<span class="task-tab-pill"><button type="button" data-kennel-building-tab="${escapeHtml(name)}" role="tab" aria-selected="${name === active ? "true" : "false"}" class="${name === active ? "is-active" : ""}">${escapeHtml(name)}</button></span>`).join("")}${canManage ? `<button type="button" class="secondary-button task-add-tab-button" data-action="add-kennel-building-tab">Add Tab</button>` : ""}`;
 }
 
 function kennelLocationOptionsForBuilding(building = "", selectedId = "") {
@@ -6390,6 +6454,12 @@ function renderKennelLocations() {
   if (!list) return;
   renderKennelBuildingTabs();
   const active = activeKennelBuildingName();
+  const actionRow = $("#kennelBuildingActionRow");
+  if (actionRow) {
+    actionRow.innerHTML = currentRole() === "admin"
+      ? `<button type="button" class="secondary-button danger-button" data-action="remove-kennel-building-tab" data-building="${escapeHtml(active)}">Delete ${escapeHtml(active)}</button>`
+      : "";
+  }
   const records = kennelLocations().filter((location) => (location.building || "") === active);
   list.innerHTML = records.length
     ? records
@@ -6435,15 +6505,15 @@ function kennelBuildingRemoveConfirmHtml(building = "") {
   const count = kennelLocations().filter((location) => (location.building || "") === building).length;
   return `<div class="tracker-form">
     <article class="record-card compact-record-card danger-confirm-card">
-      <strong>Remove ${escapeHtml(building)}?</strong>
-      <p>This removes the building tab and ${count} saved location${count === 1 ? "" : "s"} under it.</p>
+      <strong>Delete ${escapeHtml(building)}?</strong>
+      <p>This deletes the building tab and ${count} saved location${count === 1 ? "" : "s"} under it.</p>
     </article>
-    <div class="button-row"><button type="button" class="danger-button" data-action="confirm-remove-kennel-building-tab" data-building="${escapeHtml(building)}">Confirm Remove</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+    <div class="button-row"><button type="button" class="danger-button" data-action="confirm-remove-kennel-building-tab" data-building="${escapeHtml(building)}">Delete ${escapeHtml(building)}</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </div>`;
 }
 
 function openKennelBuildingRemoveConfirm(building = "") {
-  if (building) showDetailDialog("Confirm Remove Building Tab", kennelBuildingRemoveConfirmHtml(building));
+  if (building) showDetailDialog("Confirm Delete Building Tab", kennelBuildingRemoveConfirmHtml(building));
 }
 
 async function removeKennelBuilding(building = "") {
@@ -7241,6 +7311,7 @@ async function toggleRecordCompletion(type, id) {
 }
 
 function renderAllRecords() {
+  renderDailyTaskLists();
   renderDashboard();
   renderOwnedDogs();
   renderBoardingDogs();
@@ -8655,7 +8726,7 @@ function initEvents() {
       return;
     }
     if (taskTabForm) {
-      const tab = saveTaskTabFromForm(taskTabForm);
+      const tab = await saveTaskTabFromForm(taskTabForm);
       if (tab) {
         $("#detailDialog").close();
         showToast("Task tab added.");
@@ -8802,7 +8873,7 @@ function initEvents() {
 	      openDashboardQuickCare(action.dataset.id, action.dataset.careType);
 	    }
     if (action.dataset.action === "confirm-remove-task-tab") {
-      const removed = removeTaskTab(action.dataset.taskTabId);
+      const removed = await removeTaskTab(action.dataset.taskTabId);
       $("#detailDialog").close();
       if (removed) showToast("Task tab removed.");
     }
@@ -8821,6 +8892,7 @@ function initEvents() {
         switchPage("ourDogsPage");
         openOwnedDog(dog);
         setOwnedFormLocked(false);
+        showToast("Dog record opened for editing.");
       }
     }
     if (action.dataset.action === "open-boarding-editor") {
@@ -8931,9 +9003,9 @@ function initEvents() {
     if (!button) return;
     setDailyTaskTab(button.dataset.taskTab);
   });
-  $("#customTaskPanels")?.addEventListener("click", (event) => {
+  $("#customTaskPanels")?.addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="add-custom-tab-task"]');
-    if (button) addCustomTabTask(button);
+    if (button) await addCustomTabTask(button);
   });
   form.elements.date.addEventListener("change", () => {
     updateDayFromDate();
@@ -9167,6 +9239,7 @@ function initEvents() {
   $("#ownedDogTableHead").addEventListener("drop", handleTableHeaderDrop);
   $("#ownedDogTableHead").addEventListener("dragend", handleTableHeaderDragEnd);
   $("#addOwnedDogButton").addEventListener("click", () => openOwnedDog());
+  $("#closeOwnedDogDialogButton")?.addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
   $("#cancelOwnedDogEdit").addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
   $("#deleteOwnedDogButton").addEventListener("click", async () => {
     const dog = activeOwnedDog();
@@ -10054,14 +10127,14 @@ function initEvents() {
       openKennelBuildingPopup();
       return;
     }
-    if (action?.dataset.action === "remove-kennel-building-tab") {
-      openKennelBuildingRemoveConfirm(action.dataset.building);
-      return;
-    }
     const tab = event.target.closest("[data-kennel-building-tab]");
     if (!tab) return;
     kennelBuildingTab = tab.dataset.kennelBuildingTab || "Shed";
     renderKennelLocations();
+  });
+  $("#kennelBuildingActionRow")?.addEventListener("click", (event) => {
+    const action = event.target.closest('[data-action="remove-kennel-building-tab"]');
+    if (action) openKennelBuildingRemoveConfirm(action.dataset.building);
   });
   $("#addKennelLocationButton")?.addEventListener("click", addKennelLocationToActiveBuilding);
   $("#newKennelLocationText")?.addEventListener("keydown", (event) => {
