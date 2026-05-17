@@ -41,6 +41,8 @@ let dashboardAlertFilter = "All";
 let dashboardShowAllAlerts = false;
 let timesheetTab = "clock";
 let scheduleWeekDate = todayDate();
+let settingsUserTab = "admin";
+let settingsUserSort = { key: "name", direction: "asc" };
 let boardingDogRosterFilter = "Active dogs";
 let showRemainingTasksOnly = true;
 const selectedDogPhotos = { owned: null, boarding: null, customer: null };
@@ -5801,20 +5803,111 @@ function renderCfoNotes() {
     : "<p>No CFO notes saved yet.</p>";
 }
 
+const settingsUserTabLabels = {
+  admin: "Admin",
+  staff: "Staff",
+  customer: "Customer",
+  member: "Customer Member",
+};
+
+function userMemberFlag(user = {}) {
+  return user.isMember === true || user.isMember === "on" || user.isMember === "true" || user.member === true;
+}
+
+function settingsUserTabFor(user = {}) {
+  if (user.role === "admin") return "admin";
+  if (user.role === "helper") return "staff";
+  if (userMemberFlag(user)) return "member";
+  return "customer";
+}
+
+function settingsUserDisplayRole(user = {}) {
+  return `${roleLabel(user.role)}${userMemberFlag(user) ? " | Member" : ""}`;
+}
+
+function settingsUserPasswordText(user = {}) {
+  return user.passwordChangeRequired ? "Change required" : "Current";
+}
+
+function defaultSettingsUserForActiveTab() {
+  if (settingsUserTab === "admin") return { role: "admin" };
+  if (settingsUserTab === "staff") return { role: "helper" };
+  if (settingsUserTab === "member") return { role: "customer", isMember: true };
+  return { role: "customer" };
+}
+
+function settingsUserSortValue(user = {}, key = "name") {
+  if (key === "email") return user.email || "";
+  if (key === "role") return settingsUserDisplayRole(user);
+  if (key === "password") return settingsUserPasswordText(user);
+  return user.name || user.email || "";
+}
+
+function sortedSettingsUsers(users = []) {
+  const direction = settingsUserSort.direction === "desc" ? -1 : 1;
+  const key = settingsUserSort.key || "name";
+  return [...users].sort((a, b) => {
+    const left = String(settingsUserSortValue(a, key)).toLowerCase();
+    const right = String(settingsUserSortValue(b, key)).toLowerCase();
+    return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }) * direction;
+  });
+}
+
+function setSettingsUserSort(key = "name") {
+  settingsUserSort = {
+    key,
+    direction: settingsUserSort.key === key && settingsUserSort.direction === "asc" ? "desc" : "asc",
+  };
+  renderSettingsUsers();
+}
+
+function renderSettingsUserTabs(users = settingsUsers()) {
+  const counts = { admin: 0, staff: 0, customer: 0, member: 0 };
+  users.forEach((user) => {
+    const tab = settingsUserTabFor(user);
+    counts[tab] = (counts[tab] || 0) + 1;
+  });
+  $$("#settingsUserTabs [data-settings-user-tab]").forEach((button) => {
+    const active = button.dataset.settingsUserTab === settingsUserTab;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  Object.entries(counts).forEach(([tab, count]) => {
+    const counter = $(`[data-settings-user-count="${tab}"]`);
+    if (counter) counter.textContent = count;
+  });
+}
+
+function renderSettingsUserSortHeaders() {
+  $$("#settingsUserTableHead [data-settings-sort]").forEach((header) => {
+    const active = header.dataset.settingsSort === settingsUserSort.key;
+    header.setAttribute("aria-sort", active ? (settingsUserSort.direction === "asc" ? "ascending" : "descending") : "none");
+    header.title = "Double-click to sort ascending or descending.";
+    const indicator = header.querySelector(".sort-indicator");
+    if (indicator) indicator.textContent = active ? settingsUserSort.direction.toUpperCase() : "";
+  });
+}
+
 function renderSettingsUsers() {
   if (!$("#settingsUserTableBody")) return;
   const users = settingsUsers();
-  $("#settingsUserTableBody").innerHTML = users.length
-    ? users
-        .map((user) => `<tr data-id="${user.id}"><td>${escapeHtml(user.name || "")}</td><td>${escapeHtml(user.email || "")}</td><td>${roleLabel(user.role)}${isMemberUser(user) ? " | Member" : ""}</td><td>${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="${user.id}">Remove</button></td></tr>`)
+  const visibleUsers = sortedSettingsUsers(users.filter((user) => settingsUserTabFor(user) === settingsUserTab));
+  const emptyLabel = settingsUserTabLabels[settingsUserTab] || "selected";
+  renderSettingsUserTabs(users);
+  renderSettingsUserSortHeaders();
+  $("#settingsUserTableBody").innerHTML = visibleUsers.length
+    ? visibleUsers
+        .map((user) => `<tr data-id="${user.id}"><td>${escapeHtml(user.name || "")}</td><td>${escapeHtml(user.email || "")}</td><td>${escapeHtml(settingsUserDisplayRole(user))}</td><td>${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="${user.id}">Remove</button></td></tr>`)
         .join("")
-    : `<tr><td colspan="5">No custom users saved yet.</td></tr>`;
+    : `<tr><td colspan="5">No ${escapeHtml(emptyLabel.toLowerCase())} users saved yet.</td></tr>`;
   if ($("#settingsUserCards")) {
-    $("#settingsUserCards").innerHTML = users.length
-      ? users.map((user) => `<button type="button" class="settings-user-card" data-action="view-settings-user" data-id="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || user.email || "User")}</strong><span>${escapeHtml(user.email || "")}</span><small>${escapeHtml(roleLabel(user.role))}${isMemberUser(user) ? " | Member" : ""}${user.passwordChangeRequired ? " | Password change required" : ""}</small></button>`).join("")
-      : `<article class="record-card"><strong>No users saved yet.</strong></article>`;
+    $("#settingsUserCards").innerHTML = visibleUsers.length
+      ? visibleUsers.map((user) => `<button type="button" class="settings-user-card" data-action="view-settings-user" data-id="${escapeHtml(user.id)}"><strong>${escapeHtml(user.name || user.email || "User")}</strong><span>${escapeHtml(user.email || "")}</span><small>${escapeHtml(settingsUserDisplayRole(user))}${user.passwordChangeRequired ? " | Password change required" : ""}</small></button>`).join("")
+      : `<article class="record-card"><strong>No ${escapeHtml(emptyLabel.toLowerCase())} users saved yet.</strong></article>`;
   }
 }
+
+const CUSTOM_BUILDING_VALUE = "__custom_building__";
 
 function kennelLocations({ activeOnly = false } = {}) {
   return readRecords("kennelLocation")
@@ -5823,9 +5916,42 @@ function kennelLocations({ activeOnly = false } = {}) {
     .sort((a, b) => `${a.building || ""} ${a.name || ""}`.localeCompare(`${b.building || ""} ${b.name || ""}`));
 }
 
+function kennelBuildingChoices(locations = kennelLocations()) {
+  const savedBuildings = locations.map((location) => location.building || "").filter(Boolean);
+  const preferred = ["Shed", "Mansion"];
+  const custom = [...new Set(savedBuildings.filter((building) => !preferred.includes(building)))].sort();
+  return [...preferred, ...custom];
+}
+
 function kennelBuildings(locations = kennelLocations({ activeOnly: true })) {
   const buildings = [...new Set(locations.map((location) => location.building || "").filter(Boolean))].sort();
   return buildings.length ? buildings : ["Shed", "Mansion"];
+}
+
+function kennelBuildingOptions(selectedBuilding = "Shed", { includeCustom = false } = {}) {
+  const choices = kennelBuildingChoices();
+  if (selectedBuilding && selectedBuilding !== CUSTOM_BUILDING_VALUE && !choices.includes(selectedBuilding)) choices.push(selectedBuilding);
+  return `${choices.map((building) => `<option value="${escapeHtml(building)}" ${building === selectedBuilding ? "selected" : ""}>${escapeHtml(building)}</option>`).join("")}${includeCustom ? `<option value="${CUSTOM_BUILDING_VALUE}" ${selectedBuilding === CUSTOM_BUILDING_VALUE ? "selected" : ""}>Add additional building...</option>` : ""}`;
+}
+
+function syncKennelLocationBuildingInput(formEl = $("#kennelLocationForm")) {
+  if (!formEl) return;
+  const select = formEl.elements.building;
+  const label = $("#kennelLocationCustomBuildingLabel");
+  const input = formEl.elements.customBuilding;
+  if (!select || !label || !input) return;
+  const custom = select.value === CUSTOM_BUILDING_VALUE;
+  label.hidden = !custom;
+  input.required = custom;
+  if (!custom) input.value = "";
+}
+
+function renderKennelLocationBuildingOptions(selectedBuilding = "Shed") {
+  const select = $("#kennelLocationBuilding");
+  if (!select) return;
+  select.innerHTML = kennelBuildingOptions(selectedBuilding, { includeCustom: true });
+  select.value = selectedBuilding || "Shed";
+  syncKennelLocationBuildingInput(select.closest("form"));
 }
 
 function kennelLocationOptionsForBuilding(building = "", selectedId = "") {
@@ -5863,10 +5989,12 @@ function openKennelLocation(record = {}) {
   if (!formEl) return;
   formEl.reset();
   formEl.dataset.mode = record.id ? "edit" : "create";
+  renderKennelLocationBuildingOptions(record.building || "Shed");
   formEl.elements.id.value = record.id || "";
-  formEl.elements.building.value = record.building || "Shed";
   formEl.elements.name.value = record.name || "";
+  if (formEl.elements.customBuilding) formEl.elements.customBuilding.value = "";
   formEl.elements.active.checked = record.id ? record.active === "on" || record.active === true || record.active === "true" : true;
+  syncKennelLocationBuildingInput(formEl);
   const saveButton = formEl.querySelector('button[type="submit"]');
   if (saveButton) saveButton.textContent = record.id ? "Update Kennel" : "Save Kennel";
 }
@@ -5908,9 +6036,7 @@ function updateKennelAssignmentLocations(formEl) {
 }
 
 function openSettingsUser(record = {}) {
-  $("#settingsUserForm").reset();
-  setFormValues($("#settingsUserForm"), record);
-  if ($("#settingsUserForm").elements.requirePasswordChange) $("#settingsUserForm").elements.requirePasswordChange.checked = true;
+  openSettingsUserPopup(record);
 }
 
 function settingsUserLastLoginText(user = {}) {
@@ -5920,20 +6046,21 @@ function settingsUserLastLoginText(user = {}) {
 }
 
 function settingsUserPopupHtml(user = {}) {
+  const isEdit = Boolean(user.id);
   return `
     <form id="settingsUserPopupForm" class="tracker-form" data-user-id="${escapeHtml(user.id || "")}">
       <input type="hidden" name="id" value="${escapeHtml(user.id || "")}" />
       <article class="record-card compact-record-card settings-user-login-card">
-        <span>Last Login</span>
-        <strong>${escapeHtml(settingsUserLastLoginText(user))}</strong>
-        <p>${user.loginCount ? `${Number(user.loginCount)} recorded login${Number(user.loginCount) === 1 ? "" : "s"}.` : "This updates after the user signs in through the app."}</p>
+        <span>${isEdit ? "Last Login" : "New User"}</span>
+        <strong>${escapeHtml(isEdit ? settingsUserLastLoginText(user) : "Create access for a staff member, admin, customer, or member customer.")}</strong>
+        <p>${isEdit ? (user.loginCount ? `${Number(user.loginCount)} recorded login${Number(user.loginCount) === 1 ? "" : "s"}.` : "This updates after the user signs in through the app.") : "Save the user first, then set a temporary password or send a reset email when needed."}</p>
       </article>
       <div class="field-grid">
         <label>Name<input type="text" name="name" required value="${escapeHtml(user.name || "")}" /></label>
         <label>Email<input type="email" name="email" required value="${escapeHtml(user.email || "")}" /></label>
         <label>Role<select name="role" required><option value="customer" ${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" ${user.role === "helper" ? "selected" : ""}>Staff</option><option value="admin" ${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
       </div>
-      <label class="inline-check"><input type="checkbox" name="isMember" ${isMemberUser(user) ? "checked" : ""} /> Member customer pricing</label>
+      <label class="inline-check"><input type="checkbox" name="isMember" ${userMemberFlag(user) ? "checked" : ""} /> Member customer pricing</label>
       <div class="admin-password-panel">
         <h3>Password Management</h3>
         <p>Set a temporary Supabase password or send a reset email for this user.</p>
@@ -5947,12 +6074,12 @@ function settingsUserPopupHtml(user = {}) {
           <button type="button" class="secondary-button" data-action="popup-send-reset">Send Reset Email</button>
         </div>
       </div>
-      <div class="button-row"><button type="submit">Save User</button><button type="button" class="secondary-button danger-button" data-action="popup-remove-user" data-id="${escapeHtml(user.id || "")}">Remove</button></div>
+      <div class="button-row"><button type="submit">Save User</button>${isEdit ? `<button type="button" class="secondary-button danger-button" data-action="popup-remove-user" data-id="${escapeHtml(user.id || "")}">Remove</button>` : ""}<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
     </form>`;
 }
 
 function openSettingsUserPopup(user = {}) {
-  showDetailDialog(user.id ? `${user.name || user.email || "User"} Access` : "User Access", settingsUserPopupHtml(user));
+  showDetailDialog(user.id ? `${user.name || user.email || "User"} Access` : "Add User", settingsUserPopupHtml(user));
 }
 
 function settingsUserRemoveConfirmHtml(user = {}, options = {}) {
@@ -6056,7 +6183,12 @@ async function restoreBoardingDogById(id = "") {
   return restored;
 }
 
-function settingsFormProfileData(formEl = $("#settingsUserForm")) {
+function activeSettingsUserForm() {
+  return $("#settingsUserPopupForm") || $("#settingsUserForm");
+}
+
+function settingsFormProfileData(formEl = activeSettingsUserForm()) {
+  if (!formEl) return {};
   const data = formPayload(formEl);
   delete data.temporaryPassword;
   delete data.temporaryPasswordConfirm;
@@ -6065,7 +6197,11 @@ function settingsFormProfileData(formEl = $("#settingsUserForm")) {
   return data;
 }
 
-async function saveSettingsUserProfile(extra = {}, formEl = $("#settingsUserForm")) {
+async function saveSettingsUserProfile(extra = {}, formEl = activeSettingsUserForm()) {
+  if (!formEl) {
+    showToast("Open Add User first.");
+    return null;
+  }
   if (!validateForm(formEl)) return null;
   const data = settingsFormProfileData(formEl);
   const existing = data.id ? readRecords("settingsUser").find((user) => user.id === data.id) : savedUserFor({ email: data.email });
@@ -6084,7 +6220,11 @@ async function saveSettingsUserProfile(extra = {}, formEl = $("#settingsUserForm
   return record;
 }
 
-async function adminSetTemporaryPassword(formEl = $("#settingsUserForm"), button = $("#adminSetPasswordButton")) {
+async function adminSetTemporaryPassword(formEl = activeSettingsUserForm(), button = $("#adminSetPasswordButton")) {
+  if (!formEl) {
+    showToast("Open a user before changing a password.");
+    return;
+  }
   if (currentRole() !== "admin") {
     showToast("Admin access required.");
     return;
@@ -6148,7 +6288,11 @@ async function adminSetTemporaryPassword(formEl = $("#settingsUserForm"), button
   );
 }
 
-async function adminSendPasswordResetEmail(formEl = $("#settingsUserForm"), button = $("#adminSendPasswordResetButton")) {
+async function adminSendPasswordResetEmail(formEl = activeSettingsUserForm(), button = $("#adminSendPasswordResetButton")) {
+  if (!formEl) {
+    showToast("Open a user before sending a reset email.");
+    return;
+  }
   if (currentRole() !== "admin") {
     showToast("Admin access required.");
     return;
@@ -6593,6 +6737,7 @@ function renderAllRecords() {
   renderFinancials();
   renderCfoNotes();
   renderSettingsUsers();
+  if ($("#kennelLocationBuilding") && !$("#kennelLocationBuilding").options.length) renderKennelLocationBuildingOptions("Shed");
   renderKennelLocations();
   renderAuditLog();
   renderNotifications();
@@ -8039,9 +8184,11 @@ function initEvents() {
       return;
     }
     if (settingsPopupForm) {
+      const formData = settingsFormProfileData(settingsPopupForm);
+      const wasExisting = Boolean(formData.id || savedUserFor({ email: formData.email })?.id);
       const record = await saveSettingsUserProfile({}, settingsPopupForm);
       if (record) {
-        await addAuditLog("Updated user", "settingsUser", record, roleLabel(record.role));
+        await addAuditLog(wasExisting ? "Updated user" : "Created user", "settingsUser", record, roleLabel(record.role));
         showDetailDialog("User Saved", `<p>${escapeHtml(record.name || record.email)} has been saved.</p>`);
       }
       return;
@@ -9291,7 +9438,7 @@ function initEvents() {
     showToast("CFO note removed.");
   });
 
-  $("#settingsUserForm").addEventListener("submit", async (event) => {
+  $("#settingsUserForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const record = await saveSettingsUserProfile();
     if (!record) return;
@@ -9301,7 +9448,26 @@ function initEvents() {
   });
   $("#adminSetPasswordButton")?.addEventListener("click", () => adminSetTemporaryPassword());
   $("#adminSendPasswordResetButton")?.addEventListener("click", () => adminSendPasswordResetEmail());
-  $("#newSettingsUserButton").addEventListener("click", () => openSettingsUser());
+  $("#newSettingsUserButton")?.addEventListener("click", () => openSettingsUser());
+  $("#openSettingsUserButton")?.addEventListener("click", () => openSettingsUserPopup(defaultSettingsUserForActiveTab()));
+  $("#settingsUserTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-settings-user-tab]");
+    if (!button) return;
+    settingsUserTab = button.dataset.settingsUserTab;
+    renderSettingsUsers();
+  });
+  $("#settingsUserTableHead")?.addEventListener("dblclick", (event) => {
+    const header = event.target.closest("[data-settings-sort]");
+    if (!header) return;
+    setSettingsUserSort(header.dataset.settingsSort);
+  });
+  $("#settingsUserTableHead")?.addEventListener("keydown", (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    const header = event.target.closest("[data-settings-sort]");
+    if (!header) return;
+    event.preventDefault();
+    setSettingsUserSort(header.dataset.settingsSort);
+  });
   $("#settingsUserTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");
     if (!row) return;
@@ -9310,12 +9476,7 @@ function initEvents() {
   });
   $("#settingsUserTableBody").addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="remove-settings-user"]');
-    if (!button) {
-      const row = event.target.closest("tr[data-id]");
-      const user = row ? readRecords("settingsUser").find((item) => item.id === row.dataset.id) : null;
-      if (user) openSettingsUserPopup(user);
-      return;
-    }
+    if (!button) return;
     const user = readRecords("settingsUser").find((item) => item.id === button.dataset.id);
     if (user) openSettingsUserRemoveConfirm(user);
   });
@@ -9334,8 +9495,16 @@ function initEvents() {
   $("#kennelLocationForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
+    syncKennelLocationBuildingInput(formEl);
     if (!validateForm(formEl)) return;
     const data = formPayload(formEl);
+    data.building = data.building === CUSTOM_BUILDING_VALUE ? String(data.customBuilding || "").trim() : data.building;
+    delete data.customBuilding;
+    if (!data.building) {
+      setFieldError(formEl.elements.customBuilding || formEl.elements.building, "Building is required before saving.");
+      showToast("Enter the additional building name before saving.");
+      return;
+    }
     const isEditing = formEl.dataset.mode === "edit" && Boolean(data.id);
     const existing = isEditing ? readRecords("kennelLocation").find((record) => record.id === data.id) || {} : {};
     const recordId = isEditing ? data.id : uid("kennelLocation");
@@ -9356,6 +9525,9 @@ function initEvents() {
     showToast(isEditing ? "Kennel location updated." : "Kennel location added.");
   });
   $("#newKennelLocationButton")?.addEventListener("click", () => openKennelLocation());
+  $("#kennelLocationBuilding")?.addEventListener("change", (event) => {
+    syncKennelLocationBuildingInput(event.target.closest("form"));
+  });
   $("#kennelLocationList")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;

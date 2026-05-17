@@ -383,7 +383,8 @@ h2 {
   text-transform: uppercase;
 }
 
-.data-table th[data-sort-column] {
+.data-table th[data-sort-column],
+.data-table th[data-settings-sort] {
   cursor: pointer;
   user-select: none;
 }
@@ -2493,9 +2494,22 @@ option {
   letter-spacing: 0.08em;
 }
 
-.data-table th[data-sort-column]:hover {
+.data-table th[data-sort-column]:hover,
+.data-table th[data-settings-sort]:hover {
   background: rgba(255, 255, 255, 0.20);
   color: #fff;
+}
+
+.data-table th[data-settings-sort]:focus-visible {
+  outline: 2px solid rgba(59, 163, 255, 0.95);
+  outline-offset: -2px;
+}
+
+.sort-indicator {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.66rem;
+  font-weight: 800;
+  margin-left: 6px;
 }
 
 .data-table tr:hover td {
@@ -2652,6 +2666,28 @@ option {
 
 .settings-user-login-card {
   border-color: rgba(245, 158, 11, 0.55);
+}
+
+.settings-users-toolbar {
+  justify-content: flex-start;
+  margin: 12px 0;
+}
+
+.settings-user-tabs {
+  margin-bottom: 12px;
+}
+
+.settings-user-tabs button span {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 800;
+  justify-content: center;
+  margin-left: 6px;
+  min-width: 24px;
+  padding: 2px 7px;
 }
 
 .service-flag-list {

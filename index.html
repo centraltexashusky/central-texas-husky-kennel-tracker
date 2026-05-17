@@ -1077,24 +1077,18 @@
       </section>
 
       <section class="page-view" id="settingsPage">
-        <section class="form-section">
-          <div class="section-heading"><span>S</span><div><h2>Settings</h2><p>Admin user access controls for staff and customers.</p></div></div>
-          <form id="settingsUserForm" class="tracker-form">
-            <input type="hidden" name="id" />
-            <div class="field-grid">
-              <label>Name<input type="text" name="name" required /></label>
-              <label>Email<input type="email" name="email" required /></label>
-              <label>Role<select name="role" required><option value="customer">Customer</option><option value="helper">Staff</option><option value="admin">Admin</option></select></label>
-            </div>
-            <label class="inline-check"><input type="checkbox" name="isMember" /> Member customer pricing</label>
-            <div class="button-row"><button type="submit">Save User</button><button type="button" class="secondary-button" id="newSettingsUserButton">New User</button></div>
-          </form>
-        </section>
         <section class="recent-submissions">
           <div class="section-heading"><span>U</span><div><h2>Users</h2><p>Double click a user to edit. Remove access when someone no longer needs it.</p></div></div>
+          <div class="button-row settings-users-toolbar"><button type="button" id="openSettingsUserButton">Add User</button></div>
+          <div class="profile-tabs settings-user-tabs" id="settingsUserTabs" role="tablist" aria-label="User type filters">
+            <button type="button" class="secondary-button is-active" data-settings-user-tab="admin" role="tab" aria-selected="true">Admin <span data-settings-user-count="admin">0</span></button>
+            <button type="button" class="secondary-button" data-settings-user-tab="staff" role="tab" aria-selected="false">Staff <span data-settings-user-count="staff">0</span></button>
+            <button type="button" class="secondary-button" data-settings-user-tab="customer" role="tab" aria-selected="false">Customer <span data-settings-user-count="customer">0</span></button>
+            <button type="button" class="secondary-button" data-settings-user-tab="member" role="tab" aria-selected="false">Customer Member <span data-settings-user-count="member">0</span></button>
+          </div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Password</th><th>Action</th></tr></thead>
+              <thead id="settingsUserTableHead"><tr><th data-settings-sort="name" tabindex="0">Name <span class="sort-indicator"></span></th><th data-settings-sort="email" tabindex="0">Email <span class="sort-indicator"></span></th><th data-settings-sort="role" tabindex="0">Role <span class="sort-indicator"></span></th><th data-settings-sort="password" tabindex="0">Password <span class="sort-indicator"></span></th><th>Action</th></tr></thead>
               <tbody id="settingsUserTableBody"></tbody>
             </table>
           </div>
@@ -1109,7 +1103,8 @@
           <form id="kennelLocationForm" class="tracker-form admin-inline-form">
             <input type="hidden" name="id" />
             <div class="field-grid">
-              <label>Building<select name="building" required><option>Shed</option><option>Mansion</option></select></label>
+              <label>Building<select name="building" id="kennelLocationBuilding" required></select></label>
+              <label id="kennelLocationCustomBuildingLabel" hidden>Additional building<input type="text" name="customBuilding" placeholder="Example: Puppy room" /></label>
               <label>Kennel name<input type="text" name="name" required placeholder="Example: Shed 1 or Mansion Suite A" /></label>
             </div>
             <label class="inline-check"><input type="checkbox" name="active" checked /> Active</label>
@@ -1167,6 +1162,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260517-schedule-notifications-1"></script>
+    <script src="script.js?v=20260517-settings-users-1"></script>
   </body>
 </html>
