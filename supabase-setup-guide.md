@@ -11,7 +11,7 @@ Use this after reviewing the local page.
 5. Copy the full SQL into Supabase.
 6. Run it.
 
-This creates one table named `kennel_records` for daily tasks, timesheets, dogs, boarding dogs, requests, maintenance, services, app users, and calendar notes. It also creates a public Supabase Storage bucket named `kennel-media` for dog profile photos, request/maintenance images, and vaccination record uploads.
+This creates one table named `kennel_records` for daily tasks, timesheets, staff schedules, time-off requests, holidays, notifications, dogs, boarding dogs, requests, maintenance, services, app users, and calendar notes. It also creates a public Supabase Storage bucket named `kennel-media` for dog profile photos, request/maintenance images, and vaccination record uploads.
 
 ## 2. Add The Supabase Keys To The Webpage
 

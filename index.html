@@ -44,10 +44,21 @@
             <span id="headerUserName">Not signed in</span>
             <small id="modeLabel">Sign in to continue</small>
           </div>
+          <button type="button" class="sync-button notification-bell-button" id="notificationBellButton" hidden>Alerts <span id="notificationUnreadBadge">0</span></button>
           <button type="button" class="sync-button" id="syncNowButton" hidden>Sync now</button>
           <button type="button" class="sync-button" id="headerLogoutButton" hidden>Log out</button>
         </div>
       </header>
+      <section class="notification-panel" id="notificationPanel" hidden>
+        <div class="notification-panel-header">
+          <div>
+            <h2>Notifications</h2>
+            <p id="notificationPanelSummary">No unread alerts.</p>
+          </div>
+          <button type="button" class="secondary-button" id="markAllNotificationsReadButton">Mark All Read</button>
+        </div>
+        <div class="notification-list" id="notificationList"></div>
+      </section>
       <section class="global-search-panel" id="globalSearchPanel" hidden>
         <label>Quick search<input type="search" id="globalQuickSearch" placeholder="Search dogs, owners, requests, services, notes, and users" /></label>
         <div class="global-search-results" id="globalSearchResults"></div>
@@ -535,9 +546,16 @@
           </div>
 
           <div class="button-row mobile-admin-only" id="timesheetAdminActions"><button type="button" class="secondary-button" id="openTimesheetEditButton">Edit Timesheet</button></div>
+          <div class="profile-tabs timesheet-tabs" id="timesheetTabs" role="tablist" aria-label="Timesheet sections">
+            <button type="button" class="secondary-button is-active" data-timesheet-tab="clock" role="tab" aria-selected="true">Clock</button>
+            <button type="button" class="secondary-button" data-timesheet-tab="schedule" role="tab" aria-selected="false">Schedule</button>
+            <button type="button" class="secondary-button" data-timesheet-tab="timeOff" role="tab" aria-selected="false">Time Off</button>
+            <button type="button" class="secondary-button" data-timesheet-tab="holidays" role="tab" aria-selected="false">Holidays</button>
+            <button type="button" class="secondary-button" data-timesheet-tab="review" role="tab" aria-selected="false">Review</button>
+          </div>
         </section>
 
-        <section class="recent-submissions">
+        <section class="recent-submissions timesheet-tab-panel" id="timesheetClockPanel" data-timesheet-panel="clock">
           <div class="section-heading"><span>W</span><div><h2>Current Week</h2><p>Clock in and clock out records for this week.</p></div></div>
           <div class="button-row export-actions"><button type="button" class="secondary-button" id="exportTimesheetButton">Export Timesheet</button></div>
           <div class="table-wrap">
@@ -553,6 +571,38 @@
             <div class="summary-card"><span>Last Year</span><strong id="lastYearHours">0.00</strong></div>
           </div>
           <div class="helper-total-list" id="weeklyHelperTotals"></div>
+        </section>
+        <section class="recent-submissions timesheet-tab-panel" id="timesheetSchedulePanel" data-timesheet-panel="schedule" hidden>
+          <div class="section-heading"><span>S</span><div><h2>Staff Schedule</h2><p>Plan the week, publish the schedule, and keep coverage visible.</p></div></div>
+          <div class="button-row timesheet-toolbar">
+            <button type="button" class="secondary-button" data-action="schedule-prev-week">Previous Week</button>
+            <button type="button" class="secondary-button" data-action="schedule-this-week">This Week</button>
+            <button type="button" class="secondary-button" data-action="schedule-next-week">Next Week</button>
+            <button type="button" id="copyLastWeekScheduleButton" class="secondary-button mobile-admin-only">Copy Last Week</button>
+            <button type="button" id="openScheduleShiftButton" class="mobile-admin-only">Add Shift</button>
+            <button type="button" id="publishScheduleButton" class="mobile-admin-only">Publish Week</button>
+          </div>
+          <div class="summary-grid" id="scheduleSummaryGrid"></div>
+          <div class="schedule-week-grid" id="scheduleWeekGrid"></div>
+        </section>
+        <section class="recent-submissions timesheet-tab-panel" id="timesheetTimeOffPanel" data-timesheet-panel="timeOff" hidden>
+          <div class="section-heading"><span>O</span><div><h2>Time Off</h2><p>Staff can request days off. Admin can approve, deny, and watch schedule conflicts.</p></div></div>
+          <div class="button-row timesheet-toolbar">
+            <button type="button" id="openTimeOffRequestButton">Request Time Off</button>
+          </div>
+          <div class="record-grid compact-record-grid" id="timeOffRequestList"></div>
+        </section>
+        <section class="recent-submissions timesheet-tab-panel" id="timesheetHolidayPanel" data-timesheet-panel="holidays" hidden>
+          <div class="section-heading"><span>H</span><div><h2>Holidays</h2><p>Track closed days, limited staffing, and holiday pay notes.</p></div></div>
+          <div class="button-row timesheet-toolbar">
+            <button type="button" id="openHolidayButton" class="mobile-admin-only">Add Holiday</button>
+          </div>
+          <div class="record-grid compact-record-grid" id="holidayList"></div>
+        </section>
+        <section class="recent-submissions timesheet-tab-panel" id="timesheetReviewPanel" data-timesheet-panel="review" hidden>
+          <div class="section-heading"><span>R</span><div><h2>Schedule Review</h2><p>Compare scheduled time to actual clock records before payroll or publishing.</p></div></div>
+          <div class="summary-grid" id="scheduleReviewSummary"></div>
+          <div class="record-grid compact-record-grid" id="scheduleReviewIssues"></div>
         </section>
       </section>
 
@@ -1117,6 +1167,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260516-boarding-tabs-1"></script>
+    <script src="script.js?v=20260517-schedule-notifications-1"></script>
   </body>
 </html>

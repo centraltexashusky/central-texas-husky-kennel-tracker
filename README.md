@@ -32,7 +32,38 @@ This is a review version of the kennel operations app.
 - Boarding Dogs: owner contact, emergency contact, vet authorization, boarding schedule, vaccine records, required owner updates, special care, daily owner updates, and requested services
 - Request: items needed and good-to-have suggestions from kennel help
 - Maintenance: repairs or attention needed, with an Urgent Attention option
-- Timesheet: clock in/out, desktop/admin manual entries, current-week records, and last week/month/year summaries
+- Timesheet: clock in/out, desktop/admin manual entries, staff schedule tabs, time-off requests, holidays, current-week records, and schedule-vs-actual review
+
+## Staff Scheduling And Notifications
+
+The Timesheet page includes tabs for Clock, Schedule, Time Off, Holidays, and Review. Scheduling records are saved as typed JSON records in the existing `kennel_records` Supabase table, so no additional database table is required for the first release.
+
+New record types used by this workflow:
+
+- `staffSchedule`
+- `timeOffRequest`
+- `kennelHoliday`
+- `scheduleTemplate`
+- `schedulePublish`
+- `notificationLog`
+- `notificationPreference`
+
+The app creates in-app notifications for new boarding requests, urgent kennel requests, urgent maintenance, time-off review, and schedule publishing. Browser `mailto:` alerts are no longer the primary path; live email/SMS delivery is handled by the Supabase Edge Function at `supabase/functions/send-notification`.
+
+Recommended Supabase Function secrets:
+
+```text
+RESEND_API_KEY
+ALERT_FROM_EMAIL
+ADMIN_ALERT_EMAILS
+TWILIO_ACCOUNT_SID
+TWILIO_AUTH_TOKEN
+TWILIO_FROM_NUMBER
+ADMIN_ALERT_PHONES
+APP_PRODUCTION_URL
+```
+
+Email can go live with only `RESEND_API_KEY`, `ALERT_FROM_EMAIL`, and `ADMIN_ALERT_EMAILS`. SMS is optional and should stay limited to urgent alerts.
 
 ## Persistent Database
 

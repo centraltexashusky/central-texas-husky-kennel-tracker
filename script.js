@@ -39,6 +39,8 @@ let localTestMode = false;
 let dailyTaskTab = "morning";
 let dashboardAlertFilter = "All";
 let dashboardShowAllAlerts = false;
+let timesheetTab = "clock";
+let scheduleWeekDate = todayDate();
 let boardingDogRosterFilter = "Active dogs";
 let showRemainingTasksOnly = true;
 const selectedDogPhotos = { owned: null, boarding: null, customer: null };
@@ -157,6 +159,13 @@ const stateKeys = {
   calendarNote: "cth-calendarNote-records",
   kennelLocation: "cth-kennelLocation-records",
   auditLog: "cth-auditLog-records",
+  staffSchedule: "cth-staffSchedule-records",
+  timeOffRequest: "cth-timeOffRequest-records",
+  kennelHoliday: "cth-kennelHoliday-records",
+  scheduleTemplate: "cth-scheduleTemplate-records",
+  schedulePublish: "cth-schedulePublish-records",
+  notificationLog: "cth-notificationLog-records",
+  notificationPreference: "cth-notificationPreference-records",
   taskConfig: "cth-daily-task-config",
   tableConfig: "cth-table-column-config",
   tableSort: "cth-table-sort-config",
@@ -929,7 +938,7 @@ function initSupabaseClient() {
 }
 
 function recordTypes() {
-  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "auditLog"];
+  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference"];
 }
 
 function settingsUsers() {
@@ -1954,6 +1963,7 @@ function updateHeaderUser() {
   document.body.classList.toggle("role-helper", currentRole() === "helper");
   document.body.classList.toggle("role-admin", currentRole() === "admin");
   document.body.classList.toggle("role-customer", currentRole() === "customer");
+  renderNotifications();
 }
 
 function helperIsLoggedIn() {
@@ -6494,8 +6504,7 @@ async function submitPendingCustomerBooking() {
       cancelledAt: requestStatus === "Pending" ? "" : existingTarget?.cancelledAt || "",
       checkedOutAt: requestStatus === "Pending" ? "" : existingTarget?.checkedOutAt || "",
     };
-    const record = upsertRecord("boardingDog", payload);
-    await sendPayload(record);
+    const record = await saveAndNotify(payload, editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
     await ensureCustomerAccessProfile({
       email: record.ownerEmail,
       name: record.ownerName,
@@ -6586,6 +6595,7 @@ function renderAllRecords() {
   renderSettingsUsers();
   renderKennelLocations();
   renderAuditLog();
+  renderNotifications();
   renderCustomerDogs();
   renderCustomerRequests();
   renderDemoSubmissions();
@@ -6644,6 +6654,224 @@ function openGlobalSearchResult(button) {
   }
   $("#globalQuickSearch").value = "";
   renderGlobalSearchResults();
+}
+
+function currentUserNotificationKey() {
+  return normalizeEmail(currentUser?.email || helperEmail?.value || currentUser?.name || helperName?.value || "unknown");
+}
+
+function notificationVisibleToCurrentUser(notification = {}) {
+  if (!currentUser) return false;
+  if (currentRole() === "admin") return true;
+  const audienceEmails = (notification.audienceEmails || []).map(normalizeEmail);
+  return audienceEmails.includes(normalizeEmail(currentUser.email || helperEmail.value));
+}
+
+function notificationIsRead(notification = {}) {
+  return (notification.readBy || []).includes(currentUserNotificationKey());
+}
+
+function notificationEventConfig(eventName = "", record = {}) {
+  const configs = {
+    customerBoardingRequestCreated: {
+      title: `New boarding request: ${record.dogName || "Customer dog"}`,
+      message: `${record.ownerName || record.ownerEmail || "A customer"} requested ${record.stayType || "boarding"}${boardingScheduleText(record) ? ` for ${boardingScheduleText(record)}` : ""}.`,
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    customerBoardingRequestUpdated: {
+      title: `Boarding request updated: ${record.dogName || "Customer dog"}`,
+      message: `${record.ownerName || record.ownerEmail || "A customer"} updated a boarding request.`,
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    urgentKennelRequestCreated: {
+      title: `Urgent request: ${record.category || "Kennel request"}`,
+      message: record.requestText || "An urgent kennel request was submitted.",
+      priority: "urgent",
+      channels: ["email", "sms", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    urgentMaintenanceCreated: {
+      title: `Urgent maintenance: ${record.location || "Kennel"}`,
+      message: record.issue || "An urgent maintenance item was submitted.",
+      priority: "urgent",
+      channels: ["email", "sms", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    timeOffRequested: {
+      title: `Time off request: ${record.staffName || "Staff"}`,
+      message: `${record.staffName || "Staff"} requested ${dateRangeText(record.startDate, record.endDate)} off.`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    timeOffReviewed: {
+      title: `Time off ${String(record.status || "").toLowerCase()}: ${dateRangeText(record.startDate, record.endDate)}`,
+      message: `${record.reviewedBy || "Admin"} marked your time off request ${record.status || "reviewed"}.`,
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceEmails: [record.staffEmail].filter(Boolean),
+    },
+    schedulePublished: {
+      title: "Kennel schedule published",
+      message: `The schedule for ${dateRangeText(record.weekStart, addDays(record.weekStart, 6))} has been published.`,
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceRoles: ["helper", "admin"],
+    },
+    scheduleChangedAfterPublish: {
+      title: `Schedule changed: ${record.staffName || "Staff"}`,
+      message: `${record.staffName || "A staff member"} has a schedule change on ${record.date || "the published schedule"}.`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceEmails: [record.staffEmail].filter(Boolean),
+      audienceRoles: ["admin"],
+    },
+  };
+  return configs[eventName] || null;
+}
+
+function notificationAudienceEmails(config = {}) {
+  const emails = [...(config.audienceEmails || [])];
+  if ((config.audienceRoles || []).includes("admin")) emails.push(...ADMIN_EMAILS);
+  if ((config.audienceRoles || []).includes("helper") || (config.audienceRoles || []).includes("admin")) {
+    settingsUsers()
+      .filter((user) => !user.removed && (config.audienceRoles || []).includes(user.role))
+      .forEach((user) => emails.push(user.email));
+  }
+  return [...new Set(emails.map(normalizeEmail).filter(Boolean))];
+}
+
+function createNotificationRecord(record = {}, eventName = "", config = {}) {
+  const now = new Date().toISOString();
+  const sourceType = record.type || "";
+  const sourceId = record.id || uid("source");
+  const dedupeKey = `${eventName}:${sourceType}:${sourceId}:${record.updatedAt || record.submittedAt || now}`;
+  const existing = readRecords("notificationLog").find((item) => item.dedupeKey === dedupeKey && !item.removed);
+  if (existing) return existing;
+  return upsertRecord("notificationLog", {
+    type: "notificationLog",
+    id: uid("notification"),
+    submittedAt: now,
+    eventName,
+    dedupeKey,
+    title: config.title,
+    message: config.message,
+    priority: config.priority || "normal",
+    channels: config.channels || ["inApp"],
+    audienceRoles: config.audienceRoles || [],
+    audienceEmails: notificationAudienceEmails(config),
+    sourceType,
+    sourceId,
+    sourceSnapshot: payloadForSheet(record),
+    readBy: [],
+    deliveryStatus: "queued",
+  });
+}
+
+async function notifyIfNeeded(record = {}, eventName = "") {
+  const config = notificationEventConfig(eventName, record);
+  if (!config) return null;
+  const notification = createNotificationRecord(record, eventName, config);
+  renderNotifications();
+  if (!supabaseClient || localTestMode) {
+    return notification;
+  }
+  try {
+    const { error } = await supabaseClient.functions.invoke("send-notification", {
+      body: { eventName, recordId: record.id, record: payloadForSheet(record), notificationId: notification.id },
+    });
+    if (error) throw error;
+    const updated = upsertRecord("notificationLog", { ...notification, deliveryStatus: "sent" });
+    await sendPayload(updated);
+    renderNotifications();
+    return updated;
+  } catch (error) {
+    const failed = upsertRecord("notificationLog", { ...notification, deliveryStatus: "in-app only", deliveryError: error.message || String(error) });
+    await sendPayload(failed);
+    renderNotifications();
+    return failed;
+  }
+}
+
+async function saveAndNotify(record = {}, eventName = "") {
+  const saved = upsertRecord(record.type, record);
+  await sendPayload(saved);
+  if (eventName) await notifyIfNeeded(saved, eventName);
+  return saved;
+}
+
+function renderNotifications() {
+  const button = $("#notificationBellButton");
+  const badge = $("#notificationUnreadBadge");
+  const panel = $("#notificationPanel");
+  const list = $("#notificationList");
+  const summary = $("#notificationPanelSummary");
+  if (!button || !badge || !panel || !list || !summary) return;
+  const available = readRecords("notificationLog")
+    .filter((item) => !item.removed && notificationVisibleToCurrentUser(item))
+    .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
+  const unread = available.filter((item) => !notificationIsRead(item));
+  button.hidden = !helperIsLoggedIn();
+  badge.textContent = unread.length;
+  badge.hidden = !unread.length;
+  summary.textContent = unread.length ? `${unread.length} unread alert${unread.length === 1 ? "" : "s"}.` : "No unread alerts.";
+  list.innerHTML = available.length
+    ? available.slice(0, 12).map((item) => `<article class="notification-item ${notificationIsRead(item) ? "is-read" : ""} ${item.priority === "urgent" ? "is-urgent" : ""}" data-action="open-notification" data-id="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title || "Notification")}</strong><p>${escapeHtml(item.message || "")}</p><span>${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | ${escapeHtml((item.channels || []).join(", ") || "in-app")}</span></article>`).join("")
+    : "<p>No notifications yet.</p>";
+}
+
+async function markNotificationRead(id = "") {
+  const record = readRecords("notificationLog").find((item) => item.id === id);
+  if (!record) return null;
+  const readBy = [...new Set([...(record.readBy || []), currentUserNotificationKey()].filter(Boolean))];
+  const updated = upsertRecord("notificationLog", { ...record, readBy });
+  await sendPayload(updated);
+  renderNotifications();
+  return updated;
+}
+
+async function markAllNotificationsRead() {
+  const visible = readRecords("notificationLog").filter((item) => !item.removed && notificationVisibleToCurrentUser(item) && !notificationIsRead(item));
+  for (const item of visible) {
+    const readBy = [...new Set([...(item.readBy || []), currentUserNotificationKey()].filter(Boolean))];
+    await sendPayload(upsertRecord("notificationLog", { ...item, readBy }));
+  }
+  renderNotifications();
+}
+
+async function openNotification(id = "") {
+  const notification = await markNotificationRead(id);
+  if (!notification) return;
+  $("#notificationPanel").hidden = true;
+  const sourceType = notification.sourceType;
+  const sourceId = notification.sourceId;
+  if (sourceType === "boardingDog") {
+    const record = readRecords("boardingDog").find((item) => item.id === sourceId);
+    if (record) {
+      switchPage("boardingDogsPage");
+      openBoardingDog(record);
+      return;
+    }
+  }
+  if (sourceType === "request" || sourceType === "maintenance") {
+    const record = readRecords(sourceType).find((item) => item.id === sourceId);
+    if (record) {
+      showDetailDialog(titleForRecord(sourceType, record), detailForRecord(sourceType, record), { type: sourceType, id: record.id });
+      return;
+    }
+  }
+  if (sourceType === "timeOffRequest") {
+    const record = readRecords("timeOffRequest").find((item) => item.id === sourceId);
+    if (record) {
+      openTimeOffReviewPopup(record);
+      return;
+    }
+  }
+  showDetailDialog(notification.title || "Notification", `<p>${escapeHtml(notification.message || "")}</p>`);
 }
 
 function emailNow(subjectText, bodyText) {
@@ -6741,11 +6969,16 @@ function renderTimesheet() {
     totals[record.helperName] = (totals[record.helperName] || 0) + Number(record.hours || 0);
     return totals;
   }, {});
-  $("#weeklyHelperTotals").innerHTML = Object.keys(helperTotals).length
-    ? Object.entries(helperTotals).map(([helper, hours]) => `<div class="helper-total-item"><strong>${escapeHtml(isAdmin ? helper : "Your total")}</strong><span>${hours.toFixed(2)} hours this week</span></div>`).join("")
-    : "";
-  if ($("#timesheetAdminActions")) $("#timesheetAdminActions").hidden = !isAdmin;
-}
+	  $("#weeklyHelperTotals").innerHTML = Object.keys(helperTotals).length
+	    ? Object.entries(helperTotals).map(([helper, hours]) => `<div class="helper-total-item"><strong>${escapeHtml(isAdmin ? helper : "Your total")}</strong><span>${hours.toFixed(2)} hours this week</span></div>`).join("")
+	    : "";
+	  if ($("#timesheetAdminActions")) $("#timesheetAdminActions").hidden = !isAdmin;
+	  renderTimesheetTabs();
+	  renderScheduleTab();
+	  renderTimeOffTab();
+	  renderHolidayTab();
+	  renderScheduleReviewTab();
+	}
 
 function saveTimeEntry(payload, options = {}) {
   const existing = payload.id ? readRecords("timesheet").find((record) => record.id === payload.id) : null;
@@ -6871,6 +7104,467 @@ async function removeTimesheetEntryById(id = "") {
   await addAuditLog("Deleted timesheet", "timesheet", removed, `${removed.helperName || "Staff"} | ${removed.date || ""}`);
   renderTimesheet();
   return removed;
+}
+
+function dateRangeText(start = "", end = "") {
+  if (!start && !end) return "";
+  if (!end || start === end) return start || end;
+  return `${start} to ${end}`;
+}
+
+function scheduleWeekStartString(value = scheduleWeekDate) {
+  const source = dateOnly(value) || todayDate();
+  return weekStart(new Date(`${source}T12:00:00`)).toISOString().slice(0, 10);
+}
+
+function scheduleWeekDates(value = scheduleWeekDate) {
+  const start = scheduleWeekStartString(value);
+  return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+}
+
+function setTimesheetTab(tab = "clock") {
+  timesheetTab = ["clock", "schedule", "timeOff", "holidays", "review"].includes(tab) ? tab : "clock";
+  renderTimesheet();
+}
+
+function renderTimesheetTabs() {
+  $$("#timesheetTabs [data-timesheet-tab]").forEach((button) => {
+    const active = button.dataset.timesheetTab === timesheetTab;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  $$("[data-timesheet-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.timesheetPanel !== timesheetTab;
+  });
+}
+
+function staffRecordBelongsToCurrentUser(record = {}) {
+  if (!currentUser) return false;
+  const email = normalizeEmail(currentUser.email || helperEmail.value);
+  const recordEmail = normalizeEmail(record.staffEmail || record.helperEmail || "");
+  if (email && recordEmail && email === recordEmail) return true;
+  const currentNames = [currentUser.name, helperName.value].filter(Boolean).map(normalizeHelperName);
+  return currentNames.includes(normalizeHelperName(record.staffName || record.helperName || ""));
+}
+
+function staffScheduleRecords(options = {}) {
+  const isAdmin = currentRole() === "admin";
+  return readRecords("staffSchedule")
+    .filter((record) => !record.removed && (!options.excludeCancelled || record.status !== "Cancelled"))
+    .filter((record) => isAdmin || staffRecordBelongsToCurrentUser(record));
+}
+
+function staffScheduleRecordsForWeek(start = scheduleWeekStartString()) {
+  const end = addDays(start, 7);
+  return staffScheduleRecords({ excludeCancelled: true }).filter((record) => record.date >= start && record.date < end);
+}
+
+function timeOffRequests(options = {}) {
+  const isAdmin = currentRole() === "admin";
+  return readRecords("timeOffRequest")
+    .filter((record) => !record.removed)
+    .filter((record) => !options.status || record.status === options.status)
+    .filter((record) => isAdmin || staffRecordBelongsToCurrentUser(record));
+}
+
+function holidaysForRange(start = scheduleWeekStartString(), end = addDays(scheduleWeekStartString(), 7)) {
+  return readRecords("kennelHoliday").filter((record) => !record.removed && record.date >= start && record.date < end);
+}
+
+function holidayForDate(date = "") {
+  return readRecords("kennelHoliday").find((record) => !record.removed && record.date === date);
+}
+
+function timeToMinutes(value = "") {
+  const [hours = "0", minutes = "0"] = String(value).split(":");
+  return Number(hours) * 60 + Number(minutes);
+}
+
+function shiftHours(shift = {}) {
+  const start = timeToMinutes(shift.startTime);
+  const end = timeToMinutes(shift.endTime);
+  return Math.max(0, (end - start) / 60);
+}
+
+function displayTime(value = "") {
+  if (!value) return "";
+  const [hourText, minuteText = "00"] = value.split(":");
+  const hour = Number(hourText);
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minuteText} ${suffix}`;
+}
+
+function formatShiftTime(shift = {}) {
+  return [displayTime(shift.startTime), displayTime(shift.endTime)].filter(Boolean).join(" - ");
+}
+
+function staffOptionHtml(record = {}) {
+  const selectedStaff = selectedTimesheetStaff({ helperName: record.staffName, helperEmail: record.staffEmail });
+  return timesheetStaffChoices({ helperName: record.staffName, helperEmail: record.staffEmail }).map((staff) => {
+    const value = timesheetStaffOptionValue(staff);
+    const selected = value === timesheetStaffOptionValue(selectedStaff);
+    return `<option value="${escapeHtml(value)}" data-name="${escapeHtml(staff.name || "")}" data-email="${escapeHtml(staff.email || "")}" ${selected ? "selected" : ""}>${escapeHtml(staff.name || staff.email || "Staff")}</option>`;
+  }).join("");
+}
+
+function selectedStaffFromSelect(selectEl) {
+  const option = selectEl?.selectedOptions?.[0];
+  return {
+    name: option?.dataset.name || option?.textContent || currentUser?.name || helperName.value || "Unknown staff",
+    email: option?.dataset.email || option?.value || currentUser?.email || helperEmail.value || "",
+  };
+}
+
+function weekIsPublished(start = scheduleWeekStartString()) {
+  return readRecords("schedulePublish").some((record) => !record.removed && record.weekStart === start && record.status === "Published");
+}
+
+function shiftOverlaps(a = {}, b = {}) {
+  if (a.date !== b.date) return false;
+  return timeToMinutes(a.startTime) < timeToMinutes(b.endTime) && timeToMinutes(b.startTime) < timeToMinutes(a.endTime);
+}
+
+function staffTimeOffForDate(staffEmail = "", date = "") {
+  const normalized = normalizeEmail(staffEmail);
+  return readRecords("timeOffRequest").filter((request) => {
+    if (request.removed || !request.startDate || !request.endDate) return false;
+    return normalizeEmail(request.staffEmail) === normalized && date >= request.startDate && date <= request.endDate;
+  });
+}
+
+function scheduleWarningsForShift(shift = {}) {
+  const warnings = [];
+  const holiday = holidayForDate(shift.date);
+  if (holiday) warnings.push(`${holiday.name || "Holiday"}: ${holiday.closed ? "closed" : holiday.limitedStaffing ? "limited staffing" : "holiday note"}.`);
+  staffTimeOffForDate(shift.staffEmail, shift.date).forEach((request) => {
+    warnings.push(`${shift.staffName || "Staff"} has ${String(request.status || "Pending").toLowerCase()} time off for this date.`);
+  });
+  readRecords("staffSchedule")
+    .filter((record) => !record.removed && record.status !== "Cancelled" && record.id !== shift.id && normalizeEmail(record.staffEmail) === normalizeEmail(shift.staffEmail))
+    .filter((record) => shiftOverlaps(record, shift))
+    .forEach((record) => warnings.push(`Overlaps ${formatShiftTime(record)} on ${record.date}.`));
+  return warnings;
+}
+
+function renderScheduleTab() {
+  const grid = $("#scheduleWeekGrid");
+  const summary = $("#scheduleSummaryGrid");
+  if (!grid || !summary) return;
+  const start = scheduleWeekStartString();
+  const shifts = staffScheduleRecordsForWeek(start);
+  const holidays = holidaysForRange(start, addDays(start, 7));
+  const totalHours = shifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
+  const published = weekIsPublished(start);
+  summary.innerHTML = [
+    ["Week", dateRangeText(start, addDays(start, 6)), published ? "Published" : "Draft"],
+    ["Scheduled hours", totalHours.toFixed(2), "Across visible staff"],
+    ["Open days", scheduleWeekDates(start).filter((date) => !shifts.some((shift) => shift.date === date)).length, "No shift saved"],
+    ["Holiday flags", holidays.length, "This week"],
+  ].map(([label, value, note]) => `<div class="summary-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><p>${escapeHtml(String(note))}</p></div>`).join("");
+  grid.innerHTML = scheduleWeekDates(start).map((date) => {
+    const dayShifts = shifts.filter((shift) => shift.date === date).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    const holiday = holidayForDate(date);
+    return `<article class="schedule-day-card">
+      <header><strong>${escapeHtml(new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short" }))}</strong><span>${escapeHtml(date.slice(5))}</span></header>
+      ${holiday ? `<div class="status-chip">${escapeHtml(holiday.name || "Holiday")}</div>` : ""}
+      ${dayShifts.length ? dayShifts.map((shift) => {
+        const warnings = scheduleWarningsForShift(shift);
+        return `<button type="button" class="schedule-shift-card ${warnings.length ? "is-warning" : ""}" data-action="edit-shift" data-id="${escapeHtml(shift.id)}"><strong>${escapeHtml(shift.staffName || "Staff")}</strong><span>${escapeHtml(formatShiftTime(shift))}</span><span>${escapeHtml([shift.role, shift.location, shift.status].filter(Boolean).join(" | "))}</span></button>`;
+      }).join("") : `<p>No shifts scheduled.</p>`}
+    </article>`;
+  }).join("");
+  const isAdmin = currentRole() === "admin";
+  ["#openScheduleShiftButton", "#publishScheduleButton", "#copyLastWeekScheduleButton", "#openHolidayButton"].forEach((selector) => {
+    const el = $(selector);
+    if (el) el.hidden = !isAdmin;
+  });
+}
+
+function renderTimeOffTab() {
+  const list = $("#timeOffRequestList");
+  if (!list) return;
+  const records = timeOffRequests().sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
+  const isAdmin = currentRole() === "admin";
+  list.innerHTML = records.length
+    ? records.map((record) => {
+      const conflicts = readRecords("staffSchedule").filter((shift) => !shift.removed && shift.status !== "Cancelled" && normalizeEmail(shift.staffEmail) === normalizeEmail(record.staffEmail) && shift.date >= record.startDate && shift.date <= record.endDate);
+      const actions = isAdmin ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="review-time-off" data-id="${escapeHtml(record.id)}">Review</button></div>` : "";
+      return `<article class="record-card compact-record-card ${record.status === "Pending" ? "is-urgent" : ""}"><strong>${escapeHtml(record.staffName || "Staff")} - ${escapeHtml(record.status || "Pending")}</strong><span>${escapeHtml(dateRangeText(record.startDate, record.endDate))}</span><p>${escapeHtml(record.reason || "No reason recorded.")}</p>${conflicts.length ? `<p>${conflicts.length} scheduled shift conflict${conflicts.length === 1 ? "" : "s"}.</p>` : ""}${actions}</article>`;
+    }).join("")
+    : "<p>No time off requests yet.</p>";
+}
+
+function renderHolidayTab() {
+  const list = $("#holidayList");
+  if (!list) return;
+  const records = readRecords("kennelHoliday").filter((record) => !record.removed).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const isAdmin = currentRole() === "admin";
+  list.innerHTML = records.length
+    ? records.map((record) => `<article class="record-card compact-record-card"><strong>${escapeHtml(record.name || "Holiday")}</strong><span>${escapeHtml(record.date || "")} | ${record.closed ? "Closed" : record.limitedStaffing ? "Limited staffing" : "Holiday note"}</span><p>${escapeHtml(record.staffingNote || "")}</p>${isAdmin ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-holiday" data-id="${escapeHtml(record.id)}">Edit</button></div>` : ""}</article>`).join("")
+    : "<p>No holidays saved yet.</p>";
+}
+
+function reviewIssuesForWeek(start = scheduleWeekStartString()) {
+  const dates = scheduleWeekDates(start);
+  const shifts = staffScheduleRecordsForWeek(start);
+  const timesheets = readRecords("timesheet").filter((record) => !record.removed && record.date >= start && record.date < addDays(start, 7));
+  const issues = [];
+  dates.forEach((date) => {
+    if (!shifts.some((shift) => shift.date === date)) issues.push({ title: "Missing coverage", detail: `No staff shift saved for ${date}.`, priority: "review" });
+  });
+  shifts.forEach((shift) => {
+    scheduleWarningsForShift(shift).forEach((warning) => issues.push({ title: `${shift.staffName || "Staff"} schedule warning`, detail: warning, priority: "review" }));
+    const clocked = timesheets.some((entry) => normalizeEmail(entry.helperEmail) === normalizeEmail(shift.staffEmail) && entry.date === shift.date);
+    if (!clocked && shift.date <= todayDate()) issues.push({ title: "Scheduled staff has no clock record", detail: `${shift.staffName || "Staff"} was scheduled ${shift.date} ${formatShiftTime(shift)}.`, priority: "review" });
+  });
+  timesheets.forEach((entry) => {
+    if (entry.clockInTime && !entry.clockOutTime) issues.push({ title: "Open clock-in", detail: `${entry.helperName || "Staff"} still has an open clock-in from ${formatDateTime(entry.clockInTime)}.`, priority: "urgent" });
+    const scheduled = shifts.some((shift) => normalizeEmail(shift.staffEmail) === normalizeEmail(entry.helperEmail) && shift.date === entry.date);
+    if (!scheduled) issues.push({ title: "Unscheduled clock-in", detail: `${entry.helperName || "Staff"} clocked in on ${entry.date} without a saved shift.`, priority: "review" });
+  });
+  return issues;
+}
+
+function renderScheduleReviewTab() {
+  const summary = $("#scheduleReviewSummary");
+  const list = $("#scheduleReviewIssues");
+  if (!summary || !list) return;
+  const start = scheduleWeekStartString();
+  const shifts = staffScheduleRecordsForWeek(start);
+  const timesheets = readRecords("timesheet").filter((record) => !record.removed && record.date >= start && record.date < addDays(start, 7));
+  const issues = reviewIssuesForWeek(start);
+  const scheduledHours = shifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
+  const actualHours = timesheets.reduce((sum, record) => sum + Number(record.hours || 0), 0);
+  summary.innerHTML = [
+    ["Scheduled", scheduledHours.toFixed(2), "hours"],
+    ["Actual", actualHours.toFixed(2), "hours"],
+    ["Difference", (actualHours - scheduledHours).toFixed(2), "actual minus scheduled"],
+    ["Issues", issues.length, "need review"],
+  ].map(([label, value, note]) => `<div class="summary-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><p>${escapeHtml(note)}</p></div>`).join("");
+  list.innerHTML = issues.length
+    ? issues.map((issue) => `<article class="record-card compact-record-card ${issue.priority === "urgent" ? "is-urgent" : ""}"><strong>${escapeHtml(issue.title)}</strong><p>${escapeHtml(issue.detail)}</p></article>`).join("")
+    : "<p>No schedule issues found for this week.</p>";
+}
+
+function scheduleShiftFormHtml(record = {}) {
+  const isEdit = Boolean(record.id);
+  const start = scheduleWeekStartString();
+  const date = record.date || start;
+  const selected = selectedTimesheetStaff({ helperName: record.staffName, helperEmail: record.staffEmail });
+  const warnings = scheduleWarningsForShift({ ...record, staffName: selected.name, staffEmail: selected.email, date, startTime: record.startTime || "08:00", endTime: record.endTime || "12:00" });
+  return `<form id="scheduleShiftForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}">
+    <div class="field-grid">
+      <label>Staff<select name="staffKey" required>${staffOptionHtml(record)}</select></label>
+      <label>Date<input type="date" name="date" value="${escapeHtml(date)}" required /></label>
+      <label>Start time<input type="time" name="startTime" value="${escapeHtml(record.startTime || "08:00")}" required /></label>
+      <label>End time<input type="time" name="endTime" value="${escapeHtml(record.endTime || "12:00")}" required /></label>
+      <label>Role<input type="text" name="role" value="${escapeHtml(record.role || "Kennel Care")}" /></label>
+      <label>Location<input type="text" name="location" value="${escapeHtml(record.location || "")}" placeholder="Shed, Mansion, both" /></label>
+    </div>
+    <label>Shift note<textarea name="notes" rows="3">${escapeHtml(record.notes || "")}</textarea></label>
+    ${warnings.length ? `<ul class="schedule-warning-list">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
+    <div class="button-row"><button type="submit">${isEdit ? "Save Shift" : "Add Shift"}</button>${isEdit ? `<button type="button" class="secondary-button danger-button" data-action="cancel-shift" data-id="${escapeHtml(record.id)}">Cancel Shift</button>` : ""}<button type="button" class="secondary-button" data-action="close-dialog">Close</button></div>
+  </form>`;
+}
+
+function openScheduleShiftPopup(record = {}) {
+  if (currentRole() !== "admin") {
+    showToast("Admin access required to edit the schedule.");
+    return;
+  }
+  showDetailDialog(record.id ? "Edit Shift" : "Add Shift", scheduleShiftFormHtml(record));
+}
+
+async function saveScheduleShiftFromForm(formEl) {
+  if (!validateForm(formEl)) return null;
+  const data = formPayload(formEl);
+  const existing = data.id ? readRecords("staffSchedule").find((record) => record.id === data.id) : readRecords("staffSchedule").find((record) => record.id === formEl.dataset.id);
+  const staff = selectedStaffFromSelect(formEl.elements.staffKey);
+  const weekStartValue = scheduleWeekStartString(data.date);
+  const publishedWeek = weekIsPublished(weekStartValue);
+  const changedAfterPublish = Boolean(existing?.publishedAt || publishedWeek);
+  const record = {
+    ...(existing || {}),
+    type: "staffSchedule",
+    id: formEl.dataset.id || uid("staffSchedule"),
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
+    staffName: staff.name,
+    staffEmail: staff.email,
+    date: data.date,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    role: data.role || "Kennel Care",
+    location: data.location || "",
+    notes: data.notes || "",
+    status: publishedWeek ? "Published" : existing?.status || "Draft",
+    weekStart: weekStartValue,
+    publishedAt: existing?.publishedAt || (publishedWeek ? new Date().toISOString() : ""),
+    changedAfterPublish,
+  };
+  const saved = await saveAndNotify(record, changedAfterPublish ? "scheduleChangedAfterPublish" : "");
+  renderTimesheet();
+  return saved;
+}
+
+function timeOffRequestFormHtml(record = {}) {
+  return `<form id="timeOffRequestForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}">
+    <div class="field-grid">
+      <label>Start date<input type="date" name="startDate" value="${escapeHtml(record.startDate || todayDate())}" required /></label>
+      <label>End date<input type="date" name="endDate" value="${escapeHtml(record.endDate || record.startDate || todayDate())}" required /></label>
+    </div>
+    <label>Reason<textarea name="reason" rows="3" required>${escapeHtml(record.reason || "")}</textarea></label>
+    <div class="button-row"><button type="submit">Submit Request</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>`;
+}
+
+function openTimeOffRequestPopup(record = {}) {
+  showDetailDialog(record.id ? "Edit Time Off Request" : "Request Time Off", timeOffRequestFormHtml(record));
+}
+
+async function saveTimeOffRequestFromForm(formEl) {
+  if (!validateForm(formEl)) return null;
+  const data = formPayload(formEl);
+  const existing = formEl.dataset.id ? readRecords("timeOffRequest").find((record) => record.id === formEl.dataset.id) : null;
+  const record = {
+    ...(existing || {}),
+    type: "timeOffRequest",
+    id: existing?.id || uid("timeOff"),
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
+    staffName: existing?.staffName || currentUser?.name || helperName.value || "Unknown staff",
+    staffEmail: existing?.staffEmail || currentUser?.email || helperEmail.value || "",
+    startDate: data.startDate,
+    endDate: data.endDate,
+    reason: data.reason || "",
+    status: existing?.status || "Pending",
+  };
+  const saved = await saveAndNotify(record, existing ? "" : "timeOffRequested");
+  renderTimesheet();
+  return saved;
+}
+
+function openTimeOffReviewPopup(record = {}) {
+  showDetailDialog("Review Time Off", `<article class="record-card compact-record-card">
+    <strong>${escapeHtml(record.staffName || "Staff")} - ${escapeHtml(record.status || "Pending")}</strong>
+    <span>${escapeHtml(dateRangeText(record.startDate, record.endDate))}</span>
+    <p>${escapeHtml(record.reason || "")}</p>
+    ${record.reviewNote ? `<p>${escapeHtml(record.reviewNote)}</p>` : ""}
+    <label>Review note<textarea id="timeOffReviewNote" rows="3">${escapeHtml(record.reviewNote || "")}</textarea></label>
+    <div class="record-actions"><button type="button" data-action="approve-time-off" data-id="${escapeHtml(record.id)}">Approve</button><button type="button" class="secondary-button danger-button" data-action="deny-time-off" data-id="${escapeHtml(record.id)}">Deny</button><button type="button" class="secondary-button" data-action="close-dialog">Close</button></div>
+  </article>`);
+}
+
+async function reviewTimeOffRequest(id = "", status = "Approved") {
+  const record = readRecords("timeOffRequest").find((item) => item.id === id && !item.removed);
+  if (!record || currentRole() !== "admin") return null;
+  const reviewNote = $("#timeOffReviewNote")?.value || "";
+  const updated = await saveAndNotify({
+    ...record,
+    status,
+    reviewedBy: currentUser?.name || helperName.value || "Admin",
+    reviewedAt: new Date().toISOString(),
+    reviewNote,
+  }, "timeOffReviewed");
+  renderTimesheet();
+  return updated;
+}
+
+function holidayFormHtml(record = {}) {
+  return `<form id="holidayForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}">
+    <div class="field-grid">
+      <label>Name<input type="text" name="name" value="${escapeHtml(record.name || "")}" required /></label>
+      <label>Date<input type="date" name="date" value="${escapeHtml(record.date || todayDate())}" required /></label>
+      <label>Holiday type<select name="holidayType"><option ${record.holidayType === "Holiday Pay" ? "selected" : ""}>Holiday Pay</option><option ${record.holidayType === "Closed" ? "selected" : ""}>Closed</option><option ${record.holidayType === "Limited Staffing" ? "selected" : ""}>Limited Staffing</option></select></label>
+    </div>
+    <label class="inline-check"><input type="checkbox" name="closed" ${record.closed ? "checked" : ""} /> Closed to normal customer appointments</label>
+    <label class="inline-check"><input type="checkbox" name="limitedStaffing" ${record.limitedStaffing ? "checked" : ""} /> Limited staffing</label>
+    <label class="inline-check"><input type="checkbox" name="paidHoliday" ${record.paidHoliday ? "checked" : ""} /> Paid holiday / holiday rate</label>
+    <label>Staffing note<textarea name="staffingNote" rows="3">${escapeHtml(record.staffingNote || "")}</textarea></label>
+    <div class="button-row"><button type="submit">Save Holiday</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>`;
+}
+
+function openHolidayPopup(record = {}) {
+  if (currentRole() !== "admin") {
+    showToast("Admin access required to edit holidays.");
+    return;
+  }
+  showDetailDialog(record.id ? "Edit Holiday" : "Add Holiday", holidayFormHtml(record));
+}
+
+async function saveHolidayFromForm(formEl) {
+  if (!validateForm(formEl)) return null;
+  const data = formPayload(formEl);
+  const existing = formEl.dataset.id ? readRecords("kennelHoliday").find((record) => record.id === formEl.dataset.id) : null;
+  const record = {
+    ...(existing || {}),
+    type: "kennelHoliday",
+    id: existing?.id || uid("holiday"),
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
+    name: data.name,
+    date: data.date,
+    holidayType: data.holidayType || "",
+    closed: formEl.elements.closed.checked,
+    limitedStaffing: formEl.elements.limitedStaffing.checked,
+    paidHoliday: formEl.elements.paidHoliday.checked,
+    staffingNote: data.staffingNote || "",
+  };
+  const saved = await saveAndNotify(record);
+  renderTimesheet();
+  return saved;
+}
+
+async function cancelScheduleShift(id = "") {
+  const record = readRecords("staffSchedule").find((item) => item.id === id && !item.removed);
+  if (!record || currentRole() !== "admin") return null;
+  const updated = await saveAndNotify({ ...record, status: "Cancelled", cancelledAt: new Date().toISOString(), cancelledBy: currentUser?.name || "Admin" }, record.publishedAt ? "scheduleChangedAfterPublish" : "");
+  renderTimesheet();
+  return updated;
+}
+
+async function publishScheduleWeek() {
+  if (currentRole() !== "admin") return null;
+  const start = scheduleWeekStartString();
+  const shifts = readRecords("staffSchedule").filter((record) => !record.removed && record.status !== "Cancelled" && record.date >= start && record.date < addDays(start, 7));
+  const now = new Date().toISOString();
+  for (const shift of shifts) {
+    await sendPayload(upsertRecord("staffSchedule", { ...shift, status: "Published", publishedAt: now, changedAfterPublish: false, weekStart: start }));
+  }
+  const publishRecord = await saveAndNotify({
+    type: "schedulePublish",
+    id: `schedulePublish-${start}`,
+    submittedAt: now,
+    weekStart: start,
+    weekEnd: addDays(start, 6),
+    status: "Published",
+    publishedAt: now,
+    publishedBy: currentUser?.name || "Admin",
+    shiftCount: shifts.length,
+  }, "schedulePublished");
+  renderTimesheet();
+  return publishRecord;
+}
+
+async function copyLastWeekSchedule() {
+  if (currentRole() !== "admin") return;
+  const start = scheduleWeekStartString();
+  const previousStart = addDays(start, -7);
+  const previous = readRecords("staffSchedule").filter((record) => !record.removed && record.status !== "Cancelled" && record.date >= previousStart && record.date < start);
+  for (const shift of previous) {
+    const copiedDate = addDays(shift.date, 7);
+    const copy = { ...shift, id: uid("staffSchedule"), submittedAt: new Date().toISOString(), date: copiedDate, weekStart: start, status: "Draft", publishedAt: "", changedAfterPublish: false };
+    await sendPayload(upsertRecord("staffSchedule", copy));
+  }
+  renderTimesheet();
+  showToast(`${previous.length} shift${previous.length === 1 ? "" : "s"} copied from last week.`);
+}
+
+function currentShiftForStaff(staffEmailValue = "", atDate = new Date()) {
+  const date = dateTimeLocalValue(atDate).slice(0, 10);
+  const minutes = atDate.getHours() * 60 + atDate.getMinutes();
+  return readRecords("staffSchedule")
+    .filter((shift) => !shift.removed && shift.status !== "Cancelled" && normalizeEmail(shift.staffEmail) === normalizeEmail(staffEmailValue) && shift.date === date)
+    .find((shift) => minutes >= timeToMinutes(shift.startTime) - 30 && minutes <= timeToMinutes(shift.endTime) + 30) || null;
 }
 
 function exportBoardingQueue() {
@@ -7289,10 +7983,13 @@ function initEvents() {
     const careLogEditForm = event.target.closest("#careLogEditForm");
     const kennelAssignmentForm = event.target.closest("#kennelAssignmentForm");
     const timesheetEditForm = event.target.closest("#timesheetEditForm");
+    const scheduleShiftForm = event.target.closest("#scheduleShiftForm");
+    const timeOffRequestForm = event.target.closest("#timeOffRequestForm");
+    const holidayForm = event.target.closest("#holidayForm");
     const ownedDogPhotoUploadForm = event.target.closest("#ownedDogPhotoUploadForm");
     const boardingCheckInForm = event.target.closest("#boardingCheckInForm");
     const boardingCheckInServiceForm = event.target.closest("#boardingCheckInServiceForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm) return;
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm) return;
     event.preventDefault();
     if (boardingCheckInForm) {
       await submitBoardingCheckIn(boardingCheckInForm);
@@ -7308,6 +8005,30 @@ function initEvents() {
     }
     if (quickCareForm) {
       await submitDashboardQuickCare(quickCareForm);
+      return;
+    }
+    if (scheduleShiftForm) {
+      const saved = await saveScheduleShiftFromForm(scheduleShiftForm);
+      if (saved) {
+        $("#detailDialog").close();
+        showToast("Shift saved.");
+      }
+      return;
+    }
+    if (timeOffRequestForm) {
+      const saved = await saveTimeOffRequestFromForm(timeOffRequestForm);
+      if (saved) {
+        $("#detailDialog").close();
+        showToast("Time off request saved.");
+      }
+      return;
+    }
+    if (holidayForm) {
+      const saved = await saveHolidayFromForm(holidayForm);
+      if (saved) {
+        $("#detailDialog").close();
+        showToast("Holiday saved.");
+      }
       return;
     }
     if (stayPopupForm) {
@@ -7421,14 +8142,24 @@ function initEvents() {
       const record = readRecords("timesheet").find((item) => item.id === action.dataset.id && !item.removed);
       if (record) openTimesheetDeleteConfirm(record);
     }
-    if (action.dataset.action === "confirm-delete-timesheet") {
-      const removed = await removeTimesheetEntryById(action.dataset.id);
-      $("#detailDialog").close();
-      if (removed) showToast("Timesheet entry deleted.");
-    }
-    if (action.dataset.action === "popup-quick-care") {
-      openDashboardQuickCare(action.dataset.id, action.dataset.careType);
-    }
+	    if (action.dataset.action === "confirm-delete-timesheet") {
+	      const removed = await removeTimesheetEntryById(action.dataset.id);
+	      $("#detailDialog").close();
+	      if (removed) showToast("Timesheet entry deleted.");
+	    }
+	    if (action.dataset.action === "cancel-shift") {
+	      const cancelled = await cancelScheduleShift(action.dataset.id);
+	      $("#detailDialog").close();
+	      if (cancelled) showToast("Shift cancelled.");
+	    }
+	    if (action.dataset.action === "approve-time-off" || action.dataset.action === "deny-time-off") {
+	      const updated = await reviewTimeOffRequest(action.dataset.id, action.dataset.action === "approve-time-off" ? "Approved" : "Denied");
+	      $("#detailDialog").close();
+	      if (updated) showToast(`Time off ${updated.status.toLowerCase()}.`);
+	    }
+	    if (action.dataset.action === "popup-quick-care") {
+	      openDashboardQuickCare(action.dataset.id, action.dataset.careType);
+	    }
     if (action.dataset.action === "open-owned-timeline") {
       openOwnedDogTimeline(action.dataset.id);
     }
@@ -7616,38 +8347,100 @@ function initEvents() {
       const record = saveTimeEntry({
         id: openRecord.id,
         helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown staff",
-        helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
-        clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
-        clockOutTime,
-        note: openRecord.note === "Open clock-in" ? "" : openRecord.note,
-      }, { silent: true });
+	        helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
+	        clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
+	        clockOutTime,
+	        note: String(openRecord.note || "").startsWith("Open clock-in") ? String(openRecord.note || "").replace(/^Open clock-in\s*\|\s*/, "") : openRecord.note,
+	      }, { silent: true });
       activeClockIn = "";
       localStorage.removeItem("cth-active-clock-in");
       updateTimeDisplays();
       showToast(`Timesheet submitted with ${Number(record.hours || 0).toFixed(2)} hours recorded.`);
       return;
     }
-    const clockInTime = new Date().toISOString();
-    const record = upsertRecord("timesheet", {
-      type: "timesheet",
-      id: uid("timesheet"),
-      submittedAt: clockInTime,
-      date: localDateFromStoredDateTime(clockInTime),
-      helperName: helperName.value || currentUser.name,
-      helperEmail: helperEmail.value || currentUser.email,
-      clockInTime,
-      clockOutTime: "",
-      hours: 0,
-      note: "Open clock-in",
-    });
+	    const clockInTime = new Date().toISOString();
+	    const matchingShift = currentShiftForStaff(helperEmail.value || currentUser.email, new Date());
+	    const scheduleNote = matchingShift ? `Scheduled shift: ${formatShiftTime(matchingShift)}` : "Unscheduled clock-in";
+	    const record = upsertRecord("timesheet", {
+	      type: "timesheet",
+	      id: uid("timesheet"),
+	      submittedAt: clockInTime,
+	      date: localDateFromStoredDateTime(clockInTime),
+	      helperName: helperName.value || currentUser.name,
+	      helperEmail: helperEmail.value || currentUser.email,
+	      clockInTime,
+	      clockOutTime: "",
+	      hours: 0,
+	      note: `Open clock-in | ${scheduleNote}`,
+	      scheduleShiftId: matchingShift?.id || "",
+	      scheduleException: matchingShift ? "" : "Unscheduled clock-in",
+	    });
     activeClockIn = { id: record.id, clockInTime, helperEmail: record.helperEmail };
     localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
     sendPayload(record);
     updateTimeDisplays();
     showToast(`Clock-in confirmed: ${formatDateTime(clockInTime)}.`);
-  });
-  $("#openTimesheetEditButton")?.addEventListener("click", () => openTimesheetEditPopup());
-  $("#timesheetRows").addEventListener("click", (event) => {
+	  });
+	  $("#openTimesheetEditButton")?.addEventListener("click", () => openTimesheetEditPopup());
+	  $("#timesheetTabs")?.addEventListener("click", (event) => {
+	    const button = event.target.closest("[data-timesheet-tab]");
+	    if (!button) return;
+	    setTimesheetTab(button.dataset.timesheetTab);
+	  });
+	  $("#timesheetPage").addEventListener("click", async (event) => {
+	    const action = event.target.closest("[data-action]");
+	    if (action) {
+	      if (action.dataset.action === "schedule-prev-week") {
+	        scheduleWeekDate = addDays(scheduleWeekStartString(), -7);
+	        renderTimesheet();
+	        return;
+	      }
+	      if (action.dataset.action === "schedule-this-week") {
+	        scheduleWeekDate = todayDate();
+	        renderTimesheet();
+	        return;
+	      }
+	      if (action.dataset.action === "schedule-next-week") {
+	        scheduleWeekDate = addDays(scheduleWeekStartString(), 7);
+	        renderTimesheet();
+	        return;
+	      }
+	      if (action.dataset.action === "edit-shift") {
+	        const record = readRecords("staffSchedule").find((item) => item.id === action.dataset.id && !item.removed);
+	        if (record) openScheduleShiftPopup(record);
+	        return;
+	      }
+	      if (action.dataset.action === "review-time-off") {
+	        const record = readRecords("timeOffRequest").find((item) => item.id === action.dataset.id && !item.removed);
+	        if (record) openTimeOffReviewPopup(record);
+	        return;
+	      }
+	      if (action.dataset.action === "edit-holiday") {
+	        const record = readRecords("kennelHoliday").find((item) => item.id === action.dataset.id && !item.removed);
+	        if (record) openHolidayPopup(record);
+	        return;
+	      }
+	    }
+	  });
+	  $("#openScheduleShiftButton")?.addEventListener("click", () => openScheduleShiftPopup());
+	  $("#copyLastWeekScheduleButton")?.addEventListener("click", copyLastWeekSchedule);
+	  $("#publishScheduleButton")?.addEventListener("click", async () => {
+	    const published = await publishScheduleWeek();
+	    if (published) showToast("Schedule published.");
+	  });
+	  $("#openTimeOffRequestButton")?.addEventListener("click", () => openTimeOffRequestPopup());
+	  $("#openHolidayButton")?.addEventListener("click", () => openHolidayPopup());
+	  $("#notificationBellButton")?.addEventListener("click", () => {
+	    const panel = $("#notificationPanel");
+	    panel.hidden = !panel.hidden;
+	    renderNotifications();
+	  });
+	  $("#markAllNotificationsReadButton")?.addEventListener("click", markAllNotificationsRead);
+	  $("#notificationList")?.addEventListener("click", (event) => {
+	    const item = event.target.closest('[data-action="open-notification"]');
+	    if (item) openNotification(item.dataset.id);
+	  });
+	  $("#timesheetRows").addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="edit-time"]');
     if (!button) return;
     const record = readRecords("timesheet").find((item) => item.id === button.dataset.id);
@@ -8215,13 +9008,11 @@ function initEvents() {
         label: "request image",
       });
       const files = mediaItems.map((file) => file.name).join(", ");
-      const staff = staffIdentity();
-      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), requestedBy: staff.name, requestedByEmail: staff.email, mediaFiles: files, mediaItems, urgentNeeds: formEl.querySelector('input[name="urgentNeeds"]').checked };
-      const record = upsertRecord("request", payload);
-      await sendPayload(record);
-      if (record.urgentNeeds) emailNow("Urgent Kennel Request", `Urgent kennel request submitted.\n\nRequested by: ${record.requestedBy}\nCategory: ${record.category}\nRequest: ${record.requestText}\nReason: ${record.reason}`);
-      formEl.reset();
-      renderRequests();
+	      const staff = staffIdentity();
+	      const payload = { type: "request", id: uid("request"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), requestedBy: staff.name, requestedByEmail: staff.email, mediaFiles: files, mediaItems, urgentNeeds: formEl.querySelector('input[name="urgentNeeds"]').checked };
+	      const record = await saveAndNotify(payload, payload.urgentNeeds ? "urgentKennelRequestCreated" : "");
+	      formEl.reset();
+	      renderRequests();
       showDetailDialog("Request Logged", requestDetailHtml(record));
     } catch (error) {
       showDetailDialog("Request Not Logged", `<p>The request could not be saved: ${escapeHtml(error.message)}</p>`);
@@ -8239,12 +9030,10 @@ function initEvents() {
         label: "maintenance image",
       });
       const files = mediaItems.map((file) => file.name).join(", ");
-      const staff = staffIdentity();
-      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), reportedBy: staff.name, reportedByEmail: staff.email, mediaFiles: files, mediaItems, urgentAttention: formEl.querySelector('input[name="urgentAttention"]').checked };
-      const record = upsertRecord("maintenance", payload);
-      await sendPayload(record);
-      if (record.urgentAttention) emailNow("Urgent Kennel Maintenance Attention Needed", `Urgent maintenance item submitted.\n\nLocation: ${record.location}\nReported by: ${record.reportedBy}\nIssue: ${record.issue}\nSuggested action: ${record.suggestedAction}\nFiles uploaded: ${record.mediaFiles || "None"}`);
-      formEl.reset();
+	      const staff = staffIdentity();
+	      const payload = { type: "maintenance", id: uid("maintenance"), submittedAt: new Date().toISOString(), status: "Active", completed: false, completedAt: "", completedBy: "", removed: false, removedAt: "", removedBy: "", ...formPayload(formEl), reportedBy: staff.name, reportedByEmail: staff.email, mediaFiles: files, mediaItems, urgentAttention: formEl.querySelector('input[name="urgentAttention"]').checked };
+	      const record = await saveAndNotify(payload, payload.urgentAttention ? "urgentMaintenanceCreated" : "");
+	      formEl.reset();
       renderMaintenance();
       showDetailDialog("Maintenance Item Logged", maintenanceDetailHtml(record));
     } catch (error) {

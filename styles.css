@@ -1899,6 +1899,19 @@ button:disabled {
   margin-top: 22px;
 }
 
+.timesheet-tabs {
+  margin-top: 18px;
+}
+
+.timesheet-toolbar {
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.timesheet-tab-panel[hidden] {
+  display: none !important;
+}
+
 .time-card {
   background: #f6f8f7;
   border: 1px solid var(--line);
@@ -1918,6 +1931,152 @@ button:disabled {
 .time-card strong {
   font-size: 1.1rem;
   min-height: 28px;
+}
+
+.schedule-week-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.schedule-day-card {
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  min-height: 176px;
+  padding: 12px;
+}
+
+.schedule-day-card header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.schedule-day-card header span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.schedule-shift-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.schedule-shift-card.is-warning {
+  border-left-color: var(--gold);
+}
+
+.schedule-shift-card.is-conflict {
+  border-left-color: var(--red);
+}
+
+.schedule-shift-card strong {
+  font-size: 0.94rem;
+}
+
+.schedule-shift-card span,
+.schedule-warning-list {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.schedule-warning-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.notification-bell-button {
+  position: relative;
+}
+
+.notification-bell-button span {
+  background: var(--red);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-grid;
+  font-size: 0.72rem;
+  font-weight: 900;
+  margin-left: 6px;
+  min-width: 22px;
+  padding: 2px 6px;
+  place-items: center;
+}
+
+.notification-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  margin-left: auto;
+  max-width: 520px;
+  padding: 14px;
+  position: relative;
+  z-index: 8;
+}
+
+.notification-panel-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.notification-panel-header h2,
+.notification-panel-header p {
+  margin: 0;
+}
+
+.notification-panel-header p {
+  color: var(--muted);
+}
+
+.notification-list {
+  display: grid;
+  gap: 8px;
+}
+
+.notification-item {
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.notification-item.is-urgent {
+  border-left-color: var(--red);
+}
+
+.notification-item.is-read {
+  opacity: 0.72;
+}
+
+.notification-item strong {
+  display: block;
+}
+
+.notification-item span,
+.notification-item p {
+  color: var(--muted);
+  margin: 0;
 }
 
 .recent-submissions {
@@ -2372,6 +2531,10 @@ option {
 .owned-profile-section,
 .boarding-profile-section,
 .compact-record-card,
+.schedule-day-card,
+.schedule-shift-card,
+.notification-panel,
+.notification-item,
 .filter-toolbar,
 .profile-tabs {
   background: rgba(8, 17, 27, 0.66);
@@ -2427,6 +2590,22 @@ option {
 .care-filter-toolbar .is-active {
   background: rgba(185, 222, 207, 0.24);
   border-color: rgba(185, 222, 207, 0.44);
+}
+
+.schedule-day-card,
+.schedule-shift-card,
+.notification-panel,
+.notification-item {
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: var(--glass-specular);
+}
+
+.notification-item span,
+.notification-item p,
+.schedule-shift-card span,
+.schedule-warning-list,
+.schedule-day-card header span {
+  color: var(--muted);
 }
 
 .care-summary-grid {
