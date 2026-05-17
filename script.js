@@ -76,6 +76,7 @@ const taskShiftLabels = {
 };
 const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage"];
 const mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
+const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsAuditLogPage"]);
 
 const boardingLifecycleStatuses = ["Pending", "Approved", "Checked In", "In Kennel", "Ready For Pickup", "Checked Out", "Cancelled"];
 const boardingStatusTransitions = {
@@ -1983,19 +1984,26 @@ function staffIdentity() {
   };
 }
 
+function normalizePageId(pageId = "") {
+  return pageId === "settingsPage" ? "settingsUsersPage" : pageId;
+}
+
 function navigationButtonForPage(pageId) {
-  return $(`.side-nav .nav-button[data-page="${pageId}"]`);
+  return $(`.side-nav .nav-button[data-page="${normalizePageId(pageId)}"]`);
 }
 
 function pageAllowed(pageId) {
+  pageId = normalizePageId(pageId);
   if (pageId === "loginPage") return true;
+  const page = document.getElementById(pageId);
+  if (!page?.classList.contains("page-view")) return false;
   const button = navigationButtonForPage(pageId);
   const roles = (button?.dataset.roles || "helper,admin").split(",");
   return helperIsLoggedIn() && roles.includes(currentRole());
 }
 
 function pageIdFromHash() {
-  const raw = decodeURIComponent(window.location.hash || "").replace(/^#/, "").trim();
+  const raw = normalizePageId(decodeURIComponent(window.location.hash || "").replace(/^#/, "").trim());
   if (!raw) return "";
   const page = document.getElementById(raw);
   return page?.classList.contains("page-view") ? raw : "";
@@ -2017,7 +2025,7 @@ function activePageId() {
 }
 
 function navigationPageEntries() {
-  return $$(".side-nav .nav-button").map((button) => ({
+  return $$(".side-nav .nav-button[data-page]:not([data-settings-root])").map((button) => ({
     label: button.textContent.trim(),
     pageId: button.dataset.page,
   }));
@@ -6756,7 +6764,7 @@ function globalSearchEntries() {
   readRecords("maintenance").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.location || "Maintenance", detail: record.issue || record.suggestedAction || "", type: "maintenance", id: record.id, pageId: "maintenancePage" }));
   readRecords("service").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.serviceName || "Service", detail: [record.category, money(record.basePrice)].filter(Boolean).join(" | "), type: "service", id: record.id, pageId: "servicesPage" }));
   readRecords("calendarNote").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.noteKind === "staff" ? "Staff Note" : "Special Note", detail: `${calendarNoteDate(record)} | ${record.note || ""}`, type: "calendarNote", id: record.id, pageId: "dashboardPage" }));
-  readRecords("settingsUser").filter((record) => !record.removed && currentRole() === "admin").forEach((record) => entries.push({ label: record.name || record.email || "User", detail: [record.email, roleLabel(record.role)].filter(Boolean).join(" | "), type: "settingsUser", id: record.id, pageId: "settingsPage" }));
+  readRecords("settingsUser").filter((record) => !record.removed && currentRole() === "admin").forEach((record) => entries.push({ label: record.name || record.email || "User", detail: [record.email, roleLabel(record.role)].filter(Boolean).join(" | "), type: "settingsUser", id: record.id, pageId: "settingsUsersPage" }));
   return entries;
 }
 
@@ -9548,6 +9556,7 @@ function initEvents() {
 }
 
 function switchPage(pageId) {
+  pageId = normalizePageId(pageId);
   if (!pageAllowed(pageId)) {
     showToast(helperIsLoggedIn() ? "Your login does not have access to that page." : "Sign in first.");
     pageId = "loginPage";
@@ -9559,7 +9568,11 @@ function switchPage(pageId) {
   } else if (pageId === "loginPage" && window.location.hash && pageIdFromHash()) {
     window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
   }
-  $$(".nav-button").forEach((item) => item.classList.toggle("is-active", item.dataset.page === pageId));
+  $$(".nav-button").forEach((item) => {
+    const exact = normalizePageId(item.dataset.page || "") === pageId;
+    const settingsRoot = item.dataset.settingsRoot === "true" && settingsPageIds.has(pageId);
+    item.classList.toggle("is-active", exact || settingsRoot);
+  });
   $$(".page-view").forEach((page) => page.classList.toggle("is-active", page.id === pageId));
   $("#mobilePageSelect").value = pageId;
   syncMobileNavigationActive(pageId);

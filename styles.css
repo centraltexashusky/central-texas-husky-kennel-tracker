@@ -91,12 +91,29 @@ iframe {
   gap: 8px;
 }
 
+.side-nav-group {
+  display: grid;
+  gap: 6px;
+}
+
+.side-sub-nav {
+  display: grid;
+  gap: 6px;
+  padding-left: 14px;
+}
+
 .nav-button {
   background: transparent;
   color: #e8efee;
   justify-content: flex-start;
   text-align: left;
   width: 100%;
+}
+
+.sub-nav-button {
+  font-size: 0.88rem;
+  min-height: 34px;
+  padding: 8px 12px;
 }
 
 .nav-button:hover,
@@ -2357,6 +2374,13 @@ h2,
   padding: 10px 14px;
 }
 
+.sub-nav-button {
+  border-radius: 18px;
+  font-size: 0.88rem;
+  min-height: 34px;
+  padding: 8px 12px;
+}
+
 .nav-button:hover,
 .nav-button.is-active {
   background: var(--tint-blue-strong);
@@ -3154,7 +3178,7 @@ button.mobile-dog-photo-button {
 
   #ourDogsPage .table-wrap,
   #boardingDogsPage .table-wrap,
-  #settingsPage .table-wrap,
+  #settingsUsersPage .table-wrap,
   #ourDogsPage .column-manager,
   #boardingDogsPage .column-manager {
     display: none !important;
