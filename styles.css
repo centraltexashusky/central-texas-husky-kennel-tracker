@@ -2370,6 +2370,7 @@ option {
 .activity-entry,
 .structured-care-panel,
 .owned-profile-section,
+.boarding-profile-section,
 .compact-record-card,
 .filter-toolbar,
 .profile-tabs {
@@ -2386,19 +2387,22 @@ option {
 
 .table-wrap,
 .structured-care-panel,
-.owned-profile-section {
+.owned-profile-section,
+.boarding-profile-section {
   border: 1px solid rgba(215, 228, 226, 0.18);
   border-radius: var(--glass-radius);
   box-shadow: var(--glass-specular);
   padding: 14px;
 }
 
-.owned-profile-section {
+.owned-profile-section,
+.boarding-profile-section {
   display: grid;
   gap: 14px;
 }
 
-.owned-profile-section[hidden] {
+.owned-profile-section[hidden],
+.boarding-profile-section[hidden] {
   display: none !important;
 }
 

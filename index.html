@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260516-page-restore-1" />
+    <link rel="stylesheet" href="styles.css?v=20260516-boarding-tabs-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -824,62 +824,89 @@
           <div class="alert-banner">Required Update From Owner: use this when vaccines, owner instructions, or boarding details need to be refreshed.</div>
           <form id="boardingDogForm" class="tracker-form">
             <input type="hidden" name="id" />
-            <div class="dog-profile-editor">
+            <div class="dog-profile-editor boarding-profile-editor">
               <button type="button" class="dog-photo-picker" id="boardingDogPhotoPicker" aria-label="Choose profile photo for this boarding dog">
                 <img id="boardingDogPhotoPreview" alt="" hidden />
                 <span id="boardingDogPhotoInitials">Dog</span>
               </button>
               <div>
                 <strong id="boardingDogPhotoName">New boarding dog</strong>
+                <p id="boardingDogHeaderOwner">Owner not assigned</p>
                 <p>Tap the square to upload an optional JPG or PNG photo from your device.</p>
                 <input class="visually-hidden-file" type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
               </div>
             </div>
-            <div class="field-grid">
-              <label>Dog name<input type="text" name="dogName" required /></label>
-              <label>Breed / description<input type="text" name="breedDescription" /></label>
-              <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
-              <label>Sex<select name="sex" required><option value="">Select sex</option><option>Male</option><option>Female</option><option>Unknown</option></select></label>
-              <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
-              <label>Dog status<select name="boardingStatus" id="boardingDogStatus" required><option value="Pending">Pending</option><option value="Approved" selected>Approved</option><option value="Checked In">Checked In</option><option value="In Kennel">Active / In Kennel</option><option value="Ready For Pickup">Ready For Pickup</option><option value="Checked Out">Checked Out</option><option value="Cancelled">Cancelled</option></select></label>
-              <label>Owner name<input type="text" name="ownerName" required /></label>
-              <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
-              <label>Owner email<input type="email" name="ownerEmail" /></label>
-              <label>Secondary owner email<input type="email" name="secondaryOwnerEmail" /></label>
-              <label>Emergency contact name<input type="text" name="emergencyName" /></label>
-              <label>Emergency contact phone<input type="tel" name="emergencyPhone" /></label>
-              <label>Veterinarian / clinic<input type="text" name="vetInfo" /></label>
-              <label>Rabies vaccination<input type="date" name="rabiesDate" /></label>
-              <label class="inline-check"><input type="checkbox" name="rabiesGoodThreeYears" value="Yes" /> Rabies good for 3 years from last vaccination</label>
-              <label>DHPP vaccination<input type="date" name="dhppDate" /></label>
-              <label>Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
-              <label>Heartworm medication<input type="date" name="heartwormDate" /></label>
+
+            <div class="profile-tabs" id="boardingDogProfileTabs" aria-label="Boarding dog profile sections">
+              <button type="button" class="secondary-button is-active" data-boarding-profile-tab="Dog Info">Dog Info</button>
+              <button type="button" class="secondary-button" data-boarding-profile-tab="Vaccination">Vaccination</button>
+              <button type="button" class="secondary-button" data-boarding-profile-tab="Boarding & Request">Boarding & Request</button>
+              <button type="button" class="secondary-button" data-boarding-profile-tab="Customer Update">Customer Update</button>
+              <button type="button" class="secondary-button" data-boarding-profile-tab="Customer Info">Customer Info</button>
             </div>
 
-            <div class="checklist compact">
-              <label><input type="checkbox" name="boardingFlags" value="Required update from owner" /> Required update from owner</label>
-              <label><input type="checkbox" name="boardingFlags" value="Emergency vet care authorized" /> Emergency vet care authorized</label>
-              <label><input type="checkbox" name="boardingFlags" value="Bath requested" /> Bath requested</label>
-              <label><input type="checkbox" name="boardingFlags" value="Nail trim requested" /> Nail trim requested</label>
-              <label><input type="checkbox" name="boardingFlags" value="Paw trim requested" /> Paw trim requested</label>
-              <label><input type="checkbox" name="boardingFlags" value="Training requested" /> Training requested</label>
-              <label><input type="checkbox" name="boardingFlags" value="Exercise requested" /> Exercise requested</label>
-              <label><input type="checkbox" name="boardingFlags" value="Medication required" /> Medication required</label>
-            </div>
+            <section class="boarding-profile-section" data-boarding-profile-section="Dog Info">
+              <div class="field-grid">
+                <label>Dog name<input type="text" name="dogName" required /></label>
+                <label>Breed / description<input type="text" name="breedDescription" /></label>
+                <label>Date of birth<input type="date" name="dateOfBirth" /></label>
+                <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
+                <label>Sex<select name="sex" required><option value="">Select sex</option><option>Male</option><option>Female</option><option>Unknown</option></select></label>
+                <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
+                <label>Dog status<select name="boardingStatus" id="boardingDogStatus" required><option value="Pending">Pending</option><option value="Approved" selected>Approved</option><option value="Checked In">Checked In</option><option value="In Kennel">Active / In Kennel</option><option value="Ready For Pickup">Ready For Pickup</option><option value="Checked Out">Checked Out</option><option value="Cancelled">Cancelled</option></select></label>
+                <label>Owner name<input type="text" name="ownerName" required /></label>
+                <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
+                <label>Owner email<input type="email" name="ownerEmail" /></label>
+                <label>Secondary owner email<input type="email" name="secondaryOwnerEmail" /></label>
+                <label>Emergency contact name<input type="text" name="emergencyName" /></label>
+                <label>Emergency contact phone<input type="tel" name="emergencyPhone" /></label>
+                <label>Veterinarian / clinic<input type="text" name="vetInfo" /></label>
+              </div>
+              <label>Food instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals"></textarea></label>
+              <label>Special care instructions<textarea name="specialCare" rows="3" placeholder="Medication, feeding, handling, allergies, behavior concerns"></textarea></label>
+              <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
+            </section>
 
-            <label>Food instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals"></textarea></label>
-            <label>Special care instructions<textarea name="specialCare" rows="3" placeholder="Medication, feeding, handling, allergies, behavior concerns"></textarea></label>
-            <label>Daily activity update for owner<textarea name="dailyActivity" rows="3" placeholder="Eating, potty, play, exercise, mood, photos/videos taken"></textarea></label>
-            <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
+            <section class="boarding-profile-section" data-boarding-profile-section="Vaccination" hidden>
+              <div class="field-grid">
+                <label>Rabies vaccination<input type="date" name="rabiesDate" /></label>
+                <label class="inline-check"><input type="checkbox" name="rabiesGoodThreeYears" value="Yes" /> Rabies good for 3 years from last vaccination</label>
+                <label>DHPP vaccination<input type="date" name="dhppDate" /></label>
+                <label>Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
+                <label>Heartworm medication<input type="date" name="heartwormDate" /></label>
+                <label>Upload health records<input type="file" id="boardingDogVaccinationFiles" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" multiple /></label>
+              </div>
+              <div id="boardingDogVaccinationList" class="record-grid compact-record-grid"></div>
+            </section>
+
+            <section class="boarding-profile-section" data-boarding-profile-section="Customer Update" hidden>
+              <label>Notes / Update to Customer<textarea name="dailyActivity" rows="4" placeholder="Eating, potty, play, exercise, mood, photos/videos taken"></textarea></label>
+              <label>Update photo<input type="file" id="boardingCustomerUpdatePhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" /></label>
+              <div class="button-row"><button type="button" class="secondary-button" id="addBoardingCustomerUpdateButton">Add Customer Update</button></div>
+              <div id="boardingCustomerUpdateList" class="record-grid compact-record-grid"></div>
+            </section>
+
+            <section class="boarding-profile-section" data-boarding-profile-section="Customer Info" hidden>
+              <div class="checklist compact">
+                <label><input type="checkbox" name="boardingFlags" value="Required update from owner" /> Required update from owner</label>
+                <label><input type="checkbox" name="boardingFlags" value="Emergency vet care authorized" /> Emergency vet care authorized</label>
+                <label><input type="checkbox" name="boardingFlags" value="Bath requested" /> Bath requested</label>
+                <label><input type="checkbox" name="boardingFlags" value="Nail trim requested" /> Nail trim requested</label>
+                <label><input type="checkbox" name="boardingFlags" value="Paw trim requested" /> Paw trim requested</label>
+                <label><input type="checkbox" name="boardingFlags" value="Training requested" /> Training requested</label>
+                <label><input type="checkbox" name="boardingFlags" value="Exercise requested" /> Exercise requested</label>
+                <label><input type="checkbox" name="boardingFlags" value="Medication required" /> Medication required</label>
+              </div>
+              <section class="existing-only owner-account-panel" id="boardingOwnerAccountPanel" hidden>
+                <div class="section-heading compact-heading"><span>A</span><div><h2>Customer Account Link</h2><p>Prepare customer access for manually entered boarding dogs when an owner email is available.</p></div></div>
+                <div id="boardingOwnerAccountContent" class="record-grid compact-record-grid"></div>
+              </section>
+            </section>
+
             <div class="button-row"><button type="button" class="secondary-button" id="editBoardingDogButton" hidden>Edit Dog</button><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
           </form>
 
-          <section class="existing-only owner-account-panel" id="boardingOwnerAccountPanel" hidden>
-            <div class="section-heading compact-heading"><span>A</span><div><h2>Customer Account Link</h2><p>Prepare customer access for manually entered boarding dogs when an owner email is available.</p></div></div>
-            <div id="boardingOwnerAccountContent" class="record-grid compact-record-grid"></div>
-          </section>
-
-          <section class="existing-only" id="boardingSchedulePanel" hidden>
+          <section class="existing-only boarding-profile-section" data-boarding-profile-section="Boarding & Request" id="boardingSchedulePanel" hidden>
             <div class="section-heading compact-heading"><span>S</span><div><h2>Boarding Schedule And Requests</h2><p>Add boarding stays and service requests for this dog.</p></div></div>
             <form id="boardingStayForm" class="tracker-form">
               <input type="hidden" name="stayId" id="boardingStayId" />
@@ -1090,6 +1117,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260516-page-restore-1"></script>
+    <script src="script.js?v=20260516-boarding-tabs-1"></script>
   </body>
 </html>
