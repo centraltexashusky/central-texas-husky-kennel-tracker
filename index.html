@@ -3,8 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260517-tab-delete-location-1" />
+    <link rel="stylesheet" href="styles.css?v=20260517-boarding-files-refresh-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -903,6 +906,7 @@
               <button type="button" class="secondary-button" data-boarding-profile-tab="Vaccination">Vaccination</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Boarding & Request">Boarding & Request</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Customer Update">Customer Update</button>
+              <button type="button" class="secondary-button" data-boarding-profile-tab="Uploaded Files">Uploaded Files</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Customer Info">Customer Info</button>
             </div>
 
@@ -947,24 +951,22 @@
               <div id="boardingCustomerUpdateList" class="record-grid compact-record-grid"></div>
             </section>
 
-            <section class="boarding-profile-section" data-boarding-profile-section="Customer Info" hidden>
-              <div class="checklist compact">
-                <label><input type="checkbox" name="boardingFlags" value="Required update from owner" /> Required update from owner</label>
-                <label><input type="checkbox" name="boardingFlags" value="Emergency vet care authorized" /> Emergency vet care authorized</label>
-                <label><input type="checkbox" name="boardingFlags" value="Bath requested" /> Bath requested</label>
-                <label><input type="checkbox" name="boardingFlags" value="Nail trim requested" /> Nail trim requested</label>
-                <label><input type="checkbox" name="boardingFlags" value="Paw trim requested" /> Paw trim requested</label>
-                <label><input type="checkbox" name="boardingFlags" value="Training requested" /> Training requested</label>
-                <label><input type="checkbox" name="boardingFlags" value="Exercise requested" /> Exercise requested</label>
-                <label><input type="checkbox" name="boardingFlags" value="Medication required" /> Medication required</label>
+            <section class="boarding-profile-section" data-boarding-profile-section="Uploaded Files" hidden>
+              <div class="field-grid">
+                <label>Upload dog files<input type="file" id="boardingDogUploadedFiles" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,.pdf,.doc,.docx,.jpg,.jpeg,.png" multiple /></label>
               </div>
+              <div class="button-row"><button type="button" class="secondary-button" id="uploadBoardingDogFilesButton">Upload Files</button></div>
+              <div id="boardingDogUploadedFileList" class="record-grid compact-record-grid"></div>
+            </section>
+
+            <section class="boarding-profile-section" data-boarding-profile-section="Customer Info" hidden>
               <section class="existing-only owner-account-panel" id="boardingOwnerAccountPanel" hidden>
                 <div class="section-heading compact-heading"><span>A</span><div><h2>Customer Account Link</h2><p>Prepare customer access for manually entered boarding dogs when an owner email is available.</p></div></div>
                 <div id="boardingOwnerAccountContent" class="record-grid compact-record-grid"></div>
               </section>
             </section>
 
-            <div class="button-row"><button type="button" class="secondary-button" id="editBoardingDogButton" hidden>Edit Dog</button><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
+            <div class="button-row"><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
           </form>
 
           <section class="existing-only boarding-profile-section" data-boarding-profile-section="Boarding & Request" id="boardingSchedulePanel" hidden>
@@ -1172,6 +1174,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260517-tab-delete-location-1"></script>
+    <script src="script.js?v=20260517-boarding-files-refresh-1"></script>
   </body>
 </html>

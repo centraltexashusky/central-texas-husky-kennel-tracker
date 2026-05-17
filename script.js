@@ -1601,9 +1601,10 @@ async function restoreSupabaseSession() {
   return true;
 }
 
-function mergeRecords(type, incomingRecords) {
+function mergeRecords(type, incomingRecords, options = {}) {
   const byId = {};
-  [...readRecords(type), ...incomingRecords].forEach((record) => {
+  const records = options.replaceLocal ? incomingRecords : [...readRecords(type), ...incomingRecords];
+  records.forEach((record) => {
     if (!record?.id) return;
     const existing = byId[record.id];
     if (!existing || new Date(record.updatedAt || record.submittedAt || 0) >= new Date(existing.updatedAt || existing.submittedAt || 0)) {
@@ -1869,6 +1870,15 @@ async function uploadOwnedDogDocumentFiles(input, dogId) {
     allowedTypes: DOG_DOCUMENT_UPLOAD_TYPES,
     allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx"],
     label: "dog document",
+  });
+}
+
+async function uploadBoardingDogDocumentFiles(input, dogId) {
+  const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
+  return uploadMediaFiles(input, `boarding-dog-documents/${safeDogId}`, {
+    allowedTypes: DOG_DOCUMENT_UPLOAD_TYPES,
+    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx"],
+    label: "boarding dog file",
   });
 }
 
@@ -2989,7 +2999,7 @@ async function loadRemoteRecords() {
     (data || []).forEach((row) => {
       if (grouped[row.type]) grouped[row.type].push(row.payload);
     });
-    recordTypes().forEach((type) => mergeRecords(type, grouped[type] || []));
+    recordTypes().forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
     if (currentUser) {
       currentUser.role = roleForAccount(currentUser);
       localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
@@ -4659,6 +4669,7 @@ function mergeBoardingProfileGroup(records = []) {
       .sort((a, b) => new Date(b.dropoffTime || b.updatedAt || 0) - new Date(a.dropoffTime || a.updatedAt || 0)),
     statusHistory: mergeObjectList(records, "statusHistory", (item) => item.id || `${item.date || ""}|${item.from || ""}|${item.to || ""}|${item.by || ""}`)
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)),
+    documents: mergeObjectList(records, "documents", (item) => item.id || item.url || item.dataUrl || item.name || JSON.stringify(item)),
     vaccinationRecords: mergeObjectList(records, "vaccinationRecords", (item) => item.id || item.url || item.dataUrl || item.name || JSON.stringify(item)),
     customerUpdates: mergeObjectList(records, "customerUpdates", (item) => item.id || `${item.createdAt || item.submittedAt || ""}|${item.note || ""}`),
     requestedServices: mergeObjectList(records, "requestedServices", (item) => item.id || `${item.serviceName || ""}|${item.quantity || ""}|${item.unitPrice || ""}`),
@@ -4955,6 +4966,168 @@ function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
     : `<article class="record-card compact-record-card"><strong>No customer updates sent yet.</strong><p>Use this tab to add notes or photos customers can review.</p></article>`;
 }
 
+function boardingDogDocumentItems(record = {}) {
+  const documents = arrayValue(record.documents);
+  const legacyDocuments = documents.length ? documents : arrayValue(record.boardingDocuments);
+  return legacyDocuments.map((item) => ({
+    id: item.id || uid("file"),
+    name: item.name || item.fileName || "Boarding dog file",
+    type: item.type || item.contentType || "application/octet-stream",
+    size: item.size || 0,
+    savedAt: item.savedAt || item.uploadedAt || item.createdAt || "",
+    url: item.url || "",
+    dataUrl: item.dataUrl || "",
+    note: item.note || "",
+  }));
+}
+
+function boardingDogFileItem(item = {}, source, sourceLabel, options = {}) {
+  return {
+    id: item.id || uid("file"),
+    parentId: options.parentId || "",
+    sourceRecordId: options.sourceRecordId || "",
+    source,
+    sourceLabel,
+    name: item.name || item.fileName || options.fallbackName || "Uploaded file",
+    type: item.type || item.contentType || "application/octet-stream",
+    size: item.size || 0,
+    savedAt: item.savedAt || item.uploadedAt || item.createdAt || "",
+    url: item.url || "",
+    dataUrl: item.dataUrl || "",
+    note: item.note || "",
+    canRename: options.canRename !== false,
+    canRemove: Boolean(options.canRemove),
+  };
+}
+
+function boardingDogFileItems(record = {}) {
+  const files = [
+    ...boardingDogDocumentItems(record).map((file) => boardingDogFileItem(file, "boardingDocuments", "Staff uploaded file", { sourceRecordId: record.id, canRemove: true })),
+    ...arrayValue(record.vaccinationRecords).map((file) => boardingDogFileItem(file, "boardingVaccination", "Health record", { sourceRecordId: record.id, fallbackName: "Health record" })),
+    ...arrayValue(record.customerUpdates).flatMap((update) =>
+      arrayValue(update.mediaItems).map((file) =>
+        boardingDogFileItem(file, "boardingCustomerUpdate", "Customer update media", {
+          parentId: update.id || "",
+          sourceRecordId: record.id,
+          fallbackName: "Customer update photo",
+        }),
+      ),
+    ),
+  ];
+  const linkedDog = linkedCustomerDogForBoarding(record);
+  if (linkedDog) {
+    files.push(
+      ...arrayValue(linkedDog.vaccinationRecords).map((file) =>
+        boardingDogFileItem(file, "customerVaccination", "Customer uploaded health record", {
+          sourceRecordId: linkedDog.id,
+          fallbackName: "Customer health record",
+        }),
+      ),
+      ...arrayValue(linkedDog.documents).map((file) =>
+        boardingDogFileItem(file, "customerDocuments", "Customer uploaded file", {
+          sourceRecordId: linkedDog.id,
+          fallbackName: "Customer file",
+        }),
+      ),
+    );
+  }
+  return files.sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+}
+
+function renderBoardingDogFiles(record = activeBoardingDog() || {}) {
+  const list = $("#boardingDogUploadedFileList");
+  if (!list) return;
+  if (!record?.id) {
+    list.innerHTML = "<p>Save this boarding dog before uploading files.</p>";
+    return;
+  }
+  const files = boardingDogFileItems(record);
+  list.innerHTML = files.length
+    ? files.map((file) => {
+        const source = file.url || file.dataUrl || "";
+        const savedText = file.savedAt ? `Uploaded ${formatDateTime(file.savedAt)}` : "Uploaded date not recorded";
+        const sourceText = `<p>${escapeHtml(file.sourceLabel)}</p>`;
+        const noteText = file.note ? `<p>${escapeHtml(file.note)}</p>` : "";
+        const renameInput = file.canRename ? `<label>File name<input type="text" value="${escapeHtml(file.name)}" data-action="rename-boarding-file-input" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-parent-id="${escapeHtml(file.parentId)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}" /></label>` : "";
+        const renameButton = file.canRename ? `<button type="button" class="secondary-button" data-action="save-boarding-file-name" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-parent-id="${escapeHtml(file.parentId)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}">Rename</button>` : "";
+        const removeButton = file.canRemove ? `<button type="button" class="secondary-button danger-button" data-action="remove-boarding-file" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}">Remove</button>` : "";
+        return `<article class="record-card compact-record-card dog-file-card" data-file-id="${escapeHtml(file.id)}"><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(savedText)}</span>${sourceText}${noteText}${renameInput}<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(source)}" data-media-type="${escapeHtml(file.type)}" data-media-name="${escapeHtml(file.name)}">Open</button>${renameButton}${removeButton}</div></article>`;
+      }).join("")
+    : "<p>No uploaded files saved for this boarding dog yet.</p>";
+}
+
+function refreshBoardingDogFileViews(record = activeBoardingDog() || {}) {
+  const activeId = $("#boardingDogForm")?.elements.id.value || record?.id || "";
+  const refreshed = boardingDogRecordForDisplay(activeId) || record;
+  renderBoardingDogFiles(refreshed);
+  renderBoardingVaccinationFiles(refreshed);
+  renderBoardingCustomerUpdates(refreshed);
+  renderBoardingDogs();
+  renderCustomerDogs();
+  return refreshed;
+}
+
+async function updateBoardingDogFileName({ source, id, parentId = "", sourceRecordId = "", name = "" } = {}) {
+  const nextName = name.trim();
+  if (!nextName) {
+    showToast("File name cannot be blank.");
+    return null;
+  }
+  if (source === "customerVaccination" || source === "customerDocuments") {
+    const customerDog = readRecords("customerDog").find((record) => record.id === sourceRecordId && !record.removed);
+    if (!customerDog) return null;
+    const key = source === "customerVaccination" ? "vaccinationRecords" : "documents";
+    const updated = upsertRecord("customerDog", {
+      ...customerDog,
+      [key]: arrayValue(customerDog[key]).map((file) => (file.id === id ? { ...file, name: nextName } : file)),
+      updatedAt: new Date().toISOString(),
+    });
+    await sendPayload(updated);
+    refreshBoardingDogFileViews(activeBoardingDog() || {});
+    showToast("File renamed.");
+    return updated;
+  }
+  const record = readRecords("boardingDog").find((item) => item.id === (sourceRecordId || activeBoardingDog({ raw: true })?.id) && !item.removed);
+  if (!record) return null;
+  const updates = {};
+  if (source === "boardingDocuments") {
+    updates.documents = boardingDogDocumentItems(record).map((file) => (file.id === id ? { ...file, name: nextName } : file));
+  } else if (source === "boardingVaccination") {
+    updates.vaccinationRecords = arrayValue(record.vaccinationRecords).map((file) => (file.id === id ? { ...file, name: nextName } : file));
+    updates.vaccinationFiles = updates.vaccinationRecords.map((file) => file.name).join(", ");
+  } else if (source === "boardingCustomerUpdate") {
+    updates.customerUpdates = arrayValue(record.customerUpdates).map((update) =>
+      update.id === parentId
+        ? { ...update, mediaItems: arrayValue(update.mediaItems).map((file) => (file.id === id ? { ...file, name: nextName } : file)) }
+        : update,
+    );
+  }
+  const updated = upsertRecord("boardingDog", {
+    ...record,
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  });
+  await sendPayload(updated);
+  refreshBoardingDogFileViews(updated);
+  showToast("File renamed.");
+  return updated;
+}
+
+async function updateBoardingDogDocuments(documents = []) {
+  const active = activeBoardingDog({ raw: true }) || activeBoardingDog();
+  if (!active?.id) {
+    showToast("Save the boarding dog before managing files.");
+    return null;
+  }
+  const updated = upsertRecord("boardingDog", {
+    ...active,
+    documents,
+    updatedAt: new Date().toISOString(),
+  });
+  await sendPayload(updated);
+  return refreshBoardingDogFileViews(updated);
+}
+
 async function addBoardingCustomerUpdate() {
   const record = activeBoardingDog();
   if (!record?.id) {
@@ -4993,6 +5166,7 @@ async function addBoardingCustomerUpdate() {
   await addAuditLog("Added customer boarding update", "boardingDog", updated, `${updated.dogName || "Dog"} | ${note || mediaItems.map((item) => item.name).join(", ")}`);
   if (input) input.value = "";
   renderBoardingCustomerUpdates(updated);
+  renderBoardingDogFiles(updated);
   renderBoardingDogs();
   renderCustomerRequests();
   showToast("Customer update saved.");
@@ -5042,6 +5216,7 @@ function resetBoardingDogFormForRecord(record = {}) {
   if ($("#boardingDogPhotoInput")) $("#boardingDogPhotoInput").value = "";
   if ($("#boardingDogVaccinationFiles")) $("#boardingDogVaccinationFiles").value = "";
   if ($("#boardingCustomerUpdatePhotoInput")) $("#boardingCustomerUpdatePhotoInput").value = "";
+  if ($("#boardingDogUploadedFiles")) $("#boardingDogUploadedFiles").value = "";
 }
 
 function openBoardingDog(record = {}) {
@@ -5059,27 +5234,27 @@ function openBoardingDog(record = {}) {
   renderBoardingOwnerAccountPanel(record);
   renderBoardingVaccinationFiles(record);
   renderBoardingCustomerUpdates(record);
+  renderBoardingDogFiles(record);
   $$('input[name="boardingFlags"]').forEach((input) => {
     input.checked = (record.flags || []).includes(input.value);
   });
   renderBoardingStays(record);
-  setBoardingFormLocked(Boolean(record.id));
+  setBoardingFormLocked(false);
   setBoardingDogActiveTab("Dog Info");
 }
 
-function setBoardingFormLocked(locked) {
+function setBoardingFormLocked() {
   const formEl = $("#boardingDogForm");
   [...formEl.elements].forEach((field) => {
     if (field.type === "hidden") return;
-    if (["editBoardingDogButton", "cancelBoardingDogEdit"].includes(field.id)) return;
-    field.disabled = locked;
+    if (field.id === "cancelBoardingDogEdit") return;
+    field.disabled = false;
   });
   $("#boardingDogPhotoPicker").disabled = false;
-  $("#boardingDogSaveButton").hidden = locked;
-  $("#editBoardingDogButton").hidden = !locked;
+  $("#boardingDogSaveButton").hidden = false;
   $("#openBoardingScheduleButton").hidden = !formEl.elements.id.value;
-  $("#deleteBoardingDogButton").hidden = locked || !formEl.elements.id.value || currentRole() !== "admin";
-  formEl.classList.toggle("is-readonly", locked);
+  $("#deleteBoardingDogButton").hidden = !formEl.elements.id.value || currentRole() !== "admin";
+  formEl.classList.remove("is-readonly");
   renderBoardingOwnerAccountPanel(activeBoardingDog());
 }
 
@@ -9221,13 +9396,48 @@ function initEvents() {
     const dog = activeBoardingDog();
     if (dog) openBoardingDogDeleteConfirm(dog);
   });
-  $("#editBoardingDogButton").addEventListener("click", () => {
-    setBoardingFormLocked(false);
-    showToast("Boarding dog record unlocked for editing.");
-  });
   $("#boardingDogPhotoPicker").addEventListener("click", () => handleDogPhotoClick("boarding"));
   $("#boardingDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("boarding"));
   $("#addBoardingCustomerUpdateButton")?.addEventListener("click", addBoardingCustomerUpdate);
+  $("#uploadBoardingDogFilesButton")?.addEventListener("click", async () => {
+    const dog = activeBoardingDog({ raw: true }) || activeBoardingDog();
+    if (!dog?.id) {
+      showToast("Save the boarding dog before uploading files.");
+      return;
+    }
+    const input = $("#boardingDogUploadedFiles");
+    const uploads = await uploadBoardingDogDocumentFiles(input, dog.id);
+    if (!uploads.length) return;
+    const documents = [...boardingDogDocumentItems(dog), ...uploads];
+    const updated = await updateBoardingDogDocuments(documents);
+    if (input) input.value = "";
+    if (updated) showToast(`${uploads.length} file${uploads.length > 1 ? "s" : ""} added.`);
+  });
+  $("#boardingDogUploadedFileList")?.addEventListener("click", async (event) => {
+    const action = event.target.closest("[data-action]");
+    if (!action || action.dataset.action === "view-media") return;
+    if (action.dataset.action === "save-boarding-file-name") {
+      const card = action.closest("[data-file-id]");
+      const input = card?.querySelector('[data-action="rename-boarding-file-input"]');
+      await updateBoardingDogFileName({
+        source: action.dataset.source || "",
+        id: action.dataset.id || "",
+        parentId: action.dataset.parentId || "",
+        sourceRecordId: action.dataset.sourceRecordId || "",
+        name: input?.value || "",
+      });
+    }
+    if (action.dataset.action === "remove-boarding-file") {
+      const dog = activeBoardingDog({ raw: true }) || activeBoardingDog();
+      if (!dog) return;
+      if (action.dataset.source !== "boardingDocuments") {
+        showToast("Only staff uploaded files can be removed here.");
+        return;
+      }
+      await updateBoardingDogDocuments(boardingDogDocumentItems(dog).filter((file) => file.id !== action.dataset.id));
+      showToast("File removed from this boarding dog.");
+    }
+  });
   $("#boardingDogStatus")?.addEventListener("change", (event) => {
     const record = activeBoardingDog();
     if (!record) return;
@@ -9383,6 +9593,7 @@ function initEvents() {
       }
       const photo = await durableDogPhoto("boarding", existing, formData, $("#boardingDogPhotoInput"), dogId);
       const vaccinationUploads = await uploadVaccinationFiles($("#boardingDogVaccinationFiles"), dogId);
+      const documentUploads = await uploadBoardingDogDocumentFiles($("#boardingDogUploadedFiles"), dogId);
       const statusHistory = statusChanged
         ? [
             ...(existing.statusHistory || []),
@@ -9409,9 +9620,10 @@ function initEvents() {
         statusHistory,
         entrySource: existing.entrySource || (existing.customerRequest ? "customer" : "staff-admin"),
         rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
-        flags: checkedFrom(formEl, "boardingFlags"),
+        flags: formEl.querySelector('[name="boardingFlags"]') ? checkedFrom(formEl, "boardingFlags") : existing.flags || [],
         profilePhotoUrl: photo.profilePhotoUrl,
         profilePhotoData: photo.profilePhotoData,
+        documents: [...boardingDogDocumentItems(existing), ...documentUploads],
         vaccinationRecords: [...(existing.vaccinationRecords || []), ...vaccinationUploads],
         vaccinationFiles: [...(existing.vaccinationRecords || []), ...vaccinationUploads].map((file) => file.name).join(", "),
         stays: statusScopedStays,
@@ -9442,15 +9654,17 @@ function initEvents() {
       $("#boardingSchedulePanel").hidden = false;
       setDogPhoto("boarding", record);
       if ($("#boardingDogVaccinationFiles")) $("#boardingDogVaccinationFiles").value = "";
+      if ($("#boardingDogUploadedFiles")) $("#boardingDogUploadedFiles").value = "";
       renderBoardingVaccinationFiles(record);
       renderBoardingCustomerUpdates(record);
+      renderBoardingDogFiles(record);
       renderBoardingStays(record);
       if (isNewBoardingDog) boardingDogRosterFilter = "All Boarding Dogs";
       renderBoardingOwnerAccountPanel(record);
       renderBoardingDogs();
       renderBoardingRequests();
       selectedDogPhotos.boarding = null;
-      setBoardingFormLocked(true);
+      setBoardingFormLocked(false);
       if (photo.photoError) {
         showDetailDialog("Boarding Dog Saved Without Photo", `<p>${escapeHtml(record.dogName || "Boarding dog")} has been saved, but the profile photo could not be uploaded: ${escapeHtml(photo.photoError)}</p>`);
       } else {
