@@ -4519,6 +4519,28 @@ function openOwnedDog(record = {}) {
   window.scrollTo({ top: $("#ownedDogDetail").offsetTop - 12, behavior: "smooth" });
 }
 
+function resetBoardingDogFormForRecord(record = {}) {
+  const formEl = $("#boardingDogForm");
+  formEl.reset();
+  [...formEl.elements].forEach((field) => {
+    if (!field.name && field.type !== "file") return;
+    if (field.type === "checkbox" || field.type === "radio") {
+      field.checked = false;
+      return;
+    }
+    if (field.type === "file") {
+      field.value = "";
+      return;
+    }
+    field.value = "";
+  });
+  selectedDogPhotos.boarding = null;
+  setFormValues(formEl, record);
+  formEl.elements.id.value = record.id || "";
+  if (formEl.elements.profilePhotoUrl && !record.id) formEl.elements.profilePhotoUrl.value = "";
+  if ($("#boardingDogPhotoInput")) $("#boardingDogPhotoInput").value = "";
+}
+
 function openBoardingDog(record = {}) {
   const boardingDogDetail = $("#boardingDogDetail");
   if (boardingDogDetail.parentElement !== document.body) {
@@ -4526,10 +4548,8 @@ function openBoardingDog(record = {}) {
   }
   boardingDogDetail.hidden = false;
   boardingDogDetail.scrollTop = 0;
-  selectedDogPhotos.boarding = null;
   $("#boardingDogDetailTitle").textContent = record.id ? `Edit ${record.dogName || "Boarding Dog"}` : "Add Boarding Dog";
-  $("#boardingDogForm").reset();
-  setFormValues($("#boardingDogForm"), record);
+  resetBoardingDogFormForRecord(record);
   if ($("#boardingDogStatus")) $("#boardingDogStatus").value = record.id ? normalizeBoardingStatus(record) : "Approved";
   setDogPhoto("boarding", record);
   $("#boardingSchedulePanel").hidden = !record.id;
