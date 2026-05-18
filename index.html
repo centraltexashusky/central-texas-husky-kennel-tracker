@@ -779,8 +779,9 @@
 
             <section class="owned-profile-section" data-owned-profile-section="Medical / Care Notes" hidden>
               <div class="section-heading compact-heading"><span>M</span><div><h2>Medical / Care Notes</h2><p>Medication, special handling, behavior watch, and care history.</p></div></div>
-              <label>Medication or special care notes<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
-              <label>Medical notes<textarea name="medicalCareNotes" rows="3" placeholder="Ongoing medical/care notes that staff should see"></textarea></label>
+              <label>Medication or special care notes (triggers Medical/Care Alert)<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
+              <label>Medical notes (triggers Medical/Care Alert)<textarea name="medicalCareNotes" rows="3" placeholder="Ongoing medical/care notes that staff should see"></textarea></label>
+              <label>General note (no Medical/Care Alert)<textarea name="generalCareNotes" rows="3" placeholder="Normal note that should not show as a medical or care alert"></textarea></label>
               <div class="existing-only owned-tab-care-entry" data-owned-care-entry-panel hidden>
                 <label>Medical / behavior care entry<textarea id="ownedCareEntry" rows="3" placeholder="Medication, behavior, injury, appetite, or special care note"></textarea></label>
                 <button type="button" id="addCareNoteLog">Add Care Note</button>
@@ -1152,6 +1153,7 @@
         <h2 id="detailDialogTitle">Details</h2>
         <div class="dialog-actions">
           <button type="button" class="secondary-button complete-button" id="completeDetailTaskButton" hidden>Complete Task</button>
+          <button type="button" class="secondary-button" id="detailDialogHeaderAction" hidden></button>
           <button type="button" class="secondary-button" id="closeDetailDialog">Close</button>
         </div>
       </div>
@@ -1177,7 +1179,10 @@
     <dialog id="mediaDialog" class="detail-dialog media-dialog">
       <div class="dialog-header">
         <h2 id="mediaDialogTitle">Media</h2>
-        <button type="button" class="secondary-button" id="closeMediaDialog">Close</button>
+        <div class="dialog-actions">
+          <button type="button" class="secondary-button" id="replaceOwnedDogPhotoButton" hidden>Replace Photo</button>
+          <button type="button" class="secondary-button" id="closeMediaDialog">Close</button>
+        </div>
       </div>
       <div id="mediaDialogBody" class="media-preview-body"></div>
     </dialog>

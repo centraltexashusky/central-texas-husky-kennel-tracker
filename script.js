@@ -445,8 +445,7 @@ function ownedDogHasCareNote(record = {}) {
     record.specialCare ||
       record.medicalCareNotes ||
       record.careStatus ||
-      arrayValue(record.careNotesHistory).length ||
-      String(record.notes || "").match(/medical|medication|limp|injur|behavior|watch|special care/i),
+      arrayValue(record.careNotesHistory).length,
   );
 }
 
@@ -2052,7 +2051,12 @@ function handleDogPhotoClick(kind) {
   const photo = record.profilePhotoUrl || record.profilePhotoData || selectedDogPhotos[kind]?.previewDataUrl || $(elements.img)?.src || "";
   const locked = formEl?.classList.contains("is-readonly");
   if (locked && photo) {
-    showMediaDialog(photo, "image/jpeg", `${record[elements.nameKey] || record.showName || "Dog"} profile photo`);
+    showMediaDialog(
+      photo,
+      "image/jpeg",
+      `${record[elements.nameKey] || record.showName || "Dog"} profile photo`,
+      kind === "owned" && record.id ? { type: "ownedDogPhoto", id: record.id } : null,
+    );
     return;
   }
   input?.click();
@@ -3459,11 +3463,18 @@ function detailRows(record, keys) {
     .join("");
 }
 
-function showDetailDialog(title, html, context = null) {
+function showDetailDialog(title, html, context = null, options = {}) {
   detailDialogContext = context;
   $("#detailDialogTitle").textContent = title;
   $("#detailDialogBody").innerHTML = html;
   const completeButton = $("#completeDetailTaskButton");
+  const headerActionButton = $("#detailDialogHeaderAction");
+  if (headerActionButton) {
+    headerActionButton.hidden = !options.headerAction;
+    headerActionButton.textContent = options.headerAction?.label || "";
+    headerActionButton.dataset.action = options.headerAction?.action || "";
+    headerActionButton.dataset.id = options.headerAction?.id || "";
+  }
   if (context && ["request", "maintenance"].includes(context.type)) {
     const record = readRecords(context.type).find((item) => item.id === context.id);
     completeButton.hidden = Boolean(record?.completed);
@@ -3474,9 +3485,14 @@ function showDetailDialog(title, html, context = null) {
   if (!dialog.open) dialog.showModal();
 }
 
-function showMediaDialog(src, type, name) {
+function showMediaDialog(src, type, name, context = null) {
   mediaZoomLevel = 1;
   $("#mediaDialogTitle").textContent = name || "Media";
+  const replacePhotoButton = $("#replaceOwnedDogPhotoButton");
+  if (replacePhotoButton) {
+    replacePhotoButton.hidden = context?.type !== "ownedDogPhoto" || !context?.id;
+    replacePhotoButton.dataset.id = context?.id || "";
+  }
   if (!src) {
     $("#mediaDialogBody").innerHTML = `<p>This file was not uploaded to the database. The maximum file size is ${MAX_MEDIA_UPLOAD_MB} MB.</p>${name ? `<p><strong>Saved file name:</strong> ${escapeHtml(name)}</p>` : ""}`;
     $("#mediaDialog").showModal();
@@ -5731,7 +5747,8 @@ function ownedDogOverviewPopupHtml(record = {}) {
     ["DHPP", dog.dhppDate || "Not recorded"],
     ["Rabies", dog.rabiesDate || "Not recorded"],
     ["Care status", ownedDogCareSummary(dog)],
-    ["Special care", dog.specialCare || dog.medicalCareNotes || dog.behaviorNotes || dog.notes || ""],
+    ["Special care", dog.specialCare || dog.medicalCareNotes || dog.behaviorNotes || ""],
+    ["General note", dog.generalCareNotes || dog.notes || ""],
   ].filter(([, value]) => value);
   const quickButtons = ["Treadmill", "Scooter", "Yard Run", "Bath", "Training"]
     .map((type) => `<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="${escapeHtml(type)}" data-id="${escapeHtml(dog.id)}">${escapeHtml(type)}</button>`)
@@ -5739,13 +5756,18 @@ function ownedDogOverviewPopupHtml(record = {}) {
   const heatButton = dog.sex === "Female" ? `<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="Heat Note" data-id="${escapeHtml(dog.id)}">Heat Note</button>` : "";
   return `${dashboardQuickCareSummaryHtml(dog, "Profile")}
     <section class="popup-record-section"><h3>Overview</h3>${detailRows.map(([label, value]) => `<div class="detail-row"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(value)}</span></div>`).join("")}</section>
-    <section class="popup-record-section"><h3>Care Timeline</h3><div class="quick-action-grid">${quickButtons}${heatButton}<button type="button" class="secondary-button" data-action="open-owned-timeline" data-id="${escapeHtml(dog.id)}">Open Timeline</button></div>${ownedDogActivityEntriesHtml(dog, "All")}</section>
-    <div class="button-row"><button type="button" class="secondary-button" data-action="open-owned-editor" data-id="${escapeHtml(dog.id)}">Edit Full Dog Record</button></div>`;
+    <section class="popup-record-section"><h3>Care Timeline</h3><div class="quick-action-grid">${quickButtons}${heatButton}<button type="button" class="secondary-button" data-action="open-owned-timeline" data-id="${escapeHtml(dog.id)}">Open Timeline</button></div>${ownedDogActivityEntriesHtml(dog, "All")}</section>`;
 }
 
 function openOwnedDogOverviewPopup(record = {}) {
   if (!record?.id) return;
-  showDetailDialog(`${ownedDogDisplayName(record)} Profile`, ownedDogOverviewPopupHtml(record));
+  showDetailDialog(`${ownedDogDisplayName(record)} Profile`, ownedDogOverviewPopupHtml(record), null, {
+    headerAction: {
+      label: "Edit Full Dog Record",
+      action: "open-owned-editor",
+      id: record.id,
+    },
+  });
 }
 
 function openVaccineAlert(dogId) {
@@ -5844,7 +5866,7 @@ function handleOwnedDogRosterAction(button) {
   if (button.dataset.action === "view-owned-photo") {
     const photo = record.profilePhotoUrl || record.profilePhotoData || "";
     if (photo) {
-      showMediaDialog(photo, "image/jpeg", `${ownedDogDisplayName(record)} profile photo`);
+      showMediaDialog(photo, "image/jpeg", `${ownedDogDisplayName(record)} profile photo`, { type: "ownedDogPhoto", id: record.id });
     } else {
       openOwnedDogPhotoUploadPopup(normalizeOwnedDogCare(record));
     }
@@ -6102,7 +6124,7 @@ function dashboardQuickCareSummaryHtml(dog, careType) {
   const latestExercise = careTypeIsExercise(careType) ? latestExerciseLogForDog(dog, careType) : null;
   const photo = dog.profilePhotoUrl || dog.profilePhotoData || "";
   const photoHtml = photo
-    ? `<img class="quick-care-dog-photo is-clickable-photo" src="${escapeHtml(photo)}" alt="${escapeHtml(ownedDogDisplayName(dog))}" data-action="view-dog-photo" data-src="${escapeHtml(photo)}" data-media-name="${escapeHtml(`${ownedDogDisplayName(dog)} profile photo`)}" />`
+    ? `<img class="quick-care-dog-photo is-clickable-photo" src="${escapeHtml(photo)}" alt="${escapeHtml(ownedDogDisplayName(dog))}" data-action="view-dog-photo" data-dog-id="${escapeHtml(dog.id || "")}" data-src="${escapeHtml(photo)}" data-media-name="${escapeHtml(`${ownedDogDisplayName(dog)} profile photo`)}" />`
     : `<div class="quick-care-dog-photo quick-care-dog-initials">${escapeHtml(avatarText(ownedDogDisplayName(dog)))}</div>`;
   const rowsByCareType = {
     Training: [
@@ -6136,7 +6158,8 @@ function dashboardQuickCareSummaryHtml(dog, careType) {
       ["Care status", dog.careStatus || "Review notes"],
       ["Medical notes", dog.medicalNotes || dog.medicalCareNotes || "No medical note saved"],
       ["Behavior notes", dog.behaviorNotes || "No behavior note saved"],
-      ["Special care", dog.specialCare || dog.notes || "No special care note saved"],
+      ["Special care", dog.specialCare || "No special care note saved"],
+      ["General note", dog.generalCareNotes || dog.notes || "No general note saved"],
     ],
   };
   const exerciseRows = [
@@ -9374,7 +9397,12 @@ function initEvents() {
     const action = event.target.closest("[data-action]");
     if (!action) return;
     if (action.dataset.action === "view-dog-photo") {
-      showMediaDialog(action.dataset.src, "image/jpeg", action.dataset.mediaName || "Dog profile photo");
+      showMediaDialog(
+        action.dataset.src,
+        "image/jpeg",
+        action.dataset.mediaName || "Dog profile photo",
+        action.dataset.dogId ? { type: "ownedDogPhoto", id: action.dataset.dogId } : null,
+      );
       return;
     }
     if (action.dataset.action === "edit-stay-popup") {
@@ -9535,7 +9563,25 @@ function initEvents() {
     $("#detailDialog").close();
     renderDashboard();
   });
+  $("#detailDialogHeaderAction")?.addEventListener("click", () => {
+    const action = $("#detailDialogHeaderAction");
+    if (action?.dataset.action !== "open-owned-editor") return;
+    const dog = readRecords("ownedDog").find((record) => record.id === action.dataset.id && !record.removed);
+    if (!dog) return;
+    $("#detailDialog").close();
+    switchPage("ourDogsPage");
+    openOwnedDog(dog);
+    setOwnedFormLocked(false);
+    showToast("Dog record opened for editing.");
+  });
   $("#closeMediaDialog").addEventListener("click", () => $("#mediaDialog").close());
+  $("#replaceOwnedDogPhotoButton")?.addEventListener("click", () => {
+    const dogId = $("#replaceOwnedDogPhotoButton")?.dataset.id || "";
+    const dog = readRecords("ownedDog").find((record) => record.id === dogId && !record.removed);
+    if (!dog) return;
+    $("#mediaDialog").close();
+    openOwnedDogPhotoUploadPopup(dog);
+  });
   $("#mediaDialog").addEventListener("click", (event) => {
     const zoomButton = event.target.closest("[data-action]");
     if (!zoomButton) return;
