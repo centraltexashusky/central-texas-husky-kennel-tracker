@@ -714,6 +714,20 @@
                 <label>Last exercise date<input type="date" name="lastExerciseDate" /></label>
                 <label>Exercise notes<textarea name="exerciseNotes" rows="3" placeholder="Handling, conditioning, weather, or equipment notes"></textarea></label>
               </div>
+              <div class="activity-entry-grid existing-only owned-tab-care-entry" data-owned-care-entry-panel hidden>
+                <div class="activity-entry">
+                  <label>Treadmill minutes<input type="number" id="ownedTreadmillMinutes" min="0" placeholder="Minutes" /></label>
+                  <button type="button" id="addTreadmillLog">Add Treadmill Time</button>
+                </div>
+                <div class="activity-entry">
+                  <label>Scooter minutes<input type="number" id="ownedScooterMinutes" min="0" placeholder="Minutes" /></label>
+                  <button type="button" id="addScooterLog">Add Scooter Time</button>
+                </div>
+                <div class="activity-entry">
+                  <label>Yard run minutes<input type="number" id="ownedYardRunMinutes" min="0" placeholder="Minutes" /></label>
+                  <button type="button" id="addYardRunLog">Add Yard Run</button>
+                </div>
+              </div>
             </section>
 
             <section class="owned-profile-section" data-owned-profile-section="Training" hidden>
@@ -726,6 +740,10 @@
                 <label>Training goals<textarea name="trainingGoals" rows="3" placeholder="Goals, commands, handling targets, manners"></textarea></label>
                 <label>Session notes<textarea name="trainingSessionNotes" rows="3" placeholder="Recent notes or focus for next staff member"></textarea></label>
               </div>
+              <div class="existing-only owned-tab-care-entry" data-owned-care-entry-panel hidden>
+                <label>Training progress entry<textarea id="ownedTrainingEntry" rows="3" placeholder="What was worked on today?"></textarea></label>
+                <button type="button" id="addTrainingLog">Add Training Entry</button>
+              </div>
             </section>
 
             <section class="owned-profile-section" data-owned-profile-section="Baths" hidden>
@@ -737,6 +755,12 @@
                 <label>Bath interval in days<input type="number" name="bathIntervalDays" min="0" value="0" placeholder="0 for no alert" /></label>
                 <label>Bath products<input type="text" name="bathProducts" placeholder="Shampoo, conditioner, deshed tools" /></label>
                 <label>Coat notes<textarea name="coatNotes" rows="3" placeholder="Coat condition, blowout, skin notes"></textarea></label>
+              </div>
+              <div class="activity-entry-grid existing-only owned-tab-care-entry" data-owned-care-entry-panel hidden>
+                <div class="activity-entry">
+                  <label>Bath note<input type="text" id="ownedBathNote" placeholder="Products or coat note" /></label>
+                  <button type="button" id="addBathLog">Log Bath Today</button>
+                </div>
               </div>
             </section>
 
@@ -757,6 +781,10 @@
               <div class="section-heading compact-heading"><span>M</span><div><h2>Medical / Care Notes</h2><p>Medication, special handling, behavior watch, and care history.</p></div></div>
               <label>Medication or special care notes<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
               <label>Medical notes<textarea name="medicalCareNotes" rows="3" placeholder="Ongoing medical/care notes that staff should see"></textarea></label>
+              <div class="existing-only owned-tab-care-entry" data-owned-care-entry-panel hidden>
+                <label>Medical / behavior care entry<textarea id="ownedCareEntry" rows="3" placeholder="Medication, behavior, injury, appetite, or special care note"></textarea></label>
+                <button type="button" id="addCareNoteLog">Add Care Note</button>
+              </div>
             </section>
 
             <section class="owned-profile-section" data-owned-profile-section="Files" hidden>
@@ -768,52 +796,25 @@
 
             <section class="owned-profile-section" data-owned-profile-section="Timeline" hidden>
               <div class="section-heading compact-heading"><span>L</span><div><h2>Timeline</h2><p>Exercise, training, bath, heat, and medical/care history.</p></div></div>
-              <div id="ownedDogTimelineList" class="record-grid"></div>
+              <div class="filter-toolbar activity-filter-toolbar">
+                <label>Show history
+                  <select id="ownedActivityFilter">
+                    <option value="All">All entries</option>
+                    <option value="Exercise">Exercise only</option>
+                    <option value="Training">Training only</option>
+                    <option value="Treadmill">Treadmill</option>
+                    <option value="Scooter">Scooter</option>
+                    <option value="Yard Run">Yard Run</option>
+                    <option value="Bath">Baths</option>
+                    <option value="Heat">Heat notes</option>
+                    <option value="Medical/Care">Medical / care notes</option>
+                  </select>
+                </label>
+              </div>
+              <div id="ownedActivityHistory" class="record-grid"></div>
             </section>
             <div class="button-row"><button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Update</button><button type="submit" id="ownedDogSaveButton">Update</button><button type="button" class="secondary-button danger-button" id="deleteOwnedDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
           </form>
-
-          <section class="existing-only" id="ownedDogActivityPanel" hidden>
-            <div class="section-heading compact-heading"><span>A</span><div><h2>Care Timeline</h2><p>Add treadmill, scooter, yard run, training, bath, heat, and care entries for this dog.</p></div></div>
-            <div class="activity-entry-grid">
-              <div class="activity-entry">
-                <label>Treadmill minutes<input type="number" id="ownedTreadmillMinutes" min="0" placeholder="Minutes" /></label>
-                <button type="button" id="addTreadmillLog">Add Treadmill Time</button>
-              </div>
-              <div class="activity-entry">
-                <label>Scooter minutes<input type="number" id="ownedScooterMinutes" min="0" placeholder="Minutes" /></label>
-                <button type="button" id="addScooterLog">Add Scooter Time</button>
-              </div>
-              <div class="activity-entry">
-                <label>Yard run minutes<input type="number" id="ownedYardRunMinutes" min="0" placeholder="Minutes" /></label>
-                <button type="button" id="addYardRunLog">Add Yard Run</button>
-              </div>
-              <div class="activity-entry">
-                <label>Bath note<input type="text" id="ownedBathNote" placeholder="Products or coat note" /></label>
-                <button type="button" id="addBathLog">Log Bath Today</button>
-              </div>
-            </div>
-            <label>Training progress entry<textarea id="ownedTrainingEntry" rows="3" placeholder="What was worked on today?"></textarea></label>
-            <button type="button" id="addTrainingLog">Add Training Entry</button>
-            <label>Medical / behavior care entry<textarea id="ownedCareEntry" rows="3" placeholder="Medication, behavior, injury, appetite, or special care note"></textarea></label>
-            <button type="button" id="addCareNoteLog">Add Care Note</button>
-            <div class="filter-toolbar activity-filter-toolbar">
-              <label>Show history
-                <select id="ownedActivityFilter">
-                  <option value="All">All entries</option>
-                  <option value="Exercise">Exercise only</option>
-                  <option value="Training">Training only</option>
-                  <option value="Treadmill">Treadmill</option>
-                  <option value="Scooter">Scooter</option>
-                  <option value="Yard Run">Yard Run</option>
-                  <option value="Bath">Baths</option>
-                  <option value="Heat">Heat notes</option>
-                  <option value="Medical/Care">Medical / care notes</option>
-                </select>
-              </label>
-            </div>
-            <div id="ownedActivityHistory" class="record-grid"></div>
-          </section>
         </section>
       </section>
 

@@ -437,6 +437,10 @@ h2 {
   z-index: 1000;
 }
 
+body.owned-dog-modal-open {
+  overflow: hidden;
+}
+
 .boarding-dog-modal .section-heading,
 .owned-dog-modal .section-heading {
   align-items: center;
@@ -446,6 +450,10 @@ h2 {
   border-top: 1px solid var(--line);
   margin-top: 18px;
   padding-top: 18px;
+}
+
+.owned-tab-care-entry {
+  margin-top: 4px;
 }
 
 .dog-profile-editor {

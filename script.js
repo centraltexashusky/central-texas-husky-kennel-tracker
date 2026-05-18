@@ -3755,7 +3755,6 @@ async function syncOwnedDogCareFromDailyReport(record) {
     if (activeUpdate) {
       renderOwnedActivity(activeUpdate);
       renderOwnedDogFiles(activeUpdate);
-      renderOwnedDogTimeline(activeUpdate);
     }
     showToast(`${dogUpdates.size} Our Dog care profile${dogUpdates.size === 1 ? "" : "s"} updated.`);
   }
@@ -5478,6 +5477,7 @@ function openOwnedDog(record = {}) {
     document.body.appendChild(ownedDogDetail);
   }
   ownedDogDetail.hidden = false;
+  document.body.classList.add("owned-dog-modal-open");
   ownedDogDetail.scrollTop = 0;
   selectedDogPhotos.owned = null;
   $("#ownedDogDetailTitle").textContent = record.id ? `Edit ${record.callName || "Dog"}` : "Add New Dog";
@@ -5486,15 +5486,26 @@ function openOwnedDog(record = {}) {
   setFormValues($("#ourDogForm"), normalized);
   $("#ourDogForm").elements.id.value = record.id || "";
   setDogPhoto("owned", normalized);
-  $("#ownedDogActivityPanel").hidden = !record.id;
+  setOwnedCareEntryVisibility(Boolean(record.id));
   renderOwnedActivity(normalized);
   renderOwnedDogFiles(normalized);
-  renderOwnedDogTimeline(normalized);
   updateOwnedDogConditionalFields();
   syncOwnedDogTabAvailability(normalized);
   setOwnedDogActiveTab("Overview");
   setOwnedFormLocked(false);
   $("#deleteOwnedDogButton").hidden = !record.id;
+}
+
+function closeOwnedDogModal() {
+  const ownedDogDetail = $("#ownedDogDetail");
+  if (ownedDogDetail) ownedDogDetail.hidden = true;
+  document.body.classList.remove("owned-dog-modal-open");
+}
+
+function setOwnedCareEntryVisibility(visible = false) {
+  $$("[data-owned-care-entry-panel]").forEach((panel) => {
+    panel.hidden = !visible;
+  });
 }
 
 function resetBoardingDogFormForRecord(record = {}) {
@@ -5627,12 +5638,6 @@ function ownedDogActivityEntriesHtml(record = {}, filter = "All", { removable = 
     : "<p>No activity or training entries yet.</p>";
 }
 
-function renderOwnedDogTimeline(record = activeOwnedDog()) {
-  const container = $("#ownedDogTimelineList");
-  if (!container) return;
-  container.innerHTML = ownedDogActivityEntriesHtml(record || {}, "All");
-}
-
 function ownedDogDocumentItems(record = {}) {
   return arrayValue(record.documents).map((item) => ({
     id: item.id || uid("file"),
@@ -5761,8 +5766,8 @@ function openVaccineAlert(dogId) {
 
 function renderOwnedActivity(record = activeOwnedDog()) {
   const filter = $("#ownedActivityFilter")?.value || "All";
-  $("#ownedActivityHistory").innerHTML = ownedDogActivityEntriesHtml(record || {}, filter, { removable: true });
-  renderOwnedDogTimeline(record);
+  const history = $("#ownedActivityHistory");
+  if (history) history.innerHTML = ownedDogActivityEntriesHtml(record || {}, filter, { removable: true });
 }
 
 function applyOwnedCareLog(record = {}, type, minutes, note = "") {
@@ -9811,14 +9816,14 @@ function initEvents() {
   $("#ownedDogTableHead").addEventListener("drop", handleTableHeaderDrop);
   $("#ownedDogTableHead").addEventListener("dragend", handleTableHeaderDragEnd);
   $("#addOwnedDogButton").addEventListener("click", () => openOwnedDog());
-  $("#closeOwnedDogDialogButton")?.addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
-  $("#cancelOwnedDogEdit").addEventListener("click", () => ($("#ownedDogDetail").hidden = true));
+  $("#closeOwnedDogDialogButton")?.addEventListener("click", closeOwnedDogModal);
+  $("#cancelOwnedDogEdit").addEventListener("click", closeOwnedDogModal);
   $("#deleteOwnedDogButton").addEventListener("click", async () => {
     const dog = activeOwnedDog();
     if (!dog) return;
     if (!window.confirm(`Remove ${dog.callName || dog.showName || "this dog"} from Our Dogs?`)) return;
     const updated = await markRecordRemoved("ownedDog", dog.id);
-    $("#ownedDogDetail").hidden = true;
+    closeOwnedDogModal();
     renderOwnedDogs();
     renderBoardingDogs();
     showDetailDialog("Dog Removed", `<p>${escapeHtml(updated?.callName || updated?.showName || "Dog")} has been removed from the active dog list.</p>`);
@@ -9933,11 +9938,10 @@ function initEvents() {
       const record = upsertRecord("ownedDog", payload);
       await sendPayload(record);
       formEl.elements.id.value = record.id;
-      $("#ownedDogActivityPanel").hidden = false;
+      setOwnedCareEntryVisibility(true);
       setDogPhoto("owned", record);
       renderOwnedActivity(record);
       renderOwnedDogFiles(record);
-      renderOwnedDogTimeline(record);
       renderOwnedDogs();
       renderBoardingDogs();
       renderDashboard();
