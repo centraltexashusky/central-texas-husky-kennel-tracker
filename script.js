@@ -31,6 +31,10 @@ const syncNowButton = $("#syncNowButton");
 const headerUserName = $("#headerUserName");
 const headerLogoutButton = $("#headerLogoutButton");
 let syncIntervalId = null;
+let remoteLoadInProgress = false;
+let lastRemoteRecordsSignature = null;
+let deferredRemoteRenderTimer = null;
+let lastUserScrollAt = 0;
 let currentUser = null;
 let supabaseClient = null;
 let detailDialogContext = null;
@@ -57,6 +61,7 @@ let authSessionSyncPromise = null;
 let suppressAuthSyncUntil = 0;
 let taskTemplateSyncTimer = null;
 let applyingRemoteTaskConfig = false;
+const REMOTE_RENDER_SCROLL_IDLE_MS = 1200;
 
 const careDefaults = {
   exerciseFrequencyDays: 1,
@@ -3121,15 +3126,52 @@ async function sendPayload(payload) {
   }
 }
 
+function remoteRecordsSignature(rows = []) {
+  return rows
+    .map((row) => `${row.type || ""}:${row.id || ""}:${row.updated_at || ""}`)
+    .sort()
+    .join("|");
+}
+
+function activePageIsScrollSensitive() {
+  return activePageId() === "boardingDogsPage";
+}
+
+function recentlyScrolled() {
+  return Date.now() - lastUserScrollAt < REMOTE_RENDER_SCROLL_IDLE_MS;
+}
+
+function renderAllRecordsFromRemoteLoad() {
+  if (deferredRemoteRenderTimer) {
+    window.clearTimeout(deferredRemoteRenderTimer);
+    deferredRemoteRenderTimer = null;
+  }
+  if (activePageIsScrollSensitive() && recentlyScrolled()) {
+    modeLabel.textContent = "Loaded; updating after scroll";
+    deferredRemoteRenderTimer = window.setTimeout(renderAllRecordsFromRemoteLoad, REMOTE_RENDER_SCROLL_IDLE_MS);
+    return;
+  }
+  renderAllRecords();
+}
+
 async function loadRemoteRecords() {
   if (localTestMode || !supabaseClient) {
     modeLabel.textContent = localTestMode ? "Local test mode" : "Local only";
     return;
   }
+  if (remoteLoadInProgress) return;
+  remoteLoadInProgress = true;
   syncNowButton.disabled = true;
   try {
     const { data, error } = await supabaseClient.from("kennel_records").select("*").order("updated_at", { ascending: false }).limit(1500);
     if (error) throw error;
+    const nextSignature = remoteRecordsSignature(data || []);
+    const remoteDataChanged = nextSignature !== lastRemoteRecordsSignature;
+    lastRemoteRecordsSignature = nextSignature;
+    if (!remoteDataChanged) {
+      modeLabel.textContent = "Synced";
+      return;
+    }
     const grouped = Object.fromEntries(recordTypes().map((type) => [type, []]));
     (data || []).forEach((row) => {
       if (grouped[row.type]) grouped[row.type].push(row.payload);
@@ -3142,13 +3184,14 @@ async function loadRemoteRecords() {
       localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
     }
     await syncMissingCustomerAccessProfiles();
-    renderAllRecords();
+    renderAllRecordsFromRemoteLoad();
     updateNavigationAccess();
     updateHeaderUser();
   } catch (error) {
     modeLabel.textContent = "Load failed";
     showToast(`Records could not load: ${error.message}`);
   } finally {
+    remoteLoadInProgress = false;
     syncNowButton.disabled = false;
   }
 }
@@ -8426,6 +8469,9 @@ function exportCareLogs() {
 function initEvents() {
   syncMobileReviewSections();
   window.addEventListener("resize", syncMobileReviewSections);
+  window.addEventListener("scroll", () => {
+    lastUserScrollAt = Date.now();
+  }, { passive: true });
   window.addEventListener("hashchange", () => {
     const pageId = pageIdFromHash();
     if (pageId && pageAllowed(pageId) && pageId !== activePageId()) switchPage(pageId);
