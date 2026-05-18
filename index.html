@@ -65,7 +65,10 @@
             <h2>Notifications</h2>
             <p id="notificationPanelSummary">No unread alerts.</p>
           </div>
-          <button type="button" class="secondary-button" id="markAllNotificationsReadButton">Mark All Read</button>
+          <div class="notification-panel-actions">
+            <button type="button" class="secondary-button" id="showReadNotificationsButton">Read</button>
+            <button type="button" class="secondary-button" id="markAllNotificationsReadButton">Mark All Read</button>
+          </div>
         </div>
         <div class="notification-list" id="notificationList"></div>
       </section>
@@ -693,8 +696,9 @@
                 <label>Care status<select name="careStatus"><option value="">Normal / no status</option><option>Special Care</option><option>Medical Watch</option><option>Recovery</option><option>Behavior Watch</option><option>Heat Watch</option></select></label>
                 <label>Food amount currently eating<input type="text" name="foodAmount" placeholder="Example: 2 cups AM, 2 cups PM" /></label>
                 <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
-                <label class="inline-check"><input type="checkbox" name="rabiesGoodThreeYears" value="Yes" /> Rabies good for 3 years from last vaccination</label>
+                <label>Next rabies vaccination<input type="date" name="nextRabiesDate" /></label>
                 <label id="ownedDhppLabel">Last DHPP vaccination <span id="ownedDhppWarning" class="vaccine-warning"></span><input type="date" name="dhppDate" id="ownedDhppDate" /></label>
+                <label>Next DHPP vaccination<input type="date" name="nextDhppDate" /></label>
                 <label>Last heartworm medication<input type="date" name="heartwormDate" /></label>
               </div>
               <label>General notes<textarea name="notes" rows="3"></textarea></label>
@@ -704,7 +708,7 @@
               <div class="section-heading compact-heading"><span>X</span><div><h2>Exercise</h2><p>Treadmill, scooter, yard run, minutes, and target frequency.</p></div></div>
               <div class="field-grid">
                 <label>Exercise routine<textarea name="exerciseRoutine" rows="3" placeholder="Target routine, priority dogs, treadmill/scooter/yard run preferences"></textarea></label>
-                <label>Target frequency in days<input type="number" name="exerciseFrequencyDays" min="1" placeholder="Default 1" /></label>
+                <label>Target frequency in days<input type="number" name="exerciseFrequencyDays" min="0" value="0" placeholder="0 for no alert" /></label>
                 <label>Last exercise date<input type="date" name="lastExerciseDate" /></label>
                 <label>Exercise notes<textarea name="exerciseNotes" rows="3" placeholder="Handling, conditioning, weather, or equipment notes"></textarea></label>
               </div>
@@ -714,7 +718,7 @@
               <div class="section-heading compact-heading"><span>T</span><div><h2>Training</h2><p>Current focus, goals, session notes, and next session.</p></div></div>
               <div class="field-grid">
                 <label>Training routine<textarea name="trainingRoutine" rows="3" placeholder="Current focus and training cadence"></textarea></label>
-                <label>Target frequency in days<input type="number" name="trainingFrequencyDays" min="1" placeholder="Default 3" /></label>
+                <label>Target frequency in days<input type="number" name="trainingFrequencyDays" min="0" value="0" placeholder="0 for no alert" /></label>
                 <label>Last training date<input type="date" name="lastTrainingDate" /></label>
                 <label>Next training session<input type="date" name="nextTrainingDate" /></label>
                 <label>Training goals<textarea name="trainingGoals" rows="3" placeholder="Goals, commands, handling targets, manners"></textarea></label>
@@ -728,7 +732,7 @@
                 <label>Last bath<input type="date" name="lastBath" id="ownedLastBath" /></label>
                 <label>Next scheduled bath<input type="date" name="nextBath" id="ownedNextBath" readonly /></label>
                 <label>Bath routine<textarea name="bathRoutine" rows="3" placeholder="Bath interval, handling, preferred timing"></textarea></label>
-                <label>Bath interval in days<input type="number" name="bathIntervalDays" min="1" placeholder="Default 30" /></label>
+                <label>Bath interval in days<input type="number" name="bathIntervalDays" min="0" value="0" placeholder="0 for no alert" /></label>
                 <label>Bath products<input type="text" name="bathProducts" placeholder="Shampoo, conditioner, deshed tools" /></label>
                 <label>Coat notes<textarea name="coatNotes" rows="3" placeholder="Coat condition, blowout, skin notes"></textarea></label>
               </div>
@@ -764,7 +768,7 @@
               <div class="section-heading compact-heading"><span>L</span><div><h2>Timeline</h2><p>Exercise, training, bath, heat, and medical/care history.</p></div></div>
               <div id="ownedDogTimelineList" class="record-grid"></div>
             </section>
-            <div class="button-row"><button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Edit Dog</button><button type="submit" id="ownedDogSaveButton">Save Update</button><button type="button" class="secondary-button danger-button" id="deleteOwnedDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
+            <div class="button-row"><button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Update</button><button type="submit" id="ownedDogSaveButton">Update</button><button type="button" class="secondary-button danger-button" id="deleteOwnedDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
           </form>
 
           <section class="existing-only" id="ownedDogActivityPanel" hidden>
@@ -872,17 +876,6 @@
           </details>
         </section>
 
-        <section class="recent-submissions" id="customerDogUploadsSection">
-          <div class="section-heading">
-            <span>F</span>
-            <div>
-              <h2>Customer Uploaded Files</h2>
-              <p>Vaccination records and profile images customers uploaded for their dogs.</p>
-            </div>
-          </div>
-          <div class="record-grid compact-record-grid" id="customerDogUploadCards"></div>
-        </section>
-
         <section class="form-section detail-panel boarding-dog-modal" id="boardingDogDetail" hidden aria-modal="true" role="dialog">
           <div class="section-heading"><span>E</span><div><h2 id="boardingDogDetailTitle">Add Boarding Dog</h2><p>Use the table action to view or edit an existing boarding dog.</p></div><button type="button" class="secondary-button" id="closeBoardingDogDialogButton">Close</button></div>
           <div class="alert-banner">Required Update From Owner: use this when vaccines, owner instructions, or boarding details need to be refreshed.</div>
@@ -918,7 +911,6 @@
                 <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
                 <label>Sex<select name="sex" required><option value="">Select sex</option><option>Male</option><option>Female</option><option>Unknown</option></select></label>
                 <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
-                <label>Dog status<select name="boardingStatus" id="boardingDogStatus" required><option value="Pending">Pending</option><option value="Approved" selected>Approved</option><option value="Checked In">Checked In</option><option value="In Kennel">Active / In Kennel</option><option value="Ready For Pickup">Ready For Pickup</option><option value="Checked Out">Checked Out</option><option value="Cancelled">Cancelled</option></select></label>
                 <label>Owner name<input type="text" name="ownerName" required /></label>
                 <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
                 <label>Owner email<input type="email" name="ownerEmail" /></label>
@@ -964,6 +956,12 @@
                 <div class="section-heading compact-heading"><span>A</span><div><h2>Customer Account Link</h2><p>Prepare customer access for manually entered boarding dogs when an owner email is available.</p></div></div>
                 <div id="boardingOwnerAccountContent" class="record-grid compact-record-grid"></div>
               </section>
+            </section>
+
+            <section class="boarding-profile-section" data-boarding-profile-section="Boarding & Request" hidden>
+              <div class="field-grid">
+                <label>Dog status<select name="boardingStatus" id="boardingDogStatus" required><option value="Pending">Pending</option><option value="Approved" selected>Approved</option><option value="Checked In">Checked In</option><option value="In Kennel">Active / In Kennel</option><option value="Ready For Pickup">Ready For Pickup</option><option value="Checked Out">Checked Out</option><option value="Cancelled">Cancelled</option></select></label>
+              </div>
             </section>
 
             <div class="button-row"><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
@@ -1175,6 +1173,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260518-boarding-scroll-sync-1"></script>
+    <script src="script.js?v=20260518-boarding-care-alerts-1"></script>
   </body>
 </html>

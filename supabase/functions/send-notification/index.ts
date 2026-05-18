@@ -67,6 +67,23 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
       sms: false,
     };
   }
+  if (eventName === "customerDogFileUploaded") {
+    return {
+      subject: `Customer file uploaded: ${record.dogName || "Customer dog"}`,
+      body: [
+        "A customer uploaded a file to a dog profile.",
+        "",
+        `Dog: ${record.dogName || ""}`,
+        `Owner: ${record.ownerName || record.ownerEmail || record.customerEmail || ""}`,
+        `Files: ${record.vaccinationFiles || record.profilePhotoUrl || "Uploaded file"}`,
+        "",
+        `Review uploaded files: ${appUrl()}`,
+      ].join("\n"),
+      priority: "review",
+      to: adminEmails(),
+      sms: false,
+    };
+  }
   if (eventName === "urgentKennelRequestCreated") {
     return {
       subject: `Urgent kennel request: ${record.category || "Request"}`,

@@ -62,11 +62,14 @@ let suppressAuthSyncUntil = 0;
 let taskTemplateSyncTimer = null;
 let applyingRemoteTaskConfig = false;
 const REMOTE_RENDER_SCROLL_IDLE_MS = 1200;
+let showReadNotifications = false;
+let visibleReadNotificationCount = 4;
+const MAX_READ_NOTIFICATIONS = 10;
 
 const careDefaults = {
-  exerciseFrequencyDays: 1,
-  trainingFrequencyDays: 3,
-  bathIntervalDays: 30,
+  exerciseFrequencyDays: 0,
+  trainingFrequencyDays: 0,
+  bathIntervalDays: 0,
   heatCycleLengthDays: 183,
   heatExpectedSoonDays: 21,
   heatInHeatDays: 21,
@@ -341,16 +344,19 @@ function normalizeOwnedDogCare(record = {}) {
   copy.trainingFrequencyDays = numberFrom(copy.trainingFrequencyDays, careDefaults.trainingFrequencyDays);
   copy.bathIntervalDays = numberFrom(copy.bathIntervalDays, careDefaults.bathIntervalDays);
   copy.heatCycleLengthDays = numberFrom(copy.heatCycleLengthDays, careDefaults.heatCycleLengthDays);
+  copy.nextRabiesDate = dateOnly(copy.nextRabiesDate);
+  copy.nextDhppDate = dateOnly(copy.nextDhppDate);
   copy.lastExerciseDate = dateOnly(copy.lastExerciseDate) || latestLogDate(copy.exerciseLogs);
   copy.lastTrainingDate = dateOnly(copy.lastTrainingDate) || latestLogDate(copy.trainingLogs);
   copy.lastBath = dateOnly(copy.lastBath) || latestLogDate(copy.bathHistory);
-  copy.nextBath = dateOnly(copy.nextBath) || (copy.lastBath ? addDays(copy.lastBath, copy.bathIntervalDays) : "");
+  copy.nextBath = dateOnly(copy.nextBath) || nextBathFromFrequency(copy.lastBath, copy.bathIntervalDays);
   copy.lastHeat = copy.sex === "Female" ? dateOnly(copy.lastHeat) || latestLogDate(copy.heatHistory) : "";
   copy.nextHeat = copy.sex === "Female" ? dateOnly(copy.nextHeat) || (copy.lastHeat ? addDays(copy.lastHeat, copy.heatCycleLengthDays) : "") : "";
   return copy;
 }
 
 function careDueFromDate(lastDate, intervalDays, date = todayDate()) {
+  if (Number(intervalDays || 0) <= 0) return false;
   if (!lastDate) return true;
   const days = daysBetweenDates(lastDate, date);
   return days === null ? false : days >= intervalDays;
@@ -368,8 +374,13 @@ function ownedDogTrainingDue(record, date = todayDate()) {
 
 function ownedDogBathDue(record, date = todayDate()) {
   const dog = normalizeOwnedDogCare(record);
+  if (Number(dog.bathIntervalDays || 0) <= 0) return false;
   if (dog.nextBath) return dateOnlyTime(dog.nextBath) <= dateOnlyTime(date);
   return careDueFromDate(dog.lastBath, dog.bathIntervalDays, date);
+}
+
+function nextBathFromFrequency(lastBath = "", intervalDays = 0) {
+  return lastBath && Number(intervalDays || 0) > 0 ? addDays(lastBath, intervalDays) : "";
 }
 
 function ownedDogHeatStatus(record, date = todayDate()) {
@@ -2575,9 +2586,6 @@ function updateCareQuickFields() {
   setCareFieldVisibility("#careQuickNoteLabel", isBath || isHeat || isMedical || isTraining || !careType);
   if (isExercise && dog) $("#careQuickMinutes").value = lastExerciseMinutesForDog(dog, careType);
   if (!isExercise) $("#careQuickMinutes").value = "";
-  if (isBath) setAutoCareNote(bathCareDefaultNote);
-  if (isHeat) setAutoCareNote(heatCareDefaultNote);
-  if (isMedical) setAutoCareNote(medicalCareDefaultNote);
   if (isMedical) $("#careQuickNote").placeholder = medicalCarePlaceholder;
   else if (isHeat) $("#careQuickNote").placeholder = heatCareDefaultNote;
   else if (isTraining) $("#careQuickNote").placeholder = "Training focus, behavior, or progress";
@@ -3087,6 +3095,7 @@ async function addCustomTabTask(button) {
 }
 
 function setOwnedFormLocked(locked) {
+  locked = false;
   const formEl = $("#ourDogForm");
   [...formEl.elements].forEach((field) => {
     if (field.type === "hidden") return;
@@ -3096,8 +3105,9 @@ function setOwnedFormLocked(locked) {
     field.disabled = locked;
   });
   $("#ownedDogPhotoPicker").disabled = false;
-  $("#ownedDogSaveButton").hidden = locked;
-  $("#editOwnedDogButton").hidden = !locked;
+  $("#ownedDogSaveButton").hidden = false;
+  $("#ownedDogSaveButton").textContent = formEl.elements.id.value ? "Update" : "Save Dog";
+  $("#editOwnedDogButton").hidden = true;
   $("#deleteOwnedDogButton").hidden = !formEl.elements.id.value;
   formEl.classList.toggle("is-readonly", locked);
 }
@@ -3628,7 +3638,7 @@ function removeGeneratedDogCare(dog, dailyTaskId) {
   if (clean.lastTrainingUpdatedFromDailyTaskId === dailyTaskId) clean.lastTrainingDate = latestLogDate(clean.trainingLogs);
   if (clean.bathUpdatedFromDailyTaskId === dailyTaskId) {
     clean.lastBath = latestLogDate(clean.bathHistory);
-    clean.nextBath = clean.lastBath ? addDays(clean.lastBath, clean.bathIntervalDays) : "";
+    clean.nextBath = nextBathFromFrequency(clean.lastBath, clean.bathIntervalDays);
   }
   if (clean.heatUpdatedFromDailyTaskId === dailyTaskId) {
     clean.lastHeat = latestLogDate(clean.heatHistory);
@@ -3667,7 +3677,7 @@ async function syncOwnedDogCareFromDailyReport(record) {
     const entry = generatedCareEntry(record, { id: `legacy-bath-${dogId}`, date: reportDate, note: "Legacy daily bath entry.", completedBy: record.helperName }, "Bath");
     dog.bathHistory.unshift(entry);
     setIfNewer(dog, "lastBath", entry.date, "bathUpdatedFromDailyTaskId", record.id);
-    dog.nextBath = dog.lastBath ? addDays(dog.lastBath, dog.bathIntervalDays || careDefaults.bathIntervalDays) : "";
+    dog.nextBath = nextBathFromFrequency(dog.lastBath, dog.bathIntervalDays || careDefaults.bathIntervalDays);
     dog.bathUpdatedFromDailyTaskDate = entry.date;
   });
 
@@ -3692,7 +3702,7 @@ async function syncOwnedDogCareFromDailyReport(record) {
       const entry = generatedCareEntry(record, { ...log, date }, "Bath");
       dog.bathHistory.unshift(entry);
       setIfNewer(dog, "lastBath", date, "bathUpdatedFromDailyTaskId", record.id);
-      dog.nextBath = dog.lastBath ? addDays(dog.lastBath, dog.bathIntervalDays || careDefaults.bathIntervalDays) : "";
+      dog.nextBath = nextBathFromFrequency(dog.lastBath, dog.bathIntervalDays || careDefaults.bathIntervalDays);
       dog.bathUpdatedFromDailyTaskDate = date;
       return;
     }
@@ -4336,6 +4346,73 @@ function boardingQuickActionButtons(record = {}) {
   return `<div class="quick-action-grid boarding-action-grid">${buttons.join("")}</div>`;
 }
 
+function boardingStayServiceSummary(record = {}) {
+  const stay = activeBoardingStay(record) || currentOrNextStay(record) || (record.stays || [])[0] || {};
+  const requestedSource = stay.requests?.length ? stay.requests : record.requestedServices || [];
+  const requested = requestedSource.map((item) => {
+    if (typeof item === "string") return item;
+    return `${item.serviceName || "Service"}${Number(item.quantity || 1) > 1 ? ` x${item.quantity}` : ""}`;
+  });
+  const added = (stay.checkIn?.addedServices || []).map((service) => `${service.serviceName || "Service"}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""}`);
+  return [...requested, ...added].filter(Boolean);
+}
+
+function boardingPickupReviewHtml(record = {}) {
+  const stay = activeBoardingStay(record) || currentOrNextStay(record) || {};
+  const services = boardingStayServiceSummary(record);
+  const belongings = stay.checkIn?.belongings || "No belongings listed";
+  return `<section class="popup-record-section">
+    <article class="record-card compact-record-card">
+      <strong>${escapeHtml(record.dogName || "Boarding dog")}</strong>
+      <p>${escapeHtml(record.ownerName || "No owner saved")} | ${escapeHtml(record.ownerPhone || "No phone saved")}</p>
+      <p>${escapeHtml(record.ownerEmail || "No email saved")}</p>
+    </article>
+    <article class="record-card compact-record-card"><strong>Belongings to leave with dog</strong><p>${escapeHtml(belongings)}</p></article>
+    <article class="record-card compact-record-card"><strong>Requested / added services</strong><p>${escapeHtml(services.length ? services.join(", ") : "No services listed")}</p></article>
+    <div class="button-row"><button type="button" data-action="confirm-ready-for-pickup" data-id="${escapeHtml(record.id)}">Mark Ready For Pickup</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </section>`;
+}
+
+function openReadyForPickupReview(record = {}) {
+  showDetailDialog("Ready For Pickup Review", boardingPickupReviewHtml(record));
+}
+
+function boardingInvoiceTotal(record = {}) {
+  const stay = activeBoardingStay(record) || currentOrNextStay(record) || (record.stays || [])[0] || {};
+  return Number(record.finalInvoiceTotal || record.estimatedTotal || stay.estimatedTotal || 0);
+}
+
+function boardingCheckoutInvoiceHtml(record = {}) {
+  const services = boardingStayServiceSummary(record);
+  const total = boardingInvoiceTotal(record);
+  const paymentStatus = record.paymentStatus || "Unpaid";
+  return `<section class="popup-record-section">
+    <article class="record-card compact-record-card">
+      <strong>${escapeHtml(record.dogName || "Boarding dog")} final invoice</strong>
+      <p>${escapeHtml(record.ownerName || "No owner saved")} | ${escapeHtml(record.ownerPhone || "No phone saved")}</p>
+      <p>Status: ${escapeHtml(paymentStatus)}${record.paymentMethod ? ` by ${escapeHtml(record.paymentMethod)}` : ""}</p>
+    </article>
+    <article class="record-card compact-record-card"><strong>Services</strong><p>${escapeHtml(services.length ? services.join(", ") : "No services listed")}</p></article>
+    <article class="record-card compact-record-card"><strong>Total</strong><p>${escapeHtml(total ? money(total) : "No invoice total saved")}</p></article>
+    <div class="button-row"><button type="button" data-action="checkout-paid-method" data-id="${escapeHtml(record.id)}">Paid</button><button type="button" class="secondary-button" data-action="confirm-check-out" data-id="${escapeHtml(record.id)}">Check Out</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </section>`;
+}
+
+function openCheckoutInvoicePopup(record = {}) {
+  showDetailDialog("Final Invoice", boardingCheckoutInvoiceHtml(record));
+}
+
+function paymentMethodHtml(record = {}) {
+  return `<form id="paymentMethodForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}">
+    <label>Payment method<select name="paymentMethod" required><option value="">Select method</option><option>Cash</option><option>Venmo</option><option>PayPal</option><option>Zelle</option><option>Credit Card</option></select></label>
+    <div class="button-row"><button type="submit">Paid</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>`;
+}
+
+function openPaymentMethodPopup(record = {}) {
+  showDetailDialog("Payment Method", paymentMethodHtml(record));
+}
+
 function boardingDogPhotoSource(record = {}) {
   const linkedDog = linkedCustomerDogForBoarding(record) || {};
   return record.profilePhotoUrl || record.profilePhotoData || linkedDog.profilePhotoUrl || linkedDog.profilePhotoData || "";
@@ -4496,6 +4573,7 @@ function boardingCheckInHtml(record = {}, nextStatus = "Checked In", options = {
     : "";
   return `
     <form id="boardingCheckInForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}" data-next-status="${escapeHtml(nextStatus)}" data-allow-early="${options.allowEarly ? "true" : "false"}" data-early="${options.early ? "true" : "false"}">
+      <input type="hidden" name="assignKennelAfterCheckIn" value="No" />
       ${boardingCheckInPhotoHtml(record)}
       <div class="field-grid">
         <label>Owner name<input type="text" value="${escapeHtml(record.ownerName || "")}" readonly /></label>
@@ -4510,7 +4588,7 @@ function boardingCheckInHtml(record = {}, nextStatus = "Checked In", options = {
         ${serviceHtml}
         <div class="button-row"><button type="button" class="secondary-button" data-action="open-checkin-service-picker">Add service</button></div>
       </section>
-      <div class="button-row"><button type="submit">Submit Check-In</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+      <div class="button-row"><button type="submit" data-checkin-mode="check-in-only">Check-In only</button><button type="submit" class="secondary-button" data-checkin-mode="assign-kennel">Check-In & Assign Kennel</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
     </form>`;
 }
 
@@ -4638,6 +4716,10 @@ async function submitBoardingCheckIn(formEl) {
     await addAuditLog("Added check-in service", "boardingDog", updated, addedServices.map((service) => `${service.serviceName} x${service.quantity}`).join(", "));
   }
   pendingBoardingCheckIn = null;
+  if (data.assignKennelAfterCheckIn === "Yes") {
+    openKennelAssignmentPopup(updated, "In Kennel");
+    return;
+  }
   showDetailDialog("Check-In Complete", `<p>${escapeHtml(updated.dogName || "Boarding dog")} has been checked in.</p><p>Belongings: ${escapeHtml(data.belongings || "None listed")}</p>`);
 }
 
@@ -4948,6 +5030,18 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   }
   showToast(`Boarding status updated to ${nextStatus}.`);
   return updated;
+}
+
+async function handleBoardingTransition(record = {}, nextStatus = "", options = {}) {
+  if (nextStatus === "Ready For Pickup") {
+    openReadyForPickupReview(record);
+    return null;
+  }
+  if (nextStatus === "Checked Out") {
+    openCheckoutInvoicePopup(record);
+    return null;
+  }
+  return saveBoardingStatusTransition(record, nextStatus, options);
 }
 
 function dogRosterKey(record) {
@@ -5374,7 +5468,7 @@ function openOwnedDog(record = {}) {
   updateOwnedDogConditionalFields();
   syncOwnedDogTabAvailability(normalized);
   setOwnedDogActiveTab("Overview");
-  setOwnedFormLocked(Boolean(record.id));
+  setOwnedFormLocked(false);
   $("#deleteOwnedDogButton").hidden = !record.id;
 }
 
@@ -5664,7 +5758,7 @@ function applyOwnedCareLog(record = {}, type, minutes, note = "") {
     dog.bathHistory = dog.bathHistory || [];
     dog.bathHistory.unshift(log);
     dog.lastBath = log.date;
-    dog.nextBath = addDays(log.date, dog.bathIntervalDays || careDefaults.bathIntervalDays);
+    dog.nextBath = nextBathFromFrequency(log.date, dog.bathIntervalDays || careDefaults.bathIntervalDays);
   } else if (type === "Heat Note") {
     dog.heatHistory = dog.heatHistory || [];
     dog.heatHistory.unshift(log);
@@ -5769,7 +5863,7 @@ async function removeOwnedLog(logId) {
     lastExerciseDate: latestLogDate(nextExercise) || dog.lastExerciseDate,
     lastTrainingDate: latestLogDate(nextTraining) || dog.lastTrainingDate,
     lastBath: latestBath || dog.lastBath,
-    nextBath: latestBath ? addDays(latestBath, dog.bathIntervalDays || careDefaults.bathIntervalDays) : dog.nextBath,
+    nextBath: latestBath ? nextBathFromFrequency(latestBath, dog.bathIntervalDays || careDefaults.bathIntervalDays) : dog.nextBath,
     updatedAt: new Date().toISOString(),
   });
   await sendPayload(record);
@@ -7537,6 +7631,13 @@ function notificationEventConfig(eventName = "", record = {}) {
       channels: ["email", "inApp"],
       audienceRoles: ["admin"],
     },
+    customerDogFileUploaded: {
+      title: `Customer file uploaded: ${record.dogName || "Customer dog"}`,
+      message: `${record.ownerName || record.ownerEmail || record.customerEmail || "A customer"} uploaded a file${record.dogName ? ` for ${record.dogName}` : ""}.`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
     urgentKennelRequestCreated: {
       title: `Urgent request: ${record.category || "Kennel request"}`,
       message: record.requestText || "An urgent kennel request was submitted.",
@@ -7660,18 +7761,31 @@ function renderNotifications() {
   const panel = $("#notificationPanel");
   const list = $("#notificationList");
   const summary = $("#notificationPanelSummary");
+  const readButton = $("#showReadNotificationsButton");
   if (!button || !badge || !panel || !list || !summary) return;
   const available = readRecords("notificationLog")
     .filter((item) => !item.removed && notificationVisibleToCurrentUser(item))
     .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
   const unread = available.filter((item) => !notificationIsRead(item));
+  const read = available.filter((item) => notificationIsRead(item)).slice(0, MAX_READ_NOTIFICATIONS);
+  visibleReadNotificationCount = Math.min(Math.max(visibleReadNotificationCount, 4), MAX_READ_NOTIFICATIONS);
+  const notificationItemHtml = (item) => `<article class="notification-item ${notificationIsRead(item) ? "is-read" : ""} ${item.priority === "urgent" ? "is-urgent" : ""}" data-action="open-notification" data-id="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title || "Notification")}</strong><p>${escapeHtml(item.message || "")}</p><span>${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | ${escapeHtml((item.channels || []).join(", ") || "in-app")}</span></article>`;
   button.hidden = !helperIsLoggedIn();
   badge.textContent = unread.length;
   badge.hidden = !unread.length;
   summary.textContent = unread.length ? `${unread.length} unread alert${unread.length === 1 ? "" : "s"}.` : "No unread alerts.";
-  list.innerHTML = available.length
-    ? available.slice(0, 12).map((item) => `<article class="notification-item ${notificationIsRead(item) ? "is-read" : ""} ${item.priority === "urgent" ? "is-urgent" : ""}" data-action="open-notification" data-id="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title || "Notification")}</strong><p>${escapeHtml(item.message || "")}</p><span>${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | ${escapeHtml((item.channels || []).join(", ") || "in-app")}</span></article>`).join("")
-    : "<p>No notifications yet.</p>";
+  if (readButton) {
+    readButton.hidden = !read.length;
+    readButton.textContent = showReadNotifications ? "Hide Read" : `Read${read.length ? ` (${read.length})` : ""}`;
+  }
+  const unreadHtml = unread.length
+    ? unread.map(notificationItemHtml).join("")
+    : "<p>No unread alerts.</p>";
+  const visibleRead = read.slice(0, visibleReadNotificationCount);
+  const readHtml = showReadNotifications
+    ? `<section class="notification-read-section"><h3>Read</h3>${visibleRead.length ? visibleRead.map(notificationItemHtml).join("") : "<p>No read alerts yet.</p>"}${read.length > visibleRead.length ? `<button type="button" class="secondary-button notification-show-more" data-action="show-more-read-notifications">Show More</button>` : ""}</section>`
+    : "";
+  list.innerHTML = available.length ? `${unreadHtml}${readHtml}` : "<p>No notifications yet.</p>";
 }
 
 async function markNotificationRead(id = "") {
@@ -8202,12 +8316,12 @@ function scheduleShiftFormHtml(record = {}) {
   const start = scheduleWeekStartString();
   const date = record.date || start;
   const selected = selectedTimesheetStaff({ helperName: record.staffName, helperEmail: record.staffEmail });
-  const warnings = scheduleWarningsForShift({ ...record, staffName: selected.name, staffEmail: selected.email, date, startTime: record.startTime || "08:00", endTime: record.endTime || "12:00" });
+  const warnings = scheduleWarningsForShift({ ...record, staffName: selected.name, staffEmail: selected.email, date, startTime: record.startTime || "09:00", endTime: record.endTime || "12:00" });
   return `<form id="scheduleShiftForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}">
     <div class="field-grid">
       <label>Staff<select name="staffKey" required>${staffOptionHtml(record)}</select></label>
       <label>Date<input type="date" name="date" value="${escapeHtml(date)}" required /></label>
-      <label>Start time<input type="time" name="startTime" value="${escapeHtml(record.startTime || "08:00")}" required /></label>
+      <label>Start time<input type="time" name="startTime" value="${escapeHtml(record.startTime || "09:00")}" required /></label>
       <label>End time<input type="time" name="endTime" value="${escapeHtml(record.endTime || "12:00")}" required /></label>
       <label>Role<input type="text" name="role" value="${escapeHtml(record.role || "Kennel Care")}" /></label>
       <label>Location<input type="text" name="location" value="${escapeHtml(record.location || "")}" placeholder="Shed, Mansion, both" /></label>
@@ -8806,8 +8920,26 @@ function initEvents() {
     const ownedDogPhotoUploadForm = event.target.closest("#ownedDogPhotoUploadForm");
     const boardingCheckInForm = event.target.closest("#boardingCheckInForm");
     const boardingCheckInServiceForm = event.target.closest("#boardingCheckInServiceForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm) return;
+    const paymentMethodForm = event.target.closest("#paymentMethodForm");
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !paymentMethodForm) return;
     event.preventDefault();
+    if (paymentMethodForm) {
+      if (!validateForm(paymentMethodForm)) return;
+      const record = boardingDogRecordForDisplay(paymentMethodForm.dataset.id);
+      if (!record) return;
+      const paid = upsertRecord("boardingDog", {
+        ...record,
+        paymentStatus: "Paid",
+        paymentMethod: paymentMethodForm.elements.paymentMethod.value,
+        paidAt: new Date().toISOString(),
+        paidBy: currentUser?.name || helperName?.value || "",
+      });
+      await sendPayload(paid);
+      await addAuditLog("Marked boarding invoice paid", "boardingDog", paid, `${paid.dogName || "Dog"} | ${paid.paymentMethod}`);
+      await saveBoardingStatusTransition(paid, "Checked Out", { allowEarly: true, early: boardingTransitionIsEarly(paid, "Checked Out") });
+      showDetailDialog("Payment Recorded", `<p>${escapeHtml(paid.dogName || "Dog")} was marked paid by ${escapeHtml(paid.paymentMethod)} and checked out.</p>`);
+      return;
+    }
     if (boardingCheckInForm) {
       await submitBoardingCheckIn(boardingCheckInForm);
       return;
@@ -8950,6 +9082,13 @@ function initEvents() {
     }
   });
   $("#detailDialogBody").addEventListener("click", async (event) => {
+    const checkInMode = event.target.closest("[data-checkin-mode]");
+    if (checkInMode) {
+      const checkInForm = checkInMode.closest("#boardingCheckInForm");
+      if (checkInForm?.elements.assignKennelAfterCheckIn) {
+        checkInForm.elements.assignKennelAfterCheckIn.value = checkInMode.dataset.checkinMode === "assign-kennel" ? "Yes" : "No";
+      }
+    }
     const action = event.target.closest("[data-action]");
     if (!action) return;
     if (action.dataset.action === "view-dog-photo") {
@@ -8962,6 +9101,23 @@ function initEvents() {
     }
     if (action.dataset.action === "open-checkin-service-picker") {
       openBoardingCheckInServicePicker();
+      return;
+    }
+    if (action.dataset.action === "confirm-ready-for-pickup") {
+      const record = boardingDogRecordForDisplay(action.dataset.id);
+      if (record) await saveBoardingStatusTransition(record, "Ready For Pickup");
+      if (record) showDetailDialog("Ready For Pickup", `<p>${escapeHtml(record.dogName || "Dog")} is marked ready for pickup.</p>`);
+      return;
+    }
+    if (action.dataset.action === "checkout-paid-method") {
+      const record = boardingDogRecordForDisplay(action.dataset.id);
+      if (record) openPaymentMethodPopup(record);
+      return;
+    }
+    if (action.dataset.action === "confirm-check-out") {
+      const record = boardingDogRecordForDisplay(action.dataset.id);
+      if (record) await saveBoardingStatusTransition(record, "Checked Out", { allowEarly: true, early: boardingTransitionIsEarly(record, "Checked Out") });
+      if (record) showDetailDialog("Checked Out", `<p>${escapeHtml(record.dogName || "Dog")} has been checked out.</p>`);
       return;
     }
     if (action.dataset.action === "return-to-checkin") {
@@ -9295,7 +9451,18 @@ function initEvents() {
 	    renderNotifications();
 	  });
 	  $("#markAllNotificationsReadButton")?.addEventListener("click", markAllNotificationsRead);
+	  $("#showReadNotificationsButton")?.addEventListener("click", () => {
+	    showReadNotifications = !showReadNotifications;
+	    visibleReadNotificationCount = 4;
+	    renderNotifications();
+	  });
 	  $("#notificationList")?.addEventListener("click", (event) => {
+	    const showMore = event.target.closest('[data-action="show-more-read-notifications"]');
+	    if (showMore) {
+	      visibleReadNotificationCount = Math.min(visibleReadNotificationCount + 4, MAX_READ_NOTIFICATIONS);
+	      renderNotifications();
+	      return;
+	    }
 	    const item = event.target.closest('[data-action="open-notification"]');
 	    if (item) openNotification(item.dataset.id);
 	  });
@@ -9310,8 +9477,8 @@ function initEvents() {
     openTimesheetEditPopup(record);
   });
 
-  $("#ownedLastBath").addEventListener("change", () => ($("#ownedNextBath").value = addDays($("#ownedLastBath").value, numberFrom($("#ourDogForm").elements.bathIntervalDays?.value, careDefaults.bathIntervalDays))));
-  $("#ourDogForm").elements.bathIntervalDays.addEventListener("change", () => ($("#ownedNextBath").value = addDays($("#ownedLastBath").value, numberFrom($("#ourDogForm").elements.bathIntervalDays?.value, careDefaults.bathIntervalDays))));
+  $("#ownedLastBath").addEventListener("change", () => ($("#ownedNextBath").value = nextBathFromFrequency($("#ownedLastBath").value, numberFrom($("#ourDogForm").elements.bathIntervalDays?.value, careDefaults.bathIntervalDays))));
+  $("#ourDogForm").elements.bathIntervalDays.addEventListener("change", () => ($("#ownedNextBath").value = nextBathFromFrequency($("#ownedLastBath").value, numberFrom($("#ourDogForm").elements.bathIntervalDays?.value, careDefaults.bathIntervalDays))));
   $("#ownedLastHeat").addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, numberFrom($("#ourDogForm").elements.heatCycleLengthDays?.value, careDefaults.heatCycleLengthDays))));
   $("#ourDogForm").elements.heatCycleLengthDays.addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, numberFrom($("#ourDogForm").elements.heatCycleLengthDays?.value, careDefaults.heatCycleLengthDays))));
   $("#ownedDogSex").addEventListener("change", syncOwnedDogTabAvailability);
@@ -9461,12 +9628,12 @@ function initEvents() {
         removedBy: "",
         submittedAt: existing.submittedAt || new Date().toISOString(),
         ...formData,
-        rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
+        rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears?.checked ? "Yes" : "",
         exerciseFrequencyDays: numberFrom(formData.exerciseFrequencyDays, normalizedExisting.exerciseFrequencyDays || careDefaults.exerciseFrequencyDays),
         trainingFrequencyDays: numberFrom(formData.trainingFrequencyDays, normalizedExisting.trainingFrequencyDays || careDefaults.trainingFrequencyDays),
         bathIntervalDays,
         heatCycleLengthDays,
-        nextBath: formData.nextBath || (formData.lastBath ? addDays(formData.lastBath, bathIntervalDays) : ""),
+        nextBath: formData.nextBath || nextBathFromFrequency(formData.lastBath, bathIntervalDays),
         lastHeat: isFemale ? formData.lastHeat : "",
         nextHeat: isFemale ? formData.nextHeat || (formData.lastHeat ? addDays(formData.lastHeat, heatCycleLengthDays) : "") : "",
         heatCycle: isFemale ? formData.heatCycle || "" : "",
@@ -9494,7 +9661,7 @@ function initEvents() {
       renderDashboard();
       selectedDogPhotos.owned = null;
       syncOwnedDogTabAvailability(record);
-      setOwnedFormLocked(true);
+      setOwnedFormLocked(false);
       if (photo.photoError) {
         showDetailDialog("Dog Saved Without Photo", `<p>${escapeHtml(record.callName || record.showName || "Dog")} has been saved, but the profile photo could not be uploaded: ${escapeHtml(photo.photoError)}</p>`);
       } else {
@@ -9683,7 +9850,7 @@ function initEvents() {
       }
       if (action === "transition-boarding") {
         const next = button.dataset.nextStatus;
-        await saveBoardingStatusTransition(record, next);
+        await handleBoardingTransition(record, next);
       }
       return;
     }
@@ -9722,7 +9889,7 @@ function initEvents() {
       showToast("Boarding request cancelled.");
     }
     if (button.dataset.action === "transition-boarding") {
-      await saveBoardingStatusTransition(record, button.dataset.nextStatus);
+      await handleBoardingTransition(record, button.dataset.nextStatus);
     }
   });
   $("#boardingDogQuickCards")?.addEventListener("click", async (event) => {
@@ -9737,7 +9904,7 @@ function initEvents() {
     }
     if (button.dataset.action === "quick-boarding-transition") {
       const allowEarly = button.dataset.allowEarly === "true";
-      await saveBoardingStatusTransition(record, button.dataset.nextStatus, { allowEarly, early: allowEarly && boardingTransitionIsEarly(record, button.dataset.nextStatus) });
+      await handleBoardingTransition(record, button.dataset.nextStatus, { allowEarly, early: allowEarly && boardingTransitionIsEarly(record, button.dataset.nextStatus) });
     }
   });
   $("#customerDogUploadCards")?.addEventListener("click", (event) => {
@@ -10059,6 +10226,9 @@ function initEvents() {
       };
       const record = upsertRecord("customerDog", payload);
       await sendPayload(record);
+      if (vaccinationUploads.length || (photo.profilePhotoUrl && photo.profilePhotoUrl !== (existing.profilePhotoUrl || ""))) {
+        await notifyIfNeeded(record, "customerDogFileUploaded");
+      }
       await ensureCustomerAccessProfile({
         email: record.customerEmail || record.ownerEmail,
         name: record.ownerName,

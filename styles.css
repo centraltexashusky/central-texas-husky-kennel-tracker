@@ -2064,6 +2064,14 @@ button:disabled {
   justify-content: space-between;
 }
 
+.notification-panel-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .notification-panel-header h2,
 .notification-panel-header p {
   margin: 0;
@@ -2076,6 +2084,25 @@ button:disabled {
 .notification-list {
   display: grid;
   gap: 8px;
+}
+
+.notification-read-section {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.notification-read-section h3 {
+  font-size: 0.86rem;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.notification-show-more {
+  justify-self: start;
 }
 
 .notification-item {
@@ -2697,6 +2724,7 @@ option {
 
 #ownedDogSearch.filter-search-input {
   border-color: rgba(245, 158, 11, 0.88);
+  height: 46px;
   min-height: 46px;
 }
 
@@ -3211,10 +3239,10 @@ button.mobile-dog-photo-button {
   }
 
   #ownedDogSearch.filter-search-input {
-    flex: 0 0 58px;
-    height: 58px;
-    min-height: 58px;
-    padding-block: 0;
+    flex: 1 1 auto;
+    height: 46px;
+    min-height: 46px;
+    padding-block: 10px;
   }
 
   #dailyPage .checklist .task-item {
