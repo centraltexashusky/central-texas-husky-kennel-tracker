@@ -35,6 +35,12 @@ function adminEmails() {
   return splitEnv("ADMIN_ALERT_EMAILS").length ? splitEnv("ADMIN_ALERT_EMAILS") : splitEnv("ADMIN_EMAILS").length ? splitEnv("ADMIN_EMAILS") : ["centraltexashusky@gmail.com"];
 }
 
+function recordAudienceEmails(record: Record<string, unknown>) {
+  return Array.isArray(record.audienceEmails)
+    ? record.audienceEmails.map(normalizeEmail).filter(Boolean)
+    : [];
+}
+
 function appUrl() {
   return Deno.env.get("APP_PRODUCTION_URL") || "https://kennel.centraltexashusky.com/";
 }
@@ -46,6 +52,7 @@ function firstStay(record: Record<string, unknown>) {
 
 function notificationContent(eventName: string, record: Record<string, unknown>) {
   const stay = firstStay(record);
+  const audienceEmails = recordAudienceEmails(record);
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";
     return {
@@ -63,7 +70,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Review request: ${appUrl()}`,
       ].join("\n"),
       priority: "normal",
-      to: adminEmails(),
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
       sms: false,
     };
   }
@@ -80,7 +87,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Review uploaded files: ${appUrl()}`,
       ].join("\n"),
       priority: "review",
-      to: adminEmails(),
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
       sms: false,
     };
   }
@@ -98,7 +105,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Review request: ${appUrl()}`,
       ].join("\n"),
       priority: "urgent",
-      to: adminEmails(),
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
       sms: true,
     };
   }
@@ -117,7 +124,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Review request: ${appUrl()}`,
       ].join("\n"),
       priority: "urgent",
-      to: adminEmails(),
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
       sms: true,
     };
   }
@@ -134,7 +141,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Review request: ${appUrl()}`,
       ].join("\n"),
       priority: "review",
-      to: adminEmails(),
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
       sms: false,
     };
   }
@@ -151,7 +158,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Open schedule: ${appUrl()}`,
       ].join("\n"),
       priority: "normal",
-      to: [String(record.staffEmail || "")].filter(Boolean),
+      to: audienceEmails.length ? audienceEmails : [String(record.staffEmail || "")].filter(Boolean),
       sms: false,
     };
   }
@@ -168,8 +175,25 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `View schedule: ${appUrl()}`,
       ].join("\n"),
       priority: "normal",
-      to: record.staffEmail ? [String(record.staffEmail)] : adminEmails(),
+      to: audienceEmails.length ? audienceEmails : record.staffEmail ? [String(record.staffEmail)] : adminEmails(),
       sms: false,
+    };
+  }
+  if (eventName === "urgentStaffAlertSent" || eventName === "urgentCustomerAlertSent") {
+    const isCustomer = eventName === "urgentCustomerAlertSent";
+    return {
+      subject: isCustomer ? "Urgent customer alert" : "Urgent staff alert",
+      body: [
+        isCustomer ? "An urgent customer alert was sent from Snuggle Stay." : "An urgent staff alert was sent from Snuggle Stay.",
+        "",
+        String(record.message || ""),
+        "",
+        `Sent by: ${record.submittedBy || record.submittedByEmail || ""}`,
+        `Open Snuggle Stay: ${appUrl()}`,
+      ].join("\n"),
+      priority: "urgent",
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
+      sms: !isCustomer,
     };
   }
   return null;

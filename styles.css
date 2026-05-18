@@ -2737,6 +2737,11 @@ option {
   margin: 12px 0;
 }
 
+.settings-alert-actions {
+  justify-content: flex-start;
+  margin: 12px 0;
+}
+
 .settings-user-tabs {
   margin-bottom: 12px;
 }
@@ -2752,6 +2757,46 @@ option {
   margin-left: 6px;
   min-width: 24px;
   padding: 2px 7px;
+}
+
+.alert-preference-card p {
+  line-height: 1.45;
+}
+
+.alert-popup-tabs {
+  margin-bottom: 14px;
+}
+
+.alert-popup-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.alert-history-list {
+  max-height: 52vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.alert-checkbox-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.alert-checkbox-group {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.alert-checkbox-group h3 {
+  font-size: 0.9rem;
+  margin: 0;
+  text-transform: uppercase;
 }
 
 .service-flag-list {

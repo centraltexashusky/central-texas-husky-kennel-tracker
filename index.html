@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260517-task-draft-preserve-1" />
+    <link rel="stylesheet" href="styles.css?v=20260518-settings-alerts-1" />
   </head>
   <body>
     <div class="app-layout">
@@ -34,6 +34,7 @@
             <div class="side-sub-nav" aria-label="Settings sections">
               <button class="nav-button sub-nav-button" type="button" data-page="settingsUsersPage" data-roles="admin" data-settings-sub-nav="true">Users</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsKennelLocationsPage" data-roles="admin" data-settings-sub-nav="true">Kennel Locations</button>
+              <button class="nav-button sub-nav-button" type="button" data-page="settingsAlertsPage" data-roles="admin" data-settings-sub-nav="true">Alerts</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsAuditLogPage" data-roles="admin" data-settings-sub-nav="true">Audit Log</button>
             </div>
           </div>
@@ -94,6 +95,7 @@
           <option value="financialsPage" data-roles="admin">Financials</option>
           <option value="settingsUsersPage" data-roles="admin">Settings: Users</option>
           <option value="settingsKennelLocationsPage" data-roles="admin">Settings: Kennel Locations</option>
+          <option value="settingsAlertsPage" data-roles="admin">Settings: Alerts</option>
           <option value="settingsAuditLogPage" data-roles="admin">Settings: Audit Log</option>
         </select>
       </label>
@@ -1118,6 +1120,22 @@
           <div class="record-grid compact-record-grid" id="kennelLocationList"></div>
         </section>
       </section>
+      <section class="page-view" id="settingsAlertsPage">
+        <section class="recent-submissions">
+          <div class="section-heading"><span>!</span><div><h2>Alerts</h2><p>Send urgent alerts and manage which staff receive each alert type.</p></div></div>
+          <div class="button-row settings-alert-actions">
+            <button type="button" id="openUrgentStaffAlertButton">Urgent Staffs Alerts</button>
+            <button type="button" class="secondary-button" id="openUrgentCustomerAlertButton">Urgent Customers Alert</button>
+          </div>
+        </section>
+        <section class="recent-submissions">
+          <div class="section-heading"><span>C</span><div><h2>Customize Alerts</h2><p>Choose staff alert access by person. Staff can receive admin alert types when selected here.</p></div></div>
+          <div class="button-row settings-alert-actions">
+            <button type="button" id="openCustomizeAlertsButton">Customize Alerts</button>
+          </div>
+          <div class="record-grid compact-record-grid" id="settingsAlertPreferenceList"></div>
+        </section>
+      </section>
       <section class="page-view" id="settingsAuditLogPage">
         <section class="recent-submissions">
           <div class="section-heading"><span>A</span><div><h2>Audit Log</h2><p>Recent admin changes to settings, pricing, kennels, and access.</p></div></div>
@@ -1173,6 +1191,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="script.js?v=20260518-boarding-care-alerts-1"></script>
+    <script src="script.js?v=20260518-settings-alerts-1"></script>
   </body>
 </html>

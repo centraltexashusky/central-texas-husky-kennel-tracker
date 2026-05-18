@@ -96,7 +96,32 @@ const defaultTaskTabMeta = [
 ];
 const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage"];
 const mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
-const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsAuditLogPage"]);
+const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsAlertsPage", "settingsAuditLogPage"]);
+
+const alertTypeDefinitions = [
+  { key: "customerBoardingRequestCreated", label: "New customer boarding request", group: "Customer" },
+  { key: "customerBoardingRequestUpdated", label: "Customer boarding request update", group: "Customer" },
+  { key: "customerDogFileUploaded", label: "Customer uploaded dog file", group: "Customer" },
+  { key: "urgentKennelRequestCreated", label: "Urgent kennel request", group: "Operations" },
+  { key: "urgentMaintenanceCreated", label: "Urgent maintenance request", group: "Operations" },
+  { key: "timeOffRequested", label: "Staff time off request", group: "Staff" },
+  { key: "timeOffReviewed", label: "Time off approval/denial", group: "Staff" },
+  { key: "schedulePublished", label: "Schedule published", group: "Schedule" },
+  { key: "scheduleChangedAfterPublish", label: "Schedule changed after publish", group: "Schedule" },
+  { key: "urgentStaffAlertSent", label: "Urgent staff broadcast", group: "Manual" },
+  { key: "urgentCustomerAlertSent", label: "Urgent customer broadcast", group: "Manual" },
+];
+const adminDefaultAlertTypes = new Set([
+  "customerBoardingRequestCreated",
+  "customerBoardingRequestUpdated",
+  "customerDogFileUploaded",
+  "urgentKennelRequestCreated",
+  "urgentMaintenanceCreated",
+  "timeOffRequested",
+  "urgentStaffAlertSent",
+  "urgentCustomerAlertSent",
+]);
+const staffDefaultAlertTypes = new Set(["timeOffReviewed", "schedulePublished", "scheduleChangedAfterPublish", "urgentStaffAlertSent"]);
 
 const boardingLifecycleStatuses = ["Pending", "Approved", "Checked In", "In Kennel", "Ready For Pickup", "Checked Out", "Cancelled"];
 const boardingStatusTransitions = {
@@ -6613,6 +6638,200 @@ function renderSettingsUsers() {
   }
 }
 
+function alertManagedUsers() {
+  return settingsUsers().filter((user) => ["admin", "helper"].includes(user.role));
+}
+
+function customerAlertUsers() {
+  return settingsUsers().filter((user) => user.role === "customer");
+}
+
+function notificationPreferences() {
+  return readRecords("notificationPreference").filter((record) => !record.removed);
+}
+
+function alertPreferenceForEmail(email = "") {
+  const normalized = normalizeEmail(email);
+  return notificationPreferences().find((record) => normalizeEmail(record.userEmail || record.email) === normalized);
+}
+
+function defaultAlertTypesForUser(user = {}) {
+  if (user.role === "admin") return [...adminDefaultAlertTypes];
+  if (user.role === "helper") return [...staffDefaultAlertTypes];
+  return [];
+}
+
+function alertTypesForUser(user = {}) {
+  const preference = alertPreferenceForEmail(user.email);
+  if (Array.isArray(preference?.alertTypes)) return preference.alertTypes.filter(Boolean);
+  return defaultAlertTypesForUser(user);
+}
+
+function userReceivesAlertType(user = {}, eventName = "") {
+  return alertTypesForUser(user).includes(eventName);
+}
+
+function alertTypeLabel(key = "") {
+  return alertTypeDefinitions.find((item) => item.key === key)?.label || key;
+}
+
+function renderSettingsAlertPreferences() {
+  const list = $("#settingsAlertPreferenceList");
+  if (!list) return;
+  const users = alertManagedUsers().sort((a, b) => String(a.name || a.email || "").localeCompare(String(b.name || b.email || ""), undefined, { sensitivity: "base" }));
+  list.innerHTML = users.length
+    ? users.map((user) => {
+      const alertTypes = alertTypesForUser(user);
+      const labels = alertTypes.map(alertTypeLabel);
+      return `<article class="record-card compact-record-card alert-preference-card">
+        <strong>${escapeHtml(user.name || user.email || "Staff member")}</strong>
+        <span>${escapeHtml(user.email || "")} | ${escapeHtml(roleLabel(user.role))}</span>
+        <p>${labels.length ? escapeHtml(labels.join(", ")) : "No alerts selected."}</p>
+      </article>`;
+    }).join("")
+    : `<article class="record-card compact-record-card"><strong>No staff users saved yet</strong><p>Add staff in Settings > Users before customizing alerts.</p></article>`;
+}
+
+function renderSettingsAlerts() {
+  renderSettingsAlertPreferences();
+}
+
+function urgentAlertEventName(target = "staff") {
+  return target === "customer" ? "urgentCustomerAlertSent" : "urgentStaffAlertSent";
+}
+
+function urgentAlertAudienceUsers(target = "staff") {
+  return target === "customer"
+    ? customerAlertUsers()
+    : alertManagedUsers().filter((user) => userReceivesAlertType(user, "urgentStaffAlertSent"));
+}
+
+function urgentAlertTargetLabel(target = "staff") {
+  return target === "customer" ? "Customer" : "Staff";
+}
+
+function notificationRecordsForEvent(eventName = "") {
+  return readRecords("notificationLog")
+    .filter((record) => !record.removed && record.eventName === eventName)
+    .sort((a, b) => new Date(b.submittedAt || b.updatedAt || 0) - new Date(a.submittedAt || a.updatedAt || 0));
+}
+
+function alertHistoryHtml(target = "staff") {
+  const records = notificationRecordsForEvent(urgentAlertEventName(target)).slice(0, 25);
+  return records.length
+    ? `<div class="record-grid alert-history-list">${records.map((record) => `<article class="record-card compact-record-card">
+      <strong>${escapeHtml(record.title || "Urgent alert")}</strong>
+      <span>${escapeHtml(formatDateTime(record.submittedAt || record.updatedAt))} | ${escapeHtml((record.audienceEmails || []).length)} recipient${(record.audienceEmails || []).length === 1 ? "" : "s"} | ${escapeHtml(record.deliveryStatus || "queued")}</span>
+      <p>${multilineHtml(record.message || "")}</p>
+    </article>`).join("")}</div>`
+    : `<article class="record-card compact-record-card"><strong>No ${escapeHtml(urgentAlertTargetLabel(target).toLowerCase())} urgent alerts sent yet</strong><p>Sent alerts will show here for review.</p></article>`;
+}
+
+function urgentAlertPopupHtml(target = "staff") {
+  const label = urgentAlertTargetLabel(target);
+  const recipients = urgentAlertAudienceUsers(target);
+  const recipientText = recipients.length
+    ? recipients.map((user) => user.name || user.email).filter(Boolean).join(", ")
+    : target === "customer"
+      ? "No customer users found."
+      : "No staff/admin users are enabled for urgent staff alerts.";
+  return `<div class="profile-tabs alert-popup-tabs" role="tablist" aria-label="${escapeHtml(label)} alert tabs">
+      <button type="button" class="secondary-button is-active" data-alert-popup-tab="compose" aria-selected="true">Alert Tab</button>
+      <button type="button" class="secondary-button" data-alert-popup-tab="history" aria-selected="false">Alert History</button>
+    </div>
+    <form id="urgentAlertForm" class="tracker-form" data-alert-target="${escapeHtml(target)}" data-alert-panel="compose">
+      <section class="alert-popup-panel" data-alert-panel="compose">
+        <article class="record-card compact-record-card"><strong>Recipients</strong><p>${escapeHtml(recipientText)}</p></article>
+        <label>${escapeHtml(label)} alert message<textarea name="message" rows="5" required placeholder="Type the urgent alert message here"></textarea></label>
+        <div class="button-row"><button type="submit" ${recipients.length ? "" : "disabled"}>Send Alert</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+      </section>
+      <section class="alert-popup-panel" data-alert-panel="history" hidden>
+        ${alertHistoryHtml(target)}
+      </section>
+    </form>`;
+}
+
+function openUrgentAlertPopup(target = "staff") {
+  showDetailDialog(`Urgent ${urgentAlertTargetLabel(target)} Alert`, urgentAlertPopupHtml(target));
+}
+
+async function sendUrgentAlertFromForm(formEl) {
+  if (currentRole() !== "admin") return null;
+  if (!validateForm(formEl)) return null;
+  const target = formEl.dataset.alertTarget || "staff";
+  const eventName = urgentAlertEventName(target);
+  const recipients = urgentAlertAudienceUsers(target);
+  if (!recipients.length) {
+    showToast("No matching recipients are available for this alert.");
+    return null;
+  }
+  const message = formEl.elements.message.value.trim();
+  const sourceRecord = {
+    type: "alertBroadcast",
+    id: uid("alertBroadcast"),
+    submittedAt: new Date().toISOString(),
+    submittedBy: currentUser?.name || helperName?.value || "Admin",
+    submittedByEmail: currentUser?.email || helperEmail?.value || "",
+    alertTarget: target,
+    message,
+    audienceEmails: recipients.map((user) => user.email).filter(Boolean),
+  };
+  const notification = await notifyIfNeeded(sourceRecord, eventName);
+  await addAuditLog(`Sent urgent ${target} alert`, "notificationLog", notification || sourceRecord, `${recipients.length} recipient${recipients.length === 1 ? "" : "s"}`);
+  renderSettingsAlerts();
+  renderNotifications();
+  return notification;
+}
+
+function alertPreferencePopupHtml(selectedEmail = "") {
+  const users = alertManagedUsers().sort((a, b) => String(a.name || a.email || "").localeCompare(String(b.name || b.email || ""), undefined, { sensitivity: "base" }));
+  const selectedUser = users.find((user) => normalizeEmail(user.email) === normalizeEmail(selectedEmail)) || users[0] || {};
+  const selectedTypes = new Set(alertTypesForUser(selectedUser));
+  const options = users.map((user) => `<option value="${escapeHtml(user.email || "")}" ${normalizeEmail(user.email) === normalizeEmail(selectedUser.email) ? "selected" : ""}>${escapeHtml(user.name || user.email || "Staff member")} (${escapeHtml(roleLabel(user.role))})</option>`).join("");
+  const groups = [...new Set(alertTypeDefinitions.map((item) => item.group))];
+  return `<form id="alertPreferenceForm" class="tracker-form" data-user-email="${escapeHtml(selectedUser.email || "")}">
+    ${users.length ? `<label>Staff member<select name="userEmail" id="alertPreferenceUserSelect" required>${options}</select></label>
+    <div class="alert-checkbox-grid">
+      ${groups.map((group) => `<section class="alert-checkbox-group"><h3>${escapeHtml(group)}</h3>${alertTypeDefinitions.filter((item) => item.group === group).map((item) => `<label class="inline-check"><input type="checkbox" name="alertTypes" value="${escapeHtml(item.key)}" ${selectedTypes.has(item.key) ? "checked" : ""} /> ${escapeHtml(item.label)}</label>`).join("")}</section>`).join("")}
+    </div>
+    <div class="button-row"><button type="submit">Update Alert</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>` : `<article class="record-card compact-record-card"><strong>No staff users saved yet</strong><p>Add staff or admin users before customizing alerts.</p></article><div class="button-row"><button type="button" class="secondary-button" data-action="close-dialog">Close</button></div>`}
+  </form>`;
+}
+
+function openAlertPreferencePopup(selectedEmail = "") {
+  showDetailDialog("Customize Alerts", alertPreferencePopupHtml(selectedEmail));
+}
+
+async function saveAlertPreferenceFromForm(formEl) {
+  if (currentRole() !== "admin") return null;
+  if (!validateForm(formEl)) return null;
+  const user = alertManagedUsers().find((item) => normalizeEmail(item.email) === normalizeEmail(formEl.elements.userEmail.value));
+  if (!user) {
+    showToast("Choose a staff member before saving alert preferences.");
+    return null;
+  }
+  const alertTypes = [...formEl.querySelectorAll('input[name="alertTypes"]:checked')].map((input) => input.value).filter(Boolean);
+  const existing = alertPreferenceForEmail(user.email);
+  const now = new Date().toISOString();
+  const record = upsertRecord("notificationPreference", {
+    ...(existing || {}),
+    type: "notificationPreference",
+    id: existing?.id || uid("notificationPreference"),
+    submittedAt: existing?.submittedAt || now,
+    updatedAt: now,
+    userEmail: user.email,
+    userName: user.name || "",
+    userRole: user.role,
+    alertTypes,
+    updatedBy: currentUser?.name || helperName?.value || "Admin",
+    removed: false,
+  });
+  await sendPayload(record);
+  await addAuditLog("Updated alert preferences", "notificationPreference", record, `${user.name || user.email} | ${alertTypes.length} alert types`);
+  renderSettingsAlerts();
+  return record;
+}
+
 function kennelLocations({ activeOnly = false } = {}) {
   return readRecords("kennelLocation")
     .filter((location) => !location.removed)
@@ -7538,6 +7757,7 @@ function renderAllRecords() {
   renderCfoNotes();
   renderSettingsUsers();
   renderKennelLocations();
+  renderSettingsAlerts();
   renderAuditLog();
   renderNotifications();
   renderCustomerDogs();
@@ -7606,9 +7826,10 @@ function currentUserNotificationKey() {
 
 function notificationVisibleToCurrentUser(notification = {}) {
   if (!currentUser) return false;
-  if (currentRole() === "admin") return true;
   const audienceEmails = (notification.audienceEmails || []).map(normalizeEmail);
-  return audienceEmails.includes(normalizeEmail(currentUser.email || helperEmail.value));
+  const userEmail = normalizeEmail(currentUser.email || helperEmail.value);
+  if (audienceEmails.length) return audienceEmails.includes(userEmail);
+  return currentRole() === "admin";
 }
 
 function notificationIsRead(notification = {}) {
@@ -7681,17 +7902,43 @@ function notificationEventConfig(eventName = "", record = {}) {
       audienceEmails: [record.staffEmail].filter(Boolean),
       audienceRoles: ["admin"],
     },
+    urgentStaffAlertSent: {
+      title: "Urgent staff alert",
+      message: record.message || "An urgent staff alert was sent.",
+      priority: "urgent",
+      channels: ["email", "sms", "inApp"],
+      audienceEmails: record.audienceEmails || [],
+      audienceRoles: ["admin", "helper"],
+    },
+    urgentCustomerAlertSent: {
+      title: "Urgent customer alert",
+      message: record.message || "An urgent customer alert was sent.",
+      priority: "urgent",
+      channels: ["email", "inApp"],
+      audienceEmails: record.audienceEmails || [],
+      audienceRoles: ["customer"],
+    },
   };
   return configs[eventName] || null;
 }
 
-function notificationAudienceEmails(config = {}) {
+function notificationAudienceEmails(config = {}, eventName = "") {
   const emails = [...(config.audienceEmails || [])];
-  if ((config.audienceRoles || []).includes("admin")) emails.push(...ADMIN_EMAILS);
-  if ((config.audienceRoles || []).includes("helper") || (config.audienceRoles || []).includes("admin")) {
-    settingsUsers()
-      .filter((user) => !user.removed && (config.audienceRoles || []).includes(user.role))
+  const audienceRoles = config.audienceRoles || [];
+  const roleUsers = settingsUsers().filter((user) => !user.removed && audienceRoles.includes(user.role));
+  const hasSavedAdminUser = settingsUsers().some((user) => !user.removed && user.role === "admin" && user.email);
+  if (eventName && (audienceRoles.includes("helper") || audienceRoles.includes("admin"))) {
+    roleUsers
+      .filter((user) => userReceivesAlertType(user, eventName))
       .forEach((user) => emails.push(user.email));
+  } else if (audienceRoles.includes("helper") || audienceRoles.includes("admin")) {
+    roleUsers.forEach((user) => emails.push(user.email));
+  }
+  if (audienceRoles.includes("admin") && !hasSavedAdminUser) {
+    emails.push(...ADMIN_EMAILS);
+  }
+  if (audienceRoles.includes("customer")) {
+    customerAlertUsers().forEach((user) => emails.push(user.email));
   }
   return [...new Set(emails.map(normalizeEmail).filter(Boolean))];
 }
@@ -7714,7 +7961,7 @@ function createNotificationRecord(record = {}, eventName = "", config = {}) {
     priority: config.priority || "normal",
     channels: config.channels || ["inApp"],
     audienceRoles: config.audienceRoles || [],
-    audienceEmails: notificationAudienceEmails(config),
+    audienceEmails: notificationAudienceEmails(config, eventName),
     sourceType,
     sourceId,
     sourceSnapshot: payloadForSheet(record),
@@ -7733,7 +7980,7 @@ async function notifyIfNeeded(record = {}, eventName = "") {
   }
   try {
     const { error } = await supabaseClient.functions.invoke("send-notification", {
-      body: { eventName, recordId: record.id, record: payloadForSheet(record), notificationId: notification.id },
+      body: { eventName, recordId: record.id, record: { ...payloadForSheet(record), audienceEmails: notification.audienceEmails }, notificationId: notification.id },
     });
     if (error) throw error;
     const updated = upsertRecord("notificationLog", { ...notification, deliveryStatus: "sent" });
@@ -8921,8 +9168,23 @@ function initEvents() {
     const boardingCheckInForm = event.target.closest("#boardingCheckInForm");
     const boardingCheckInServiceForm = event.target.closest("#boardingCheckInServiceForm");
     const paymentMethodForm = event.target.closest("#paymentMethodForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !paymentMethodForm) return;
+    const urgentAlertForm = event.target.closest("#urgentAlertForm");
+    const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm) return;
     event.preventDefault();
+    if (urgentAlertForm) {
+      const notification = await sendUrgentAlertFromForm(urgentAlertForm);
+      if (notification) showDetailDialog("Alert Sent", `<p>The urgent alert was sent to ${escapeHtml((notification.audienceEmails || []).length)} recipient${(notification.audienceEmails || []).length === 1 ? "" : "s"}.</p>`);
+      return;
+    }
+    if (alertPreferenceForm) {
+      const saved = await saveAlertPreferenceFromForm(alertPreferenceForm);
+      if (saved) {
+        $("#detailDialog").close();
+        showToast("Alert preferences updated.");
+      }
+      return;
+    }
     if (paymentMethodForm) {
       if (!validateForm(paymentMethodForm)) return;
       const record = boardingDogRecordForDisplay(paymentMethodForm.dataset.id);
@@ -9082,6 +9344,21 @@ function initEvents() {
     }
   });
   $("#detailDialogBody").addEventListener("click", async (event) => {
+    const alertTab = event.target.closest("[data-alert-popup-tab]");
+    if (alertTab) {
+      const formEl = alertTab.closest("#detailDialogBody")?.querySelector("#urgentAlertForm");
+      const selectedPanel = alertTab.dataset.alertPopupTab;
+      $$("#detailDialogBody [data-alert-popup-tab]").forEach((button) => {
+        const active = button.dataset.alertPopupTab === selectedPanel;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      $$("#detailDialogBody [data-alert-panel]").forEach((panel) => {
+        if (panel === formEl) return;
+        panel.hidden = panel.dataset.alertPanel !== selectedPanel;
+      });
+      return;
+    }
     const checkInMode = event.target.closest("[data-checkin-mode]");
     if (checkInMode) {
       const checkInForm = checkInMode.closest("#boardingCheckInForm");
@@ -9229,6 +9506,11 @@ function initEvents() {
     const kennelBuilding = event.target.closest("#kennelAssignmentBuilding");
     if (kennelBuilding) {
       updateKennelAssignmentLocations(kennelBuilding.closest("#kennelAssignmentForm"));
+      return;
+    }
+    const alertPreferenceUser = event.target.closest("#alertPreferenceUserSelect");
+    if (alertPreferenceUser) {
+      openAlertPreferencePopup(alertPreferenceUser.value);
       return;
     }
     const timesheetStaff = event.target.closest("#timesheetStaffSelect");
@@ -10408,6 +10690,9 @@ function initEvents() {
     const user = readRecords("settingsUser").find((item) => item.id === card.dataset.id);
     if (user) openSettingsUserPopup(user);
   });
+  $("#openUrgentStaffAlertButton")?.addEventListener("click", () => openUrgentAlertPopup("staff"));
+  $("#openUrgentCustomerAlertButton")?.addEventListener("click", () => openUrgentAlertPopup("customer"));
+  $("#openCustomizeAlertsButton")?.addEventListener("click", () => openAlertPreferencePopup());
   $("#auditLogList")?.addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="restore-boarding-dog"]');
     if (!button) return;
