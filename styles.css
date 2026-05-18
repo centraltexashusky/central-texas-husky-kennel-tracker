@@ -1808,6 +1808,50 @@ textarea {
   margin-top: 14px;
 }
 
+.dashboard-detail-summary {
+  margin: 0;
+}
+
+.dashboard-action-group h3 {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.dashboard-action-group h3 span,
+.dashboard-group-more {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dashboard-detail-card {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.dashboard-detail-card:not(:has(.dashboard-detail-thumb)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-detail-card strong,
+.dashboard-detail-card span,
+.dashboard-detail-card p {
+  overflow-wrap: anywhere;
+}
+
+.dashboard-detail-thumb {
+  aspect-ratio: 1;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  height: 72px;
+  object-fit: cover;
+  width: 72px;
+}
+
 .dog-file-card {
   gap: 8px;
 }

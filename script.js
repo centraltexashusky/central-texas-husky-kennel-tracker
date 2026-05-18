@@ -6509,6 +6509,164 @@ function dashboardDetailRecords(key) {
   return map[key] || [];
 }
 
+function dashboardImagePreviewHtml(src = "", alt = "") {
+  return src ? `<img class="dashboard-detail-thumb" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" />` : "";
+}
+
+function firstRecordImage(record = {}) {
+  const media = arrayValue(record.mediaItems).find((item) => String(item.type || "").startsWith("image/") && (item.url || item.dataUrl));
+  return media?.url || media?.dataUrl || record.profilePhotoUrl || record.profilePhotoData || "";
+}
+
+function dashboardOwnedDogReason(record = {}, category = "") {
+  const heat = ownedDogHeatStatus(record, $("#dashboardDate")?.value || todayDate());
+  if (category === "Exercise") return `Exercise due${record.lastExerciseDate ? ` - last logged ${record.lastExerciseDate}` : ""}`;
+  if (category === "Training") return `Training due${record.lastTrainingDate ? ` - last logged ${record.lastTrainingDate}` : ""}`;
+  if (category === "Bath") return `Bath due${record.lastBath ? ` - last bath ${record.lastBath}` : ""}`;
+  if (category === "Heat") return heat.label || "Heat watch";
+  if (category === "Medical/Care") return record.careStatus || "Review medical or care notes";
+  if (category === "Vaccine") return `DHPP date: ${record.dhppDate || "Not recorded"}`;
+  return ownedDogCareSummary(record);
+}
+
+function dashboardOwnedDogNote(record = {}, category = "") {
+  if (category === "Exercise") return record.exerciseRoutine || record.exerciseNotes || "Log exercise today.";
+  if (category === "Training") return record.trainingRoutine || record.trainingGoals || record.trainingSessionNotes || "Log a training session.";
+  if (category === "Bath") return record.bathRoutine || record.bathProducts || record.coatNotes || "Bath is due.";
+  if (category === "Heat") return record.heatCycleNotes || record.heatCycle || "Review heat cycle status.";
+  if (category === "Medical/Care") return record.medicalCareNotes || record.specialCare || record.behaviorNotes || "Review care notes.";
+  if (category === "Vaccine") return "Review and update vaccine date.";
+  return record.generalCareNotes || record.notes || "";
+}
+
+function dashboardOwnedDogCardHtml(record = {}, category = "Care") {
+  const name = ownedDogDisplayName(record) || "Dog";
+  return `<article class="record-card compact-record-card clickable-card dashboard-detail-card" data-action="dashboard-open-owned" data-id="${escapeHtml(record.id)}">
+    ${dashboardImagePreviewHtml(firstRecordImage(record), name)}
+    <div>
+      <strong>${escapeHtml(name)}</strong>
+      <span>${escapeHtml(dashboardOwnedDogReason(record, category))}</span>
+      <p>${escapeHtml(dashboardOwnedDogNote(record, category))}</p>
+      <div class="record-actions"><button type="button" class="secondary-button">Open Dog</button></div>
+    </div>
+  </article>`;
+}
+
+function dashboardBoardingDogReason(record = {}, category = "") {
+  const stay = currentOrNextStay(record) || activeBoardingStay(record) || (record.stays || [])[0] || {};
+  if (category === "Arrival") return `Arrives ${formatDateTime(stay.dropoffTime) || "today"}`;
+  if (category === "Departure") return `Leaves ${formatDateTime(stay.pickupTime) || "today"}`;
+  if (category === "Owner Update") return "Owner update needed";
+  if (category === "Bath") return `Bath requested before pickup${stay.pickupTime ? ` ${formatDateTime(stay.pickupTime)}` : ""}`;
+  return boardingScheduleText(record);
+}
+
+function dashboardBoardingDogCardHtml(record = {}, category = "Boarding") {
+  const name = record.dogName || "Boarding dog";
+  const kennel = boardingKennelLocationLabel(record);
+  const status = normalizeBoardingStatus(record);
+  const note = [
+    record.ownerName ? `Owner: ${record.ownerName}` : "",
+    status ? `Status: ${status}` : "",
+    kennel ? `Kennel: ${kennel}` : "",
+  ].filter(Boolean).join(" | ");
+  const flagText = arrayValue(record.flags).join(", ");
+  return `<article class="record-card compact-record-card clickable-card dashboard-detail-card" data-action="dashboard-open-boarding" data-id="${escapeHtml(record.id)}">
+    ${dashboardImagePreviewHtml(firstRecordImage(record), name)}
+    <div>
+      <strong>${escapeHtml(name)}</strong>
+      <span>${escapeHtml(dashboardBoardingDogReason(record, category))}</span>
+      <p>${escapeHtml(note || boardingScheduleText(record))}</p>
+      ${flagText ? `<p>${escapeHtml(flagText)}</p>` : ""}
+      <div class="record-actions"><button type="button" class="secondary-button">Open Boarding Dog</button></div>
+    </div>
+  </article>`;
+}
+
+function dashboardMaintenanceCardHtml(record = {}) {
+  const title = record.issue || record.location || "Maintenance item";
+  const image = firstRecordImage(record);
+  return `<article class="record-card compact-record-card clickable-card dashboard-detail-card" data-action="dashboard-open-maintenance" data-id="${escapeHtml(record.id)}">
+    ${dashboardImagePreviewHtml(image, title)}
+    <div>
+      <strong>${record.urgentAttention ? "Urgent: " : ""}${escapeHtml(title)}</strong>
+      <span>${escapeHtml([record.location, record.status || "Active"].filter(Boolean).join(" | "))}</span>
+      <p>${escapeHtml(record.reportedBy ? `Reported by ${record.reportedBy}` : "Reporter not recorded")}</p>
+      <div class="record-actions"><button type="button" class="secondary-button">View Details</button></div>
+    </div>
+  </article>`;
+}
+
+function dashboardRequestCardHtml(record = {}) {
+  return `<article class="record-card compact-record-card clickable-card dashboard-detail-card" data-action="dashboard-open-request" data-id="${escapeHtml(record.id)}">
+    <div>
+      <strong>${record.urgentNeeds ? "Urgent: " : ""}${escapeHtml(record.category || "Request")}</strong>
+      <span>${escapeHtml([record.requestedBy, record.status || "Active"].filter(Boolean).join(" | "))}</span>
+      <p>${escapeHtml(record.requestText || record.reason || "No request details saved.")}</p>
+      <div class="record-actions"><button type="button" class="secondary-button">View Details</button></div>
+    </div>
+  </article>`;
+}
+
+function dashboardActionGroupHtml(title, records = [], renderItem, emptyText = "No items in this group.") {
+  const visible = records.slice(0, 4);
+  const overflow = records.length - visible.length;
+  return `<section class="popup-record-section dashboard-action-group">
+    <h3>${escapeHtml(title)} <span>${records.length}</span></h3>
+    ${visible.length ? visible.map(renderItem).join("") : `<p>${escapeHtml(emptyText)}</p>`}
+    ${overflow > 0 ? `<p class="dashboard-group-more">${overflow} more item${overflow === 1 ? "" : "s"} in this group.</p>` : ""}
+  </section>`;
+}
+
+function dashboardNeedsActionHtml(metrics = dashboardMetrics()) {
+  const selectedDate = metrics.selectedDate || ($("#dashboardDate")?.value || todayDate());
+  return `
+    <p class="dashboard-detail-summary">Condensed action list for ${escapeHtml(selectedDate)}. Open a card when you need the full dog, request, or maintenance record.</p>
+    ${dashboardActionGroupHtml("Care Due", [...metrics.exerciseDueDogs.map((dog) => ({ dog, category: "Exercise" })), ...metrics.trainingDueDogs.map((dog) => ({ dog, category: "Training" })), ...metrics.ownedBathDueDogs.map((dog) => ({ dog, category: "Bath" }))], (item) => dashboardOwnedDogCardHtml(item.dog, item.category))}
+    ${dashboardActionGroupHtml("Heat Watch", [...metrics.inHeatDogs, ...metrics.heatSoonDogs], (dog) => dashboardOwnedDogCardHtml(dog, "Heat"))}
+    ${dashboardActionGroupHtml("Owner Updates Needed", metrics.ownerUpdateDogs, (dog) => dashboardBoardingDogCardHtml(dog, "Owner Update"))}
+    ${dashboardActionGroupHtml("Arrivals / Departures", [...metrics.arrivalRecords.map((dog) => ({ dog, category: "Arrival" })), ...metrics.departureRecords.map((dog) => ({ dog, category: "Departure" }))], (item) => dashboardBoardingDogCardHtml(item.dog, item.category))}
+    ${dashboardActionGroupHtml("Active Boarders", metrics.currentBoarding, (dog) => dashboardBoardingDogCardHtml(dog, "Active"))}
+    ${dashboardActionGroupHtml("Open Maintenance", metrics.openMaintenanceRecords, dashboardMaintenanceCardHtml)}
+    ${dashboardActionGroupHtml("Open Requests", metrics.openRequestRecords, dashboardRequestCardHtml)}
+  `;
+}
+
+function dashboardDetailHtml(key) {
+  const metrics = dashboardMetrics();
+  if (key === "needsAction") return dashboardNeedsActionHtml(metrics);
+  const records = dashboardDetailRecords(key);
+  if (!records.length) return "<p>No open items in this category.</p>";
+  if (["exerciseDue", "trainingDue", "inHeat", "heatSoon", "careNotes", "vaccines"].includes(key)) {
+    const categories = {
+      exerciseDue: "Exercise",
+      trainingDue: "Training",
+      inHeat: "Heat",
+      heatSoon: "Heat",
+      careNotes: "Medical/Care",
+      vaccines: "Vaccine",
+    };
+    return records.map((record) => dashboardOwnedDogCardHtml(record, categories[key])).join("");
+  }
+  if (["arrivals", "departures", "activeBoarders", "ownerUpdates"].includes(key)) {
+    const categories = {
+      arrivals: "Arrival",
+      departures: "Departure",
+      activeBoarders: "Active",
+      ownerUpdates: "Owner Update",
+    };
+    return records.map((record) => dashboardBoardingDogCardHtml(record, categories[key])).join("");
+  }
+  if (key === "baths") {
+    const owned = metrics.ownedBathDueDogs.map((record) => dashboardOwnedDogCardHtml(record, "Bath")).join("");
+    const boarding = metrics.boardingBathDueRecords.map((record) => dashboardBoardingDogCardHtml(record, "Bath")).join("");
+    return owned + boarding || "<p>No bath work due.</p>";
+  }
+  if (key === "requests") return records.map(dashboardRequestCardHtml).join("");
+  if (key === "maintenance") return records.map(dashboardMaintenanceCardHtml).join("");
+  return "<p>No open items in this category.</p>";
+}
+
 function showDashboardDetail(key) {
   const labels = {
     needsAction: "Needs Action Today",
@@ -6526,13 +6684,7 @@ function showDashboardDetail(key) {
     requests: "Open Requests",
     maintenance: "Open Maintenance",
   };
-  const records = dashboardDetailRecords(key);
-  const html = records.length
-    ? records.map((record) => `<article class="record-card">${genericDetailHtml(record)}</article>`).join("")
-    : "<p>No open items in this category.</p>";
-  const type = key === "requests" ? "request" : key === "maintenance" ? "maintenance" : "";
-  const context = type && records.length === 1 ? { type, id: records[0].id } : null;
-  showDetailDialog(labels[key] || "Dashboard Details", html, context);
+  showDetailDialog(labels[key] || "Dashboard Details", dashboardDetailHtml(key));
 }
 
 function renderFinancials() {
@@ -9396,6 +9548,31 @@ function initEvents() {
     }
     const action = event.target.closest("[data-action]");
     if (!action) return;
+    if (action.dataset.action === "dashboard-open-owned") {
+      const dog = readRecords("ownedDog").find((record) => record.id === action.dataset.id && !record.removed);
+      if (dog) openOwnedDogOverviewPopup(dog);
+      return;
+    }
+    if (action.dataset.action === "dashboard-open-boarding") {
+      const dog = readRecords("boardingDog").find((record) => record.id === action.dataset.id && !record.removed);
+      if (dog) {
+        $("#detailDialog").close();
+        switchPage("boardingDogsPage");
+        openBoardingDog(dog);
+        setBoardingFormLocked(false);
+      }
+      return;
+    }
+    if (action.dataset.action === "dashboard-open-maintenance") {
+      const record = readRecords("maintenance").find((item) => item.id === action.dataset.id && !item.removed);
+      if (record) showDetailDialog(titleForRecord("maintenance", record), maintenanceDetailHtml(record), { type: "maintenance", id: record.id });
+      return;
+    }
+    if (action.dataset.action === "dashboard-open-request") {
+      const record = readRecords("request").find((item) => item.id === action.dataset.id && !item.removed);
+      if (record) showDetailDialog(titleForRecord("request", record), requestDetailHtml(record), { type: "request", id: record.id });
+      return;
+    }
     if (action.dataset.action === "view-dog-photo") {
       showMediaDialog(
         action.dataset.src,
