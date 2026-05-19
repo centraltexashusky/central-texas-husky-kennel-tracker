@@ -653,6 +653,43 @@ body.owned-dog-modal-open {
   margin-left: 0;
 }
 
+.customer-update-group {
+  display: grid;
+  gap: 10px;
+}
+
+.customer-update-group h3,
+.customer-update-group p {
+  margin: 0;
+}
+
+.customer-update-media-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  margin-top: 10px;
+}
+
+.customer-update-media-button {
+  align-items: stretch;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  gap: 6px;
+  min-height: auto;
+  padding: 8px;
+  text-align: left;
+}
+
+.customer-update-media-button img {
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  object-fit: cover;
+  width: 100%;
+}
+
 .status-chip-button {
   background: transparent;
   border: 0;

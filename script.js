@@ -4226,8 +4226,22 @@ function boardingDogForCustomerDog(dog = {}) {
   }) || null;
 }
 
+function baseBoardingOwnerEmails(record = {}) {
+  return uniqueEmails(
+    record.ownerEmail,
+    record.customerEmail,
+    record.linkedOwnerEmail,
+    record.secondaryOwnerEmail,
+    record.requestedByEmail,
+  );
+}
+
 function boardingOwnerEmails(record = {}) {
-  return uniqueEmails(record.ownerEmail, record.customerEmail, record.linkedOwnerEmail, record.secondaryOwnerEmail);
+  const linked = readRecords("customerDog").find((dog) => !dog.removed && (
+    (record.linkedCustomerDogId && dog.id === record.linkedCustomerDogId)
+    || dog.linkedBoardingDogId === record.id
+  )) || {};
+  return uniqueEmails(...baseBoardingOwnerEmails(record), linked.ownerEmail, linked.customerEmail);
 }
 
 function boardingDogVisibleToCustomer(record = {}, email = currentUser?.email) {
@@ -4311,14 +4325,34 @@ function customerDogPhotoHtml(dog = {}) {
 
 function customerUpdatesForCurrentUser() {
   const email = normalizeEmail(currentUser?.email);
-  return readRecords("boardingDog")
+  const updateKeys = new Set();
+  const boardingUpdates = readRecords("boardingDog")
     .filter((record) => !record.removed && boardingDogVisibleToCustomer(record, email))
     .flatMap((record) => {
       const stays = record.stays || [];
       return (record.customerUpdates || []).map((update) => {
         const stay = stays.find((item) => item.id === update.stayId) || activeBoardingStay(record) || currentOrNextStay(record) || stays[0] || {};
-        return { ...update, dog: record, stay };
+        return { ...update, source: "boardingDog", dog: record, stay };
       });
+    });
+  const customerDogUpdates = readRecords("customerDog")
+    .filter((dog) => !dog.removed && customerDogVisibleToCustomer(dog, email))
+    .flatMap((dog) => (dog.customerUpdates || []).map((update) => ({
+      ...update,
+      source: "customerDog",
+      dog,
+      stay: {
+        id: update.stayId || "",
+        dropoffTime: update.stayDropoffTime || "",
+        pickupTime: update.stayPickupTime || "",
+      },
+    })));
+  return [...boardingUpdates, ...customerDogUpdates]
+    .filter((update) => {
+      const key = update.id || `${update.createdAt || ""}|${update.note || ""}|${update.stayId || ""}`;
+      if (updateKeys.has(key)) return false;
+      updateKeys.add(key);
+      return true;
     })
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
@@ -4327,23 +4361,60 @@ function renderCustomerUpdates() {
   const list = $("#customerUpdatesList");
   if (!list) return;
   const updates = customerUpdatesForCurrentUser();
-  list.innerHTML = updates.length
-    ? updates
-        .map((update) => {
-          const media = (update.mediaItems || []).map((item) => `<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type || "image/jpeg")}" data-media-name="${escapeHtml(item.name || "Customer update media")}">Open photo</button>`).join("");
-          const stayText = update.stay?.dropoffTime || update.stay?.pickupTime
-            ? `${formatDateTime(update.stay.dropoffTime)} to ${formatDateTime(update.stay.pickupTime)}`
-            : "Current stay";
-          return `<article class="record-card compact-record-card customer-update-card">
-            <strong>${escapeHtml(update.dog?.dogName || "Dog update")}</strong>
-            <span>${escapeHtml(stayText)}</span>
-            <p>${escapeHtml(update.note || "No note added.")}</p>
-            <small>${escapeHtml([formatDateTime(update.createdAt), update.byName || ""].filter(Boolean).join(" | "))}</small>
-            ${media ? `<div class="record-actions">${media}</div>` : ""}
-          </article>`;
-        })
-        .join("")
-    : "<p>No boarding updates have been sent yet.</p>";
+  if (!updates.length) {
+    list.innerHTML = "<p>No boarding updates have been sent yet.</p>";
+    return;
+  }
+  const grouped = updates.reduce((groups, update) => {
+    const stayText = update.stayLabel || (update.stay?.dropoffTime || update.stay?.pickupTime
+      ? `${formatDateTime(update.stay.dropoffTime)} to ${formatDateTime(update.stay.pickupTime)}`
+      : "Current stay");
+    const key = `${update.dog?.dogName || update.dogName || "Dog"}|${stayText}|${update.stayId || update.stay?.id || ""}`;
+    groups[key] = groups[key] || { dogName: update.dog?.dogName || update.dogName || "Dog", stayText, updates: [] };
+    groups[key].updates.push(update);
+    return groups;
+  }, {});
+  list.innerHTML = Object.values(grouped)
+    .map((group) => `<section class="customer-update-group">
+      <h3>${escapeHtml(group.dogName)}</h3>
+      <p>${escapeHtml(group.stayText)}</p>
+      ${group.updates.map((update) => {
+        const media = (update.mediaItems || []).map((item) => {
+          const src = item.url || item.dataUrl || "";
+          if (!src) return item.note ? `<p class="muted-text">${escapeHtml(item.name || "Photo")}: ${escapeHtml(item.note)}</p>` : "";
+          const isImage = String(item.type || "").startsWith("image/");
+          return `<button type="button" class="customer-update-media-button" data-action="view-media" data-src="${escapeHtml(src)}" data-media-type="${escapeHtml(item.type || "image/jpeg")}" data-media-name="${escapeHtml(item.name || "Customer update media")}">${isImage ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.name || "Customer update photo")}" />` : ""}<span>${escapeHtml(item.name || "Open attachment")}</span></button>`;
+        }).join("");
+        return `<article class="record-card compact-record-card customer-update-card">
+          <strong>${escapeHtml(formatDateTime(update.createdAt) || "Update")}</strong>
+          <p>${escapeHtml(update.note || "No note added.")}</p>
+          <small>${escapeHtml([update.byName || "", update.stayId ? `Stay ${update.stayId}` : ""].filter(Boolean).join(" | "))}</small>
+          ${media ? `<div class="customer-update-media-grid">${media}</div>` : ""}
+        </article>`;
+      }).join("")}
+    </section>`)
+    .join("");
+}
+
+async function mirrorBoardingCustomerUpdateToCustomerDog(boardingRecord = {}, update = {}) {
+  const linkedDog = linkedCustomerDogForBoarding(boardingRecord);
+  if (!linkedDog?.id || linkedDog.isSharedBoardingDog) return null;
+  const existingUpdates = linkedDog.customerUpdates || [];
+  const nextUpdate = {
+    ...update,
+    sourceBoardingDogId: boardingRecord.id || "",
+    linkedBoardingDogId: boardingRecord.id || "",
+    dogName: boardingRecord.dogName || linkedDog.dogName || "",
+  };
+  const updates = [nextUpdate, ...existingUpdates.filter((item) => item.id !== update.id)];
+  const updatedDog = upsertRecord("customerDog", {
+    ...linkedDog,
+    customerUpdates: updates,
+    linkedBoardingDogId: boardingRecord.id || linkedDog.linkedBoardingDogId || "",
+    updatedAt: new Date().toISOString(),
+  });
+  await sendPayload(updatedDog);
+  return updatedDog;
 }
 
 function boardingDraftFromCustomerDog(dog = {}) {
@@ -5551,6 +5622,11 @@ async function addBoardingCustomerUpdate() {
     id: uid("customerUpdate"),
     createdAt: timestamp,
     stayId: stay.id || "",
+    stayDropoffTime: stay.dropoffTime || "",
+    stayPickupTime: stay.pickupTime || "",
+    stayLabel: stay.dropoffTime || stay.pickupTime ? `${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}` : "",
+    boardingDogId: record.id || "",
+    dogName: record.dogName || "",
     note,
     mediaItems,
     byName: currentUser?.name || helperName?.value || "",
@@ -5562,11 +5638,13 @@ async function addBoardingCustomerUpdate() {
     customerUpdates: [update, ...(record.customerUpdates || [])],
   });
   await sendPayload(updated);
+  await mirrorBoardingCustomerUpdateToCustomerDog(updated, update);
   await addAuditLog("Added customer boarding update", "boardingDog", updated, `${updated.dogName || "Dog"} | ${note || mediaItems.map((item) => item.name).join(", ")}`);
   if (input) input.value = "";
   renderBoardingCustomerUpdates(updated);
   renderBoardingDogFiles(updated);
   renderBoardingDogs();
+  renderCustomerDogs();
   renderCustomerRequests();
   renderCustomerUpdates();
   showToast("Customer update saved.");
