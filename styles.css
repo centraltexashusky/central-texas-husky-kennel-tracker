@@ -3884,6 +3884,120 @@ button.mobile-dog-photo-button {
   }
 }
 
+@media (max-width: 980px) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    filter: none !important;
+    transition: none !important;
+  }
+
+  body {
+    background-attachment: scroll !important;
+  }
+
+  body::before {
+    display: none;
+  }
+
+  .page-view.is-active .form-section,
+  .page-view.is-active .recent-submissions,
+  .page-header,
+  .status-card,
+  .detail-dialog[open],
+  .toast,
+  .nav-button.is-active,
+  .mobile-bottom-nav-button,
+  .mobile-bottom-nav-button.is-active,
+  .mobile-bottom-nav-button:active {
+    animation: none !important;
+    filter: none !important;
+    transform: none !important;
+  }
+
+  body:not(.is-login-view) .status-card,
+  body:not(.is-login-view) .notice,
+  body:not(.is-login-view) .alert-banner,
+  body:not(.is-login-view) .table-wrap,
+  body:not(.is-login-view) .dog-profile-editor,
+  body:not(.is-login-view) .dashboard-card,
+  body:not(.is-login-view) .role-note,
+  body:not(.is-login-view) .customer-dog-item,
+  body:not(.is-login-view) .estimate-box,
+  body:not(.is-login-view) .estimate-total,
+  body:not(.is-login-view) .task-calendar,
+  body:not(.is-login-view) .summary-card,
+  body:not(.is-login-view) .helper-total-item,
+  body:not(.is-login-view) .form-section,
+  body:not(.is-login-view) .recent-submissions,
+  body:not(.is-login-view) .inline-check,
+  body:not(.is-login-view) .record-card,
+  body:not(.is-login-view) .toggle-row,
+  body:not(.is-login-view) .checklist label,
+  body:not(.is-login-view) .admin-task-controls,
+  body:not(.is-login-view) .admin-password-panel,
+  body:not(.is-login-view) .column-chip,
+  body:not(.is-login-view) .detail-dialog,
+  body:not(.is-login-view) .detail-row,
+  body:not(.is-login-view) .activity-entry,
+  body:not(.is-login-view) .time-card,
+  body:not(.is-login-view) .submission-item,
+  body:not(.is-login-view) .rotation-banner,
+  body:not(.is-login-view) .submit-bar {
+    background: rgba(9, 20, 34, 0.96) !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  body:not(.is-login-view) .record-card,
+  body:not(.is-login-view) .customer-dog-item,
+  body:not(.is-login-view) .checklist label,
+  body:not(.is-login-view) .detail-row,
+  body:not(.is-login-view) .activity-entry,
+  body:not(.is-login-view) .dog-profile-editor,
+  body:not(.is-login-view) .table-wrap {
+    background: rgba(15, 32, 50, 0.96) !important;
+  }
+
+  body:not(.is-login-view) .boarding-dog-modal:not([hidden]),
+  body:not(.is-login-view) .owned-dog-modal:not([hidden]),
+  body:not(.is-login-view) .service-modal:not([hidden]),
+  body:not(.is-login-view) .customer-dog-modal:not([hidden]),
+  body:not(.is-login-view) .customer-request-modal:not([hidden]),
+  body:not(.is-login-view) .detail-dialog[open],
+  body:not(.is-login-view) .mobile-more-sheet,
+  body:not(.is-login-view) .mobile-bottom-nav {
+    background: rgba(7, 16, 29, 0.98) !important;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.58), 0 14px 34px rgba(0, 0, 0, 0.34);
+  }
+
+  body:not(.is-login-view) .mobile-bottom-nav {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+  }
+
+  .mobile-more-backdrop,
+  .detail-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.62) !important;
+  }
+
+  .mobile-more-menu-item,
+  .mobile-more-close,
+  .mobile-bottom-nav-button,
+  button,
+  input,
+  select,
+  textarea {
+    box-shadow: none;
+  }
+
+  body.owned-dog-modal-open .page-view.is-active .form-section,
+  body.boarding-dog-modal-open .page-view.is-active .form-section {
+    background: rgba(7, 16, 29, 0.96) !important;
+  }
+}
+
 body.is-login-view {
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(245, 248, 249, 0.88)),

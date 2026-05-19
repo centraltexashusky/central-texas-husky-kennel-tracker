@@ -3295,7 +3295,7 @@ function remoteRecordsSignature(rows = []) {
 }
 
 function activePageIsScrollSensitive() {
-  return activePageId() === "boardingDogsPage";
+  return ["boardingDogsPage", "ourDogsPage"].includes(activePageId());
 }
 
 function recentlyScrolled() {
@@ -5918,6 +5918,7 @@ function openBoardingDog(record = {}) {
     document.body.appendChild(boardingDogDetail);
   }
   boardingDogDetail.hidden = false;
+  document.body.classList.add("boarding-dog-modal-open");
   boardingDogDetail.scrollTop = 0;
   $("#boardingDogDetailTitle").textContent = record.id ? `Edit ${record.dogName || "Boarding Dog"}` : "Add Boarding Dog";
   resetBoardingDogFormForRecord(record);
@@ -5936,6 +5937,12 @@ function openBoardingDog(record = {}) {
   renderBoardingHistory(record);
   setBoardingFormLocked(false);
   setBoardingDogActiveTab("Dog Info");
+}
+
+function closeBoardingDogModal() {
+  const boardingDogDetail = $("#boardingDogDetail");
+  if (boardingDogDetail) boardingDogDetail.hidden = true;
+  document.body.classList.remove("boarding-dog-modal-open");
 }
 
 function openBoardingDogToTab(record = {}, tabName = "Boarding & Request") {
@@ -10891,8 +10898,8 @@ function initEvents() {
   $("#boardingDogTableHead").addEventListener("drop", handleTableHeaderDrop);
   $("#boardingDogTableHead").addEventListener("dragend", handleTableHeaderDragEnd);
   $("#addBoardingDogButton").addEventListener("click", () => openBoardingDog());
-  $("#closeBoardingDogDialogButton")?.addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
-  $("#cancelBoardingDogEdit").addEventListener("click", () => ($("#boardingDogDetail").hidden = true));
+  $("#closeBoardingDogDialogButton")?.addEventListener("click", closeBoardingDogModal);
+  $("#cancelBoardingDogEdit").addEventListener("click", closeBoardingDogModal);
   $("#deleteBoardingDogButton")?.addEventListener("click", () => {
     const dog = activeBoardingDog();
     if (dog) openBoardingDogDeleteConfirm(dog);
