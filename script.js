@@ -8786,6 +8786,9 @@ function renderNotifications() {
   visibleReadNotificationCount = Math.min(Math.max(visibleReadNotificationCount, 4), MAX_READ_NOTIFICATIONS);
   const notificationItemHtml = (item) => `<article class="notification-item ${notificationIsRead(item) ? "is-read" : ""} ${item.priority === "urgent" ? "is-urgent" : ""}" data-action="open-notification" data-id="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title || "Notification")}</strong><p>${escapeHtml(item.message || "")}</p><span>${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | ${escapeHtml((item.channels || []).join(", ") || "in-app")}</span></article>`;
   button.hidden = !helperIsLoggedIn();
+  const panelOpen = !panel.hidden;
+  button.classList.toggle("is-alert-panel-open", panelOpen);
+  if (button.firstChild) button.firstChild.nodeValue = panelOpen ? "Close Alert " : "Alerts ";
   badge.textContent = unread.length;
   badge.hidden = !unread.length;
   summary.textContent = unread.length ? `${unread.length} unread alert${unread.length === 1 ? "" : "s"}.` : "No unread alerts.";

@@ -450,45 +450,6 @@ body.is-impersonating .user-card {
   z-index: 1000;
 }
 
-.customer-dog-modal:not([hidden]),
-.customer-request-modal:not([hidden]) {
-  background: rgba(250, 252, 251, 0.98);
-  border-color: rgba(113, 136, 130, 0.42);
-  box-shadow: var(--shadow), 0 0 0 9999px rgba(4, 15, 26, 0.68);
-  color: #1c2528;
-}
-
-.customer-dog-modal h2,
-.customer-request-modal h2,
-.customer-dog-modal label,
-.customer-request-modal label,
-.customer-dog-modal strong,
-.customer-request-modal strong {
-  color: #1c2528;
-}
-
-.customer-dog-modal p,
-.customer-request-modal p,
-.customer-dog-modal span,
-.customer-request-modal span,
-.customer-dog-modal .field-help,
-.customer-request-modal .field-help,
-.customer-dog-modal .section-heading p,
-.customer-request-modal .section-heading p {
-  color: #4f6063;
-}
-
-.customer-dog-modal input,
-.customer-dog-modal select,
-.customer-dog-modal textarea,
-.customer-request-modal input,
-.customer-request-modal select,
-.customer-request-modal textarea {
-  background: #fff;
-  border-color: rgba(113, 136, 130, 0.38);
-  color: #1c2528;
-}
-
 body.owned-dog-modal-open {
   overflow: hidden;
 }
@@ -2558,7 +2519,8 @@ h2,
 .detail-dialog {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.20), transparent 42%),
-    var(--glass-fill);
+    rgba(9, 20, 34, 0.92);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .detail-panel {
@@ -2571,49 +2533,54 @@ h2,
 .service-modal:not([hidden]),
 .customer-dog-modal:not([hidden]),
 .customer-request-modal:not([hidden]) {
-  box-shadow: var(--glass-shadow), var(--glass-specular), 0 0 0 9999px rgba(0, 0, 0, 0.38);
-}
-
-.customer-dog-modal:not([hidden]),
-.customer-request-modal:not([hidden]) {
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.42), transparent 48%),
-    rgba(250, 252, 251, 0.98);
-  backdrop-filter: blur(6px) saturate(120%);
-  -webkit-backdrop-filter: blur(6px) saturate(120%);
-  box-shadow: var(--glass-shadow), var(--glass-specular), 0 0 0 9999px rgba(0, 0, 0, 0.68);
+    linear-gradient(135deg, rgba(255, 255, 255, 0.20), transparent 42%),
+    rgba(9, 20, 34, 0.92);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: var(--glass-shadow), var(--glass-specular), 0 0 0 9999px rgba(0, 0, 0, 0.58);
+  color: var(--ink);
 }
 
-body.role-customer .detail-dialog {
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.48), transparent 48%),
-    rgba(250, 252, 251, 0.98);
-  border-color: rgba(113, 136, 130, 0.42);
-  color: #1c2528;
+.boarding-dog-modal .detail-row,
+.owned-dog-modal .detail-row,
+.service-modal .detail-row,
+.customer-dog-modal .detail-row,
+.customer-request-modal .detail-row,
+.detail-dialog .detail-row,
+.detail-dialog .record-card {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.20);
+  color: var(--ink);
 }
 
-body.role-customer .detail-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.68);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+.boarding-dog-modal input,
+.boarding-dog-modal select,
+.boarding-dog-modal textarea,
+.owned-dog-modal input,
+.owned-dog-modal select,
+.owned-dog-modal textarea,
+.service-modal input,
+.service-modal select,
+.service-modal textarea,
+.customer-dog-modal input,
+.customer-dog-modal select,
+.customer-dog-modal textarea,
+.customer-request-modal input,
+.customer-request-modal select,
+.customer-request-modal textarea,
+.detail-dialog input,
+.detail-dialog select,
+.detail-dialog textarea {
+  background: rgba(4, 14, 26, 0.74);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.94);
 }
 
-body.role-customer .detail-dialog h2,
-body.role-customer .detail-dialog strong,
-body.role-customer .detail-dialog label {
-  color: #1c2528;
-}
-
-body.role-customer .detail-dialog p,
-body.role-customer .detail-dialog span {
-  color: #4f6063;
-}
-
-body.role-customer .detail-dialog .detail-row,
-body.role-customer .detail-dialog .record-card {
-  background: #f7faf8;
-  border-color: rgba(113, 136, 130, 0.24);
-  color: #1c2528;
+.notification-bell-button.is-alert-panel-open {
+  background: rgba(255, 149, 0, 0.92);
+  border-color: rgba(255, 204, 102, 0.72);
+  box-shadow: 0 8px 24px rgba(255, 149, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  color: #fff;
 }
 
 .existing-only {
@@ -2725,6 +2692,17 @@ button:active {
   color: #fff;
 }
 
+.sync-button.notification-bell-button.is-alert-panel-open,
+.sync-button.notification-bell-button.is-alert-panel-open:hover,
+.sync-button.notification-bell-button.is-alert-panel-open:focus-visible {
+  background: rgba(255, 149, 0, 0.92) !important;
+  background-color: rgba(255, 149, 0, 0.92) !important;
+  background-image: none !important;
+  border-color: rgba(255, 204, 102, 0.72) !important;
+  box-shadow: 0 8px 24px rgba(255, 149, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  color: #fff !important;
+}
+
 input[type="date"],
 input[type="datetime-local"],
 input[type="email"],
@@ -2754,6 +2732,29 @@ textarea,
 input::placeholder,
 textarea::placeholder {
   color: rgba(255, 255, 255, 0.44);
+}
+
+.boarding-dog-modal input,
+.boarding-dog-modal select,
+.boarding-dog-modal textarea,
+.owned-dog-modal input,
+.owned-dog-modal select,
+.owned-dog-modal textarea,
+.service-modal input,
+.service-modal select,
+.service-modal textarea,
+.customer-dog-modal input,
+.customer-dog-modal select,
+.customer-dog-modal textarea,
+.customer-request-modal input,
+.customer-request-modal select,
+.customer-request-modal textarea,
+.detail-dialog input,
+.detail-dialog select,
+.detail-dialog textarea {
+  background: rgba(4, 14, 26, 0.74);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.94);
 }
 
 input[readonly],
@@ -3252,9 +3253,9 @@ button.mobile-dog-photo-button {
 }
 
 .detail-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.30);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .detail-dialog[open] {
@@ -3277,6 +3278,16 @@ button.mobile-dog-photo-button {
 .page-header,
 .status-card {
   animation: glassSurfaceIn 280ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.page-view.is-active .form-section:has(.boarding-dog-modal:not([hidden])),
+.page-view.is-active .form-section:has(.owned-dog-modal:not([hidden])),
+.page-view.is-active .form-section:has(.customer-dog-modal:not([hidden])),
+.page-view.is-active .form-section:has(.customer-request-modal:not([hidden])) {
+  animation: none;
+  backdrop-filter: none;
+  transform: none;
+  -webkit-backdrop-filter: none;
 }
 
 @keyframes glassSurfaceIn {
@@ -3481,8 +3492,9 @@ button.mobile-dog-photo-button {
   .owned-dog-modal:not([hidden]),
   .customer-dog-modal:not([hidden]),
   .customer-request-modal:not([hidden]) {
-    inset: calc(10px + env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
-    max-height: none;
+    inset: calc(14px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) calc(92px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    height: calc(100dvh - 106px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 106px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     max-width: none;
     transform: none;
     width: auto;
