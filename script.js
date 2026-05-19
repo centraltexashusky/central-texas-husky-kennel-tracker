@@ -129,7 +129,7 @@ const boardingStatusTransitions = {
   Approved: ["Checked In"],
   "Checked In": ["In Kennel"],
   "In Kennel": ["Ready For Pickup"],
-  "Ready For Pickup": ["Checked Out"],
+  "Ready For Pickup": ["In Kennel", "Checked Out"],
   "Checked Out": [],
   Cancelled: [],
 };
@@ -651,7 +651,7 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
     ],
     checkedInAt: nextStatus === "Checked In" ? timestamp : record.checkedInAt || "",
     inKennelAt: nextStatus === "In Kennel" ? timestamp : record.inKennelAt || "",
-    readyForPickupAt: nextStatus === "Ready For Pickup" ? timestamp : record.readyForPickupAt || "",
+    readyForPickupAt: nextStatus === "Ready For Pickup" ? timestamp : nextStatus === "In Kennel" ? "" : record.readyForPickupAt || "",
     checkedOutAt: nextStatus === "Checked Out" ? timestamp : record.checkedOutAt || "",
     cancelledAt: nextStatus === "Cancelled" ? timestamp : record.cancelledAt || "",
     earlyCheckInAt: nextStatus === "Checked In" && early ? timestamp : record.earlyCheckInAt || "",
@@ -10824,7 +10824,7 @@ function initEvents() {
         openBoardingCheckInPopup(existing, "Checked In", { allowEarly: true, early: boardingTransitionIsEarly(existing, "Checked In") });
         return;
       }
-      if (statusChanged && selectedStatus === "In Kennel" && !existing.kennelLocationId) {
+      if (statusChanged && selectedStatus === "In Kennel") {
         formEl.elements.boardingStatus.value = currentStatus;
         openKennelAssignmentPopup(existing, "In Kennel");
         return;
