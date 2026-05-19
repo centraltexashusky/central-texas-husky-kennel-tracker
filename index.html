@@ -20,6 +20,7 @@
           <button class="nav-button is-active" type="button" data-page="loginPage" data-roles="public">Login</button>
           <button class="nav-button" type="button" data-page="customerPage" data-roles="customer">Add Dog</button>
           <button class="nav-button" type="button" data-page="customerRequestsPage" data-roles="customer">My Requests</button>
+          <button class="nav-button" type="button" data-page="customerUpdatesPage" data-roles="customer">Updates</button>
           <button class="nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin">Main Dashboard</button>
           <button class="nav-button" type="button" data-page="timesheetPage" data-roles="helper,admin">Timesheet</button>
           <button class="nav-button" type="button" data-page="dailyPage" data-roles="helper,admin">Daily Tasks</button>
@@ -84,6 +85,7 @@
           <option value="loginPage" data-roles="public">Login</option>
           <option value="customerPage" data-roles="customer">Add Dog</option>
           <option value="customerRequestsPage" data-roles="customer">My Requests</option>
+          <option value="customerUpdatesPage" data-roles="customer">Updates</option>
           <option value="dashboardPage" data-roles="helper,admin">Main Dashboard</option>
           <option value="timesheetPage">Timesheet</option>
           <option value="dailyPage">Daily Tasks</option>
@@ -330,6 +332,13 @@
             </label>
           </div>
           <div class="record-grid" id="customerRequestList"></div>
+        </section>
+      </section>
+
+      <section class="page-view" id="customerUpdatesPage">
+        <section class="form-section">
+          <div class="section-heading"><span>U</span><div><h2>Updates</h2><p>Boarding updates sent by the kennel for your dog.</p></div></div>
+          <div class="record-grid compact-record-grid" id="customerUpdatesList"></div>
         </section>
       </section>
 
@@ -904,6 +913,7 @@
               <button type="button" class="secondary-button" data-boarding-profile-tab="Boarding & Request">Boarding & Request</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Customer Update">Customer Update</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Uploaded Files">Uploaded Files</button>
+              <button type="button" class="secondary-button" data-boarding-profile-tab="Boarding History">Boarding History</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Customer Info">Customer Info</button>
             </div>
 
@@ -965,7 +975,13 @@
             <section class="boarding-profile-section" data-boarding-profile-section="Boarding & Request" hidden>
               <div class="field-grid">
                 <label>Dog status<select name="boardingStatus" id="boardingDogStatus" required><option value="Pending">Pending</option><option value="Approved" selected>Approved</option><option value="Checked In">Checked In</option><option value="In Kennel">Active / In Kennel</option><option value="Ready For Pickup">Ready For Pickup</option><option value="Checked Out">Checked Out</option><option value="Cancelled">Cancelled</option></select></label>
+                <label id="boardingKennelLocationLabel" hidden>Kennel location<select id="boardingKennelLocationSelect" name="kennelLocationId"><option value="">Select kennel location</option></select><small>Shown when the dog is actively in kennel.</small></label>
               </div>
+            </section>
+
+            <section class="boarding-profile-section" data-boarding-profile-section="Boarding History" hidden>
+              <div class="section-heading compact-heading"><span>H</span><div><h2>Boarding History</h2><p>Each stay keeps its own request, approval, check-in, kennel, pickup, and checkout trail.</p></div></div>
+              <div id="boardingHistoryList" class="record-grid"></div>
             </section>
 
             <div class="button-row"><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
@@ -1033,8 +1049,8 @@
       </section>
 
       <section class="page-view" id="servicesPage">
-        <section class="form-section">
-          <div class="section-heading"><span>$</span><div><h2>Services & Pricing</h2><p>Admin-only catalog for puppies, deposits, add-ons, boarding, yard rental, grooming, and training.</p></div></div>
+        <section class="form-section detail-panel service-modal" id="serviceEditorPanel" hidden aria-modal="true" role="dialog">
+          <div class="section-heading"><span>$</span><div><h2 id="serviceEditorTitle">Add Service</h2><p>Catalog pricing for puppies, deposits, add-ons, boarding, yard rental, grooming, and training.</p></div><button type="button" class="secondary-button" id="closeServiceModalButton">Close</button></div>
           <form id="serviceForm" class="tracker-form">
             <input type="hidden" name="id" />
             <div class="field-grid">
@@ -1048,18 +1064,19 @@
             </div>
             <div class="checklist compact">
               <label><input type="checkbox" name="serviceFlags" value="Active" checked /> Active</label>
-              <label><input type="checkbox" name="serviceFlags" value="Admin only" /> Admin only</label>
+              <label><input type="checkbox" name="serviceFlags" value="Admin only" /> Staff/admin only <small>Hidden from customer request options.</small></label>
               <label><input type="checkbox" name="serviceFlags" value="Member Pricing" /> Member Pricing</label>
               <label><input type="checkbox" name="serviceFlags" value="Vaccine proof required" /> Vaccine proof required</label>
-              <label><input type="checkbox" name="serviceFlags" value="Owner bookable later" /> Owner bookable later</label>
+              <label><input type="checkbox" name="serviceFlags" value="Owner bookable later" /> Future customer-booking option <small>Not live for customers until enabled later.</small></label>
               <label><input type="checkbox" name="serviceFlags" value="Taxable" /> Taxable</label>
             </div>
             <label>Pricing notes / guardrails<textarea name="pricingNotes" rows="3" placeholder="What is included, price justification, discount rules, or contract notes"></textarea></label>
-            <div class="button-row"><button type="submit">Save Service</button><button type="button" class="secondary-button" id="resetServiceForm">New Service</button></div>
+            <div class="button-row"><button type="submit" id="serviceSaveButton">Add Service</button><button type="button" class="secondary-button danger-button" id="removeServiceButton" hidden>Remove Service</button><button type="button" class="secondary-button" id="resetServiceForm">Cancel</button></div>
           </form>
         </section>
         <section class="recent-submissions">
           <div class="section-heading"><span>P</span><div><h2>Pricing Catalog</h2><p>Customer-bookable services are separated from internal/admin-only services below.</p></div></div>
+          <div class="button-row"><button type="button" id="addServiceButton">Add Service</button></div>
           <div class="service-catalog-groups" id="serviceCatalogGroups"></div>
           <div class="table-toolbar">
             <input type="search" id="serviceSearch" placeholder="Search pricing by service, category, price, unit, deposit, tax, flags, or notes" />

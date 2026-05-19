@@ -422,7 +422,8 @@ h2 {
 }
 
 .boarding-dog-modal:not([hidden]),
-.owned-dog-modal:not([hidden]) {
+.owned-dog-modal:not([hidden]),
+.service-modal:not([hidden]) {
   border-radius: 8px;
   box-shadow: var(--shadow), 0 0 0 9999px rgba(4, 15, 26, 0.58);
   left: 50%;
@@ -442,7 +443,8 @@ body.owned-dog-modal-open {
 }
 
 .boarding-dog-modal .section-heading,
-.owned-dog-modal .section-heading {
+.owned-dog-modal .section-heading,
+.service-modal .section-heading {
   align-items: center;
 }
 
@@ -614,6 +616,28 @@ body.owned-dog-modal-open {
   justify-content: space-between;
 }
 
+.customer-dog-photo {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  flex: 0 0 auto;
+  height: 52px;
+  object-fit: cover;
+  width: 52px;
+}
+
+.customer-dog-item > .customer-dog-photo {
+  margin-left: 0;
+}
+
+.customer-dog-photo-initials {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+}
+
 .customer-dog-item span {
   color: var(--muted);
   margin-left: auto;
@@ -627,6 +651,22 @@ body.owned-dog-modal-open {
 
 .customer-dog-item > div span {
   margin-left: 0;
+}
+
+.status-chip-button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: none;
+  color: inherit;
+  display: inline-flex;
+  min-height: auto;
+  padding: 0;
+  width: auto;
+}
+
+.status-chip-button:hover {
+  transform: none;
 }
 
 .booking-summary {
@@ -2430,7 +2470,8 @@ h2,
 }
 
 .boarding-dog-modal:not([hidden]),
-.owned-dog-modal:not([hidden]) {
+.owned-dog-modal:not([hidden]),
+.service-modal:not([hidden]) {
   box-shadow: var(--glass-shadow), var(--glass-specular), 0 0 0 9999px rgba(0, 0, 0, 0.38);
 }
 
