@@ -169,10 +169,6 @@ body.role-helper #dashboardPage.is-active {
   flex-direction: column;
 }
 
-body.role-helper #dashboardAttentionSection {
-  order: -1;
-}
-
 .page-header {
   align-items: flex-start;
   display: flex;
@@ -286,6 +282,11 @@ h2 {
   font-size: 0.82rem;
   min-height: 34px;
   padding: 7px 10px;
+}
+
+body.is-impersonating .user-card {
+  border-color: rgba(255, 69, 58, 0.58);
+  box-shadow: 0 0 0 1px rgba(255, 69, 58, 0.22), var(--glass-shadow);
 }
 
 .status-dot {
@@ -2612,6 +2613,13 @@ button:active {
 .remove-task-button {
   background: rgba(255, 69, 58, 0.16);
   color: #ffd6d3;
+}
+
+.sync-button.stop-impersonation-button,
+.sync-button.stop-impersonation-button:hover {
+  background: rgba(255, 69, 58, 0.9);
+  border-color: rgba(255, 255, 255, 0.36);
+  color: #fff;
 }
 
 input[type="date"],

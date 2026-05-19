@@ -36,6 +36,7 @@ let lastRemoteRecordsSignature = null;
 let deferredRemoteRenderTimer = null;
 let lastUserScrollAt = 0;
 let currentUser = null;
+let impersonationSession = null;
 let supabaseClient = null;
 let detailDialogContext = null;
 let pendingCustomerBooking = null;
@@ -219,6 +220,7 @@ const stateKeys = {
   tableConfig: "cth-table-column-config",
   tableSort: "cth-table-sort-config",
   session: "cth-current-session",
+  impersonation: "cth-impersonation-session",
   authThrottle: "cth-auth-throttle",
   lastPage: "cth-last-page-id",
 };
@@ -2099,11 +2101,67 @@ function setHelper(user, options = {}) {
   if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(currentUser.role));
 }
 
+function impersonationUserFromSettings(user = {}) {
+  const email = normalizeEmail(user.email);
+  return {
+    key: user.authId || user.id || email || uid("impersonatedUser"),
+    name: user.name || user.email || "Impersonated user",
+    email: user.email || "",
+    role: user.role || "customer",
+    isMember: userMemberFlag(user),
+    authId: user.authId || "",
+    authProvider: "admin-impersonation",
+    impersonatedUserId: user.id || "",
+  };
+}
+
+function isImpersonating() {
+  return Boolean(impersonationSession?.admin?.key && currentUser?.authProvider === "admin-impersonation");
+}
+
+function startUserImpersonation(user = {}) {
+  if (currentRole() !== "admin" || !currentUser?.key) {
+    showToast("Only admins can impersonate users.");
+    return;
+  }
+  if (!user?.id) {
+    showToast("Save the user before impersonating.");
+    return;
+  }
+  const admin = { ...currentUser };
+  const target = impersonationUserFromSettings(user);
+  impersonationSession = {
+    admin,
+    target,
+    returnPage: activePageId() || "settingsUsersPage",
+    startedAt: new Date().toISOString(),
+  };
+  localStorage.setItem(stateKeys.impersonation, JSON.stringify(impersonationSession));
+  $("#detailDialog")?.close();
+  setHelper(target, { switchAfterLogin: false });
+  switchPage(defaultPageForRole(target.role));
+  showToast(`Viewing the app as ${target.name || target.email || "selected user"}.`);
+}
+
+function stopUserImpersonation() {
+  if (!isImpersonating()) return false;
+  const session = impersonationSession;
+  impersonationSession = null;
+  localStorage.removeItem(stateKeys.impersonation);
+  setHelper(session.admin, { switchAfterLogin: false });
+  switchPage(session.returnPage || "settingsUsersPage");
+  showToast("Admin session restored.");
+  return true;
+}
+
 async function clearHelper() {
+  if (stopUserImpersonation()) return;
   if (supabaseClient) await supabaseClient.auth.signOut();
   localTestMode = false;
   currentUser = null;
+  impersonationSession = null;
   localStorage.removeItem(stateKeys.session);
+  localStorage.removeItem(stateKeys.impersonation);
   localStorage.removeItem(stateKeys.lastPage);
   helperName.value = "";
   helperEmail.value = "";
@@ -2119,12 +2177,16 @@ async function clearHelper() {
 }
 
 function updateHeaderUser() {
-  headerUserName.textContent = currentUser?.name || "Not signed in";
-  modeLabel.textContent = currentUser ? (localTestMode ? "Local test mode" : `${roleLabel(currentUser.role)} account`) : "Sign in to continue";
+  const impersonating = isImpersonating();
+  headerUserName.textContent = impersonating ? `Impersonating ${currentUser?.name || currentUser?.email || "user"}` : currentUser?.name || "Not signed in";
+  modeLabel.textContent = currentUser ? (impersonating ? `Admin view as ${roleLabel(currentUser.role)}` : localTestMode ? "Local test mode" : `${roleLabel(currentUser.role)} account`) : "Sign in to continue";
   headerLogoutButton.hidden = !currentUser;
+  headerLogoutButton.textContent = impersonating ? "Stop Impersonation" : "Log out";
+  headerLogoutButton.classList.toggle("stop-impersonation-button", impersonating);
   document.body.classList.toggle("role-helper", currentRole() === "helper");
   document.body.classList.toggle("role-admin", currentRole() === "admin");
   document.body.classList.toggle("role-customer", currentRole() === "customer");
+  document.body.classList.toggle("is-impersonating", impersonating);
   renderNotifications();
 }
 
@@ -2276,6 +2338,8 @@ function updateNavigationAccess() {
 function restoreSession() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.session) || "null");
   if (!saved?.key) return;
+  impersonationSession = JSON.parse(localStorage.getItem(stateKeys.impersonation) || "null");
+  if (!impersonationSession?.admin?.key) impersonationSession = null;
   currentUser = saved;
   helperName.value = saved.name || "";
   helperEmail.value = saved.email || "";
@@ -4097,17 +4161,20 @@ function renderOwnedDogs() {
     exerciseDue: allDogs.filter((dog) => ownedDogExerciseDue(dog)).length,
     trainingDue: allDogs.filter((dog) => ownedDogTrainingDue(dog)).length,
     bathsDue: allDogs.filter((dog) => ownedDogBathDue(dog)).length,
+    females: allDogs.filter((dog) => dog.sex === "Female").length,
+    males: allDogs.filter((dog) => dog.sex === "Male").length,
     femalesInHeat: allDogs.filter((dog) => ownedDogHeatStatus(dog).inHeat).length,
     heatExpectedSoon: allDogs.filter((dog) => {
       const heat = ownedDogHeatStatus(dog);
       return heat.expectedSoon || heat.overdue;
     }).length,
+    specialCare: allDogs.filter((dog) => ownedDogHasCareNote(dog)).length,
   };
   if ($("#ownedDogSummary")) {
     $("#ownedDogSummary").innerHTML = "";
     $("#ownedDogSummary").hidden = true;
   }
-  renderOwnedDogTabCounts(summary);
+  renderOwnedDogFilterCounts(summary);
   $("#ownedDogTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}" data-table="ownedDog" data-column="${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
   $("#ownedDogTableBody").innerHTML = records.length
     ? records
@@ -4126,16 +4193,19 @@ function renderOwnedDogs() {
   renderCareDogOptions();
 }
 
-function renderOwnedDogTabCounts(summary = {}) {
+function renderOwnedDogFilterCounts(summary = {}) {
   const counts = {
-    Exercise: summary.exerciseDue || 0,
-    Training: summary.trainingDue || 0,
-    Baths: summary.bathsDue || 0,
-    "Heat Cycle": (summary.femalesInHeat || 0) + (summary.heatExpectedSoon || 0),
-    "Medical / Care Notes": readRecords("ownedDog").filter((dog) => !dog.removed && normalizeOwnedDogCare(dog).careAlertCount).length,
+    All: summary.total || 0,
+    "Exercise Due": summary.exerciseDue || 0,
+    "Training Due": summary.trainingDue || 0,
+    "Bath Due": summary.bathsDue || 0,
+    Females: summary.females || 0,
+    Males: summary.males || 0,
+    "Heat Watch": (summary.femalesInHeat || 0) + (summary.heatExpectedSoon || 0),
+    "Special Care": summary.specialCare || 0,
   };
-  $$("#ownedDogProfileTabs [data-owned-profile-tab]").forEach((button) => {
-    const base = button.dataset.baseLabel || button.dataset.ownedProfileTab || button.textContent.trim();
+  $$("#ownedDogCareFilters [data-filter]").forEach((button) => {
+    const base = button.dataset.baseLabel || button.dataset.filter || button.textContent.trim();
     button.dataset.baseLabel = base;
     const count = counts[base] || 0;
     button.textContent = count > 0 ? `${base} (${count})` : base;
@@ -6623,10 +6693,16 @@ function renderDashboard() {
   metrics.ownerUpdateDogs.forEach((dog) => alerts.push({ category: "Owner Updates", action: "view-owner-update", id: dog.id, html: `<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml(dog.ownerName || "")} ${escapeHtml(dog.ownerPhone || "")}</p>` }));
   metrics.boardingBathDue.forEach((dogName) => alerts.push({ category: "Baths", html: `<strong>Bath due before pickup today</strong><p>${escapeHtml(dogName)}</p>` }));
   renderDashboardAlertTabs(alerts);
+  const dashboardAlerts = $("#dashboardAlerts");
+  if (!dashboardAlerts) {
+    renderDashboardTaskCalendar();
+    renderDashboardTimeline();
+    return;
+  }
   const filteredAlerts = dashboardAlertFilter === "All" ? alerts : alerts.filter((alert) => alert.category === dashboardAlertFilter);
   const visibleAlerts = !dashboardShowAllAlerts ? filteredAlerts.slice(0, 10) : filteredAlerts;
   const showMore = filteredAlerts.length > visibleAlerts.length ? `<article class="record-card dashboard-more-card"><strong>${filteredAlerts.length - visibleAlerts.length} more items hidden</strong><p>Use the filters above or expand the full list when you are reviewing instead of working the queue.</p><button type="button" class="secondary-button" data-action="show-all-alerts">Show All</button></article>` : "";
-  $("#dashboardAlerts").innerHTML = filteredAlerts.length
+  dashboardAlerts.innerHTML = filteredAlerts.length
     ? visibleAlerts
         .map((alert) => {
           const quickCareAttrs = alert.action === "dashboard-quick-care" ? `data-action="dashboard-quick-care" data-dog-id="${escapeHtml(alert.dogId)}" data-care-type="${escapeHtml(alert.careType)}"` : "";
@@ -7535,6 +7611,7 @@ function settingsUserLastLoginText(user = {}) {
 
 function settingsUserPopupHtml(user = {}) {
   const isEdit = Boolean(user.id);
+  const canImpersonate = isEdit && currentRole() === "admin" && normalizeEmail(user.email) !== normalizeEmail(currentUser?.email);
   return `
     <form id="settingsUserPopupForm" class="tracker-form" data-user-id="${escapeHtml(user.id || "")}">
       <input type="hidden" name="id" value="${escapeHtml(user.id || "")}" />
@@ -7562,7 +7639,7 @@ function settingsUserPopupHtml(user = {}) {
           <button type="button" class="secondary-button" data-action="popup-send-reset">Send Reset Email</button>
         </div>
       </div>
-      <div class="button-row"><button type="submit">Save User</button>${isEdit ? `<button type="button" class="secondary-button danger-button" data-action="popup-remove-user" data-id="${escapeHtml(user.id || "")}">Remove</button>` : ""}<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+      <div class="button-row"><button type="submit">Save User</button>${canImpersonate ? `<button type="button" class="secondary-button" data-action="popup-impersonate-user" data-id="${escapeHtml(user.id || "")}">Impersonate User</button>` : ""}${isEdit ? `<button type="button" class="secondary-button danger-button" data-action="popup-remove-user" data-id="${escapeHtml(user.id || "")}">Remove</button>` : ""}<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
     </form>`;
 }
 
@@ -9404,7 +9481,7 @@ function initEvents() {
     const record = readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
     if (record) showDetailDialog(titleForRecord(card.dataset.type, record), detailForRecord(card.dataset.type, record));
   });
-  $("#dashboardAlerts").addEventListener("click", (event) => {
+  $("#dashboardAlerts")?.addEventListener("click", (event) => {
     const showAllButton = event.target.closest('[data-action="show-all-alerts"]');
     if (showAllButton) {
       dashboardShowAllAlerts = true;
@@ -10014,6 +10091,11 @@ function initEvents() {
     }
     if (action.dataset.action === "popup-set-password") await adminSetTemporaryPassword(action.closest("form"), action);
     if (action.dataset.action === "popup-send-reset") await adminSendPasswordResetEmail(action.closest("form"), action);
+    if (action.dataset.action === "popup-impersonate-user") {
+      const user = readRecords("settingsUser").find((item) => item.id === action.dataset.id && !item.removed);
+      if (user) startUserImpersonation(user);
+      return;
+    }
     if (action.dataset.action === "popup-remove-user") {
       const user = readRecords("settingsUser").find((item) => item.id === action.dataset.id && !item.removed);
       if (user) openSettingsUserRemoveConfirm(user, { returnToUser: true });
