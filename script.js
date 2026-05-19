@@ -1102,6 +1102,9 @@ function initSupabaseClient() {
         console.warn("Could not sync authenticated user profile.", error);
       });
     }
+    if (event === "SIGNED_OUT" && currentUser) {
+      clearLocalAppSession({ switchToLogin: true });
+    }
   });
 }
 
@@ -1163,6 +1166,7 @@ async function loginWithProvider(provider) {
     );
     return;
   }
+  clearLocalAppSession({ switchToLogin: true });
   const { error } = await supabaseClient.auth.signInWithOAuth({
     provider,
     options: { redirectTo: authRedirectUrl() },
@@ -1466,15 +1470,17 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
   if (!user) return null;
   if (authSessionSyncPromise) return authSessionSyncPromise;
   authSessionSyncPromise = (async () => {
-    await loadRemoteRecords();
+    await loadRemoteRecords({ render: false });
     const profile = await ensureAppUserProfile(user);
     const syncedUser = {
       ...user,
       role: profile?.role || roleForAccount(user),
       name: profile?.name || user.name,
     };
-    setHelper(syncedUser, { switchAfterLogin: options.switchAfterLogin });
-    await loadRemoteRecords();
+    setHelper(syncedUser, { switchAfterLogin: false, render: false });
+    updateNavigationAccess();
+    renderAllRecords();
+    if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(syncedUser.role));
     requirePasswordChangeIfNeeded();
     return syncedUser;
   })();
@@ -1715,7 +1721,8 @@ async function completeForcedPasswordChange(event) {
 
 async function restoreSupabaseSession() {
   if (!supabaseClient) return false;
-  const { data } = await supabaseClient.auth.getSession();
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error || !data.session?.user) return false;
   const user = await syncAuthenticatedSupabaseUser(data.session?.user, { switchAfterLogin: false });
   if (!user) return false;
   return true;
@@ -2114,10 +2121,51 @@ function setHelper(user, options = {}) {
   loginHelp.textContent = `${currentUser.email || "Account"} | Access: ${roleLabel(currentUser.role)}`;
   $("#clearHelperButton").hidden = false;
   updateNavigationAccess();
-  renderDailyTaskLists();
-  fillCustomerDefaults();
-  renderAllRecords();
+  if (options.render !== false) {
+    renderDailyTaskLists();
+    fillCustomerDefaults();
+    renderAllRecords();
+  }
   if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(currentUser.role));
+}
+
+function stopAutoSync() {
+  if (!syncIntervalId) return;
+  window.clearInterval(syncIntervalId);
+  syncIntervalId = null;
+}
+
+function clearLocalAppSession(options = {}) {
+  stopAutoSync();
+  localTestMode = false;
+  currentUser = null;
+  impersonationSession = null;
+  localStorage.removeItem(stateKeys.session);
+  localStorage.removeItem(stateKeys.impersonation);
+  localStorage.removeItem(stateKeys.lastPage);
+  helperName.value = "";
+  helperEmail.value = "";
+  helperKey.value = "";
+  $("#globalQuickSearch").value = "";
+  $("#notificationPanel").hidden = true;
+  $("#customerSignupForm")?.toggleAttribute("hidden", true);
+  $("#passwordRecoveryForm")?.toggleAttribute("hidden", true);
+  $("#customerDogForm")?.toggleAttribute("hidden", true);
+  $("#customerBookingForm")?.toggleAttribute("hidden", true);
+  ["detailDialog", "mediaDialog", "bookingConfirmDialog", "passwordChangeDialog"].forEach((id) => {
+    const dialog = document.getElementById(id);
+    if (dialog?.open) dialog.close();
+  });
+  setMobileMoreOpen(false);
+  updateHeaderUser();
+  loginStatus.textContent = "Not logged in";
+  loginHelp.textContent = "Sign in with email and password, Google, or another enabled account provider.";
+  $("#clearHelperButton").hidden = true;
+  updateNavigationAccess();
+  fillCustomerDefaults();
+  renderGlobalSearchResults();
+  if (options.switchToLogin !== false) switchPage("loginPage");
+  else document.body.classList.add("is-login-view");
 }
 
 function impersonationUserFromSettings(user = {}) {
@@ -2175,24 +2223,15 @@ function stopUserImpersonation() {
 
 async function clearHelper() {
   if (stopUserImpersonation()) return;
-  if (supabaseClient) await supabaseClient.auth.signOut();
-  localTestMode = false;
-  currentUser = null;
-  impersonationSession = null;
-  localStorage.removeItem(stateKeys.session);
-  localStorage.removeItem(stateKeys.impersonation);
-  localStorage.removeItem(stateKeys.lastPage);
-  helperName.value = "";
-  helperEmail.value = "";
-  helperKey.value = "";
-  updateHeaderUser();
-  loginStatus.textContent = "Not logged in";
-  loginHelp.textContent = "Sign in with email and password, Google, or another enabled account provider.";
-  $("#clearHelperButton").hidden = true;
-  updateNavigationAccess();
-  renderDailyTaskLists();
-  fillCustomerDefaults();
-  switchPage("loginPage");
+  suppressAuthSyncUntil = Date.now() + 10000;
+  const client = supabaseClient;
+  clearLocalAppSession({ switchToLogin: true });
+  if (client) {
+    const { error } = await client.auth.signOut();
+    if (error) showToast(`Logout could not finish with Supabase: ${error.message}`);
+  }
+  clearLocalAppSession({ switchToLogin: true });
+  suppressAuthSyncUntil = 0;
 }
 
 function updateHeaderUser() {
@@ -2352,21 +2391,22 @@ function updateNavigationAccess() {
     option.hidden = (isLogin && helperIsLoggedIn()) || (option.disabled && !(isLogin && !helperIsLoggedIn()));
   });
   updateMobileNavigationAccess();
+  renderGlobalSearchResults();
 }
 
 function restoreSession() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.session) || "null");
-  if (!saved?.key) return;
+  if (!saved?.key) return false;
+  const localSession = saved.authProvider === "local-test" || String(saved.key || "").startsWith("local-test-");
+  if (!localSession) {
+    localStorage.removeItem(stateKeys.session);
+    localStorage.removeItem(stateKeys.impersonation);
+    return false;
+  }
   impersonationSession = JSON.parse(localStorage.getItem(stateKeys.impersonation) || "null");
   if (!impersonationSession?.admin?.key) impersonationSession = null;
-  currentUser = saved;
-  helperName.value = saved.name || "";
-  helperEmail.value = saved.email || "";
-  helperKey.value = saved.key || "";
-  updateHeaderUser();
-  loginStatus.textContent = `${roleLabel(saved.role)} logged in: ${saved.name}`;
-  loginHelp.textContent = `${saved.email || "Account"} | Access: ${roleLabel(saved.role)}`;
-  $("#clearHelperButton").hidden = false;
+  setHelper(saved, { switchAfterLogin: false, render: false });
+  return true;
 }
 
 function roleLabel(role = "") {
@@ -3241,7 +3281,6 @@ async function sendPayload(payload) {
     });
     if (error) throw error;
     modeLabel.textContent = "Saved";
-    if (payload.type !== TASK_TEMPLATE_RECORD_TYPE) window.setTimeout(loadRemoteRecords, 500);
   } catch (error) {
     modeLabel.textContent = "Save failed";
     showToast(`Save failed: ${error.message}`);
@@ -3276,7 +3315,7 @@ function renderAllRecordsFromRemoteLoad() {
   renderAllRecords();
 }
 
-async function loadRemoteRecords() {
+async function loadRemoteRecords(options = {}) {
   if (localTestMode || !supabaseClient) {
     modeLabel.textContent = localTestMode ? "Local test mode" : "Local only";
     return;
@@ -3306,7 +3345,7 @@ async function loadRemoteRecords() {
       localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
     }
     await syncMissingCustomerAccessProfiles();
-    renderAllRecordsFromRemoteLoad();
+    if (options.render !== false) renderAllRecordsFromRemoteLoad();
     updateNavigationAccess();
     updateHeaderUser();
   } catch (error) {
@@ -3319,8 +3358,7 @@ async function loadRemoteRecords() {
 }
 
 function startAutoSync() {
-  if (!supabaseClient || syncIntervalId) return;
-  syncIntervalId = window.setInterval(loadRemoteRecords, 10000);
+  stopAutoSync();
 }
 
 function payloadForSheet(payload) {
@@ -3557,6 +3595,7 @@ function showDetailDialog(title, html, context = null, options = {}) {
     headerActionButton.textContent = options.headerAction?.label || "";
     headerActionButton.dataset.action = options.headerAction?.action || "";
     headerActionButton.dataset.id = options.headerAction?.id || "";
+    headerActionButton.dataset.sourceId = options.headerAction?.sourceId || "";
   }
   if (context && ["request", "maintenance"].includes(context.type)) {
     const record = readRecords(context.type).find((item) => item.id === context.id);
@@ -3706,6 +3745,50 @@ function customerBoardingDogDetailHtml(record = {}) {
     </article>
     ${customerUploadSectionHtml(record)}
   `;
+}
+
+function customerDogForBoardingRequest(record = {}) {
+  if (!record?.id) return null;
+  const currentEmail = normalizeEmail(currentUser?.email);
+  return linkedCustomerDogForBoarding(record)
+    || customerDogsForCurrentUser().find((dog) => {
+      if (dog.sourceBoardingDogId === record.id || dog.linkedBoardingDogId === record.id) return true;
+      const dogEmail = normalizeEmail(dog.ownerEmail || dog.customerEmail);
+      return dogEmail === currentEmail
+        && String(dog.dogName || "").trim().toLowerCase() === String(record.dogName || "").trim().toLowerCase();
+    })
+    || customerDogFromBoardingDog(record, currentEmail);
+}
+
+function openCustomerDogEditorForRequest(requestId = "") {
+  const record = readRecords("boardingDog").find((item) => item.id === requestId && !item.removed);
+  if (!record) {
+    showToast("This request is no longer available.");
+    return;
+  }
+  const dog = customerDogForBoardingRequest(record);
+  if (!dog) {
+    showToast("The dog for this request could not be opened.");
+    return;
+  }
+  const formDog = dog.isSharedBoardingDog && String(dog.id || "").startsWith("boarding:")
+    ? { ...dog, id: "", sourceBoardingDogId: record.id, linkedBoardingDogId: record.id }
+    : dog;
+  $("#detailDialog")?.close();
+  switchPage("customerPage");
+  openCustomerDog(formDog);
+}
+
+function openCustomerRequestDetail(record = {}) {
+  if (!record?.id) return;
+  const linkedDog = customerDogForBoardingRequest(record);
+  showDetailDialog(titleForRecord("boardingDog", record), detailForRecord("boardingDog", record), null, {
+    headerAction: linkedDog ? {
+      label: "Edit Dog",
+      action: "open-customer-dog-editor",
+      id: record.id,
+    } : null,
+  });
 }
 
 function detailForRecord(type, record) {
@@ -4105,6 +4188,7 @@ function ownedDogMobileCardHtml(record = {}) {
         <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Yard Run" data-id="${escapeHtml(dog.id)}">Yard Run</button>
         <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Bath" data-id="${escapeHtml(dog.id)}">Bath</button>
         <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Training" data-id="${escapeHtml(dog.id)}">Training</button>
+        <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Medical/Behavior Note" data-id="${escapeHtml(dog.id)}">Medical/Behavior</button>
         ${heatAction}
         <button type="button" class="secondary-button" data-action="log-owned-care" data-id="${escapeHtml(dog.id)}">Open Timeline</button>
       </div>
@@ -6097,8 +6181,8 @@ function ownedDogOverviewPopupHtml(record = {}) {
     ["Special care", dog.specialCare || dog.medicalCareNotes || dog.behaviorNotes || ""],
     ["General note", dog.generalCareNotes || dog.notes || ""],
   ].filter(([, value]) => value);
-  const quickButtons = ["Treadmill", "Scooter", "Yard Run", "Bath", "Training"]
-    .map((type) => `<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="${escapeHtml(type)}" data-id="${escapeHtml(dog.id)}">${escapeHtml(type)}</button>`)
+  const quickButtons = ["Treadmill", "Scooter", "Yard Run", "Bath", "Training", "Medical/Behavior Note"]
+    .map((type) => `<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="${escapeHtml(type)}" data-id="${escapeHtml(dog.id)}">${escapeHtml(type === "Medical/Behavior Note" ? "Medical/Behavior" : type)}</button>`)
     .join("");
   const heatButton = dog.sex === "Female" ? `<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="Heat Note" data-id="${escapeHtml(dog.id)}">Heat Note</button>` : "";
   return `${dashboardQuickCareSummaryHtml(dog, "Profile")}
@@ -6593,6 +6677,9 @@ function dashboardQuickCareFormHtml(dog, careType) {
   if (careType === "Heat Note") {
     return `${summary}<form id="dashboardQuickCareForm" class="tracker-form dashboard-quick-care-form" data-care-type="Heat Note" data-dog-id="${escapeHtml(dog.id)}"><label>Heat date<input type="date" name="date" required value="${todayDate()}" /></label><label>Heat note<textarea name="note" rows="3" placeholder="Heat observation, behavior, separation, or breeding watch note"></textarea></label><div class="button-row"><button type="submit">Log Heat</button></div></form>`;
   }
+  if (careType === "Medical/Behavior Note") {
+    return `${summary}<form id="dashboardQuickCareForm" class="tracker-form dashboard-quick-care-form" data-care-type="Medical/Behavior Note" data-dog-id="${escapeHtml(dog.id)}"><label>Note date<input type="date" name="date" required value="${todayDate()}" /></label><label>Medical/Behavior note<textarea name="note" rows="4" required placeholder="${escapeHtml(medicalCarePlaceholder)}"></textarea></label><div class="button-row"><button type="submit">Log Medical/Behavior</button></div></form>`;
+  }
   return summary;
 }
 
@@ -6610,6 +6697,7 @@ function openDashboardQuickCare(dogId, careType) {
     Training: "Log Training",
     Bath: "Log Bath",
     "Heat Note": "Log Heat Cycle",
+    "Medical/Behavior Note": "Log Medical/Behavior",
   };
   showDetailDialog(titles[careType] || `Log ${careType}`, dashboardQuickCareFormHtml(dog, careType));
 }
@@ -6638,11 +6726,16 @@ async function submitDashboardQuickCare(formEl) {
       showToast("Enter exercise minutes before saving.");
       return;
     }
-    const note = ["Training", "Heat Note"].includes(careType) ? String(formData.get("note") || "").trim() : "";
+    const note = ["Training", "Heat Note", "Medical/Behavior Note"].includes(careType) ? String(formData.get("note") || "").trim() : "";
+    if (careType === "Medical/Behavior Note" && !note) {
+      showToast("Enter a medical or behavior note before saving.");
+      return;
+    }
     const date = careTypeIsExercise(careType) || careType === "Training" ? todayDate() : String(formData.get("date") || todayDate());
     const defaultNotes = {
       Bath: "Bath logged from dashboard.",
       "Heat Note": "Heat cycle logged from dashboard.",
+      "Medical/Behavior Note": medicalCareDefaultNote,
     };
     const log = buildStructuredCareLog(dog, {
       careType,
@@ -10125,24 +10218,28 @@ function initEvents() {
       const record = readRecords("timesheet").find((item) => item.id === action.dataset.id && !item.removed);
       if (record) openTimesheetDeleteConfirm(record);
     }
-	    if (action.dataset.action === "confirm-delete-timesheet") {
-	      const removed = await removeTimesheetEntryById(action.dataset.id);
-	      $("#detailDialog").close();
-	      if (removed) showToast("Timesheet entry deleted.");
-	    }
-	    if (action.dataset.action === "cancel-shift") {
-	      const cancelled = await cancelScheduleShift(action.dataset.id);
-	      $("#detailDialog").close();
-	      if (cancelled) showToast("Shift cancelled.");
-	    }
-	    if (action.dataset.action === "approve-time-off" || action.dataset.action === "deny-time-off") {
-	      const updated = await reviewTimeOffRequest(action.dataset.id, action.dataset.action === "approve-time-off" ? "Approved" : "Denied");
-	      $("#detailDialog").close();
-	      if (updated) showToast(`Time off ${updated.status.toLowerCase()}.`);
-	    }
-	    if (action.dataset.action === "popup-quick-care") {
-	      openDashboardQuickCare(action.dataset.id, action.dataset.careType);
-	    }
+    if (action.dataset.action === "confirm-delete-timesheet") {
+      const removed = await removeTimesheetEntryById(action.dataset.id);
+      $("#detailDialog").close();
+      if (removed) showToast("Timesheet entry deleted.");
+    }
+    if (action.dataset.action === "cancel-shift") {
+      const cancelled = await cancelScheduleShift(action.dataset.id);
+      $("#detailDialog").close();
+      if (cancelled) showToast("Shift cancelled.");
+    }
+    if (action.dataset.action === "approve-time-off" || action.dataset.action === "deny-time-off") {
+      const updated = await reviewTimeOffRequest(action.dataset.id, action.dataset.action === "approve-time-off" ? "Approved" : "Denied");
+      $("#detailDialog").close();
+      if (updated) showToast(`Time off ${updated.status.toLowerCase()}.`);
+    }
+    if (action.dataset.action === "popup-quick-care") {
+      openDashboardQuickCare(action.dataset.id, action.dataset.careType);
+    }
+    if (action.dataset.action === "open-customer-dog-editor") {
+      openCustomerDogEditorForRequest(action.dataset.id);
+      return;
+    }
     if (action.dataset.action === "confirm-remove-task-tab") {
       const removed = await removeTaskTab(action.dataset.taskTabId);
       $("#detailDialog").close();
@@ -10270,6 +10367,10 @@ function initEvents() {
   });
   $("#detailDialogHeaderAction")?.addEventListener("click", () => {
     const action = $("#detailDialogHeaderAction");
+    if (action?.dataset.action === "open-customer-dog-editor") {
+      openCustomerDogEditorForRequest(action.dataset.id);
+      return;
+    }
     if (action?.dataset.action !== "open-owned-editor") return;
     const dog = readRecords("ownedDog").find((record) => record.id === action.dataset.id && !record.removed);
     if (!dog) return;
@@ -11381,7 +11482,7 @@ function initEvents() {
     }
     if (button.dataset.action === "view-customer-request") {
       const boarding = readRecords("boardingDog").find((item) => item.id === button.dataset.id && !item.removed);
-      if (boarding) showDetailDialog(titleForRecord("boardingDog", boarding), detailForRecord("boardingDog", boarding));
+      if (boarding) openCustomerRequestDetail(boarding);
       return;
     }
     const record = readRecords("customerDog").find((item) => item.id === button.dataset.id);
@@ -11422,7 +11523,7 @@ function initEvents() {
     const card = event.target.closest('[data-action="view-customer-request"]');
     if (!card) return;
     const record = readRecords("boardingDog").find((item) => item.id === card.dataset.id);
-    if (record) showDetailDialog(titleForRecord("boardingDog", record), detailForRecord("boardingDog", record));
+    if (record) openCustomerRequestDetail(record);
   });
   $("#customerBookingForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -11581,6 +11682,7 @@ function switchPage(pageId) {
 }
 
 async function initializeApp() {
+  document.body.classList.add("is-auth-booting");
   initSupabaseClient();
   ensureTaskConfig();
   setDefaultDateAndDay();
@@ -11589,8 +11691,6 @@ async function initializeApp() {
   seedDefaultCfoNotes();
   seedDefaultKennelLocations();
   seedDefaultKennelBuildings();
-  const restoredFromSupabase = await restoreSupabaseSession();
-  if (!restoredFromSupabase) restoreSession();
   updateConditionalSections();
   updateRotationBanner();
   updateCompletionCount();
@@ -11600,13 +11700,23 @@ async function initializeApp() {
   initEvents();
   showAuthRedirectError();
   hydrateLoginFromUrl();
+  let renderedDuringSessionRestore = false;
+  if (!helperIsLoggedIn()) {
+    const restoredFromSupabase = await restoreSupabaseSession();
+    renderedDuringSessionRestore = restoredFromSupabase;
+    if (!restoredFromSupabase && !restoreSession()) {
+      clearLocalAppSession({ switchToLogin: false });
+    }
+  }
   updateNavigationAccess();
-  renderAllRecords();
-  if (helperIsLoggedIn()) switchPage(rememberedPageForRole(currentRole()));
-  else document.body.classList.add("is-login-view");
-  await loadRemoteRecords();
-  requirePasswordChangeIfNeeded();
-  startAutoSync();
+  if (helperIsLoggedIn()) {
+    if (!renderedDuringSessionRestore) renderAllRecords();
+    switchPage(rememberedPageForRole(currentRole()));
+    requirePasswordChangeIfNeeded();
+  } else {
+    switchPage("loginPage");
+  }
+  document.body.classList.remove("is-auth-booting");
 }
 
 initializeApp();
