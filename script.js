@@ -290,8 +290,17 @@ function uid(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function localDateKey(value = new Date()) {
+  const source = value instanceof Date ? value : new Date(String(value).includes("T") ? value : `${value}T12:00:00`);
+  if (Number.isNaN(source.getTime())) return "";
+  const year = source.getFullYear();
+  const month = String(source.getMonth() + 1).padStart(2, "0");
+  const day = String(source.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function todayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateKey(new Date());
 }
 
 function setDefaultDateAndDay() {
@@ -324,8 +333,7 @@ function addDays(dateString, daysToAdd) {
 
 function dateOnly(value) {
   if (!value) return "";
-  const date = new Date(String(value).includes("T") ? value : `${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  return localDateKey(value);
 }
 
 function dateOnlyTime(value) {
