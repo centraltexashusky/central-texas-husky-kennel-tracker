@@ -1234,7 +1234,7 @@ function completeLocalTestLogin(email, reason = "", role = "admin") {
   switchPage(rememberedPageForRole(currentRole()));
   showDetailDialog(
     "Local Test Login",
-    `<p>You are signed in locally as an admin for UI testing. Remote Supabase login was not used${reason ? `: ${escapeHtml(reason)}` : "."}</p><p>Changes will stay in this browser's local storage during this test session.</p>`,
+    `<p>You are signed in locally as a ${escapeHtml(roleLabel(currentRole()).toLowerCase())} for UI testing. Remote Supabase login was not used${reason ? `: ${escapeHtml(reason)}` : "."}</p><p>Changes will stay in this browser's local storage during this test session.</p>`,
   );
 }
 
@@ -8183,14 +8183,17 @@ async function removeCustomerDogById(id = "") {
 }
 
 function resetCustomerBookingForm() {
-  $("#customerBookingForm").reset();
+  const formEl = $("#customerBookingForm");
+  formEl.reset();
   $("#editingCustomerRequestId").value = "";
   $("#customerRequestMode").value = "boarding";
   $("#customerBookingFormTitle").textContent = "Request Boarding";
   $("#customerBookingFormHelp").textContent = "Choose dog(s), requested time, and optional services.";
   $("#requestBoardingButton").textContent = "Request Boarding Time";
   pendingCustomerBooking = null;
-  $("#customerBookingForm").hidden = true;
+  $("#bookingConfirmDialog")?.close();
+  formEl.hidden = true;
+  formEl.scrollTop = 0;
   renderCustomerDogs();
   updateCustomerEstimate();
 }
@@ -8201,9 +8204,13 @@ function openCustomerBookingModal(mode = "boarding") {
     openCustomerDogModal();
     return;
   }
+  $("#detailDialog")?.close();
+  $("#bookingConfirmDialog")?.close();
+  $("#customerBookingForm").hidden = true;
   resetCustomerBookingForm();
   $("#customerRequestMode").value = mode;
   $("#customerBookingForm").hidden = false;
+  $("#customerBookingForm").scrollTop = 0;
   $("#customerBookingFormTitle").textContent = mode === "service" ? "Request Service" : "Request Boarding";
   $("#customerBookingFormHelp").textContent = mode === "service" ? "Choose dog(s), service, and requested drop-off time." : "Choose dog(s), requested stay, and optional services.";
   $("#requestBoardingButton").textContent = mode === "service" ? "Request Service" : "Request Boarding Time";
@@ -8434,6 +8441,7 @@ async function submitPendingCustomerBooking() {
   renderCustomerRequests();
   renderDashboard();
   switchPage("customerRequestsPage");
+  resetCustomerBookingForm();
   showDetailDialog(editingId ? "Request Updated" : "Request Sent", `<p>Your boarding request has been sent for approval.</p><p>${estimate.dogs.length} dog(s), ${boardingBillingLabel(estimate)}, estimated total ${money(estimate.total)}.</p>`);
 }
 
