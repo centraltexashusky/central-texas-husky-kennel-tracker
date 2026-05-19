@@ -424,7 +424,9 @@ body.is-impersonating .user-card {
 
 .boarding-dog-modal:not([hidden]),
 .owned-dog-modal:not([hidden]),
-.service-modal:not([hidden]) {
+.service-modal:not([hidden]),
+.customer-dog-modal:not([hidden]),
+.customer-request-modal:not([hidden]) {
   border-radius: 8px;
   box-shadow: var(--shadow), 0 0 0 9999px rgba(4, 15, 26, 0.58);
   left: 50%;
@@ -445,7 +447,9 @@ body.owned-dog-modal-open {
 
 .boarding-dog-modal .section-heading,
 .owned-dog-modal .section-heading,
-.service-modal .section-heading {
+.service-modal .section-heading,
+.customer-dog-modal .section-heading,
+.customer-request-modal .section-heading {
   align-items: center;
 }
 
@@ -1250,6 +1254,13 @@ button:focus-visible {
 
 .customer-additional-services .checklist.compact {
   margin-bottom: 0;
+}
+
+.customer-request-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .request-timeline {
@@ -2509,7 +2520,9 @@ h2,
 
 .boarding-dog-modal:not([hidden]),
 .owned-dog-modal:not([hidden]),
-.service-modal:not([hidden]) {
+.service-modal:not([hidden]),
+.customer-dog-modal:not([hidden]),
+.customer-request-modal:not([hidden]) {
   box-shadow: var(--glass-shadow), var(--glass-specular), 0 0 0 9999px rgba(0, 0, 0, 0.38);
 }
 

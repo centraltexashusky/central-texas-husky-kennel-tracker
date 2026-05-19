@@ -531,6 +531,25 @@ function boardingStatusChipHtml(record = {}) {
   return statusChipHtml(label, `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
 }
 
+function customerRequestStatusLabel(status = "") {
+  const normalized = boardingLifecycleStatuses.includes(status) ? status : normalizeBoardingStatus({ boardingStatus: status, customerRequest: true });
+  const labels = {
+    Pending: "Request Pending",
+    Approved: "Request Approved",
+    "Checked In": "Checked In",
+    "In Kennel": "In Kennel",
+    "Ready For Pickup": "Ready For Pickup",
+    "Checked Out": "Completed",
+    Cancelled: "Request Cancelled",
+  };
+  return labels[normalized] || "Request Pending";
+}
+
+function customerRequestStatusChipHtml(record = {}) {
+  const status = normalizeBoardingStatus(record);
+  return statusChipHtml(customerRequestStatusLabel(status), `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
+}
+
 function boardingStayStatusChipHtml(record = {}, stay = {}) {
   const status = boardingStayDisplayStatus(record, stay);
   const kennelLabel = status === "In Kennel" ? boardingKennelLocationLabel(record, stay) : "";
@@ -3632,6 +3651,7 @@ function genericDetailHtml(record) {
 }
 
 function boardingDogDetailHtml(record) {
+  if (currentRole() === "customer") return customerBoardingDogDetailHtml(record);
   const stays = (record.stays || [])
     .map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayStatusChipHtml(record, stay)}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.stayNotes || "")}</p></article>`)
     .join("");
@@ -3664,6 +3684,30 @@ function boardingDogDetailHtml(record) {
   `;
 }
 
+function customerBoardingDogDetailHtml(record = {}) {
+  const stay = (record.stays || [])[0] || {};
+  const services = stay.requests?.length ? stay.requests.join(", ") : "No added services";
+  return `
+    <div class="chip-row">${customerRequestStatusChipHtml(record)}</div>
+    ${detailRows(record, [
+      ["Dog", "dogName"],
+      ["Owner", "ownerName"],
+      ["Owner phone", "ownerPhone"],
+      ["Emergency contact", "emergencyName"],
+      ["Emergency phone", "emergencyPhone"],
+      ["Feeding instructions", "foodInstructions"],
+      ["Care notes", "specialCare"],
+    ])}
+    <article class="record-card">
+      <strong>${escapeHtml(formatDateTime(stay.dropoffTime) || "Requested stay")}${stay.pickupTime ? ` to ${escapeHtml(formatDateTime(stay.pickupTime))}` : ""}</strong>
+      <p>${escapeHtml(services)}</p>
+      ${stay.stayNotes ? `<p>${escapeHtml(stay.stayNotes)}</p>` : ""}
+      ${record.estimatedTotal ? `<p><strong>Estimated total:</strong> ${money(record.estimatedTotal)}</p>` : ""}
+    </article>
+    ${customerUploadSectionHtml(record)}
+  `;
+}
+
 function detailForRecord(type, record) {
   if (!record) return "";
   if (type === "dailyTask") return dailyDetailHtml(record);
@@ -3674,6 +3718,7 @@ function detailForRecord(type, record) {
 }
 
 function titleForRecord(type, record = {}) {
+  if (currentRole() === "customer" && type === "boardingDog") return `Request: ${record.dogName || "Dog"}`;
   const labels = {
     ownedDog: `Dog: ${record.callName || record.showName || "Record"}`,
     boardingDog: `Boarding Dog: ${record.dogName || "Record"}`,
@@ -7900,8 +7945,8 @@ function renderCustomerDogs() {
         ? `<button type="button" class="secondary-button" data-action="view-customer-request" data-id="${escapeHtml(dog.sourceBoardingDogId || "")}">View Boarding Profile</button>`
         : `<button type="button" class="secondary-button" data-action="edit-customer-dog" data-id="${dog.id}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-customer-dog" data-id="${dog.id}">Remove</button>`;
       return `<article class="customer-dog-item">${customerDogPhotoHtml(dog)}<div><strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span>${dog.isSharedBoardingDog ? "<small>Shared boarding profile</small>" : ""}</div><div class="record-actions">${sharedActions}</div></article>`;
-    }).join("")
-    : "<p>No dogs added yet.</p>";
+    }).join("") + `<div class="button-row"><button type="button" class="secondary-button" data-action="add-another-customer-dog">Add Another Dog</button></div>`
+    : `<article class="record-card compact-record-card"><strong>No dogs added yet.</strong><p>Start by adding your dog first.</p><button type="button" class="secondary-button" data-action="add-another-customer-dog">Add Dog</button></article>`;
   if ($("#customerBookingDogList")) {
     $("#customerBookingDogList").innerHTML = dogs.length
       ? dogs.map((dog) => `<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="${dog.id}" ${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span></label>`).join("")
@@ -7909,6 +7954,8 @@ function renderCustomerDogs() {
   }
   $("#customerBookingForm")?.classList.toggle("has-no-customer-dogs", !dogs.length);
   $("#requestBoardingButton").disabled = !dogs.length;
+  $("#customerRequestActions")?.toggleAttribute("hidden", !dogs.length);
+  $("#customerNoDogRequestPrompt")?.toggleAttribute("hidden", dogs.length);
   renderCustomerServiceOptions();
   updateCustomerEstimate();
   renderCustomerProgress();
@@ -7955,17 +8002,16 @@ function renderCustomerRequests() {
           const actions = !["Cancelled", "Checked Out"].includes(status)
             ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-customer-request" data-id="${record.id}">Update</button>${canTransitionBoardingStatus(record, "Cancelled") ? `<button type="button" class="secondary-button" data-action="cancel-customer-request" data-id="${record.id}">Cancel Request</button>` : ""}</div>`
             : "";
-          return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="${record.id}"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("customerDog")}${boardingStatusChipHtml(record)}</div>${timeline}<span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${estimate}${actions}</article>`;
+          return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="${record.id}"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${customerRequestStatusChipHtml(record)}</div>${timeline}<span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${estimate}${actions}</article>`;
         })
         .join("")
     : `<p>No ${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>`;
 }
 
 function customerRequestTimelineHtml(status = "Pending") {
-  const steps = ["Pending", "Approved", "Checked In", "Ready For Pickup", "Checked Out"];
-  const activeIndex = status === "In Kennel" ? steps.indexOf("Checked In") : steps.indexOf(status);
-  if (status === "Cancelled") return `<div class="request-timeline"><span class="is-cancelled">Cancelled</span></div>`;
-  return `<div class="request-timeline">${steps.map((step, index) => `<span class="${index <= activeIndex ? "is-done" : ""}">${escapeHtml(step)}</span>`).join("")}</div>`;
+  const normalized = boardingLifecycleStatuses.includes(status) ? status : "Pending";
+  const className = normalized === "Cancelled" ? "is-cancelled" : "is-done";
+  return `<div class="request-timeline"><span class="${className}">${escapeHtml(customerRequestStatusLabel(normalized))}</span></div>`;
 }
 
 function renderCustomerServiceOptions() {
@@ -7992,8 +8038,17 @@ function resetCustomerDogForm() {
   $("#customerDogForm").reset();
   $("#customerDogId").value = "";
   $("#saveCustomerDogButton").textContent = "Save Dog";
+  $("#customerDogFormTitle").textContent = "Add Dog";
   fillCustomerDefaults();
   resetSelectedDogPhoto("customer", {});
+}
+
+function closeCustomerDogModal() {
+  $("#customerDogForm").hidden = true;
+}
+
+function openCustomerDogModal(record = {}) {
+  openCustomerDog(record);
 }
 
 function openCustomerDog(record = {}) {
@@ -8001,23 +8056,64 @@ function openCustomerDog(record = {}) {
   setFormValues($("#customerDogForm"), record);
   $("#customerDogId").value = record.id || "";
   $("#saveCustomerDogButton").textContent = record.id ? "Save Dog Changes" : "Save Dog";
+  $("#customerDogFormTitle").textContent = record.id ? `Edit ${record.dogName || "Dog"}` : "Add Dog";
   setDogPhoto("customer", record);
-  $("#customerDogForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("#customerDogForm").hidden = false;
+}
+
+function openCustomerDogRemoveConfirm(record = {}) {
+  showDetailDialog(
+    "Remove Dog?",
+    `<article class="record-card compact-record-card danger-confirm-card"><strong>Remove ${escapeHtml(record.dogName || "this dog")}?</strong><p>This removes the dog from your customer profile. Existing submitted requests stay on file.</p></article><div class="button-row"><button type="button" class="danger-button" data-action="confirm-remove-customer-dog" data-id="${escapeHtml(record.id || "")}">Remove Dog</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>`,
+  );
+}
+
+async function removeCustomerDogById(id = "") {
+  const record = readRecords("customerDog").find((item) => item.id === id);
+  if (!record) return null;
+  const updated = upsertRecord("customerDog", { ...record, removed: true, removedAt: new Date().toISOString() });
+  await sendPayload(updated);
+  if ($("#customerDogId")?.value === record.id) {
+    resetCustomerDogForm();
+    closeCustomerDogModal();
+  }
+  renderCustomerDogs();
+  renderBoardingDogs();
+  return updated;
 }
 
 function resetCustomerBookingForm() {
   $("#customerBookingForm").reset();
   $("#editingCustomerRequestId").value = "";
-  $("#requestBoardingButton").textContent = "Request Boarding";
+  $("#customerRequestMode").value = "boarding";
+  $("#customerBookingFormTitle").textContent = "Request Boarding";
+  $("#customerBookingFormHelp").textContent = "Choose dog(s), requested time, and optional services.";
+  $("#requestBoardingButton").textContent = "Request Boarding Time";
   pendingCustomerBooking = null;
+  $("#customerBookingForm").hidden = true;
   renderCustomerDogs();
   updateCustomerEstimate();
+}
+
+function openCustomerBookingModal(mode = "boarding") {
+  if (!customerDogsForCurrentUser().length) {
+    switchPage("customerPage");
+    openCustomerDogModal();
+    return;
+  }
+  resetCustomerBookingForm();
+  $("#customerRequestMode").value = mode;
+  $("#customerBookingForm").hidden = false;
+  $("#customerBookingFormTitle").textContent = mode === "service" ? "Request Service" : "Request Boarding";
+  $("#customerBookingFormHelp").textContent = mode === "service" ? "Choose dog(s), service, and requested drop-off time." : "Choose dog(s), requested stay, and optional services.";
+  $("#requestBoardingButton").textContent = mode === "service" ? "Request Service" : "Request Boarding Time";
 }
 
 function editCustomerRequest(record) {
   if (!record) return;
   switchPage("customerRequestsPage");
   resetCustomerBookingForm();
+  $("#customerBookingForm").hidden = false;
   const stay = record.stays?.[0] || {};
   $("#editingCustomerRequestId").value = record.id;
   $("#customerBookingForm").elements.dropoffTime.value = stay.dropoffTime?.slice(0, 16) || "";
@@ -8047,8 +8143,9 @@ function editCustomerRequest(record) {
     }
   });
   $("#requestBoardingButton").textContent = "Update Request";
+  $("#customerBookingFormTitle").textContent = "Update Request";
+  $("#customerBookingFormHelp").textContent = "Update boarding time, requested services, or notes.";
   updateCustomerEstimate();
-  $("#customerBookingForm").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function boardingDays(dropoffTime, pickupTime) {
@@ -8361,7 +8458,8 @@ function renderGlobalSearchResults() {
   const input = $("#globalQuickSearch");
   const list = $("#globalSearchResults");
   if (!panel || !input || !list) return;
-  panel.hidden = !helperIsLoggedIn();
+  panel.hidden = !helperIsLoggedIn() || currentRole() === "customer";
+  if (panel.hidden) return;
   const query = input.value.trim().toLowerCase();
   if (!query) {
     list.innerHTML = `<p>Type a dog, owner, request, service, note, or user name.</p>`;
@@ -10109,6 +10207,12 @@ function initEvents() {
       $("#detailDialog").close();
       if (removed) showToast("User access removed.");
     }
+    if (action.dataset.action === "confirm-remove-customer-dog") {
+      const removed = await removeCustomerDogById(action.dataset.id);
+      $("#detailDialog").close();
+      if (removed) showToast(`${removed.dogName || "Dog"} removed.`);
+      return;
+    }
     if (action.dataset.action === "confirm-delete-boarding-dog") {
       const removed = await deleteBoardingDogById(action.dataset.id);
       $("#detailDialog").close();
@@ -11218,6 +11322,7 @@ function initEvents() {
         customerDogId: record.id,
       });
       resetCustomerDogForm();
+      closeCustomerDogModal();
       renderCustomerDogs();
       renderBoardingDogs();
       const uploadText = vaccinationUploads.length ? `${vaccinationUploads.length} vaccination file(s) uploaded.` : "No new vaccination files uploaded.";
@@ -11233,7 +11338,19 @@ function initEvents() {
       setSubmitState($("#saveCustomerDogButton"), false);
     }
   });
-  $("#newCustomerDogButton").addEventListener("click", resetCustomerDogForm);
+  $("#openCustomerDogModalButton")?.addEventListener("click", () => openCustomerDogModal());
+  $("#closeCustomerDogModalButton")?.addEventListener("click", closeCustomerDogModal);
+  $("#newCustomerDogButton").addEventListener("click", () => {
+    resetCustomerDogForm();
+    closeCustomerDogModal();
+  });
+  $("#openCustomerBoardingRequestButton")?.addEventListener("click", () => openCustomerBookingModal("boarding"));
+  $("#openCustomerServiceRequestButton")?.addEventListener("click", () => openCustomerBookingModal("service"));
+  $("#closeCustomerBookingModalButton")?.addEventListener("click", resetCustomerBookingForm);
+  $("#customerRequestAddDogButton")?.addEventListener("click", () => {
+    switchPage("customerPage");
+    openCustomerDogModal();
+  });
   $("#customerBookingForm").addEventListener("change", (event) => {
     if (event.target.name === "customerServices") {
       const quantityInput = $("#customerBookingForm").elements[`serviceQuantity-${event.target.value}`];
@@ -11250,11 +11367,18 @@ function initEvents() {
   $("#customerBookingDogList").addEventListener("change", updateCustomerEstimate);
   $("#customerBookingDogList").addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="customer-add-dog-cta"]');
-    if (button) switchPage("customerPage");
+    if (button) {
+      switchPage("customerPage");
+      openCustomerDogModal();
+    }
   });
   $("#customerDogList").addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
     if (!button) return;
+    if (button.dataset.action === "add-another-customer-dog") {
+      openCustomerDogModal();
+      return;
+    }
     if (button.dataset.action === "view-customer-request") {
       const boarding = readRecords("boardingDog").find((item) => item.id === button.dataset.id && !item.removed);
       if (boarding) showDetailDialog(titleForRecord("boardingDog", boarding), detailForRecord("boardingDog", boarding));
@@ -11267,12 +11391,7 @@ function initEvents() {
       return;
     }
     if (button.dataset.action === "remove-customer-dog") {
-      const updated = upsertRecord("customerDog", { ...record, removed: true, removedAt: new Date().toISOString() });
-      sendPayload(updated);
-      if ($("#customerDogId").value === record.id) resetCustomerDogForm();
-      renderCustomerDogs();
-      renderBoardingDogs();
-      showDetailDialog("Dog Removed", `<p>${escapeHtml(record.dogName || "This dog")} has been removed from your dog list.</p>`);
+      openCustomerDogRemoveConfirm(record);
     }
   });
   $("#customerRequestStatusFilter").addEventListener("change", renderCustomerRequests);
@@ -11307,6 +11426,9 @@ function initEvents() {
   });
   $("#customerBookingForm").addEventListener("submit", async (event) => {
     event.preventDefault();
+    if ($("#customerRequestMode")?.value === "service" && event.currentTarget.elements.dropoffTime.value && !event.currentTarget.elements.pickupTime.value) {
+      event.currentTarget.elements.pickupTime.value = event.currentTarget.elements.dropoffTime.value;
+    }
     if (!validateForm(event.currentTarget)) return;
     const estimate = customerEstimateDetails();
     if (!estimate.dogs.length) {
