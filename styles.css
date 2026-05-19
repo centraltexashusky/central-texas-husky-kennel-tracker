@@ -1248,6 +1248,27 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
+.customer-booking-time-box,
+.customer-dog-selection-step {
+  background: rgba(12, 28, 45, 0.72);
+  border-color: rgba(148, 170, 190, 0.42);
+  border-radius: 18px;
+  gap: 14px;
+}
+
+.customer-booking-time-box > strong,
+.customer-dog-selection-step > strong {
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.customer-booking-time-box > p {
+  color: rgba(230, 238, 247, 0.78);
+  margin: -4px 0 0;
+}
+
 .customer-additional-services {
   border: 1px solid var(--glass-border);
   border-radius: 8px;

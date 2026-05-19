@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260519-mobile-no-blur-1" />
+    <link rel="stylesheet" href="styles.css?v=20260519-customer-request-clarity-1" />
   </head>
   <body class="is-auth-booting">
     <div class="app-layout">
@@ -310,7 +310,6 @@
       <section class="page-view" id="customerRequestsPage">
         <section class="form-section">
           <div class="section-heading"><span>B</span><div><h2>Boarding Request</h2><p>Select dog(s), requested stay, and optional services.</p></div></div>
-          <div class="customer-progress-panel" id="customerRequestProgress"></div>
           <div class="customer-request-actions" id="customerRequestActions">
             <button type="button" id="openCustomerBoardingRequestButton">Request Boarding</button>
             <button type="button" class="secondary-button" id="openCustomerServiceRequestButton">Request Service</button>
@@ -324,13 +323,20 @@
             <div class="section-heading"><span>R</span><div><h2 id="customerBookingFormTitle">Request Boarding</h2><p id="customerBookingFormHelp">Choose dog(s), requested time, and optional services.</p></div><button type="button" class="secondary-button" id="closeCustomerBookingModalButton">Close</button></div>
             <input type="hidden" name="editingRequestId" id="editingCustomerRequestId" />
             <input type="hidden" name="requestMode" id="customerRequestMode" value="boarding" />
-            <div class="customer-dog-list" id="customerBookingDogList"></div>
-            <div class="field-grid">
-              <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
-              <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
-            </div>
+            <section class="customer-form-step customer-dog-selection-step">
+              <strong>Select one or more dogs for boarding.</strong>
+              <div class="customer-dog-list" id="customerBookingDogList"></div>
+            </section>
+            <section class="customer-form-step customer-booking-time-box">
+              <strong>Boarding time</strong>
+              <p>Let us know what day and time you would like to request for the drop-off and pickup times.</p>
+              <div class="field-grid">
+                <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
+                <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
+              </div>
+            </section>
             <section class="customer-additional-services">
-              <strong>Add additional services:</strong>
+              <strong>Add additional service(s) for your dog's stay:</strong>
               <div class="checklist compact" id="customerServiceOptions"></div>
             </section>
             <div class="estimate-box" id="customerEstimate">Select dog(s), dates, and services to see an estimate.</div>
@@ -1232,6 +1238,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260519-local-date-queue-1"></script>
+  <script src="script.js?v=20260519-customer-request-clarity-1"></script>
   </body>
 </html>
