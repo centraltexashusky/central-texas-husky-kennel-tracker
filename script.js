@@ -6682,7 +6682,7 @@ function boardingDogFileItem(item = {}, source, sourceLabel, options = {}) {
     dataUrl: item.dataUrl || "",
     note: item.note || "",
     canRename: options.canRename !== false,
-    canRemove: Boolean(options.canRemove),
+    canRemove: options.canRemove !== false,
   };
 }
 
@@ -6736,7 +6736,7 @@ function renderBoardingDogFiles(record = activeBoardingDog() || {}) {
         const noteText = file.note ? `<p>${escapeHtml(file.note)}</p>` : "";
         const renameInput = file.canRename ? `<label>File name<input type="text" value="${escapeHtml(file.name)}" data-action="rename-boarding-file-input" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-parent-id="${escapeHtml(file.parentId)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}" /></label>` : "";
         const renameButton = file.canRename ? `<button type="button" class="secondary-button" data-action="save-boarding-file-name" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-parent-id="${escapeHtml(file.parentId)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}">Rename</button>` : "";
-        const removeButton = file.canRemove ? `<button type="button" class="secondary-button danger-button" data-action="remove-boarding-file" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}">Remove</button>` : "";
+        const removeButton = file.canRemove ? `<button type="button" class="secondary-button danger-button" data-action="remove-boarding-file" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-parent-id="${escapeHtml(file.parentId)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}">Remove</button>` : "";
         return `<article class="record-card compact-record-card dog-file-card" data-file-id="${escapeHtml(file.id)}"><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(savedText)}</span>${sourceText}${noteText}${renameInput}<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(source)}" data-media-type="${escapeHtml(file.type)}" data-media-name="${escapeHtml(file.name)}">Open</button>${renameButton}${removeButton}</div></article>`;
       }).join("")
     : "<p>No uploaded files saved for this boarding dog yet.</p>";
@@ -6810,6 +6810,83 @@ async function updateBoardingDogDocuments(documents = []) {
     documents,
     updatedAt: new Date().toISOString(),
   });
+  await sendPayload(updated);
+  return refreshBoardingDogFileViews(updated);
+}
+
+function boardingDogFileReferenceFromAction(action = {}) {
+  return {
+    source: action.dataset?.source || "",
+    id: action.dataset?.id || "",
+    parentId: action.dataset?.parentId || "",
+    sourceRecordId: action.dataset?.sourceRecordId || "",
+  };
+}
+
+function boardingDogFileFromReference(reference = {}, record = activeBoardingDog() || {}) {
+  return boardingDogFileItems(record).find((file) =>
+    file.id === reference.id
+    && file.source === reference.source
+    && (file.parentId || "") === (reference.parentId || "")
+    && (file.sourceRecordId || "") === (reference.sourceRecordId || "")
+  ) || null;
+}
+
+function boardingDogFileRemoveConfirmHtml(file = {}, reference = {}) {
+  return `<article class="record-card compact-record-card danger-confirm-card">
+    <strong>Remove ${escapeHtml(file.name || "this file")}?</strong>
+    <p>This removes the file from ${escapeHtml(file.sourceLabel || "this boarding dog record")}. It does not delete the dog profile or any boarding stays.</p>
+  </article>
+  <div class="button-row">
+    <button type="button" class="danger-button" data-action="confirm-remove-boarding-file" data-id="${escapeHtml(reference.id || "")}" data-source="${escapeHtml(reference.source || "")}" data-parent-id="${escapeHtml(reference.parentId || "")}" data-source-record-id="${escapeHtml(reference.sourceRecordId || "")}">Remove File</button>
+    <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+  </div>`;
+}
+
+function openBoardingDogFileRemoveConfirm(reference = {}) {
+  const file = boardingDogFileFromReference(reference);
+  if (!file) {
+    showToast("That file could not be found.");
+    return;
+  }
+  showDetailDialog("Confirm Remove File", boardingDogFileRemoveConfirmHtml(file, reference));
+}
+
+async function removeBoardingDogFile(reference = {}) {
+  const { source, id, parentId, sourceRecordId } = reference;
+  if (!source || !id) return null;
+  const timestamp = new Date().toISOString();
+  if (source === "customerVaccination" || source === "customerDocuments") {
+    const customerDog = readRecords("customerDog").find((record) => record.id === sourceRecordId && !record.removed);
+    if (!customerDog) return null;
+    const key = source === "customerVaccination" ? "vaccinationRecords" : "documents";
+    const nextFiles = arrayValue(customerDog[key]).filter((file) => file.id !== id);
+    const updates = { [key]: nextFiles, updatedAt: timestamp };
+    if (source === "customerVaccination") updates.vaccinationFiles = nextFiles.map((file) => file.name || file.fileName).filter(Boolean).join(", ");
+    const updated = upsertRecord("customerDog", { ...customerDog, ...updates });
+    await sendPayload(updated);
+    refreshBoardingDogFileViews(activeBoardingDog() || {});
+    return updated;
+  }
+  const record = readRecords("boardingDog").find((item) => item.id === (sourceRecordId || activeBoardingDog({ raw: true })?.id) && !item.removed);
+  if (!record) return null;
+  const updates = {};
+  if (source === "boardingDocuments") {
+    updates.documents = boardingDogDocumentItems(record).filter((file) => file.id !== id);
+  } else if (source === "boardingVaccination") {
+    updates.vaccinationRecords = arrayValue(record.vaccinationRecords).filter((file) => file.id !== id);
+    updates.vaccinationFiles = updates.vaccinationRecords.map((file) => file.name || file.fileName).filter(Boolean).join(", ");
+  } else if (source === "boardingCustomerUpdate") {
+    updates.customerUpdates = arrayValue(record.customerUpdates).map((update) =>
+      update.id === parentId
+        ? { ...update, mediaItems: arrayValue(update.mediaItems).filter((file) => file.id !== id) }
+        : update,
+    );
+  } else {
+    showToast("That file source cannot be removed here.");
+    return null;
+  }
+  const updated = upsertRecord("boardingDog", { ...record, ...updates, updatedAt: timestamp });
   await sendPayload(updated);
   return refreshBoardingDogFileViews(updated);
 }
@@ -11505,6 +11582,11 @@ function initEvents() {
       $("#detailDialog").close();
       if (updated) showToast("Boarding stay removed.");
     }
+    if (action.dataset.action === "confirm-remove-boarding-file") {
+      const removed = await removeBoardingDogFile(boardingDogFileReferenceFromAction(action));
+      $("#detailDialog").close();
+      if (removed) showToast("File removed.");
+    }
   });
   $("#detailDialogBody").addEventListener("change", (event) => {
     const ownedDogMobilePhotoInput = event.target.closest("#ownedDogMobilePhotoInput");
@@ -12114,14 +12196,7 @@ function initEvents() {
       });
     }
     if (action.dataset.action === "remove-boarding-file") {
-      const dog = activeBoardingDog({ raw: true }) || activeBoardingDog();
-      if (!dog) return;
-      if (action.dataset.source !== "boardingDocuments") {
-        showToast("Only staff uploaded files can be removed here.");
-        return;
-      }
-      await updateBoardingDogDocuments(boardingDogDocumentItems(dog).filter((file) => file.id !== action.dataset.id));
-      showToast("File removed from this boarding dog.");
+      openBoardingDogFileRemoveConfirm(boardingDogFileReferenceFromAction(action));
     }
   });
   $("#boardingHistoryList")?.addEventListener("click", (event) => {
