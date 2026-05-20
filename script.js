@@ -8065,7 +8065,7 @@ function renderCustomerDogs() {
         ? `<button type="button" class="secondary-button" data-action="view-customer-request" data-id="${escapeHtml(dog.sourceBoardingDogId || dog.linkedBoardingDogId || "")}">View Boarding Profile</button>`
         : `<button type="button" class="secondary-button danger-button" data-action="remove-customer-dog" data-id="${escapeHtml(dog.id || "")}">Remove</button>`;
       const sharedActions = `${editButton}${secondaryButton}`;
-      return `<article class="customer-dog-item">${customerDogPhotoHtml(dog)}<div><strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span>${dog.isSharedBoardingDog ? "<small>Shared boarding profile</small>" : ""}</div><div class="record-actions">${sharedActions}</div></article>`;
+      return `<article class="customer-dog-item clickable-card" data-action="edit-customer-dog" data-id="${escapeHtml(dog.id || "")}">${customerDogPhotoHtml(dog)}<div><strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span>${dog.isSharedBoardingDog ? "<small>Shared boarding profile</small>" : ""}</div><div class="record-actions">${sharedActions}</div></article>`;
     }).join("") + `<div class="button-row"><button type="button" class="secondary-button" data-action="add-another-customer-dog">Add Another Dog</button></div>`
     : `<article class="record-card compact-record-card"><strong>No dogs added yet.</strong><p>Start by adding your dog first.</p><button type="button" class="secondary-button" data-action="add-another-customer-dog">Add Dog</button></article>`;
   if ($("#customerBookingDogList")) {
