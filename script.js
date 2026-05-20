@@ -128,7 +128,7 @@ const boardingLifecycleStatuses = ["Pending", "Approved", "Checked In", "In Kenn
 const boardingStatusTransitions = {
   Pending: ["Approved", "Cancelled"],
   Approved: ["Checked In", "Cancelled"],
-  "Checked In": ["In Kennel"],
+  "Checked In": ["Approved", "In Kennel"],
   "In Kennel": ["Checked In", "Ready For Pickup"],
   "Ready For Pickup": ["In Kennel", "Checked Out"],
   "Checked Out": [],
@@ -610,6 +610,7 @@ function transitionLabel(status) {
 }
 
 function stayTransitionLabel(currentStatus = "", nextStatus = "") {
+  if (currentStatus === "Checked In" && nextStatus === "Approved") return "Move Back to Approved";
   if (currentStatus === "In Kennel" && nextStatus === "Checked In") return "Move Back to Checked In";
   if (currentStatus === "Ready For Pickup" && nextStatus === "In Kennel") return "Move Back to In Kennel";
   return transitionLabel(nextStatus);
@@ -653,20 +654,23 @@ function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new
     if (!targetStayId || stay.id !== targetStayId) return stay;
     const checkInDetails = nextStatus === "Checked In" ? options.checkInDetails || null : null;
     const checkInDropoffTime = checkInDetails?.dropoffTime || "";
+    const clearsActiveStayState = nextStatus === "Approved" || nextStatus === "Checked In";
     return {
       ...stay,
       status: nextStatus,
       dropoffTime: checkInDropoffTime || stay.dropoffTime || "",
       updatedAt: timestamp,
-      actualDropoffAt: nextStatus === "Checked In" ? checkInDropoffTime || stay.actualDropoffAt || timestamp : stay.actualDropoffAt || "",
+      actualDropoffAt: nextStatus === "Approved" ? "" : nextStatus === "Checked In" ? checkInDropoffTime || stay.actualDropoffAt || timestamp : stay.actualDropoffAt || "",
       actualPickupAt: nextStatus === "Checked Out" ? stay.actualPickupAt || timestamp : stay.actualPickupAt || "",
-      readyForPickupAt: nextStatus === "Checked In" || nextStatus === "In Kennel" ? "" : stay.readyForPickupAt || "",
-      kennelLocationId: nextStatus === "Checked In" ? "" : stay.kennelLocationId || "",
-      kennelLocationName: nextStatus === "Checked In" ? "" : stay.kennelLocationName || "",
-      kennelBuilding: nextStatus === "Checked In" ? "" : stay.kennelBuilding || "",
-      kennelAssignedAt: nextStatus === "Checked In" ? "" : stay.kennelAssignedAt || "",
+      readyForPickupAt: ["Approved", "Checked In", "In Kennel"].includes(nextStatus) ? "" : stay.readyForPickupAt || "",
+      kennelLocationId: clearsActiveStayState ? "" : stay.kennelLocationId || "",
+      kennelLocationName: clearsActiveStayState ? "" : stay.kennelLocationName || "",
+      kennelBuilding: clearsActiveStayState ? "" : stay.kennelBuilding || "",
+      kennelAssignedAt: clearsActiveStayState ? "" : stay.kennelAssignedAt || "",
       requests: checkInDetails?.addedServiceLabels?.length ? mergeStayRequestLabels(stay.requests, checkInDetails.addedServiceLabels) : stay.requests || [],
-      checkIn: checkInDetails
+      checkIn: nextStatus === "Approved"
+        ? null
+        : checkInDetails
         ? {
             ...(stay.checkIn || {}),
             ...checkInDetails,
@@ -711,9 +715,11 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
       kennelAssignedAt: timestamp,
     };
   });
+  const summaryStatus = options.stayId ? boardingSummaryStatusFromStays(record, scopedStays, nextStatus) : nextStatus;
+  const clearsDogLocation = summaryStatus === "Approved" || summaryStatus === "Checked In";
   return {
     ...record,
-    boardingStatus: options.stayId ? boardingSummaryStatusFromStays(record, scopedStays, nextStatus) : nextStatus,
+    boardingStatus: summaryStatus,
     statusHistory: [
       ...(record.statusHistory || []),
       {
@@ -725,17 +731,17 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
         early,
       },
     ],
-    checkedInAt: nextStatus === "Checked In" ? record.checkedInAt || timestamp : record.checkedInAt || "",
-    inKennelAt: nextStatus === "In Kennel" ? timestamp : nextStatus === "Checked In" ? "" : record.inKennelAt || "",
-    readyForPickupAt: nextStatus === "Ready For Pickup" ? timestamp : ["Checked In", "In Kennel"].includes(nextStatus) ? "" : record.readyForPickupAt || "",
-    checkedOutAt: nextStatus === "Checked Out" ? timestamp : record.checkedOutAt || "",
-    cancelledAt: nextStatus === "Cancelled" ? timestamp : record.cancelledAt || "",
+    checkedInAt: summaryStatus === "Approved" ? "" : summaryStatus === "Checked In" ? record.checkedInAt || timestamp : record.checkedInAt || "",
+    inKennelAt: summaryStatus === "In Kennel" ? timestamp : clearsDogLocation ? "" : record.inKennelAt || "",
+    readyForPickupAt: summaryStatus === "Ready For Pickup" ? timestamp : ["Approved", "Checked In", "In Kennel"].includes(summaryStatus) ? "" : record.readyForPickupAt || "",
+    checkedOutAt: summaryStatus === "Checked Out" ? timestamp : record.checkedOutAt || "",
+    cancelledAt: summaryStatus === "Cancelled" ? timestamp : record.cancelledAt || "",
     earlyCheckInAt: nextStatus === "Checked In" && early ? timestamp : record.earlyCheckInAt || "",
     earlyCheckOutAt: nextStatus === "Checked Out" && early ? timestamp : record.earlyCheckOutAt || "",
-    kennelLocationId: nextStatus === "In Kennel" && kennelLocation ? kennelLocation.id : nextStatus === "Checked In" ? "" : record.kennelLocationId || "",
-    kennelLocationName: nextStatus === "In Kennel" && kennelLocation ? kennelLocation.name : nextStatus === "Checked In" ? "" : record.kennelLocationName || "",
-    kennelBuilding: nextStatus === "In Kennel" && kennelLocation ? kennelLocation.building : nextStatus === "Checked In" ? "" : record.kennelBuilding || "",
-    kennelAssignedAt: nextStatus === "In Kennel" && kennelLocation ? timestamp : nextStatus === "Checked In" ? "" : record.kennelAssignedAt || "",
+    kennelLocationId: summaryStatus === "In Kennel" && kennelLocation ? kennelLocation.id : clearsDogLocation ? "" : record.kennelLocationId || "",
+    kennelLocationName: summaryStatus === "In Kennel" && kennelLocation ? kennelLocation.name : clearsDogLocation ? "" : record.kennelLocationName || "",
+    kennelBuilding: summaryStatus === "In Kennel" && kennelLocation ? kennelLocation.building : clearsDogLocation ? "" : record.kennelBuilding || "",
+    kennelAssignedAt: summaryStatus === "In Kennel" && kennelLocation ? timestamp : clearsDogLocation ? "" : record.kennelAssignedAt || "",
     stays: scopedStays,
     flags: nextStatus === "Cancelled" || nextStatus === "Checked Out" ? (record.flags || []).filter((flag) => flag !== "Required update from owner") : record.flags || [],
   };
@@ -6972,7 +6978,6 @@ function setBoardingFormLocked() {
   });
   $("#boardingDogPhotoPicker").disabled = false;
   $("#boardingDogSaveButton").hidden = false;
-  $("#openBoardingScheduleButton").hidden = !formEl.elements.id.value;
   $("#deleteBoardingDogButton").hidden = !formEl.elements.id.value || currentRole() !== "admin";
   formEl.classList.remove("is-readonly");
   renderBoardingOwnerAccountPanel(activeBoardingDog());
@@ -12348,17 +12353,13 @@ function initEvents() {
       showDetailDialog("Boarding Dog Not Saved", `<p>The boarding dog record could not be saved: ${escapeHtml(error.message)}</p>`);
     }
   });
-  $("#boardingStayForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const formEl = event.currentTarget;
-    formEl.dataset.dogId = activeBoardingDog()?.id || "";
-    const existingStay = activeBoardingDog()?.stays?.find((stay) => stay.id === formEl.elements.stayId.value);
-    const record = await saveBoardingStayFromForm(formEl);
-    if (!record) return;
-    formEl.reset();
-    $("#boardingStayId").value = "";
-    $("#boardingStaySaveButton").textContent = "Add Boarding Stay";
-    showToast(existingStay ? "Boarding stay updated." : "Boarding stay added.");
+  $("#openBoardingStayPopupButton")?.addEventListener("click", () => {
+    const dog = activeBoardingDog();
+    if (!dog?.id) {
+      showToast("Save the boarding dog first.");
+      return;
+    }
+    openBoardingStayPopup(dog);
   });
   $("#boardingStayHistory").addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"]');
@@ -12367,12 +12368,6 @@ function initEvents() {
     if (button.dataset.action === "change-stay-status") openBoardingStayStatusMenu(dog, button.dataset.id);
     if (button.dataset.action === "edit-stay") openBoardingStayPopup(dog, button.dataset.id);
     if (button.dataset.action === "remove-stay") openBoardingStayRemoveConfirm(dog, button.dataset.id);
-  });
-  $("#openBoardingScheduleButton").addEventListener("click", () => openBoardingSchedulePopup(activeBoardingDog()));
-  $("#resetBoardingStayButton").addEventListener("click", () => {
-    $("#boardingStayForm").reset();
-    $("#boardingStayId").value = "";
-    $("#boardingStaySaveButton").textContent = "Add Boarding Stay";
   });
 
   $("#requestForm").addEventListener("submit", async (event) => {

@@ -462,6 +462,14 @@ body.owned-dog-modal-open {
   align-items: center;
 }
 
+#boardingDogDetail > .section-heading > div {
+  flex: 1 1 auto;
+}
+
+#closeBoardingDogDialogButton {
+  margin-left: auto;
+}
+
 .existing-only {
   border-top: 1px solid var(--line);
   margin-top: 18px;
@@ -3677,10 +3685,6 @@ button.mobile-dog-photo-button {
 
   #timesheetPage [data-action="edit-time"],
   #timesheetPage .table-wrap {
-    display: none !important;
-  }
-
-  #boardingSchedulePanel {
     display: none !important;
   }
 

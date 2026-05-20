@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260520-shared-dog-editor-1" />
+    <link rel="stylesheet" href="styles.css?v=20260520-boarding-stay-popup-1" />
   </head>
   <body class="is-auth-booting">
     <div class="app-layout">
@@ -984,6 +984,7 @@
               <label>Food instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals"></textarea></label>
               <label>Special care instructions<textarea name="specialCare" rows="3" placeholder="Medication, feeding, handling, allergies, behavior concerns"></textarea></label>
               <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
+              <div class="button-row dog-info-actions"><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button></div>
             </section>
 
             <section class="boarding-profile-section" data-boarding-profile-section="Vaccination" hidden>
@@ -1020,38 +1021,17 @@
               </section>
             </section>
 
-            <section class="boarding-profile-section" data-boarding-profile-section="Boarding & Request" hidden>
-              <div class="field-grid">
-                <label id="boardingKennelLocationLabel" hidden>Kennel location<select id="boardingKennelLocationSelect" name="kennelLocationId"><option value="">Select kennel location</option></select><small>Shown when the dog is actively in kennel.</small></label>
-              </div>
-            </section>
-
             <section class="boarding-profile-section" data-boarding-profile-section="Boarding History" hidden>
               <div class="section-heading compact-heading"><span>H</span><div><h2>Boarding History</h2><p>Each stay keeps its own request, approval, check-in, kennel, pickup, and checkout trail.</p></div></div>
               <div id="boardingHistoryList" class="record-grid"></div>
             </section>
 
-            <div class="button-row"><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="openBoardingScheduleButton" hidden>Boarding/Request</button><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
+            <div class="button-row"><button type="submit" id="boardingDogSaveButton">Save Update</button><button type="button" class="secondary-button" id="cancelBoardingDogEdit">Cancel</button></div>
           </form>
 
           <section class="existing-only boarding-profile-section" data-boarding-profile-section="Boarding & Request" id="boardingSchedulePanel" hidden>
             <div class="section-heading compact-heading"><span>S</span><div><h2>Boarding Schedule And Requests</h2><p>Add boarding stays and service requests for this dog.</p></div></div>
-            <form id="boardingStayForm" class="tracker-form">
-              <input type="hidden" name="stayId" id="boardingStayId" />
-              <div class="field-grid">
-                <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
-                <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
-              </div>
-              <div class="checklist compact">
-                <label><input type="checkbox" name="stayRequests" value="Bath requested" /> Bath requested</label>
-                <label><input type="checkbox" name="stayRequests" value="Nail trim requested" /> Nail trim requested</label>
-                <label><input type="checkbox" name="stayRequests" value="Paw trim requested" /> Paw trim requested</label>
-                <label><input type="checkbox" name="stayRequests" value="Training requested" /> Training requested</label>
-                <label><input type="checkbox" name="stayRequests" value="Exercise requested" /> Exercise requested</label>
-              </div>
-              <label>Stay notes<textarea name="stayNotes" rows="2" placeholder="Owner instructions or pickup grooming notes"></textarea></label>
-              <div class="button-row"><button type="submit" id="boardingStaySaveButton">Add Boarding Stay</button><button type="button" class="secondary-button" id="resetBoardingStayButton">New Stay</button></div>
-            </form>
+            <div class="button-row"><button type="button" id="openBoardingStayPopupButton">Add Boarding Stay</button></div>
             <div id="boardingStayHistory" class="record-grid"></div>
           </section>
         </section>
@@ -1261,6 +1241,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260520-boarding-status-flow-1"></script>
+  <script src="script.js?v=20260520-boarding-stay-popup-1"></script>
   </body>
 </html>
