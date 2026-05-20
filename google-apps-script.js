@@ -170,7 +170,11 @@ function appendDatabaseRecord(payload) {
 function readDatabase() {
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = spreadsheet.getSheetByName("Database");
-  const data = { ownedDog: [], boardingDog: [], request: [], maintenance: [], timesheet: [], service: [], dailyTask: [], customerDog: [], settingsUser: [], cfoNote: [], calendarNote: [], kennelLocation: [], kennelBuilding: [], auditLog: [], staffSchedule: [], timeOffRequest: [], kennelHoliday: [], scheduleTemplate: [], schedulePublish: [], notificationLog: [], notificationPreference: [] };
+  const data = {
+    ownedDog: [], boardingDog: [], request: [], maintenance: [], timesheet: [], service: [], dailyTask: [], customerDog: [],
+    dog: [], userDogAccess: [], boardingReservation: [], reservationService: [], dogVaccination: [], dogInternalNote: [], dogActivityLog: [], reservationCustomerUpdate: [], dogClaimRequest: [], legacyDogLink: [],
+    settingsUser: [], cfoNote: [], calendarNote: [], kennelLocation: [], kennelBuilding: [], auditLog: [], staffSchedule: [], timeOffRequest: [], kennelHoliday: [], scheduleTemplate: [], schedulePublish: [], notificationLog: [], notificationPreference: [],
+  };
   if (!sheet || sheet.getLastRow() < 2) return data;
   const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
   const latest = {};

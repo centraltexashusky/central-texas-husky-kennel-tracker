@@ -203,6 +203,16 @@ const stateKeys = {
   service: "cth-service-records",
   dailyTask: "cth-dailyTask-records",
   customerDog: "cth-customerDog-records",
+  dog: "cth-dog-records",
+  userDogAccess: "cth-userDogAccess-records",
+  boardingReservation: "cth-boardingReservation-records",
+  reservationService: "cth-reservationService-records",
+  dogVaccination: "cth-dogVaccination-records",
+  dogInternalNote: "cth-dogInternalNote-records",
+  dogActivityLog: "cth-dogActivityLog-records",
+  reservationCustomerUpdate: "cth-reservationCustomerUpdate-records",
+  dogClaimRequest: "cth-dogClaimRequest-records",
+  legacyDogLink: "cth-legacyDogLink-records",
   settingsUser: "cth-settingsUser-records",
   cfoNote: "cth-cfoNote-records",
   calendarNote: "cth-calendarNote-records",
@@ -1140,7 +1150,11 @@ function initSupabaseClient() {
 }
 
 function recordTypes() {
-  return ["ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog", "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference"];
+  return [
+    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog",
+    "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink",
+    "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
+  ];
 }
 
 function settingsUsers() {
@@ -3436,6 +3450,23 @@ function renderAllRecordsFromRemoteLoad() {
   renderAllRecords();
 }
 
+async function fetchRemoteRecordRows() {
+  const pageSize = 1000;
+  const rows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabaseClient
+      .from("kennel_records")
+      .select("*")
+      .order("updated_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) return rows;
+    from += pageSize;
+  }
+}
+
 async function loadRemoteRecords(options = {}) {
   if (localTestMode || !supabaseClient) {
     modeLabel.textContent = localTestMode ? "Local test mode" : "Local only";
@@ -3445,8 +3476,7 @@ async function loadRemoteRecords(options = {}) {
   remoteLoadInProgress = true;
   syncNowButton.disabled = true;
   try {
-    const { data, error } = await supabaseClient.from("kennel_records").select("*").order("updated_at", { ascending: false }).limit(1500);
-    if (error) throw error;
+    const data = await fetchRemoteRecordRows();
     const nextSignature = remoteRecordsSignature(data || []);
     const remoteDataChanged = nextSignature !== lastRemoteRecordsSignature;
     lastRemoteRecordsSignature = nextSignature;
@@ -3466,6 +3496,7 @@ async function loadRemoteRecords(options = {}) {
       localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
     }
     await syncMissingCustomerAccessProfiles();
+    await syncLegacyDogModelRecords();
     if (options.render !== false) renderAllRecordsFromRemoteLoad();
     updateNavigationAccess();
     updateHeaderUser();
@@ -4919,6 +4950,490 @@ async function saveCanonicalCustomerDogForBoarding(record = {}, previousRecord =
   const saved = upsertRecord("customerDog", payload);
   await sendPayload(saved);
   return saved;
+}
+
+function stableLegacyPart(value = "") {
+  return String(value || "none")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "none";
+}
+
+function stableLegacyId(prefix = "legacy", ...parts) {
+  return [prefix, ...parts.map(stableLegacyPart)].join("-");
+}
+
+function latestRecord(records = []) {
+  return [...records].filter(Boolean).sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0))[0] || {};
+}
+
+function earliestTimestamp(records = []) {
+  return [...records]
+    .map((record) => record?.submittedAt || record?.createdAt || record?.updatedAt || "")
+    .filter(Boolean)
+    .sort()[0] || new Date().toISOString();
+}
+
+function legacyDogRecordDiffers(existing = {}, next = {}) {
+  const scrub = (record = {}) => {
+    const copy = { ...record };
+    delete copy.updatedAt;
+    return copy;
+  };
+  return JSON.stringify(scrub(existing)) !== JSON.stringify(scrub(next));
+}
+
+async function upsertDerivedRecord(type = "", payload = {}) {
+  if (!type || !payload?.id) return null;
+  const existing = readRecords(type).find((record) => record.id === payload.id);
+  const next = {
+    ...(existing || {}),
+    ...payload,
+    submittedAt: existing?.submittedAt || payload.submittedAt || new Date().toISOString(),
+    removed: false,
+  };
+  if (existing && !legacyDogRecordDiffers(existing, next)) return null;
+  const saved = upsertRecord(type, next);
+  await sendPayload(saved);
+  return saved;
+}
+
+function canonicalDogIdForLegacyCustomerDog(customerDog = {}) {
+  const existing = readRecords("legacyDogLink").find((link) => !link.removed && link.oldCustomerDogId === customerDog.id);
+  return existing?.dogId || stableLegacyId("dog", "customer", customerDog.id);
+}
+
+function canonicalDogIdForLegacyBoardingDog(boardingDog = {}) {
+  const existing = readRecords("legacyDogLink").find((link) => !link.removed && link.oldBoardingDogId === boardingDog.id);
+  return existing?.dogId || stableLegacyId("dog", "boarding", boardingDog.id);
+}
+
+function legacyOwnerEmailsForRecord(record = {}) {
+  return uniqueEmails(record.ownerEmail, record.customerEmail, record.linkedOwnerEmail, record.secondaryOwnerEmail, record.requestedByEmail);
+}
+
+function uniqueEmailNameCustomerMatch(record = {}, customerDogs = []) {
+  const dogName = String(record.dogName || "").trim().toLowerCase();
+  const ownerEmails = legacyOwnerEmailsForRecord(record);
+  if (!dogName || !ownerEmails.length) return null;
+  const matches = customerDogs.filter((dog) => {
+    if (dog.removed) return false;
+    const dogEmails = uniqueEmails(dog.ownerEmail, dog.customerEmail);
+    return dogEmails.some((email) => ownerEmails.includes(email))
+      && String(dog.dogName || "").trim().toLowerCase() === dogName;
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function legacyCustomerDogForBoardingDog(record = {}, customerDogs = []) {
+  if (!record?.id) return null;
+  if (record.linkedCustomerDogId) {
+    const linked = customerDogs.find((dog) => dog.id === record.linkedCustomerDogId && !dog.removed);
+    if (linked) return { dog: linked, matchType: "linkedCustomerDogId", needsReview: false };
+  }
+  const explicit = customerDogs.find((dog) => !dog.removed && customerDogHasBoardingLink(dog, record.id));
+  if (explicit) return { dog: explicit, matchType: "customerDogBoardingLink", needsReview: false };
+  const uniqueMatch = uniqueEmailNameCustomerMatch(record, customerDogs);
+  return uniqueMatch ? { dog: uniqueMatch, matchType: "uniqueEmailAndDogName", needsReview: true } : null;
+}
+
+function mergedLegacyVaccinationRecords(records = []) {
+  const byKey = new Map();
+  records.flatMap((record) => record.vaccinationRecords || []).forEach((item) => {
+    const key = item.id || item.url || item.dataUrl || item.name || JSON.stringify(item);
+    if (!key || byKey.has(key)) return;
+    byKey.set(key, item);
+  });
+  return [...byKey.values()];
+}
+
+function canonicalDogPayloadFromLegacy(dogId = "", sources = {}) {
+  const customerDogs = sources.customerDogs || [];
+  const boardingDogs = sources.boardingDogs || [];
+  const customerDog = latestRecord(customerDogs);
+  const boardingDog = chooseBoardingProfilePrimary(boardingDogs) || latestRecord(boardingDogs);
+  const ownerEmail = normalizeEmail(customerDog.ownerEmail || customerDog.customerEmail || boardingDog.ownerEmail || boardingDog.customerEmail || boardingDog.linkedOwnerEmail);
+  const ownerAccount = ownerEmail ? savedUserFor({ email: ownerEmail }) || {} : {};
+  const allSources = [...customerDogs, ...boardingDogs];
+  return {
+    type: "dog",
+    id: dogId,
+    submittedAt: earliestTimestamp(allSources),
+    dogName: customerDog.dogName || boardingDog.dogName || "Dog",
+    ownerUserId: ownerAccount.id || "",
+    ownerEmail,
+    ownerName: customerDog.ownerName || boardingDog.ownerName || ownerAccount.name || "",
+    ownerPhone: customerDog.ownerPhone || boardingDog.ownerPhone || "",
+    secondaryOwnerEmail: normalizeEmail(customerDog.secondaryOwnerEmail || boardingDog.secondaryOwnerEmail),
+    breed: customerDog.breed || customerDog.breedDescription || boardingDog.breed || boardingDog.breedDescription || "",
+    breedDescription: customerDog.breedDescription || boardingDog.breedDescription || "",
+    sex: customerDog.sex || boardingDog.sex || "Unknown",
+    birthday: customerDog.birthday || customerDog.dateOfBirth || boardingDog.birthday || boardingDog.dateOfBirth || "",
+    weight: customerDog.weight || boardingDog.weight || "",
+    notes: customerDog.notes || "",
+    feedingInstructions: customerDog.foodInstructions || boardingDog.foodInstructions || "",
+    medicationInstructions: customerDog.medicationInstructions || boardingDog.medicationInstructions || "",
+    emergencyName: customerDog.emergencyName || boardingDog.emergencyName || "",
+    emergencyPhone: customerDog.emergencyPhone || boardingDog.emergencyPhone || "",
+    vetInfo: customerDog.vetInfo || boardingDog.vetInfo || "",
+    temperamentNotes: boardingDog.temperamentNotes || boardingDog.handlingNotes || "",
+    medicalNotes: customerDog.medicalNotes || boardingDog.medicalNotes || customerDog.specialCare || boardingDog.specialCare || "",
+    specialInstructions: customerDog.specialInstructions || boardingDog.specialInstructions || customerDog.specialCare || boardingDog.specialCare || "",
+    vaccinationRecords: mergedLegacyVaccinationRecords(allSources),
+    vaccinationFiles: customerDog.vaccinationFiles || boardingDog.vaccinationFiles || "",
+    dhppDate: customerDog.dhppDate || boardingDog.dhppDate || "",
+    rabiesDate: customerDog.rabiesDate || boardingDog.rabiesDate || "",
+    rabiesDuration: customerDog.rabiesDuration || boardingDog.rabiesDuration || "",
+    bordetellaDate: customerDog.bordetellaDate || boardingDog.bordetellaDate || "",
+    heartwormDate: customerDog.heartwormDate || boardingDog.heartwormDate || "",
+    profilePhotoUrl: customerDog.profilePhotoUrl || boardingDogPhotoSource(boardingDog) || "",
+    profileStatus: customerDog.id || ownerAccount.id ? "claimed" : "unclaimed",
+    source: customerDog.id ? (boardingDog.id ? "legacy_customer_and_boarding" : "legacy_customerDog") : "legacy_boardingDog",
+    legacyCustomerDogIds: customerDogs.map((dog) => dog.id).filter(Boolean),
+    legacyBoardingDogIds: boardingDogs.map((dog) => dog.id).filter(Boolean),
+    migrationVersion: "legacy-dog-model-v1",
+    migrationNeedsReview: Boolean(sources.needsReview),
+    migrationMatchTypes: [...(sources.matchTypes || new Set())],
+    removed: false,
+  };
+}
+
+function reservationStatusFromLegacy(record = {}, stay = {}) {
+  const status = stay.status || normalizeBoardingStatus(record);
+  if (status === "Cancelled") return "cancelled";
+  if (status === "Checked Out") return "checked_out";
+  if (["Checked In", "In Kennel", "Ready For Pickup"].includes(status)) return "checked_in";
+  if (status === "Approved") return "approved";
+  if (status === "Declined") return "declined";
+  if (record.customerRequest || status === "Pending") return "pending_customer_request";
+  return "draft";
+}
+
+function legacyReservationSourcesForBoardingDog(record = {}) {
+  const stays = record.stays || [];
+  if (stays.length) return stays.map((stay, index) => ({ stay, index, synthetic: false }));
+  const needsSynthetic = record.customerRequest || (record.requestedServices || []).length || record.dropoffTime || record.pickupTime || record.estimatedTotal;
+  return needsSynthetic ? [{ stay: {}, index: 0, synthetic: true }] : [];
+}
+
+function legacyReservationId(record = {}, stay = {}, index = 0) {
+  return stableLegacyId("boardingReservation", record.id, stay.id || stay.dropoffTime || "root", stay.pickupTime || index);
+}
+
+function canonicalReservationPayload(record = {}, dogId = "", stay = {}, index = 0) {
+  const reservationId = legacyReservationId(record, stay, index);
+  const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail || record.linkedOwnerEmail || record.requestedByEmail);
+  const ownerAccount = ownerEmail ? savedUserFor({ email: ownerEmail }) || {} : {};
+  return {
+    type: "boardingReservation",
+    id: reservationId,
+    submittedAt: stay.createdAt || record.submittedAt || new Date().toISOString(),
+    dogId,
+    customerUserId: ownerAccount.id || "",
+    customerEmail: ownerEmail,
+    status: reservationStatusFromLegacy(record, stay),
+    dropoffTime: stay.dropoffTime || record.dropoffTime || "",
+    pickupTime: stay.pickupTime || record.pickupTime || "",
+    estimatedTotal: Number(stay.estimatedTotal || record.estimatedTotal || 0),
+    billingDays: Number(stay.billingDays || record.billingDays || 0),
+    stayType: stay.stayType || record.stayType || "Boarding",
+    createdBy: record.requestedByEmail || record.createdByEmail || record.ownerEmail || "",
+    createdByName: record.requestedByName || record.createdByName || record.ownerName || "",
+    notes: stay.stayNotes || record.stayNotes || "",
+    legacyBoardingDogId: record.id || "",
+    legacyStayId: stay.id || "",
+    migrationVersion: "legacy-dog-model-v1",
+    removed: false,
+  };
+}
+
+function structuredReservationServicePayloads(record = {}, reservation = {}, includeRootServices = false) {
+  const services = [];
+  (reservation.legacyStayRequests || []).forEach((requestText, index) => {
+    const original = String(requestText || "").trim();
+    if (!original) return;
+    services.push({
+      type: "reservationService",
+      id: stableLegacyId("reservationService", reservation.id, "stay-request", index, original),
+      submittedAt: reservation.submittedAt,
+      reservationId: reservation.id,
+      serviceName: original.replace(/\s+requested$/i, "") || original,
+      quantity: 1,
+      unitPrice: 0,
+      status: "requested",
+      notes: original,
+      legacyBoardingDogId: record.id || "",
+      legacyStayId: reservation.legacyStayId || "",
+      legacySource: "stay.requests",
+      removed: false,
+    });
+  });
+  if (includeRootServices) {
+    (record.requestedServices || []).forEach((service, index) => {
+      const serviceName = typeof service === "object" ? service.serviceName || service.name || service.id || "Service" : String(service || "Service");
+      services.push({
+        type: "reservationService",
+        id: stableLegacyId("reservationService", reservation.id, "requested-service", index, serviceName),
+        submittedAt: reservation.submittedAt,
+        reservationId: reservation.id,
+        serviceId: typeof service === "object" ? service.id || "" : "",
+        serviceName,
+        quantity: Number(typeof service === "object" ? service.quantity || 1 : 1),
+        unitPrice: Number(typeof service === "object" ? service.unitPrice || service.basePrice || 0 : 0),
+        status: "requested",
+        notes: typeof service === "object" ? service.notes || service.pricingNotes || "" : String(service || ""),
+        legacyBoardingDogId: record.id || "",
+        legacySource: "boardingDog.requestedServices",
+        removed: false,
+      });
+    });
+  }
+  return services;
+}
+
+function vaccinationPayloadsForDog(dog = {}) {
+  const dateFields = [
+    ["dhppDate", "DHPP"],
+    ["rabiesDate", "Rabies"],
+    ["bordetellaDate", "Bordetella"],
+    ["heartwormDate", "Heartworm"],
+  ];
+  const payloads = dateFields
+    .filter(([field]) => dog[field])
+    .map(([field, label]) => ({
+      type: "dogVaccination",
+      id: stableLegacyId("dogVaccination", dog.id, field, dog[field]),
+      submittedAt: dog.submittedAt,
+      dogId: dog.id,
+      vaccineType: label,
+      vaccinationDate: dog[field],
+      duration: field === "rabiesDate" ? dog.rabiesDuration || "" : "",
+      source: "legacy-dog-field",
+      removed: false,
+    }));
+  (dog.vaccinationRecords || []).forEach((file, index) => {
+    const key = file.id || file.url || file.dataUrl || file.name || index;
+    payloads.push({
+      type: "dogVaccination",
+      id: stableLegacyId("dogVaccination", dog.id, "file", key),
+      submittedAt: dog.submittedAt,
+      dogId: dog.id,
+      vaccineType: file.vaccineType || "Uploaded record",
+      vaccinationDate: file.vaccinationDate || "",
+      fileName: file.name || "",
+      fileUrl: file.url || file.dataUrl || "",
+      source: "legacy-vaccination-record",
+      removed: false,
+    });
+  });
+  return payloads;
+}
+
+function internalNotePayloadsForLegacyBoardingDog(record = {}, dogId = "") {
+  const noteFields = [
+    ["boardingHistory", "boarding_history"],
+    ["dailyActivity", "daily_activity"],
+    ["pickupReadyNote", "pickup_ready"],
+    ["checkoutNote", "checkout"],
+  ];
+  return noteFields
+    .filter(([field]) => record[field])
+    .map(([field, noteType]) => ({
+      type: "dogInternalNote",
+      id: stableLegacyId("dogInternalNote", dogId, record.id, field),
+      submittedAt: record.submittedAt || new Date().toISOString(),
+      dogId,
+      createdByStaffId: record.updatedByEmail || record.createdByEmail || "",
+      noteType,
+      note: record[field],
+      visibleToCustomer: false,
+      legacyBoardingDogId: record.id || "",
+      removed: false,
+    }));
+}
+
+function customerUpdatePayloadsForLegacyBoardingDog(record = {}, dogId = "", reservationIdsByStayId = new Map()) {
+  return (record.customerUpdates || []).map((update, index) => ({
+    type: "reservationCustomerUpdate",
+    id: stableLegacyId("reservationCustomerUpdate", record.id, update.id || update.createdAt || index),
+    submittedAt: update.createdAt || record.submittedAt || new Date().toISOString(),
+    dogId,
+    reservationId: reservationIdsByStayId.get(update.stayId || "") || reservationIdsByStayId.get("__first__") || "",
+    title: update.title || "Customer update",
+    note: update.note || "",
+    mediaItems: update.mediaItems || [],
+    visibleToCustomer: true,
+    createdByStaffId: update.byEmail || update.createdByEmail || "",
+    legacyBoardingDogId: record.id || "",
+    legacyUpdateId: update.id || "",
+    removed: false,
+  }));
+}
+
+function userDogAccessPayload(user = {}, dogId = "", role = "owner", source = "legacy") {
+  if (!user?.id || !dogId) return null;
+  return {
+    type: "userDogAccess",
+    id: stableLegacyId("userDogAccess", user.id, dogId, role),
+    submittedAt: user.submittedAt || new Date().toISOString(),
+    userId: user.id,
+    userEmail: normalizeEmail(user.email),
+    dogId,
+    role,
+    source,
+    removed: false,
+  };
+}
+
+function dogClaimRequestPayload(dog = {}) {
+  const contactKey = dog.ownerEmail || dog.ownerPhone;
+  if (!dog?.id || !contactKey || dog.profileStatus !== "unclaimed") return null;
+  return {
+    type: "dogClaimRequest",
+    id: stableLegacyId("dogClaimRequest", dog.id, contactKey),
+    submittedAt: dog.submittedAt || new Date().toISOString(),
+    dogId: dog.id,
+    customerEmail: normalizeEmail(dog.ownerEmail),
+    customerPhone: dog.ownerPhone || "",
+    status: "pending",
+    createdByStaffId: "",
+    legacyCustomerDogIds: dog.legacyCustomerDogIds || [],
+    legacyBoardingDogIds: dog.legacyBoardingDogIds || [],
+    removed: false,
+  };
+}
+
+function buildLegacyDogModelMigration() {
+  const customerDogs = readRecords("customerDog").filter((dog) => !dog.removed);
+  const boardingDogs = readRecords("boardingDog").filter((dog) => !dog.removed);
+  const settings = settingsUsers().filter((user) => !user.removed);
+  const sourcesByDog = new Map();
+  const customerDogToDogId = new Map();
+  const boardingDogToDogId = new Map();
+  const boardingDogMatch = new Map();
+  const ensureSource = (dogId) => {
+    if (!sourcesByDog.has(dogId)) sourcesByDog.set(dogId, { customerDogs: [], boardingDogs: [], matchTypes: new Set(), needsReview: false });
+    return sourcesByDog.get(dogId);
+  };
+
+  customerDogs.forEach((customerDog) => {
+    const dogId = canonicalDogIdForLegacyCustomerDog(customerDog);
+    customerDogToDogId.set(customerDog.id, dogId);
+    ensureSource(dogId).customerDogs.push(customerDog);
+  });
+
+  boardingDogs.forEach((boardingDog) => {
+    const match = legacyCustomerDogForBoardingDog(boardingDog, customerDogs);
+    const dogId = match?.dog?.id ? customerDogToDogId.get(match.dog.id) || canonicalDogIdForLegacyCustomerDog(match.dog) : canonicalDogIdForLegacyBoardingDog(boardingDog);
+    boardingDogToDogId.set(boardingDog.id, dogId);
+    if (match?.dog?.id) {
+      customerDogToDogId.set(match.dog.id, dogId);
+      boardingDogMatch.set(boardingDog.id, match);
+    }
+    const source = ensureSource(dogId);
+    if (match?.dog?.id && !source.customerDogs.some((dog) => dog.id === match.dog.id)) source.customerDogs.push(match.dog);
+    source.boardingDogs.push(boardingDog);
+    if (match?.matchType) source.matchTypes.add(match.matchType);
+    source.needsReview = source.needsReview || Boolean(match?.needsReview);
+  });
+
+  const records = [];
+  const reservationsByBoardingDog = new Map();
+  sourcesByDog.forEach((sources, dogId) => {
+    const dog = canonicalDogPayloadFromLegacy(dogId, sources);
+    records.push(["dog", dog]);
+    records.push(...vaccinationPayloadsForDog(dog).map((record) => ["dogVaccination", record]));
+    sources.customerDogs.forEach((customerDog) => {
+      records.push(["legacyDogLink", {
+        type: "legacyDogLink",
+        id: stableLegacyId("legacyDogLink", dogId, "customer", customerDog.id),
+        submittedAt: customerDog.submittedAt || dog.submittedAt,
+        dogId,
+        oldCustomerDogId: customerDog.id,
+        oldBoardingDogId: "",
+        matchType: "customerDogSource",
+        needsReview: false,
+        migrationVersion: "legacy-dog-model-v1",
+        removed: false,
+      }]);
+    });
+    sources.boardingDogs.forEach((boardingDog) => {
+      const match = boardingDogMatch.get(boardingDog.id);
+      records.push(["legacyDogLink", {
+        type: "legacyDogLink",
+        id: stableLegacyId("legacyDogLink", dogId, "boarding", boardingDog.id, match?.dog?.id || "none"),
+        submittedAt: boardingDog.submittedAt || dog.submittedAt,
+        dogId,
+        oldCustomerDogId: match?.dog?.id || boardingDog.linkedCustomerDogId || "",
+        oldBoardingDogId: boardingDog.id,
+        matchType: match?.matchType || "boardingDogSource",
+        needsReview: Boolean(match?.needsReview),
+        migrationVersion: "legacy-dog-model-v1",
+        removed: false,
+      }]);
+      records.push(...internalNotePayloadsForLegacyBoardingDog(boardingDog, dogId).map((record) => ["dogInternalNote", record]));
+    });
+  });
+
+  boardingDogs.forEach((boardingDog) => {
+    const dogId = boardingDogToDogId.get(boardingDog.id);
+    if (!dogId) return;
+    const reservationSources = legacyReservationSourcesForBoardingDog(boardingDog);
+    const reservationIdsByStayId = new Map();
+    reservationSources.forEach(({ stay, index }, sourceIndex) => {
+      const reservation = canonicalReservationPayload(boardingDog, dogId, stay, index);
+      reservation.legacyStayRequests = stay.requests || [];
+      records.push(["boardingReservation", reservation]);
+      if (stay.id) reservationIdsByStayId.set(stay.id, reservation.id);
+      if (sourceIndex === 0) reservationIdsByStayId.set("__first__", reservation.id);
+      records.push(...structuredReservationServicePayloads(boardingDog, reservation, sourceIndex === 0).map((record) => ["reservationService", record]));
+    });
+    reservationsByBoardingDog.set(boardingDog.id, reservationIdsByStayId);
+    records.push(...customerUpdatePayloadsForLegacyBoardingDog(boardingDog, dogId, reservationIdsByStayId).map((record) => ["reservationCustomerUpdate", record]));
+  });
+
+  settings.forEach((user) => {
+    (user.linkedCustomerDogIds || []).forEach((legacyId) => {
+      const dogId = customerDogToDogId.get(legacyId);
+      const access = userDogAccessPayload(user, dogId, "owner", "legacy_settingsUser_customerDog");
+      if (access) records.push(["userDogAccess", access]);
+    });
+    (user.linkedBoardingDogIds || []).forEach((legacyId) => {
+      const dogId = boardingDogToDogId.get(legacyId);
+      const access = userDogAccessPayload(user, dogId, "owner", "legacy_settingsUser_boardingDog");
+      if (access) records.push(["userDogAccess", access]);
+    });
+  });
+
+  [...sourcesByDog.entries()].forEach(([dogId, sources]) => {
+    const dog = canonicalDogPayloadFromLegacy(dogId, sources);
+    const ownerUser = dog.ownerEmail ? savedUserFor({ email: dog.ownerEmail }) || null : null;
+    const secondaryUser = dog.secondaryOwnerEmail ? savedUserFor({ email: dog.secondaryOwnerEmail }) || null : null;
+    const ownerAccess = userDogAccessPayload(ownerUser, dogId, "owner", "legacy_owner_email");
+    const secondaryAccess = userDogAccessPayload(secondaryUser, dogId, "co_owner", "legacy_secondary_owner_email");
+    if (ownerAccess) records.push(["userDogAccess", ownerAccess]);
+    if (secondaryAccess) records.push(["userDogAccess", secondaryAccess]);
+    if (!ownerAccess) {
+      const claimRequest = dogClaimRequestPayload(dog);
+      if (claimRequest) records.push(["dogClaimRequest", claimRequest]);
+    }
+  });
+
+  return { records, customerDogToDogId, boardingDogToDogId, reservationsByBoardingDog };
+}
+
+async function syncLegacyDogModelRecords() {
+  if (localTestMode || !supabaseClient || !["admin", "helper"].includes(currentRole())) return null;
+  const migration = buildLegacyDogModelMigration();
+  let savedCount = 0;
+  for (const [type, payload] of migration.records) {
+    const saved = await upsertDerivedRecord(type, payload);
+    if (saved) savedCount += 1;
+  }
+  if (savedCount) modeLabel.textContent = "Dog links preserved";
+  return { ...migration, savedCount };
 }
 
 function ownerAccountForBoarding(record = {}) {
