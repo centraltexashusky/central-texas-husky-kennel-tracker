@@ -4541,6 +4541,19 @@ function editableCustomerDogForCurrentUser(id = "") {
   return boarding ? customerDogForBoardingRequest(boarding) : null;
 }
 
+function openEditableCustomerDogById(id = "") {
+  const record = editableCustomerDogForCurrentUser(id);
+  if (!record) {
+    showToast("This dog profile could not be opened for editing.");
+    return;
+  }
+  if (record.isSharedBoardingDog) {
+    openCustomerDogEditorForRequest(record.sourceBoardingDogId || record.linkedBoardingDogId || record.id);
+    return;
+  }
+  openCustomerDog(record);
+}
+
 function customerUpdatesForCurrentUser() {
   const email = normalizeEmail(currentUser?.email);
   const updateKeys = new Set();
@@ -8073,6 +8086,13 @@ function renderCustomerDogs() {
       ? dogs.map((dog) => `<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="${dog.id}" ${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span></label>`).join("")
       : `<article class="record-card compact-record-card"><strong>Add a dog before requesting boarding.</strong><p>Boarding requests need at least one dog profile first.</p><button type="button" class="secondary-button" data-action="customer-add-dog-cta">Add Dog</button></article>`;
   }
+  $("#customerDogList").querySelectorAll('[data-action="edit-customer-dog"]').forEach((element) => {
+    element.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openEditableCustomerDogById(element.dataset.id);
+    };
+  });
   $("#customerBookingForm")?.classList.toggle("has-no-customer-dogs", !dogs.length);
   $("#requestBoardingButton").disabled = !dogs.length;
   $("#customerRequestActions")?.toggleAttribute("hidden", !dogs.length);
@@ -11554,16 +11574,7 @@ function initEvents() {
 	      return;
 	    }
 	    if (button.dataset.action === "edit-customer-dog") {
-	      const record = editableCustomerDogForCurrentUser(button.dataset.id);
-	      if (!record) {
-	        showToast("This dog profile could not be opened for editing.");
-	        return;
-	      }
-	      if (record.isSharedBoardingDog) {
-	        openCustomerDogEditorForRequest(record.sourceBoardingDogId || record.linkedBoardingDogId);
-	        return;
-	      }
-	      openCustomerDog(record);
+	      openEditableCustomerDogById(button.dataset.id);
 	      return;
 	    }
 	    if (button.dataset.action === "remove-customer-dog") {
