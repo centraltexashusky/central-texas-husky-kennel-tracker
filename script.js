@@ -274,7 +274,7 @@ const tableColumns = {
   boardingDog: [
     { key: "dogName", label: "Dog", value: (record) => record.dogName || "" },
     { key: "ownerName", label: "Owner", value: (record) => record.ownerName || "" },
-    { key: "boardingStatus", label: "Status", value: (record) => normalizeBoardingStatus(record) },
+    { key: "boardingStatus", label: "Status", value: (record) => boardingDisplayStatus(record) },
     { key: "ownerPhone", label: "Phone", value: (record) => record.ownerPhone || "" },
     { key: "emergencyPhone", label: "Emergency", value: (record) => [record.emergencyName, record.emergencyPhone].filter(Boolean).join(" ") },
     { key: "dropoffTime", label: "Drop-off", value: (record) => formatDateTime(currentOrNextStay(record)?.dropoffTime) || "" },
@@ -543,7 +543,7 @@ function statusClassForBoardingStatus(status = "") {
 }
 
 function boardingStatusChipHtml(record = {}) {
-  const status = normalizeBoardingStatus(record);
+  const status = boardingDisplayStatus(record);
   const kennelLabel = status === "In Kennel" ? boardingKennelLocationLabel(record) : "";
   const label = kennelLabel ? `${status} - ${kennelLabel}` : status;
   return statusChipHtml(label, `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
@@ -564,7 +564,7 @@ function customerRequestStatusLabel(status = "") {
 }
 
 function customerRequestStatusChipHtml(record = {}) {
-  const status = normalizeBoardingStatus(record);
+  const status = boardingDisplayStatus(record);
   return statusChipHtml(customerRequestStatusLabel(status), `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
 }
 
@@ -625,7 +625,7 @@ function canTransitionBoardingStatus(record = {}, nextStatus, options = {}) {
 }
 
 function boardingTransitionActions(record = {}) {
-  const currentStatus = normalizeBoardingStatus(record);
+  const currentStatus = boardingDisplayStatus(record);
   const nextStatuses = boardingStatusTransitions[currentStatus] || [];
   return nextStatuses.length
     ? `<div class="record-actions lifecycle-actions">${nextStatuses.map((nextStatus) => `<button type="button" class="secondary-button" data-action="transition-boarding" data-next-status="${escapeHtml(nextStatus)}" data-id="${escapeHtml(record.id)}">${escapeHtml(transitionLabel(nextStatus))}</button>`).join("")}</div>`
@@ -783,6 +783,20 @@ function boardingStayDisplayStatus(record = {}, stay = {}) {
   if (!stayStatus) return normalizeBoardingStatus(record);
   if (stayStatus === "Pending" && !record.customerRequest && (record.entrySource === "staff-admin" || !record.entrySource)) return "Approved";
   return boardingLifecycleStatuses.includes(stayStatus) ? stayStatus : normalizeBoardingStatus({ boardingStatus: stayStatus });
+}
+
+function boardingPrimaryStay(record = {}) {
+  const stays = record.stays || [];
+  return activeBoardingStay(record)
+    || currentOrNextStay(record)
+    || stays.find((stay) => !inactiveBoardingStayStatus(stay))
+    || stays[0]
+    || null;
+}
+
+function boardingDisplayStatus(record = {}, stayOverride = null) {
+  const stay = stayOverride || boardingPrimaryStay(record);
+  return stay ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
 }
 
 function formatDateTime(value) {
@@ -2189,8 +2203,9 @@ function setDogPhoto(kind, record) {
   caption.textContent = name || elements.fallback;
   if (kind === "boarding") {
     const owner = record.ownerName || record.ownerEmail || record.customerEmail || "Owner not assigned";
-    const status = record.id ? ` | ${normalizeBoardingStatus(record)}` : "";
-    const location = record.id && normalizeBoardingStatus(record) === "In Kennel" ? ` | ${boardingKennelLocationLabel(record)}` : "";
+    const displayStatus = boardingDisplayStatus(record);
+    const status = record.id ? ` | ${displayStatus}` : "";
+    const location = record.id && displayStatus === "In Kennel" ? ` | ${boardingKennelLocationLabel(record)}` : "";
     const ownerText = $("#boardingDogHeaderOwner");
     if (ownerText) ownerText.textContent = `${owner}${status}${location}`;
   }
@@ -4600,7 +4615,7 @@ function boardingRosterFilterLabel(filter) {
 }
 
 function boardingDogMatchesRosterFilter(record = {}, filter = boardingDogRosterFilter) {
-  const status = normalizeBoardingStatus(record);
+  const status = boardingDisplayStatus(record);
   const hasActiveStay = isCurrentlyBoarding(record);
   if (filter === "All Boarding Dogs") return true;
   if (filter === "Pending" || filter === "Pending Approval") return status === "Pending" && !hasActiveStay;
@@ -4631,25 +4646,30 @@ function sameDateValue(value, date = todayDate()) {
   return dateOnly(value) === date;
 }
 
-function boardingQueueStayForGroup(title = "", record = {}) {
+function boardingQueueStayMatchesGroup(title = "", record = {}, stay = {}) {
   const today = todayDate();
+  const status = boardingStayDisplayStatus(record, stay);
+  if (title === "Pending Approval") return status === "Pending";
+  if (title === "Today Drop-offs") return sameDateValue(stay.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
+  if (title === "In Kennel") return status === "In Kennel";
+  if (title === "Today Pickups") return sameDateValue(stay.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
+  return false;
+}
+
+function boardingQueueStayForGroup(title = "", record = {}) {
   const stays = record.stays || [];
-  if (title === "Today Drop-offs") {
-    return stays.find((stay) => sameDateValue(stay.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(boardingStayDisplayStatus(record, stay)))
-      || currentOrNextStay(record)
-      || activeBoardingStay(record)
-      || stays[0]
-      || {};
-  }
-  if (title === "In Kennel") return activeBoardingStay(record) || currentOrNextStay(record) || stays[0] || {};
-  if (title === "Today Pickups") {
-    return stays.find((stay) => sameDateValue(stay.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(boardingStayDisplayStatus(record, stay)))
-      || activeBoardingStay(record)
-      || currentOrNextStay(record)
-      || stays[0]
-      || {};
-  }
-  return currentOrNextStay(record) || activeBoardingStay(record) || stays[0] || {};
+  return stays.find((stay) => boardingQueueStayMatchesGroup(title, record, stay)) || null;
+}
+
+function boardingQueueRecordMatchesGroup(title = "", record = {}) {
+  if ((record.stays || []).length) return Boolean(boardingQueueStayForGroup(title, record));
+  const status = normalizeBoardingStatus(record);
+  const today = todayDate();
+  if (title === "Pending Approval") return status === "Pending";
+  if (title === "Today Drop-offs") return sameDateValue(record.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
+  if (title === "In Kennel") return status === "In Kennel";
+  if (title === "Today Pickups") return sameDateValue(record.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
+  return false;
 }
 
 function boardingQueueGroupHtml(title, records = []) {
@@ -4657,8 +4677,8 @@ function boardingQueueGroupHtml(title, records = []) {
   return `<article class="boarding-queue-card"><strong>${escapeHtml(title)}</strong><span>${records.length}</span>${
     preview.length
       ? preview.map((record) => {
-        const stay = boardingQueueStayForGroup(title, record);
-        return `<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="${escapeHtml(record.id)}" data-stay-id="${escapeHtml(stay.id || "")}"><span>${escapeHtml(record.dogName || "Dog")}</span><small>${escapeHtml(boardingScheduleText(record))}</small></button>`;
+        const stay = boardingQueueStayForGroup(title, record) || boardingPrimaryStay(record) || {};
+        return `<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="${escapeHtml(record.id)}" data-stay-id="${escapeHtml(stay.id || "")}"><span>${escapeHtml(record.dogName || "Dog")}</span><small>${escapeHtml(boardingScheduleText(record, stay))}</small></button>`;
       }).join("")
       : `<p>No dogs in this group.</p>`
   }</article>`;
@@ -4667,12 +4687,11 @@ function boardingQueueGroupHtml(title, records = []) {
 function renderBoardingQueueGroups(records = []) {
   const container = $("#boardingQueueGroups");
   if (!container) return;
-  const today = todayDate();
   const groups = [
-    ["Pending Approval", records.filter((record) => normalizeBoardingStatus(record) === "Pending")],
-    ["Today Drop-offs", records.filter((record) => sameDateValue(currentOrNextStay(record)?.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(normalizeBoardingStatus(record)))],
-    ["In Kennel", records.filter((record) => normalizeBoardingStatus(record) === "In Kennel")],
-    ["Today Pickups", records.filter((record) => sameDateValue((activeBoardingStay(record) || currentOrNextStay(record))?.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(normalizeBoardingStatus(record)))],
+    ["Pending Approval", records.filter((record) => boardingQueueRecordMatchesGroup("Pending Approval", record))],
+    ["Today Drop-offs", records.filter((record) => boardingQueueRecordMatchesGroup("Today Drop-offs", record))],
+    ["In Kennel", records.filter((record) => boardingQueueRecordMatchesGroup("In Kennel", record))],
+    ["Today Pickups", records.filter((record) => boardingQueueRecordMatchesGroup("Today Pickups", record))],
   ];
   container.innerHTML = groups.map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords)).join("");
 }
@@ -5680,29 +5699,29 @@ function renderBoardingOwnerAccountPanel(record = activeBoardingDog()) {
   content.innerHTML = `<article class="record-card compact-record-card"><strong>${escapeHtml(ownerEmail)}</strong><p>${linkedDog ? `Linked customer dog: ${escapeHtml(linkedDog.dogName || record.dogName || "Dog")}` : "No customer dog profile linked yet."}</p><p>${ownerAccount ? `Customer access profile exists: ${escapeHtml(roleLabel(ownerAccount.role))}` : "No customer access profile exists yet."}</p><div class="record-actions">${boardingOwnerLinkButtonHtml(record)}</div></article>`;
 }
 
-function boardingScheduleText(record = {}) {
-  const status = normalizeBoardingStatus(record);
-  const stay = currentOrNextStay(record) || (record.stays || [])[0] || {};
+function boardingScheduleText(record = {}, stayOverride = null) {
+  const stay = stayOverride || boardingPrimaryStay(record) || {};
+  const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
   const dropoff = stay.dropoffTime ? `Drop-off ${formatDateTime(stay.dropoffTime)}` : "";
   const pickup = stay.pickupTime ? `Pick-up ${formatDateTime(stay.pickupTime)}` : "";
-  const kennel = status === "In Kennel" && (record.kennelLocationName || stay.kennelLocationName)
-    ? `Kennel ${[record.kennelBuilding || stay.kennelBuilding, record.kennelLocationName || stay.kennelLocationName].filter(Boolean).join(" - ")}`
+  const kennel = status === "In Kennel" && (stay.kennelLocationName || record.kennelLocationName)
+    ? `Kennel ${[stay.kennelBuilding || record.kennelBuilding, stay.kennelLocationName || record.kennelLocationName].filter(Boolean).join(" - ")}`
     : "";
   const pieces = [dropoff, pickup, kennel].filter(Boolean);
   return pieces.length ? pieces.join(" | ") : `${status} - no stay time saved`;
 }
 
 function boardingQuickSortTime(record = {}) {
-  const status = normalizeBoardingStatus(record);
-  const stay = currentOrNextStay(record) || (record.stays || [])[0] || {};
+  const stay = boardingPrimaryStay(record) || {};
+  const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
   const value = ["Checked In", "In Kennel", "Ready For Pickup"].includes(status) ? stay.pickupTime : stay.dropoffTime;
   const date = new Date(value || record.updatedAt || record.submittedAt || 0);
   return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
 }
 
 function boardingQuickActionButtons(record = {}) {
-  const status = normalizeBoardingStatus(record);
-  const stay = activeBoardingStay(record) || currentOrNextStay(record) || (record.stays || [])[0] || {};
+  const stay = boardingPrimaryStay(record) || {};
+  const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
   const stayAttr = stay.id ? ` data-stay-id="${escapeHtml(stay.id)}"` : "";
   const buttons = [];
   if (status === "Pending") {
@@ -6183,7 +6202,7 @@ function renderBoardingQuickCards(records = []) {
   const container = $("#boardingDogQuickCards");
   if (!container) return;
   const actionable = records
-    .filter((record) => !["Cancelled", "Checked Out"].includes(normalizeBoardingStatus(record)))
+    .filter((record) => !["Cancelled", "Checked Out"].includes(boardingDisplayStatus(record)))
     .sort((a, b) => boardingQuickSortTime(a) - boardingQuickSortTime(b));
   container.innerHTML = actionable.length
     ? actionable.map(boardingQuickCardHtml).join("")
@@ -6286,7 +6305,7 @@ function boardingStatusPriority(record = {}) {
     "Checked Out": 20,
     Cancelled: 10,
   };
-  return priorities[normalizeBoardingStatus(record)] || 0;
+  return priorities[boardingDisplayStatus(record)] || 0;
 }
 
 function boardingRecordSortTime(record = {}) {
@@ -6329,6 +6348,59 @@ function mergePrimitiveList(records = [], property = "") {
   return [...new Set(records.flatMap((record) => arrayValue(record[property])).filter(Boolean))];
 }
 
+function boardingStayMergeKey(stay = {}) {
+  const dropoff = String(stay.dropoffTime || "").trim();
+  const pickup = String(stay.pickupTime || "").trim();
+  if (dropoff || pickup) return `time:${dropoff}|${pickup}`;
+  if (stay.id) return `id:${stay.id}`;
+  return JSON.stringify(stay);
+}
+
+function boardingStayMergeTime(record = {}, stay = {}) {
+  const values = [stay.updatedAt, record.updatedAt, stay.createdAt, record.submittedAt]
+    .map((value) => new Date(value || 0).getTime())
+    .filter((value) => !Number.isNaN(value));
+  if (values.length) return Math.max(...values);
+  const fallback = new Date(stay.dropoffTime || 0).getTime();
+  return Number.isNaN(fallback) ? 0 : fallback;
+}
+
+function mergeBoardingStays(records = [], primary = {}) {
+  const byKey = new Map();
+  records.forEach((record) => {
+    arrayValue(record.stays).forEach((stay) => {
+      const key = boardingStayMergeKey(stay);
+      if (!key) return;
+      byKey.set(key, [...(byKey.get(key) || []), { record, stay }]);
+    });
+  });
+  return [...byKey.values()].map((items) => {
+    const [best] = [...items].sort((a, b) => {
+      const timeDiff = boardingStayMergeTime(b.record, b.stay) - boardingStayMergeTime(a.record, a.stay);
+      if (timeDiff) return timeDiff;
+      const primaryDiff = Number(b.record.id === primary.id) - Number(a.record.id === primary.id);
+      if (primaryDiff) return primaryDiff;
+      return boardingStatusPriority({ ...b.record, stays: [b.stay] }) - boardingStatusPriority({ ...a.record, stays: [a.stay] });
+    });
+    const merged = { ...best.stay, status: boardingStayDisplayStatus(best.record, best.stay) };
+    items.forEach(({ stay }) => {
+      Object.entries(stay).forEach(([field, value]) => {
+        if (field === "status" || field === "requests") return;
+        if (merged[field]) return;
+        merged[field] = value;
+      });
+    });
+    merged.requests = mergePrimitiveList(items.map(({ stay }) => stay), "requests");
+    if (merged.status !== "In Kennel") {
+      merged.kennelLocationId = "";
+      merged.kennelLocationName = "";
+      merged.kennelBuilding = "";
+      merged.kennelAssignedAt = "";
+    }
+    return merged;
+  }).sort((a, b) => new Date(b.dropoffTime || b.updatedAt || 0) - new Date(a.dropoffTime || a.updatedAt || 0));
+}
+
 function mergeBoardingProfileGroup(records = []) {
   if (records.length <= 1) return records[0] || {};
   const primary = chooseBoardingProfilePrimary(records);
@@ -6336,8 +6408,7 @@ function mergeBoardingProfileGroup(records = []) {
     ...primary,
     sourceRecordIds: [...new Set(records.map((record) => record.id).filter(Boolean))],
     duplicateProfileIds: [...new Set(records.map((record) => record.id).filter((id) => id && id !== primary.id))],
-    stays: mergeObjectList(records, "stays", (stay) => stay.id || `${stay.dropoffTime || ""}|${stay.pickupTime || ""}|${stay.status || ""}`)
-      .sort((a, b) => new Date(b.dropoffTime || b.updatedAt || 0) - new Date(a.dropoffTime || a.updatedAt || 0)),
+    stays: mergeBoardingStays(records, primary),
     statusHistory: mergeObjectList(records, "statusHistory", (item) => item.id || `${item.date || ""}|${item.from || ""}|${item.to || ""}|${item.by || ""}`)
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)),
     documents: mergeObjectList(records, "documents", (item) => item.id || item.url || item.dataUrl || item.name || JSON.stringify(item)),
@@ -6462,7 +6533,7 @@ function dogRosterKey(record) {
 
 function combinedBoardingDogRecords() {
   const records = readRecords("boardingDog")
-    .filter((record) => !record.removed && !["Cancelled", "Checked Out"].includes(normalizeBoardingStatus(record)))
+    .filter((record) => !record.removed && !["Cancelled", "Checked Out"].includes(boardingDisplayStatus(record)))
     .map((record) => ({ ...record, sourceType: "boardingDog" }));
   const seen = new Set(records.map(dogRosterKey));
   readRecords("customerDog")
@@ -6519,14 +6590,14 @@ function renderBoardingRequests() {
   const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
     .filter((record) => record.customerRequest)
     .filter((record) => !record.removed)
-    .filter((record) => statusFilter === "All" || normalizeBoardingStatus(record) === statusFilter))
+    .filter((record) => statusFilter === "All" || boardingDisplayStatus(record) === statusFilter))
     .sort((a, b) => new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0));
   list.innerHTML = records.length
     ? records
         .map((record) => {
           const stay = record.stays?.[0] || {};
           const services = stay.requests?.length ? stay.requests.join(", ") : "No added services";
-          const status = normalizeBoardingStatus(record);
+          const status = boardingDisplayStatus(record);
           const approveAction = status === "Cancelled" ? `<button type="button" class="secondary-button" data-action="approve-boarding" data-id="${escapeHtml(record.id)}">Approve</button>` : "";
           const actions = `<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="${record.id}">Change</button>${approveAction}</div>${boardingTransitionActions(record)}`;
           return `<article class="record-card clickable-card" data-id="${record.id}" data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}">${boardingStatusChipHtml(record)}</button></div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${record.estimatedTotal ? `<p><strong>Estimated total:</strong> ${money(record.estimatedTotal)}</p>` : ""}${actions}</article>`;
@@ -7669,11 +7740,11 @@ function money(value) {
 
 function dashboardMetrics() {
   const ownedDogs = readRecords("ownedDog").filter((record) => !record.removed);
-  const boardingDogs = readRecords("boardingDog").filter((record) => !record.removed && !["Cancelled", "Checked Out"].includes(normalizeBoardingStatus(record)));
+  const boardingDogs = readRecords("boardingDog").filter((record) => !record.removed && !["Cancelled", "Checked Out"].includes(boardingDisplayStatus(record)));
   const requests = readRecords("request").filter((record) => !record.removed);
   const maintenance = readRecords("maintenance").filter((record) => !record.removed);
   const selectedDate = $("#dashboardDate")?.value || todayDate();
-  const currentBoarding = boardingDogs.filter((dog) => isCurrentlyBoarding(dog) || ["Checked In", "In Kennel", "Ready For Pickup"].includes(normalizeBoardingStatus(dog)));
+  const currentBoarding = boardingDogs.filter((dog) => isCurrentlyBoarding(dog) || ["Checked In", "In Kennel", "Ready For Pickup"].includes(boardingDisplayStatus(dog)));
   const arrivals = [];
   const departures = [];
   const arrivalRecords = [];
@@ -8212,8 +8283,8 @@ function dashboardBoardingDogReason(record = {}, category = "") {
 
 function dashboardBoardingDogCardHtml(record = {}, category = "Boarding") {
   const name = record.dogName || "Boarding dog";
-  const kennel = boardingKennelLocationLabel(record);
-  const status = normalizeBoardingStatus(record);
+  const status = boardingDisplayStatus(record);
+  const kennel = status === "In Kennel" ? boardingKennelLocationLabel(record) : "";
   const note = [
     record.ownerName ? `Owner: ${record.ownerName}` : "",
     status ? `Status: ${status}` : "",
@@ -9762,7 +9833,7 @@ function renderAllRecords() {
 function globalSearchEntries() {
   const entries = [];
   readRecords("ownedDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: ownedDogDisplayName(record), detail: ownedDogCareSummary(record), type: "ownedDog", id: record.id, pageId: "ourDogsPage" }));
-  readRecords("boardingDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.dogName || "Boarding dog", detail: [record.ownerName, normalizeBoardingStatus(record), boardingScheduleText(record)].filter(Boolean).join(" | "), type: "boardingDog", id: record.id, pageId: "boardingDogsPage" }));
+  readRecords("boardingDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.dogName || "Boarding dog", detail: [record.ownerName, boardingDisplayStatus(record), boardingScheduleText(record)].filter(Boolean).join(" | "), type: "boardingDog", id: record.id, pageId: "boardingDogsPage" }));
   readRecords("request").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.category || "Request", detail: record.requestText || record.reason || "", type: "request", id: record.id, pageId: "requestsPage" }));
   readRecords("maintenance").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.location || "Maintenance", detail: record.issue || record.suggestedAction || "", type: "maintenance", id: record.id, pageId: "maintenancePage" }));
   readRecords("service").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.serviceName || "Service", detail: [record.category, money(record.basePrice)].filter(Boolean).join(" | "), type: "service", id: record.id, pageId: "servicesPage" }));
@@ -10776,15 +10847,16 @@ function currentShiftForStaff(staffEmailValue = "", atDate = new Date()) {
 
 function exportBoardingQueue() {
   const rows = readRecords("boardingDog")
-    .filter((record) => !record.removed && !["Cancelled", "Checked Out"].includes(normalizeBoardingStatus(record)))
+    .filter((record) => !record.removed && !["Cancelled", "Checked Out"].includes(boardingDisplayStatus(record)))
     .map((record) => {
-      const stay = currentOrNextStay(record) || activeBoardingStay(record) || {};
+      const stay = boardingPrimaryStay(record) || {};
+      const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
       return {
         dog: record.dogName || "",
         owner: record.ownerName || "",
         phone: record.ownerPhone || "",
-        status: normalizeBoardingStatus(record),
-        kennel: [record.kennelBuilding, record.kennelLocationName].filter(Boolean).join(" - "),
+        status,
+        kennel: status === "In Kennel" ? [stay.kennelBuilding || record.kennelBuilding, stay.kennelLocationName || record.kennelLocationName].filter(Boolean).join(" - ") : "",
         dropoff: formatDateTime(stay.dropoffTime),
         pickup: formatDateTime(stay.pickupTime),
         requests: (stay.requests || []).join("; "),
