@@ -638,6 +638,35 @@ body.owned-dog-modal-open {
   overflow: auto;
 }
 
+.detail-dialog.is-customer-dog-editor {
+  max-height: min(860px, calc(100dvh - 32px));
+  max-width: min(1040px, calc(100vw - 32px));
+  width: min(1040px, calc(100vw - 32px));
+}
+
+.detail-dialog.is-customer-dog-editor .detail-dialog-body {
+  display: block;
+  min-width: 0;
+}
+
+#customerDogPopupMount {
+  min-width: 0;
+  width: 100%;
+}
+
+#customerDogPopupMount .customer-dog-modal:not([hidden]) {
+  box-shadow: none;
+  inset: auto;
+  left: auto;
+  max-height: min(720px, calc(100dvh - 132px));
+  max-width: none;
+  position: static;
+  top: auto;
+  transform: none;
+  width: 100%;
+  z-index: auto;
+}
+
 .customer-dog-item,
 .estimate-box {
   background: #f6f8f7;
@@ -3542,6 +3571,30 @@ button.mobile-dog-photo-button {
     max-width: none;
     transform: none;
     width: auto;
+  }
+
+  .detail-dialog.is-customer-dog-editor {
+    max-height: calc(100dvh - 20px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-width: calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    padding: 12px;
+    width: calc(100vw - 20px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  }
+
+  .detail-dialog.is-customer-dog-editor .dialog-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .detail-dialog.is-customer-dog-editor .dialog-actions {
+    justify-content: stretch;
+  }
+
+  .detail-dialog.is-customer-dog-editor .dialog-actions button {
+    width: 100%;
+  }
+
+  #customerDogPopupMount .customer-dog-modal:not([hidden]) {
+    max-height: calc(100dvh - 166px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 
   .dog-photo-picker,

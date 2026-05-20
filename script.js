@@ -3707,6 +3707,9 @@ function detailRows(record, keys) {
 
 function showDetailDialog(title, html, context = null, options = {}) {
   detailDialogContext = context;
+  const dialog = $("#detailDialog");
+  dialog?.classList.remove("is-customer-dog-editor");
+  if (options.dialogClass) dialog?.classList.add(options.dialogClass);
   $("#detailDialogTitle").textContent = title;
   $("#detailDialogBody").innerHTML = html;
   const completeButton = $("#completeDetailTaskButton");
@@ -3724,8 +3727,7 @@ function showDetailDialog(title, html, context = null, options = {}) {
   } else {
     completeButton.hidden = true;
   }
-  const dialog = $("#detailDialog");
-  if (!dialog.open) dialog.showModal();
+  if (dialog && !dialog.open) dialog.showModal();
 }
 
 function showMediaDialog(src, type, name, context = null) {
@@ -3868,33 +3870,60 @@ function customerBoardingDogDetailHtml(record = {}) {
   `;
 }
 
+function boardingDogIdFromCustomerDogValue(value = "") {
+  const id = String(value || "");
+  return id.startsWith("boarding:") ? id.slice("boarding:".length) : id;
+}
+
+function customerDogHasBoardingLink(dog = {}, boardingId = "") {
+  const id = boardingDogIdFromCustomerDogValue(boardingId);
+  if (!id) return false;
+  return [dog.sourceBoardingDogId, dog.linkedBoardingDogId]
+    .map(boardingDogIdFromCustomerDogValue)
+    .includes(id);
+}
+
+function explicitLinkedCustomerDogForBoarding(record = {}) {
+  const boardingIds = new Set([
+    record.id,
+    ...(record.sourceRecordIds || []),
+    ...(record.duplicateProfileIds || []),
+  ].map(boardingDogIdFromCustomerDogValue).filter(Boolean));
+  return readRecords("customerDog").find((dog) => {
+    if (dog.removed) return false;
+    if (record.linkedCustomerDogId && dog.id === record.linkedCustomerDogId) return true;
+    return [...boardingIds].some((boardingId) => customerDogHasBoardingLink(dog, boardingId));
+  }) || null;
+}
+
 function customerDogForBoardingRequest(record = {}) {
   if (!record?.id) return null;
   const currentEmail = normalizeEmail(currentUser?.email);
-  return linkedCustomerDogForBoarding(record)
-    || customerDogsForCurrentUser().find((dog) => {
-      if (dog.sourceBoardingDogId === record.id || dog.linkedBoardingDogId === record.id) return true;
-      const dogEmail = normalizeEmail(dog.ownerEmail || dog.customerEmail);
-      return dogEmail === currentEmail
-        && String(dog.dogName || "").trim().toLowerCase() === String(record.dogName || "").trim().toLowerCase();
-    })
-    || customerDogFromBoardingDog(record, currentEmail);
+  const linkedDog = explicitLinkedCustomerDogForBoarding(record);
+  if (linkedDog && (currentRole() === "admin" || customerDogVisibleToCustomer(linkedDog, currentEmail))) return linkedDog;
+  return customerDogsForCurrentUser().find((dog) => customerDogHasBoardingLink(dog, record.id))
+    || customerDogFromBoardingDog(record, currentEmail, { explicitOnly: true });
 }
 
 function openCustomerDogEditorForRequest(requestId = "") {
-  const record = readRecords("boardingDog").find((item) => item.id === requestId && !item.removed);
-  if (!record) {
+  const boardingId = boardingDogIdFromCustomerDogValue(requestId);
+  const record = readRecords("boardingDog").find((item) => item.id === boardingId && !item.removed);
+  if (!record || (currentRole() !== "admin" && !boardingDogVisibleToCustomer(record))) {
     showToast("This request is no longer available.");
     return;
   }
-  const dog = customerDogForBoardingRequest(record);
+  const linkedDog = explicitLinkedCustomerDogForBoarding(record);
+  const canEditLinkedDog = linkedDog && (currentRole() === "admin" || customerDogVisibleToCustomer(linkedDog));
+  const dog = canEditLinkedDog
+    ? linkedDog
+    : customerDogFromBoardingDog(record, currentUser?.email, { explicitOnly: true });
   if (!dog) {
     showToast("The dog for this request could not be opened.");
     return;
   }
-  const formDog = dog.isSharedBoardingDog && String(dog.id || "").startsWith("boarding:")
-    ? { ...dog, id: "", sourceBoardingDogId: record.id, linkedBoardingDogId: record.id, linkedCustomerDogId: linkedCustomerDogForBoarding(record)?.id || "" }
-    : dog;
+  const formDog = canEditLinkedDog
+    ? { ...dog, sourceBoardingDogId: dog.sourceBoardingDogId || record.id, linkedBoardingDogId: dog.linkedBoardingDogId || record.id }
+    : { ...dog, id: "", sourceBoardingDogId: record.id, linkedBoardingDogId: record.id };
   $("#detailDialog")?.close();
   switchPage("customerPage");
   openCustomerDog(formDog);
@@ -4576,8 +4605,8 @@ function customerDogVisibleToCustomer(dog = {}, email = currentUser?.email) {
   return Boolean(normalizedEmail && uniqueEmails(dog.ownerEmail, dog.customerEmail).includes(normalizedEmail));
 }
 
-function customerDogFromBoardingDog(record = {}, email = currentUser?.email) {
-  const linked = linkedCustomerDogForBoarding(record) || {};
+function customerDogFromBoardingDog(record = {}, email = currentUser?.email, options = {}) {
+  const linked = (options.explicitOnly ? explicitLinkedCustomerDogForBoarding(record) : linkedCustomerDogForBoarding(record)) || {};
   const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail);
   const currentEmail = normalizeEmail(email);
   return {
@@ -4625,15 +4654,14 @@ function customerDogsForCurrentUser() {
       return boardingPhoto && !dog.profilePhotoUrl && !dog.profilePhotoData ? { ...dog, profilePhotoUrl: boardingPhoto } : dog;
     });
   if (role === "admin") return dogs;
-  const seenIds = new Set(dogs.map((dog) => dog.linkedBoardingDogId).filter(Boolean));
-  const seenKeys = new Set(dogs.map((dog) => `${normalizeEmail(dog.ownerEmail || dog.customerEmail)}|${String(dog.dogName || "").trim().toLowerCase()}`));
+  const seenIds = new Set(dogs.flatMap((dog) => [dog.linkedBoardingDogId, dog.sourceBoardingDogId].map(boardingDogIdFromCustomerDogValue)).filter(Boolean));
   readRecords("boardingDog")
     .filter((record) => !record.removed && boardingDogVisibleToCustomer(record, email))
     .forEach((record) => {
-      const key = `${normalizeEmail(record.ownerEmail || record.customerEmail)}|${String(record.dogName || "").trim().toLowerCase()}`;
-      if (seenIds.has(record.id) || seenKeys.has(key)) return;
+      const recordId = boardingDogIdFromCustomerDogValue(record.id);
+      if (seenIds.has(recordId)) return;
       dogs.push(customerDogFromBoardingDog(record, email));
-      seenIds.add(record.id);
+      seenIds.add(recordId);
     });
   return dogs;
 }
@@ -4645,25 +4673,26 @@ function customerDogPhotoHtml(dog = {}) {
   return `<span class="customer-dog-photo customer-dog-photo-initials">${escapeHtml(avatarText(name))}</span>`;
 }
 
-function editableCustomerDogForCurrentUser(id = "") {
+function editableCustomerDogForCurrentUser(id = "", boardingId = "") {
   const dogId = String(id || "");
-  const visibleDog = customerDogsForCurrentUser().find((dog) => dog.id === dogId);
+  const normalizedBoardingId = boardingDogIdFromCustomerDogValue(boardingId || dogId);
+  const visibleDog = customerDogsForCurrentUser().find((dog) => dog.id === dogId || customerDogHasBoardingLink(dog, normalizedBoardingId));
   if (visibleDog) return visibleDog;
   const savedDog = readRecords("customerDog").find((dog) => dog.id === dogId && !dog.removed && (currentRole() === "admin" || customerDogVisibleToCustomer(dog)));
   if (savedDog) return savedDog;
-  const boardingId = dogId.startsWith("boarding:") ? dogId.slice("boarding:".length) : dogId;
-  const boarding = readRecords("boardingDog").find((record) => record.id === boardingId && !record.removed && (currentRole() === "admin" || boardingDogVisibleToCustomer(record)));
+  const boarding = readRecords("boardingDog").find((record) => record.id === normalizedBoardingId && !record.removed && (currentRole() === "admin" || boardingDogVisibleToCustomer(record)));
   return boarding ? customerDogForBoardingRequest(boarding) : null;
 }
 
-function openEditableCustomerDogById(id = "") {
-  const record = editableCustomerDogForCurrentUser(id);
+function openEditableCustomerDogById(id = "", boardingId = "") {
+  const normalizedBoardingId = boardingDogIdFromCustomerDogValue(boardingId);
+  const record = editableCustomerDogForCurrentUser(id, normalizedBoardingId);
   if (!record) {
     showToast("This dog profile could not be opened for editing.");
     return;
   }
-  if (record.isSharedBoardingDog) {
-    openCustomerDogEditorForRequest(record.sourceBoardingDogId || record.linkedBoardingDogId || record.id);
+  if (record.isSharedBoardingDog || normalizedBoardingId) {
+    openCustomerDogEditorForRequest(normalizedBoardingId || record.sourceBoardingDogId || record.linkedBoardingDogId || record.id);
     return;
   }
   openCustomerDog(record);
@@ -8340,12 +8369,14 @@ function renderCustomerDogs() {
   const checkedIds = new Set([...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')].map((input) => input.value));
   $("#customerDogList").innerHTML = dogs.length
     ? dogs.map((dog) => {
-      const editButton = `<button type="button" class="secondary-button" data-action="edit-customer-dog" data-id="${escapeHtml(dog.id || "")}">Edit</button>`;
+      const sharedBoardingId = dog.isSharedBoardingDog ? boardingDogIdFromCustomerDogValue(dog.sourceBoardingDogId || dog.linkedBoardingDogId || dog.id) : "";
+      const boardingAttr = sharedBoardingId ? ` data-boarding-id="${escapeHtml(sharedBoardingId)}"` : "";
+      const editButton = `<button type="button" class="secondary-button" data-action="edit-customer-dog" data-id="${escapeHtml(dog.id || "")}"${boardingAttr}>Edit</button>`;
       const secondaryButton = dog.isSharedBoardingDog
-        ? `<button type="button" class="secondary-button" data-action="view-customer-request" data-id="${escapeHtml(dog.sourceBoardingDogId || dog.linkedBoardingDogId || "")}">View Boarding Profile</button>`
+        ? `<button type="button" class="secondary-button" data-action="view-customer-request" data-id="${escapeHtml(sharedBoardingId)}">View Boarding Profile</button>`
         : `<button type="button" class="secondary-button danger-button" data-action="remove-customer-dog" data-id="${escapeHtml(dog.id || "")}">Remove</button>`;
       const sharedActions = `${editButton}${secondaryButton}`;
-      return `<article class="customer-dog-item clickable-card" data-action="edit-customer-dog" data-id="${escapeHtml(dog.id || "")}">${customerDogPhotoHtml(dog)}<div><strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span>${dog.isSharedBoardingDog ? "<small>Shared boarding profile</small>" : ""}</div><div class="record-actions">${sharedActions}</div></article>`;
+      return `<article class="customer-dog-item clickable-card" data-action="edit-customer-dog" data-id="${escapeHtml(dog.id || "")}"${boardingAttr}>${customerDogPhotoHtml(dog)}<div><strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span>${dog.isSharedBoardingDog ? "<small>Shared boarding profile</small>" : ""}</div><div class="record-actions">${sharedActions}</div></article>`;
     }).join("") + `<div class="button-row"><button type="button" class="secondary-button" data-action="add-another-customer-dog">Add Another Dog</button></div>`
     : `<article class="record-card compact-record-card"><strong>No dogs added yet.</strong><p>Start by adding your dog first.</p><button type="button" class="secondary-button" data-action="add-another-customer-dog">Add Dog</button></article>`;
   if ($("#customerBookingDogList")) {
@@ -8357,7 +8388,7 @@ function renderCustomerDogs() {
     element.onclick = (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openEditableCustomerDogById(element.dataset.id);
+      openEditableCustomerDogById(element.dataset.id, element.dataset.boardingId || "");
     };
   });
   $("#customerBookingForm")?.classList.toggle("has-no-customer-dogs", !dogs.length);
@@ -8508,6 +8539,7 @@ function restoreCustomerDogFormHome() {
   const home = $("#customerDogFormHome");
   if (formEl) formEl.hidden = true;
   if (formEl && home && formEl.parentElement !== home) home.appendChild(formEl);
+  $("#detailDialog")?.classList.remove("is-customer-dog-editor");
 }
 
 function closeCustomerDogModal() {
@@ -8527,7 +8559,7 @@ function openCustomerDog(record = {}) {
   $("#saveCustomerDogButton").textContent = record.id ? "Save Dog Changes" : "Save Dog";
   $("#customerDogFormTitle").textContent = record.id ? `Edit ${record.dogName || "Dog"}` : "Add Dog";
   setDogPhoto("customer", record);
-  showDetailDialog(record.id ? `Edit ${record.dogName || "Dog"}` : "Add Dog", `<div id="customerDogPopupMount"></div>`);
+  showDetailDialog(record.id ? `Edit ${record.dogName || "Dog"}` : "Add Dog", `<div id="customerDogPopupMount"></div>`, null, { dialogClass: "is-customer-dog-editor" });
   $("#customerDogPopupMount")?.appendChild(formEl);
   formEl.hidden = false;
   formEl.scrollTop = 0;
@@ -11758,6 +11790,8 @@ function initEvents() {
       const data = formPayload(formEl);
       const existing = data.id ? readRecords("customerDog").find((record) => record.id === data.id) || {} : {};
       const dogId = existing.id || data.id || uid("customerDog");
+      const sourceBoardingDogId = boardingDogIdFromCustomerDogValue(data.sourceBoardingDogId || existing.sourceBoardingDogId || "");
+      const linkedBoardingDogId = boardingDogIdFromCustomerDogValue(data.linkedBoardingDogId || existing.linkedBoardingDogId || sourceBoardingDogId);
       if (uploadStatus) uploadStatus.textContent = "Saving dog profile and uploading files...";
       setSubmitState($("#saveCustomerDogButton"), true, "Saving...");
       const photo = await durableDogPhoto("customer", existing, data, $("#customerDogPhotoInput"), dogId);
@@ -11771,6 +11805,8 @@ function initEvents() {
         ...data,
         ownerName: currentUser?.name || data.ownerName || "",
         ownerEmail: currentUser?.email || data.ownerEmail || "",
+        sourceBoardingDogId,
+        linkedBoardingDogId,
         profilePhotoUrl: photo.profilePhotoUrl,
         profilePhotoData: photo.profilePhotoData,
         vaccinationRecords: [...(existing.vaccinationRecords || []), ...vaccinationUploads],
@@ -11779,9 +11815,10 @@ function initEvents() {
       };
       const record = upsertRecord("customerDog", payload);
       await sendPayload(record);
-      if ((record.sourceBoardingDogId || record.linkedBoardingDogId) && customerDogVisibleToCustomer(record)) {
-        const boarding = readRecords("boardingDog").find((item) => item.id === (record.sourceBoardingDogId || record.linkedBoardingDogId) && !item.removed);
-        if (boarding && boardingDogVisibleToCustomer(boarding)) {
+      const boardingRecordId = boardingDogIdFromCustomerDogValue(record.sourceBoardingDogId || record.linkedBoardingDogId);
+      if (boardingRecordId && (currentRole() === "admin" || customerDogVisibleToCustomer(record))) {
+        const boarding = readRecords("boardingDog").find((item) => item.id === boardingRecordId && !item.removed);
+        if (boarding && (currentRole() === "admin" || boardingDogVisibleToCustomer(boarding))) {
           const linkedBoarding = upsertRecord("boardingDog", boardingDogWithCustomerProfilePatch(boarding, record));
           await sendPayload(linkedBoarding);
         }
@@ -11855,20 +11892,20 @@ function initEvents() {
       openCustomerDogModal();
       return;
     }
-	    if (button.dataset.action === "view-customer-request") {
-	      const boarding = readRecords("boardingDog").find((item) => item.id === button.dataset.id && !item.removed);
-	      if (boarding) openCustomerRequestDetail(boarding);
-	      return;
-	    }
-	    if (button.dataset.action === "edit-customer-dog") {
-	      openEditableCustomerDogById(button.dataset.id);
-	      return;
-	    }
-	    if (button.dataset.action === "remove-customer-dog") {
-	      const record = readRecords("customerDog").find((item) => item.id === button.dataset.id && !item.removed && customerDogVisibleToCustomer(item));
-	      if (!record) return;
-	      openCustomerDogRemoveConfirm(record);
-	    }
+    if (button.dataset.action === "view-customer-request") {
+      const boarding = readRecords("boardingDog").find((item) => item.id === boardingDogIdFromCustomerDogValue(button.dataset.id) && !item.removed);
+      if (boarding) openCustomerRequestDetail(boarding);
+      return;
+    }
+    if (button.dataset.action === "edit-customer-dog") {
+      openEditableCustomerDogById(button.dataset.id, button.dataset.boardingId || "");
+      return;
+    }
+    if (button.dataset.action === "remove-customer-dog") {
+      const record = readRecords("customerDog").find((item) => item.id === button.dataset.id && !item.removed && customerDogVisibleToCustomer(item));
+      if (!record) return;
+      openCustomerDogRemoveConfirm(record);
+    }
   });
   $("#customerRequestStatusFilter").addEventListener("change", renderCustomerRequests);
   $("#customerRequestList").addEventListener("click", (event) => {
