@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260519-customer-request-clarity-1" />
+    <link rel="stylesheet" href="styles.css?v=20260520-mobile-status-customer-flow-1" />
   </head>
   <body class="is-auth-booting">
     <div class="app-layout">
@@ -261,6 +261,7 @@
           <div class="customer-progress-panel" id="customerOnboardingProgress"></div>
           <div class="table-toolbar"><button type="button" id="openCustomerDogModalButton">Add Dog</button></div>
           <div class="customer-dog-list" id="customerDogList"></div>
+          <div id="customerDogFormHome">
           <form id="customerDogForm" class="tracker-form detail-panel customer-dog-modal" hidden>
             <input type="hidden" name="id" id="customerDogId" />
             <input type="hidden" name="ownerName" id="customerOwnerName" />
@@ -304,6 +305,7 @@
             <div class="upload-status" id="customerUploadStatus" role="status"></div>
             <div class="button-row"><button type="submit" id="saveCustomerDogButton">Save Dog</button><button type="button" class="secondary-button" id="newCustomerDogButton">Cancel</button></div>
           </form>
+          </div>
         </section>
       </section>
 
@@ -322,10 +324,12 @@
           <form id="customerBookingForm" class="tracker-form detail-panel customer-request-modal" hidden>
             <div class="section-heading"><span>R</span><div><h2 id="customerBookingFormTitle">Request Boarding</h2><p id="customerBookingFormHelp">Choose dog(s), requested time, and optional services.</p></div><button type="button" class="secondary-button" id="closeCustomerBookingModalButton">Close</button></div>
             <input type="hidden" name="editingRequestId" id="editingCustomerRequestId" />
+            <input type="hidden" name="editingStayId" id="editingCustomerStayId" />
             <input type="hidden" name="requestMode" id="customerRequestMode" value="boarding" />
             <section class="customer-form-step customer-dog-selection-step">
               <strong>Select one or more dogs for boarding.</strong>
               <div class="customer-dog-list" id="customerBookingDogList"></div>
+              <p id="customerDogSelectionError" class="form-error" hidden>Select at least one dog for this request.</p>
             </section>
             <section class="customer-form-step customer-booking-time-box">
               <strong>Boarding time</strong>
@@ -1237,6 +1241,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260520-stay-status-profile-merge-1"></script>
+  <script src="script.js?v=20260520-mobile-status-customer-flow-1"></script>
   </body>
 </html>

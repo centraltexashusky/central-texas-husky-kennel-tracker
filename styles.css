@@ -615,6 +615,29 @@ body.owned-dog-modal-open {
   margin-top: 14px;
 }
 
+.form-error {
+  background: rgba(191, 78, 69, 0.16);
+  border: 1px solid rgba(255, 118, 112, 0.55);
+  border-radius: 10px;
+  color: #ffd7d4;
+  font-weight: 800;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+}
+
+.customer-form-step.is-invalid {
+  border-color: rgba(255, 118, 112, 0.72);
+  box-shadow: 0 0 0 2px rgba(255, 118, 112, 0.18);
+}
+
+#customerDogPopupMount .customer-dog-modal {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  max-height: min(78vh, 760px);
+  overflow: auto;
+}
+
 .customer-dog-item,
 .estimate-box {
   background: #f6f8f7;
