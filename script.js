@@ -1944,6 +1944,10 @@ function setFormValues(targetForm, record) {
   Object.entries(record).forEach(([key, value]) => {
     const field = targetForm.elements[key];
     if (!field) return;
+    if (field.type === "file") {
+      field.value = "";
+      return;
+    }
     if (field.type === "checkbox") {
       field.checked = value === "Yes" || value === true;
       return;
@@ -3636,6 +3640,48 @@ function setupRequiredFields() {
     field.addEventListener("input", () => clearFieldError(field));
     field.addEventListener("change", () => clearFieldError(field));
   });
+}
+
+function setLabelText(label, text = "") {
+  if (!label || !text) return;
+  const title = label.querySelector(".field-label-text span");
+  if (title) {
+    title.textContent = text;
+    return;
+  }
+  const firstText = [...label.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+  if (firstText) firstText.textContent = text;
+}
+
+function setFieldRequired(field, required) {
+  if (!field) return;
+  field.required = Boolean(required);
+  const label = fieldLabel(field);
+  const title = label?.querySelector(".field-label-text");
+  const mark = title?.querySelector(".required-mark");
+  if (required && title && !mark) title.insertAdjacentHTML("beforeend", '<span class="required-mark" aria-label="required">*</span>');
+  if (!required && mark) mark.remove();
+}
+
+function setFieldHelpText(field, text = "") {
+  const help = fieldLabel(field)?.querySelector(".field-help");
+  if (help) help.textContent = text;
+}
+
+function setCustomerBookingTimeCopy(mode = "boarding") {
+  const formEl = $("#customerBookingForm");
+  if (!formEl) return;
+  const isServiceRequest = mode === "service";
+  const dropoffField = formEl.elements.dropoffTime;
+  const pickupField = formEl.elements.pickupTime;
+  setLabelText(dropoffField?.closest("label"), isServiceRequest ? "Ideal drop off time" : "Drop-off time");
+  setLabelText(pickupField?.closest("label"), isServiceRequest ? "Alternative drop off time" : "Pick-up time");
+  setFieldRequired(dropoffField, true);
+  setFieldRequired(pickupField, !isServiceRequest);
+  setFieldHelpText(dropoffField, isServiceRequest ? "Ideal requested drop-off date and time." : "Requested drop-off date and time.");
+  setFieldHelpText(pickupField, isServiceRequest ? "Optional alternate drop-off date and time." : "Requested pick-up date and time.");
+  const heading = formEl.querySelector(".customer-booking-time-box strong");
+  if (heading) heading.textContent = isServiceRequest ? "Requested drop off time" : "Boarding time";
 }
 
 function fieldLabel(field) {
@@ -8899,13 +8945,6 @@ function renderCustomerDogs() {
       ? dogs.map((dog) => `<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="${dog.id}" ${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span></label>`).join("")
       : `<article class="record-card compact-record-card"><strong>Add a dog before requesting boarding.</strong><p>Boarding requests need at least one dog profile first.</p><button type="button" class="secondary-button" data-action="customer-add-dog-cta">Add Dog</button></article>`;
   }
-  $("#customerDogList").querySelectorAll('[data-action="edit-customer-dog"]').forEach((element) => {
-    element.onclick = (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openEditableCustomerDogById(element.dataset.id, element.dataset.boardingId || "");
-    };
-  });
   $("#customerBookingForm")?.classList.toggle("has-no-customer-dogs", !dogs.length);
   $("#requestBoardingButton").disabled = !dogs.length;
   $("#customerRequestActions")?.toggleAttribute("hidden", !dogs.length);
@@ -8917,22 +8956,10 @@ function renderCustomerDogs() {
 
 function renderCustomerProgress() {
   const panels = ["#customerOnboardingProgress", "#customerRequestProgress"].map((selector) => $(selector)).filter(Boolean);
-  if (!panels.length || currentRole() !== "customer") {
-    panels.forEach((panel) => (panel.innerHTML = ""));
-    return;
-  }
-  const dogs = customerDogsForCurrentUser();
-  const requests = readRecords("boardingDog").filter((record) => record.customerRequest && !record.removed && boardingDogVisibleToCustomer(record));
-  const hasDog = dogs.length > 0;
-  const hasVaccine = dogs.some((dog) => (dog.vaccinationRecords || []).length || dog.vaccinationFiles || dog.rabiesDate || dog.dhppDate);
-  const hasRequest = requests.length > 0;
-  const steps = [
-    ["Add dog", hasDog],
-    ["Add vaccines/care", hasVaccine],
-    ["Request boarding", hasRequest],
-  ];
-  const html = `<div class="progress-steps">${steps.map(([label, done]) => `<span class="${done ? "is-done" : ""}">${escapeHtml(label)}</span>`).join("")}</div>`;
-  panels.forEach((panel) => (panel.innerHTML = html));
+  panels.forEach((panel) => {
+    panel.innerHTML = "";
+    panel.hidden = true;
+  });
 }
 
 function renderCustomerRequests() {
@@ -9109,6 +9136,7 @@ function resetCustomerBookingForm() {
   $("#customerRequestMode").value = "boarding";
   $("#customerBookingFormTitle").textContent = "Request Boarding";
   $("#customerBookingFormHelp").textContent = "Choose dog(s), requested time, and optional services.";
+  setCustomerBookingTimeCopy("boarding");
   $("#requestBoardingButton").textContent = "Request Boarding Time";
   pendingCustomerBooking = null;
   $("#bookingConfirmDialog")?.close();
@@ -9133,6 +9161,7 @@ function openCustomerBookingModal(mode = "boarding") {
   $("#customerBookingForm").scrollTop = 0;
   $("#customerBookingFormTitle").textContent = mode === "service" ? "Request Service" : "Request Boarding";
   $("#customerBookingFormHelp").textContent = mode === "service" ? "Choose dog(s), service, and requested drop-off time." : "Choose dog(s), requested stay, and optional services.";
+  setCustomerBookingTimeCopy(mode);
   $("#requestBoardingButton").textContent = mode === "service" ? "Request Service" : "Request Boarding Time";
 }
 
