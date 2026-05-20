@@ -95,7 +95,7 @@ const defaultTaskTabMeta = [
   { id: "tuesday", label: "Tuesdays", system: true },
   { id: "monthly", label: "Monthly", system: true },
 ];
-const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage"];
+const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
 const mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsAlertsPage", "settingsAuditLogPage"]);
 
@@ -2531,6 +2531,8 @@ function updateNavigationAccess() {
   });
   updateMobileNavigationAccess();
   renderGlobalSearchResults();
+  const activePage = activePageId();
+  if (helperIsLoggedIn() && activePage !== "loginPage" && !pageAllowed(activePage)) switchPage(defaultPageForRole());
 }
 
 function restoreSession() {
@@ -4677,6 +4679,56 @@ function boardingDogVisibleToCustomer(record = {}, email = currentUser?.email) {
   return Boolean(normalizedEmail && boardingOwnerEmails(record).includes(normalizedEmail));
 }
 
+function customerDogIdentityKey(dog = {}, email = currentUser?.email) {
+  const dogName = String(dog.dogName || "").trim().toLowerCase();
+  if (!dogName) return "";
+  const ownerEmails = uniqueEmails(dog.ownerEmail, dog.customerEmail, email);
+  const ownerPhone = String(dog.ownerPhone || "").replace(/\D/g, "");
+  const ownerName = String(dog.ownerName || "").trim().toLowerCase();
+  const ownerKey = ownerEmails[0] || ownerPhone || ownerName;
+  return ownerKey ? `${dogName}|${ownerKey}` : "";
+}
+
+function mergeCustomerDogDisplayGroup(records = []) {
+  if (records.length <= 1) return records[0] || {};
+  const primary = [...records].sort((a, b) => {
+    const photoDiff = Number(Boolean(b.profilePhotoUrl || b.profilePhotoData)) - Number(Boolean(a.profilePhotoUrl || a.profilePhotoData));
+    if (photoDiff) return photoDiff;
+    return itemSortTime(b) - itemSortTime(a);
+  })[0] || {};
+  const merged = {
+    ...primary,
+    duplicateCustomerDogIds: [...new Set(records.map((record) => record.id).filter((id) => id && id !== primary.id))],
+    vaccinationRecords: mergeObjectList(records, "vaccinationRecords", (item) => item.id || item.url || item.dataUrl || item.name || JSON.stringify(item)),
+    customerUpdates: mergeObjectList(records, "customerUpdates", (item) => item.id || `${item.createdAt || item.submittedAt || ""}|${item.note || ""}`),
+  };
+  ["linkedBoardingDogId", "sourceBoardingDogId"].forEach((field) => {
+    if (merged[field]) return;
+    const fallback = records.find((record) => record[field]);
+    if (fallback) merged[field] = fallback[field];
+  });
+  canonicalDogProfileFields.forEach((field) => {
+    if (merged[field]) return;
+    const fallback = records.find((record) => record[field]);
+    if (fallback) merged[field] = fallback[field];
+  });
+  return merged;
+}
+
+function mergeCustomerDogDisplayRecords(records = [], email = currentUser?.email) {
+  const groups = new Map();
+  const ungrouped = [];
+  records.forEach((record) => {
+    const key = customerDogIdentityKey(record, email);
+    if (!key) {
+      ungrouped.push(record);
+      return;
+    }
+    groups.set(key, [...(groups.get(key) || []), record]);
+  });
+  return [...groups.values()].map(mergeCustomerDogDisplayGroup).concat(ungrouped);
+}
+
 function customerDogVisibleToCustomer(dog = {}, email = currentUser?.email) {
   const normalizedEmail = normalizeEmail(email);
   return Boolean(normalizedEmail && uniqueEmails(dog.ownerEmail, dog.customerEmail).includes(normalizedEmail));
@@ -4723,22 +4775,32 @@ function customerDogFromBoardingDog(record = {}, email = currentUser?.email, opt
 function customerDogsForCurrentUser() {
   const role = currentRole();
   const email = normalizeEmail(currentUser?.email);
-  const dogs = readRecords("customerDog")
-    .filter((dog) => !dog.removed && (role === "admin" || customerDogVisibleToCustomer(dog, email)))
+  if (role !== "customer") return [];
+  const dogs = mergeCustomerDogDisplayRecords(readRecords("customerDog")
+    .filter((dog) => !dog.removed && customerDogVisibleToCustomer(dog, email))
     .map((dog) => {
       const boarding = boardingDogForCustomerDog(dog);
       const boardingPhoto = boarding ? boardingDogPhotoSource(boarding) : "";
       return boardingPhoto && !dog.profilePhotoUrl && !dog.profilePhotoData ? { ...dog, profilePhotoUrl: boardingPhoto } : dog;
-    });
-  if (role === "admin") return dogs;
+    }), email);
+  const seenCustomerIds = new Set(dogs.map((dog) => dog.id).filter(Boolean));
   const seenIds = new Set(dogs.flatMap((dog) => [dog.linkedBoardingDogId, dog.sourceBoardingDogId].map(boardingDogIdFromCustomerDogValue)).filter(Boolean));
-  readRecords("boardingDog")
+  const seenIdentityKeys = new Set(dogs.map((dog) => customerDogIdentityKey(dog, email)).filter(Boolean));
+  consolidatedBoardingDogRecords(readRecords("boardingDog")
     .filter((record) => !record.removed && boardingDogVisibleToCustomer(record, email))
+  )
     .forEach((record) => {
       const recordId = boardingDogIdFromCustomerDogValue(record.id);
       if (seenIds.has(recordId)) return;
-      dogs.push(customerDogFromBoardingDog(record, email));
+      const linkedDog = explicitLinkedCustomerDogForBoarding(record);
+      if (linkedDog?.id && seenCustomerIds.has(linkedDog.id)) return;
+      const displayDog = customerDogFromBoardingDog(record, email);
+      const identityKey = customerDogIdentityKey(displayDog, email);
+      if (identityKey && seenIdentityKeys.has(identityKey)) return;
+      dogs.push(displayDog);
       seenIds.add(recordId);
+      if (displayDog.id && !displayDog.isSharedBoardingDog) seenCustomerIds.add(displayDog.id);
+      if (identityKey) seenIdentityKeys.add(identityKey);
     });
   return dogs;
 }
@@ -4848,6 +4910,65 @@ function renderCustomerUpdates() {
     .join("");
 }
 
+function customerUploadedFileEntriesForCurrentUser() {
+  return customerDogsForCurrentUser().flatMap((dog) => {
+    const dogName = dog.dogName || "Dog";
+    const entries = [];
+    if (dog.profilePhotoUrl || dog.profilePhotoData) {
+      entries.push({
+        dogName,
+        fileName: `${dogName} profile photo`,
+        fileType: "Profile photo",
+        src: dog.profilePhotoUrl || dog.profilePhotoData || "",
+        mediaType: "image/jpeg",
+        savedAt: dog.updatedAt || dog.submittedAt || "",
+      });
+    }
+    (dog.vaccinationRecords || []).forEach((file, index) => {
+      entries.push({
+        dogName,
+        fileName: file.name || `Vaccination record ${index + 1}`,
+        fileType: file.vaccineType || "Vaccination record",
+        src: file.url || file.dataUrl || "",
+        mediaType: file.type || "application/pdf",
+        savedAt: file.savedAt || file.createdAt || dog.updatedAt || dog.submittedAt || "",
+      });
+    });
+    if (!(dog.vaccinationRecords || []).length && dog.vaccinationFiles) {
+      String(dog.vaccinationFiles).split(",").map((name) => name.trim()).filter(Boolean).forEach((name) => {
+        entries.push({
+          dogName,
+          fileName: name,
+          fileType: "Vaccination record",
+          src: "",
+          mediaType: "",
+          savedAt: dog.updatedAt || dog.submittedAt || "",
+        });
+      });
+    }
+    return entries;
+  }).sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+}
+
+function renderCustomerFiles() {
+  const list = $("#customerFilesList");
+  if (!list) return;
+  const files = customerUploadedFileEntriesForCurrentUser();
+  list.innerHTML = files.length
+    ? files.map((file) => {
+      const action = file.src
+        ? `<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(file.src)}" data-media-type="${escapeHtml(file.mediaType || "")}" data-media-name="${escapeHtml(file.fileName)}">Open</button>`
+        : `<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="" data-media-name="${escapeHtml(file.fileName)}">View Name</button>`;
+      return `<article class="record-card compact-record-card">
+        <strong>${escapeHtml(file.fileName)}</strong>
+        <span>${escapeHtml(file.dogName)} | ${escapeHtml(file.fileType)}</span>
+        ${file.savedAt ? `<p>${escapeHtml(formatDateTime(file.savedAt))}</p>` : ""}
+        <div class="record-actions">${action}</div>
+      </article>`;
+    }).join("")
+    : "<p>No uploaded files are saved yet.</p>";
+}
+
 async function mirrorBoardingCustomerUpdateToCustomerDog(boardingRecord = {}, update = {}) {
   const linkedDog = linkedCustomerDogForBoarding(boardingRecord);
   if (!linkedDog?.id || linkedDog.isSharedBoardingDog) return null;
@@ -4907,6 +5028,7 @@ const canonicalDogProfileFields = [
   "ownerPhone",
   "ownerEmail",
   "customerEmail",
+  "secondaryOwnerEmail",
   "emergencyName",
   "emergencyPhone",
   "vetInfo",
@@ -8926,6 +9048,14 @@ function fillCustomerDefaults() {
 
 function renderCustomerDogs() {
   if (!$("#customerDogList")) return;
+  if (currentRole() !== "customer") {
+    $("#customerDogList").innerHTML = "";
+    if ($("#customerBookingDogList")) $("#customerBookingDogList").innerHTML = "";
+    $("#customerRequestActions")?.toggleAttribute("hidden", true);
+    $("#customerNoDogRequestPrompt")?.toggleAttribute("hidden", true);
+    if (activePageId() === "customerPage") switchPage(defaultPageForRole());
+    return;
+  }
   const dogs = customerDogsForCurrentUser();
   const checkedIds = new Set([...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')].map((input) => input.value));
   $("#customerDogList").innerHTML = dogs.length
@@ -9098,7 +9228,7 @@ function openCustomerDog(record = {}) {
   resetCustomerDogForm();
   setFormValues(formEl, record);
   $("#customerDogId").value = record.id || "";
-  $("#saveCustomerDogButton").textContent = record.id ? "Save Dog Changes" : "Save Dog";
+  $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
   $("#customerDogFormTitle").textContent = record.id ? `Edit ${record.dogName || "Dog"}` : "Add Dog";
   setDogPhoto("customer", record);
   showDetailDialog(record.id ? `Edit ${record.dogName || "Dog"}` : "Add Dog", `<div id="customerDogPopupMount"></div>`, null, { dialogClass: "is-customer-dog-editor" });
@@ -9124,6 +9254,7 @@ async function removeCustomerDogById(id = "") {
     closeCustomerDogModal();
   }
   renderCustomerDogs();
+  renderCustomerFiles();
   renderBoardingDogs();
   return updated;
 }
@@ -9495,6 +9626,7 @@ function renderAllRecords() {
   renderCustomerDogs();
   renderCustomerRequests();
   renderCustomerUpdates();
+  renderCustomerFiles();
   renderDemoSubmissions();
   updateTimeDisplays();
   renderGlobalSearchResults();
@@ -10572,7 +10704,7 @@ function initEvents() {
   }, { passive: true });
   window.addEventListener("hashchange", () => {
     const pageId = pageIdFromHash();
-    if (pageId && pageAllowed(pageId) && pageId !== activePageId()) switchPage(pageId);
+    if (pageId && pageId !== activePageId()) switchPage(pageId);
   });
   $("#mobilePageSelect").addEventListener("change", (event) => switchPage(event.target.value));
   $("#mobileBottomNav").addEventListener("click", (event) => {
@@ -12349,6 +12481,7 @@ function initEvents() {
         ...data,
         ownerName: currentUser?.name || data.ownerName || "",
         ownerEmail: currentUser?.email || data.ownerEmail || "",
+        secondaryOwnerEmail: normalizeEmail(data.secondaryOwnerEmail),
         sourceBoardingDogId,
         linkedBoardingDogId,
         profilePhotoUrl: photo.profilePhotoUrl,
@@ -12378,6 +12511,7 @@ function initEvents() {
       resetCustomerDogForm();
       closeCustomerDogModal();
       renderCustomerDogs();
+      renderCustomerFiles();
       renderBoardingDogs();
       const uploadText = vaccinationUploads.length ? `${vaccinationUploads.length} vaccination file(s) uploaded.` : "No new vaccination files uploaded.";
       if (uploadStatus) uploadStatus.textContent = uploadText;
@@ -12615,7 +12749,8 @@ function switchPage(pageId) {
   pageId = normalizePageId(pageId);
   if (!pageAllowed(pageId)) {
     showToast(helperIsLoggedIn() ? "Your login does not have access to that page." : "Sign in first.");
-    pageId = "loginPage";
+    const fallback = helperIsLoggedIn() ? defaultPageForRole(currentRole()) : "loginPage";
+    pageId = pageAllowed(fallback) ? fallback : "loginPage";
   }
   if (helperIsLoggedIn() && pageId !== "loginPage") {
     localStorage.setItem(stateKeys.lastPage, pageId);

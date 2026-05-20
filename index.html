@@ -21,6 +21,7 @@
           <button class="nav-button" type="button" data-page="customerPage" data-roles="customer">Add Dog</button>
           <button class="nav-button" type="button" data-page="customerRequestsPage" data-roles="customer">My Requests</button>
           <button class="nav-button" type="button" data-page="customerUpdatesPage" data-roles="customer">Updates</button>
+          <button class="nav-button" type="button" data-page="customerFilesPage" data-roles="customer">File Uploaded</button>
           <button class="nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin">Main Dashboard</button>
           <button class="nav-button" type="button" data-page="timesheetPage" data-roles="helper,admin">Timesheet</button>
           <button class="nav-button" type="button" data-page="dailyPage" data-roles="helper,admin">Daily Tasks</button>
@@ -86,6 +87,7 @@
           <option value="customerPage" data-roles="customer">Add Dog</option>
           <option value="customerRequestsPage" data-roles="customer">My Requests</option>
           <option value="customerUpdatesPage" data-roles="customer">Updates</option>
+          <option value="customerFilesPage" data-roles="customer">File Uploaded</option>
           <option value="dashboardPage" data-roles="helper,admin">Main Dashboard</option>
           <option value="timesheetPage">Timesheet</option>
           <option value="dailyPage">Daily Tasks</option>
@@ -127,6 +129,14 @@
             <path d="M9 10h6M9 13h4" />
           </svg>
           <span class="mobile-bottom-nav-label">Updates</span>
+        </button>
+        <button class="mobile-bottom-nav-button" type="button" data-page="customerFilesPage" data-roles="customer" aria-label="File Uploaded">
+          <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 3.5h7l4 4V20a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 20V5a1.5 1.5 0 0 1 1.5-1.5Z" />
+            <path d="M14 3.5V8h4" />
+            <path d="M9 13h6M9 16h4" />
+          </svg>
+          <span class="mobile-bottom-nav-label">Files</span>
         </button>
         <button class="mobile-bottom-nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin" aria-label="Home">
           <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -285,9 +295,12 @@
               <div class="field-grid">
                 <label>Dog name<input type="text" name="dogName" required /></label>
                 <label>Breed / description<input type="text" name="breedDescription" placeholder="Example: Siberian Husky, 3 years old" /></label>
+                <label>Date of birth<input type="date" name="dateOfBirth" /></label>
                 <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
+                <label>Secondary owner email<input type="email" name="secondaryOwnerEmail" /></label>
                 <label>Emergency contact name <small>Highly recommended</small><input type="text" name="emergencyName" /></label>
                 <label>Emergency contact phone <small>Highly recommended</small><input type="tel" name="emergencyPhone" /></label>
+                <label>Veterinarian / clinic <small>This is the primary one your dog goes to.</small><input type="text" name="vetInfo" /></label>
                 <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
               </div>
             </div>
@@ -296,7 +309,7 @@
               <div class="field-grid">
                 <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
                 <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
-                <label>Rabies duration<select name="rabiesDuration"><option value="">Select duration</option><option>1 year</option><option>3 years</option><option>Unknown</option></select></label>
+                <label>Last Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
                 <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple /><small>Optional PDF, PNG, or JPG records.</small></label>
               </div>
               <label>Feeding instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals, or special feeding notes"></textarea></label>
@@ -372,6 +385,13 @@
         <section class="form-section">
           <div class="section-heading"><span>U</span><div><h2>Updates</h2><p>Boarding updates sent by the kennel for your dog.</p></div></div>
           <div class="record-grid compact-record-grid" id="customerUpdatesList"></div>
+        </section>
+      </section>
+
+      <section class="page-view" id="customerFilesPage">
+        <section class="form-section">
+          <div class="section-heading"><span>F</span><div><h2>File Uploaded</h2><p>Review files you uploaded for your dog profiles.</p></div></div>
+          <div class="record-grid compact-record-grid" id="customerFilesList"></div>
         </section>
       </section>
 
@@ -1241,6 +1261,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260520-customer-dog-edit-labels-1"></script>
+  <script src="script.js?v=20260520-customer-files-dog-fields-1"></script>
   </body>
 </html>
