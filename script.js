@@ -4676,6 +4676,107 @@ function boardingDraftFromCustomerDog(dog = {}) {
   };
 }
 
+const canonicalDogProfileFields = [
+  "dogName",
+  "breedDescription",
+  "dateOfBirth",
+  "sex",
+  "spayNeuterStatus",
+  "ownerName",
+  "ownerPhone",
+  "ownerEmail",
+  "customerEmail",
+  "emergencyName",
+  "emergencyPhone",
+  "vetInfo",
+  "foodInstructions",
+  "specialCare",
+  "rabiesDate",
+  "dhppDate",
+  "bordetellaDate",
+  "heartwormDate",
+  "rabiesDuration",
+  "profilePhotoUrl",
+  "profilePhotoData",
+  "vaccinationRecords",
+  "vaccinationFiles",
+];
+
+function dogProfileFieldPatch(source = {}) {
+  return canonicalDogProfileFields.reduce((patch, field) => {
+    if (Object.prototype.hasOwnProperty.call(source, field)) patch[field] = source[field];
+    return patch;
+  }, {});
+}
+
+function boardingDogWithCanonicalProfile(record = {}) {
+  if (!record?.id) return record || {};
+  const linked = linkedCustomerDogForBoarding(record);
+  if (!linked?.id || linked.isSharedBoardingDog) return record;
+  const profilePatch = dogProfileFieldPatch(linked);
+  return {
+    ...record,
+    ...profilePatch,
+    id: record.id,
+    type: "boardingDog",
+    linkedCustomerDogId: linked.id,
+    linkedOwnerEmail: linked.ownerEmail || linked.customerEmail || record.linkedOwnerEmail || "",
+    customerEmail: linked.customerEmail || linked.ownerEmail || record.customerEmail || "",
+  };
+}
+
+function boardingDogWithCustomerProfilePatch(record = {}, customerDog = {}) {
+  const profilePatch = dogProfileFieldPatch(customerDog);
+  return {
+    ...record,
+    ...profilePatch,
+    id: record.id,
+    type: "boardingDog",
+    linkedCustomerDogId: customerDog.id || record.linkedCustomerDogId || "",
+    linkedOwnerEmail: customerDog.ownerEmail || customerDog.customerEmail || record.linkedOwnerEmail || "",
+    customerEmail: customerDog.customerEmail || customerDog.ownerEmail || record.customerEmail || "",
+  };
+}
+
+function matchingCustomerDogForBoardingProfile(record = {}) {
+  const linked = linkedCustomerDogForBoarding(record);
+  if (linked?.id && !linked.isSharedBoardingDog) return linked;
+  const ownerEmails = boardingOwnerEmails(record);
+  const dogName = String(record.dogName || "").trim().toLowerCase();
+  if (!dogName || !ownerEmails.length) return null;
+  return readRecords("customerDog").find((dog) => {
+    if (dog.removed) return false;
+    if (record.linkedCustomerDogId && dog.id === record.linkedCustomerDogId) return true;
+    const dogEmails = uniqueEmails(dog.ownerEmail, dog.customerEmail);
+    return dogEmails.some((email) => ownerEmails.includes(email))
+      && String(dog.dogName || "").trim().toLowerCase() === dogName;
+  }) || null;
+}
+
+async function saveCanonicalCustomerDogForBoarding(record = {}, previousRecord = {}) {
+  const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail || record.linkedOwnerEmail);
+  if (!ownerEmail || !record.dogName) return null;
+  const existingDog = matchingCustomerDogForBoardingProfile(record) || matchingCustomerDogForBoardingProfile(previousRecord) || {};
+  const profilePatch = dogProfileFieldPatch(record);
+  const payload = {
+    ...existingDog,
+    ...profilePatch,
+    type: "customerDog",
+    id: existingDog.id || record.linkedCustomerDogId || uid("customerDog"),
+    submittedAt: existingDog.submittedAt || record.submittedAt || new Date().toISOString(),
+    ownerEmail,
+    customerEmail: ownerEmail,
+    ownerName: record.ownerName || existingDog.ownerName || "",
+    linkedBoardingDogId: record.id || previousRecord.id || existingDog.linkedBoardingDogId || "",
+    sourceBoardingDogId: record.id || previousRecord.id || existingDog.sourceBoardingDogId || "",
+    sourceType: "boardingDog",
+    removed: false,
+  };
+  const saved = upsertRecord("customerDog", payload);
+  await sendPayload(saved);
+  return saved;
+}
+
 function ownerAccountForBoarding(record = {}) {
   const ownerEmail = String(record.ownerEmail || "").trim().toLowerCase();
   return ownerEmail ? savedUserFor({ email: ownerEmail }) || null : null;
@@ -5387,14 +5488,15 @@ function consolidatedBoardingDogRecords(records = readRecords("boardingDog").fil
     }
     groups.set(key, [...(groups.get(key) || []), item]);
   });
-  return [...groups.values()].map(mergeBoardingProfileGroup).concat(ungrouped);
+  return [...groups.values()].map(mergeBoardingProfileGroup).concat(ungrouped).map(boardingDogWithCanonicalProfile);
 }
 
 function boardingDogRecordForDisplay(id = "") {
   if (!id) return null;
-  return consolidatedBoardingDogRecords().find((record) => record.id === id || (record.sourceRecordIds || []).includes(id))
-    || readRecords("boardingDog").find((record) => record.id === id && !record.removed)
-    || null;
+  const displayRecord = consolidatedBoardingDogRecords().find((record) => record.id === id || (record.sourceRecordIds || []).includes(id));
+  if (displayRecord) return displayRecord;
+  const rawRecord = readRecords("boardingDog").find((record) => record.id === id && !record.removed);
+  return rawRecord ? boardingDogWithCanonicalProfile(rawRecord) : null;
 }
 
 function findMatchingBoardingDogProfile(record = {}, options = {}) {
@@ -5945,6 +6047,7 @@ function resetBoardingDogFormForRecord(record = {}) {
 }
 
 function openBoardingDog(record = {}) {
+  record = boardingDogWithCanonicalProfile(record);
   const boardingDogDetail = $("#boardingDogDetail");
   if (boardingDogDetail.parentElement !== document.body) {
     document.body.appendChild(boardingDogDetail);
@@ -11200,7 +11303,7 @@ function initEvents() {
           ]
         : existing.statusHistory || [];
       const statusScopedStays = statusChanged ? boardingStatusScopedStays(existing, selectedStatus, timestamp) : existing.stays || [];
-      const payload = {
+      let payload = {
         ...existing,
         type: "boardingDog",
         id: dogId,
@@ -11227,9 +11330,10 @@ function initEvents() {
         checkedOutAt: selectedStatus === "Checked Out" ? existing.checkedOutAt || timestamp : currentStatus === "Checked Out" && statusChanged ? "" : existing.checkedOutAt || "",
         cancelledAt: selectedStatus === "Cancelled" ? existing.cancelledAt || timestamp : currentStatus === "Cancelled" && statusChanged ? "" : existing.cancelledAt || "",
       };
+      const canonicalDog = await saveCanonicalCustomerDogForBoarding(payload, existing);
+      if (canonicalDog) payload = boardingDogWithCustomerProfilePatch(payload, canonicalDog);
       const record = upsertRecord("boardingDog", payload);
       await sendPayload(record);
-      await syncLinkedCustomerDogPhotoFromBoarding(record);
       if (!isNewBoardingDog) {
         const oldOwnerEmail = normalizeEmail(existing.ownerEmail);
         const newOwnerEmail = normalizeEmail(record.ownerEmail);
@@ -11476,29 +11580,7 @@ function initEvents() {
       if ((record.sourceBoardingDogId || record.linkedBoardingDogId) && customerDogVisibleToCustomer(record)) {
         const boarding = readRecords("boardingDog").find((item) => item.id === (record.sourceBoardingDogId || record.linkedBoardingDogId) && !item.removed);
         if (boarding && boardingDogVisibleToCustomer(boarding)) {
-          const linkedBoarding = upsertRecord("boardingDog", {
-            ...boarding,
-            dogName: record.dogName || boarding.dogName || "",
-            breedDescription: record.breedDescription || boarding.breedDescription || "",
-            ownerName: record.ownerName || boarding.ownerName || "",
-            ownerPhone: record.ownerPhone || boarding.ownerPhone || "",
-            ownerEmail: record.ownerEmail || record.customerEmail || boarding.ownerEmail || "",
-            emergencyName: record.emergencyName || boarding.emergencyName || "",
-            emergencyPhone: record.emergencyPhone || boarding.emergencyPhone || "",
-            specialCare: record.specialCare || boarding.specialCare || "",
-            foodInstructions: record.foodInstructions || boarding.foodInstructions || "",
-            spayNeuterStatus: record.spayNeuterStatus || boarding.spayNeuterStatus || "",
-            dhppDate: record.dhppDate || boarding.dhppDate || "",
-            rabiesDate: record.rabiesDate || boarding.rabiesDate || "",
-            rabiesDuration: record.rabiesDuration || boarding.rabiesDuration || "",
-            profilePhotoUrl: record.profilePhotoUrl || boarding.profilePhotoUrl || "",
-            profilePhotoData: record.profilePhotoData || boarding.profilePhotoData || "",
-            vaccinationRecords: record.vaccinationRecords || boarding.vaccinationRecords || [],
-            vaccinationFiles: record.vaccinationFiles || boarding.vaccinationFiles || "",
-            linkedCustomerDogId: record.id,
-            linkedOwnerEmail: record.customerEmail || record.ownerEmail || boarding.linkedOwnerEmail || "",
-            customerEmail: record.customerEmail || record.ownerEmail || boarding.customerEmail || "",
-          });
+          const linkedBoarding = upsertRecord("boardingDog", boardingDogWithCustomerProfilePatch(boarding, record));
           await sendPayload(linkedBoarding);
         }
       }
