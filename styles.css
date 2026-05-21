@@ -3249,6 +3249,14 @@ button.mobile-dog-photo-button {
   border-color: rgba(255, 231, 174, 0.42);
 }
 
+.boarding-request-code-chip {
+  background: rgba(125, 211, 252, 0.16);
+  border-color: rgba(125, 211, 252, 0.40);
+  color: #dff7ff;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
 .boarding-status-chip.is-status-pending {
   background: rgba(255, 204, 102, 0.18);
   border-color: rgba(255, 204, 102, 0.38);
