@@ -585,7 +585,7 @@ function boardingStayStatusButtonHtml(record = {}, stay = {}, action = "change-s
 }
 
 function boardingRecordStatusButtonHtml(record = {}, action = "open-mobile-stay-status-menu") {
-  const stay = activeBoardingStay(record) || currentOrNextStay(record) || (record.stays || [])[0] || {};
+  const stay = boardingPrimaryStay(record) || {};
   return `<button type="button" class="status-chip-button" data-action="${escapeHtml(action)}" data-id="${escapeHtml(record.id || "")}" data-stay-id="${escapeHtml(stay.id || "")}">${boardingStatusChipHtml(record)}</button>`;
 }
 
@@ -797,6 +797,28 @@ function boardingPrimaryStay(record = {}) {
 function boardingDisplayStatus(record = {}, stayOverride = null) {
   const stay = stayOverride || boardingPrimaryStay(record);
   return stay ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
+}
+
+function boardingDogWithStayStatus(record = {}) {
+  const stay = boardingPrimaryStay(record);
+  if (!stay?.id) return record || {};
+  const status = boardingStayDisplayStatus(record, stay);
+  const next = {
+    ...record,
+    boardingStatus: status,
+  };
+  if (status === "In Kennel") {
+    next.kennelLocationId = stay.kennelLocationId || record.kennelLocationId || "";
+    next.kennelLocationName = stay.kennelLocationName || record.kennelLocationName || "";
+    next.kennelBuilding = stay.kennelBuilding || record.kennelBuilding || "";
+    next.kennelAssignedAt = stay.kennelAssignedAt || record.kennelAssignedAt || "";
+  } else {
+    next.kennelLocationId = "";
+    next.kennelLocationName = "";
+    next.kennelBuilding = "";
+    next.kennelAssignedAt = "";
+  }
+  return next;
 }
 
 function formatDateTime(value) {
@@ -6442,7 +6464,7 @@ function consolidatedBoardingDogRecords(records = readRecords("boardingDog").fil
     }
     groups.set(key, [...(groups.get(key) || []), item]);
   });
-  return [...groups.values()].map(mergeBoardingProfileGroup).concat(ungrouped).map(boardingDogWithCanonicalProfile);
+  return [...groups.values()].map(mergeBoardingProfileGroup).concat(ungrouped).map(boardingDogWithCanonicalProfile).map(boardingDogWithStayStatus);
 }
 
 function boardingDogRecordForDisplay(id = "") {
@@ -6450,7 +6472,7 @@ function boardingDogRecordForDisplay(id = "") {
   const displayRecord = consolidatedBoardingDogRecords().find((record) => record.id === id || (record.sourceRecordIds || []).includes(id));
   if (displayRecord) return displayRecord;
   const rawRecord = readRecords("boardingDog").find((record) => record.id === id && !record.removed);
-  return rawRecord ? boardingDogWithCanonicalProfile(rawRecord) : null;
+  return rawRecord ? boardingDogWithStayStatus(boardingDogWithCanonicalProfile(rawRecord)) : null;
 }
 
 function findMatchingBoardingDogProfile(record = {}, options = {}) {
@@ -7181,7 +7203,7 @@ function selectedBoardingKennelLocation(record = {}) {
 function renderBoardingKennelLocationControl(record = activeBoardingDog()) {
   const label = $("#boardingKennelLocationLabel");
   const select = $("#boardingKennelLocationSelect");
-  const status = normalizeBoardingStatus(record || {});
+  const status = boardingDisplayStatus(record || {});
   if (!label || !select) return;
   const show = status === "In Kennel";
   label.hidden = !show;
