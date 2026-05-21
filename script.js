@@ -125,6 +125,7 @@ const adminDefaultAlertTypes = new Set([
 const staffDefaultAlertTypes = new Set(["timeOffReviewed", "schedulePublished", "scheduleChangedAfterPublish", "urgentStaffAlertSent"]);
 
 const boardingLifecycleStatuses = ["Pending", "Approved", "Checked In", "In Kennel", "Ready For Pickup", "Checked Out", "Cancelled"];
+const activeBoardingStayStatuses = ["Checked In", "In Kennel", "Ready For Pickup"];
 const boardingStatusTransitions = {
   Pending: ["Approved", "Cancelled"],
   Approved: ["Checked In", "Cancelled"],
@@ -6663,11 +6664,19 @@ function inactiveBoardingStayStatus(stay = {}) {
   return ["Cancelled", "Checked Out"].includes(normalized);
 }
 
+function explicitBoardingStatus(value = "") {
+  const status = String(value || "").trim();
+  if (!status) return "";
+  return boardingLifecycleStatuses.includes(status) ? status : normalizeBoardingStatus({ boardingStatus: status });
+}
+
 function activeBoardingStay(record = {}, date = new Date()) {
   const now = date instanceof Date ? date : new Date(date);
   if (Number.isNaN(now.getTime())) return null;
   return (record.stays || []).find((stay) => {
     if (inactiveBoardingStayStatus(stay)) return false;
+    const explicitStatus = explicitBoardingStatus(stay.status) || explicitBoardingStatus(record.boardingStatus || record.status);
+    if (!activeBoardingStayStatuses.includes(explicitStatus)) return false;
     const dropoff = new Date(stay.dropoffTime);
     const pickup = new Date(stay.pickupTime);
     if (Number.isNaN(dropoff.getTime()) || Number.isNaN(pickup.getTime())) return false;
