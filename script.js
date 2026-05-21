@@ -618,7 +618,7 @@ function stayTransitionLabel(currentStatus = "", nextStatus = "") {
 }
 
 function canTransitionBoardingStatus(record = {}, nextStatus, options = {}) {
-  const targetStay = options.stayId ? (record.stays || []).find((stay) => stay.id === options.stayId) : null;
+  const targetStay = options.stayId ? boardingStayById(record, options.stayId) : null;
   const currentStatus = targetStay ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
   if (options.allowEarly && nextStatus === "Checked In" && ["Pending", "Approved"].includes(currentStatus)) return true;
   if (options.allowEarly && nextStatus === "Checked Out" && ["Checked In", "In Kennel", "Ready For Pickup"].includes(currentStatus)) return true;
@@ -639,7 +639,7 @@ function isFutureDateTime(value, date = new Date()) {
 }
 
 function boardingStatusTargetStay(record = {}, nextStatus = "", options = {}) {
-  if (options.stayId) return (record.stays || []).find((stay) => stay.id === options.stayId) || null;
+  if (options.stayId) return boardingStayById(record, options.stayId);
   if (nextStatus === "Checked Out") return activeBoardingStay(record) || currentOrNextStay(record);
   return currentOrNextStay(record);
 }
@@ -649,10 +649,10 @@ function mergeStayRequestLabels(existing = [], additions = []) {
 }
 
 function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new Date().toISOString(), options = {}) {
-  const targetStay = options.stayId ? (record.stays || []).find((stay) => stay.id === options.stayId) : boardingStatusTargetStay(record, nextStatus);
+  const targetStay = options.stayId ? boardingStayById(record, options.stayId) : boardingStatusTargetStay(record, nextStatus);
   const targetStayId = targetStay?.id || "";
   return (record.stays || []).map((stay) => {
-    if (!targetStayId || stay.id !== targetStayId) return stay;
+    if (!targetStayId || !boardingStayMatchesIdentity(stay, targetStay)) return stay;
     const checkInDetails = nextStatus === "Checked In" ? options.checkInDetails || null : null;
     const checkInDropoffTime = checkInDetails?.dropoffTime || "";
     const clearsActiveStayState = nextStatus === "Approved" || nextStatus === "Checked In";
@@ -698,16 +698,16 @@ function boardingTransitionIsEarly(record = {}, nextStatus = "", options = {}) {
 }
 
 function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
-  const targetStay = options.stayId ? (record.stays || []).find((stay) => stay.id === options.stayId) : null;
+  const targetStay = options.stayId ? boardingStayById(record, options.stayId) : null;
   const currentStatus = targetStay ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
-  if (!canTransitionBoardingStatus(record, nextStatus, options)) return null;
+  if (!canTransitionBoardingStatus(record, nextStatus, options) && !options.forceStatusSync) return null;
   const timestamp = new Date().toISOString();
   const early = Boolean(options.early || boardingTransitionIsEarly(record, nextStatus, options));
   const kennelLocation = options.kennelLocation || null;
   const scopedStays = boardingStatusScopedStays(record, nextStatus, timestamp, options).map((stay) => {
     if (nextStatus !== "In Kennel" || !kennelLocation) return stay;
     const targetStay = boardingStatusTargetStay(record, nextStatus, options);
-    if (targetStay?.id && stay.id !== targetStay.id) return stay;
+    if (targetStay?.id && !boardingStayMatchesIdentity(stay, targetStay)) return stay;
     return {
       ...stay,
       kennelLocationId: kennelLocation.id,
@@ -801,18 +801,19 @@ function boardingDisplayStatus(record = {}, stayOverride = null) {
 }
 
 function boardingDogWithStayStatus(record = {}) {
-  const stay = boardingPrimaryStay(record);
-  if (!stay?.id) return record || {};
-  const status = boardingStayDisplayStatus(record, stay);
+  const normalizedRecord = boardingDogWithMergedStays(record);
+  const stay = boardingPrimaryStay(normalizedRecord);
+  if (!stay?.id) return normalizedRecord || {};
+  const status = boardingStayDisplayStatus(normalizedRecord, stay);
   const next = {
-    ...record,
+    ...normalizedRecord,
     boardingStatus: status,
   };
   if (status === "In Kennel") {
-    next.kennelLocationId = stay.kennelLocationId || record.kennelLocationId || "";
-    next.kennelLocationName = stay.kennelLocationName || record.kennelLocationName || "";
-    next.kennelBuilding = stay.kennelBuilding || record.kennelBuilding || "";
-    next.kennelAssignedAt = stay.kennelAssignedAt || record.kennelAssignedAt || "";
+    next.kennelLocationId = stay.kennelLocationId || normalizedRecord.kennelLocationId || "";
+    next.kennelLocationName = stay.kennelLocationName || normalizedRecord.kennelLocationName || "";
+    next.kennelBuilding = stay.kennelBuilding || normalizedRecord.kennelBuilding || "";
+    next.kennelAssignedAt = stay.kennelAssignedAt || normalizedRecord.kennelAssignedAt || "";
   } else {
     next.kennelLocationId = "";
     next.kennelLocationName = "";
@@ -4640,12 +4641,13 @@ function boardingRosterFilterLabel(filter) {
 function boardingDogMatchesRosterFilter(record = {}, filter = boardingDogRosterFilter) {
   const status = boardingDisplayStatus(record);
   const hasActiveStay = isCurrentlyBoarding(record);
+  const hasStays = Boolean((record.stays || []).length);
   if (filter === "All Boarding Dogs") return true;
   if (filter === "Pending" || filter === "Pending Approval") return status === "Pending" && !hasActiveStay;
   if (filter === "Approved") return status === "Approved" && !hasActiveStay;
-  if (filter === "In Kennel") return status === "In Kennel";
-  if (filter === "Ready For Pickup") return status === "Ready For Pickup";
-  return hasActiveStay || ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
+  if (filter === "In Kennel") return status === "In Kennel" && (hasActiveStay || !hasStays);
+  if (filter === "Ready For Pickup") return status === "Ready For Pickup" && (hasActiveStay || !hasStays);
+  return hasActiveStay || (!hasStays && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status));
 }
 
 function renderBoardingRosterTabs(records = []) {
@@ -4674,7 +4676,7 @@ function boardingQueueStayMatchesGroup(title = "", record = {}, stay = {}) {
   const status = boardingStayDisplayStatus(record, stay);
   if (title === "Pending Approval") return status === "Pending";
   if (title === "Today Drop-offs") return sameDateValue(stay.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
-  if (title === "In Kennel") return status === "In Kennel";
+  if (title === "In Kennel") return status === "In Kennel" && Boolean(activeBoardingStay({ ...record, stays: [stay] }));
   if (title === "Today Pickups") return sameDateValue(stay.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
   return false;
 }
@@ -4929,10 +4931,11 @@ function customerUpdatesForCurrentUser() {
   const boardingUpdates = readRecords("boardingDog")
     .filter((record) => !record.removed && boardingDogVisibleToCustomer(record, email))
     .flatMap((record) => {
-      const stays = record.stays || [];
+      const displayRecord = boardingDogWithStayStatus(record);
+      const stays = displayRecord.stays || [];
       return (record.customerUpdates || []).map((update) => {
-        const stay = stays.find((item) => item.id === update.stayId) || activeBoardingStay(record) || currentOrNextStay(record) || stays[0] || {};
-        return { ...update, source: "boardingDog", dog: record, stay };
+        const stay = boardingStayById(displayRecord, update.stayId) || activeBoardingStay(displayRecord) || currentOrNextStay(displayRecord) || stays[0] || {};
+        return { ...update, source: "boardingDog", dog: displayRecord, stay };
       });
     });
   const customerDogUpdates = readRecords("customerDog")
@@ -5909,10 +5912,11 @@ function boardingStayFormHtml(record = {}, stay = {}) {
 }
 
 function boardingSchedulePopupHtml(record = {}) {
-  const staysHtml = (record.stays || []).length
-    ? (record.stays || []).map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(record.id)}" data-id="${escapeHtml(stay.id)}">Edit Stay</button></div></article>`).join("")
+  const displayRecord = boardingDogWithStayStatus(record);
+  const staysHtml = (displayRecord.stays || []).length
+    ? (displayRecord.stays || []).map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}">Edit Stay</button></div></article>`).join("")
     : "<p>No boarding stays logged yet.</p>";
-  return `${boardingStayFormHtml(record)}<section class="popup-record-section"><h3>Boarding stays</h3>${staysHtml}</section>`;
+  return `${boardingStayFormHtml(displayRecord)}<section class="popup-record-section"><h3>Boarding stays</h3>${staysHtml}</section>`;
 }
 
 function openBoardingSchedulePopup(record = activeBoardingDog()) {
@@ -5939,8 +5943,9 @@ function openOwnerUpdateAlert(recordId) {
 
 function openBoardingStayPopup(record = activeBoardingDog(), stayId = "") {
   if (!record?.id) return;
-  const stay = (record.stays || []).find((item) => item.id === stayId) || {};
-  showDetailDialog(`${record.dogName || "Boarding Dog"} Boarding Request`, boardingStayFormHtml(record, stay));
+  const displayRecord = boardingDogWithStayStatus(record);
+  const stay = boardingStayById(displayRecord, stayId) || {};
+  showDetailDialog(`${displayRecord.dogName || "Boarding Dog"} Boarding Request`, boardingStayFormHtml(displayRecord, stay));
 }
 
 function boardingFoodInstructions(record = {}) {
@@ -6181,7 +6186,7 @@ async function saveBoardingStayFromForm(formEl) {
     return null;
   }
   const payload = formPayload(formEl);
-  const existingStay = (dog.stays || []).find((stay) => stay.id === payload.stayId);
+  const existingStay = boardingStayById(dog, payload.stayId);
   const timestamp = new Date().toISOString();
   const existingStayStatus = normalizeBoardingStatus({ boardingStatus: existingStay?.status || "" });
   const shouldAutoApproveStay = !existingStay || (!dog.customerRequest && existingStayStatus === "Pending");
@@ -6198,10 +6203,8 @@ async function saveBoardingStayFromForm(formEl) {
     stayNotes: payload.stayNotes,
   };
   stay.bathPlan = bathPlanForStay(stay);
-  const stays = [...(dog.stays || [])];
-  const stayIndex = stays.findIndex((item) => item.id === stay.id);
-  if (stayIndex >= 0) stays[stayIndex] = stay;
-  else stays.unshift(stay);
+  const stays = (dog.stays || []).filter((item) => !boardingStayMatchesIdentity(item, stay));
+  stays.unshift(stay);
   const currentDogStatus = normalizeBoardingStatus(dog);
   const statusUpdates = !existingStay && ["Pending", "Cancelled", "Checked Out"].includes(currentDogStatus)
     ? {
@@ -6379,8 +6382,48 @@ function boardingStayMergeKey(stay = {}) {
   return JSON.stringify(stay);
 }
 
+function boardingStaySourceIds(stay = {}) {
+  return [...new Set([
+    stay.id,
+    ...(stay.sourceStayIds || []),
+    ...(stay.duplicateStayIds || []),
+  ].filter(Boolean).map(String))];
+}
+
+function boardingStayById(record = {}, stayId = "") {
+  const id = String(stayId || "");
+  if (!id) return null;
+  return (record.stays || []).find((stay) => boardingStaySourceIds(stay).includes(id)) || null;
+}
+
+function boardingStayMatchesIdentity(stay = {}, targetStay = {}) {
+  if (!stay || !targetStay) return false;
+  const stayIds = boardingStaySourceIds(stay);
+  const targetIds = boardingStaySourceIds(targetStay);
+  if (stayIds.length && targetIds.some((id) => stayIds.includes(id))) return true;
+  const stayKey = boardingStayMergeKey(stay);
+  const targetKey = boardingStayMergeKey(targetStay);
+  return Boolean(stayKey && stayKey === targetKey && stayKey.startsWith("time:"));
+}
+
 function boardingStayMergeTime(record = {}, stay = {}) {
-  const values = [stay.updatedAt, record.updatedAt, stay.createdAt, record.submittedAt]
+  const stayIds = boardingStaySourceIds(stay);
+  const statusHistoryTimes = (record.statusHistory || [])
+    .filter((item) => item.stayId && stayIds.includes(String(item.stayId)))
+    .map((item) => item.date);
+  const values = [
+    stay.updatedAt,
+    stay.statusUpdatedAt,
+    stay.actualDropoffAt,
+    stay.kennelAssignedAt,
+    stay.readyForPickupAt,
+    stay.actualPickupAt,
+    stay.approvedAt,
+    stay.cancelledAt,
+    stay.createdAt,
+    stay.submittedAt,
+    ...statusHistoryTimes,
+  ]
     .map((value) => new Date(value || 0).getTime())
     .filter((value) => !Number.isNaN(value));
   if (values.length) return Math.max(...values);
@@ -6405,10 +6448,18 @@ function mergeBoardingStays(records = [], primary = {}) {
       if (primaryDiff) return primaryDiff;
       return boardingStatusPriority({ ...b.record, stays: [b.stay] }) - boardingStatusPriority({ ...a.record, stays: [a.stay] });
     });
-    const merged = { ...best.stay, status: boardingStayDisplayStatus(best.record, best.stay) };
+    const sourceStayIds = [...new Set(items.flatMap(({ stay }) => boardingStaySourceIds(stay)))];
+    const sourceRecordIds = [...new Set(items.flatMap(({ record, stay }) => [record.id, ...(stay.sourceRecordIds || [])]).filter(Boolean))];
+    const merged = {
+      ...best.stay,
+      status: boardingStayDisplayStatus(best.record, best.stay),
+      sourceStayIds,
+      duplicateStayIds: sourceStayIds.filter((id) => id !== best.stay.id),
+      sourceRecordIds,
+    };
     items.forEach(({ stay }) => {
       Object.entries(stay).forEach(([field, value]) => {
-        if (field === "status" || field === "requests") return;
+        if (["status", "requests", "sourceStayIds", "duplicateStayIds", "sourceRecordIds"].includes(field)) return;
         if (merged[field]) return;
         merged[field] = value;
       });
@@ -6424,8 +6475,17 @@ function mergeBoardingStays(records = [], primary = {}) {
   }).sort((a, b) => new Date(b.dropoffTime || b.updatedAt || 0) - new Date(a.dropoffTime || a.updatedAt || 0));
 }
 
+function boardingDogWithMergedStays(record = {}) {
+  if (!record) return {};
+  return {
+    ...record,
+    sourceRecordIds: record.sourceRecordIds?.length ? record.sourceRecordIds : [record.id].filter(Boolean),
+    stays: mergeBoardingStays([record], record),
+  };
+}
+
 function mergeBoardingProfileGroup(records = []) {
-  if (records.length <= 1) return records[0] || {};
+  if (records.length <= 1) return boardingDogWithMergedStays(records[0] || {});
   const primary = chooseBoardingProfilePrimary(records);
   const merged = {
     ...primary,
@@ -6508,6 +6568,52 @@ function renderBoardingDogs() {
   renderCustomerDogUploadCards();
 }
 
+function boardingStayNeedsDuplicateStatusSync(record = {}, stay = {}, nextStatus = "", options = {}) {
+  const status = boardingStayDisplayStatus(record, stay);
+  if (status !== nextStatus) return true;
+  if (nextStatus === "In Kennel") {
+    const kennelLocation = options.kennelLocation || {};
+    return Boolean(kennelLocation.id && stay.kennelLocationId !== kennelLocation.id);
+  }
+  return Boolean(
+    stay.kennelLocationId
+      || stay.kennelLocationName
+      || stay.kennelBuilding
+      || stay.kennelAssignedAt
+      || record.kennelLocationId
+      || record.kennelLocationName
+      || record.kennelBuilding
+      || record.kennelAssignedAt,
+  );
+}
+
+async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updatedRecord = {}, targetStay = {}, nextStatus = "", options = {}) {
+  if (!targetStay?.id || !boardingLifecycleStatuses.includes(nextStatus)) return [];
+  const sourceIds = [...new Set([
+    originalRecord.id,
+    updatedRecord.id,
+    ...(originalRecord.sourceRecordIds || []),
+    ...(updatedRecord.sourceRecordIds || []),
+    ...(targetStay.sourceRecordIds || []),
+  ].filter(Boolean))];
+  const syncedRecords = [];
+  const sourceRecords = readRecords("boardingDog").filter((record) => sourceIds.includes(record.id) && !record.removed && record.id !== updatedRecord.id);
+  for (const sourceRecord of sourceRecords) {
+    const sourceStay = (sourceRecord.stays || []).find((stay) => boardingStayMatchesIdentity(stay, targetStay));
+    if (!sourceStay || !boardingStayNeedsDuplicateStatusSync(sourceRecord, sourceStay, nextStatus, options)) continue;
+    const synced = withBoardingStatusTransition(sourceRecord, nextStatus, {
+      ...options,
+      stayId: sourceStay.id,
+      forceStatusSync: true,
+    });
+    if (!synced) continue;
+    const stored = upsertRecord("boardingDog", synced);
+    await sendPayload(stored);
+    syncedRecords.push(stored);
+  }
+  return syncedRecords;
+}
+
 async function saveBoardingStatusTransition(record = {}, nextStatus = "", options = {}) {
   if (nextStatus === "Checked In" && !options.checkInSubmitted) {
     openBoardingCheckInPopup(record, nextStatus, options);
@@ -6524,6 +6630,9 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   }
   const updated = upsertRecord("boardingDog", transitioned);
   await sendPayload(updated);
+  if (options.stayId) {
+    await syncDuplicateBoardingStayStatusRecords(record, updated, boardingStayById(record, options.stayId) || boardingStayById(updated, options.stayId), nextStatus, options);
+  }
   renderBoardingDogs();
   renderBoardingRequests();
   renderCustomerRequests();
@@ -7571,9 +7680,10 @@ async function markRecordRemoved(type, id) {
 }
 
 function renderBoardingStays(record = activeBoardingDog()) {
-  const stays = record?.stays || [];
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stays = displayRecord?.stays || [];
   $("#boardingStayHistory").innerHTML = stays.length
-    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayStatusButtonHtml(record, stay)}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}">Edit Stay</button><button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}">Remove Stay</button></div></article>`).join("")
+    ? stays.map((stay) => `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayStatusButtonHtml(displayRecord, stay)}</div><p>${escapeHtml((stay.requests || []).join(", ") || "No service requests")}</p><p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}">Edit Stay</button><button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}">Remove Stay</button></div></article>`).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
 
@@ -7591,16 +7701,18 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
 }
 
 function openBoardingStayStatusMenu(record = activeBoardingDog(), stayId = "") {
-  const stay = (record?.stays || []).find((item) => item.id === stayId);
-  if (!record?.id || !stay) {
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayById(displayRecord, stayId);
+  if (!displayRecord?.id || !stay) {
     showToast("This boarding stay could not be opened.");
     return;
   }
-  showDetailDialog("Update Stay Status", boardingStayStatusMenuHtml(record, stay));
+  showDetailDialog("Update Stay Status", boardingStayStatusMenuHtml(displayRecord, stay));
 }
 
 async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextStatus = "") {
   if (!record?.id || !stayId || !boardingLifecycleStatuses.includes(nextStatus)) return null;
+  const targetStay = boardingStayById(record, stayId);
   const transitioned = withBoardingStatusTransition(record, nextStatus, { stayId });
   if (!transitioned) {
     showToast("That stay status transition is not allowed.");
@@ -7608,6 +7720,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   }
   const updated = upsertRecord("boardingDog", transitioned);
   await sendPayload(updated);
+  await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay || boardingStayById(updated, stayId), nextStatus, { stayId });
   await addAuditLog("Changed boarding stay status", "boardingDog", updated, `${updated.dogName || "Dog"} stay ${stayId}: ${nextStatus}`);
   renderBoardingDogs();
   renderBoardingRequests();
@@ -7624,6 +7737,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
 
 function boardingStayLifecycleEvents(record = {}, stay = {}) {
   const events = [];
+  const stayIds = boardingStaySourceIds(stay);
   const add = (label, date, by, note = "") => {
     if (!date && !note) return;
     events.push({ label, date, by, note });
@@ -7635,7 +7749,7 @@ function boardingStayLifecycleEvents(record = {}, stay = {}) {
   add("Ready for pickup", stay.readyForPickupAt || record.readyForPickupAt, stay.readyForPickupBy || record.statusHistory?.find((item) => item.to === "Ready For Pickup")?.by, "");
   add("Checked out", stay.checkedOutAt || record.checkedOutAt, stay.checkedOutBy || record.statusHistory?.find((item) => item.to === "Checked Out")?.by, record.paymentStatus ? `Payment: ${record.paymentStatus}${record.paymentMethod ? ` by ${record.paymentMethod}` : ""}` : "");
   (record.statusHistory || []).forEach((item) => {
-    if (item.stayId && stay.id && item.stayId !== stay.id) return;
+    if (item.stayId && stayIds.length && !stayIds.includes(String(item.stayId))) return;
     add(`Status changed: ${item.from || "Unknown"} to ${item.to || "Unknown"}`, item.date, item.by, item.early ? "Early transition" : "");
   });
   return events.sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
@@ -7656,15 +7770,16 @@ function boardingStayHistoryPopupHtml(record = {}, stay = {}) {
 function renderBoardingHistory(record = activeBoardingDog()) {
   const list = $("#boardingHistoryList");
   if (!list) return;
-  const stays = record?.stays || [];
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stays = displayRecord?.stays || [];
   list.innerHTML = stays.length
     ? stays
         .map((stay) => {
-          const events = boardingStayLifecycleEvents(record, stay);
-          const location = [stay.kennelBuilding || record.kennelBuilding, stay.kennelLocationName || record.kennelLocationName].filter(Boolean).join(" - ");
+          const events = boardingStayLifecycleEvents(displayRecord, stay);
+          const location = [stay.kennelBuilding || displayRecord.kennelBuilding, stay.kennelLocationName || displayRecord.kennelLocationName].filter(Boolean).join(" - ");
           return `<article class="record-card clickable-card compact-record-card" data-action="view-boarding-stay-history" data-id="${escapeHtml(stay.id || "")}">
             <strong>${escapeHtml(formatDateTime(stay.dropoffTime))} to ${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
-            <div class="chip-row">${boardingStayStatusChipHtml(record, stay)}</div>
+            <div class="chip-row">${boardingStayStatusChipHtml(displayRecord, stay)}</div>
             <p>${escapeHtml(location || (stay.requests || []).join(", ") || "No location or service request saved")}</p>
             <span>${events.length} lifecycle event${events.length === 1 ? "" : "s"}</span>
           </article>`;
@@ -7674,9 +7789,10 @@ function renderBoardingHistory(record = activeBoardingDog()) {
 }
 
 function openBoardingStayHistory(record = activeBoardingDog(), stayId = "") {
-  const stay = (record?.stays || []).find((item) => item.id === stayId);
-  if (!record?.id || !stay) return;
-  showDetailDialog("Boarding Stay History", boardingStayHistoryPopupHtml(record, stay));
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayById(displayRecord, stayId);
+  if (!displayRecord?.id || !stay) return;
+  showDetailDialog("Boarding Stay History", boardingStayHistoryPopupHtml(displayRecord, stay));
 }
 
 function boardingStayRemoveConfirmHtml(record = {}, stay = {}) {
@@ -7695,19 +7811,22 @@ function boardingStayRemoveConfirmHtml(record = {}, stay = {}) {
 }
 
 function openBoardingStayRemoveConfirm(record = activeBoardingDog(), stayId = "") {
-  const stay = (record?.stays || []).find((item) => item.id === stayId);
-  if (!record?.id || !stay) return;
-  showDetailDialog("Confirm Remove Boarding Stay", boardingStayRemoveConfirmHtml(record, stay));
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayById(displayRecord, stayId);
+  if (!displayRecord?.id || !stay) return;
+  showDetailDialog("Confirm Remove Boarding Stay", boardingStayRemoveConfirmHtml(displayRecord, stay));
 }
 
 async function removeBoardingStayFromDog(dogId = "", stayId = "") {
   const displayRecord = boardingDogRecordForDisplay(dogId);
   if (!displayRecord || !stayId) return null;
+  const targetStay = boardingStayById(displayRecord, stayId);
+  if (!targetStay) return null;
   const sourceIds = displayRecord.sourceRecordIds?.length ? displayRecord.sourceRecordIds : [displayRecord.id];
   const sourceRecords = readRecords("boardingDog").filter((record) => sourceIds.includes(record.id) && !record.removed);
   let updatedPrimary = null;
   for (const sourceRecord of sourceRecords) {
-    const nextStays = (sourceRecord.stays || []).filter((stay) => stay.id !== stayId);
+    const nextStays = (sourceRecord.stays || []).filter((stay) => !boardingStayMatchesIdentity(stay, targetStay));
     if (nextStays.length === (sourceRecord.stays || []).length) continue;
     const updated = upsertRecord("boardingDog", {
       ...sourceRecord,
@@ -9527,18 +9646,19 @@ function openCustomerBookingModal(mode = "boarding") {
 
 function editCustomerRequest(record, stayId = "") {
   if (!record) return;
+  const displayRecord = boardingDogWithStayStatus(record);
   switchPage("customerRequestsPage");
   resetCustomerBookingForm();
   $("#customerBookingForm").hidden = false;
-  const stay = (record.stays || []).find((item) => item.id === stayId) || record.stays?.[0] || {};
-  $("#editingCustomerRequestId").value = record.id;
+  const stay = boardingStayById(displayRecord, stayId) || displayRecord.stays?.[0] || {};
+  $("#editingCustomerRequestId").value = displayRecord.id;
   $("#editingCustomerStayId").value = stay.id || "";
   $("#customerBookingForm").elements.dropoffTime.value = stay.dropoffTime?.slice(0, 16) || "";
   $("#customerBookingForm").elements.pickupTime.value = stay.pickupTime?.slice(0, 16) || "";
   $("#customerBookingForm").elements.requestNotes.value = stay.stayNotes || "";
   const dog = customerDogsForCurrentUser().find((item) => {
-    if (item.sourceBoardingDogId && item.sourceBoardingDogId === record.id) return true;
-    return item.dogName === record.dogName && normalizeEmail(item.ownerEmail || item.customerEmail) === normalizeEmail(record.ownerEmail || record.customerEmail);
+    if (item.sourceBoardingDogId && item.sourceBoardingDogId === displayRecord.id) return true;
+    return item.dogName === displayRecord.dogName && normalizeEmail(item.ownerEmail || item.customerEmail) === normalizeEmail(displayRecord.ownerEmail || displayRecord.customerEmail);
   });
   if (dog) {
     const checkbox = [...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]')].find((input) => input.value === dog.id);
@@ -9653,12 +9773,12 @@ async function submitPendingCustomerBooking() {
   if (!estimate?.dogs?.length) return;
   const editingId = $("#editingCustomerRequestId")?.value;
   const editingStayId = $("#editingCustomerStayId")?.value || "";
-  const editingRecord = editingId ? readRecords("boardingDog").find((record) => record.id === editingId) : null;
+  const editingRecord = editingId ? boardingDogRecordForDisplay(editingId) : null;
   for (const dog of estimate.dogs) {
     const sharedBoardingRecord = dog.sourceBoardingDogId ? readRecords("boardingDog").find((record) => record.id === dog.sourceBoardingDogId && !record.removed) : null;
     const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
     const useExisting = Boolean(existingTarget);
-    const existingStay = editingStayId ? (existingTarget?.stays || []).find((item) => item.id === editingStayId) || {} : existingTarget?.stays?.[0] || {};
+    const existingStay = editingStayId ? boardingStayById(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
     const stay = {
       id: editingRecord ? existingStay.id || editingStayId || uid("stay") : uid("stay"),
       status: editingRecord ? existingStay.status || normalizeBoardingStatus(editingRecord) : "Pending",
@@ -9673,10 +9793,8 @@ async function submitPendingCustomerBooking() {
       estimatedTotal: estimate.total,
     };
     stay.bathPlan = bathPlanForStay(stay);
-    const existingStays = useExisting ? [...(existingTarget.stays || [])] : [];
-    const stayIndex = editingRecord ? existingStays.findIndex((item) => item.id === stay.id) : -1;
-    if (stayIndex >= 0) existingStays[stayIndex] = stay;
-    else existingStays.unshift(stay);
+    const existingStays = useExisting ? (existingTarget.stays || []).filter((item) => !boardingStayMatchesIdentity(item, stay)) : [];
+    existingStays.unshift(stay);
     const ownerEmail = normalizeEmail(existingTarget?.ownerEmail || dog.ownerEmail || currentUser?.email);
     const secondaryOwnerEmail = normalizeEmail(existingTarget?.secondaryOwnerEmail || dog.secondaryOwnerEmail);
     const existingStatus = useExisting ? normalizeBoardingStatus(existingTarget) : "Pending";
@@ -11522,7 +11640,7 @@ function initEvents() {
     if (action.dataset.action === "transition-boarding-stay") {
       const dog = boardingDogRecordForDisplay(action.dataset.dogId);
       const options = { stayId: action.dataset.stayId || "" };
-      const stay = (dog?.stays || []).find((item) => item.id === options.stayId) || {};
+      const stay = boardingStayById(dog || {}, options.stayId) || {};
       const currentStayStatus = boardingStayDisplayStatus(dog, stay);
       if (action.dataset.nextStatus === "Checked In") {
         options.allowEarly = true;
@@ -12822,24 +12940,21 @@ function initEvents() {
     }
   });
   $("#customerRequestStatusFilter").addEventListener("change", renderCustomerRequests);
-  $("#customerRequestList").addEventListener("click", (event) => {
+  $("#customerRequestList").addEventListener("click", async (event) => {
     const actionButton = event.target.closest("[data-action]");
     if (actionButton?.dataset.action === "edit-customer-request") {
       event.stopPropagation();
-      editCustomerRequest(readRecords("boardingDog").find((item) => item.id === actionButton.dataset.id), actionButton.dataset.stayId || "");
+      editCustomerRequest(boardingDogRecordForDisplay(actionButton.dataset.id), actionButton.dataset.stayId || "");
       return;
     }
     if (actionButton?.dataset.action === "cancel-customer-request") {
       event.stopPropagation();
-      const record = readRecords("boardingDog").find((item) => item.id === actionButton.dataset.id);
+      const record = boardingDogRecordForDisplay(actionButton.dataset.id);
       if (!record) return;
-      const transitioned = withBoardingStatusTransition(record, "Cancelled", actionButton.dataset.stayId ? { stayId: actionButton.dataset.stayId } : {});
-      if (!transitioned) {
-        showToast("That boarding status transition is not allowed.");
-        return;
-      }
-      const updated = upsertRecord("boardingDog", transitioned);
-      sendPayload(updated);
+      const updated = actionButton.dataset.stayId
+        ? await saveBoardingStayStatusTransition(record, actionButton.dataset.stayId, "Cancelled")
+        : await saveBoardingStatusTransition(record, "Cancelled");
+      if (!updated) return;
       renderCustomerRequests();
       renderBoardingDogs();
       renderBoardingRequests();
@@ -12848,7 +12963,7 @@ function initEvents() {
     }
     const card = event.target.closest('[data-action="view-customer-request"]');
     if (!card) return;
-    const record = readRecords("boardingDog").find((item) => item.id === card.dataset.id);
+    const record = boardingDogRecordForDisplay(card.dataset.id);
     if (record) openCustomerRequestDetail(record);
   });
   $("#customerBookingForm").addEventListener("submit", async (event) => {
