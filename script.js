@@ -276,15 +276,10 @@ const tableColumns = {
     { key: "dogName", label: "Dog", value: (record) => record.dogName || "" },
     { key: "ownerName", label: "Owner", value: (record) => record.ownerName || "" },
     { key: "boardingStatus", label: "Status", value: (record) => boardingDisplayStatus(record) },
+    { key: "breedDescription", label: "Breed", value: (record) => record.breedDescription || "" },
     { key: "ownerPhone", label: "Phone", value: (record) => record.ownerPhone || "" },
     { key: "emergencyPhone", label: "Emergency", value: (record) => [record.emergencyName, record.emergencyPhone].filter(Boolean).join(" ") },
-    { key: "dropoffTime", label: "Drop-off", value: (record) => formatDateTime(currentOrNextStay(record)?.dropoffTime) || "" },
-    { key: "pickupTime", label: "Pick-up", value: (record) => formatDateTime(currentOrNextStay(record)?.pickupTime) || "" },
     { key: "requiredUpdate", label: "Required Update", value: (record) => (record.flags || []).includes("Required update from owner") ? "Yes" : "No" },
-    { key: "requests", label: "Requests", value: (record) => {
-      const stay = currentOrNextStay(record);
-      return [...(record.flags || []).filter((flag) => flag.includes("requested")), ...((stay?.requests || []).filter((flag) => flag.includes("requested")))].join(", ");
-    } },
   ],
   service: [
     { key: "serviceName", label: "Service", value: (record) => record.serviceName || "" },
@@ -6850,10 +6845,7 @@ function renderBoardingDogs() {
   $("#boardingDogTableBody").innerHTML = records.length
     ? records
         .map((record) => {
-          const stay = boardingPrimaryStay(record) || {};
-          const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
-          const statusChip = stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record);
-          return `<tr data-id="${record.id}" data-source="${escapeHtml(record.sourceType || record.type || "boardingDog")}">${columns.map((column) => `<td>${escapeHtml(column.value(record))}</td>`).join("")}<td><div class="record-actions table-actions">${dogTypeBadgeHtml("boardingDog")}${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}"${stayAttr}>${statusChip}</button><button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>View/Edit</button>${boardingOwnerLinkButtonHtml(record)}</div></td></tr>`;
+          return `<tr data-id="${record.id}" data-source="${escapeHtml(record.sourceType || record.type || "boardingDog")}">${columns.map((column) => `<td>${escapeHtml(column.value(record))}</td>`).join("")}<td><div class="record-actions table-actions">${dogTypeBadgeHtml("boardingDog")}${boardingStatusChipHtml(record)}<button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}">View/Edit</button><button type="button" class="secondary-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}">Boarding & Request</button>${boardingOwnerLinkButtonHtml(record)}</div></td></tr>`;
         })
         .join("")
     : `<tr><td colspan="${(columns.length || 1) + 1}">${hasSearchQuery ? "No boarding dog records match this search." : `No ${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.`}</td></tr>`;
