@@ -40,6 +40,7 @@ let impersonationSession = null;
 let supabaseClient = null;
 let detailDialogContext = null;
 let pendingCustomerBooking = null;
+let customerBookingSubmitInProgress = false;
 let pendingBoardingCheckIn = null;
 let activeClockIn = JSON.parse(localStorage.getItem("cth-active-clock-in") || "null") || "";
 let localTestMode = false;
@@ -6629,6 +6630,35 @@ function boardingStayMergeKey(stay = {}) {
   return JSON.stringify(stay);
 }
 
+function boardingStayRequestsKey(stay = {}) {
+  return [...new Set(arrayValue(stay.requests)
+    .map((item) => (typeof item === "string" ? item : item?.serviceName || item?.label || JSON.stringify(item)))
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean))]
+    .sort()
+    .join("|");
+}
+
+function boardingStaySemanticMergeKey(record = {}, stay = {}) {
+  const dropoff = String(stay.dropoffTime || "").trim();
+  const pickup = String(stay.pickupTime || "").trim();
+  if (!dropoff && !pickup) return "";
+  return [
+    "customer-request",
+    dropoff,
+    pickup,
+    String(stay.stayType || record.stayType || "").trim().toLowerCase(),
+    boardingStayRequestsKey(stay),
+  ].join("|");
+}
+
+function boardingStayMergeKeyForRecord(record = {}, stay = {}) {
+  if (record.customerRequest || stay.source === "customer-request" || stay.source === "customer") {
+    return boardingStaySemanticMergeKey(record, stay) || boardingStayMergeKey(stay);
+  }
+  return boardingStayMergeKey(stay);
+}
+
 function shortStableHash(value = "", length = 5) {
   const text = String(value || "");
   let hash = 0;
@@ -6749,7 +6779,7 @@ function mergeBoardingStays(records = [], primary = {}) {
   const byKey = new Map();
   records.forEach((record) => {
     arrayValue(record.stays).forEach((stay) => {
-      const key = boardingStayMergeKey(stay);
+      const key = boardingStayMergeKeyForRecord(record, stay);
       if (!key) return;
       byKey.set(key, [...(byKey.get(key) || []), { record, stay }]);
     });
@@ -6868,9 +6898,9 @@ function boardingStayEntryKey(entry = {}) {
   const dogKey = boardingDogIdentityTokens(record).sort().join("|")
     || [record.id, ...(record.sourceRecordIds || [])].filter(Boolean).sort().join("|")
     || normalizedDogIdentityName(record);
-  const timeKey = boardingStayMergeKey(stay);
+  const timeKey = boardingStayMergeKeyForRecord(record, stay);
   const sourceKey = boardingStaySourceIds(stay).sort().join("|");
-  const stayKey = timeKey?.startsWith("time:") ? timeKey : sourceKey || entry.requestCode || timeKey;
+  const stayKey = timeKey?.startsWith("time:") || timeKey?.startsWith("customer-request|") ? timeKey : sourceKey || entry.requestCode || timeKey;
   return [dogKey, stayKey].filter(Boolean).join("::");
 }
 
@@ -9987,9 +10017,100 @@ function renderCustomerServiceOptions() {
 }
 
 function selectedCustomerDogs() {
-  return [...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')]
+  const dogs = [...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')]
     .map((input) => customerDogsForCurrentUser().find((dog) => dog.id === input.value))
     .filter((dog) => dog && !dog.removed);
+  return uniqueCustomerBookingDogs(dogs);
+}
+
+function customerBookingSelectionKey(dog = {}) {
+  const boardingId = boardingDogIdFromCustomerDogValue(dog.sourceBoardingDogId || dog.linkedBoardingDogId || (String(dog.id || "").startsWith("boarding:") ? dog.id : ""));
+  if (boardingId) return `boarding:${boardingId}`;
+  if (dog.id) return `customer:${dog.id}`;
+  return customerDogIdentityKey(dog);
+}
+
+function uniqueCustomerBookingDogs(dogs = []) {
+  const seen = new Set();
+  return dogs.filter((dog) => {
+    const key = customerBookingSelectionKey(dog);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function customerBookingDogIdentityTokens(dog = {}) {
+  const dogName = normalizedDogIdentityName(dog);
+  if (!dogName) return [];
+  const tokens = new Set();
+  const addScoped = (kind = "", value = "") => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized) tokens.add(`${dogName}|${kind}:${normalized}`);
+  };
+  [
+    dog.isSharedBoardingDog ? dog.linkedCustomerDogId : dog.id,
+    dog.linkedCustomerDogId,
+    dog.customerDogId,
+  ].forEach((id) => addScoped("customer-dog", id));
+  [
+    boardingDogIdFromCustomerDogValue(dog.sourceBoardingDogId),
+    boardingDogIdFromCustomerDogValue(dog.linkedBoardingDogId),
+    String(dog.id || "").startsWith("boarding:") ? boardingDogIdFromCustomerDogValue(dog.id) : "",
+  ].forEach((id) => addScoped("boarding-dog", id));
+  uniqueEmails(dog.ownerEmail, dog.customerEmail, currentUser?.email).forEach((email) => addScoped("email", email));
+  [
+    dog.ownerPhone,
+    dog.phone,
+    dog.customerPhone,
+    dog.emergencyPhone,
+  ].forEach((phone) => {
+    const normalized = normalizedPhoneToken(phone);
+    if (normalized) addScoped("phone", normalized);
+  });
+  if (!tokens.size) addScoped("owner-name", dog.ownerName);
+  return [...tokens];
+}
+
+function customerBookingDogMatchesRecord(dog = {}, record = {}) {
+  const dogTokens = new Set(customerBookingDogIdentityTokens(dog));
+  if (!dogTokens.size) return false;
+  return boardingDogIdentityTokens(record).some((token) => dogTokens.has(token));
+}
+
+function customerBookingServiceKey(estimate = {}) {
+  return [...new Set(arrayValue(estimate.services)
+    .map((service) => `${service.serviceName || service.id || "Service"}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`)
+    .map((label) => String(label || "").trim().toLowerCase())
+    .filter(Boolean))]
+    .sort()
+    .join("|");
+}
+
+function existingCustomerBookingEntryForDog(dog = {}, estimate = {}, options = {}) {
+  const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
+    .filter((record) => !record.removed && (record.customerRequest || (record.stays || []).length))
+    .filter((record) => currentRole() === "admin" || boardingDogVisibleToCustomer(record)));
+  const serviceKey = customerBookingServiceKey(estimate);
+  return uniqueBoardingStayEntries(boardingStayEntries(records)).find(({ record, stay, status }) => {
+    if (options.editingRecordId && (record.id === options.editingRecordId || (record.sourceRecordIds || []).includes(options.editingRecordId))) return false;
+    if (!customerBookingDogMatchesRecord(dog, record)) return false;
+    if (["Cancelled", "Checked Out"].includes(status)) return false;
+    if (String(stay.dropoffTime || "") !== String(estimate.dropoffTime || "")) return false;
+    if (String(stay.pickupTime || "") !== String(estimate.pickupTime || "")) return false;
+    return boardingStayRequestsKey(stay) === serviceKey;
+  }) || null;
+}
+
+function customerBookingStableId(prefix = "customer-booking", estimate = {}, dog = {}) {
+  const seed = [
+    estimate.submissionId || "",
+    customerBookingSelectionKey(dog),
+    dog.dogName || "",
+    estimate.dropoffTime || "",
+    estimate.pickupTime || "",
+  ].join("|");
+  return `${prefix}-${shortStableHash(seed, 10)}`;
 }
 
 function validateCustomerDogSelection(options = {}) {
@@ -10079,6 +10200,8 @@ function resetCustomerBookingForm() {
   setCustomerBookingTimeCopy("boarding");
   $("#requestBoardingButton").textContent = "Request Boarding Time";
   pendingCustomerBooking = null;
+  customerBookingSubmitInProgress = false;
+  if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
   $("#bookingConfirmDialog")?.close();
   formEl.hidden = true;
   formEl.scrollTop = 0;
@@ -10212,18 +10335,20 @@ function updateCustomerEstimate() {
 }
 
 function showBookingConfirmDialog(estimate) {
-  pendingCustomerBooking = estimate;
-  const dogList = estimate.dogs.map((dog) => `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}</li>`).join("");
-  const serviceList = estimate.services.length
-    ? estimate.services.map((service) => `<li>${escapeHtml(service.serviceName)} x${Number(service.quantity || 1)} for ${estimate.dogs.length} dog(s) - ${money(service.lineTotal)} ${escapeHtml(service.unit || "")}</li>`).join("")
+  pendingCustomerBooking = { ...estimate, dogs: uniqueCustomerBookingDogs(estimate.dogs), submissionId: uid("customerBooking") };
+  customerBookingSubmitInProgress = false;
+  if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
+  const dogList = pendingCustomerBooking.dogs.map((dog) => `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}</li>`).join("");
+  const serviceList = pendingCustomerBooking.services.length
+    ? pendingCustomerBooking.services.map((service) => `<li>${escapeHtml(service.serviceName)} x${Number(service.quantity || 1)} for ${pendingCustomerBooking.dogs.length} dog(s) - ${money(service.lineTotal)} ${escapeHtml(service.unit || "")}</li>`).join("")
     : "<li>No added services selected</li>";
   $("#bookingConfirmBody").innerHTML = `
     <div class="booking-summary">
       <div><strong>Dog(s)</strong><ul>${dogList}</ul></div>
-      <div><strong>Stay</strong><p>${formatDateTime(estimate.dropoffTime)} to ${formatDateTime(estimate.pickupTime)}</p><p>${boardingBillingLabel(estimate)} at ${money(estimate.boardingRate)} per day/night</p><p>Boarding subtotal: ${money(estimate.boardingCost)}</p></div>
+      <div><strong>Stay</strong><p>${formatDateTime(pendingCustomerBooking.dropoffTime)} to ${formatDateTime(pendingCustomerBooking.pickupTime)}</p><p>${boardingBillingLabel(pendingCustomerBooking)} at ${money(pendingCustomerBooking.boardingRate)} per day/night</p><p>Boarding subtotal: ${money(pendingCustomerBooking.boardingCost)}</p></div>
       <div><strong>Services</strong><ul>${serviceList}</ul></div>
-      <div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>
-      ${estimate.requestNotes ? `<div><strong>Notes</strong><p>${escapeHtml(estimate.requestNotes)}</p></div>` : ""}
+      <div class="estimate-total"><strong>Estimated total</strong><span>${money(pendingCustomerBooking.total)}</span></div>
+      ${pendingCustomerBooking.requestNotes ? `<div><strong>Notes</strong><p>${escapeHtml(pendingCustomerBooking.requestNotes)}</p></div>` : ""}
     </div>
   `;
   $("#bookingConfirmDialog").showModal();
@@ -10231,109 +10356,134 @@ function showBookingConfirmDialog(estimate) {
 
 async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
+  if (customerBookingSubmitInProgress) return;
   if (!estimate?.dogs?.length) return;
+  customerBookingSubmitInProgress = true;
+  const confirmButton = $("#confirmBookingRequestButton");
+  if (confirmButton) confirmButton.disabled = true;
   const editingId = $("#editingCustomerRequestId")?.value;
   const editingStayId = $("#editingCustomerStayId")?.value || "";
   const editingRecord = editingId ? boardingDogRecordForDisplay(editingId) : null;
-  for (const dog of estimate.dogs) {
-    const sharedBoardingRecord = dog.sourceBoardingDogId ? readRecords("boardingDog").find((record) => record.id === dog.sourceBoardingDogId && !record.removed) : null;
-    const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
-    const useExisting = Boolean(existingTarget);
-    const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
-    const stay = {
-      id: editingRecord ? existingStay.id || editingStayId || uid("stay") : uid("stay"),
-      status: editingRecord ? existingStay.status || normalizeBoardingStatus(editingRecord) : "Pending",
-      createdAt: editingRecord ? existingStay.createdAt || new Date().toISOString() : new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      dropoffTime: estimate.dropoffTime,
-      pickupTime: estimate.pickupTime,
-      stayType: estimate.isDayCare ? "Day Care" : "Boarding",
-      billingDays: estimate.days,
-      requests: estimate.services.map((service) => `${service.serviceName}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`),
-      stayNotes: estimate.requestNotes,
-      estimatedTotal: estimate.total,
-    };
-    stay.bathPlan = bathPlanForStay(stay);
-    stay.requestCode = boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, stay);
-    const existingStays = useExisting ? (existingTarget.stays || []).filter((item) => !boardingStaySharesExplicitIdentity(item, stay)) : [];
-    existingStays.unshift(stay);
-    const ownerEmail = normalizeEmail(existingTarget?.ownerEmail || dog.ownerEmail || currentUser?.email);
-    const secondaryOwnerEmail = normalizeEmail(existingTarget?.secondaryOwnerEmail || dog.secondaryOwnerEmail);
-    const existingStatus = useExisting ? normalizeBoardingStatus(existingTarget) : "Pending";
-    const activeExistingStatus = ["Checked In", "In Kennel", "Ready For Pickup"].includes(existingStatus);
-    const requestStatus = editingRecord ? existingStatus : activeExistingStatus ? existingStatus : "Pending";
-    const statusHistory = useExisting
-      ? [
-          ...(existingTarget.statusHistory || []),
-          ...(requestStatus !== existingStatus ? [{ from: existingStatus, to: requestStatus, date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }] : []),
-        ]
-      : [{ from: "", to: "Pending", date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }];
-    const payload = {
-      ...(useExisting ? existingTarget : {}),
-      type: "boardingDog",
-      id: useExisting ? existingTarget.id : uid("boardingDog"),
-      submittedAt: useExisting ? existingTarget.submittedAt || new Date().toISOString() : new Date().toISOString(),
-      boardingStatus: requestStatus,
-      statusHistory,
-      customerRequest: true,
-      dogName: dog.dogName,
-      breedDescription: dog.breedDescription,
-      ownerName: dog.ownerName,
-      ownerPhone: dog.ownerPhone,
-      ownerEmail,
-      customerEmail: ownerEmail,
-      secondaryOwnerEmail,
-      requestedByEmail: currentUser?.email || ownerEmail,
-      requestedByName: currentUser?.name || dog.ownerName || "",
-      linkedCustomerDogId: dog.isSharedBoardingDog ? linkedCustomerDogForBoarding(sharedBoardingRecord || {})?.id || dog.linkedCustomerDogId || "" : dog.id,
-      linkedOwnerEmail: ownerEmail,
-      emergencyName: dog.emergencyName,
-      emergencyPhone: dog.emergencyPhone,
-      specialCare: dog.specialCare,
-      foodInstructions: dog.foodInstructions || existingTarget?.foodInstructions || "",
-      spayNeuterStatus: dog.spayNeuterStatus,
-      dhppDate: dog.dhppDate,
-      rabiesDate: dog.rabiesDate,
-      rabiesDuration: dog.rabiesDuration,
-      sourceBoardingDogId: dog.sourceBoardingDogId || "",
-      profilePhotoUrl: dog.profilePhotoUrl || "",
-      vaccinationRecords: dog.vaccinationRecords || [],
-      vaccinationFiles: dog.vaccinationFiles || "",
-      estimatedTotal: estimate.total,
-      stayType: estimate.isDayCare ? "Day Care" : "Boarding",
-      billingDays: estimate.days,
-      requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
-      flags: ["Required update from owner"],
-      stays: existingStays,
-      cancelledAt: requestStatus === "Pending" ? "" : existingTarget?.cancelledAt || "",
-      checkedOutAt: requestStatus === "Pending" ? "" : existingTarget?.checkedOutAt || "",
-    };
-    const record = await saveAndNotify(payload, editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
-    await ensureCustomerAccessProfile({
-      email: record.ownerEmail,
-      name: record.ownerName,
-      customerDogId: dog.isSharedBoardingDog ? record.linkedCustomerDogId : dog.id,
-      boardingDogId: record.id,
-    });
-    if (record.secondaryOwnerEmail) {
+  let savedCount = 0;
+  let skippedCount = 0;
+  try {
+    for (const dog of estimate.dogs) {
+      const duplicateEntry = editingRecord ? null : existingCustomerBookingEntryForDog(dog, estimate, { editingRecordId: editingId, editingStayId });
+      if (duplicateEntry) {
+        skippedCount += 1;
+        continue;
+      }
+      const sharedBoardingRecord = dog.sourceBoardingDogId ? readRecords("boardingDog").find((record) => record.id === dog.sourceBoardingDogId && !record.removed) : null;
+      const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
+      const useExisting = Boolean(existingTarget);
+      const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
+      const stay = {
+        id: editingRecord ? existingStay.id || editingStayId || uid("stay") : customerBookingStableId("stay", estimate, dog),
+        status: editingRecord ? existingStay.status || normalizeBoardingStatus(editingRecord) : "Pending",
+        createdAt: editingRecord ? existingStay.createdAt || new Date().toISOString() : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        source: "customer-request",
+        dropoffTime: estimate.dropoffTime,
+        pickupTime: estimate.pickupTime,
+        stayType: estimate.isDayCare ? "Day Care" : "Boarding",
+        billingDays: estimate.days,
+        requests: estimate.services.map((service) => `${service.serviceName}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`),
+        stayNotes: estimate.requestNotes,
+        estimatedTotal: estimate.total,
+      };
+      stay.bathPlan = bathPlanForStay(stay);
+      stay.requestCode = boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, stay);
+      const existingStays = useExisting ? (existingTarget.stays || []).filter((item) => !boardingStaySharesExplicitIdentity(item, stay)) : [];
+      existingStays.unshift(stay);
+      const ownerEmail = normalizeEmail(existingTarget?.ownerEmail || dog.ownerEmail || currentUser?.email);
+      const secondaryOwnerEmail = normalizeEmail(existingTarget?.secondaryOwnerEmail || dog.secondaryOwnerEmail);
+      const existingStatus = useExisting ? normalizeBoardingStatus(existingTarget) : "Pending";
+      const activeExistingStatus = ["Checked In", "In Kennel", "Ready For Pickup"].includes(existingStatus);
+      const requestStatus = editingRecord ? existingStatus : activeExistingStatus ? existingStatus : "Pending";
+      const statusHistory = useExisting
+        ? [
+            ...(existingTarget.statusHistory || []),
+            ...(requestStatus !== existingStatus ? [{ from: existingStatus, to: requestStatus, date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }] : []),
+          ]
+        : [{ from: "", to: "Pending", date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }];
+      const payload = {
+        ...(useExisting ? existingTarget : {}),
+        type: "boardingDog",
+        id: useExisting ? existingTarget.id : customerBookingStableId("boardingDog", estimate, dog),
+        submittedAt: useExisting ? existingTarget.submittedAt || new Date().toISOString() : new Date().toISOString(),
+        boardingStatus: requestStatus,
+        statusHistory,
+        customerRequest: true,
+        dogName: dog.dogName,
+        breedDescription: dog.breedDescription,
+        ownerName: dog.ownerName,
+        ownerPhone: dog.ownerPhone,
+        ownerEmail,
+        customerEmail: ownerEmail,
+        secondaryOwnerEmail,
+        requestedByEmail: currentUser?.email || ownerEmail,
+        requestedByName: currentUser?.name || dog.ownerName || "",
+        linkedCustomerDogId: dog.isSharedBoardingDog ? linkedCustomerDogForBoarding(sharedBoardingRecord || {})?.id || dog.linkedCustomerDogId || "" : dog.id,
+        linkedOwnerEmail: ownerEmail,
+        emergencyName: dog.emergencyName,
+        emergencyPhone: dog.emergencyPhone,
+        specialCare: dog.specialCare,
+        foodInstructions: dog.foodInstructions || existingTarget?.foodInstructions || "",
+        spayNeuterStatus: dog.spayNeuterStatus,
+        dhppDate: dog.dhppDate,
+        rabiesDate: dog.rabiesDate,
+        rabiesDuration: dog.rabiesDuration,
+        sourceBoardingDogId: dog.sourceBoardingDogId || "",
+        profilePhotoUrl: dog.profilePhotoUrl || "",
+        vaccinationRecords: dog.vaccinationRecords || [],
+        vaccinationFiles: dog.vaccinationFiles || "",
+        estimatedTotal: estimate.total,
+        stayType: estimate.isDayCare ? "Day Care" : "Boarding",
+        billingDays: estimate.days,
+        requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
+        flags: ["Required update from owner"],
+        stays: existingStays,
+        cancelledAt: requestStatus === "Pending" ? "" : existingTarget?.cancelledAt || "",
+        checkedOutAt: requestStatus === "Pending" ? "" : existingTarget?.checkedOutAt || "",
+      };
+      const record = await saveAndNotify(payload, editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
+      savedCount += 1;
       await ensureCustomerAccessProfile({
-        email: record.secondaryOwnerEmail,
-        name: record.secondaryOwnerName || record.ownerName,
+        email: record.ownerEmail,
+        name: record.ownerName,
+        customerDogId: dog.isSharedBoardingDog ? record.linkedCustomerDogId : dog.id,
         boardingDogId: record.id,
       });
+      if (record.secondaryOwnerEmail) {
+        await ensureCustomerAccessProfile({
+          email: record.secondaryOwnerEmail,
+          name: record.secondaryOwnerName || record.ownerName,
+          boardingDogId: record.id,
+        });
+      }
     }
+    pendingCustomerBooking = null;
+    $("#bookingConfirmDialog").close();
+    resetCustomerBookingForm();
+    renderBoardingDogs();
+    renderBoardingRequests();
+    renderCustomerDogs();
+    renderCustomerRequests();
+    renderDashboard();
+    switchPage("customerRequestsPage");
+    resetCustomerBookingForm();
+    if (!savedCount && skippedCount) {
+      showDetailDialog("Request Already Exists", `<p>A matching request already exists for the selected dog${skippedCount === 1 ? "" : "s"} at that time.</p>`);
+    } else {
+      showDetailDialog(editingId ? "Request Updated" : "Request Sent", `<p>Your boarding request has been sent for approval.</p><p>${savedCount || estimate.dogs.length} dog(s), ${boardingBillingLabel(estimate)}, estimated total ${money(estimate.total)}.</p>${skippedCount ? `<p>${skippedCount} duplicate request${skippedCount === 1 ? "" : "s"} were skipped.</p>` : ""}`);
+    }
+  } catch (error) {
+    pendingCustomerBooking = estimate;
+    showToast(`Request could not be saved: ${error.message || error}`);
+  } finally {
+    customerBookingSubmitInProgress = false;
+    if ($("#bookingConfirmDialog")?.open && confirmButton) confirmButton.disabled = false;
   }
-  pendingCustomerBooking = null;
-  $("#bookingConfirmDialog").close();
-  resetCustomerBookingForm();
-  renderBoardingDogs();
-  renderBoardingRequests();
-  renderCustomerDogs();
-  renderCustomerRequests();
-  renderDashboard();
-  switchPage("customerRequestsPage");
-  resetCustomerBookingForm();
-  showDetailDialog(editingId ? "Request Updated" : "Request Sent", `<p>Your boarding request has been sent for approval.</p><p>${estimate.dogs.length} dog(s), ${boardingBillingLabel(estimate)}, estimated total ${money(estimate.total)}.</p>`);
 }
 
 function renderServices() {
