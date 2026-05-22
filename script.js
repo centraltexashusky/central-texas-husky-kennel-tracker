@@ -579,8 +579,15 @@ function boardingStayStatusChipHtml(record = {}, stay = {}) {
   return statusChipHtml(label, `boarding-status-chip ${statusClassForBoardingStatus(status)}`);
 }
 
-function boardingStayRequestCodeChipHtml(record = {}, stay = {}) {
-  return statusChipHtml(boardingStayRequestCode(record, stay), "boarding-request-code-chip");
+function boardingStayRequestCodeChipHtml(record = {}, stay = {}, options = {}) {
+  const requestCode = boardingStayRequestCode(record, stay);
+  if (!requestCode) return "";
+  const label = options.labelPrefix ? `${options.labelPrefix}: ${requestCode}` : requestCode;
+  return statusChipHtml(label, "boarding-request-code-chip");
+}
+
+function customerStayIdChipHtml(record = {}, stay = {}) {
+  return boardingStayRequestCodeChipHtml(record, stay, { labelPrefix: "Stay ID" });
 }
 
 function boardingStayDataAttrs(record = {}, stay = {}) {
@@ -4014,7 +4021,7 @@ function boardingStayServicesText(stay = {}) {
 function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
   const isCustomer = Boolean(options.customer);
   const statusChip = isCustomer ? customerRequestStayStatusChipHtml(record, stay) : boardingStayStatusChipHtml(record, stay);
-  const requestCode = stay.id ? boardingStayRequestCodeChipHtml(record, stay) : "";
+  const requestCode = stay.id ? (isCustomer ? customerStayIdChipHtml(record, stay) : boardingStayRequestCodeChipHtml(record, stay)) : "";
   const total = stay.estimatedTotal || record.estimatedTotal || 0;
   return `<article class="record-card ${options.compact ? "compact-record-card" : ""}">
     <strong>${escapeHtml(formatDateTime(stay.dropoffTime) || "Requested stay")}${stay.pickupTime ? ` to ${escapeHtml(formatDateTime(stay.pickupTime))}` : ""}</strong>
@@ -4068,7 +4075,7 @@ function customerBoardingDogDetailHtml(record = {}, stayId = "") {
   const displayRecord = boardingDogWithStayStatus(record || {});
   const stay = boardingStayByReference(displayRecord, stayId) || boardingPrimaryStay(displayRecord) || displayRecord.stays?.[0] || {};
   return `
-    <div class="chip-row">${stay.id ? boardingStayRequestCodeChipHtml(displayRecord, stay) : ""}${stay.id ? customerRequestStayStatusChipHtml(displayRecord, stay) : customerRequestStatusChipHtml(displayRecord)}</div>
+    <div class="chip-row">${stay.id ? customerStayIdChipHtml(displayRecord, stay) : ""}${stay.id ? customerRequestStayStatusChipHtml(displayRecord, stay) : customerRequestStatusChipHtml(displayRecord)}</div>
     ${detailRows(displayRecord, [
       ["Dog", "dogName"],
       ["Owner", "ownerName"],
@@ -4146,19 +4153,14 @@ function openCustomerRequestDetail(record = {}, stayId = "") {
   if (!record?.id) return;
   const displayRecord = boardingDogWithStayStatus(record);
   const stay = boardingStayByReference(displayRecord, stayId) || boardingPrimaryStay(displayRecord) || displayRecord.stays?.[0] || {};
-  const linkedDog = customerDogForBoardingRequest(displayRecord);
-  const isStaffView = currentRole() !== "customer" || isImpersonating();
+  const canShowStaffDogAction = currentRole() !== "customer" && !isImpersonating();
   showDetailDialog(titleForRecord("boardingDog", displayRecord), detailForRecord("boardingDog", displayRecord, { stayId: stay.id || stayId }), null, {
-    headerAction: isStaffView ? {
+    headerAction: canShowStaffDogAction ? {
       label: "Edit Dog",
       action: "open-boarding-dog-editor",
       id: displayRecord.id,
       stayId: stay.id || "",
       requestCode: stay.id ? boardingStayRequestCode(displayRecord, stay) : "",
-    } : linkedDog ? {
-      label: "Edit Dog",
-      action: "open-customer-dog-editor",
-      id: displayRecord.id,
     } : null,
   });
 }
@@ -9960,7 +9962,7 @@ function renderCustomerRequests() {
           const actions = !["Cancelled", "Checked Out"].includes(status)
             ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-customer-request" data-id="${escapeHtml(record.id)}"${stayAttr}>Update</button>${canTransitionBoardingStatus(record, "Cancelled", stay.id ? { stayId: stay.id } : {}) ? `<button type="button" class="secondary-button" data-action="cancel-customer-request" data-id="${escapeHtml(record.id)}"${stayAttr}>Cancel Request</button>` : ""}</div>`
             : "";
-          return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="${escapeHtml(record.id)}"${stayAttr}><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}${customerRequestStayStatusChipHtml(record, stay)}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${estimate}${actions}</article>`;
+          return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="${escapeHtml(record.id)}"${stayAttr}><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${stay.id ? customerStayIdChipHtml(record, stay) : ""}${customerRequestStayStatusChipHtml(record, stay)}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${estimate}${actions}</article>`;
         })
         .join("")
     : `<p>No ${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>`;
