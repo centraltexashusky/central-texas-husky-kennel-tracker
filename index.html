@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260522-hours-operation-1" />
+    <link rel="stylesheet" href="styles.css?v=20260522-fixes-2" />
   </head>
   <body class="is-auth-booting">
     <div class="app-layout">
@@ -280,7 +280,7 @@
             <input type="hidden" name="ownerEmail" id="customerOwnerEmail" />
             <input type="hidden" name="sourceBoardingDogId" id="customerSourceBoardingDogId" />
             <input type="hidden" name="linkedBoardingDogId" id="customerLinkedBoardingDogId" />
-            <div class="section-heading"><span>D</span><div><h2 id="customerDogFormTitle">Add Dog</h2><p>Add or update a dog profile.</p></div><button type="button" class="secondary-button" id="closeCustomerDogModalButton">Close</button></div>
+            <div class="section-heading"><span>D</span><div><h2 id="customerDogFormTitle">Add Dog</h2><p>Add or update a dog profile.</p></div></div>
             <div class="dog-profile-editor">
               <button type="button" class="dog-photo-button" id="customerDogPhotoButton" aria-label="Upload customer dog profile photo">
                 <img id="customerDogPhotoPreview" alt="Dog profile preview" hidden />
@@ -635,7 +635,14 @@
         </section>
 
         <section class="recent-submissions timesheet-tab-panel" id="timesheetClockPanel" data-timesheet-panel="clock">
-          <div class="section-heading"><span>W</span><div><h2>Current Week</h2><p>Clock in and clock out records for this week.</p></div></div>
+          <div class="section-heading"><span>W</span><div><h2 id="timesheetTableTitle">Current Week</h2><p id="timesheetTableHelp">Clock in and clock out records for this week.</p></div></div>
+          <div class="timesheet-date-filter" aria-label="Timesheet date range filter">
+            <label>From date<input type="date" id="timesheetStartDate" /></label>
+            <label>To date<input type="date" id="timesheetEndDate" /></label>
+            <button type="button" class="secondary-button" id="applyTimesheetDateFilterButton">Apply Date Filter</button>
+            <button type="button" class="secondary-button" id="resetTimesheetDateFilterButton">This Week</button>
+          </div>
+          <p class="filter-summary" id="timesheetRangeSummary"></p>
           <div class="button-row export-actions"><button type="button" class="secondary-button" id="exportTimesheetButton">Export Timesheet</button></div>
           <div class="table-wrap">
             <table class="data-table">
@@ -1265,6 +1272,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260522-hours-operation-2"></script>
+  <script src="script.js?v=20260522-fixes-2"></script>
   </body>
 </html>

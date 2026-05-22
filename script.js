@@ -48,6 +48,8 @@ let dailyTaskTab = "morning";
 let dashboardAlertFilter = "All";
 let dashboardShowAllAlerts = false;
 let timesheetTab = "clock";
+let timesheetFilterStart = "";
+let timesheetFilterEnd = "";
 let scheduleWeekDate = todayDate();
 let operationCalendarMonth = todayDate().slice(0, 7);
 let settingsUserTab = "admin";
@@ -386,6 +388,11 @@ function numberFrom(value, fallback) {
   return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
+function nonNegativeNumberFrom(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : fallback;
+}
+
 function normalizeOwnedDogCare(record = {}) {
   const copy = {
     ...record,
@@ -396,9 +403,9 @@ function normalizeOwnedDogCare(record = {}) {
     careNotesHistory: arrayValue(record.careNotesHistory),
     documents: arrayValue(record.documents),
   };
-  copy.exerciseFrequencyDays = numberFrom(copy.exerciseFrequencyDays, careDefaults.exerciseFrequencyDays);
-  copy.trainingFrequencyDays = numberFrom(copy.trainingFrequencyDays, careDefaults.trainingFrequencyDays);
-  copy.bathIntervalDays = numberFrom(copy.bathIntervalDays, careDefaults.bathIntervalDays);
+  copy.exerciseFrequencyDays = nonNegativeNumberFrom(copy.exerciseFrequencyDays, careDefaults.exerciseFrequencyDays);
+  copy.trainingFrequencyDays = nonNegativeNumberFrom(copy.trainingFrequencyDays, careDefaults.trainingFrequencyDays);
+  copy.bathIntervalDays = nonNegativeNumberFrom(copy.bathIntervalDays, careDefaults.bathIntervalDays);
   copy.heatCycleLengthDays = numberFrom(copy.heatCycleLengthDays, careDefaults.heatCycleLengthDays);
   copy.nextRabiesDate = dateOnly(copy.nextRabiesDate);
   copy.nextDhppDate = dateOnly(copy.nextDhppDate);
@@ -2076,7 +2083,7 @@ function checkedFrom(targetForm, name) {
 
 function setFormValues(targetForm, record) {
   Object.entries(record).forEach(([key, value]) => {
-    const field = targetForm.elements[key];
+    const field = formFieldByName(targetForm, key);
     if (!field) return;
     if (field.type === "file") {
       field.value = "";
@@ -3831,8 +3838,8 @@ function setCustomerBookingTimeCopy(mode = "boarding") {
   const formEl = $("#customerBookingForm");
   if (!formEl) return;
   const isServiceRequest = mode === "service";
-  const dropoffField = formEl.elements.dropoffTime;
-  const pickupField = formEl.elements.pickupTime;
+  const dropoffField = formFieldByName(formEl, "dropoffTime");
+  const pickupField = formFieldByName(formEl, "pickupTime");
   setLabelText(dropoffField?.closest("label"), isServiceRequest ? "Ideal drop off time" : "Drop-off time");
   setLabelText(pickupField?.closest("label"), isServiceRequest ? "Alternative drop off time" : "Pick-up time");
   setFieldRequired(dropoffField, true);
@@ -9601,7 +9608,7 @@ function operationBoolean(value, fallback = true) {
 
 function formFieldByName(formEl, name = "") {
   const field = formEl?.elements?.namedItem?.(name) || formEl?.elements?.[name] || null;
-  return field && typeof field.length === "number" && typeof field.item === "function" ? field.item(0) : field;
+  return field && !field.tagName && typeof field.length === "number" && typeof field.item === "function" ? field.item(0) : field;
 }
 
 function normalizeOperationTime(value = "", fallback = defaultOperationOpenTime) {
@@ -9734,6 +9741,13 @@ function customerBookingAvailabilityChecks(formEl = $("#customerBookingForm")) {
   return checks;
 }
 
+function clearCustomerBookingTimeErrors(formEl = $("#customerBookingForm")) {
+  ["dropoffTime", "pickupTime"].forEach((name) => {
+    const field = formFieldByName(formEl, name);
+    if (field) clearFieldError(field);
+  });
+}
+
 function customerBookingAvailabilityMessagesHtml(checks = customerBookingAvailabilityChecks()) {
   const messages = [];
   const seen = new Set();
@@ -9758,6 +9772,7 @@ function renderCustomerBookingAvailabilityMessages() {
 }
 
 function validateCustomerBookingAvailability(formEl = $("#customerBookingForm")) {
+  clearCustomerBookingTimeErrors(formEl);
   const checks = customerBookingAvailabilityChecks(formEl);
   let firstInvalid = null;
   checks.forEach(({ field, result }) => {
@@ -10457,7 +10472,7 @@ function renderCustomerServiceOptions() {
   $("#customerServiceOptions").innerHTML = services.length
     ? services.map((service) => {
         const checked = checkedIds.has(service.id);
-        const quantityValue = $("#customerBookingForm").elements[`serviceQuantity-${service.id}`]?.value || "1";
+        const quantityValue = formFieldByName($("#customerBookingForm"), `serviceQuantity-${service.id}`)?.value || "1";
         return `<label class="service-option"><span><input type="checkbox" name="customerServices" value="${service.id}" ${checked ? "checked" : ""} /> ${escapeHtml(service.serviceName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span><input class="service-quantity" type="number" name="serviceQuantity-${service.id}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(service.serviceName)} quantity" /></label>`;
       }).join("")
     : "<p>No customer services are active yet.</p>";
@@ -10639,6 +10654,7 @@ async function removeCustomerDogById(id = "") {
 function resetCustomerBookingForm() {
   const formEl = $("#customerBookingForm");
   formEl.reset();
+  clearCustomerBookingTimeErrors(formEl);
   $("#editingCustomerRequestId").value = "";
   $("#editingCustomerStayId").value = "";
   $("#customerRequestMode").value = "boarding";
@@ -10673,6 +10689,7 @@ function openCustomerBookingModal(mode = "boarding") {
   $("#customerBookingFormTitle").textContent = mode === "service" ? "Request Service" : "Request Boarding";
   $("#customerBookingFormHelp").textContent = mode === "service" ? "Choose dog(s), service, and requested drop-off time." : "Choose dog(s), requested stay, and optional services.";
   setCustomerBookingTimeCopy(mode);
+  clearCustomerBookingTimeErrors();
   $("#requestBoardingButton").textContent = mode === "service" ? "Request Service" : "Request Boarding Time";
   renderCustomerBookingAvailabilityMessages();
 }
@@ -10686,9 +10703,11 @@ function editCustomerRequest(record, stayId = "") {
   const stay = boardingStayByReference(displayRecord, stayId) || displayRecord.stays?.[0] || {};
   $("#editingCustomerRequestId").value = displayRecord.id;
   $("#editingCustomerStayId").value = stay.id || "";
-  $("#customerBookingForm").elements.dropoffTime.value = stay.dropoffTime?.slice(0, 16) || "";
-  $("#customerBookingForm").elements.pickupTime.value = stay.pickupTime?.slice(0, 16) || "";
-  $("#customerBookingForm").elements.requestNotes.value = stay.stayNotes || "";
+  const bookingForm = $("#customerBookingForm");
+  formFieldByName(bookingForm, "dropoffTime").value = stay.dropoffTime?.slice(0, 16) || "";
+  formFieldByName(bookingForm, "pickupTime").value = stay.pickupTime?.slice(0, 16) || "";
+  formFieldByName(bookingForm, "requestNotes").value = stay.stayNotes || "";
+  clearCustomerBookingTimeErrors(bookingForm);
   const dog = customerDogsForCurrentUser().find((item) => {
     if (item.sourceBoardingDogId && item.sourceBoardingDogId === displayRecord.id) return true;
     return item.dogName === displayRecord.dogName && normalizeEmail(item.ownerEmail || item.customerEmail) === normalizeEmail(displayRecord.ownerEmail || displayRecord.customerEmail);
@@ -10706,7 +10725,7 @@ function editCustomerRequest(record, stayId = "") {
     const service = readRecords("service").find((item) => item.id === input.value);
     const quantity = serviceQuantities.get(service?.id) || serviceQuantities.get(service?.serviceName);
     input.checked = Boolean(quantity);
-    const quantityInput = $("#customerBookingForm").querySelector(`input[name="serviceQuantity-${input.value}"]`);
+    const quantityInput = formFieldByName($("#customerBookingForm"), `serviceQuantity-${input.value}`);
     if (quantityInput) {
       quantityInput.value = String(quantity || 1);
       quantityInput.disabled = !input.checked;
@@ -10753,7 +10772,7 @@ function customerEstimateDetails() {
     .map((id) => {
       const service = readRecords("service").find((item) => item.id === id);
       if (!service) return null;
-      const quantity = Math.max(1, Number(formEl.elements[`serviceQuantity-${id}`]?.value || 1));
+      const quantity = Math.max(1, Number(formFieldByName(formEl, `serviceQuantity-${id}`)?.value || 1));
       return { ...service, quantity };
     })
     .filter(Boolean);
@@ -11438,6 +11457,57 @@ function inRange(record, start, end) {
   return date >= start && date < end;
 }
 
+function timesheetDefaultRange() {
+  const start = localDateKey(weekStart(new Date()));
+  return { start, end: addDays(start, 6), isFiltered: false };
+}
+
+function timesheetActiveRange() {
+  const fallback = timesheetDefaultRange();
+  let start = dateOnly(timesheetFilterStart) || "";
+  let end = dateOnly(timesheetFilterEnd) || "";
+  if (!start && !end) return fallback;
+  if (!start) start = end;
+  if (!end) end = start;
+  if (start > end) [start, end] = [end, start];
+  return { start, end, isFiltered: true };
+}
+
+function timesheetRecordDate(record = {}) {
+  return dateOnly(record.date) || localDateFromStoredDateTime(record.clockInTime) || dateOnly(record.clockInTime);
+}
+
+function timesheetRecordTime(record = {}) {
+  const value = record.clockInTime || `${timesheetRecordDate(record)}T12:00:00`;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function timesheetRecordInDateRange(record, start, end) {
+  const recordDate = timesheetRecordDate(record);
+  return Boolean(recordDate && recordDate >= start && recordDate <= end);
+}
+
+function timesheetDateLabel(date = "") {
+  const dateKey = dateOnly(date);
+  if (!dateKey) return "";
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function syncTimesheetRangeUi(range = timesheetActiveRange()) {
+  const startInput = $("#timesheetStartDate");
+  const endInput = $("#timesheetEndDate");
+  if (startInput) startInput.value = range.start || "";
+  if (endInput) endInput.value = range.end || "";
+  const title = $("#timesheetTableTitle");
+  const help = $("#timesheetTableHelp");
+  const summary = $("#timesheetRangeSummary");
+  const label = range.start === range.end ? timesheetDateLabel(range.start) : `${timesheetDateLabel(range.start)} to ${timesheetDateLabel(range.end)}`;
+  if (title) title.textContent = range.isFiltered ? "Selected Date Range" : "Current Week";
+  if (help) help.textContent = range.isFiltered ? "Clock in and clock out records for the selected date range." : "Clock in and clock out records for this week.";
+  if (summary) summary.textContent = label ? `Showing timesheet records for ${label}.` : "";
+}
+
 function sumHours(records) {
   return records.reduce((total, record) => total + Number(record.hours || 0), 0);
 }
@@ -11456,25 +11526,30 @@ function renderTimesheet() {
   const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
   const thisYearStart = new Date(now.getFullYear(), 0, 1);
   const currentWeekRecords = records.filter((record) => inRange(record, thisWeekStart, nextWeekStart));
+  const activeRange = timesheetActiveRange();
+  const visibleRecords = records
+    .filter((record) => timesheetRecordInDateRange(record, activeRange.start, activeRange.end))
+    .sort((a, b) => timesheetRecordTime(b) - timesheetRecordTime(a));
+  syncTimesheetRangeUi(activeRange);
 
-  $("#timesheetRows").innerHTML = currentWeekRecords.length
-    ? currentWeekRecords.map((record) => {
+  $("#timesheetRows").innerHTML = visibleRecords.length
+    ? visibleRecords.map((record) => {
         const canEdit = isAdmin || canEditOwnToday(record);
         return `<tr><td>${record.date}</td><td>${record.helperName}</td><td>${formatDateTime(record.clockInTime)}</td><td>${formatDateTime(record.clockOutTime)}</td><td>${Number(record.hours || 0).toFixed(2)}</td><td>${record.note || ""}</td><td>${canEdit ? `<button type="button" class="secondary-button" data-action="edit-time" data-id="${record.id}">Edit</button>` : ""}</td></tr>`;
       }).join("")
-    : `<tr><td colspan="7">No time entries for this week.</td></tr>`;
+    : `<tr><td colspan="7">No time entries for this date range.</td></tr>`;
 
   $("#thisWeekHours").textContent = sumHours(currentWeekRecords).toFixed(2);
   $("#lastWeekHours").textContent = sumHours(records.filter((record) => inRange(record, lastWeekStart, thisWeekStart))).toFixed(2);
   $("#lastMonthHours").textContent = sumHours(records.filter((record) => inRange(record, lastMonthStart, thisMonthStart))).toFixed(2);
   $("#lastYearHours").textContent = sumHours(records.filter((record) => inRange(record, lastYearStart, thisYearStart))).toFixed(2);
 
-  const helperTotals = currentWeekRecords.reduce((totals, record) => {
+  const helperTotals = visibleRecords.reduce((totals, record) => {
     totals[record.helperName] = (totals[record.helperName] || 0) + Number(record.hours || 0);
     return totals;
   }, {});
 	  $("#weeklyHelperTotals").innerHTML = Object.keys(helperTotals).length
-	    ? Object.entries(helperTotals).map(([helper, hours]) => `<div class="helper-total-item"><strong>${escapeHtml(isAdmin ? helper : "Your total")}</strong><span>${hours.toFixed(2)} hours this week</span></div>`).join("")
+	    ? Object.entries(helperTotals).map(([helper, hours]) => `<div class="helper-total-item"><strong>${escapeHtml(isAdmin ? helper : "Your total")}</strong><span>${hours.toFixed(2)} hours ${activeRange.isFiltered ? "in selected range" : "this week"}</span></div>`).join("")
 	    : "";
 	  if ($("#timesheetAdminActions")) $("#timesheetAdminActions").hidden = !isAdmin;
 	  renderTimesheetTabs();
@@ -12093,8 +12168,11 @@ function exportBoardingQueue() {
 
 function exportTimesheet() {
   const isAdmin = currentRole() === "admin";
+  const range = timesheetActiveRange();
   const rows = readRecords("timesheet")
-    .filter((record) => isAdmin || timesheetBelongsToCurrentUser(record))
+    .filter((record) => !record.removed && (isAdmin || timesheetBelongsToCurrentUser(record)))
+    .filter((record) => timesheetRecordInDateRange(record, range.start, range.end))
+    .sort((a, b) => timesheetRecordTime(b) - timesheetRecordTime(a))
     .map((record) => ({
       date: record.date || "",
       staff: record.helperName || "",
@@ -12103,7 +12181,7 @@ function exportTimesheet() {
       hours: Number(record.hours || 0).toFixed(2),
       note: record.note || "",
     }));
-  downloadCsv(`timesheet-${todayDate()}.csv`, rows);
+  downloadCsv(`timesheet-${range.start}-to-${range.end}.csv`, rows);
 }
 
 function exportCareLogs() {
@@ -12155,6 +12233,23 @@ function initEvents() {
   });
   $("#exportBoardingQueueButton")?.addEventListener("click", exportBoardingQueue);
   $("#exportTimesheetButton")?.addEventListener("click", exportTimesheet);
+  $("#applyTimesheetDateFilterButton")?.addEventListener("click", () => {
+    const start = dateOnly($("#timesheetStartDate")?.value);
+    const end = dateOnly($("#timesheetEndDate")?.value);
+    if (!start && !end) {
+      timesheetFilterStart = "";
+      timesheetFilterEnd = "";
+    } else {
+      timesheetFilterStart = start || end;
+      timesheetFilterEnd = end || start;
+    }
+    renderTimesheet();
+  });
+  $("#resetTimesheetDateFilterButton")?.addEventListener("click", () => {
+    timesheetFilterStart = "";
+    timesheetFilterEnd = "";
+    renderTimesheet();
+  });
   $("#exportCareLogsButton")?.addEventListener("click", exportCareLogs);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setMobileMoreOpen(false);
@@ -13377,7 +13472,7 @@ function initEvents() {
       const photo = await durableDogPhoto("owned", existing, formData, $("#ownedDogPhotoInput"), dogId);
       const isFemale = formData.sex === "Female";
       const normalizedExisting = normalizeOwnedDogCare(existing);
-      const bathIntervalDays = numberFrom(formData.bathIntervalDays, normalizedExisting.bathIntervalDays || careDefaults.bathIntervalDays);
+      const bathIntervalDays = nonNegativeNumberFrom(formData.bathIntervalDays, nonNegativeNumberFrom(normalizedExisting.bathIntervalDays, careDefaults.bathIntervalDays));
       const heatCycleLengthDays = numberFrom(formData.heatCycleLengthDays, normalizedExisting.heatCycleLengthDays || careDefaults.heatCycleLengthDays);
       const payload = {
         ...existing,
@@ -13389,8 +13484,8 @@ function initEvents() {
         submittedAt: existing.submittedAt || new Date().toISOString(),
         ...formData,
         rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears?.checked ? "Yes" : "",
-        exerciseFrequencyDays: numberFrom(formData.exerciseFrequencyDays, normalizedExisting.exerciseFrequencyDays || careDefaults.exerciseFrequencyDays),
-        trainingFrequencyDays: numberFrom(formData.trainingFrequencyDays, normalizedExisting.trainingFrequencyDays || careDefaults.trainingFrequencyDays),
+        exerciseFrequencyDays: nonNegativeNumberFrom(formData.exerciseFrequencyDays, nonNegativeNumberFrom(normalizedExisting.exerciseFrequencyDays, careDefaults.exerciseFrequencyDays)),
+        trainingFrequencyDays: nonNegativeNumberFrom(formData.trainingFrequencyDays, nonNegativeNumberFrom(normalizedExisting.trainingFrequencyDays, careDefaults.trainingFrequencyDays)),
         bathIntervalDays,
         heatCycleLengthDays,
         nextBath: formData.nextBath || nextBathFromFrequency(formData.lastBath, bathIntervalDays),
@@ -14062,7 +14157,7 @@ function initEvents() {
   });
   $("#customerBookingForm").addEventListener("change", (event) => {
     if (event.target.name === "customerServices") {
-      const quantityInput = $("#customerBookingForm").elements[`serviceQuantity-${event.target.value}`];
+      const quantityInput = formFieldByName($("#customerBookingForm"), `serviceQuantity-${event.target.value}`);
       if (quantityInput) {
         quantityInput.disabled = !event.target.checked;
         if (event.target.checked && !quantityInput.value) quantityInput.value = "1";
