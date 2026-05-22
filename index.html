@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260521-stay-request-ids-1" />
+    <link rel="stylesheet" href="styles.css?v=20260522-hours-operation-1" />
   </head>
   <body class="is-auth-booting">
     <div class="app-layout">
@@ -36,6 +36,7 @@
             <div class="side-sub-nav" aria-label="Settings sections">
               <button class="nav-button sub-nav-button" type="button" data-page="settingsUsersPage" data-roles="admin" data-settings-sub-nav="true">Users</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsKennelLocationsPage" data-roles="admin" data-settings-sub-nav="true">Kennel Locations</button>
+              <button class="nav-button sub-nav-button" type="button" data-page="settingsHoursPage" data-roles="admin" data-settings-sub-nav="true">Hours of Operation</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsAlertsPage" data-roles="admin" data-settings-sub-nav="true">Alerts</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsAuditLogPage" data-roles="admin" data-settings-sub-nav="true">Audit Log</button>
             </div>
@@ -99,6 +100,7 @@
           <option value="financialsPage" data-roles="admin">Financials</option>
           <option value="settingsUsersPage" data-roles="admin">Settings: Users</option>
           <option value="settingsKennelLocationsPage" data-roles="admin">Settings: Kennel Locations</option>
+          <option value="settingsHoursPage" data-roles="admin">Settings: Hours of Operation</option>
           <option value="settingsAlertsPage" data-roles="admin">Settings: Alerts</option>
           <option value="settingsAuditLogPage" data-roles="admin">Settings: Audit Log</option>
         </select>
@@ -351,6 +353,7 @@
                 <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
                 <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
               </div>
+              <div class="operation-availability-messages" id="customerBookingAvailabilityMessages" aria-live="polite"></div>
             </section>
             <section class="customer-additional-services">
               <strong>Add additional service(s) for your dog's stay:</strong>
@@ -1166,6 +1169,27 @@
           <div class="record-grid compact-record-grid" id="kennelLocationList"></div>
         </section>
       </section>
+      <section class="page-view" id="settingsHoursPage">
+        <section class="recent-submissions">
+          <div class="section-heading"><span>H</span><div><h2>Hours of Operation</h2><p>Set the customer drop-off and pick-up hours used when customers request boarding or service time.</p></div></div>
+          <div class="operation-summary-grid" id="operationHoursSummary"></div>
+          <div class="record-grid operation-hours-list" id="operationHoursList"></div>
+          <div class="button-row settings-alert-actions">
+            <button type="button" id="saveOperationHoursButton">Save Weekly Hours</button>
+            <button type="button" class="secondary-button" id="resetOperationHoursButton">Reset To 9 AM - 9 PM</button>
+          </div>
+        </section>
+        <section class="recent-submissions">
+          <div class="section-heading"><span>C</span><div><h2>Calendar Overrides</h2><p>Click a date to close customer requests for that day, adjust hours, or display a customer message.</p></div></div>
+          <div class="operation-calendar-toolbar">
+            <button type="button" class="secondary-button" id="prevOperationMonthButton">Previous</button>
+            <strong id="operationCalendarMonthLabel">This month</strong>
+            <button type="button" class="secondary-button" id="nextOperationMonthButton">Next</button>
+          </div>
+          <div class="operation-calendar" id="operationOverrideCalendar" aria-label="Hours of operation override calendar"></div>
+          <div class="record-grid compact-record-grid" id="operationOverrideList"></div>
+        </section>
+      </section>
       <section class="page-view" id="settingsAlertsPage">
         <section class="recent-submissions">
           <div class="section-heading"><span>!</span><div><h2>Alerts</h2><p>Send urgent alerts and manage which staff receive each alert type.</p></div></div>
@@ -1241,6 +1265,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260521-customer-request-detail-1"></script>
+  <script src="script.js?v=20260522-hours-operation-2"></script>
   </body>
 </html>

@@ -3082,6 +3082,108 @@ option {
   padding: 2px 7px;
 }
 
+.operation-summary-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.operation-hours-list {
+  gap: 12px;
+}
+
+.operation-day-card {
+  gap: 12px;
+}
+
+.operation-day-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.operation-calendar-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.operation-calendar {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.operation-calendar-header {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.operation-calendar-day {
+  align-items: stretch;
+  background: #f6f8f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+  min-height: 94px;
+  padding: 10px;
+  text-align: left;
+}
+
+.operation-calendar-day strong {
+  font-size: 1.05rem;
+}
+
+.operation-calendar-day span,
+.operation-calendar-day small {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.operation-calendar-day.has-override {
+  border-color: rgba(245, 158, 11, 0.76);
+  box-shadow: inset 0 -3px 0 rgba(245, 158, 11, 0.62);
+}
+
+.operation-calendar-day.is-closed {
+  border-color: rgba(191, 78, 69, 0.78);
+  box-shadow: inset 0 -3px 0 rgba(191, 78, 69, 0.62);
+}
+
+.operation-calendar-day.is-outside-month {
+  opacity: 0.5;
+}
+
+.operation-availability-messages,
+.operation-confirm-notices {
+  display: grid;
+  gap: 8px;
+}
+
+.operation-availability-card {
+  background: rgba(47, 111, 110, 0.12);
+  border: 1px solid rgba(47, 111, 110, 0.35);
+  border-radius: 8px;
+  color: var(--ink);
+  font-weight: 750;
+  padding: 10px 12px;
+}
+
+.operation-availability-card.is-warning {
+  background: rgba(191, 78, 69, 0.12);
+  border-color: rgba(191, 78, 69, 0.42);
+}
+
 .alert-preference-card p {
   line-height: 1.45;
 }
@@ -3449,6 +3551,7 @@ button.mobile-dog-photo-button {
   }
 
   .summary-grid,
+  .operation-summary-grid,
   .care-summary-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -3490,6 +3593,7 @@ button.mobile-dog-photo-button {
   .field-grid,
   .timesheet-grid,
   .summary-grid,
+  .operation-summary-grid,
   .care-summary-grid,
   .dashboard-grid,
   .activity-entry-grid,
@@ -3524,6 +3628,18 @@ button.mobile-dog-photo-button {
   .table-actions button,
   .record-actions button {
     width: 100%;
+  }
+
+  .operation-calendar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .operation-calendar-header {
+    display: none;
+  }
+
+  .operation-calendar-day {
+    min-height: 78px;
   }
 }
 
@@ -3563,6 +3679,7 @@ button.mobile-dog-photo-button {
   .field-grid,
   .timesheet-grid,
   .summary-grid,
+  .operation-summary-grid,
   .care-summary-grid,
   .dashboard-grid,
   .activity-entry-grid,
@@ -4043,6 +4160,8 @@ button.mobile-dog-photo-button {
   body:not(.is-login-view) .form-section,
   body:not(.is-login-view) .recent-submissions,
   body:not(.is-login-view) .inline-check,
+  body:not(.is-login-view) .operation-calendar-day,
+  body:not(.is-login-view) .operation-availability-card,
   body:not(.is-login-view) .record-card,
   body:not(.is-login-view) .toggle-row,
   body:not(.is-login-view) .checklist label,
@@ -4063,6 +4182,7 @@ button.mobile-dog-photo-button {
   body:not(.is-login-view) .record-card,
   body:not(.is-login-view) .customer-dog-item,
   body:not(.is-login-view) .checklist label,
+  body:not(.is-login-view) .operation-calendar-day,
   body:not(.is-login-view) .detail-row,
   body:not(.is-login-view) .activity-entry,
   body:not(.is-login-view) .dog-profile-editor,

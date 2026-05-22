@@ -49,6 +49,7 @@ let dashboardAlertFilter = "All";
 let dashboardShowAllAlerts = false;
 let timesheetTab = "clock";
 let scheduleWeekDate = todayDate();
+let operationCalendarMonth = todayDate().slice(0, 7);
 let settingsUserTab = "admin";
 let settingsUserSort = { key: "name", direction: "asc" };
 let kennelBuildingTab = "Shed";
@@ -98,7 +99,18 @@ const defaultTaskTabMeta = [
 ];
 const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
 const mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
-const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsAlertsPage", "settingsAuditLogPage"]);
+const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsHoursPage", "settingsAlertsPage", "settingsAuditLogPage"]);
+const operationWeekdays = [
+  { key: "monday", label: "Monday", shortLabel: "Mon", dayIndex: 1 },
+  { key: "tuesday", label: "Tuesday", shortLabel: "Tue", dayIndex: 2 },
+  { key: "wednesday", label: "Wednesday", shortLabel: "Wed", dayIndex: 3 },
+  { key: "thursday", label: "Thursday", shortLabel: "Thu", dayIndex: 4 },
+  { key: "friday", label: "Friday", shortLabel: "Fri", dayIndex: 5 },
+  { key: "saturday", label: "Saturday", shortLabel: "Sat", dayIndex: 6 },
+  { key: "sunday", label: "Sunday", shortLabel: "Sun", dayIndex: 0 },
+];
+const defaultOperationOpenTime = "09:00";
+const defaultOperationCloseTime = "21:00";
 
 const alertTypeDefinitions = [
   { key: "customerBoardingRequestCreated", label: "New customer boarding request", group: "Customer" },
@@ -220,6 +232,8 @@ const stateKeys = {
   calendarNote: "cth-calendarNote-records",
   kennelLocation: "cth-kennelLocation-records",
   kennelBuilding: "cth-kennelBuilding-records",
+  operationHours: "cth-operationHours-records",
+  operationDateOverride: "cth-operationDateOverride-records",
   auditLog: "cth-auditLog-records",
   staffSchedule: "cth-staffSchedule-records",
   timeOffRequest: "cth-timeOffRequest-records",
@@ -1273,7 +1287,7 @@ function recordTypes() {
   return [
     "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "customerDog",
     "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink",
-    "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
+    "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
   ];
 }
 
@@ -3706,6 +3720,28 @@ function seedDefaultKennelBuildings() {
       removed: false,
     })),
   );
+}
+
+function defaultOperationHourRecords() {
+  const now = new Date().toISOString();
+  return operationWeekdays.map((day) => ({
+    type: "operationHours",
+    id: `operationHours-${day.key}`,
+    weekday: day.key,
+    weekdayLabel: day.label,
+    dayIndex: day.dayIndex,
+    isOpen: true,
+    openTime: defaultOperationOpenTime,
+    closeTime: defaultOperationCloseTime,
+    submittedAt: now,
+    updatedAt: now,
+    removed: false,
+  }));
+}
+
+function seedDefaultOperationHours() {
+  if (readRecords("operationHours").length) return;
+  writeRecords("operationHours", defaultOperationHourRecords());
 }
 
 const fieldHelp = {
@@ -9557,6 +9593,415 @@ async function removeKennelLocationById(id = "") {
   return updated;
 }
 
+function operationBoolean(value, fallback = true) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return !["false", "off", "no", "closed", "0"].includes(String(value).toLowerCase());
+}
+
+function formFieldByName(formEl, name = "") {
+  const field = formEl?.elements?.namedItem?.(name) || formEl?.elements?.[name] || null;
+  return field && typeof field.length === "number" && typeof field.item === "function" ? field.item(0) : field;
+}
+
+function normalizeOperationTime(value = "", fallback = defaultOperationOpenTime) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return fallback;
+  const hour = Math.min(23, Math.max(0, Number(match[1])));
+  const minute = Math.min(59, Math.max(0, Number(match[2])));
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function operationHoursRecords() {
+  const defaults = defaultOperationHourRecords();
+  const recordsByWeekday = new Map(defaults.map((record) => [record.weekday, record]));
+  readRecords("operationHours")
+    .filter((record) => !record.removed)
+    .forEach((record) => {
+      const weekday = record.weekday || operationWeekdays.find((day) => day.dayIndex === Number(record.dayIndex))?.key;
+      if (!weekday) return;
+      const fallback = recordsByWeekday.get(weekday) || {};
+      recordsByWeekday.set(weekday, { ...fallback, ...record, weekday });
+    });
+  return operationWeekdays.map((day) => {
+    const record = recordsByWeekday.get(day.key) || {};
+    return {
+      ...record,
+      type: "operationHours",
+      id: record.id || `operationHours-${day.key}`,
+      weekday: day.key,
+      weekdayLabel: day.label,
+      dayIndex: day.dayIndex,
+      isOpen: operationBoolean(record.isOpen, true),
+      openTime: normalizeOperationTime(record.openTime, defaultOperationOpenTime),
+      closeTime: normalizeOperationTime(record.closeTime, defaultOperationCloseTime),
+      removed: false,
+    };
+  });
+}
+
+function operationHoursForDate(date = todayDate()) {
+  const parsed = new Date(`${dateOnly(date) || todayDate()}T12:00:00`);
+  const dayIndex = Number.isNaN(parsed.getTime()) ? 1 : parsed.getDay();
+  return operationHoursRecords().find((record) => Number(record.dayIndex) === dayIndex) || operationHoursRecords()[0];
+}
+
+function operationOverrideForDate(date = "") {
+  const dateKey = dateOnly(date);
+  if (!dateKey) return null;
+  return readRecords("operationDateOverride")
+    .filter((record) => !record.removed && record.date === dateKey)
+    .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0))[0] || null;
+}
+
+function operationWindowForDate(date = "") {
+  const dateKey = dateOnly(date);
+  const weekly = operationHoursForDate(dateKey);
+  const override = operationOverrideForDate(dateKey);
+  const openSource = override || weekly;
+  const isOpen = operationBoolean(openSource.isOpen, true);
+  const openTime = normalizeOperationTime(openSource.openTime || weekly.openTime, weekly.openTime || defaultOperationOpenTime);
+  const closeTime = normalizeOperationTime(openSource.closeTime || weekly.closeTime, weekly.closeTime || defaultOperationCloseTime);
+  const invalidWindow = isOpen && timeToMinutes(closeTime) <= timeToMinutes(openTime);
+  return {
+    date: dateKey,
+    isOpen: isOpen && !invalidWindow,
+    openTime,
+    closeTime,
+    message: override?.customerMessage || "",
+    override,
+    weekly,
+    invalidWindow,
+  };
+}
+
+function operationWindowText(window = {}) {
+  if (!window.date) return "Choose a date to see available customer request hours.";
+  if (!window.isOpen) return window.invalidWindow ? "Hours need review by the kennel before customers can request this day." : "Closed to customer drop-off and pick-up requests.";
+  return `Available ${displayTime(window.openTime)} - ${displayTime(window.closeTime)}`;
+}
+
+function operationDateLabel(date = "") {
+  const dateKey = dateOnly(date);
+  if (!dateKey) return "Selected date";
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+}
+
+function customerBookingAvailabilityForDateTime(value = "", label = "Selected time") {
+  if (!value) return { valid: true, notices: [] };
+  const date = dateOnly(value);
+  const parsed = new Date(value);
+  if (!date || Number.isNaN(parsed.getTime())) return { valid: false, fieldLabel: label, message: `${label} is not a valid date and time.`, notices: [] };
+  const window = operationWindowForDate(date);
+  const notices = [];
+  if (window.message) notices.push(`${operationDateLabel(date)}: ${window.message}`);
+  if (!window.isOpen) {
+    return {
+      valid: false,
+      fieldLabel: label,
+      message: `${label} falls on ${operationDateLabel(date)}. ${window.message || operationWindowText(window)}`,
+      notices,
+      window,
+    };
+  }
+  const selectedMinutes = parsed.getHours() * 60 + parsed.getMinutes();
+  const openMinutes = timeToMinutes(window.openTime);
+  const closeMinutes = timeToMinutes(window.closeTime);
+  if (selectedMinutes < openMinutes || selectedMinutes > closeMinutes) {
+    return {
+      valid: false,
+      fieldLabel: label,
+      message: `${label} must be between ${displayTime(window.openTime)} and ${displayTime(window.closeTime)} on ${operationDateLabel(date)}.`,
+      notices,
+      window,
+    };
+  }
+  notices.push(`${label}: ${operationWindowText(window)}.`);
+  return { valid: true, fieldLabel: label, notices, window };
+}
+
+function customerBookingAvailabilityChecks(formEl = $("#customerBookingForm")) {
+  if (!formEl) return [];
+  const isServiceRequest = $("#customerRequestMode")?.value === "service";
+  const dropoffField = formFieldByName(formEl, "dropoffTime");
+  const pickupField = formFieldByName(formEl, "pickupTime");
+  const checks = [
+    { field: dropoffField, result: customerBookingAvailabilityForDateTime(dropoffField?.value || "", isServiceRequest ? "Ideal drop off time" : "Drop-off time") },
+  ];
+  if (pickupField?.value || !isServiceRequest) {
+    checks.push({ field: pickupField, result: customerBookingAvailabilityForDateTime(pickupField?.value || "", isServiceRequest ? "Alternative drop off time" : "Pick-up time") });
+  }
+  return checks;
+}
+
+function customerBookingAvailabilityMessagesHtml(checks = customerBookingAvailabilityChecks()) {
+  const messages = [];
+  const seen = new Set();
+  checks.forEach(({ result }) => {
+    (result.notices || []).forEach((notice) => {
+      if (seen.has(notice)) return;
+      seen.add(notice);
+      messages.push({ type: result.valid ? "info" : "warning", text: notice });
+    });
+    if (!result.valid && result.message && !seen.has(result.message)) {
+      seen.add(result.message);
+      messages.push({ type: "warning", text: result.message });
+    }
+  });
+  return messages.map((item) => `<article class="operation-availability-card ${item.type === "warning" ? "is-warning" : ""}">${escapeHtml(item.text)}</article>`).join("");
+}
+
+function renderCustomerBookingAvailabilityMessages() {
+  const container = $("#customerBookingAvailabilityMessages");
+  if (!container) return;
+  container.innerHTML = customerBookingAvailabilityMessagesHtml();
+}
+
+function validateCustomerBookingAvailability(formEl = $("#customerBookingForm")) {
+  const checks = customerBookingAvailabilityChecks(formEl);
+  let firstInvalid = null;
+  checks.forEach(({ field, result }) => {
+    if (!field || result.valid) return;
+    setFieldError(field, result.message);
+    firstInvalid = firstInvalid || field;
+  });
+  renderCustomerBookingAvailabilityMessages();
+  if (firstInvalid) {
+    firstInvalid.focus({ preventScroll: true });
+    firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+    showToast("Choose a customer request time inside the kennel hours.");
+    return false;
+  }
+  return true;
+}
+
+function customerBookingEstimateAvailabilityChecks(estimate = {}) {
+  return [
+    { result: customerBookingAvailabilityForDateTime(estimate.dropoffTime || "", "Drop-off time") },
+    { result: customerBookingAvailabilityForDateTime(estimate.pickupTime || "", "Pick-up time") },
+  ].filter((item) => item.result);
+}
+
+function customerBookingEstimateAvailabilityValid(estimate = {}) {
+  return customerBookingEstimateAvailabilityChecks(estimate).every((item) => item.result.valid);
+}
+
+function monthLabel(monthKey = operationCalendarMonth) {
+  const date = new Date(`${monthKey || todayDate().slice(0, 7)}-01T12:00:00`);
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function operationCalendarDates(monthKey = operationCalendarMonth) {
+  const first = new Date(`${monthKey}-01T12:00:00`);
+  if (Number.isNaN(first.getTime())) return [];
+  const firstOffset = (first.getDay() + 6) % 7;
+  const start = new Date(first);
+  start.setDate(first.getDate() - firstOffset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return localDateKey(date);
+  });
+}
+
+function operationOverrideSummaryHtml() {
+  const overrides = readRecords("operationDateOverride")
+    .filter((record) => !record.removed)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return overrides.length
+    ? overrides.map((record) => {
+      const open = operationBoolean(record.isOpen, true);
+      const timeText = open ? `${displayTime(record.openTime)} - ${displayTime(record.closeTime)}` : "Closed";
+      return `<article class="record-card compact-record-card"><strong>${escapeHtml(operationDateLabel(record.date))}</strong><span>${escapeHtml(timeText)}</span>${record.customerMessage ? `<p>${escapeHtml(record.customerMessage)}</p>` : ""}<div class="record-actions"><button type="button" class="secondary-button" data-action="open-operation-date-override" data-date="${escapeHtml(record.date)}">Edit</button></div></article>`;
+    }).join("")
+    : `<article class="record-card compact-record-card"><strong>No date overrides saved</strong><p>Weekly hours apply until a specific calendar date is changed.</p></article>`;
+}
+
+function renderOperationHoursSettings() {
+  const list = $("#operationHoursList");
+  if (!list) return;
+  const hours = operationHoursRecords();
+  const openDays = hours.filter((record) => operationBoolean(record.isOpen, true)).length;
+  const overrideCount = readRecords("operationDateOverride").filter((record) => !record.removed).length;
+  const closedOverrides = readRecords("operationDateOverride").filter((record) => !record.removed && !operationBoolean(record.isOpen, true)).length;
+  $("#operationHoursSummary").innerHTML = [
+    ["Open days", openDays, "weekly customer request days"],
+    ["Date overrides", overrideCount, "calendar-specific changes"],
+    ["Closed dates", closedOverrides, "blocked request dates"],
+  ].map(([label, value, note]) => `<div class="summary-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><p>${escapeHtml(note)}</p></div>`).join("");
+  list.innerHTML = hours.map((record) => {
+    const open = operationBoolean(record.isOpen, true);
+    return `<article class="record-card operation-day-card" data-weekday="${escapeHtml(record.weekday)}">
+      <div class="operation-day-header">
+        <strong>${escapeHtml(record.weekdayLabel || record.weekday)}</strong>
+        <label class="toggle-row"><input type="checkbox" data-operation-open ${open ? "checked" : ""} /> Open</label>
+      </div>
+      <div class="field-grid">
+        <label>Open time<input type="time" data-operation-open-time value="${escapeHtml(record.openTime || defaultOperationOpenTime)}" ${open ? "" : "disabled"} /></label>
+        <label>Close time<input type="time" data-operation-close-time value="${escapeHtml(record.closeTime || defaultOperationCloseTime)}" ${open ? "" : "disabled"} /></label>
+      </div>
+      <p>${open ? `Customers can request drop-off and pick-up from ${escapeHtml(displayTime(record.openTime))} to ${escapeHtml(displayTime(record.closeTime))}.` : "Customers cannot request drop-off or pick-up on this weekday."}</p>
+    </article>`;
+  }).join("");
+  const monthLabelEl = $("#operationCalendarMonthLabel");
+  if (monthLabelEl) monthLabelEl.textContent = monthLabel(operationCalendarMonth);
+  const calendar = $("#operationOverrideCalendar");
+  if (calendar) {
+    calendar.innerHTML = [
+      ...operationWeekdays.map((day) => `<div class="operation-calendar-header">${escapeHtml(day.shortLabel)}</div>`),
+      ...operationCalendarDates(operationCalendarMonth).map((date) => {
+        const inMonth = date.slice(0, 7) === operationCalendarMonth;
+        const window = operationWindowForDate(date);
+        const override = window.override;
+        const status = !window.isOpen ? "Closed" : override ? "Custom" : "Open";
+        const message = override?.customerMessage ? "Message" : "";
+        return `<button type="button" class="operation-calendar-day ${inMonth ? "" : "is-outside-month"} ${!window.isOpen ? "is-closed" : ""} ${override ? "has-override" : ""}" data-action="open-operation-date-override" data-date="${escapeHtml(date)}">
+          <strong>${Number(date.slice(8, 10))}</strong>
+          <span>${escapeHtml(status)}</span>
+          ${message ? `<small>${escapeHtml(message)}</small>` : ""}
+        </button>`;
+      }),
+    ].join("");
+  }
+  const overrideList = $("#operationOverrideList");
+  if (overrideList) overrideList.innerHTML = operationOverrideSummaryHtml();
+}
+
+async function saveOperationHoursSettings() {
+  if (currentRole() !== "admin") return null;
+  const cards = $$("#operationHoursList .operation-day-card");
+  const now = new Date().toISOString();
+  const records = [];
+  for (const card of cards) {
+    const weekday = card.dataset.weekday || "";
+    const day = operationWeekdays.find((item) => item.key === weekday);
+    if (!day) continue;
+    const isOpen = Boolean(card.querySelector("[data-operation-open]")?.checked);
+    const openTime = normalizeOperationTime(card.querySelector("[data-operation-open-time]")?.value, defaultOperationOpenTime);
+    const closeTime = normalizeOperationTime(card.querySelector("[data-operation-close-time]")?.value, defaultOperationCloseTime);
+    if (isOpen && timeToMinutes(closeTime) <= timeToMinutes(openTime)) {
+      showToast(`${day.label} close time must be after open time.`);
+      card.querySelector("[data-operation-close-time]")?.focus();
+      return null;
+    }
+    records.push({
+      type: "operationHours",
+      id: `operationHours-${day.key}`,
+      weekday: day.key,
+      weekdayLabel: day.label,
+      dayIndex: day.dayIndex,
+      isOpen,
+      openTime,
+      closeTime,
+      submittedAt: readRecords("operationHours").find((record) => record.id === `operationHours-${day.key}`)?.submittedAt || now,
+      updatedAt: now,
+      updatedBy: currentUser?.email || helperEmail?.value || "",
+      removed: false,
+    });
+  }
+  for (const record of records) await sendPayload(upsertRecord("operationHours", record));
+  await addAuditLog("Updated operation hours", "operationHours", { id: "weekly-operation-hours" }, "Weekly customer request hours updated.");
+  renderOperationHoursSettings();
+  renderCustomerBookingAvailabilityMessages();
+  showToast("Hours of operation saved.");
+  return records;
+}
+
+async function resetOperationHoursSettings() {
+  if (currentRole() !== "admin") return null;
+  const now = new Date().toISOString();
+  for (const record of defaultOperationHourRecords()) {
+    await sendPayload(upsertRecord("operationHours", { ...record, updatedAt: now, updatedBy: currentUser?.email || helperEmail?.value || "" }));
+  }
+  await addAuditLog("Reset operation hours", "operationHours", { id: "weekly-operation-hours" }, "Weekly customer request hours reset to 9 AM - 9 PM.");
+  renderOperationHoursSettings();
+  showToast("Weekly hours reset.");
+  return true;
+}
+
+function operationDateOverrideFormHtml(date = todayDate()) {
+  const dateKey = dateOnly(date) || todayDate();
+  const existing = operationOverrideForDate(dateKey) || {};
+  const weekly = operationHoursForDate(dateKey);
+  const open = operationBoolean(existing.isOpen, operationBoolean(weekly.isOpen, true));
+  const openTime = normalizeOperationTime(existing.openTime || weekly.openTime, defaultOperationOpenTime);
+  const closeTime = normalizeOperationTime(existing.closeTime || weekly.closeTime, defaultOperationCloseTime);
+  return `<form id="operationDateOverrideForm" class="tracker-form" data-date="${escapeHtml(dateKey)}" data-id="${escapeHtml(existing.id || "")}">
+    <article class="record-card compact-record-card">
+      <strong>${escapeHtml(operationDateLabel(dateKey))}</strong>
+      <span>Weekly default: ${operationBoolean(weekly.isOpen, true) ? `${escapeHtml(displayTime(weekly.openTime))} - ${escapeHtml(displayTime(weekly.closeTime))}` : "Closed"}</span>
+    </article>
+    <label class="toggle-row"><input type="checkbox" name="isOpen" ${open ? "checked" : ""} /> Open to customer drop-off and pick-up requests</label>
+    <div class="field-grid">
+      <label>Open time<input type="time" name="openTime" value="${escapeHtml(openTime)}" ${open ? "" : "disabled"} /></label>
+      <label>Close time<input type="time" name="closeTime" value="${escapeHtml(closeTime)}" ${open ? "" : "disabled"} /></label>
+    </div>
+    <label>Customer message<textarea name="customerMessage" rows="3" placeholder="Message customers will see when they select this date.">${escapeHtml(existing.customerMessage || "")}</textarea></label>
+    <div class="button-row">
+      <button type="submit">Save Date</button>
+      ${existing.id ? `<button type="button" class="secondary-button danger-button" data-action="clear-operation-date-override" data-id="${escapeHtml(existing.id)}">Clear Override</button>` : ""}
+      <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+    </div>
+  </form>`;
+}
+
+function openOperationDateOverridePopup(date = todayDate()) {
+  if (currentRole() !== "admin") {
+    showToast("Admin access required to edit hours of operation.");
+    return;
+  }
+  showDetailDialog("Date Hours Override", operationDateOverrideFormHtml(date));
+}
+
+async function saveOperationDateOverrideFromForm(formEl) {
+  if (currentRole() !== "admin") return null;
+  const date = formEl.dataset.date || todayDate();
+  const existing = formEl.dataset.id ? readRecords("operationDateOverride").find((record) => record.id === formEl.dataset.id) : operationOverrideForDate(date);
+  const isOpenField = formFieldByName(formEl, "isOpen");
+  const openTimeField = formFieldByName(formEl, "openTime");
+  const closeTimeField = formFieldByName(formEl, "closeTime");
+  const customerMessageField = formFieldByName(formEl, "customerMessage");
+  const isOpen = Boolean(isOpenField?.checked);
+  const openTime = normalizeOperationTime(openTimeField?.value, defaultOperationOpenTime);
+  const closeTime = normalizeOperationTime(closeTimeField?.value, defaultOperationCloseTime);
+  if (isOpen && timeToMinutes(closeTime) <= timeToMinutes(openTime)) {
+    showToast("Close time must be after open time.");
+    closeTimeField?.focus();
+    return null;
+  }
+  const now = new Date().toISOString();
+  const record = upsertRecord("operationDateOverride", {
+    ...(existing || {}),
+    type: "operationDateOverride",
+    id: existing?.id || `operationDateOverride-${date}`,
+    submittedAt: existing?.submittedAt || now,
+    date,
+    isOpen,
+    openTime,
+    closeTime,
+    customerMessage: customerMessageField?.value.trim() || "",
+    updatedAt: now,
+    updatedBy: currentUser?.email || helperEmail?.value || "",
+    removed: false,
+  });
+  await sendPayload(record);
+  await addAuditLog("Updated operation date override", "operationDateOverride", record, `${operationDateLabel(date)} | ${isOpen ? `${displayTime(openTime)} - ${displayTime(closeTime)}` : "Closed"}`);
+  renderOperationHoursSettings();
+  renderCustomerBookingAvailabilityMessages();
+  return record;
+}
+
+async function clearOperationDateOverride(id = "") {
+  const record = readRecords("operationDateOverride").find((item) => item.id === id && !item.removed);
+  if (!record || currentRole() !== "admin") return null;
+  const updated = upsertRecord("operationDateOverride", { ...record, removed: true, removedAt: new Date().toISOString() });
+  await sendPayload(updated);
+  await addAuditLog("Cleared operation date override", "operationDateOverride", updated, operationDateLabel(updated.date));
+  renderOperationHoursSettings();
+  renderCustomerBookingAvailabilityMessages();
+  return updated;
+}
+
 function renderAuditLog() {
   const list = $("#auditLogList");
   if (!list) return;
@@ -10208,6 +10653,7 @@ function resetCustomerBookingForm() {
   formEl.hidden = true;
   formEl.scrollTop = 0;
   renderCustomerDogs();
+  renderCustomerBookingAvailabilityMessages();
   updateCustomerEstimate();
 }
 
@@ -10228,6 +10674,7 @@ function openCustomerBookingModal(mode = "boarding") {
   $("#customerBookingFormHelp").textContent = mode === "service" ? "Choose dog(s), service, and requested drop-off time." : "Choose dog(s), requested stay, and optional services.";
   setCustomerBookingTimeCopy(mode);
   $("#requestBoardingButton").textContent = mode === "service" ? "Request Service" : "Request Boarding Time";
+  renderCustomerBookingAvailabilityMessages();
 }
 
 function editCustomerRequest(record, stayId = "") {
@@ -10268,6 +10715,7 @@ function editCustomerRequest(record, stayId = "") {
   $("#requestBoardingButton").textContent = "Update Request";
   $("#customerBookingFormTitle").textContent = "Update Request";
   $("#customerBookingFormHelp").textContent = "Update boarding time, requested services, or notes.";
+  renderCustomerBookingAvailabilityMessages();
   updateCustomerEstimate();
 }
 
@@ -10331,12 +10779,18 @@ function boardingPricingServiceForCustomer(user = currentUser) {
 function updateCustomerEstimate() {
   if (!$("#customerEstimate")) return;
   const estimate = customerEstimateDetails();
+  renderCustomerBookingAvailabilityMessages();
   $("#customerEstimate").innerHTML = estimate.dogs.length
     ? `<strong>${escapeHtml(boardingBillingLabel(estimate))}</strong><div class="estimate-line"><span>Boarding</span><span>${estimate.dogs.length} dog(s) x ${estimate.days || 0} day(s) x ${money(estimate.boardingRate)} = ${money(estimate.boardingCost)}</span></div>${estimate.services.map((service) => `<div class="estimate-line"><span>${escapeHtml(service.serviceName)}</span><span>${estimate.dogs.length} dog(s) x ${Number(service.quantity || 1)} x ${money(service.basePrice)} = ${money(service.lineTotal)}</span></div>`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>`
     : "Select dog(s), dates, and services to see an estimate.";
 }
 
 function showBookingConfirmDialog(estimate) {
+  if (!customerBookingEstimateAvailabilityValid(estimate)) {
+    showToast("Choose a customer request time inside the kennel hours.");
+    renderCustomerBookingAvailabilityMessages();
+    return;
+  }
   pendingCustomerBooking = { ...estimate, dogs: uniqueCustomerBookingDogs(estimate.dogs), submissionId: uid("customerBooking") };
   customerBookingSubmitInProgress = false;
   if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
@@ -10344,10 +10798,12 @@ function showBookingConfirmDialog(estimate) {
   const serviceList = pendingCustomerBooking.services.length
     ? pendingCustomerBooking.services.map((service) => `<li>${escapeHtml(service.serviceName)} x${Number(service.quantity || 1)} for ${pendingCustomerBooking.dogs.length} dog(s) - ${money(service.lineTotal)} ${escapeHtml(service.unit || "")}</li>`).join("")
     : "<li>No added services selected</li>";
+  const availabilityHtml = customerBookingAvailabilityMessagesHtml(customerBookingEstimateAvailabilityChecks(pendingCustomerBooking));
   $("#bookingConfirmBody").innerHTML = `
     <div class="booking-summary">
       <div><strong>Dog(s)</strong><ul>${dogList}</ul></div>
       <div><strong>Stay</strong><p>${formatDateTime(pendingCustomerBooking.dropoffTime)} to ${formatDateTime(pendingCustomerBooking.pickupTime)}</p><p>${boardingBillingLabel(pendingCustomerBooking)} at ${money(pendingCustomerBooking.boardingRate)} per day/night</p><p>Boarding subtotal: ${money(pendingCustomerBooking.boardingCost)}</p></div>
+      ${availabilityHtml ? `<div class="operation-confirm-notices">${availabilityHtml}</div>` : ""}
       <div><strong>Services</strong><ul>${serviceList}</ul></div>
       <div class="estimate-total"><strong>Estimated total</strong><span>${money(pendingCustomerBooking.total)}</span></div>
       ${pendingCustomerBooking.requestNotes ? `<div><strong>Notes</strong><p>${escapeHtml(pendingCustomerBooking.requestNotes)}</p></div>` : ""}
@@ -10360,6 +10816,12 @@ async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
   if (customerBookingSubmitInProgress) return;
   if (!estimate?.dogs?.length) return;
+  if (!customerBookingEstimateAvailabilityValid(estimate)) {
+    showToast("This request time is no longer inside the kennel hours. Please adjust it and try again.");
+    customerBookingSubmitInProgress = false;
+    $("#bookingConfirmDialog")?.close();
+    return;
+  }
   customerBookingSubmitInProgress = true;
   const confirmButton = $("#confirmBookingRequestButton");
   if (confirmButton) confirmButton.disabled = true;
@@ -10581,6 +11043,7 @@ function renderAllRecords() {
   renderCfoNotes();
   renderSettingsUsers();
   renderKennelLocations();
+  renderOperationHoursSettings();
   renderSettingsAlerts();
   renderAuditLog();
   renderNotifications();
@@ -12000,6 +12463,7 @@ function initEvents() {
     const scheduleShiftForm = event.target.closest("#scheduleShiftForm");
     const timeOffRequestForm = event.target.closest("#timeOffRequestForm");
     const holidayForm = event.target.closest("#holidayForm");
+    const operationDateOverrideForm = event.target.closest("#operationDateOverrideForm");
     const taskTabForm = event.target.closest("#taskTabForm");
     const kennelBuildingTabForm = event.target.closest("#kennelBuildingTabForm");
     const ownedDogPhotoUploadForm = event.target.closest("#ownedDogPhotoUploadForm");
@@ -12008,7 +12472,7 @@ function initEvents() {
     const paymentMethodForm = event.target.closest("#paymentMethodForm");
     const urgentAlertForm = event.target.closest("#urgentAlertForm");
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm) return;
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !operationDateOverrideForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm) return;
     event.preventDefault();
     if (urgentAlertForm) {
       const notification = await sendUrgentAlertFromForm(urgentAlertForm);
@@ -12083,6 +12547,14 @@ function initEvents() {
       if (saved) {
         $("#detailDialog").close();
         showToast("Holiday saved.");
+      }
+      return;
+    }
+    if (operationDateOverrideForm) {
+      const saved = await saveOperationDateOverrideFromForm(operationDateOverrideForm);
+      if (saved) {
+        $("#detailDialog").close();
+        showToast("Date hours saved.");
       }
       return;
     }
@@ -12366,6 +12838,11 @@ function initEvents() {
       $("#detailDialog").close();
       if (removed) showToast("Building tab removed.");
     }
+    if (action.dataset.action === "clear-operation-date-override") {
+      const removed = await clearOperationDateOverride(action.dataset.id);
+      $("#detailDialog").close();
+      if (removed) showToast("Date override cleared.");
+    }
     if (action.dataset.action === "confirm-remove-service") {
       const removed = await markRecordRemoved("service", action.dataset.id);
       $("#detailDialog").close();
@@ -12477,6 +12954,15 @@ function initEvents() {
     const timesheetStaff = event.target.closest("#timesheetStaffSelect");
     if (timesheetStaff) {
       syncTimesheetStaffFields(timesheetStaff.closest("#timesheetEditForm"));
+      return;
+    }
+    const operationOpenToggle = event.target.closest('#operationDateOverrideForm input[name="isOpen"]');
+    if (operationOpenToggle) {
+      const formEl = operationOpenToggle.closest("#operationDateOverrideForm");
+      ["openTime", "closeTime"].forEach((name) => {
+        const field = formFieldByName(formEl, name);
+        if (field) field.disabled = !operationOpenToggle.checked;
+      });
       return;
     }
     const filter = event.target.closest("#ownedTimelinePopupFilter");
@@ -13650,11 +14136,14 @@ function initEvents() {
   });
   $("#customerBookingForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if ($("#customerRequestMode")?.value === "service" && event.currentTarget.elements.dropoffTime.value && !event.currentTarget.elements.pickupTime.value) {
-      event.currentTarget.elements.pickupTime.value = event.currentTarget.elements.dropoffTime.value;
+    const dropoffField = formFieldByName(event.currentTarget, "dropoffTime");
+    const pickupField = formFieldByName(event.currentTarget, "pickupTime");
+    if ($("#customerRequestMode")?.value === "service" && dropoffField?.value && !pickupField?.value) {
+      pickupField.value = dropoffField.value;
     }
     if (!validateCustomerDogSelection()) return;
     if (!validateForm(event.currentTarget)) return;
+    if (!validateCustomerBookingAvailability(event.currentTarget)) return;
     const estimate = customerEstimateDetails();
     if (!estimate.dogs.length) {
       showToast("Select at least one dog for the boarding request.");
@@ -13776,6 +14265,36 @@ function initEvents() {
       if (removed) showToast("Kennel location removed.");
     }
   });
+  $("#operationHoursList")?.addEventListener("change", (event) => {
+    const toggle = event.target.closest("[data-operation-open]");
+    if (!toggle) return;
+    const card = toggle.closest(".operation-day-card");
+    card?.querySelectorAll("[data-operation-open-time], [data-operation-close-time]").forEach((field) => {
+      field.disabled = !toggle.checked;
+    });
+  });
+  $("#saveOperationHoursButton")?.addEventListener("click", saveOperationHoursSettings);
+  $("#resetOperationHoursButton")?.addEventListener("click", resetOperationHoursSettings);
+  $("#prevOperationMonthButton")?.addEventListener("click", () => {
+    const current = new Date(`${operationCalendarMonth}-01T12:00:00`);
+    current.setMonth(current.getMonth() - 1);
+    operationCalendarMonth = localDateKey(current).slice(0, 7);
+    renderOperationHoursSettings();
+  });
+  $("#nextOperationMonthButton")?.addEventListener("click", () => {
+    const current = new Date(`${operationCalendarMonth}-01T12:00:00`);
+    current.setMonth(current.getMonth() + 1);
+    operationCalendarMonth = localDateKey(current).slice(0, 7);
+    renderOperationHoursSettings();
+  });
+  $("#operationOverrideCalendar")?.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="open-operation-date-override"]');
+    if (button) openOperationDateOverridePopup(button.dataset.date);
+  });
+  $("#operationOverrideList")?.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="open-operation-date-override"]');
+    if (button) openOperationDateOverridePopup(button.dataset.date);
+  });
 }
 
 function switchPage(pageId) {
@@ -13816,6 +14335,7 @@ async function initializeApp() {
   seedDefaultCfoNotes();
   seedDefaultKennelLocations();
   seedDefaultKennelBuildings();
+  seedDefaultOperationHours();
   updateConditionalSections();
   updateRotationBanner();
   updateCompletionCount();
