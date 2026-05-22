@@ -6474,14 +6474,95 @@ async function linkBoardingDogOwnerAccount(record = {}) {
   showDetailDialog("Customer Login Prepared", `<p>${escapeHtml(record.ownerName || ownerEmail)} can sign up or sign in with ${escapeHtml(ownerEmail)}. Snuggle Stay will link that customer account to ${escapeHtml(customerDog.dogName || record.dogName || "this dog")}.</p><p>This boarding dog can still have stays added by staff or admin even if the owner has not logged in yet.</p>`);
 }
 
+function normalizedDogIdentityName(record = {}) {
+  return String(record.dogName || record.callName || record.showName || "").trim().toLowerCase();
+}
+
+function normalizedPhoneToken(value = "") {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function boardingDogIdentityTokens(record = {}) {
+  const dogName = normalizedDogIdentityName(record);
+  if (!dogName) return [];
+  const tokens = new Set();
+  const addScoped = (kind = "", value = "") => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized) tokens.add(`${dogName}|${kind}:${normalized}`);
+  };
+  const addPhone = (kind = "", value = "") => {
+    const phone = normalizedPhoneToken(value);
+    if (phone) addScoped(kind, phone);
+  };
+
+  [
+    record.linkedCustomerDogId,
+    record.sourceCustomerDogId,
+    record.customerDogId,
+    record.dogId,
+    record.canonicalDogId,
+    ...arrayValue(record.legacyCustomerDogIds),
+  ].forEach((id) => addScoped("customer-dog", id));
+  [
+    record.linkedBoardingDogId,
+    record.sourceBoardingDogId,
+    ...arrayValue(record.sourceRecordIds),
+    ...arrayValue(record.duplicateProfileIds),
+    ...arrayValue(record.legacyBoardingDogIds),
+  ].forEach((id) => addScoped("boarding-dog", id));
+  boardingOwnerEmails(record).forEach((email) => addScoped("email", email));
+  [
+    record.ownerPhone,
+    record.phone,
+    record.customerPhone,
+    record.requestedByPhone,
+    record.emergencyPhone,
+  ].forEach((phone) => addPhone("phone", phone));
+
+  if (!tokens.size) addScoped("owner-name", record.ownerName);
+  return [...tokens];
+}
+
 function boardingDogIdentityKey(record = {}) {
-  const dogName = String(record.dogName || record.callName || record.showName || "").trim().toLowerCase();
-  if (!dogName) return "";
-  const ownerEmails = boardingOwnerEmails(record).join("|");
-  const ownerPhone = String(record.ownerPhone || record.phone || "").replace(/\D/g, "");
-  const ownerName = String(record.ownerName || "").trim().toLowerCase();
-  const ownerKey = ownerEmails || ownerPhone || ownerName;
-  return ownerKey ? `${dogName}|${ownerKey}` : "";
+  return boardingDogIdentityTokens(record)[0] || "";
+}
+
+function groupedBoardingDogProfiles(records = []) {
+  const groups = new Map();
+  const tokenToGroup = new Map();
+  const ungrouped = [];
+  let groupIndex = 0;
+
+  const createGroup = () => {
+    const key = `boarding-profile-${groupIndex += 1}`;
+    groups.set(key, []);
+    return key;
+  };
+
+  const mergeGroups = (targetKey, sourceKey) => {
+    if (!targetKey || !sourceKey || targetKey === sourceKey || !groups.has(sourceKey)) return targetKey;
+    groups.set(targetKey, [...(groups.get(targetKey) || []), ...(groups.get(sourceKey) || [])]);
+    groups.delete(sourceKey);
+    tokenToGroup.forEach((groupKey, token) => {
+      if (groupKey === sourceKey) tokenToGroup.set(token, targetKey);
+    });
+    return targetKey;
+  };
+
+  records.forEach((record) => {
+    const item = { ...record, sourceType: "boardingDog" };
+    const tokens = boardingDogIdentityTokens(item);
+    if (!tokens.length) {
+      ungrouped.push(item);
+      return;
+    }
+    const existingGroups = [...new Set(tokens.map((token) => tokenToGroup.get(token)).filter(Boolean))];
+    const groupKey = existingGroups.reduce((targetKey, sourceKey) => mergeGroups(targetKey, sourceKey), existingGroups[0] || createGroup());
+    groups.set(groupKey, [...(groups.get(groupKey) || []), item]);
+    tokens.forEach((token) => tokenToGroup.set(token, groupKey));
+  });
+
+  return { groups: [...groups.values()], ungrouped };
 }
 
 function boardingStatusPriority(record = {}) {
@@ -6748,18 +6829,8 @@ function mergeBoardingProfileGroup(records = []) {
 }
 
 function consolidatedBoardingDogRecords(records = readRecords("boardingDog").filter((record) => !record.removed)) {
-  const groups = new Map();
-  const ungrouped = [];
-  records.forEach((record) => {
-    const item = { ...record, sourceType: "boardingDog" };
-    const key = boardingDogIdentityKey(item);
-    if (!key) {
-      ungrouped.push(item);
-      return;
-    }
-    groups.set(key, [...(groups.get(key) || []), item]);
-  });
-  return [...groups.values()].map(mergeBoardingProfileGroup).concat(ungrouped).map(boardingDogWithCanonicalProfile).map(boardingDogWithStayStatus);
+  const { groups, ungrouped } = groupedBoardingDogProfiles(records);
+  return groups.map(mergeBoardingProfileGroup).concat(ungrouped).map(boardingDogWithCanonicalProfile).map(boardingDogWithStayStatus);
 }
 
 function boardingDogRecordForDisplay(id = "") {
@@ -6794,9 +6865,9 @@ function boardingStayEntries(records = []) {
 function boardingStayEntryKey(entry = {}) {
   const record = entry.record || {};
   const stay = entry.stay || {};
-  const dogKey = boardingDogIdentityKey(record)
+  const dogKey = boardingDogIdentityTokens(record).sort().join("|")
     || [record.id, ...(record.sourceRecordIds || [])].filter(Boolean).sort().join("|")
-    || String(record.dogName || "").trim().toLowerCase();
+    || normalizedDogIdentityName(record);
   const timeKey = boardingStayMergeKey(stay);
   const sourceKey = boardingStaySourceIds(stay).sort().join("|");
   const stayKey = timeKey?.startsWith("time:") ? timeKey : sourceKey || entry.requestCode || timeKey;
@@ -6822,11 +6893,11 @@ function boardingStayEntrySortTime(entry = {}) {
 }
 
 function findMatchingBoardingDogProfile(record = {}, options = {}) {
-  const key = boardingDogIdentityKey(record);
-  if (!key) return null;
+  const tokens = new Set(boardingDogIdentityTokens(record));
+  if (!tokens.size) return null;
   return consolidatedBoardingDogRecords()
     .filter((item) => item.id !== options.excludeId && !(item.sourceRecordIds || []).includes(options.excludeId))
-    .find((item) => boardingDogIdentityKey(item) === key) || null;
+    .find((item) => boardingDogIdentityTokens(item).some((token) => tokens.has(token))) || null;
 }
 
 function renderBoardingDogs() {
@@ -6946,7 +7017,8 @@ async function handleBoardingTransition(record = {}, nextStatus = "", options = 
 }
 
 function dogRosterKey(record) {
-  return `${record.dogName || record.callName || record.showName || ""}|${record.ownerEmail || record.ownerPhone || record.ownerName || record.sourceType || ""}`.toLowerCase();
+  return boardingDogIdentityTokens(record).sort().join("|")
+    || `${record.dogName || record.callName || record.showName || ""}|${record.ownerEmail || record.ownerPhone || record.ownerName || record.sourceType || ""}`.toLowerCase();
 }
 
 function combinedBoardingDogRecords() {
