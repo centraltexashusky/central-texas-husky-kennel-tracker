@@ -72,7 +72,9 @@ as $$
     )
 $$;
 
-create or replace function public.kennel_is_staff_member()
+create schema if not exists kennel_private;
+
+create or replace function kennel_private.kennel_is_staff_member()
 returns boolean
 language sql
 stable
@@ -90,13 +92,25 @@ as $$
     )
 $$;
 
+revoke all on function kennel_private.kennel_is_staff_member() from public;
+grant usage on schema kennel_private to authenticated;
+grant execute on function kennel_private.kennel_is_staff_member() to authenticated;
+
+create or replace function public.kennel_is_staff_member()
+returns boolean
+language sql
+stable
+as $$
+  select kennel_private.kennel_is_staff_member()
+$$;
+
 create or replace function public.kennel_customer_can_write(record_type text, payload jsonb)
 returns boolean
 language sql
 stable
 as $$
   select case
-    when public.kennel_is_staff_member() then true
+    when kennel_private.kennel_is_staff_member() then true
     when record_type in ('customerDog', 'boardingDog', 'request', 'maintenance') then public.kennel_payload_has_email(payload)
     when record_type = 'settingsUser' then lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email()
       and lower(coalesce(payload ->> 'role', '')) in ('customer', 'member', 'customer | member')
@@ -110,7 +124,7 @@ on public.kennel_records
 for select
 to authenticated
 using (
-  public.kennel_is_staff_member()
+  kennel_private.kennel_is_staff_member()
   or public.kennel_payload_has_email(payload)
   or public.kennel_payload_audience_has_email(payload)
   or (type = 'settingsUser' and lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email())
@@ -128,7 +142,7 @@ on public.kennel_records
 for update
 to authenticated
 using (
-  public.kennel_is_staff_member()
+  kennel_private.kennel_is_staff_member()
   or public.kennel_payload_has_email(payload)
   or public.kennel_payload_audience_has_email(payload)
   or (type = 'settingsUser' and lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email())
@@ -178,11 +192,11 @@ for update
 to authenticated
 using (
   bucket_id = 'kennel-media'
-  and (public.kennel_is_staff_member() or (storage.foldername(name))[2] = auth.uid()::text)
+  and (kennel_private.kennel_is_staff_member() or (storage.foldername(name))[2] = auth.uid()::text)
 )
 with check (
   bucket_id = 'kennel-media'
-  and (public.kennel_is_staff_member() or (storage.foldername(name))[2] = auth.uid()::text)
+  and (kennel_private.kennel_is_staff_member() or (storage.foldername(name))[2] = auth.uid()::text)
 );
 
 create policy "Authenticated users can delete kennel media"
@@ -191,5 +205,5 @@ for delete
 to authenticated
 using (
   bucket_id = 'kennel-media'
-  and (public.kennel_is_staff_member() or (storage.foldername(name))[2] = auth.uid()::text)
+  and (kennel_private.kennel_is_staff_member() or (storage.foldername(name))[2] = auth.uid()::text)
 );

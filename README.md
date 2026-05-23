@@ -50,6 +50,8 @@ New record types used by this workflow:
 
 The app creates in-app notifications for new boarding requests, urgent kennel requests, urgent maintenance, time-off review, and schedule publishing. Browser `mailto:` alerts are no longer the primary path; live email/SMS delivery is handled by the Supabase Edge Function at `supabase/functions/send-notification`.
 
+Private file access is handled by the Supabase Edge Function at `supabase/functions/media-access`. The app stores each uploaded file's `storagePath` and can request a short-lived signed URL after confirming the logged-in user can access the source record.
+
 Recommended Supabase Function secrets:
 
 ```text
@@ -69,6 +71,9 @@ Email can go live with only `RESEND_API_KEY`, `ALERT_FROM_EMAIL`, and `ADMIN_ALE
 
 Current setup:
 The app uses Supabase as the persistent database. Email/password, Google, and Facebook sign-in save records across desktop and mobile. User profile and role records are stored in the app database; passwords stay in Supabase Auth.
+
+Production hardening:
+Use `docs/production-hardening-runbook.md` for the SQL apply order, Edge Function validation, duplicate boarding stay/profile cleanup, private-media migration, and production smoke test. The current app still reads and writes `kennel_records`; `supabase-normalized-boarding-schema.sql` stages the future normalized tables without breaking the live JSON-record flow.
 
 Important deployment note:
 Whenever `index.html`, `styles.css`, or `script.js` changes, upload the updated files to GitHub or your Wix-hosted version.

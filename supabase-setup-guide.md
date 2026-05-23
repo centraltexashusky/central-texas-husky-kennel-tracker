@@ -11,7 +11,9 @@ Use this after reviewing the local page.
 5. Copy the full SQL into Supabase.
 6. Run it.
 
-This creates one table named `kennel_records` for daily tasks, timesheets, staff schedules, time-off requests, holidays, notifications, dogs, boarding dogs, requests, maintenance, services, app users, and calendar notes. It also creates a public Supabase Storage bucket named `kennel-media` for dog profile photos, request/maintenance images, and vaccination record uploads.
+This creates one table named `kennel_records` for daily tasks, timesheets, staff schedules, time-off requests, holidays, notifications, dogs, boarding dogs, requests, maintenance, services, app users, and calendar notes. It also creates the Supabase Storage bucket named `kennel-media` for dog profile photos, request/maintenance images, and vaccination record uploads.
+
+For production hardening, also review `docs/production-hardening-runbook.md`. It includes the duplicate boarding-data cleanup script, signed-media Edge Function, optional private-media SQL, and the staged normalized boarding schema.
 
 ## 2. Add The Supabase Keys To The Webpage
 
@@ -86,10 +88,11 @@ Important: Google and Facebook login will not complete from a `file://` preview.
 
 1. In Supabase, go to Storage.
 2. Confirm there is a bucket named `kennel-media`.
-3. Confirm it is public.
+3. Keep it public until the `media-access` Edge Function has been deployed and tested.
 4. Use a file size limit around 50 MB.
 5. Allow JPG, PNG, and PDF uploads. Request and Maintenance forms accept only JPG/PNG; customer dog vaccination records also accept PDF.
-6. If the SQL policies were not applied, allow the anon/public key to read and upload objects in this bucket.
+6. Do not allow anon/public uploads. Authenticated users should upload only to their own `users/<auth uid>/...` folder.
+7. After signed media access is verified, run `supabase-private-media.sql` to make reads private.
 
 ## 5. Quick Auth Troubleshooting
 
@@ -132,3 +135,14 @@ Add another email inside that list if another person should see admin-only pages
 Admin password changes use the deployed Supabase Edge Function named `admin-set-password`. Do not put a service-role key in `script.js`.
 
 The Settings page can set a temporary password for a user. The user will be required to enter that temporary password and choose a new password after the next email/password login.
+
+## 9. Edge Functions
+
+Deploy these Edge Functions before enabling the full production flow:
+
+```bash
+supabase functions deploy send-notification
+supabase functions deploy media-access
+```
+
+Run `node tools/check-edge-functions.mjs` first on a machine with Deno installed. The `media-access` function creates short-lived signed URLs for private files after checking the logged-in user against the source record.

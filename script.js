@@ -61,6 +61,7 @@ const selectedDogPhotos = { owned: null, boarding: null, customer: null };
 let ownedDogCareFilter = "All";
 let pendingStructuredCareLogs = [];
 let mediaZoomLevel = 1;
+const signedMediaUrlCache = new Map();
 let customerProfileSyncInProgress = false;
 let authSessionSyncPromise = null;
 let suppressAuthSyncUntil = 0;
@@ -3885,19 +3886,73 @@ function multilineHtml(value = "") {
   return escapeHtml(value).replaceAll("\n", "<br>");
 }
 
+function mediaAccessAttrs(item = {}, context = {}) {
+  const storagePath = item.storagePath || item.profilePhotoPath || "";
+  const sourceRecordId = context.sourceRecordId || item.sourceRecordId || item.recordId || "";
+  const sourceRecordType = context.sourceRecordType || item.sourceRecordType || item.recordType || "";
+  const attrs = [];
+  if (storagePath) attrs.push(`data-storage-path="${escapeHtml(storagePath)}"`);
+  if (sourceRecordId) attrs.push(`data-source-record-id="${escapeHtml(sourceRecordId)}"`);
+  if (sourceRecordType) attrs.push(`data-source-record-type="${escapeHtml(sourceRecordType)}"`);
+  return attrs.length ? ` ${attrs.join(" ")}` : "";
+}
+
+async function signedMediaUrlForPath(storagePath = "", context = {}) {
+  const path = String(storagePath || "").trim();
+  if (!path || !supabaseClient || localTestMode) return "";
+  const cached = signedMediaUrlCache.get(path);
+  if (cached && cached.expiresAt > Date.now()) return cached.url;
+  const { data, error } = await supabaseClient.functions.invoke("media-access", {
+    body: {
+      storagePath: path,
+      recordId: context.sourceRecordId || context.recordId || "",
+      recordType: context.sourceRecordType || context.recordType || "",
+    },
+  });
+  if (error) throw error;
+  const signedUrl = data?.signedUrl || "";
+  if (signedUrl) {
+    signedMediaUrlCache.set(path, {
+      url: signedUrl,
+      expiresAt: Date.now() + Math.max(60, Number(data?.expiresIn || 600) - 30) * 1000,
+    });
+  }
+  return signedUrl;
+}
+
+async function openMediaFromButton(mediaButton) {
+  const storagePath = mediaButton.dataset.storagePath || "";
+  let src = mediaButton.dataset.src || "";
+  if (storagePath) {
+    try {
+      src = await signedMediaUrlForPath(storagePath, {
+        sourceRecordId: mediaButton.dataset.sourceRecordId || "",
+        sourceRecordType: mediaButton.dataset.sourceRecordType || "",
+      }) || src;
+    } catch (error) {
+      if (!src) {
+        showDetailDialog("File Not Available", `<p>This file is stored privately, but Snuggle Stay could not create an access link right now.</p><p>${escapeHtml(error.message || String(error))}</p>`);
+        return;
+      }
+      showToast("Using the saved file link because private access could not be refreshed.");
+    }
+  }
+  showMediaDialog(src, mediaButton.dataset.mediaType, mediaButton.dataset.mediaName);
+}
+
 function mediaLinkHtml(record) {
   const links = [];
   if (record.mediaLink) {
     links.push(`<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(record.mediaLink)}" data-media-type="external/link" data-media-name="Shared media">Open shared media</button>`);
   }
   if (record.profilePhotoUrl) {
-    links.push(`<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(record.profilePhotoUrl)}" data-media-type="image/jpeg" data-media-name="Profile photo">Open profile photo</button>`);
+    links.push(`<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(record.profilePhotoUrl)}" data-media-type="image/jpeg" data-media-name="Profile photo"${mediaAccessAttrs({ profilePhotoPath: record.profilePhotoPath || record.storagePath || "" }, { sourceRecordId: record.id || "", sourceRecordType: record.type || "" })}>Open profile photo</button>`);
   }
   if (record.mediaItems?.length) {
     links.push(
       ...record.mediaItems.map(
         (item) =>
-          `<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type)}" data-media-name="${escapeHtml(item.name)}">Open ${escapeHtml(item.name)}</button>`,
+          `<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type)}" data-media-name="${escapeHtml(item.name)}"${mediaAccessAttrs(item, { sourceRecordId: record.id || item.sourceRecordId || "", sourceRecordType: record.type || item.sourceRecordType || "" })}>Open ${escapeHtml(item.name)}</button>`,
       ),
     );
   }
@@ -3905,7 +3960,7 @@ function mediaLinkHtml(record) {
     links.push(
       ...record.vaccinationRecords.map(
         (item) =>
-          `<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(item.url || "")}" data-media-type="${escapeHtml(item.type)}" data-media-name="${escapeHtml(item.name)}">Open vaccine record: ${escapeHtml(item.name)}</button>`,
+          `<button type="button" class="media-preview-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type)}" data-media-name="${escapeHtml(item.name)}"${mediaAccessAttrs(item, { sourceRecordId: record.id || item.sourceRecordId || "", sourceRecordType: record.type || item.sourceRecordType || "" })}>Open vaccine record: ${escapeHtml(item.name)}</button>`,
       ),
     );
   } else if (record.vaccinationFiles) {
@@ -3920,14 +3975,20 @@ function customerUploadSectionHtml(record = {}) {
   const linkedDog = linkedCustomerDogForBoarding(record);
   const sections = [];
   const directMedia = mediaLinkHtml({
+    id: record.id || "",
+    type: record.type || "boardingDog",
     profilePhotoUrl: record.profilePhotoUrl,
+    profilePhotoPath: record.profilePhotoPath || "",
     vaccinationRecords: record.vaccinationRecords || [],
     vaccinationFiles: record.vaccinationFiles || "",
   });
   if (directMedia) sections.push(`<article class="record-card compact-record-card"><strong>Files attached to boarding record</strong>${directMedia}</article>`);
   if (linkedDog) {
     const linkedMedia = mediaLinkHtml({
+      id: linkedDog.id || "",
+      type: linkedDog.type || "customerDog",
       profilePhotoUrl: linkedDog.profilePhotoUrl,
+      profilePhotoPath: linkedDog.profilePhotoPath || "",
       vaccinationRecords: linkedDog.vaccinationRecords || [],
       vaccinationFiles: linkedDog.vaccinationFiles || "",
     });
@@ -5137,9 +5198,9 @@ function renderCustomerUpdates() {
       ${group.updates.map((update) => {
         const media = (update.mediaItems || []).map((item) => {
           const src = item.url || item.dataUrl || "";
-          if (!src) return item.note ? `<p class="muted-text">${escapeHtml(item.name || "Photo")}: ${escapeHtml(item.note)}</p>` : "";
+          if (!src && !item.storagePath) return item.note ? `<p class="muted-text">${escapeHtml(item.name || "Photo")}: ${escapeHtml(item.note)}</p>` : "";
           const isImage = String(item.type || "").startsWith("image/");
-          return `<button type="button" class="customer-update-media-button" data-action="view-media" data-src="${escapeHtml(src)}" data-media-type="${escapeHtml(item.type || "image/jpeg")}" data-media-name="${escapeHtml(item.name || "Customer update media")}">${isImage ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.name || "Customer update photo")}" />` : ""}<span>${escapeHtml(item.name || "Open attachment")}</span></button>`;
+          return `<button type="button" class="customer-update-media-button" data-action="view-media" data-src="${escapeHtml(src)}" data-media-type="${escapeHtml(item.type || "image/jpeg")}" data-media-name="${escapeHtml(item.name || "Customer update media")}"${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>${isImage && src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.name || "Customer update photo")}" />` : ""}<span>${escapeHtml(item.name || "Open attachment")}</span></button>`;
         }).join("");
         return `<article class="record-card compact-record-card customer-update-card">
           <strong>${escapeHtml(formatDateTime(update.createdAt) || "Update")}</strong>
@@ -7289,13 +7350,13 @@ function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
   if (!list) return;
   const files = record.vaccinationRecords || [];
   list.innerHTML = files.length
-    ? files.map((file) => `<article class="record-card compact-record-card"><strong>${escapeHtml(file.name || "Health record")}</strong><span>${escapeHtml(formatDateTime(file.savedAt || file.createdAt))}</span>${file.note ? `<p>${escapeHtml(file.note)}</p>` : ""}<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(file.url || file.dataUrl || "")}" data-media-type="${escapeHtml(file.type || "")}" data-media-name="${escapeHtml(file.name || "Health record")}">Open</button></div></article>`).join("")
+    ? files.map((file) => `<article class="record-card compact-record-card"><strong>${escapeHtml(file.name || "Health record")}</strong><span>${escapeHtml(formatDateTime(file.savedAt || file.createdAt))}</span>${file.note ? `<p>${escapeHtml(file.note)}</p>` : ""}<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(file.url || file.dataUrl || "")}" data-media-type="${escapeHtml(file.type || "")}" data-media-name="${escapeHtml(file.name || "Health record")}"${mediaAccessAttrs(file, { sourceRecordId: record.id || file.sourceRecordId || "", sourceRecordType: "boardingDog" })}>Open</button></div></article>`).join("")
     : `<article class="record-card compact-record-card"><strong>No health records uploaded yet.</strong><p>Choose files in this tab, then save the dog profile.</p></article>`;
 }
 
 function customerUpdateMediaHtml(update = {}) {
   const items = update.mediaItems || [];
-  return items.map((item) => `<button type="button" class="media-preview-button secondary-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type || "image/jpeg")}" data-media-name="${escapeHtml(item.name || "Customer update photo")}">Open photo</button>`).join("");
+  return items.map((item) => `<button type="button" class="media-preview-button secondary-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type || "image/jpeg")}" data-media-name="${escapeHtml(item.name || "Customer update photo")}"${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>Open photo</button>`).join("");
 }
 
 function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
@@ -7317,6 +7378,7 @@ function boardingDogDocumentItems(record = {}) {
     size: item.size || 0,
     savedAt: item.savedAt || item.uploadedAt || item.createdAt || "",
     url: item.url || "",
+    storagePath: item.storagePath || item.path || "",
     dataUrl: item.dataUrl || "",
     note: item.note || "",
   }));
@@ -7334,6 +7396,7 @@ function boardingDogFileItem(item = {}, source, sourceLabel, options = {}) {
     size: item.size || 0,
     savedAt: item.savedAt || item.uploadedAt || item.createdAt || "",
     url: item.url || "",
+    storagePath: item.storagePath || item.path || "",
     dataUrl: item.dataUrl || "",
     note: item.note || "",
     canRename: options.canRename !== false,
@@ -7392,7 +7455,7 @@ function renderBoardingDogFiles(record = activeBoardingDog() || {}) {
         const renameInput = file.canRename ? `<label>File name<input type="text" value="${escapeHtml(file.name)}" data-action="rename-boarding-file-input" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-parent-id="${escapeHtml(file.parentId)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}" /></label>` : "";
         const renameButton = file.canRename ? `<button type="button" class="secondary-button" data-action="save-boarding-file-name" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-parent-id="${escapeHtml(file.parentId)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}">Rename</button>` : "";
         const removeButton = file.canRemove ? `<button type="button" class="secondary-button danger-button" data-action="remove-boarding-file" data-id="${escapeHtml(file.id)}" data-source="${escapeHtml(file.source)}" data-parent-id="${escapeHtml(file.parentId)}" data-source-record-id="${escapeHtml(file.sourceRecordId)}">Remove</button>` : "";
-        return `<article class="record-card compact-record-card dog-file-card" data-file-id="${escapeHtml(file.id)}"><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(savedText)}</span>${sourceText}${noteText}${renameInput}<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(source)}" data-media-type="${escapeHtml(file.type)}" data-media-name="${escapeHtml(file.name)}">Open</button>${renameButton}${removeButton}</div></article>`;
+        return `<article class="record-card compact-record-card dog-file-card" data-file-id="${escapeHtml(file.id)}"><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(savedText)}</span>${sourceText}${noteText}${renameInput}<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(source)}" data-media-type="${escapeHtml(file.type)}" data-media-name="${escapeHtml(file.name)}"${mediaAccessAttrs(file, { sourceRecordId: file.sourceRecordId || record.id || "", sourceRecordType: file.sourceRecordType || (file.source?.startsWith("customer") ? "customerDog" : "boardingDog") })}>Open</button>${renameButton}${removeButton}</div></article>`;
       }).join("")
     : "<p>No uploaded files saved for this boarding dog yet.</p>";
 }
@@ -7848,6 +7911,7 @@ function ownedDogDocumentItems(record = {}) {
     size: item.size || 0,
     savedAt: item.savedAt || item.uploadedAt || item.createdAt || "",
     url: item.url || "",
+    storagePath: item.storagePath || item.path || "",
     dataUrl: item.dataUrl || "",
     note: item.note || "",
   }));
@@ -7866,7 +7930,7 @@ function renderOwnedDogFiles(record = activeOwnedDog()) {
         const source = file.url || file.dataUrl || "";
         const savedText = file.savedAt ? `Uploaded ${formatDateTime(file.savedAt)}` : "Uploaded date not recorded";
         const statusText = file.note ? `<p>${escapeHtml(file.note)}</p>` : "";
-        return `<article class="record-card compact-record-card dog-file-card" data-file-id="${escapeHtml(file.id)}"><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(savedText)}</span>${statusText}<label>Rename file<input type="text" value="${escapeHtml(file.name)}" data-action="rename-owned-file-input" data-id="${escapeHtml(file.id)}" /></label><div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(source)}" data-media-type="${escapeHtml(file.type)}" data-media-name="${escapeHtml(file.name)}">Open</button><button type="button" class="secondary-button" data-action="save-owned-file-name" data-id="${escapeHtml(file.id)}">Rename</button><button type="button" class="secondary-button danger-button" data-action="remove-owned-file" data-id="${escapeHtml(file.id)}">Remove</button></div></article>`;
+        return `<article class="record-card compact-record-card dog-file-card" data-file-id="${escapeHtml(file.id)}"><strong>${escapeHtml(file.name)}</strong><span>${escapeHtml(savedText)}</span>${statusText}<label>Rename file<input type="text" value="${escapeHtml(file.name)}" data-action="rename-owned-file-input" data-id="${escapeHtml(file.id)}" /></label><div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="${escapeHtml(source)}" data-media-type="${escapeHtml(file.type)}" data-media-name="${escapeHtml(file.name)}"${mediaAccessAttrs(file, { sourceRecordId: record.id || "", sourceRecordType: "ownedDog" })}>Open</button><button type="button" class="secondary-button" data-action="save-owned-file-name" data-id="${escapeHtml(file.id)}">Rename</button><button type="button" class="secondary-button danger-button" data-action="remove-owned-file" data-id="${escapeHtml(file.id)}">Remove</button></div></article>`;
       }).join("")
     : "<p>No documents uploaded for this dog yet.</p>";
 }
@@ -13185,7 +13249,7 @@ function initEvents() {
     if (!mediaButton) return;
     event.preventDefault();
     event.stopPropagation();
-    showMediaDialog(mediaButton.dataset.src, mediaButton.dataset.mediaType, mediaButton.dataset.mediaName);
+    openMediaFromButton(mediaButton);
   });
   form.addEventListener("change", () => {
     updateCompletionCount();
