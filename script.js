@@ -64,10 +64,21 @@ let mediaZoomLevel = 1;
 const signedMediaUrlCache = new Map();
 let customerProfileSyncInProgress = false;
 let authSessionSyncPromise = null;
+let authSessionSyncStartedAt = 0;
 let suppressAuthSyncUntil = 0;
 let taskTemplateSyncTimer = null;
 let applyingRemoteTaskConfig = false;
 const REMOTE_RENDER_SCROLL_IDLE_MS = 1200;
+const REMOTE_LOAD_STALE_MS = 15000;
+const AUTH_BOOT_TIMEOUT_MS = 8000;
+const AUTH_SYNC_STALE_MS = 15000;
+const APP_RESUME_DEBOUNCE_MS = 900;
+const APP_RESUME_REMOTE_REFRESH_MS = 30000;
+let remoteLoadStartedAt = 0;
+let lastRemoteLoadFinishedAt = 0;
+let appInitialized = false;
+let appResumeTimer = null;
+let lastAppResumeAt = 0;
 let showReadNotifications = false;
 let visibleReadNotificationCount = 4;
 const MAX_READ_NOTIFICATIONS = 10;
@@ -1724,10 +1735,68 @@ function isEmailConfirmationError(message = "") {
   return /confirm|verified|verification/i.test(message);
 }
 
+function appTimeoutError(label = "Operation") {
+  const error = new Error(`${label} timed out.`);
+  error.name = "TimeoutError";
+  return error;
+}
+
+function isTimeoutError(error) {
+  return error?.name === "TimeoutError";
+}
+
+function withTimeout(promise, timeoutMs, label = "Operation") {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => reject(appTimeoutError(label)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) window.clearTimeout(timer);
+  });
+}
+
+function cachedSupabaseSessionUser(supabaseUser = null) {
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(stateKeys.session) || "null");
+  } catch (error) {
+    return null;
+  }
+  if (!saved?.key || saved.authProvider === "local-test" || saved.authProvider === "admin-impersonation") return null;
+  const savedEmail = normalizeEmail(saved.email);
+  const sessionEmail = normalizeEmail(supabaseUser?.email);
+  if (sessionEmail && savedEmail && sessionEmail !== savedEmail) return null;
+  return saved;
+}
+
+function shellUserFromSupabaseSession(supabaseUser) {
+  const baseUser = userFromSupabase(supabaseUser);
+  if (!baseUser) return null;
+  const cachedUser = cachedSupabaseSessionUser(supabaseUser);
+  const merged = cachedUser ? { ...baseUser, ...cachedUser, key: baseUser.key, authId: baseUser.key, authProvider: "supabase" } : baseUser;
+  return {
+    ...merged,
+    role: roleForAccount(merged) || merged.role || baseUser.role || "customer",
+    name: merged.name || baseUser.name,
+    email: merged.email || baseUser.email,
+  };
+}
+
+function recoverStaleAuthSync(reason = "") {
+  if (!authSessionSyncPromise || !authSessionSyncStartedAt) return false;
+  if (Date.now() - authSessionSyncStartedAt < AUTH_SYNC_STALE_MS) return false;
+  console.warn(`Recovering stale auth sync${reason ? ` after ${reason}` : ""}.`);
+  authSessionSyncPromise = null;
+  authSessionSyncStartedAt = 0;
+  return true;
+}
+
 async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
   const user = userFromSupabase(supabaseUser);
   if (!user) return null;
+  recoverStaleAuthSync("new auth sync request");
   if (authSessionSyncPromise) return authSessionSyncPromise;
+  authSessionSyncStartedAt = Date.now();
   authSessionSyncPromise = (async () => {
     await loadRemoteRecords({ render: false });
     const profile = await ensureAppUserProfile(user);
@@ -1747,6 +1816,7 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     return await authSessionSyncPromise;
   } finally {
     authSessionSyncPromise = null;
+    authSessionSyncStartedAt = 0;
   }
 }
 
@@ -1980,10 +2050,29 @@ async function completeForcedPasswordChange(event) {
 
 async function restoreSupabaseSession() {
   if (!supabaseClient) return false;
-  const { data, error } = await supabaseClient.auth.getSession();
-  if (error || !data.session?.user) return false;
-  const user = await syncAuthenticatedSupabaseUser(data.session?.user, { switchAfterLogin: false });
-  if (!user) return false;
+  let sessionResult = null;
+  try {
+    sessionResult = await withTimeout(supabaseClient.auth.getSession(), AUTH_BOOT_TIMEOUT_MS, "Supabase session restore");
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      const cachedUser = cachedSupabaseSessionUser();
+      if (cachedUser) {
+        setHelper(cachedUser, { switchAfterLogin: false, render: false });
+        modeLabel.textContent = "Restored; sync pending";
+        return true;
+      }
+    }
+    console.warn("Could not restore Supabase session.", error);
+    return false;
+  }
+  const { data, error } = sessionResult || {};
+  if (error || !data?.session?.user) return false;
+  const shellUser = shellUserFromSupabaseSession(data.session.user);
+  if (!shellUser) return false;
+  setHelper(shellUser, { switchAfterLogin: false, render: false });
+  syncAuthenticatedSupabaseUser(data.session.user, { switchAfterLogin: false }).catch((syncError) => {
+    console.warn("Could not finish Supabase profile sync after shell restore.", syncError);
+  });
   return true;
 }
 
@@ -3619,9 +3708,18 @@ async function loadRemoteRecords(options = {}) {
     modeLabel.textContent = localTestMode ? "Local test mode" : "Local only";
     return;
   }
-  if (remoteLoadInProgress) return;
+  if (remoteLoadInProgress) {
+    if (remoteLoadStartedAt && Date.now() - remoteLoadStartedAt > REMOTE_LOAD_STALE_MS) {
+      console.warn("Recovering stale remote record load.");
+      remoteLoadInProgress = false;
+      remoteLoadStartedAt = 0;
+    } else {
+      return;
+    }
+  }
   remoteLoadInProgress = true;
-  syncNowButton.disabled = true;
+  remoteLoadStartedAt = Date.now();
+  if (syncNowButton) syncNowButton.disabled = true;
   try {
     const data = await fetchRemoteRecordRows();
     const nextSignature = remoteRecordsSignature(data || []);
@@ -3652,7 +3750,9 @@ async function loadRemoteRecords(options = {}) {
     showToast(`Records could not load: ${error.message}`);
   } finally {
     remoteLoadInProgress = false;
-    syncNowButton.disabled = false;
+    remoteLoadStartedAt = 0;
+    lastRemoteLoadFinishedAt = Date.now();
+    if (syncNowButton) syncNowButton.disabled = false;
   }
 }
 
@@ -12338,6 +12438,14 @@ function initEvents() {
   window.addEventListener("scroll", () => {
     lastUserScrollAt = Date.now();
   }, { passive: true });
+  window.addEventListener("pageshow", (event) => {
+    scheduleAppResumeRecovery(event.persisted ? "pageshow-bfcache" : "pageshow");
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) scheduleAppResumeRecovery("visibility");
+  });
+  window.addEventListener("focus", () => scheduleAppResumeRecovery("focus"));
+  window.addEventListener("online", () => scheduleAppResumeRecovery("online"));
   window.addEventListener("hashchange", () => {
     const pageId = pageIdFromHash();
     if (pageId && pageId !== activePageId()) switchPage(pageId);
@@ -14556,43 +14664,122 @@ function switchPage(pageId) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-async function initializeApp() {
-  document.body.classList.add("is-auth-booting");
-  initSupabaseClient();
-  ensureTaskConfig();
-  setDefaultDateAndDay();
-  $("#dashboardDate").value = todayDate();
-  seedDefaultServices();
-  seedDefaultCfoNotes();
-  seedDefaultKennelLocations();
-  seedDefaultKennelBuildings();
-  seedDefaultOperationHours();
-  updateConditionalSections();
-  updateRotationBanner();
-  updateCompletionCount();
-  updateTimeDisplays();
-  renderDailyTaskLists();
-  setupRequiredFields();
-  initEvents();
-  showAuthRedirectError();
-  hydrateLoginFromUrl();
-  let renderedDuringSessionRestore = false;
-  if (!helperIsLoggedIn()) {
-    const restoredFromSupabase = await restoreSupabaseSession();
-    renderedDuringSessionRestore = restoredFromSupabase;
-    if (!restoredFromSupabase && !restoreSession()) {
-      clearLocalAppSession({ switchToLogin: false });
-    }
+function ensureAppShellVisible(reason = "") {
+  const wasBooting = document.body.classList.contains("is-auth-booting");
+  if (wasBooting) document.body.classList.remove("is-auth-booting");
+  recoverStaleAuthSync(reason);
+  if (remoteLoadInProgress && remoteLoadStartedAt && Date.now() - remoteLoadStartedAt > REMOTE_LOAD_STALE_MS) {
+    console.warn(`Recovering stale remote load${reason ? ` after ${reason}` : ""}.`);
+    remoteLoadInProgress = false;
+    remoteLoadStartedAt = 0;
+    if (syncNowButton) syncNowButton.disabled = false;
   }
   updateNavigationAccess();
-  if (helperIsLoggedIn()) {
-    if (!renderedDuringSessionRestore) renderAllRecords();
-    switchPage(rememberedPageForRole(currentRole()));
-    requirePasswordChangeIfNeeded();
+  const activeId = activePageId();
+  const activePage = document.getElementById(activeId);
+  const needsPageRepair = !activePage?.classList.contains("is-active") || !pageAllowed(activeId) || (helperIsLoggedIn() && activeId === "loginPage");
+  if (needsPageRepair) {
+    const fallback = helperIsLoggedIn() ? rememberedPageForRole(currentRole()) : "loginPage";
+    switchPage(pageAllowed(fallback) ? fallback : "loginPage");
   } else {
-    switchPage("loginPage");
+    document.body.classList.toggle("is-login-view", activeId === "loginPage" && !helperIsLoggedIn());
+    syncMobileNavigationActive(activeId);
   }
-  document.body.classList.remove("is-auth-booting");
+  if (wasBooting && helperIsLoggedIn()) renderAllRecords();
 }
 
-initializeApp();
+function scheduleAppResumeRecovery(reason = "resume") {
+  if (appResumeTimer) window.clearTimeout(appResumeTimer);
+  appResumeTimer = window.setTimeout(() => {
+    appResumeTimer = null;
+    resumeAppFromLifecycle(reason);
+  }, 150);
+}
+
+async function resumeAppFromLifecycle(reason = "resume") {
+  if (!appInitialized && reason !== "pageshow-bfcache") return;
+  const now = Date.now();
+  if (now - lastAppResumeAt < APP_RESUME_DEBOUNCE_MS) return;
+  lastAppResumeAt = now;
+  ensureAppShellVisible(reason);
+  if (!helperIsLoggedIn()) {
+    const restored = await restoreSupabaseSession();
+    if (restored) {
+      renderAllRecords();
+      ensureAppShellVisible(`${reason}:session-restored`);
+    }
+    return;
+  }
+  if (supabaseClient && !localTestMode && !remoteLoadInProgress && now - lastRemoteLoadFinishedAt > APP_RESUME_REMOTE_REFRESH_MS) {
+    loadRemoteRecords({ render: true }).catch((error) => {
+      console.warn("Resume sync failed.", error);
+    });
+  }
+}
+
+async function initializeApp() {
+  document.body.classList.add("is-auth-booting");
+  let renderedDuringSessionRestore = false;
+  try {
+    initSupabaseClient();
+    ensureTaskConfig();
+    setDefaultDateAndDay();
+    $("#dashboardDate").value = todayDate();
+    seedDefaultServices();
+    seedDefaultCfoNotes();
+    seedDefaultKennelLocations();
+    seedDefaultKennelBuildings();
+    seedDefaultOperationHours();
+    updateConditionalSections();
+    updateRotationBanner();
+    updateCompletionCount();
+    updateTimeDisplays();
+    renderDailyTaskLists();
+    setupRequiredFields();
+    initEvents();
+    showAuthRedirectError();
+    hydrateLoginFromUrl();
+    if (!helperIsLoggedIn()) {
+      const restoredFromSupabase = await restoreSupabaseSession();
+      renderedDuringSessionRestore = restoredFromSupabase;
+      if (!restoredFromSupabase && !restoreSession()) {
+        clearLocalAppSession({ switchToLogin: false });
+      }
+    }
+    updateNavigationAccess();
+    if (helperIsLoggedIn()) {
+      if (!renderedDuringSessionRestore) renderAllRecords();
+      switchPage(rememberedPageForRole(currentRole()));
+      requirePasswordChangeIfNeeded();
+    } else {
+      switchPage("loginPage");
+    }
+  } catch (error) {
+    console.error("App startup recovered after an error.", error);
+    const cachedUser = cachedSupabaseSessionUser();
+    if (!helperIsLoggedIn() && cachedUser) {
+      setHelper(cachedUser, { switchAfterLogin: false, render: false });
+      renderAllRecords();
+      switchPage(rememberedPageForRole(currentRole()));
+      showToast("The app restored from saved login. Sync will retry when the connection is ready.");
+    } else if (!helperIsLoggedIn()) {
+      clearLocalAppSession({ switchToLogin: false });
+      switchPage("loginPage");
+    } else {
+      renderAllRecords();
+      switchPage(rememberedPageForRole(currentRole()));
+    }
+  } finally {
+    appInitialized = true;
+    ensureAppShellVisible("startup");
+    document.body.classList.remove("is-auth-booting");
+  }
+}
+
+initializeApp().catch((error) => {
+  console.error("App startup failed after recovery attempt.", error);
+  appInitialized = true;
+  document.body.classList.remove("is-auth-booting");
+  if (!helperIsLoggedIn()) clearLocalAppSession({ switchToLogin: false });
+  ensureAppShellVisible("startup-fallback");
+});
