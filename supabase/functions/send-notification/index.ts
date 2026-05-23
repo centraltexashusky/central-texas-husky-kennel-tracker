@@ -11,7 +11,6 @@ type NotifyBody = {
   eventName?: string;
   recordId?: string;
   notificationId?: string;
-  record?: Record<string, unknown>;
 };
 
 const json = (body: Record<string, unknown>, status = 200) =>
@@ -33,6 +32,35 @@ function normalizeEmail(value: unknown) {
 
 function adminEmails() {
   return splitEnv("ADMIN_ALERT_EMAILS").length ? splitEnv("ADMIN_ALERT_EMAILS") : splitEnv("ADMIN_EMAILS").length ? splitEnv("ADMIN_EMAILS") : ["centraltexashusky@gmail.com"];
+}
+
+function recordHasEmail(record: Record<string, unknown>, email: string) {
+  const target = normalizeEmail(email);
+  if (!target) return false;
+  return [
+    record.ownerEmail,
+    record.customerEmail,
+    record.requestedByEmail,
+    record.linkedOwnerEmail,
+    record.secondaryOwnerEmail,
+    record.staffEmail,
+    record.helperEmail,
+  ].some((value) => normalizeEmail(value) === target);
+}
+
+async function callerIsStaff(adminClient: ReturnType<typeof createClient>, email: string) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+  if (adminEmails().map(normalizeEmail).includes(normalized) || normalized === "centraltexashusky@gmail.com" || normalized === "cthusky05@gmail.com") return true;
+  const { data } = await adminClient
+    .from("kennel_records")
+    .select("payload")
+    .eq("type", "settingsUser")
+    .filter("payload->>email", "eq", normalized)
+    .maybeSingle();
+  const payload = (data?.payload && typeof data.payload === "object" ? data.payload : {}) as Record<string, unknown>;
+  const role = String(payload.role || "").toLowerCase();
+  return ["admin", "helper", "staff"].includes(role) && String(payload.removed || "false").toLowerCase() !== "true";
 }
 
 function recordAudienceEmails(record: Record<string, unknown>) {
@@ -257,15 +285,36 @@ Deno.serve(async (req) => {
 
   const body = await req.json().catch(() => ({})) as NotifyBody;
   const eventName = String(body.eventName || "");
-  const content = notificationContent(eventName, body.record || {});
-  if (!content) return json({ error: "Unsupported notification event." }, 400);
+  const recordId = String(body.recordId || "");
+  if (!eventName || !recordId) return json({ error: "eventName and recordId are required." }, 400);
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const { data: sourceRow, error: sourceError } = await adminClient
+    .from("kennel_records")
+    .select("id,type,payload")
+    .eq("id", recordId)
+    .maybeSingle();
+  if (sourceError) return json({ error: sourceError.message }, 500);
+  if (!sourceRow?.payload || typeof sourceRow.payload !== "object") return json({ error: "Source record not found." }, 404);
+
+  const sourceRecord = {
+    ...(sourceRow.payload as Record<string, unknown>),
+    id: sourceRow.id,
+    type: sourceRow.type,
+  };
+  const isStaff = await callerIsStaff(adminClient, user.email);
+  if (!isStaff && !recordHasEmail(sourceRecord, user.email)) {
+    return json({ error: "Not authorized for this notification source." }, 403);
+  }
+
+  const content = notificationContent(eventName, sourceRecord);
+  if (!content) return json({ error: "Unsupported notification event." }, 400);
+
   const emailResult = await sendEmail(content.to.map(normalizeEmail).filter(Boolean), content.subject, content.body);
-  const smsResult = content.sms ? await sendSms(`${content.subject}: ${String(body.record?.dogName || body.record?.location || body.record?.category || "")}. ${appUrl()}`) : { skipped: true };
+  const smsResult = content.sms ? await sendSms(`${content.subject}: ${String(sourceRecord.dogName || sourceRecord.location || sourceRecord.category || "")}. ${appUrl()}`) : { skipped: true };
   const emailSkipped = Boolean((emailResult as Record<string, unknown>)?.skipped);
   const smsSkipped = Boolean((smsResult as Record<string, unknown>)?.skipped);
   const deliveryStatus = emailSkipped && (!content.sms || smsSkipped) ? "skipped" : "sent";

@@ -404,6 +404,10 @@
           <div class="dashboard-filter">
             <label>Review date<input type="date" id="dashboardDate" /></label>
           </div>
+          <section class="dashboard-action-panel" aria-label="Today action queue">
+            <div class="profile-tabs dashboard-alert-tabs" id="dashboardAlertTabs" role="tablist" aria-label="Dashboard alert filters"></div>
+            <div class="record-grid compact-record-grid" id="dashboardAlerts"></div>
+          </section>
           <div class="task-calendar" id="dashboardTaskCalendar" aria-label="Daily task calendar"></div>
           <div class="calendar-notes-panel">
             <form id="calendarNoteForm" class="tracker-form admin-inline-form" hidden>
@@ -1272,6 +1276,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260522-fixes-2"></script>
+  <script src="script.js?v=20260523-security-flow-fixes"></script>
   </body>
 </html>

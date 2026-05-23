@@ -3050,6 +3050,24 @@ option {
   padding: 10px 12px;
 }
 
+.dashboard-action-panel {
+  background: rgba(5, 12, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px;
+}
+
+.dashboard-alert-tabs {
+  margin: 0;
+}
+
+#dashboardAlerts:empty {
+  display: none;
+}
+
 .mobile-roster-list {
   display: none;
   gap: 10px;
@@ -3130,8 +3148,8 @@ option {
 }
 
 .operation-calendar {
-  background: rgba(5, 12, 22, 0.78);
-  border: 1px solid rgba(125, 190, 255, 0.34);
+  background: #061321;
+  border: 1px solid rgba(125, 190, 255, 0.62);
   border-radius: 8px;
   display: grid;
   gap: 8px;
@@ -3150,8 +3168,8 @@ option {
 
 .operation-calendar-day {
   align-items: stretch;
-  background: rgba(18, 39, 61, 0.98);
-  border: 1px solid rgba(125, 190, 255, 0.52);
+  background: #12283f;
+  border: 1px solid rgba(148, 205, 255, 0.72);
   border-radius: 8px;
   color: #f8fbff;
   display: grid;
@@ -3169,26 +3187,26 @@ option {
 
 .operation-calendar-day span,
 .operation-calendar-day small {
-  color: rgba(226, 241, 255, 0.86);
+  color: #dcecff;
   font-size: 0.8rem;
   font-weight: 800;
 }
 
 .operation-calendar-day.has-override {
-  background: rgba(73, 48, 15, 0.98);
+  background: #4f3516;
   border-color: rgba(245, 158, 11, 0.76);
   box-shadow: inset 0 -3px 0 rgba(245, 158, 11, 0.62);
 }
 
 .operation-calendar-day.is-closed {
-  background: rgba(75, 28, 36, 0.98);
+  background: #521d29;
   border-color: rgba(191, 78, 69, 0.78);
   box-shadow: inset 0 -3px 0 rgba(191, 78, 69, 0.62);
 }
 
 .operation-calendar-day.is-outside-month {
-  background: rgba(45, 61, 79, 0.82);
-  opacity: 0.72;
+  background: #344659;
+  opacity: 0.86;
 }
 
 .operation-availability-messages,
@@ -4749,8 +4767,8 @@ body.role-admin #settingsKennelLocationsPage .admin-task-controls {
 }
 
 body:not(.is-login-view) .operation-calendar-day {
-  background: rgba(18, 39, 61, 0.98) !important;
-  border-color: rgba(125, 190, 255, 0.58);
+  background: #12283f !important;
+  border-color: rgba(148, 205, 255, 0.78);
   color: #f8fbff !important;
 }
 
@@ -4760,22 +4778,22 @@ body:not(.is-login-view) .operation-calendar-day strong {
 
 body:not(.is-login-view) .operation-calendar-day span,
 body:not(.is-login-view) .operation-calendar-day small {
-  color: rgba(226, 241, 255, 0.88);
+  color: #dcecff;
 }
 
 body:not(.is-login-view) .operation-calendar-day.has-override {
-  background: rgba(73, 48, 15, 0.98) !important;
+  background: #4f3516 !important;
   border-color: rgba(245, 190, 92, 0.9);
 }
 
 body:not(.is-login-view) .operation-calendar-day.is-closed {
-  background: rgba(75, 28, 36, 0.98) !important;
+  background: #521d29 !important;
   border-color: rgba(248, 113, 113, 0.9);
 }
 
 body:not(.is-login-view) .operation-calendar-day.is-outside-month {
-  background: rgba(45, 61, 79, 0.82) !important;
-  opacity: 0.72;
+  background: #344659 !important;
+  opacity: 0.86;
 }
 
 @media (max-width: 760px) {
