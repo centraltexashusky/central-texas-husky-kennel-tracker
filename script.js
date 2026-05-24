@@ -9391,6 +9391,84 @@ function dashboardAlertButtonLabel(alert = {}) {
   return alert.type ? "Open" : "";
 }
 
+function dashboardAlertActionAttrs(alert = {}) {
+  if (alert.action === "dashboard-quick-care") {
+    return `data-action="dashboard-quick-care" data-dog-id="${escapeHtml(alert.dogId)}" data-care-type="${escapeHtml(alert.careType)}"`;
+  }
+  if (["view-medical-care", "view-vaccine-alert"].includes(alert.action)) {
+    return `data-action="${escapeHtml(alert.action)}" data-dog-id="${escapeHtml(alert.dogId)}"`;
+  }
+  if (alert.action === "view-owner-update") {
+    return `data-action="view-owner-update" data-id="${escapeHtml(alert.id)}"`;
+  }
+  if (alert.action === "complete-stay-service") {
+    return `data-action="complete-stay-service" data-dog-id="${escapeHtml(alert.dogId)}" data-stay-id="${escapeHtml(alert.stayId)}" data-request-code="${escapeHtml(alert.requestCode)}" data-task-id="${escapeHtml(alert.taskId)}" data-task-key="${escapeHtml(alert.taskKey || "")}"`;
+  }
+  if (alert.type) {
+    return `data-action="view-alert" data-type="${escapeHtml(alert.type)}" data-id="${escapeHtml(alert.id)}"`;
+  }
+  return "";
+}
+
+function dashboardAlertCardHtml(alert = {}) {
+  const attrs = dashboardAlertActionAttrs(alert);
+  const clickableClass = attrs ? "clickable-card " : "";
+  const buttonLabel = dashboardAlertButtonLabel(alert);
+  return `<article class="record-card ${clickableClass}is-urgent" ${attrs}><span class="status-chip">${escapeHtml(alert.category || "Alert")}</span>${alert.html || ""}${buttonLabel ? `<div class="record-actions"><button type="button" class="secondary-button">${escapeHtml(buttonLabel)}</button></div>` : ""}</article>`;
+}
+
+function dashboardAlertsForMetrics(metrics = dashboardMetrics()) {
+  const alerts = [];
+  metrics.exerciseDueDogs.forEach((dog) => {
+    const careType = dashboardExerciseCategory(dog);
+    alerts.push({ category: careType, action: "dashboard-quick-care", dogId: dog.id, careType, html: `<strong>${escapeHtml(careType)} due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.exerciseRoutine || dog.exerciseNotes || `Log ${careType.toLowerCase()} today.`)}</p>` });
+  });
+  metrics.trainingDueDogs.forEach((dog) => alerts.push({ category: "Training", action: "dashboard-quick-care", dogId: dog.id, careType: "Training", html: `<strong>Training due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.trainingRoutine || dog.trainingGoals || "Log a training session today.")}</p>` }));
+  metrics.ownedBathDueDogs.forEach((dog) => alerts.push({ category: "Baths", action: "dashboard-quick-care", dogId: dog.id, careType: "Bath", html: `<strong>Bath due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>Last bath: ${escapeHtml(dog.lastBath || "Not recorded")}</p>` }));
+  metrics.inHeatDogs.forEach((dog) => alerts.push({ category: "Heat", action: "dashboard-quick-care", dogId: dog.id, careType: "Heat Note", html: `<strong>Female in heat: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
+  metrics.heatSoonDogs.forEach((dog) => alerts.push({ category: "Heat", action: "dashboard-quick-care", dogId: dog.id, careType: "Heat Note", html: `<strong>Heat watch: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
+  metrics.medicalCareDogs.forEach((dog) => alerts.push({ category: "Medical/Care", action: "view-medical-care", dogId: dog.id, html: `<strong>Care note: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.careStatus || dog.medicalNotes || dog.behaviorNotes || "Review care notes today.")}</p>` }));
+  metrics.urgentRequestRecords.forEach((item) => alerts.push({ category: "Requests", type: "request", id: item.id, html: `<strong>Urgent request: ${escapeHtml(item.category)}</strong><p>${escapeHtml(item.requestText || "")}</p>${mediaLinkHtml(item)}` }));
+  metrics.urgentMaintenanceRecords.forEach((item) => alerts.push({ category: "Maintenance", type: "maintenance", id: item.id, html: `<strong>Urgent maintenance: ${escapeHtml(item.location)}</strong><p>${escapeHtml(item.issue || "")}</p>${mediaLinkHtml(item)}` }));
+  metrics.vaccineIssueDogs.forEach((dog) => alerts.push({ category: "Vaccines", action: "view-vaccine-alert", dogId: dog.id, html: `<strong>Vaccine warning: ${escapeHtml(dog.callName || dog.showName || "Dog")}</strong><p>DHPP date: ${escapeHtml(dog.dhppDate || "Not recorded")}</p>` }));
+  metrics.ownerUpdateDogs.forEach((dog) => alerts.push({ category: "Owner Updates", action: "view-owner-update", id: dog.id, html: `<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml(dog.ownerName || "")} ${escapeHtml(dog.ownerPhone || "")}</p>` }));
+  metrics.boardingServiceDue.forEach((item) => alerts.push({ category: "Stay Services", action: "complete-stay-service", dogId: item.record.id, stayId: item.stay.id, requestCode: boardingStayRequestCode(item.record, item.stay), taskId: item.task.id, taskKey: item.taskKey || boardingServiceTaskKey(item.task), html: `<strong>${escapeHtml(item.dueInfo.label)}: ${escapeHtml(item.record.dogName || "Boarding dog")}</strong><p>${escapeHtml(item.task.label || item.task.serviceName || "Requested service")} | Stay ID: ${escapeHtml(boardingStayRequestCode(item.record, item.stay))}</p>` }));
+  metrics.boardingBathDue.forEach((dogName) => alerts.push({ category: "Baths", html: `<strong>Bath due before pickup today</strong><p>${escapeHtml(dogName)}</p>` }));
+  return alerts;
+}
+
+function dashboardFilteredAlerts(alerts = [], filter = dashboardAlertFilter) {
+  return filter === "All" ? alerts : alerts.filter((alert) => alert.category === filter);
+}
+
+function dashboardAlertsSummaryHtml(alerts = []) {
+  if (!alerts.length) return "<p>No action items today.</p>";
+  const plural = alerts.length === 1 ? "item" : "items";
+  return `<article class="record-card compact-record-card clickable-card" data-action="open-dashboard-alert-popup" data-alert-filter="All"><strong>${alerts.length} action ${plural} today</strong><p>Tap a category above to review and complete that list in a popup.</p><div class="record-actions"><button type="button" class="secondary-button">Open All</button></div></article>`;
+}
+
+function dashboardAlertPopupHtml(filter = "All", alerts = dashboardAlertsForMetrics()) {
+  const filteredAlerts = dashboardFilteredAlerts(alerts, filter);
+  const plural = filteredAlerts.length === 1 ? "item" : "items";
+  return `<section class="popup-record-section dashboard-alert-popup" data-dashboard-alert-popup="${escapeHtml(filter)}">
+    <article class="record-card compact-record-card">
+      <strong>${escapeHtml(filter)} Action Items</strong>
+      <p>${filteredAlerts.length} ${plural} for ${escapeHtml($("#dashboardDate")?.value || todayDate())}. Use the buttons on each card to complete or open the related workflow.</p>
+    </article>
+    <div class="record-grid compact-record-grid">${filteredAlerts.length ? filteredAlerts.map(dashboardAlertCardHtml).join("") : "<p>No items in this category right now.</p>"}</div>
+  </section>`;
+}
+
+function openDashboardAlertPopup(filter = "All") {
+  dashboardAlertFilter = filter || "All";
+  dashboardShowAllAlerts = false;
+  const alerts = dashboardAlertsForMetrics(dashboardMetrics());
+  renderDashboardAlertTabs(alerts);
+  const dashboardAlerts = $("#dashboardAlerts");
+  if (dashboardAlerts) dashboardAlerts.innerHTML = dashboardAlertsSummaryHtml(alerts);
+  showDetailDialog(`${dashboardAlertFilter} Action Items`, dashboardAlertPopupHtml(dashboardAlertFilter, alerts));
+}
+
 function renderDashboard() {
   if (!$("#dashboardCards")) return;
   $("#dashboardDate").value ||= todayDate();
@@ -9424,22 +9502,7 @@ function renderDashboard() {
   ];
   $("#dashboardCards").innerHTML = cards.map(([key, label, value, note]) => `<article class="dashboard-card clickable-card" data-action="dashboard-detail" data-key="${key}"><span>${label}</span><strong>${value}</strong><p>${note}</p></article>`).join("");
   renderDashboardReminders(metrics);
-  const alerts = [];
-  metrics.exerciseDueDogs.forEach((dog) => {
-    const careType = dashboardExerciseCategory(dog);
-    alerts.push({ category: careType, action: "dashboard-quick-care", dogId: dog.id, careType, html: `<strong>${escapeHtml(careType)} due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.exerciseRoutine || dog.exerciseNotes || `Log ${careType.toLowerCase()} today.`)}</p>` });
-  });
-  metrics.trainingDueDogs.forEach((dog) => alerts.push({ category: "Training", action: "dashboard-quick-care", dogId: dog.id, careType: "Training", html: `<strong>Training due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.trainingRoutine || dog.trainingGoals || "Log a training session today.")}</p>` }));
-  metrics.ownedBathDueDogs.forEach((dog) => alerts.push({ category: "Baths", action: "dashboard-quick-care", dogId: dog.id, careType: "Bath", html: `<strong>Bath due: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>Last bath: ${escapeHtml(dog.lastBath || "Not recorded")}</p>` }));
-  metrics.inHeatDogs.forEach((dog) => alerts.push({ category: "Heat", action: "dashboard-quick-care", dogId: dog.id, careType: "Heat Note", html: `<strong>Female in heat: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
-  metrics.heatSoonDogs.forEach((dog) => alerts.push({ category: "Heat", action: "dashboard-quick-care", dogId: dog.id, careType: "Heat Note", html: `<strong>Heat watch: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(ownedDogHeatStatus(dog).label)}</p>` }));
-  metrics.medicalCareDogs.forEach((dog) => alerts.push({ category: "Medical/Care", action: "view-medical-care", dogId: dog.id, html: `<strong>Care note: ${escapeHtml(ownedDogDisplayName(dog))}</strong><p>${escapeHtml(dog.careStatus || dog.medicalNotes || dog.behaviorNotes || "Review care notes today.")}</p>` }));
-  metrics.urgentRequestRecords.forEach((item) => alerts.push({ category: "Requests", type: "request", id: item.id, html: `<strong>Urgent request: ${escapeHtml(item.category)}</strong><p>${escapeHtml(item.requestText || "")}</p>${mediaLinkHtml(item)}` }));
-  metrics.urgentMaintenanceRecords.forEach((item) => alerts.push({ category: "Maintenance", type: "maintenance", id: item.id, html: `<strong>Urgent maintenance: ${escapeHtml(item.location)}</strong><p>${escapeHtml(item.issue || "")}</p>${mediaLinkHtml(item)}` }));
-  metrics.vaccineIssueDogs.forEach((dog) => alerts.push({ category: "Vaccines", action: "view-vaccine-alert", dogId: dog.id, html: `<strong>Vaccine warning: ${escapeHtml(dog.callName || dog.showName || "Dog")}</strong><p>DHPP date: ${escapeHtml(dog.dhppDate || "Not recorded")}</p>` }));
-  metrics.ownerUpdateDogs.forEach((dog) => alerts.push({ category: "Owner Updates", action: "view-owner-update", id: dog.id, html: `<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml(dog.ownerName || "")} ${escapeHtml(dog.ownerPhone || "")}</p>` }));
-  metrics.boardingServiceDue.forEach((item) => alerts.push({ category: "Stay Services", action: "complete-stay-service", dogId: item.record.id, stayId: item.stay.id, requestCode: boardingStayRequestCode(item.record, item.stay), taskId: item.task.id, taskKey: item.taskKey || boardingServiceTaskKey(item.task), html: `<strong>${escapeHtml(item.dueInfo.label)}: ${escapeHtml(item.record.dogName || "Boarding dog")}</strong><p>${escapeHtml(item.task.label || item.task.serviceName || "Requested service")} | Stay ID: ${escapeHtml(boardingStayRequestCode(item.record, item.stay))}</p>` }));
-  metrics.boardingBathDue.forEach((dogName) => alerts.push({ category: "Baths", html: `<strong>Bath due before pickup today</strong><p>${escapeHtml(dogName)}</p>` }));
+  const alerts = dashboardAlertsForMetrics(metrics);
   renderDashboardAlertTabs(alerts);
   const dashboardAlerts = $("#dashboardAlerts");
   if (!dashboardAlerts) {
@@ -9447,21 +9510,7 @@ function renderDashboard() {
     renderDashboardTimeline();
     return;
   }
-  const filteredAlerts = dashboardAlertFilter === "All" ? alerts : alerts.filter((alert) => alert.category === dashboardAlertFilter);
-  const visibleAlerts = !dashboardShowAllAlerts ? filteredAlerts.slice(0, 10) : filteredAlerts;
-  const showMore = filteredAlerts.length > visibleAlerts.length ? `<article class="record-card dashboard-more-card"><strong>${filteredAlerts.length - visibleAlerts.length} more items hidden</strong><p>Use the filters above or expand the full list when you are reviewing instead of working the queue.</p><button type="button" class="secondary-button" data-action="show-all-alerts">Show All</button></article>` : "";
-  dashboardAlerts.innerHTML = filteredAlerts.length
-    ? visibleAlerts
-        .map((alert) => {
-          const quickCareAttrs = alert.action === "dashboard-quick-care" ? `data-action="dashboard-quick-care" data-dog-id="${escapeHtml(alert.dogId)}" data-care-type="${escapeHtml(alert.careType)}"` : "";
-          const customActionAttrs = ["view-medical-care", "view-vaccine-alert"].includes(alert.action) ? `data-action="${escapeHtml(alert.action)}" data-dog-id="${escapeHtml(alert.dogId)}"` : alert.action === "view-owner-update" ? `data-action="view-owner-update" data-id="${escapeHtml(alert.id)}"` : alert.action === "complete-stay-service" ? `data-action="complete-stay-service" data-dog-id="${escapeHtml(alert.dogId)}" data-stay-id="${escapeHtml(alert.stayId)}" data-request-code="${escapeHtml(alert.requestCode)}" data-task-id="${escapeHtml(alert.taskId)}" data-task-key="${escapeHtml(alert.taskKey || "")}"` : "";
-          const recordAttrs = alert.type ? `data-action="view-alert" data-type="${alert.type}" data-id="${alert.id}"` : "";
-          const clickableClass = alert.action || alert.type ? "clickable-card " : "";
-          const buttonLabel = dashboardAlertButtonLabel(alert);
-          return `<article class="record-card ${clickableClass}is-urgent" ${quickCareAttrs || customActionAttrs || recordAttrs}><span class="status-chip">${escapeHtml(alert.category)}</span>${alert.html}${buttonLabel ? `<div class="record-actions"><button type="button" class="secondary-button">${escapeHtml(buttonLabel)}</button></div>` : ""}</article>`;
-        })
-        .join("") + showMore
-    : "<p>No alerts in this category right now.</p>";
+  dashboardAlerts.innerHTML = dashboardAlertsSummaryHtml(alerts);
   renderDashboardTaskCalendar();
   renderDashboardTimeline();
 }
@@ -13149,6 +13198,11 @@ function initEvents() {
     if (record) showDetailDialog(titleForRecord(card.dataset.type, record), detailForRecord(card.dataset.type, record));
   });
   $("#dashboardAlerts")?.addEventListener("click", async (event) => {
+    const alertPopupButton = event.target.closest('[data-action="open-dashboard-alert-popup"]');
+    if (alertPopupButton) {
+      openDashboardAlertPopup(alertPopupButton.dataset.alertFilter || "All");
+      return;
+    }
     const showAllButton = event.target.closest('[data-action="show-all-alerts"]');
     if (showAllButton) {
       dashboardShowAllAlerts = true;
@@ -13191,9 +13245,7 @@ function initEvents() {
   $("#dashboardAlertTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-alert-filter]");
     if (!button) return;
-    dashboardAlertFilter = button.dataset.alertFilter;
-    dashboardShowAllAlerts = false;
-    renderDashboard();
+    openDashboardAlertPopup(button.dataset.alertFilter);
   });
   $("#calendarNoteForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -13645,6 +13697,31 @@ function initEvents() {
     }
     const action = event.target.closest("[data-action]");
     if (!action) return;
+    if (action.dataset.action === "open-dashboard-alert-popup") {
+      openDashboardAlertPopup(action.dataset.alertFilter || "All");
+      return;
+    }
+    if (action.dataset.action === "dashboard-quick-care") {
+      openDashboardQuickCare(action.dataset.dogId, action.dataset.careType);
+      return;
+    }
+    if (action.dataset.action === "view-medical-care") {
+      openMedicalCareAlert(action.dataset.dogId);
+      return;
+    }
+    if (action.dataset.action === "view-vaccine-alert") {
+      openVaccineAlert(action.dataset.dogId);
+      return;
+    }
+    if (action.dataset.action === "view-owner-update") {
+      openOwnerUpdateAlert(action.dataset.id);
+      return;
+    }
+    if (action.dataset.action === "view-alert") {
+      const record = readRecords(action.dataset.type).find((item) => item.id === action.dataset.id);
+      if (record) showDetailDialog(titleForRecord(action.dataset.type, record), detailForRecord(action.dataset.type, record), { type: action.dataset.type, id: record.id });
+      return;
+    }
     if (action.dataset.action === "dashboard-open-owned") {
       const dog = readRecords("ownedDog").find((record) => record.id === action.dataset.id && !record.removed);
       if (dog) openOwnedDogOverviewPopup(dog);
@@ -13720,7 +13797,9 @@ function initEvents() {
     }
     if (action.dataset.action === "complete-stay-service") {
       const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
-      await updateBoardingStayServiceTaskStatus(dog || {}, boardingStayReferenceFromAction(action), action.dataset.taskId || "", "completed", action.dataset.taskKey || "");
+      const alertFilter = action.closest("[data-dashboard-alert-popup]")?.dataset.dashboardAlertPopup || "";
+      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, boardingStayReferenceFromAction(action), action.dataset.taskId || "", "completed", action.dataset.taskKey || "");
+      if (updated && alertFilter) openDashboardAlertPopup(alertFilter);
       return;
     }
     if (action.dataset.action === "confirm-ready-for-pickup") {
