@@ -3427,6 +3427,65 @@ button.mobile-dog-photo-button {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+.boarding-service-chip.is-service-complete {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: rgba(34, 197, 94, 0.62);
+  color: #dcfce7;
+}
+
+.boarding-service-chip.is-service-due {
+  background: rgba(245, 158, 11, 0.24);
+  border-color: rgba(245, 158, 11, 0.66);
+  color: #fff7ed;
+}
+
+.boarding-service-chip.is-service-overdue {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.62);
+  color: #fee2e2;
+}
+
+.boarding-service-chip.is-service-pending {
+  background: rgba(125, 211, 252, 0.14);
+  border-color: rgba(125, 211, 252, 0.38);
+  color: #e0f2fe;
+}
+
+.boarding-service-task-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.boarding-service-task-card {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.boarding-service-task-card > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.boarding-service-due-card {
+  grid-template-columns: auto 1fr;
+}
+
+.service-warning-text {
+  color: #fecaca;
+  font-weight: 800;
+  margin: 4px 0;
+}
+
+.success-text {
+  color: #bbf7d0;
+  font-weight: 800;
+  margin: 4px 0;
+}
+
 .data-table tr.has-care-due td {
   box-shadow: inset 4px 0 0 rgba(255, 204, 102, 0.46);
 }
