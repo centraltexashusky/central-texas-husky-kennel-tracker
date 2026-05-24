@@ -10114,9 +10114,9 @@ function alertHistoryHtml(target = "staff") {
   const records = notificationRecordsForEvent(urgentAlertEventName(target)).slice(0, 25);
   return records.length
     ? `<div class="record-grid alert-history-list">${records.map((record) => `<article class="record-card compact-record-card">
-      <strong>${escapeHtml(record.title || "Urgent alert")}</strong>
+      <strong>${escapeHtml(notificationDisplayTitle(record))}</strong>
       <span>${escapeHtml(formatDateTime(record.submittedAt || record.updatedAt))} | ${escapeHtml((record.audienceEmails || []).length)} recipient${(record.audienceEmails || []).length === 1 ? "" : "s"} | ${escapeHtml(record.deliveryStatus || "queued")}</span>
-      <p>${multilineHtml(record.message || "")}</p>
+      <p>${multilineHtml(notificationDisplayMessage(record))}</p>
     </article>`).join("")}</div>`
     : `<article class="record-card compact-record-card"><strong>No ${escapeHtml(urgentAlertTargetLabel(target).toLowerCase())} urgent alerts sent yet</strong><p>Sent alerts will show here for review.</p></article>`;
 }
@@ -12015,6 +12015,107 @@ function notificationIsRead(notification = {}) {
   return (notification.readBy || []).includes(currentUserNotificationKey());
 }
 
+function notificationSourceSnapshot(notification = {}) {
+  const snapshot = notification.sourceSnapshot;
+  if (snapshot && typeof snapshot === "object") return snapshot;
+  if (typeof snapshot === "string") {
+    try {
+      const parsed = JSON.parse(snapshot);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+  return {};
+}
+
+function notificationEventDisplayLabel(eventName = "") {
+  const configured = alertTypeLabel(eventName);
+  if (configured && configured !== eventName) return configured;
+  const words = String(eventName || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Snuggle Stay alert";
+}
+
+function notificationStayIdText(source = {}) {
+  const stay = boardingPrimaryStay(source) || {};
+  return source.latestCustomerUpdate?.requestCode
+    || source.requestCode
+    || stay.requestCode
+    || (stay.id ? boardingStayRequestCode(source, stay) : "");
+}
+
+function notificationDisplayTitle(notification = {}) {
+  const savedTitle = String(notification.title || "").trim();
+  if (savedTitle && savedTitle.toLowerCase() !== "notification") return savedTitle;
+  const source = notificationSourceSnapshot(notification);
+  const dogName = source.dogName || source.latestCustomerUpdate?.dogName || "";
+  const eventName = notification.eventName || "";
+  if (eventName === "customerBoardingRequestCreated") return `New boarding request: ${dogName || "Customer dog"}`;
+  if (eventName === "customerBoardingRequestUpdated") return `Boarding request updated: ${dogName || "Customer dog"}`;
+  if (eventName === "customerDogFileUploaded") return `Customer file uploaded: ${dogName || "Customer dog"}`;
+  if (eventName === "urgentKennelRequestCreated") return `Urgent request: ${source.category || "Kennel request"}`;
+  if (eventName === "urgentMaintenanceCreated") return `Urgent maintenance: ${source.location || "Kennel"}`;
+  if (eventName === "timeOffRequested") return `Time off request: ${source.staffName || "Staff"}`;
+  if (eventName === "timeOffReviewed") return `Time off ${String(source.status || "reviewed").toLowerCase()}: ${dateRangeText(source.startDate, source.endDate)}`;
+  if (eventName === "schedulePublished") return "Kennel schedule published";
+  if (eventName === "scheduleChangedAfterPublish") return `Schedule changed: ${source.staffName || "Staff"}`;
+  if (eventName === "urgentStaffAlertSent") return "Urgent staff alert";
+  if (eventName === "urgentCustomerAlertSent") return "Urgent customer alert";
+  if (eventName === "customerStayUpdateSent") return `Stay update: ${dogName || "Customer dog"}`;
+  if (notification.sourceType === "boardingDog") return `Boarding dog alert: ${dogName || "Dog"}`;
+  if (notification.sourceType === "request") return `Request alert: ${source.category || "Kennel request"}`;
+  if (notification.sourceType === "maintenance") return `Maintenance alert: ${source.location || "Kennel"}`;
+  return notificationEventDisplayLabel(eventName);
+}
+
+function notificationDisplayMessage(notification = {}) {
+  const savedMessage = String(notification.message || "").trim();
+  if (savedMessage) return savedMessage;
+  const source = notificationSourceSnapshot(notification);
+  const eventName = notification.eventName || "";
+  const dogName = source.dogName || source.latestCustomerUpdate?.dogName || "";
+  const owner = source.ownerName || source.ownerEmail || source.customerEmail || "A customer";
+  const stayId = notificationStayIdText(source);
+  if (eventName === "customerBoardingRequestCreated") {
+    return `${owner} submitted a boarding request${dogName ? ` for ${dogName}` : ""}${boardingScheduleText(source) ? ` for ${boardingScheduleText(source)}` : ""}.`;
+  }
+  if (eventName === "customerBoardingRequestUpdated") return `${owner} updated a boarding request${dogName ? ` for ${dogName}` : ""}.`;
+  if (eventName === "customerDogFileUploaded") return `${owner} uploaded a file${dogName ? ` for ${dogName}` : ""}.`;
+  if (eventName === "urgentKennelRequestCreated") return source.requestText || "An urgent kennel request was submitted.";
+  if (eventName === "urgentMaintenanceCreated") return source.issue || "An urgent maintenance item was submitted.";
+  if (eventName === "timeOffRequested") return `${source.staffName || "Staff"} requested ${dateRangeText(source.startDate, source.endDate)} off.`;
+  if (eventName === "timeOffReviewed") return `${source.reviewedBy || "Admin"} marked your time off request ${source.status || "reviewed"}.`;
+  if (eventName === "schedulePublished") return `The schedule for ${dateRangeText(source.weekStart, addDays(source.weekStart, 6))} has been published.`;
+  if (eventName === "scheduleChangedAfterPublish") return `${source.staffName || "A staff member"} has a schedule change on ${source.date || "the published schedule"}.`;
+  if (eventName === "urgentStaffAlertSent" || eventName === "urgentCustomerAlertSent") return source.message || "An urgent alert was sent.";
+  if (eventName === "customerStayUpdateSent") {
+    const update = source.latestCustomerUpdate || {};
+    const text = update.note || source.dailyActivity || "";
+    return `${update.byName || "Kennel staff"} sent an update for ${dogName || "your dog"}${stayId ? ` (Stay ID: ${stayId})` : ""}.${text ? ` ${text}` : ""}`;
+  }
+  if (source.message) return source.message;
+  if (source.requestText) return source.requestText;
+  if (source.issue) return source.issue;
+  if (source.note) return source.note;
+  return "Open this alert to review the related kennel record.";
+}
+
+function notificationChannelsText(notification = {}) {
+  const labels = arrayValue(notification.channels)
+    .map((channel) => {
+      const normalized = String(channel || "").trim();
+      if (/^inapp$/i.test(normalized)) return "in-app";
+      if (/^sms$/i.test(normalized)) return "SMS";
+      if (/^email$/i.test(normalized)) return "email";
+      return normalized;
+    })
+    .filter(Boolean);
+  return labels.length ? labels.join(", ") : "in-app";
+}
+
 function customerStayUpdateAudienceEmails(record = {}) {
   const linkedDog = linkedCustomerDogForBoarding(record) || {};
   return uniqueEmails(
@@ -12147,24 +12248,26 @@ function createNotificationRecord(record = {}, eventName = "", config = {}) {
   const now = new Date().toISOString();
   const sourceType = record.type || "";
   const sourceId = record.id || uid("source");
+  const sourceSnapshot = payloadForSheet(record);
   const dedupeKey = `${eventName}:${sourceType}:${sourceId}:${record.updatedAt || record.submittedAt || now}`;
   const existing = readRecords("notificationLog").find((item) => item.dedupeKey === dedupeKey && !item.removed);
   if (existing) return existing;
+  const displaySeed = { eventName, sourceType, sourceId, sourceSnapshot, title: config.title, message: config.message };
   return upsertRecord("notificationLog", {
     type: "notificationLog",
     id: uid("notification"),
     submittedAt: now,
     eventName,
     dedupeKey,
-    title: config.title,
-    message: config.message,
+    title: notificationDisplayTitle(displaySeed),
+    message: notificationDisplayMessage(displaySeed),
     priority: config.priority || "normal",
     channels: config.channels || ["inApp"],
     audienceRoles: config.audienceRoles || [],
     audienceEmails: notificationAudienceEmails(config, eventName),
     sourceType,
     sourceId,
-    sourceSnapshot: payloadForSheet(record),
+    sourceSnapshot,
     readBy: [],
     deliveryStatus: "queued",
   });
@@ -12216,7 +12319,7 @@ function renderNotifications() {
   const unread = available.filter((item) => !notificationIsRead(item));
   const read = available.filter((item) => notificationIsRead(item)).slice(0, MAX_READ_NOTIFICATIONS);
   visibleReadNotificationCount = Math.min(Math.max(visibleReadNotificationCount, 4), MAX_READ_NOTIFICATIONS);
-  const notificationItemHtml = (item) => `<article class="notification-item ${notificationIsRead(item) ? "is-read" : ""} ${item.priority === "urgent" ? "is-urgent" : ""}" data-action="open-notification" data-id="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title || "Notification")}</strong><p>${escapeHtml(item.message || "")}</p><span>${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | ${escapeHtml((item.channels || []).join(", ") || "in-app")}</span></article>`;
+  const notificationItemHtml = (item) => `<article class="notification-item ${notificationIsRead(item) ? "is-read" : ""} ${item.priority === "urgent" ? "is-urgent" : ""}" data-action="open-notification" data-id="${escapeHtml(item.id)}"><strong>${escapeHtml(notificationDisplayTitle(item))}</strong><p>${escapeHtml(notificationDisplayMessage(item))}</p><span>${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | ${escapeHtml(notificationChannelsText(item))}</span></article>`;
   button.hidden = !helperIsLoggedIn();
   const panelOpen = !panel.hidden;
   button.classList.toggle("is-alert-panel-open", panelOpen);
@@ -12290,7 +12393,7 @@ async function openNotification(id = "") {
       return;
     }
   }
-  showDetailDialog(notification.title || "Notification", `<p>${escapeHtml(notification.message || "")}</p>`);
+  showDetailDialog(notificationDisplayTitle(notification), `<p>${escapeHtml(notificationDisplayMessage(notification))}</p>`);
 }
 
 function emailNow(subjectText, bodyText) {
