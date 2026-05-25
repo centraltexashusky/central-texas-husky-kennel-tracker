@@ -4798,10 +4798,12 @@ body.is-login-view #loginPage .login-auth-section {
 
 .daily-task-tabs button[draggable="true"] {
   cursor: grab;
+  touch-action: none;
   user-select: none;
 }
 
 .daily-task-tabs button.is-dragging {
+  cursor: grabbing;
   opacity: 0.62;
   transform: scale(0.98);
 }
@@ -4809,6 +4811,20 @@ body.is-login-view #loginPage .login-auth-section {
 .daily-task-tabs button.is-drag-over {
   border-color: rgba(10, 132, 255, 0.9);
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.24), var(--glass-specular);
+}
+
+.daily-task-tabs button.is-drag-over-before {
+  box-shadow: inset 4px 0 0 rgba(10, 132, 255, 0.95), 0 0 0 3px rgba(10, 132, 255, 0.24), var(--glass-specular);
+}
+
+.daily-task-tabs button.is-drag-over-after {
+  box-shadow: inset -4px 0 0 rgba(10, 132, 255, 0.95), 0 0 0 3px rgba(10, 132, 255, 0.24), var(--glass-specular);
+}
+
+body.is-task-tab-dragging,
+body.is-task-tab-dragging * {
+  cursor: grabbing !important;
+  user-select: none;
 }
 
 .daily-task-tabs .task-add-tab-button {

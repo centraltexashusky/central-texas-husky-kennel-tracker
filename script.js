@@ -45,6 +45,8 @@ let pendingBoardingCheckIn = null;
 let activeClockIn = JSON.parse(localStorage.getItem("cth-active-clock-in") || "null") || "";
 let localTestMode = false;
 let dailyTaskTab = "morning";
+let dailyTaskTabPointerDrag = null;
+let suppressDailyTaskTabClick = false;
 let dashboardAlertFilter = "All";
 let dashboardShowAllAlerts = false;
 let timesheetTab = "clock";
@@ -3266,26 +3268,62 @@ function renderDailyTaskTabs(config = readTaskConfig()) {
 
 function adminTaskTabDragEnabled() {
   return currentRole() === "admin"
-    && window.matchMedia("(min-width: 900px)").matches
-    && window.matchMedia("(pointer: fine)").matches;
+    && window.matchMedia("(min-width: 900px)").matches;
 }
 
-async function reorderTaskTabByDrag(sourceId = "", targetId = "") {
-  if (!adminTaskTabDragEnabled() || !sourceId || !targetId || sourceId === targetId) return;
+function taskTabDropPositionFromEvent(event, targetButton) {
+  if (!targetButton || typeof event.clientX !== "number") return "before";
+  const rect = targetButton.getBoundingClientRect();
+  return event.clientX > rect.left + rect.width / 2 ? "after" : "before";
+}
+
+function clearTaskTabDragTargets() {
+  $$("#dailyTaskTabs [data-task-tab]").forEach((button) => {
+    button.classList.remove("is-drag-over", "is-drag-over-before", "is-drag-over-after");
+    delete button.dataset.dropPosition;
+  });
+}
+
+function markTaskTabDropTarget(targetButton, position = "before") {
+  clearTaskTabDragTargets();
+  if (!targetButton) return;
+  targetButton.dataset.dropPosition = position;
+  targetButton.classList.add("is-drag-over", position === "after" ? "is-drag-over-after" : "is-drag-over-before");
+}
+
+function taskTabButtonFromPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  return el?.closest?.("#dailyTaskTabs [data-task-tab]") || null;
+}
+
+async function reorderTaskTabByDrag(sourceId = "", targetId = "", position = "before") {
+  if (!adminTaskTabDragEnabled() || !sourceId || !targetId || sourceId === targetId) return false;
   const config = readTaskConfig();
   const tabs = taskTabMeta(config);
   const order = tabs.map((tab) => tab.id);
   const sourceIndex = order.indexOf(sourceId);
   const targetIndex = order.indexOf(targetId);
-  if (sourceIndex < 0 || targetIndex < 0) return;
+  if (sourceIndex < 0 || targetIndex < 0) return false;
+  const originalOrder = order.join("|");
   const [source] = order.splice(sourceIndex, 1);
-  const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  const adjustedTargetIndex = order.indexOf(targetId);
+  if (adjustedTargetIndex < 0) return false;
+  const insertIndex = position === "after" ? adjustedTargetIndex + 1 : adjustedTargetIndex;
   order.splice(insertIndex, 0, source);
+  if (order.join("|") === originalOrder) return false;
   config._tabOrder = order;
   await persistTaskConfig(config);
   dailyTaskTab = sourceId;
   renderDailyTaskLists();
   showToast("Task tab order updated.");
+  return true;
+}
+
+function resetDailyTaskTabPointerDrag() {
+  dailyTaskTabPointerDrag?.sourceButton?.classList.remove("is-dragging");
+  dailyTaskTabPointerDrag = null;
+  document.body.classList.remove("is-task-tab-dragging");
+  clearTaskTabDragTargets();
 }
 
 function taskTabDeleteRowHtml(tab = {}) {
@@ -13456,7 +13494,12 @@ function exportCareLogs() {
 
 function initEvents() {
   syncMobileReviewSections();
-  window.addEventListener("resize", syncMobileReviewSections);
+  window.addEventListener("resize", () => {
+    syncMobileReviewSections();
+    resetDailyTaskTabPointerDrag();
+    renderDailyTaskTabs();
+    setDailyTaskTab(dailyTaskTab);
+  });
   window.addEventListener("scroll", () => {
     lastUserScrollAt = Date.now();
   }, { passive: true });
@@ -14452,6 +14495,12 @@ function initEvents() {
     updateRotationBanner();
   });
   $("#dailyTaskTabs")?.addEventListener("click", (event) => {
+    if (suppressDailyTaskTabClick) {
+      event.preventDefault();
+      event.stopPropagation();
+      suppressDailyTaskTabClick = false;
+      return;
+    }
     const action = event.target.closest("[data-action]");
     if (action?.dataset.action === "add-task-tab") {
       openTaskTabPopup();
@@ -14476,22 +14525,84 @@ function initEvents() {
     const button = event.target.closest('[data-task-tab][draggable="true"]');
     if (!button || !adminTaskTabDragEnabled()) return;
     event.preventDefault();
-    button.classList.add("is-drag-over");
+    markTaskTabDropTarget(button, taskTabDropPositionFromEvent(event, button));
   });
   $("#dailyTaskTabs")?.addEventListener("dragleave", (event) => {
     const button = event.target.closest("[data-task-tab]");
-    if (button) button.classList.remove("is-drag-over");
+    if (button) {
+      button.classList.remove("is-drag-over", "is-drag-over-before", "is-drag-over-after");
+      delete button.dataset.dropPosition;
+    }
   });
   $("#dailyTaskTabs")?.addEventListener("drop", async (event) => {
     const target = event.target.closest('[data-task-tab][draggable="true"]');
     if (!target || !adminTaskTabDragEnabled()) return;
     event.preventDefault();
     const sourceId = event.dataTransfer.getData("text/plain");
-    target.classList.remove("is-drag-over");
-    await reorderTaskTabByDrag(sourceId, target.dataset.taskTab || "");
+    const position = target.dataset.dropPosition || taskTabDropPositionFromEvent(event, target);
+    clearTaskTabDragTargets();
+    await reorderTaskTabByDrag(sourceId, target.dataset.taskTab || "", position);
   });
   $("#dailyTaskTabs")?.addEventListener("dragend", () => {
-    $$("#dailyTaskTabs [data-task-tab]").forEach((button) => button.classList.remove("is-dragging", "is-drag-over"));
+    $$("#dailyTaskTabs [data-task-tab]").forEach((button) => button.classList.remove("is-dragging"));
+    clearTaskTabDragTargets();
+  });
+  $("#dailyTaskTabs")?.addEventListener("pointerdown", (event) => {
+    const button = event.target.closest('[data-task-tab][draggable="true"]');
+    if (!button || !adminTaskTabDragEnabled() || event.button !== 0) return;
+    dailyTaskTabPointerDrag = {
+      sourceButton: button,
+      sourceId: button.dataset.taskTab || "",
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+      targetButton: null,
+      position: "before",
+    };
+    button.setPointerCapture?.(event.pointerId);
+  });
+  $("#dailyTaskTabs")?.addEventListener("pointermove", (event) => {
+    const drag = dailyTaskTabPointerDrag;
+    if (!drag || drag.pointerId !== event.pointerId || !adminTaskTabDragEnabled()) return;
+    const moved = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+    if (!drag.dragging && moved < 6) return;
+    if (!drag.dragging) {
+      drag.dragging = true;
+      suppressDailyTaskTabClick = true;
+      drag.sourceButton?.classList.add("is-dragging");
+      document.body.classList.add("is-task-tab-dragging");
+    }
+    event.preventDefault();
+    const target = taskTabButtonFromPoint(event.clientX, event.clientY);
+    if (!target || target.dataset.taskTab === drag.sourceId) {
+      clearTaskTabDragTargets();
+      drag.targetButton = null;
+      return;
+    }
+    drag.targetButton = target;
+    drag.position = taskTabDropPositionFromEvent(event, target);
+    markTaskTabDropTarget(target, drag.position);
+  });
+  $("#dailyTaskTabs")?.addEventListener("pointerup", async (event) => {
+    const drag = dailyTaskTabPointerDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    drag.sourceButton?.releasePointerCapture?.(event.pointerId);
+    if (drag.dragging) {
+      event.preventDefault();
+      suppressDailyTaskTabClick = true;
+      const target = taskTabButtonFromPoint(event.clientX, event.clientY) || drag.targetButton;
+      const position = target ? taskTabDropPositionFromEvent(event, target) : drag.position;
+      if (target && target.dataset.taskTab !== drag.sourceId) await reorderTaskTabByDrag(drag.sourceId, target.dataset.taskTab || "", position);
+      window.setTimeout(() => {
+        suppressDailyTaskTabClick = false;
+      }, 0);
+    }
+    resetDailyTaskTabPointerDrag();
+  });
+  $("#dailyTaskTabs")?.addEventListener("pointercancel", () => {
+    suppressDailyTaskTabClick = false;
+    resetDailyTaskTabPointerDrag();
   });
   $("#customTaskPanels")?.addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="add-custom-tab-task"]');
