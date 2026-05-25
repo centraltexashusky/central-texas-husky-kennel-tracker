@@ -13,6 +13,9 @@ type NotifyBody = {
   notificationId?: string;
 };
 
+const MEDIA_BUCKET = "kennel-media";
+const DEFAULT_MEDIA_LINK_SECONDS = 7 * 24 * 60 * 60;
+
 const json = (body: Record<string, unknown>, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -28,6 +31,10 @@ function splitEnv(name: string) {
 
 function normalizeEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
+}
+
+function uniqueEmails(values: unknown[]) {
+  return [...new Set(values.map(normalizeEmail).filter(Boolean))];
 }
 
 function adminEmails() {
@@ -65,7 +72,7 @@ async function callerIsStaff(adminClient: ReturnType<typeof createClient>, email
 
 function recordAudienceEmails(record: Record<string, unknown>) {
   return Array.isArray(record.audienceEmails)
-    ? record.audienceEmails.map(normalizeEmail).filter(Boolean)
+    ? uniqueEmails(record.audienceEmails)
     : [];
 }
 
@@ -73,16 +80,91 @@ function appUrl() {
   return Deno.env.get("APP_PRODUCTION_URL") || "https://kennel.centraltexashusky.com/";
 }
 
+function appLink(hash = "") {
+  const base = appUrl().replace(/#.*$/, "").replace(/\/?$/, "/");
+  return hash ? `${base}${hash.startsWith("#") ? hash : `#${hash}`}` : base;
+}
+
+function arrayValue(value: unknown) {
+  return Array.isArray(value) ? value : [];
+}
+
+function safeStoragePath(value: unknown) {
+  const path = String(value || "").trim();
+  if (!path || path.includes("..") || path.startsWith("/") || !path.startsWith("users/")) return "";
+  return path;
+}
+
+function mediaLinkSeconds() {
+  const configured = Number(Deno.env.get("MEDIA_EMAIL_LINK_EXPIRES_SECONDS") || "");
+  return Number.isFinite(configured) && configured >= 600 ? configured : DEFAULT_MEDIA_LINK_SECONDS;
+}
+
+function mediaLabel(item: Record<string, unknown>, index: number) {
+  const type = String(item.type || item.contentType || "");
+  const name = String(item.name || item.fileName || "").trim();
+  if (name) return name;
+  if (type.startsWith("video/")) return `Video ${index + 1}`;
+  if (type.startsWith("image/")) return `Photo ${index + 1}`;
+  return `Media ${index + 1}`;
+}
+
+async function mediaLines(adminClient: ReturnType<typeof createClient>, mediaItems: unknown[]) {
+  const lines: string[] = [];
+  const seconds = mediaLinkSeconds();
+  for (const [index, rawItem] of mediaItems.entries()) {
+    const item = (rawItem && typeof rawItem === "object" ? rawItem : {}) as Record<string, unknown>;
+    const storagePath = safeStoragePath(item.storagePath || item.path || item.profilePhotoPath);
+    let url = String(item.url || "").trim();
+    if (storagePath) {
+      const { data, error } = await adminClient.storage.from(MEDIA_BUCKET).createSignedUrl(storagePath, seconds);
+      if (!error && data?.signedUrl) url = data.signedUrl;
+    }
+    if (!url || url.startsWith("data:")) continue;
+    lines.push(`${mediaLabel(item, index)}: ${url}`);
+  }
+  return lines;
+}
+
+async function recordMediaLines(adminClient: ReturnType<typeof createClient>, record: Record<string, unknown>) {
+  const mediaItems = [
+    ...arrayValue(record.mediaItems),
+    ...arrayValue(record.vaccinationRecords),
+    ...arrayValue(record.documents),
+  ];
+  if (record.profilePhotoPath || record.profilePhotoUrl) {
+    mediaItems.push({
+      name: "Profile photo",
+      type: "image/jpeg",
+      storagePath: record.profilePhotoPath,
+      url: record.profilePhotoUrl,
+    });
+  }
+  return mediaLines(adminClient, mediaItems);
+}
+
+function customerStayAudienceEmails(record: Record<string, unknown>, notification: Record<string, unknown>) {
+  const notificationAudience = recordAudienceEmails(notification);
+  if (notificationAudience.length) return notificationAudience;
+  return uniqueEmails([
+    record.ownerEmail,
+    record.customerEmail,
+    record.linkedOwnerEmail,
+    record.secondaryOwnerEmail,
+  ]);
+}
+
 function firstStay(record: Record<string, unknown>) {
   const stays = Array.isArray(record.stays) ? record.stays : [];
   return (stays[0] && typeof stays[0] === "object" ? stays[0] : {}) as Record<string, unknown>;
 }
 
-function notificationContent(eventName: string, record: Record<string, unknown>) {
+async function notificationContent(adminClient: ReturnType<typeof createClient>, eventName: string, record: Record<string, unknown>, notification: Record<string, unknown> = {}) {
   const stay = firstStay(record);
-  const audienceEmails = recordAudienceEmails(record);
+  const audienceEmails = recordAudienceEmails(notification).length ? recordAudienceEmails(notification) : recordAudienceEmails(record);
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";
+    const media = await recordMediaLines(adminClient, record);
     return {
       subject: `${eventName.endsWith("Updated") ? "Updated" : "New"} boarding request: ${record.dogName || "Customer dog"}`,
       body: [
@@ -94,8 +176,9 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Requested services: ${Array.isArray(record.requestedServices) ? record.requestedServices.map((item) => (typeof item === "object" ? (item as Record<string, unknown>).serviceName : item)).join(", ") : ""}`,
         `Estimated total: ${record.estimatedTotal || ""}`,
         `Notes: ${stay.stayNotes || ""}`,
+        ...(media.length ? ["", "Media links:", ...media] : []),
         "",
-        `Review request: ${appUrl()}`,
+        `Review request: ${appLink("#boardingDogsPage")}`,
       ].join("\n"),
       priority: "normal",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
@@ -103,6 +186,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
     };
   }
   if (eventName === "customerDogFileUploaded") {
+    const media = await recordMediaLines(adminClient, record);
     return {
       subject: `Customer file uploaded: ${record.dogName || "Customer dog"}`,
       body: [
@@ -111,8 +195,9 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Dog: ${record.dogName || ""}`,
         `Owner: ${record.ownerName || record.ownerEmail || record.customerEmail || ""}`,
         `Files: ${record.vaccinationFiles || record.profilePhotoUrl || "Uploaded file"}`,
+        ...(media.length ? ["", "File links:", ...media] : []),
         "",
-        `Review uploaded files: ${appUrl()}`,
+        `Review uploaded files: ${appLink("#boardingDogsPage")}`,
       ].join("\n"),
       priority: "review",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
@@ -120,6 +205,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
     };
   }
   if (eventName === "urgentKennelRequestCreated") {
+    const media = await recordMediaLines(adminClient, record);
     return {
       subject: `Urgent kennel request: ${record.category || "Request"}`,
       body: [
@@ -129,8 +215,9 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Category: ${record.category || ""}`,
         `Request: ${record.requestText || ""}`,
         `Reason: ${record.reason || ""}`,
+        ...(media.length ? ["", "Media links:", ...media] : []),
         "",
-        `Review request: ${appUrl()}`,
+        `Review request: ${appLink("#requestsPage")}`,
       ].join("\n"),
       priority: "urgent",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
@@ -138,6 +225,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
     };
   }
   if (eventName === "urgentMaintenanceCreated") {
+    const media = await recordMediaLines(adminClient, record);
     return {
       subject: `Urgent maintenance: ${record.location || "Kennel"}`,
       body: [
@@ -148,8 +236,9 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Issue: ${record.issue || ""}`,
         `Suggested action: ${record.suggestedAction || ""}`,
         `Files: ${record.mediaFiles || ""}`,
+        ...(media.length ? ["", "Media links:", ...media] : []),
         "",
-        `Review request: ${appUrl()}`,
+        `Review request: ${appLink("#maintenancePage")}`,
       ].join("\n"),
       priority: "urgent",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
@@ -166,7 +255,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Dates: ${record.startDate || ""}${record.endDate && record.endDate !== record.startDate ? ` to ${record.endDate}` : ""}`,
         `Reason: ${record.reason || ""}`,
         "",
-        `Review request: ${appUrl()}`,
+        `Review request: ${appLink("#timesheetPage")}`,
       ].join("\n"),
       priority: "review",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
@@ -183,7 +272,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Reviewed by: ${record.reviewedBy || ""}`,
         `Note: ${record.reviewNote || ""}`,
         "",
-        `Open schedule: ${appUrl()}`,
+        `Open schedule: ${appLink("#timesheetPage")}`,
       ].join("\n"),
       priority: "normal",
       to: audienceEmails.length ? audienceEmails : [String(record.staffEmail || "")].filter(Boolean),
@@ -200,7 +289,7 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         `Staff: ${record.staffName || ""}`,
         `Shift: ${record.startTime || ""}${record.endTime ? ` to ${record.endTime}` : ""}`,
         "",
-        `View schedule: ${appUrl()}`,
+        `View schedule: ${appLink("#timesheetPage")}`,
       ].join("\n"),
       priority: "normal",
       to: audienceEmails.length ? audienceEmails : record.staffEmail ? [String(record.staffEmail)] : adminEmails(),
@@ -217,11 +306,34 @@ function notificationContent(eventName: string, record: Record<string, unknown>)
         String(record.message || ""),
         "",
         `Sent by: ${record.submittedBy || record.submittedByEmail || ""}`,
-        `Open Snuggle Stay: ${appUrl()}`,
+        `Open Snuggle Stay: ${appLink(isCustomer ? "#customerPage" : "#dashboardPage")}`,
       ].join("\n"),
       priority: "urgent",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
       sms: !isCustomer,
+    };
+  }
+  if (eventName === "customerStayUpdateSent") {
+    const update = (record.latestCustomerUpdate && typeof record.latestCustomerUpdate === "object" ? record.latestCustomerUpdate : {}) as Record<string, unknown>;
+    const requestCode = String(update.requestCode || "").trim();
+    const stayLabel = String(update.stayLabel || "").trim();
+    const media = await mediaLines(adminClient, arrayValue(update.mediaItems));
+    return {
+      subject: `Stay update: ${record.dogName || update.dogName || "Your dog"}${requestCode ? ` (${requestCode})` : ""}`,
+      body: [
+        "Central Texas Husky sent a stay update.",
+        "",
+        `Dog: ${record.dogName || update.dogName || ""}`,
+        requestCode ? `Stay ID: ${requestCode}` : "",
+        stayLabel ? `Stay: ${stayLabel}` : "",
+        `Update: ${update.note || record.dailyActivity || ""}`,
+        ...(media.length ? ["", "Photo/video links:", ...media] : []),
+        "",
+        `Open updates: ${appLink("#customerUpdatesPage")}`,
+      ].filter(Boolean).join("\n"),
+      priority: "normal",
+      to: customerStayAudienceEmails(record, notification),
+      sms: false,
     };
   }
   return null;
@@ -309,19 +421,27 @@ Deno.serve(async (req) => {
   if (!isStaff && !recordHasEmail(sourceRecord, user.email)) {
     return json({ error: "Not authorized for this notification source." }, 403);
   }
+  if (eventName === "customerStayUpdateSent" && !isStaff) {
+    return json({ error: "Only staff can send customer stay update notifications." }, 403);
+  }
 
-  const content = notificationContent(eventName, sourceRecord);
+  let notificationPayload: Record<string, unknown> = {};
+  if (body.notificationId) {
+    const { data } = await adminClient.from("kennel_records").select("payload").eq("id", body.notificationId).maybeSingle();
+    notificationPayload = (data?.payload && typeof data.payload === "object" ? data.payload : {}) as Record<string, unknown>;
+  }
+
+  const content = await notificationContent(adminClient, eventName, sourceRecord, notificationPayload);
   if (!content) return json({ error: "Unsupported notification event." }, 400);
 
-  const emailResult = await sendEmail(content.to.map(normalizeEmail).filter(Boolean), content.subject, content.body);
+  const emailResult = await sendEmail(uniqueEmails(content.to), content.subject, content.body);
   const smsResult = content.sms ? await sendSms(`${content.subject}: ${String(sourceRecord.dogName || sourceRecord.location || sourceRecord.category || "")}. ${appUrl()}`) : { skipped: true };
   const emailSkipped = Boolean((emailResult as Record<string, unknown>)?.skipped);
   const smsSkipped = Boolean((smsResult as Record<string, unknown>)?.skipped);
   const deliveryStatus = emailSkipped && (!content.sms || smsSkipped) ? "skipped" : "sent";
 
   if (body.notificationId) {
-    const { data } = await adminClient.from("kennel_records").select("payload").eq("id", body.notificationId).maybeSingle();
-    const existingPayload = (data?.payload && typeof data.payload === "object" ? data.payload : {}) as Record<string, unknown>;
+    const existingPayload = notificationPayload;
     const now = new Date().toISOString();
     await adminClient.from("kennel_records").upsert({
       id: body.notificationId,

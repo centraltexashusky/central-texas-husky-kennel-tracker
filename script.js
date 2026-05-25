@@ -4,6 +4,9 @@ const MEDIA_BUCKET = "kennel-media";
 const MAX_MEDIA_UPLOAD_MB = 50;
 const MAX_MEDIA_UPLOAD_BYTES = MAX_MEDIA_UPLOAD_MB * 1024 * 1024;
 const IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png"];
+const VIDEO_UPLOAD_TYPES = ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"];
+const CUSTOMER_UPDATE_MEDIA_TYPES = [...IMAGE_UPLOAD_TYPES, ...VIDEO_UPLOAD_TYPES];
+const CUSTOMER_UPDATE_MEDIA_EXTENSIONS = [".jpg", ".jpeg", ".png", ".mp4", ".mov", ".webm", ".m4v"];
 const VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 const DOG_DOCUMENT_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
 const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
@@ -5758,9 +5761,11 @@ function renderCustomerUpdates() {
         const requestCode = update.requestCode || group.requestCode || "";
         const media = (update.mediaItems || []).map((item) => {
           const src = item.url || item.dataUrl || "";
-          if (!src && !item.storagePath) return item.note ? `<p class="muted-text">${escapeHtml(item.name || "Photo")}: ${escapeHtml(item.note)}</p>` : "";
+          if (!src && !item.storagePath) return item.note ? `<p class="muted-text">${escapeHtml(item.name || "Media")}: ${escapeHtml(item.note)}</p>` : "";
           const isImage = String(item.type || "").startsWith("image/");
-          return `<button type="button" class="customer-update-media-button" data-action="view-media" data-src="${escapeHtml(src)}" data-media-type="${escapeHtml(item.type || "image/jpeg")}" data-media-name="${escapeHtml(item.name || "Customer update media")}"${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>${isImage && src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.name || "Customer update photo")}" />` : ""}<span>${escapeHtml(item.name || "Open attachment")}</span></button>`;
+          const isVideo = String(item.type || "").startsWith("video/");
+          const label = item.name || (isVideo ? "Open video" : isImage ? "Open photo" : "Open attachment");
+          return `<button type="button" class="customer-update-media-button" data-action="view-media" data-src="${escapeHtml(src)}" data-media-type="${escapeHtml(item.type || "application/octet-stream")}" data-media-name="${escapeHtml(item.name || "Customer update media")}"${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>${isImage && src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.name || "Customer update photo")}" />` : ""}<span>${escapeHtml(label)}</span></button>`;
         }).join("");
         return `<article class="record-card compact-record-card customer-update-card">
           <strong>${escapeHtml(formatDateTime(update.createdAt) || "Update")}</strong>
@@ -6891,7 +6896,7 @@ function openOwnerUpdateAlert(recordId, reference = {}) {
     `<article class="record-card compact-record-card"><strong>${escapeHtml(record.dogName || "Boarding dog")}</strong><div class="chip-row">${stay.id ? customerStayIdChipHtml(record, stay) : ""}${stay.id ? boardingStayStatusChipHtml(record, stay) : ""}</div><p>${escapeHtml([record.ownerName, record.ownerPhone, record.ownerEmail].filter(Boolean).join(" | "))}</p><p>${escapeHtml(stay.id ? `${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}` : record.dailyActivity || "Owner update is marked as needed.")}</p>${ownerUpdateReasonHtml(record, stay)}</article>
     <form id="ownerUpdatePopupForm" class="tracker-form" data-id="${escapeHtml(record.id)}"${stayAttrs || ` data-request-code="${escapeHtml(requestCode)}"`}>
       <label>Daily activity update for owner<textarea name="dailyActivity" rows="4" placeholder="Eating, potty, play, exercise, mood, photos/videos taken">${escapeHtml(record.dailyActivity || "")}</textarea></label>
-      <label>Update photo<input type="file" name="ownerUpdatePhoto" id="ownerUpdatePopupPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" /></label>
+      <label>Update photo or video<input type="file" name="ownerUpdatePhoto" id="ownerUpdatePopupPhotoInput" accept="image/jpeg,image/png,video/mp4,video/quicktime,video/webm,video/x-m4v,.jpg,.jpeg,.png,.mp4,.mov,.webm,.m4v" multiple /></label>
       <label class="inline-check"><input type="checkbox" name="clearOwnerUpdate" checked /> Clear owner update alert after saving</label>
       <div class="button-row"><button type="submit">Save Owner Update</button><button type="button" class="secondary-button" data-action="open-boarding-editor" data-id="${escapeHtml(record.id)}">Open Boarding Dog</button></div>
     </form>`,
@@ -8183,7 +8188,11 @@ function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
 
 function customerUpdateMediaHtml(update = {}) {
   const items = update.mediaItems || [];
-  return items.map((item) => `<button type="button" class="media-preview-button secondary-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(item.type || "image/jpeg")}" data-media-name="${escapeHtml(item.name || "Customer update photo")}"${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>Open photo</button>`).join("");
+  return items.map((item) => {
+    const type = String(item.type || "");
+    const label = type.startsWith("video/") ? "Open video" : type.startsWith("image/") ? "Open photo" : "Open media";
+    return `<button type="button" class="media-preview-button secondary-button" data-action="view-media" data-src="${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="${escapeHtml(type || "application/octet-stream")}" data-media-name="${escapeHtml(item.name || "Customer update media")}"${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>${label}</button>`;
+  }).join("");
 }
 
 function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
@@ -8255,7 +8264,7 @@ function boardingDogFileItems(record = {}) {
         boardingDogFileItem(file, "boardingCustomerUpdate", "Customer update media", {
           parentId: update.id || "",
           sourceRecordId: record.id,
-          fallbackName: "Customer update photo",
+          fallbackName: "Customer update media",
         }),
       ),
     ),
@@ -8465,18 +8474,18 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
     return null;
   }
   if (!note && !input?.files?.length) {
-    showToast("Add a note or photo before saving a customer update.");
+    showToast("Add a note, photo, or video before saving a customer update.");
     return null;
   }
   const timestamp = new Date().toISOString();
   const requestCode = boardingStayRequestCode(displayRecord, targetStay);
   const mediaItems = options.mediaItems || await uploadMediaFiles(input, `boarding-customer-updates/${displayRecord.id}/${targetStay.id}`, {
-    allowedTypes: IMAGE_UPLOAD_TYPES,
-    allowedExtensions: [".jpg", ".jpeg", ".png"],
-    label: "customer update photo",
+    allowedTypes: CUSTOMER_UPDATE_MEDIA_TYPES,
+    allowedExtensions: CUSTOMER_UPDATE_MEDIA_EXTENSIONS,
+    label: "customer update media",
   });
   if (!note && !mediaItems.length) {
-    showToast("Add a note or upload a valid photo before saving a customer update.");
+    showToast("Add a note or upload a valid photo or video before saving a customer update.");
     return null;
   }
   const staff = staffIdentity();
@@ -12573,6 +12582,11 @@ async function notifyIfNeeded(record = {}, eventName = "") {
   renderNotifications();
   if (!supabaseClient || localTestMode) {
     return notification;
+  }
+  try {
+    await sendPayload(notification);
+  } catch (error) {
+    console.warn("Could not save notification before delivery.", error);
   }
   try {
     const { error } = await supabaseClient.functions.invoke("send-notification", {
