@@ -353,6 +353,11 @@ body.is-impersonating .user-card {
   margin: 12px 0 16px;
 }
 
+.filter-toolbar.boarding-request-filter-toolbar {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
 .filter-toolbar label {
   align-items: center;
   display: flex;
@@ -367,6 +372,45 @@ body.is-impersonating .user-card {
   color: var(--ink);
   min-height: 42px;
   padding: 8px 36px 8px 10px;
+}
+
+.request-filter-button {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.request-filter-button span {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  display: inline-flex;
+  min-width: 1.8em;
+  padding: 1px 8px;
+}
+
+.filter-chip-row {
+  align-items: center;
+  display: flex;
+  flex: 1 1 220px;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.request-filter-popup {
+  gap: 14px;
+}
+
+.request-filter-options {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.request-filter-option {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--ink);
+  justify-self: stretch;
 }
 
 .signup-panel {
@@ -1235,6 +1279,16 @@ button:focus-visible {
 .record-card.is-completed strong {
   text-decoration: line-through;
   text-decoration-thickness: 2px;
+}
+
+.compact-reason-list {
+  color: var(--muted);
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.compact-reason-list li + li {
+  margin-top: 3px;
 }
 
 .record-card strong {
@@ -4721,6 +4775,21 @@ body.is-login-view #loginPage .login-auth-section {
   cursor: pointer;
   font-weight: 800;
   padding: 9px 13px;
+}
+
+.daily-task-tabs button[draggable="true"] {
+  cursor: grab;
+  user-select: none;
+}
+
+.daily-task-tabs button.is-dragging {
+  opacity: 0.62;
+  transform: scale(0.98);
+}
+
+.daily-task-tabs button.is-drag-over {
+  border-color: rgba(10, 132, 255, 0.9);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.24), var(--glass-specular);
 }
 
 .daily-task-tabs .task-add-tab-button {

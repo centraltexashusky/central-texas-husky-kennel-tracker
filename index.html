@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260523-stay-services-owner-updates" />
+    <link rel="stylesheet" href="styles.css?v=20260524-stay-actions-filters" />
   </head>
   <body>
     <div class="app-layout">
@@ -29,7 +29,6 @@
           <button class="nav-button" type="button" data-page="boardingDogsPage" data-roles="helper,admin">Boarding Dogs</button>
           <button class="nav-button" type="button" data-page="requestsPage" data-roles="helper,admin">Request</button>
           <button class="nav-button" type="button" data-page="maintenancePage" data-roles="helper,admin">Maintenance</button>
-          <button class="nav-button" type="button" data-page="servicesPage" data-roles="admin">Services & Pricing</button>
           <button class="nav-button" type="button" data-page="financialsPage" data-roles="admin">Financials</button>
           <div class="side-nav-group" data-roles="admin">
             <button class="nav-button" type="button" data-page="settingsUsersPage" data-roles="admin" data-settings-root="true">Settings</button>
@@ -37,6 +36,7 @@
               <button class="nav-button sub-nav-button" type="button" data-page="settingsUsersPage" data-roles="admin" data-settings-sub-nav="true">Users</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsKennelLocationsPage" data-roles="admin" data-settings-sub-nav="true">Kennel Locations</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsHoursPage" data-roles="admin" data-settings-sub-nav="true">Hours of Operation</button>
+              <button class="nav-button sub-nav-button" type="button" data-page="servicesPage" data-roles="admin" data-settings-sub-nav="true">Services & Pricing</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsAlertsPage" data-roles="admin" data-settings-sub-nav="true">Alerts</button>
               <button class="nav-button sub-nav-button" type="button" data-page="settingsAuditLogPage" data-roles="admin" data-settings-sub-nav="true">Audit Log</button>
             </div>
@@ -96,11 +96,11 @@
           <option value="boardingDogsPage">Boarding Dogs</option>
           <option value="requestsPage">Request</option>
           <option value="maintenancePage">Maintenance</option>
-          <option value="servicesPage" data-roles="admin">Services & Pricing</option>
           <option value="financialsPage" data-roles="admin">Financials</option>
           <option value="settingsUsersPage" data-roles="admin">Settings: Users</option>
           <option value="settingsKennelLocationsPage" data-roles="admin">Settings: Kennel Locations</option>
           <option value="settingsHoursPage" data-roles="admin">Settings: Hours of Operation</option>
+          <option value="servicesPage" data-roles="admin">Settings: Services & Pricing</option>
           <option value="settingsAlertsPage" data-roles="admin">Settings: Alerts</option>
           <option value="settingsAuditLogPage" data-roles="admin">Settings: Audit Log</option>
         </select>
@@ -933,19 +933,9 @@
                 <p>Review pending, approved, and cancelled customer boarding requests separately from the dog roster.</p>
               </div>
             </div>
-            <div class="filter-toolbar">
-              <label>View requests
-                <select id="boardingRequestStatusFilter">
-                  <option value="All">All</option>
-                  <option value="Pending">Pending</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Checked In">Checked In</option>
-                  <option value="In Kennel">In Kennel</option>
-                  <option value="Ready For Pickup">Ready For Pickup</option>
-                  <option value="Checked Out">Checked Out</option>
-                  <option value="Cancelled">Cancelled</option>
-                </select>
-              </label>
+            <div class="filter-toolbar boarding-request-filter-toolbar">
+              <button type="button" class="secondary-button request-filter-button" id="boardingRequestFilterButton" aria-haspopup="dialog">Filter requests <span id="boardingRequestFilterCount">All</span></button>
+              <div class="filter-chip-row" id="boardingRequestFilterSummary" aria-live="polite">All statuses</div>
             </div>
             <div class="record-grid" id="boardingRequestRecords"></div>
           </details>
@@ -1273,6 +1263,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260524-notification-labels"></script>
+  <script src="script.js?v=20260524-stay-actions-filters"></script>
 </body>
 </html>

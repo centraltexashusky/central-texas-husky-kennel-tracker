@@ -113,7 +113,7 @@ const defaultTaskTabMeta = [
 ];
 const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
 const mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
-const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsHoursPage", "settingsAlertsPage", "settingsAuditLogPage"]);
+const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsHoursPage", "servicesPage", "settingsAlertsPage", "settingsAuditLogPage"]);
 const operationWeekdays = [
   { key: "monday", label: "Monday", shortLabel: "Mon", dayIndex: 1 },
   { key: "tuesday", label: "Tuesday", shortLabel: "Tue", dayIndex: 2 },
@@ -130,6 +130,7 @@ const alertTypeDefinitions = [
   { key: "customerBoardingRequestCreated", label: "New customer boarding request", group: "Customer" },
   { key: "customerBoardingRequestUpdated", label: "Customer boarding request update", group: "Customer" },
   { key: "customerDogFileUploaded", label: "Customer uploaded dog file", group: "Customer" },
+  { key: "customerStayUpdateSent", label: "Customer stay update sent", group: "Customer" },
   { key: "urgentKennelRequestCreated", label: "Urgent kennel request", group: "Operations" },
   { key: "urgentMaintenanceCreated", label: "Urgent maintenance request", group: "Operations" },
   { key: "timeOffRequested", label: "Staff time off request", group: "Staff" },
@@ -259,6 +260,7 @@ const stateKeys = {
   taskConfig: "cth-daily-task-config",
   tableConfig: "cth-table-column-config",
   tableSort: "cth-table-sort-config",
+  boardingRequestStatusFilter: "cth-boarding-request-status-filter",
   session: "cth-current-session",
   impersonation: "cth-impersonation-session",
   authThrottle: "cth-auth-throttle",
@@ -1032,13 +1034,21 @@ function normalizeRemovedTaskTabs(tabs = []) {
   return [...new Set(tabs.map((tab) => String(tab || "").trim()).filter((tab) => removableIds.has(tab)))];
 }
 
+function normalizeTaskTabOrder(order = [], tabs = []) {
+  if (!Array.isArray(order)) return [];
+  const validIds = new Set(tabs.map((tab) => tab.id));
+  return [...new Set(order.map((tabId) => String(tabId || "").trim()).filter((tabId) => validIds.has(tabId)))];
+}
+
 function normalizeTaskConfig(saved = null) {
   const hasGroup = (group) => saved && Object.prototype.hasOwnProperty.call(saved, group);
   const customTabs = normalizeCustomTaskTabs(saved?._tabs);
   const removedTabs = normalizeRemovedTaskTabs(saved?._removedTabs);
+  const availableTabs = [...defaultTaskTabMeta.filter((tab) => !removedTabs.includes(tab.id)), ...customTabs];
   const config = {
     _tabs: customTabs,
     _removedTabs: removedTabs,
+    _tabOrder: normalizeTaskTabOrder(saved?._tabOrder, availableTabs),
     morning: normalizeTaskList(saved?.morning, hasGroup("morning") ? [] : defaultTaskList("morning", defaultDailyTasks.morning)),
     pm: normalizeTaskList(saved?.pm, hasGroup("pm") ? [] : defaultTaskList("pm", defaultDailyTasks.pm)),
     weekly: normalizeTaskList(saved?.weekly, hasGroup("weekly") ? [] : defaultTaskList("weekly", defaultManagedTasks.weekly)),
@@ -2836,7 +2846,11 @@ function taskInputName(shift) {
 
 function taskTabMeta(config = readTaskConfig()) {
   const removedTabs = new Set(config._removedTabs || []);
-  return [...defaultTaskTabMeta.filter((tab) => !removedTabs.has(tab.id)), ...(config._tabs || [])];
+  const tabs = [...defaultTaskTabMeta.filter((tab) => !removedTabs.has(tab.id)), ...(config._tabs || [])];
+  const tabMap = new Map(tabs.map((tab) => [tab.id, tab]));
+  const ordered = normalizeTaskTabOrder(config._tabOrder, tabs).map((tabId) => tabMap.get(tabId)).filter(Boolean);
+  const orderedIds = new Set(ordered.map((tab) => tab.id));
+  return [...ordered, ...tabs.filter((tab) => !orderedIds.has(tab.id))];
 }
 
 function taskTabLabel(shift = "") {
@@ -3242,11 +3256,36 @@ async function updateDailyCareLog(logId, updates = {}) {
 function renderDailyTaskTabs(config = readTaskConfig()) {
   const tabs = $("#dailyTaskTabs");
   if (!tabs) return;
+  const canDragTabs = adminTaskTabDragEnabled();
   const tabButtons = taskTabMeta(config)
-    .map((tab) => `<button type="button" data-task-tab="${escapeHtml(tab.id)}" role="tab" aria-selected="false">${escapeHtml(tab.label)}</button>`)
+    .map((tab) => `<button type="button" data-task-tab="${escapeHtml(tab.id)}" role="tab" aria-selected="false" ${canDragTabs ? 'draggable="true" title="Drag to reorder tab"' : ""}>${escapeHtml(tab.label)}</button>`)
     .join("");
   const addButton = currentRole() === "admin" ? `<button type="button" class="secondary-button task-add-tab-button" data-action="add-task-tab">Add Tab</button>` : "";
   tabs.innerHTML = `${tabButtons}${addButton}`;
+}
+
+function adminTaskTabDragEnabled() {
+  return currentRole() === "admin"
+    && window.matchMedia("(min-width: 900px)").matches
+    && window.matchMedia("(pointer: fine)").matches;
+}
+
+async function reorderTaskTabByDrag(sourceId = "", targetId = "") {
+  if (!adminTaskTabDragEnabled() || !sourceId || !targetId || sourceId === targetId) return;
+  const config = readTaskConfig();
+  const tabs = taskTabMeta(config);
+  const order = tabs.map((tab) => tab.id);
+  const sourceIndex = order.indexOf(sourceId);
+  const targetIndex = order.indexOf(targetId);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const [source] = order.splice(sourceIndex, 1);
+  const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  order.splice(insertIndex, 0, source);
+  config._tabOrder = order;
+  await persistTaskConfig(config);
+  dailyTaskTab = sourceId;
+  renderDailyTaskLists();
+  showToast("Task tab order updated.");
 }
 
 function taskTabDeleteRowHtml(tab = {}) {
@@ -4124,6 +4163,7 @@ function showDetailDialog(title, html, context = null, options = {}) {
     headerActionButton.dataset.sourceId = options.headerAction?.sourceId || "";
     headerActionButton.dataset.stayId = options.headerAction?.stayId || "";
     headerActionButton.dataset.requestCode = options.headerAction?.requestCode || "";
+    headerActionButton.dataset.tab = options.headerAction?.tab || "";
   }
   if (context && ["request", "maintenance"].includes(context.type)) {
     const record = readRecords(context.type).find((item) => item.id === context.id);
@@ -4508,25 +4548,51 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
     showToast("That stay service could not be found.");
     return null;
   }
+  const explicitStayIds = new Set([
+    reference.stayId,
+    reference.id,
+    ...boardingStaySourceIds(targetStay),
+  ].filter(Boolean).map(String));
+  const explicitRequestCode = String(reference.requestCode || targetStay.requestCode || targetStay.requestId || targetStay.reservationId || "").trim();
+  const matchingStayIndexes = (rawRecord = {}) => {
+    const stays = arrayValue(rawRecord.stays);
+    const indexed = stays.map((stay, index) => ({ stay, index }));
+    let matches = indexed.filter(({ stay }) => {
+      if (explicitStayIds.size && boardingStaySourceIds(stay).some((id) => explicitStayIds.has(id))) return true;
+      if (explicitRequestCode && boardingStayRequestCode(rawRecord, stay) === explicitRequestCode) return true;
+      return false;
+    });
+    if (!matches.length && explicitStayIds.size) {
+      matches = indexed.filter(({ stay }) => boardingStaySharesExplicitIdentity(stay, targetStay));
+    }
+    if (!matches.length) {
+      const identityMatches = indexed.filter(({ stay }) => boardingStayMatchesIdentity(stay, targetStay));
+      if (identityMatches.length === 1) matches = identityMatches;
+    }
+    return matches.map((match) => match.index);
+  };
   const sourceRecordIds = displayRecord.sourceRecordIds?.length ? displayRecord.sourceRecordIds : [displayRecord.id];
   const rawRecords = readRecords("boardingDog")
     .filter((item) => !item.removed && (sourceRecordIds.includes(item.id) || item.id === displayRecord.id));
   const savedRecords = [];
   for (const rawRecord of rawRecords.length ? rawRecords : [displayRecord]) {
     const stays = arrayValue(rawRecord.stays);
-    const nextStays = stays.map((stay) => {
-      const sameStay = boardingStaySharesExplicitIdentity(stay, targetStay)
-        || boardingStayRequestCode(rawRecord, stay) === targetRequestCode
-        || boardingStayMatchesIdentity(stay, targetStay);
-      return sameStay ? boardingStayWithServiceTaskStatus(displayRecord, { ...stay, requestCode: targetRequestCode }, taskId, status, targetTask, targetTaskKey) : stay;
-    });
+    const matchIndexes = new Set(matchingStayIndexes(rawRecord));
+    if (!matchIndexes.size) continue;
+    const nextStays = stays.map((stay, index) => (matchIndexes.has(index)
+      ? boardingStayWithServiceTaskStatus(displayRecord, { ...stay, requestCode: stay.requestCode || targetRequestCode }, taskId, status, targetTask, targetTaskKey)
+      : stay));
     const updated = upsertRecord("boardingDog", {
       ...rawRecord,
-      stays: nextStays.length ? nextStays : [boardingStayWithServiceTaskStatus(displayRecord, targetStay, taskId, status, targetTask, targetTaskKey)],
+      stays: nextStays,
       updatedAt: new Date().toISOString(),
     });
     await sendPayload(updated);
     savedRecords.push(updated);
+  }
+  if (!savedRecords.length) {
+    showToast("That stay service could not be matched to this stay.");
+    return null;
   }
   const latest = boardingDogRecordForDisplay(displayRecord.id) || savedRecords[0] || displayRecord;
   if ($("#boardingDogForm")?.elements.id.value === latest.id || sourceRecordIds.includes($("#boardingDogForm")?.elements.id.value)) {
@@ -4540,6 +4606,37 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
   renderDashboard();
   showToast(status === "completed" ? "Stay service marked done." : "Stay service updated.");
   return latest;
+}
+
+function stayServiceTaskByReference(record = {}, reference = {}, taskId = "", taskKey = "") {
+  const stay = boardingStayByReference(record, reference);
+  if (!stay) return null;
+  return boardingStayServiceTasks(record, stay)
+    .find((task) => task.id === taskId || (taskKey && boardingServiceTaskKey(task) === taskKey) || (taskKey && boardingServiceTaskNameKey(task) === boardingServiceTaskNameFromKey(taskKey)))
+    || null;
+}
+
+function stayServiceCompletionConfirmationHtml(record = {}, reference = {}, task = {}, alertFilter = "") {
+  const stay = boardingStayByReference(record, reference) || {};
+  const requestCode = stay.id ? boardingStayRequestCode(record, stay) : reference.requestCode || "";
+  const completedText = task.completedAt ? formatDateTime(task.completedAt) : formatDateTime(new Date().toISOString());
+  return `<section class="popup-record-section">
+    <article class="record-card compact-record-card">
+      <strong>${escapeHtml(task.label || task.serviceName || "Stay service")} completed</strong>
+      <p>${escapeHtml(record.dogName || "Boarding dog")} | Stay ID: ${escapeHtml(requestCode || "Not recorded")}</p>
+      <p>Completed ${escapeHtml(completedText)}${task.completedBy ? ` by ${escapeHtml(task.completedBy)}` : ""}.</p>
+    </article>
+    <div class="button-row">
+      <button type="button" class="secondary-button" data-action="open-boarding-editor" data-id="${escapeHtml(record.id || "")}" data-tab="Boarding & Request">Open Boarding & Request</button>
+      ${alertFilter ? `<button type="button" class="secondary-button" data-action="open-dashboard-alert-popup" data-alert-filter="${escapeHtml(alertFilter)}">Back to ${escapeHtml(alertFilter)}</button>` : ""}
+      <button type="button" class="secondary-button" data-action="close-dialog">Close</button>
+    </div>
+  </section>`;
+}
+
+function showStayServiceCompletionConfirmation(record = {}, reference = {}, taskId = "", taskKey = "", alertFilter = "") {
+  const task = stayServiceTaskByReference(record, reference, taskId, taskKey) || {};
+  showDetailDialog("Stay Service Completed", stayServiceCompletionConfirmationHtml(record, reference, task, alertFilter));
 }
 
 function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
@@ -6699,6 +6796,52 @@ function ownerUpdateStayForRecord(record = {}, reference = {}) {
     || {};
 }
 
+function customerUpdateForStay(record = {}, stay = {}) {
+  if (!stay?.id) return null;
+  const requestCode = boardingStayRequestCode(record, stay);
+  return arrayValue(record.customerUpdates).find((update) => {
+    if (update.stayId && update.stayId === stay.id) return true;
+    if (requestCode && update.requestCode === requestCode) return true;
+    if (stay.dropoffTime && stay.pickupTime && update.stayDropoffTime === stay.dropoffTime && update.stayPickupTime === stay.pickupTime) return true;
+    return false;
+  }) || null;
+}
+
+function ownerUpdateReasonItems(record = {}, stay = {}) {
+  const reasons = [];
+  const flags = arrayValue(record.flags);
+  if (flags.includes("Required update from owner")) {
+    reasons.push("Owner update flag is active on this boarding dog.");
+  }
+  if (stay?.id) {
+    const status = boardingStayDisplayStatus(record, stay);
+    const requestCode = boardingStayRequestCode(record, stay);
+    const latestUpdate = customerUpdateForStay(record, stay);
+    if (!latestUpdate && activeBoardingStayStatuses.includes(status)) {
+      reasons.push(`No stay update has been sent for Stay ID: ${requestCode || stay.id}.`);
+    } else if (latestUpdate?.createdAt) {
+      reasons.push(`Last stay update was sent ${formatDateTime(latestUpdate.createdAt)}.`);
+    }
+    const pickup = new Date(stay.pickupTime || 0);
+    if (!Number.isNaN(pickup.getTime()) && activeBoardingStayStatuses.includes(status) && !stayHasActualPickupEvidence(stay)) {
+      const hoursRemaining = Math.ceil((pickup - new Date()) / 3600000);
+      if (hoursRemaining <= 0) reasons.push("Pickup time has passed; review the stay before checkout.");
+      else if (hoursRemaining <= BOARDING_SERVICE_DUE_WINDOW_HOURS) reasons.push(`Pickup is in ${hoursRemaining} hour${hoursRemaining === 1 ? "" : "s"}.`);
+    }
+    const openServices = boardingStayServiceStats(record, stay).incompleteTasks;
+    if (openServices.length) {
+      reasons.push(`Open stay service${openServices.length === 1 ? "" : "s"}: ${openServices.map((task) => task.label || task.serviceName || "Service").join(", ")}.`);
+    }
+  }
+  if (!reasons.length) reasons.push("Review the current stay and owner update history.");
+  return reasons;
+}
+
+function ownerUpdateReasonHtml(record = {}, stay = {}) {
+  const items = ownerUpdateReasonItems(record, stay);
+  return `<ul class="compact-reason-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
 function openOwnerUpdateAlert(recordId, reference = {}) {
   const record = boardingDogRecordForDisplay(recordId) || readRecords("boardingDog").find((item) => item.id === recordId && !item.removed);
   if (!record) return;
@@ -6707,7 +6850,7 @@ function openOwnerUpdateAlert(recordId, reference = {}) {
   const requestCode = stay.id ? boardingStayRequestCode(record, stay) : "";
   showDetailDialog(
     `${record.dogName || "Boarding Dog"} Owner Update`,
-    `<article class="record-card compact-record-card"><strong>${escapeHtml(record.dogName || "Boarding dog")}</strong><div class="chip-row">${stay.id ? customerStayIdChipHtml(record, stay) : ""}${stay.id ? boardingStayStatusChipHtml(record, stay) : ""}</div><p>${escapeHtml([record.ownerName, record.ownerPhone, record.ownerEmail].filter(Boolean).join(" | "))}</p><p>${escapeHtml(stay.id ? `${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}` : record.dailyActivity || "Owner update is marked as needed.")}</p></article>
+    `<article class="record-card compact-record-card"><strong>${escapeHtml(record.dogName || "Boarding dog")}</strong><div class="chip-row">${stay.id ? customerStayIdChipHtml(record, stay) : ""}${stay.id ? boardingStayStatusChipHtml(record, stay) : ""}</div><p>${escapeHtml([record.ownerName, record.ownerPhone, record.ownerEmail].filter(Boolean).join(" | "))}</p><p>${escapeHtml(stay.id ? `${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}` : record.dailyActivity || "Owner update is marked as needed.")}</p>${ownerUpdateReasonHtml(record, stay)}</article>
     <form id="ownerUpdatePopupForm" class="tracker-form" data-id="${escapeHtml(record.id)}"${stayAttrs || ` data-request-code="${escapeHtml(requestCode)}"`}>
       <label>Daily activity update for owner<textarea name="dailyActivity" rows="4" placeholder="Eating, potty, play, exercise, mood, photos/videos taken">${escapeHtml(record.dailyActivity || "")}</textarea></label>
       <label>Update photo<input type="file" name="ownerUpdatePhoto" id="ownerUpdatePopupPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" /></label>
@@ -7791,15 +7934,85 @@ function combinedBoardingDogRecords() {
   return records;
 }
 
+function boardingRequestStatusFilterStorageKey() {
+  const userKey = typeof currentUserNotificationKey === "function" ? currentUserNotificationKey() : "";
+  return `${stateKeys.boardingRequestStatusFilter}:${userKey || "default"}`;
+}
+
+function readBoardingRequestStatusFilter() {
+  try {
+    const raw = localStorage.getItem(boardingRequestStatusFilterStorageKey());
+    const parsed = JSON.parse(raw || "[]");
+    if (Array.isArray(parsed)) return [...new Set(parsed.filter((status) => boardingLifecycleStatuses.includes(status)))];
+    if (typeof parsed === "string" && boardingLifecycleStatuses.includes(parsed)) return [parsed];
+  } catch (_error) {
+    const legacy = localStorage.getItem(boardingRequestStatusFilterStorageKey()) || "";
+    if (boardingLifecycleStatuses.includes(legacy)) return [legacy];
+  }
+  return [];
+}
+
+function writeBoardingRequestStatusFilter(statuses = []) {
+  const clean = [...new Set(arrayValue(statuses).filter((status) => boardingLifecycleStatuses.includes(status)))];
+  localStorage.setItem(boardingRequestStatusFilterStorageKey(), JSON.stringify(clean));
+  return clean;
+}
+
+function boardingRequestFilterLabel(statuses = []) {
+  if (!statuses.length || statuses.length === boardingLifecycleStatuses.length) return "All";
+  if (statuses.length === 1) return statuses[0];
+  return `${statuses.length} statuses`;
+}
+
+function syncBoardingRequestFilterUi(statuses = readBoardingRequestStatusFilter()) {
+  const selected = statuses.filter((status) => boardingLifecycleStatuses.includes(status));
+  const count = $("#boardingRequestFilterCount");
+  const summary = $("#boardingRequestFilterSummary");
+  if (count) count.textContent = boardingRequestFilterLabel(selected);
+  if (summary) {
+    summary.innerHTML = selected.length
+      ? selected.map((status) => `<span class="status-chip">${escapeHtml(status)}</span>`).join("")
+      : `<span class="status-chip">All statuses</span>`;
+  }
+}
+
+function boardingRequestFilterPopupHtml(statuses = readBoardingRequestStatusFilter()) {
+  const selected = new Set(statuses);
+  return `<form id="boardingRequestFilterForm" class="tracker-form request-filter-popup">
+    <article class="record-card compact-record-card">
+      <strong>Boarding request views</strong>
+      <p>Select one or more stay statuses. Leave all unchecked to show every boarding request.</p>
+    </article>
+    <div class="request-filter-options">
+      ${boardingLifecycleStatuses.map((status) => `<label class="toggle-row request-filter-option"><input type="checkbox" name="statuses" value="${escapeHtml(status)}" ${selected.has(status) ? "checked" : ""} /> <span>${escapeHtml(status)}</span></label>`).join("")}
+    </div>
+    <div class="button-row">
+      <button type="submit">Save Filter</button>
+      <button type="button" class="secondary-button" data-action="clear-boarding-request-filter">Show All</button>
+      <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+    </div>
+  </form>`;
+}
+
+function saveBoardingRequestFilterFromForm(formEl) {
+  const selected = [...formEl.querySelectorAll('input[name="statuses"]:checked')].map((input) => input.value);
+  const statuses = writeBoardingRequestStatusFilter(selected);
+  syncBoardingRequestFilterUi(statuses);
+  renderBoardingRequests();
+  $("#detailDialog").close();
+  showToast(statuses.length ? "Boarding request filter saved." : "Showing all boarding requests.");
+}
+
 function renderBoardingRequests() {
   const list = $("#boardingRequestRecords");
   if (!list) return;
-  const statusFilter = $("#boardingRequestStatusFilter")?.value || "All";
+  const statusFilters = readBoardingRequestStatusFilter();
+  syncBoardingRequestFilterUi(statusFilters);
   const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
     .filter((record) => record.customerRequest)
     .filter((record) => !record.removed));
   const entries = uniqueBoardingStayEntries(boardingStayEntries(records))
-    .filter((entry) => statusFilter === "All" || entry.status === statusFilter)
+    .filter((entry) => !statusFilters.length || statusFilters.includes(entry.status))
     .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
   list.innerHTML = entries.length
     ? entries
@@ -7816,7 +8029,7 @@ function renderBoardingRequests() {
           return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-id="${escapeHtml(record.id)}"${stayAttr} data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}"${stayAttr}>${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : ""}${actions}</article>`;
         })
         .join("")
-    : `<p>No ${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests yet.</p>`;
+    : `<p>No ${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>`;
 }
 
 function renderCustomerDogUploadCards() {
@@ -8825,7 +9038,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   return `<section class="popup-record-section">
     <article class="record-card compact-record-card">
       <strong>${escapeHtml(formatDateTime(stay.dropoffTime))} to ${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
-      <div class="chip-row">${boardingStayRequestCodeChipHtml(record, stay)}${boardingStayStatusChipHtml(record, stay)}</div>
+      <div class="chip-row">${boardingStayRequestCodeChipHtml(record, stay)}${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}</div>
       <p>Status changes apply only to this boarding request/stay.</p>
     </article>
     <div class="record-actions">${nextStatuses.length ? nextStatuses.map((nextStatus) => `<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="${escapeHtml(record.id || "")}"${stayAttrs} data-next-status="${escapeHtml(nextStatus)}">${escapeHtml(stayTransitionLabel(status, nextStatus))}</button>`).join("") : "<p>No status changes are available for this stay.</p>"}</div>
@@ -8839,7 +9052,16 @@ function openBoardingStayStatusMenu(record = activeBoardingDog(), stayId = "") {
     showToast("This boarding stay could not be opened.");
     return;
   }
-  showDetailDialog("Update Stay Status", boardingStayStatusMenuHtml(displayRecord, stay));
+  showDetailDialog("Update Stay Status", boardingStayStatusMenuHtml(displayRecord, stay), null, {
+    headerAction: {
+      label: "Edit Dog",
+      action: "open-boarding-dog-editor",
+      id: displayRecord.id,
+      stayId: stay.id || "",
+      requestCode: boardingStayRequestCode(displayRecord, stay),
+      tab: "Boarding & Request",
+    },
+  });
 }
 
 async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextStatus = "", reference = {}) {
@@ -9399,7 +9621,7 @@ function dashboardAlertActionAttrs(alert = {}) {
     return `data-action="${escapeHtml(alert.action)}" data-dog-id="${escapeHtml(alert.dogId)}"`;
   }
   if (alert.action === "view-owner-update") {
-    return `data-action="view-owner-update" data-id="${escapeHtml(alert.id)}"`;
+    return `data-action="view-owner-update" data-id="${escapeHtml(alert.id)}" data-stay-id="${escapeHtml(alert.stayId || "")}" data-request-code="${escapeHtml(alert.requestCode || "")}"`;
   }
   if (alert.action === "complete-stay-service") {
     return `data-action="complete-stay-service" data-dog-id="${escapeHtml(alert.dogId)}" data-stay-id="${escapeHtml(alert.stayId)}" data-request-code="${escapeHtml(alert.requestCode)}" data-task-id="${escapeHtml(alert.taskId)}" data-task-key="${escapeHtml(alert.taskKey || "")}"`;
@@ -9431,7 +9653,18 @@ function dashboardAlertsForMetrics(metrics = dashboardMetrics()) {
   metrics.urgentRequestRecords.forEach((item) => alerts.push({ category: "Requests", type: "request", id: item.id, html: `<strong>Urgent request: ${escapeHtml(item.category)}</strong><p>${escapeHtml(item.requestText || "")}</p>${mediaLinkHtml(item)}` }));
   metrics.urgentMaintenanceRecords.forEach((item) => alerts.push({ category: "Maintenance", type: "maintenance", id: item.id, html: `<strong>Urgent maintenance: ${escapeHtml(item.location)}</strong><p>${escapeHtml(item.issue || "")}</p>${mediaLinkHtml(item)}` }));
   metrics.vaccineIssueDogs.forEach((dog) => alerts.push({ category: "Vaccines", action: "view-vaccine-alert", dogId: dog.id, html: `<strong>Vaccine warning: ${escapeHtml(dog.callName || dog.showName || "Dog")}</strong><p>DHPP date: ${escapeHtml(dog.dhppDate || "Not recorded")}</p>` }));
-  metrics.ownerUpdateDogs.forEach((dog) => alerts.push({ category: "Owner Updates", action: "view-owner-update", id: dog.id, html: `<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml(dog.ownerName || "")} ${escapeHtml(dog.ownerPhone || "")}</p>` }));
+  metrics.ownerUpdateDogs.forEach((dog) => {
+    const stay = ownerUpdateStayForRecord(dog);
+    const requestCode = stay?.id ? boardingStayRequestCode(dog, stay) : "";
+    alerts.push({
+      category: "Owner Updates",
+      action: "view-owner-update",
+      id: dog.id,
+      stayId: stay?.id || "",
+      requestCode,
+      html: `<strong>Owner update needed: ${escapeHtml(dog.dogName || "Boarding dog")}</strong><p>${escapeHtml([dog.ownerName, dog.ownerPhone].filter(Boolean).join(" | "))}</p>${ownerUpdateReasonHtml(dog, stay)}`,
+    });
+  });
   metrics.boardingServiceDue.forEach((item) => alerts.push({ category: "Stay Services", action: "complete-stay-service", dogId: item.record.id, stayId: item.stay.id, requestCode: boardingStayRequestCode(item.record, item.stay), taskId: item.task.id, taskKey: item.taskKey || boardingServiceTaskKey(item.task), html: `<strong>${escapeHtml(item.dueInfo.label)}: ${escapeHtml(item.record.dogName || "Boarding dog")}</strong><p>${escapeHtml(item.task.label || item.task.serviceName || "Requested service")} | Stay ID: ${escapeHtml(boardingStayRequestCode(item.record, item.stay))}</p>` }));
   metrics.boardingBathDue.forEach((dogName) => alerts.push({ category: "Baths", html: `<strong>Bath due before pickup today</strong><p>${escapeHtml(dogName)}</p>` }));
   return alerts;
@@ -9747,7 +9980,7 @@ function dashboardBoardingDogReason(record = {}, category = "") {
   const stay = dashboardStayForBoardingRecord(record);
   if (category === "Arrival") return `Arrives ${formatDateTime(stay.dropoffTime) || "today"}`;
   if (category === "Departure") return `Leaves ${formatDateTime(stay.pickupTime) || "today"}`;
-  if (category === "Owner Update") return "Owner update needed";
+  if (category === "Owner Update") return ownerUpdateReasonItems(record, stay)[0] || "Owner update needed";
   if (category === "Bath") return `Bath requested before pickup${stay.pickupTime ? ` ${formatDateTime(stay.pickupTime)}` : ""}`;
   return boardingScheduleText(record);
 }
@@ -12039,6 +12272,23 @@ function notificationEventDisplayLabel(eventName = "") {
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Snuggle Stay alert";
 }
 
+function notificationSavedTitleIsSpecific(title = "") {
+  const normalized = String(title || "").trim().toLowerCase();
+  if (!normalized) return false;
+  return !["notification", "snuggle stay alert", "alert"].includes(normalized);
+}
+
+function notificationSavedMessageIsSpecific(message = "") {
+  const normalized = String(message || "").trim().toLowerCase();
+  if (!normalized) return false;
+  return ![
+    "notification",
+    "snuggle stay alert",
+    "open this alert to review the related kennel record.",
+    "open this alert to review the related kennel record",
+  ].includes(normalized);
+}
+
 function notificationStayIdText(source = {}) {
   const stay = boardingPrimaryStay(source) || {};
   return source.latestCustomerUpdate?.requestCode
@@ -12049,7 +12299,7 @@ function notificationStayIdText(source = {}) {
 
 function notificationDisplayTitle(notification = {}) {
   const savedTitle = String(notification.title || "").trim();
-  if (savedTitle && savedTitle.toLowerCase() !== "notification") return savedTitle;
+  if (notificationSavedTitleIsSpecific(savedTitle)) return savedTitle;
   const source = notificationSourceSnapshot(notification);
   const dogName = source.dogName || source.latestCustomerUpdate?.dogName || "";
   const eventName = notification.eventName || "";
@@ -12073,7 +12323,7 @@ function notificationDisplayTitle(notification = {}) {
 
 function notificationDisplayMessage(notification = {}) {
   const savedMessage = String(notification.message || "").trim();
-  if (savedMessage) return savedMessage;
+  if (notificationSavedMessageIsSpecific(savedMessage)) return savedMessage;
   const source = notificationSourceSnapshot(notification);
   const eventName = notification.eventName || "";
   const dogName = source.dogName || source.latestCustomerUpdate?.dogName || "";
@@ -12097,6 +12347,11 @@ function notificationDisplayMessage(notification = {}) {
     return `${update.byName || "Kennel staff"} sent an update for ${dogName || "your dog"}${stayId ? ` (Stay ID: ${stayId})` : ""}.${text ? ` ${text}` : ""}`;
   }
   if (source.message) return source.message;
+  if (notification.sourceType === "boardingDog") {
+    const stayId = notificationStayIdText(source);
+    const status = source.boardingStatus || boardingDisplayStatus(source) || source.status || "Review needed";
+    return `${dogName || "Boarding dog"} needs review${stayId ? ` for Stay ID: ${stayId}` : ""}. Current status: ${status}.`;
+  }
   if (source.requestText) return source.requestText;
   if (source.issue) return source.issue;
   if (source.note) return source.note;
@@ -12367,15 +12622,16 @@ async function openNotification(id = "") {
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;
   if (sourceType === "boardingDog") {
-    if (currentRole() === "customer" || notification.eventName === "customerStayUpdateSent") {
+    if (currentRole() === "customer") {
       switchPage("customerUpdatesPage");
       renderCustomerUpdates();
       return;
     }
-    const record = readRecords("boardingDog").find((item) => item.id === sourceId);
+    const record = boardingDogRecordForDisplay(sourceId) || readRecords("boardingDog").find((item) => item.id === sourceId);
     if (record) {
+      const tabName = notification.eventName === "customerStayUpdateSent" ? "Customer Update" : "Dog Info";
       switchPage("boardingDogsPage");
-      openBoardingDog(record);
+      openBoardingDogToTab(record, tabName);
       return;
     }
   }
@@ -13331,13 +13587,15 @@ function initEvents() {
     }
     const ownerUpdateCard = event.target.closest('[data-action="view-owner-update"]');
     if (ownerUpdateCard) {
-      openOwnerUpdateAlert(ownerUpdateCard.dataset.id);
+      openOwnerUpdateAlert(ownerUpdateCard.dataset.id, boardingStayReferenceFromAction(ownerUpdateCard));
       return;
     }
     const stayServiceCard = event.target.closest('[data-action="complete-stay-service"]');
     if (stayServiceCard) {
       const dog = boardingDogRecordForDisplay(stayServiceCard.dataset.dogId || stayServiceCard.dataset.id);
-      await updateBoardingStayServiceTaskStatus(dog || {}, boardingStayReferenceFromAction(stayServiceCard), stayServiceCard.dataset.taskId || "", "completed", stayServiceCard.dataset.taskKey || "");
+      const reference = boardingStayReferenceFromAction(stayServiceCard);
+      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, stayServiceCard.dataset.taskId || "", "completed", stayServiceCard.dataset.taskKey || "");
+      if (updated) showStayServiceCompletionConfirmation(updated, reference, stayServiceCard.dataset.taskId || "", stayServiceCard.dataset.taskKey || "", dashboardAlertFilter);
       return;
     }
     const card = event.target.closest('[data-action="view-alert"]');
@@ -13583,8 +13841,13 @@ function initEvents() {
     const paymentMethodForm = event.target.closest("#paymentMethodForm");
     const urgentAlertForm = event.target.closest("#urgentAlertForm");
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !operationDateOverrideForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm) return;
+    const boardingRequestFilterForm = event.target.closest("#boardingRequestFilterForm");
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !operationDateOverrideForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm && !boardingRequestFilterForm) return;
     event.preventDefault();
+    if (boardingRequestFilterForm) {
+      saveBoardingRequestFilterFromForm(boardingRequestFilterForm);
+      return;
+    }
     if (urgentAlertForm) {
       const notification = await sendUrgentAlertFromForm(urgentAlertForm);
       if (notification) showDetailDialog("Alert Sent", `<p>The urgent alert was sent to ${escapeHtml((notification.audienceEmails || []).length)} recipient${(notification.audienceEmails || []).length === 1 ? "" : "s"}.</p>`);
@@ -13804,6 +14067,14 @@ function initEvents() {
       openDashboardAlertPopup(action.dataset.alertFilter || "All");
       return;
     }
+    if (action.dataset.action === "clear-boarding-request-filter") {
+      writeBoardingRequestStatusFilter([]);
+      syncBoardingRequestFilterUi([]);
+      renderBoardingRequests();
+      $("#detailDialog").close();
+      showToast("Showing all boarding requests.");
+      return;
+    }
     if (action.dataset.action === "dashboard-quick-care") {
       openDashboardQuickCare(action.dataset.dogId, action.dataset.careType);
       return;
@@ -13817,7 +14088,7 @@ function initEvents() {
       return;
     }
     if (action.dataset.action === "view-owner-update") {
-      openOwnerUpdateAlert(action.dataset.id);
+      openOwnerUpdateAlert(action.dataset.id, boardingStayReferenceFromAction(action));
       return;
     }
     if (action.dataset.action === "view-alert") {
@@ -13902,7 +14173,7 @@ function initEvents() {
       const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
       const alertFilter = action.closest("[data-dashboard-alert-popup]")?.dataset.dashboardAlertPopup || "";
       const updated = await updateBoardingStayServiceTaskStatus(dog || {}, boardingStayReferenceFromAction(action), action.dataset.taskId || "", "completed", action.dataset.taskKey || "");
-      if (updated && alertFilter) openDashboardAlertPopup(alertFilter);
+      if (updated) showStayServiceCompletionConfirmation(updated, boardingStayReferenceFromAction(action), action.dataset.taskId || "", action.dataset.taskKey || "", alertFilter);
       return;
     }
     if (action.dataset.action === "confirm-ready-for-pickup") {
@@ -13978,7 +14249,7 @@ function initEvents() {
       if (!dog) return;
       $("#detailDialog").close();
       switchPage("boardingDogsPage");
-      openBoardingDogToTab(dog, "Dog Info");
+      openBoardingDogToTab(dog, action.dataset.tab || "Dog Info");
       return;
     }
     if (action.dataset.action === "confirm-remove-task-tab") {
@@ -14026,8 +14297,7 @@ function initEvents() {
       if (dog) {
         $("#detailDialog").close();
         switchPage("boardingDogsPage");
-        openBoardingDog(dog);
-        setBoardingFormLocked(false);
+        openBoardingDogToTab(dog, action.dataset.tab || "Dog Info");
       }
     }
     if (action.dataset.action === "popup-set-password") await adminSetTemporaryPassword(action.closest("form"), action);
@@ -14137,7 +14407,7 @@ function initEvents() {
       if (!dog) return;
       $("#detailDialog").close();
       switchPage("boardingDogsPage");
-      openBoardingDogToTab(dog, "Dog Info");
+      openBoardingDogToTab(dog, action.dataset.tab || "Dog Info");
       showToast("Boarding dog profile opened.");
       return;
     }
@@ -14194,6 +14464,34 @@ function initEvents() {
     const button = event.target.closest("[data-task-tab]");
     if (!button) return;
     setDailyTaskTab(button.dataset.taskTab);
+  });
+  $("#dailyTaskTabs")?.addEventListener("dragstart", (event) => {
+    const button = event.target.closest('[data-task-tab][draggable="true"]');
+    if (!button || !adminTaskTabDragEnabled()) return;
+    button.classList.add("is-dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", button.dataset.taskTab || "");
+  });
+  $("#dailyTaskTabs")?.addEventListener("dragover", (event) => {
+    const button = event.target.closest('[data-task-tab][draggable="true"]');
+    if (!button || !adminTaskTabDragEnabled()) return;
+    event.preventDefault();
+    button.classList.add("is-drag-over");
+  });
+  $("#dailyTaskTabs")?.addEventListener("dragleave", (event) => {
+    const button = event.target.closest("[data-task-tab]");
+    if (button) button.classList.remove("is-drag-over");
+  });
+  $("#dailyTaskTabs")?.addEventListener("drop", async (event) => {
+    const target = event.target.closest('[data-task-tab][draggable="true"]');
+    if (!target || !adminTaskTabDragEnabled()) return;
+    event.preventDefault();
+    const sourceId = event.dataTransfer.getData("text/plain");
+    target.classList.remove("is-drag-over");
+    await reorderTaskTabByDrag(sourceId, target.dataset.taskTab || "");
+  });
+  $("#dailyTaskTabs")?.addEventListener("dragend", () => {
+    $$("#dailyTaskTabs [data-task-tab]").forEach((button) => button.classList.remove("is-dragging", "is-drag-over"));
   });
   $("#customTaskPanels")?.addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="add-custom-tab-task"]');
@@ -14721,7 +15019,9 @@ function initEvents() {
     if (!row || row.dataset.source !== "boardingDog") return;
     openBoardingDog(boardingDogRecordForDisplay(row.dataset.id));
   });
-  $("#boardingRequestStatusFilter").addEventListener("change", renderBoardingRequests);
+  $("#boardingRequestFilterButton")?.addEventListener("click", () => {
+    showDetailDialog("Filter Boarding Requests", boardingRequestFilterPopupHtml());
+  });
   $("#boardingRequestRecords").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     const action = button?.dataset.action;
@@ -14978,14 +15278,18 @@ function initEvents() {
     }
     openBoardingStayPopup(dog);
   });
-  $("#boardingStayHistory").addEventListener("click", (event) => {
-    const button = event.target.closest('[data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"]');
+  $("#boardingStayHistory").addEventListener("click", async (event) => {
+    const button = event.target.closest('[data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"], [data-action="complete-stay-service"]');
     if (!button) return;
     const dog = activeBoardingDog();
     const reference = boardingStayReferenceFromAction(button);
     if (button.dataset.action === "change-stay-status") openBoardingStayStatusMenu(dog, reference);
     if (button.dataset.action === "edit-stay") openBoardingStayPopup(dog, reference);
     if (button.dataset.action === "remove-stay") openBoardingStayRemoveConfirm(dog, reference);
+    if (button.dataset.action === "complete-stay-service") {
+      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, button.dataset.taskId || "", "completed", button.dataset.taskKey || "");
+      if (updated) showStayServiceCompletionConfirmation(updated, reference, button.dataset.taskId || "", button.dataset.taskKey || "");
+    }
   });
 
   $("#requestForm").addEventListener("submit", async (event) => {
