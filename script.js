@@ -12648,7 +12648,7 @@ async function notifyIfNeeded(record = {}, eventName = "") {
     const emailSkipped = Boolean(data?.emailResult?.skipped);
     const smsRequested = (config.channels || []).some((channel) => String(channel).toLowerCase() === "sms");
     const smsSkipped = Boolean(data?.smsResult?.skipped);
-    const deliveryStatus = emailSkipped && (!smsRequested || smsSkipped) ? "skipped" : "sent";
+    const deliveryStatus = emailSkipped ? (smsRequested && !smsSkipped ? "sms sent; email skipped" : "skipped") : "sent";
     const updated = upsertRecord("notificationLog", {
       ...notification,
       deliveryStatus,

@@ -438,7 +438,7 @@ Deno.serve(async (req) => {
   const smsResult = content.sms ? await sendSms(`${content.subject}: ${String(sourceRecord.dogName || sourceRecord.location || sourceRecord.category || "")}. ${appUrl()}`) : { skipped: true };
   const emailSkipped = Boolean((emailResult as Record<string, unknown>)?.skipped);
   const smsSkipped = Boolean((smsResult as Record<string, unknown>)?.skipped);
-  const deliveryStatus = emailSkipped && (!content.sms || smsSkipped) ? "skipped" : "sent";
+  const deliveryStatus = emailSkipped ? (content.sms && !smsSkipped ? "sms sent; email skipped" : "skipped") : "sent";
 
   if (body.notificationId) {
     const existingPayload = notificationPayload;
