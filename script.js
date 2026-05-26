@@ -10451,6 +10451,12 @@ function urgentAlertPopupHtml(target = "staff") {
     <form id="urgentAlertForm" class="tracker-form" data-alert-target="${escapeHtml(target)}" data-alert-panel="compose">
       <section class="alert-popup-panel" data-alert-panel="compose">
         <article class="record-card compact-record-card"><strong>Recipients</strong><p>${escapeHtml(recipientText)}</p></article>
+        ${recipients.length ? `<section class="alert-checkbox-group"><h3>Send To</h3>${recipients.map((user) => {
+          const email = user.email || "";
+          const label = user.name || email || "Recipient";
+          const detail = user.name && email ? ` <small>${escapeHtml(email)}</small>` : "";
+          return `<label class="inline-check"><input type="checkbox" name="alertRecipientEmails" value="${escapeHtml(email)}" checked /> ${escapeHtml(label)}${detail}</label>`;
+        }).join("")}</section>` : ""}
         <label>${escapeHtml(label)} alert message<textarea name="message" rows="5" required placeholder="Type the urgent alert message here"></textarea></label>
         <div class="button-row"><button type="submit" ${recipients.length ? "" : "disabled"}>Send Alert</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
       </section>
@@ -10469,9 +10475,13 @@ async function sendUrgentAlertFromForm(formEl) {
   if (!validateForm(formEl)) return null;
   const target = formEl.dataset.alertTarget || "staff";
   const eventName = urgentAlertEventName(target);
-  const recipients = urgentAlertAudienceUsers(target);
+  const selectedEmails = [...formEl.querySelectorAll('input[name="alertRecipientEmails"]:checked')]
+    .map((input) => normalizeEmail(input.value))
+    .filter(Boolean);
+  const recipients = urgentAlertAudienceUsers(target)
+    .filter((user) => selectedEmails.includes(normalizeEmail(user.email)));
   if (!recipients.length) {
-    showToast("No matching recipients are available for this alert.");
+    showToast("Choose at least one recipient for this alert.");
     return null;
   }
   const message = formEl.elements.message.value.trim();
@@ -10485,6 +10495,14 @@ async function sendUrgentAlertFromForm(formEl) {
     message,
     audienceEmails: recipients.map((user) => user.email).filter(Boolean),
   };
+  if (supabaseClient && !localTestMode) {
+    try {
+      await sendPayload(sourceRecord);
+    } catch (error) {
+      showToast(`Alert source could not be saved: ${error.message}`);
+      return null;
+    }
+  }
   const notification = await notifyIfNeeded(sourceRecord, eventName);
   await addAuditLog(`Sent urgent ${target} alert`, "notificationLog", notification || sourceRecord, `${recipients.length} recipient${recipients.length === 1 ? "" : "s"}`);
   renderSettingsAlerts();
@@ -12540,7 +12558,6 @@ function notificationEventConfig(eventName = "", record = {}) {
       priority: "urgent",
       channels: ["email", "sms", "inApp"],
       audienceEmails: record.audienceEmails || [],
-      audienceRoles: ["admin", "helper"],
     },
     urgentCustomerAlertSent: {
       title: "Urgent customer alert",
@@ -12548,7 +12565,6 @@ function notificationEventConfig(eventName = "", record = {}) {
       priority: "urgent",
       channels: ["email", "inApp"],
       audienceEmails: record.audienceEmails || [],
-      audienceRoles: ["customer"],
     },
     customerStayUpdateSent: {
       title: `Stay update: ${record.dogName || "Customer dog"}`,
@@ -12625,11 +12641,21 @@ async function notifyIfNeeded(record = {}, eventName = "") {
     console.warn("Could not save notification before delivery.", error);
   }
   try {
-    const { error } = await supabaseClient.functions.invoke("send-notification", {
+    const { data, error } = await supabaseClient.functions.invoke("send-notification", {
       body: { eventName, recordId: record.id, notificationId: notification.id },
     });
     if (error) throw error;
-    const updated = upsertRecord("notificationLog", { ...notification, deliveryStatus: "sent" });
+    const emailSkipped = Boolean(data?.emailResult?.skipped);
+    const smsRequested = (config.channels || []).some((channel) => String(channel).toLowerCase() === "sms");
+    const smsSkipped = Boolean(data?.smsResult?.skipped);
+    const deliveryStatus = emailSkipped && (!smsRequested || smsSkipped) ? "skipped" : "sent";
+    const updated = upsertRecord("notificationLog", {
+      ...notification,
+      deliveryStatus,
+      emailResult: data?.emailResult || "",
+      smsResult: data?.smsResult || "",
+      sentAt: new Date().toISOString(),
+    });
     if (["admin", "helper"].includes(currentRole())) await sendPayload(updated);
     renderNotifications();
     return updated;
