@@ -4373,17 +4373,23 @@ function boardingStayRequestUnit(value = {}) {
   return item.unit || serviceCatalogMatchForRequest(value)?.unit || "";
 }
 
-function boardingStayRequestDisplayText(value = {}) {
-  const label = boardingStayRequestLabel(value);
+function customerFacingBoardingStayRequestLabel(value = {}, quantity = 1) {
+  const service = serviceCatalogMatchForRequest(value) || (value && typeof value === "object" ? value : {});
+  if (!customerServiceIsPremiumStayUpgrade(service)) return boardingStayRequestLabel(value);
+  return `${customerServiceDisplayName(service)}${quantity > 1 ? ` x${quantity}` : ""} requested`;
+}
+
+function boardingStayRequestDisplayText(value = {}, options = {}) {
   const quantity = boardingServiceTaskQuantity(value);
+  const label = options.customerFacing ? customerFacingBoardingStayRequestLabel(value, quantity) : boardingStayRequestLabel(value);
   const unitPrice = boardingStayRequestUnitPrice(value);
   const unit = boardingStayRequestUnit(value);
   const priceText = unitPrice ? ` - ${money(unitPrice * quantity)}${unit ? ` ${unit}` : ""}` : "";
   return `${label}${priceText}`;
 }
 
-function boardingStayServicesText(stay = {}) {
-  const requests = arrayValue(stay.requests).map(boardingStayRequestDisplayText).filter(Boolean);
+function boardingStayServicesText(stay = {}, options = {}) {
+  const requests = arrayValue(stay.requests).map((request) => boardingStayRequestDisplayText(request, options)).filter(Boolean);
   return requests.length ? requests.join(", ") : "No service requests";
 }
 
@@ -4982,7 +4988,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
   return `<article class="record-card ${options.compact ? "compact-record-card" : ""}">
     <strong>${escapeHtml(formatDateTime(stay.dropoffTime) || "Requested stay")}${stay.pickupTime ? ` to ${escapeHtml(formatDateTime(stay.pickupTime))}` : ""}</strong>
     <div class="chip-row">${requestCode}${statusChip}${boardingStayServiceFlagHtml(record, stay)}</div>
-    <p>${escapeHtml(boardingStayServicesText(stay))}</p>
+    <p>${escapeHtml(boardingStayServicesText(stay, { customerFacing: isCustomer }))}</p>
     ${options.showServiceTasks ? boardingStayServiceTaskListHtml(record, stay, { actions: options.serviceActions }) : ""}
     ${stay.bathPlan ? `<p>${escapeHtml(stay.bathPlan)}</p>` : ""}
     ${stay.stayNotes ? `<p>${escapeHtml(stay.stayNotes)}</p>` : ""}
@@ -11926,7 +11932,7 @@ function renderCustomerRequests() {
         .map((record) => {
           const stay = record.stay || {};
           record = record.record || record;
-          const services = boardingStayServicesText(stay);
+          const services = boardingStayServicesText(stay, { customerFacing: true });
           const total = boardingStayInvoiceTotal(record, stay);
           const estimate = total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : "";
           const status = boardingStayDisplayStatus(record, stay);
@@ -11981,6 +11987,22 @@ function customerRequestTimelineHtml(status = "Pending") {
   return `<div class="request-timeline"><span class="${className}">${escapeHtml(customerRequestStatusLabel(normalized))}</span></div>`;
 }
 
+const CUSTOMER_PREMIUM_STAY_UPGRADE_LABEL = "Upgrade Stay";
+const CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION = "Upgrade your dog's stay with a spacious glass-front suite, larger play yards, and extra enrichment featuring obstacle courses and interactive activities.";
+
+function customerServiceIsPremiumStayUpgrade(service = {}) {
+  return normalizedServiceLookupText(service.serviceName || service.name || "") === "premium overnight boarding kennel";
+}
+
+function customerServiceDisplayName(service = {}) {
+  if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_LABEL;
+  return service.serviceName || service.name || "Service";
+}
+
+function customerServiceInfoText(service = {}) {
+  return customerServiceIsPremiumStayUpgrade(service) ? CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION : "";
+}
+
 function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
   const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
@@ -11990,7 +12012,10 @@ function renderCustomerServiceOptions() {
     ? services.map((service) => {
         const checked = checkedIds.has(service.id);
         const quantityValue = formFieldByName($("#customerBookingForm"), `serviceQuantity-${service.id}`)?.value || "1";
-        return `<label class="service-option"><span><input type="checkbox" name="customerServices" value="${service.id}" ${checked ? "checked" : ""} /> ${escapeHtml(service.serviceName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span><input class="service-quantity" type="number" name="serviceQuantity-${service.id}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(service.serviceName)} quantity" /></label>`;
+        const displayName = customerServiceDisplayName(service);
+        const infoText = customerServiceInfoText(service);
+        const infoIcon = infoText ? `<span class="service-info-icon" tabindex="0" aria-label="${escapeHtml(infoText)}" title="${escapeHtml(infoText)}" data-tooltip="${escapeHtml(infoText)}">(i)</span>` : "";
+        return `<label class="service-option"><span class="service-option-label"><input type="checkbox" name="customerServices" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-${escapeHtml(service.id)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity" /></label>`;
       }).join("")
     : "<p>No customer services are active yet.</p>";
 }
@@ -12359,7 +12384,7 @@ function updateCustomerEstimate() {
   renderCustomerBookingAvailabilityMessages();
   const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => `<div class="estimate-line"><span>${escapeHtml(line.dogName)} - ${escapeHtml(boardingLineRoleLabel(line.role))}</span><span>${Number(line.days || 0)} x ${money(line.rate)} = ${money(line.total)}</span></div>`).join("");
   $("#customerEstimate").innerHTML = estimate.dogs.length
-    ? `<strong>${escapeHtml(boardingBillingLabel(estimate))}</strong>${boardingLine}${estimate.services.map((service) => `<div class="estimate-line"><span>${escapeHtml(service.serviceName)}</span><span>${estimate.dogs.length} dog(s) x ${Number(service.quantity || 1)} x ${money(service.basePrice)} = ${money(service.lineTotal)}</span></div>`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>`
+    ? `<strong>${escapeHtml(boardingBillingLabel(estimate))}</strong>${boardingLine}${estimate.services.map((service) => `<div class="estimate-line"><span>${escapeHtml(customerServiceDisplayName(service))}</span><span>${estimate.dogs.length} dog(s) x ${Number(service.quantity || 1)} x ${money(service.basePrice)} = ${money(service.lineTotal)}</span></div>`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>`
     : "Select dog(s), dates, and services to see an estimate.";
 }
 
@@ -12378,7 +12403,7 @@ function showBookingConfirmDialog(estimate) {
     return `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}${rateText}</li>`;
   }).join("");
   const serviceList = pendingCustomerBooking.services.length
-    ? pendingCustomerBooking.services.map((service) => `<li>${escapeHtml(service.serviceName)} x${Number(service.quantity || 1)} for ${pendingCustomerBooking.dogs.length} dog(s) - ${money(service.lineTotal)} ${escapeHtml(service.unit || "")}</li>`).join("")
+    ? pendingCustomerBooking.services.map((service) => `<li>${escapeHtml(customerServiceDisplayName(service))} x${Number(service.quantity || 1)} for ${pendingCustomerBooking.dogs.length} dog(s) - ${money(service.lineTotal)} ${escapeHtml(service.unit || "")}</li>`).join("")
     : "<li>No added services selected</li>";
   const availabilityHtml = customerBookingAvailabilityMessagesHtml(customerBookingEstimateAvailabilityChecks(pendingCustomerBooking));
   $("#bookingConfirmBody").innerHTML = `
