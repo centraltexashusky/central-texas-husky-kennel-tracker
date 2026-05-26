@@ -1364,7 +1364,8 @@ function userFromSupabase(supabaseUser) {
   if (!supabaseUser?.email) return null;
   const email = supabaseUser.email.toLowerCase();
   const name = supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || email.split("@")[0];
-  const role = supabaseUser.app_metadata?.role || roleForAccount({ email, key: supabaseUser.id });
+  const saved = savedUserFor({ email, key: supabaseUser.id });
+  const role = saved?.role || supabaseUser.app_metadata?.role || roleForAccount({ email, key: supabaseUser.id });
   return {
     name,
     email,
@@ -2114,7 +2115,16 @@ function upsertRecord(type, payload) {
     const email = normalizeEmail(record.email);
     const sameEmailUsers = records.filter((item) => !item.removed && normalizeEmail(item.email) === email);
     if (sameEmailUsers.length) {
+      const explicitExistingUserEdit = Boolean(record.id && sameEmailUsers.some((item) => item.id === record.id));
+      const requestedRole = record.role || "";
+      const requestedMember = record.isMember;
       record = mergeSettingsUserRecords(sameEmailUsers, record);
+      if (explicitExistingUserEdit && requestedRole) {
+        record.role = requestedRole;
+      }
+      if (explicitExistingUserEdit && Object.prototype.hasOwnProperty.call(payload, "isMember")) {
+        record.isMember = requestedMember === true || requestedMember === "true" || requestedMember === "on";
+      }
       const mergedAt = new Date().toISOString();
       records = records.map((item) => {
         if (item.id === record.id || item.removed || normalizeEmail(item.email) !== email) return item;
@@ -6816,7 +6826,10 @@ function boardingSchedulePopupHtml(record = {}) {
   const staysHtml = (displayRecord.stays || []).length
     ? (displayRecord.stays || []).map((stay) => {
       const requestCode = boardingStayRequestCode(displayRecord, stay);
-      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button><button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button></div></article>`;
+      const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
+        ? `<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button>`
+        : "";
+      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}</div></article>`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
   return `${boardingStayFormHtml(displayRecord)}<section class="popup-record-section"><h3>Boarding stays</h3>${staysHtml}</section>`;
@@ -6831,12 +6844,25 @@ function openBoardingSchedulePopup(record = activeBoardingDog()) {
 }
 
 function ownerUpdateStayForRecord(record = {}, reference = {}) {
-  return boardingStayByReference(record, reference)
-    || activeBoardingStay(record)
-    || currentOrNextStay(record)
-    || (record.stays || []).find((stay) => !["Cancelled", "Checked Out"].includes(boardingStayDisplayStatus(record, stay)))
-    || (record.stays || [])[0]
-    || {};
+  const referencedStay = boardingStayByReference(record, reference);
+  if (ownerUpdateStayIsAvailable(record, referencedStay)) return referencedStay;
+  if (referencedStay?.id) return {};
+  const activeStay = activeBoardingStay(record);
+  if (ownerUpdateStayIsAvailable(record, activeStay)) return activeStay;
+  const currentStay = currentOrNextStay(record);
+  if (ownerUpdateStayIsAvailable(record, currentStay)) return currentStay;
+  return ownerUpdateStaysForRecord(record)[0] || {};
+}
+
+function ownerUpdateStayIsAvailable(record = {}, stay = {}) {
+  if (!stay?.id) return false;
+  return activeBoardingStayStatuses.includes(boardingStayDisplayStatus(record, stay));
+}
+
+function ownerUpdateStaysForRecord(record = {}) {
+  return arrayValue(record.stays)
+    .filter((stay) => ownerUpdateStayIsAvailable(record, stay))
+    .sort((a, b) => new Date(a.pickupTime || a.dropoffTime || 0) - new Date(b.pickupTime || b.dropoffTime || 0));
 }
 
 function customerUpdateForStay(record = {}, stay = {}) {
@@ -6889,6 +6915,10 @@ function openOwnerUpdateAlert(recordId, reference = {}) {
   const record = boardingDogRecordForDisplay(recordId) || readRecords("boardingDog").find((item) => item.id === recordId && !item.removed);
   if (!record) return;
   const stay = ownerUpdateStayForRecord(record, reference);
+  if (!ownerUpdateStayIsAvailable(record, stay)) {
+    showDetailDialog("Owner Update Not Available", `<p>Owner updates can be sent after ${escapeHtml(record.dogName || "this dog")} is checked in, in kennel, or ready for pickup.</p>`);
+    return;
+  }
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const requestCode = stay.id ? boardingStayRequestCode(record, stay) : "";
   showDetailDialog(
@@ -8199,15 +8229,13 @@ function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
   const list = $("#boardingCustomerUpdateList");
   if (!list) return;
   const displayRecord = boardingDogWithStayStatus(record || {});
-  const activeStays = (displayRecord.stays || [])
-    .filter((stay) => !["Cancelled", "Checked Out"].includes(boardingStayDisplayStatus(displayRecord, stay)))
-    .sort((a, b) => new Date(a.pickupTime || a.dropoffTime || 0) - new Date(b.pickupTime || b.dropoffTime || 0));
+  const activeStays = ownerUpdateStaysForRecord(displayRecord);
   const stayCards = activeStays.length
     ? `<section class="popup-record-section"><h3>Owner Updates by Stay</h3>${activeStays.map((stay) => {
         const requestCode = boardingStayRequestCode(displayRecord, stay);
         return `<article class="record-card compact-record-card customer-update-stay-card"><strong>${escapeHtml(displayRecord.dogName || "Boarding dog")}</strong><div class="chip-row">${customerStayIdChipHtml(displayRecord, stay)}${boardingStayStatusChipHtml(displayRecord, stay)}</div><p>${escapeHtml(formatDateTime(stay.dropoffTime))} to ${escapeHtml(formatDateTime(stay.pickupTime))}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id || "")}" data-id="${escapeHtml(stay.id || "")}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button></div></article>`;
       }).join("")}</section>`
-    : `<article class="record-card compact-record-card"><strong>No active stay available.</strong><p>Add or select a boarding stay before sending a customer update.</p></article>`;
+    : `<article class="record-card compact-record-card"><strong>No in-care stay available.</strong><p>Owner updates can be sent after a stay is checked in, in kennel, or ready for pickup.</p></article>`;
   const updates = [...(displayRecord.customerUpdates || [])].sort((a, b) => new Date(b.createdAt || b.submittedAt || 0) - new Date(a.createdAt || a.submittedAt || 0));
   const updateHistory = updates.length
     ? updates.map((update) => {
@@ -8471,6 +8499,10 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
   }
   if (!targetStay?.id) {
     showToast("Choose a stay before sending a customer update.");
+    return null;
+  }
+  if (!ownerUpdateStayIsAvailable(displayRecord, targetStay)) {
+    showToast("Owner updates can only be sent for checked-in, in-kennel, or ready-for-pickup stays.");
     return null;
   }
   if (!note && !input?.files?.length) {
@@ -9073,7 +9105,10 @@ function renderBoardingStays(record = activeBoardingDog()) {
   $("#boardingStayHistory").innerHTML = stays.length
     ? stays.map((stay) => {
       const requestCode = boardingStayRequestCode(displayRecord, stay);
-      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay)}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button><button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button><button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Remove Stay</button></div></article>`;
+      const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
+        ? `<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button>`
+        : "";
+      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay)}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Remove Stay</button></div></article>`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -11367,6 +11402,7 @@ async function saveSettingsUserProfile(extra = {}, formEl = activeSettingsUserFo
   };
   const record = upsertRecord("settingsUser", payload);
   await sendPayload(record);
+  settingsUserTab = settingsUserTabFor(record);
   renderSettingsUsers();
   return record;
 }
@@ -15404,17 +15440,24 @@ function initEvents() {
     openBoardingStayPopup(dog);
   });
   $("#boardingStayHistory").addEventListener("click", async (event) => {
-    const button = event.target.closest('[data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"], [data-action="complete-stay-service"]');
+    const button = event.target.closest('[data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"], [data-action="complete-stay-service"], [data-action="open-owner-update-for-stay"]');
     if (!button) return;
     const dog = activeBoardingDog();
     const reference = boardingStayReferenceFromAction(button);
     if (button.dataset.action === "change-stay-status") openBoardingStayStatusMenu(dog, reference);
     if (button.dataset.action === "edit-stay") openBoardingStayPopup(dog, reference);
     if (button.dataset.action === "remove-stay") openBoardingStayRemoveConfirm(dog, reference);
+    if (button.dataset.action === "open-owner-update-for-stay") openOwnerUpdateAlert(dog?.id || button.dataset.dogId, reference);
     if (button.dataset.action === "complete-stay-service") {
       const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, button.dataset.taskId || "", "completed", button.dataset.taskKey || "");
       if (updated) showStayServiceCompletionConfirmation(updated, reference, button.dataset.taskId || "", button.dataset.taskKey || "");
     }
+  });
+  $("#boardingCustomerUpdateList")?.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="open-owner-update-for-stay"]');
+    if (!button) return;
+    const dog = activeBoardingDog() || boardingDogRecordForDisplay(button.dataset.dogId);
+    openOwnerUpdateAlert(dog?.id || button.dataset.dogId, boardingStayReferenceFromAction(button));
   });
 
   $("#requestForm").addEventListener("submit", async (event) => {
