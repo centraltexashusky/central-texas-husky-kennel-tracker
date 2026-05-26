@@ -272,6 +272,11 @@ const stateKeys = {
   lastPage: "cth-last-page-id",
 };
 
+const BOARDING_MEMBER_PRIMARY_RATE = 45;
+const BOARDING_MEMBER_SHARED_CRATE_RATE = 35;
+const BOARDING_NON_MEMBER_RATE = 65;
+const BOARDING_MAX_DOGS_PER_CRATE = 2;
+
 const defaultServices = [
   { serviceName: "Companion Puppy Placement", category: "Puppy placement", basePrice: "1800", unit: "per puppy", depositAmount: "500", defaultDuration: "", flags: ["Active", "Admin only"], pricingNotes: "Recommended range $1,500-$2,200 for standard companion puppies." },
   { serviceName: "Older Puppy Hold Deposit", category: "Deposit", basePrice: "500", unit: "flat deposit", depositAmount: "500", defaultDuration: "3-7 day hold", flags: ["Active", "Admin only"], pricingNotes: "Lower friction than a 50% reservation while still confirming intent." },
@@ -4390,6 +4395,285 @@ function boardingStayRequestTotal(requests = []) {
   }, 0);
 }
 
+function activeBoardingPricingServices() {
+  return readRecords("service").filter((service) => !service.removed && service.category === "Boarding" && serviceHasFlag(service, "Active"));
+}
+
+function boardingRatePlanForCustomer(user = currentUser) {
+  const isMemberPricing = isMemberUser(user);
+  const activeBoarding = activeBoardingPricingServices();
+  const memberService = activeBoarding.find((service) => serviceHasFlag(service, "Member Pricing"));
+  const nonMemberService = activeBoarding.find((service) => !serviceHasFlag(service, "Member Pricing"));
+  const memberPrimaryRate = Number(memberService?.basePrice || BOARDING_MEMBER_PRIMARY_RATE);
+  const nonMemberRate = Number(nonMemberService?.basePrice || BOARDING_NON_MEMBER_RATE);
+  return {
+    isMemberPricing,
+    primaryRate: isMemberPricing ? memberPrimaryRate : nonMemberRate,
+    sharedCrateRate: isMemberPricing ? BOARDING_MEMBER_SHARED_CRATE_RATE : nonMemberRate,
+    nonMemberRate,
+    maxDogsPerCrate: BOARDING_MAX_DOGS_PER_CRATE,
+  };
+}
+
+function boardingRatePlanForRecord(record = {}) {
+  const owner = ownerAccountForBoarding(record) || savedUserFor({ email: record.ownerEmail || record.customerEmail }) || {};
+  return boardingRatePlanForCustomer(owner);
+}
+
+function boardingPricingDogKey(dog = {}) {
+  return customerBookingSelectionKey(dog)
+    || dog.id
+    || dog.linkedCustomerDogId
+    || dog.sourceBoardingDogId
+    || boardingDogIdentityKey(dog)
+    || normalizedDogIdentityName(dog);
+}
+
+function boardingLineRoleLabel(role = "") {
+  if (role === "shared-crate-additional") return "Shared crate dog";
+  if (role === "non-member") return "Non-member boarding";
+  return "Primary crate dog";
+}
+
+function customerSharedCrateRequested() {
+  const checkbox = $("#customerSharedCrateRequested");
+  return Boolean(checkbox && checkbox.checked);
+}
+
+function boardingDogPricingLines(dogs = [], options = {}) {
+  const ratePlan = options.ratePlan || boardingRatePlanForCustomer();
+  const days = Number(options.days || 0);
+  const isServiceRequest = Boolean(options.isServiceRequest);
+  const sharedCrateRequested = Boolean(options.sharedCrateRequested && ratePlan.isMemberPricing);
+  return uniqueCustomerBookingDogs(dogs).map((dog, index) => {
+    const pairIndex = Math.floor(index / ratePlan.maxDogsPerCrate);
+    const position = index % ratePlan.maxDogsPerCrate;
+    const sharedGroup = sharedCrateRequested && position > 0;
+    const role = ratePlan.isMemberPricing
+      ? sharedGroup ? "shared-crate-additional" : "primary"
+      : "non-member";
+    const rate = isServiceRequest ? 0 : sharedGroup ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
+    return {
+      dogKey: boardingPricingDogKey(dog),
+      dogId: dog.id || "",
+      dogName: dog.dogName || "Dog",
+      crateGroupId: sharedCrateRequested ? `crate-${pairIndex + 1}` : `solo-${boardingPricingDogKey(dog) || index}`,
+      crateGroupPosition: sharedCrateRequested ? position + 1 : 1,
+      role,
+      rate,
+      days,
+      total: isServiceRequest ? 0 : days * rate,
+      sharedCrateRequested,
+    };
+  });
+}
+
+function normalizeInvoiceAdjustments(adjustments = []) {
+  return arrayValue(adjustments)
+    .map((adjustment) => {
+      const type = adjustment.type === "discount" ? "discount" : "charge";
+      return {
+        ...adjustment,
+        type,
+        label: adjustment.label || (type === "discount" ? "Discount" : "Other"),
+        categoryKey: adjustment.categoryKey || (type === "discount" ? "discount" : "other"),
+        amount: Math.max(0, Number(adjustment.amount || 0)),
+        reason: String(adjustment.reason || adjustment.note || "").trim(),
+        visibleToCustomer: adjustment.visibleToCustomer !== false,
+      };
+    })
+    .filter((adjustment) => adjustment.amount > 0);
+}
+
+function invoiceAdjustmentSignedAmount(adjustment = {}) {
+  const amount = Math.max(0, Number(adjustment.amount || 0));
+  return adjustment.type === "discount" ? -amount : amount;
+}
+
+function invoiceAdjustmentsTotal(adjustments = []) {
+  return normalizeInvoiceAdjustments(adjustments).reduce((total, adjustment) => total + invoiceAdjustmentSignedAmount(adjustment), 0);
+}
+
+function invoiceAdjustmentByKey(adjustments = [], key = "") {
+  return normalizeInvoiceAdjustments(adjustments).find((adjustment) => adjustment.categoryKey === key) || {};
+}
+
+function invoiceAdjustmentFormChecks(formEl) {
+  const otherAmount = Number(formEl.elements.otherChargeAmount?.value || 0);
+  const discountAmount = Number(formEl.elements.discountAmount?.value || 0);
+  const otherReason = String(formEl.elements.otherChargeReason?.value || "").trim();
+  const discountReason = String(formEl.elements.discountReason?.value || "").trim();
+  return [
+    {
+      field: formEl.elements.otherChargeReason,
+      message: "Enter a reason for the Other charge.",
+      valid: !otherAmount || Boolean(otherReason),
+    },
+    {
+      field: formEl.elements.discountReason,
+      message: "Enter a reason for the Discount.",
+      valid: !discountAmount || Boolean(discountReason),
+    },
+  ].filter((check) => check.field);
+}
+
+function invoiceAdjustmentsFromStayForm(formEl, existingStay = {}, timestamp = new Date().toISOString()) {
+  const existing = normalizeInvoiceAdjustments(existingStay.invoiceAdjustments);
+  const preserved = existing.filter((adjustment) => !["other", "discount"].includes(adjustment.categoryKey));
+  const existingOther = invoiceAdjustmentByKey(existing, "other");
+  const existingDiscount = invoiceAdjustmentByKey(existing, "discount");
+  const actorName = currentUser?.name || helperName?.value || "Staff";
+  const actorEmail = currentUser?.email || helperEmail?.value || "";
+  const makeAdjustment = (type, amount, reason, previous = {}) => {
+    if (!amount) return null;
+    return {
+      ...previous,
+      id: previous.id || uid("invoiceAdjustment"),
+      type,
+      categoryKey: type === "discount" ? "discount" : "other",
+      label: type === "discount" ? "Discount" : "Other",
+      amount: Math.max(0, Number(amount || 0)),
+      reason: String(reason || "").trim(),
+      visibleToCustomer: true,
+      createdAt: previous.createdAt || timestamp,
+      createdByName: previous.createdByName || actorName,
+      createdByEmail: previous.createdByEmail || actorEmail,
+      updatedAt: timestamp,
+      updatedByName: actorName,
+      updatedByEmail: actorEmail,
+    };
+  };
+  return [
+    ...preserved,
+    makeAdjustment("charge", Number(formEl.elements.otherChargeAmount?.value || 0), formEl.elements.otherChargeReason?.value || "", existingOther),
+    makeAdjustment("discount", Number(formEl.elements.discountAmount?.value || 0), formEl.elements.discountReason?.value || "", existingDiscount),
+  ].filter(Boolean);
+}
+
+function invoiceAdjustmentEventChanges(previous = [], next = [], timestamp = new Date().toISOString()) {
+  const oldByKey = new Map(normalizeInvoiceAdjustments(previous).map((adjustment) => [adjustment.categoryKey || adjustment.id, adjustment]));
+  const nextByKey = new Map(normalizeInvoiceAdjustments(next).map((adjustment) => [adjustment.categoryKey || adjustment.id, adjustment]));
+  const actorName = currentUser?.name || helperName?.value || "Staff";
+  const actorEmail = currentUser?.email || helperEmail?.value || "";
+  const events = [];
+  nextByKey.forEach((adjustment, key) => {
+    const old = oldByKey.get(key);
+    const changed = old && (Number(old.amount || 0) !== Number(adjustment.amount || 0) || String(old.reason || "") !== String(adjustment.reason || ""));
+    if (!old || changed) {
+      events.push({
+        id: uid("invoiceEvent"),
+        action: old ? `updated-${adjustment.type}` : `added-${adjustment.type}`,
+        adjustmentId: adjustment.id || "",
+        label: adjustment.label || "",
+        amount: adjustment.amount,
+        reason: adjustment.reason,
+        at: timestamp,
+        by: actorName,
+        byEmail: actorEmail,
+      });
+    }
+  });
+  oldByKey.forEach((adjustment, key) => {
+    if (nextByKey.has(key)) return;
+    events.push({
+      id: uid("invoiceEvent"),
+      action: `removed-${adjustment.type}`,
+      adjustmentId: adjustment.id || "",
+      label: adjustment.label || "",
+      amount: adjustment.amount,
+      reason: adjustment.reason,
+      at: timestamp,
+      by: actorName,
+      byEmail: actorEmail,
+    });
+  });
+  return events;
+}
+
+function invoiceAdjustmentsChanged(previous = [], next = []) {
+  const stable = (adjustments) => normalizeInvoiceAdjustments(adjustments)
+    .map((adjustment) => [adjustment.categoryKey, adjustment.type, Number(adjustment.amount || 0), adjustment.reason])
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+  return JSON.stringify(stable(previous)) !== JSON.stringify(stable(next));
+}
+
+function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
+  const ratePlan = options.ratePlan || boardingRatePlanForRecord(record);
+  const stayType = options.stayType || stay.stayType || record.stayType || "Boarding";
+  const isServiceRequest = stayType === "Service Request";
+  const days = isServiceRequest ? 0 : boardingDays(stay.dropoffTime, stay.pickupTime);
+  const priorRole = stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.role || "";
+  const role = options.currentDogRole || priorRole || (ratePlan.isMemberPricing ? "primary" : "non-member");
+  const rate = isServiceRequest ? 0 : ratePlan.isMemberPricing && role === "shared-crate-additional" ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
+  const requests = options.requests || stay.requests || [];
+  const adjustments = normalizeInvoiceAdjustments(options.invoiceAdjustments || stay.invoiceAdjustments || []);
+  const boardingSubtotal = isServiceRequest ? 0 : days * rate;
+  const serviceSubtotal = boardingStayRequestTotal(requests);
+  const adjustmentsTotal = invoiceAdjustmentsTotal(adjustments);
+  const total = Math.max(0, boardingSubtotal + serviceSubtotal + adjustmentsTotal);
+  return {
+    version: "boarding-rate-v1",
+    billingUnit: "boarding day/night",
+    billingDays: days,
+    isMemberPricing: ratePlan.isMemberPricing,
+    maxDogsPerCrate: ratePlan.maxDogsPerCrate,
+    currentDogKey: options.currentDogKey || stay.pricingSnapshot?.currentDogKey || record.id || "",
+    currentDogName: options.currentDogName || stay.pricingSnapshot?.currentDogName || record.dogName || "",
+    currentDogRole: role,
+    currentDogRate: rate,
+    sharedCrateRequested: Boolean(options.sharedCrateRequested || stay.pricingSnapshot?.sharedCrateRequested),
+    crateGroupId: options.crateGroupId || stay.pricingSnapshot?.crateGroupId || "",
+    boardingSubtotal,
+    serviceSubtotal,
+    adjustmentsTotal,
+    total,
+    groupBoardingSubtotal: options.groupBoardingSubtotal ?? stay.pricingSnapshot?.groupBoardingSubtotal ?? boardingSubtotal,
+    groupServiceSubtotal: options.groupServiceSubtotal ?? stay.pricingSnapshot?.groupServiceSubtotal ?? serviceSubtotal,
+    groupTotal: options.groupTotal ?? stay.pricingSnapshot?.groupTotal ?? total,
+    lineItems: [
+      ...(boardingSubtotal ? [{ type: "boarding", label: boardingLineRoleLabel(role), quantity: days, unitPrice: rate, amount: boardingSubtotal }] : []),
+      ...arrayValue(requests).map((request) => ({
+        type: "service",
+        label: boardingServiceTaskDisplayName(request),
+        quantity: boardingServiceTaskQuantity(request),
+        unitPrice: boardingStayRequestUnitPrice(request),
+        amount: boardingStayRequestUnitPrice(request) * boardingServiceTaskQuantity(request),
+      })),
+      ...adjustments.map((adjustment) => ({
+        type: adjustment.type,
+        label: adjustment.label,
+        amount: invoiceAdjustmentSignedAmount(adjustment),
+        reason: adjustment.reason,
+      })),
+    ],
+  };
+}
+
+function boardingStayInvoiceTotal(record = {}, stay = {}) {
+  if (stay.pricingSnapshot?.total !== undefined) return Number(stay.pricingSnapshot.total || 0);
+  if (stay.estimatedTotal !== undefined && stay.estimatedTotal !== "") return Number(stay.estimatedTotal || 0);
+  if (record.finalInvoiceTotal !== undefined && record.finalInvoiceTotal !== "") return Number(record.finalInvoiceTotal || 0);
+  return Number(record.estimatedTotal || 0);
+}
+
+function boardingStayInvoiceSummaryHtml(record = {}, stay = {}, options = {}) {
+  const hasSnapshot = Boolean(stay.pricingSnapshot?.version || stay.pricingSnapshot?.lineItems);
+  const snapshot = hasSnapshot ? stay.pricingSnapshot : {};
+  const adjustments = normalizeInvoiceAdjustments(stay.invoiceAdjustments);
+  const lines = hasSnapshot ? arrayValue(snapshot.lineItems).filter((line) => Number(line.amount || 0)) : [];
+  const customerAdjustments = adjustments.filter((adjustment) => adjustment.visibleToCustomer !== false);
+  const adjustmentLines = customerAdjustments
+    .map((adjustment) => `<div class="estimate-line"><span>${escapeHtml(adjustment.label)}${adjustment.reason ? `: ${escapeHtml(adjustment.reason)}` : ""}</span><span>${money(invoiceAdjustmentSignedAmount(adjustment))}</span></div>`)
+    .join("");
+  if (!lines.length && !adjustmentLines && !boardingStayInvoiceTotal(record, stay)) return "";
+  const lineHtml = lines
+    .filter((line) => !["charge", "discount"].includes(line.type))
+    .map((line) => `<div class="estimate-line"><span>${escapeHtml(line.label || "Invoice item")}</span><span>${line.quantity ? `${escapeHtml(line.quantity)} x ${money(line.unitPrice || 0)} = ` : ""}${money(line.amount || 0)}</span></div>`)
+    .join("");
+  const totalLabel = options.final ? "Final total" : "Estimated total";
+  return `<div class="estimate-box stay-invoice-summary">${lineHtml}${adjustmentLines}<div class="estimate-total"><strong>${totalLabel}</strong><span>${money(boardingStayInvoiceTotal(record, stay))}</span></div></div>`;
+}
+
 function boardingStayHasService(stay = {}, label = "") {
   const normalizedLabel = normalizedServiceLookupText(label);
   return arrayValue(stay.requests).some((request) => {
@@ -4694,7 +4978,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
   const isCustomer = Boolean(options.customer);
   const statusChip = isCustomer ? customerRequestStayStatusChipHtml(record, stay) : boardingStayStatusChipHtml(record, stay);
   const requestCode = stay.id ? (isCustomer ? customerStayIdChipHtml(record, stay) : boardingStayRequestCodeChipHtml(record, stay)) : "";
-  const total = stay.estimatedTotal || record.estimatedTotal || 0;
+  const invoiceSummary = options.hideInvoiceSummary ? "" : boardingStayInvoiceSummaryHtml(record, stay);
   return `<article class="record-card ${options.compact ? "compact-record-card" : ""}">
     <strong>${escapeHtml(formatDateTime(stay.dropoffTime) || "Requested stay")}${stay.pickupTime ? ` to ${escapeHtml(formatDateTime(stay.pickupTime))}` : ""}</strong>
     <div class="chip-row">${requestCode}${statusChip}${boardingStayServiceFlagHtml(record, stay)}</div>
@@ -4702,7 +4986,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
     ${options.showServiceTasks ? boardingStayServiceTaskListHtml(record, stay, { actions: options.serviceActions }) : ""}
     ${stay.bathPlan ? `<p>${escapeHtml(stay.bathPlan)}</p>` : ""}
     ${stay.stayNotes ? `<p>${escapeHtml(stay.stayNotes)}</p>` : ""}
-    ${total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : ""}
+    ${invoiceSummary}
   </article>`;
 }
 
@@ -6611,7 +6895,7 @@ function openReadyForPickupReview(record = {}, options = {}) {
 
 function boardingInvoiceTotal(record = {}, stayOverride = null) {
   const stay = stayOverride || activeBoardingStay(record) || currentOrNextStay(record) || (record.stays || [])[0] || {};
-  return Number(record.finalInvoiceTotal || record.estimatedTotal || stay.estimatedTotal || 0);
+  return boardingStayInvoiceTotal(record, stay);
 }
 
 function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
@@ -6626,9 +6910,9 @@ function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
       <p>${escapeHtml(record.ownerName || "No owner saved")} | ${escapeHtml(record.ownerPhone || "No phone saved")}</p>
       <p>Status: ${escapeHtml(paymentStatus)}${record.paymentMethod ? ` by ${escapeHtml(record.paymentMethod)}` : ""}</p>
     </article>
-    ${stay.id ? boardingStayDetailCardHtml(record, stay, { compact: true }) : ""}
+    ${stay.id ? boardingStayDetailCardHtml(record, stay, { compact: true, hideInvoiceSummary: true }) : ""}
     <article class="record-card compact-record-card"><strong>Services</strong><p>${escapeHtml(services.length ? services.join(", ") : "No services listed")}</p></article>
-    <article class="record-card compact-record-card"><strong>Total</strong><p>${escapeHtml(total ? money(total) : "No invoice total saved")}</p></article>
+    ${stay.id ? boardingStayInvoiceSummaryHtml(record, stay, { final: true }) : `<article class="record-card compact-record-card"><strong>Total</strong><p>${escapeHtml(total ? money(total) : "No invoice total saved")}</p></article>`}
     <label>Checkout note<textarea id="checkoutNote" rows="3" placeholder="Payment note, pickup person, invoice issue, or checkout detail"></textarea></label>
     <div class="button-row"><button type="button" data-action="checkout-paid-method" data-id="${escapeHtml(record.id)}"${stayAttr}>Paid</button><button type="button" class="secondary-button" data-action="confirm-check-out" data-id="${escapeHtml(record.id)}"${stayAttr}>Check Out</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </section>`;
@@ -6765,12 +7049,22 @@ function selectedStayRequestsFromForm(formEl) {
 }
 
 function boardingStayEstimatedTotal(record = {}, existingStay = {}, selectedRequests = []) {
-  const existingTotal = Number(existingStay.estimatedTotal || 0);
-  const recordTotal = existingStay?.id ? Number(record.estimatedTotal || 0) : 0;
-  const priorServiceTotal = boardingStayRequestTotal(existingStay.requests || []);
-  const baseTotal = Math.max(0, (existingTotal || recordTotal || 0) - priorServiceTotal);
-  const serviceTotal = boardingStayRequestTotal(selectedRequests);
-  return baseTotal + serviceTotal;
+  const snapshot = boardingPricingSnapshotForStay(record, { ...existingStay, requests: selectedRequests });
+  return snapshot.total;
+}
+
+function boardingStayBillingAdjustmentFieldsHtml(stay = {}) {
+  const other = invoiceAdjustmentByKey(stay.invoiceAdjustments, "other");
+  const discount = invoiceAdjustmentByKey(stay.invoiceAdjustments, "discount");
+  return `<section class="popup-record-section billing-adjustment-section">
+    <h3>Billing Adjustments</h3>
+    <div class="field-grid">
+      <label><span class="field-label-text"><span>Other amount</span></span><input type="number" name="otherChargeAmount" min="0" step="0.01" value="${escapeHtml(other.amount || "")}" /></label>
+      <label><span class="field-label-text"><span>Other reason</span></span><input type="text" name="otherChargeReason" value="${escapeHtml(other.reason || "")}" placeholder="Reason shown to the customer" /></label>
+      <label><span class="field-label-text"><span>Discount amount</span></span><input type="number" name="discountAmount" min="0" step="0.01" value="${escapeHtml(discount.amount || "")}" /></label>
+      <label><span class="field-label-text"><span>Discount reason</span></span><input type="text" name="discountReason" value="${escapeHtml(discount.reason || "")}" placeholder="Reason shown to the customer" /></label>
+    </div>
+  </section>`;
 }
 
 function boardingStayLocationFieldsHtml(stay = {}) {
@@ -6816,6 +7110,7 @@ function boardingStayFormHtml(record = {}, stay = {}) {
       </div>
       ${boardingStayLocationFieldsHtml(stay)}
       <div class="checklist compact">${stayRequestCheckboxesHtml(stay)}</div>
+      ${boardingStayBillingAdjustmentFieldsHtml(stay)}
       <label>Stay notes<textarea name="stayNotes" rows="3" placeholder="Owner instructions or pickup grooming notes">${escapeHtml(stay.stayNotes || "")}</textarea></label>
       <div class="button-row"><button type="submit">${isEdit ? "Save Boarding Stay" : "Add Boarding Stay"}</button></div>
     </form>`;
@@ -6829,7 +7124,7 @@ function boardingSchedulePopupHtml(record = {}) {
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? `<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button>`
         : "";
-      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}</div></article>`;
+      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayInvoiceSummaryHtml(displayRecord, stay)}${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}</div></article>`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
   return `${boardingStayFormHtml(displayRecord)}<section class="popup-record-section"><h3>Boarding stays</h3>${staysHtml}</section>`;
@@ -7175,7 +7470,7 @@ async function submitBoardingCheckIn(formEl) {
 }
 
 async function saveBoardingStayFromForm(formEl) {
-  if (!validateForm(formEl)) return null;
+  if (!validateForm(formEl, invoiceAdjustmentFormChecks(formEl))) return null;
   const dog = boardingDogRecordForDisplay(formEl.dataset.dogId) || activeBoardingDog();
   if (!dog) {
     showToast("Save the boarding dog first.");
@@ -7201,10 +7496,20 @@ async function saveBoardingStayFromForm(formEl) {
   const existingStayStatus = normalizeBoardingStatus({ boardingStatus: existingStay?.status || "" });
   const shouldAutoApproveStay = !existingStay || (!dog.customerRequest && existingStayStatus === "Pending");
   const selectedRequests = selectedStayRequestsFromForm(formEl);
-  const estimatedTotal = boardingStayEstimatedTotal(dog, existingStay || {}, selectedRequests);
+  const invoiceAdjustments = invoiceAdjustmentsFromStayForm(formEl, existingStay || {}, timestamp);
+  const adjustmentEvents = invoiceAdjustmentEventChanges(existingStay?.invoiceAdjustments || [], invoiceAdjustments, timestamp);
   const location = payload.kennelLocationId
     ? kennelLocations({ activeOnly: true }).find((item) => item.id === payload.kennelLocationId)
     : null;
+  const draftStay = {
+    ...(existingStay || {}),
+    dropoffTime: payload.dropoffTime,
+    pickupTime: payload.pickupTime,
+    stayType: existingStay?.stayType || "Boarding",
+    requests: selectedRequests,
+    invoiceAdjustments,
+  };
+  const pricingSnapshot = boardingPricingSnapshotForStay(dog, draftStay);
   const stay = {
     ...existingStay,
     id: payload.stayId || uid("stay"),
@@ -7214,9 +7519,14 @@ async function saveBoardingStayFromForm(formEl) {
     status: shouldAutoApproveStay ? "Approved" : existingStay?.status || "Approved",
     dropoffTime: payload.dropoffTime,
     pickupTime: payload.pickupTime,
+    stayType: draftStay.stayType,
+    billingDays: pricingSnapshot.billingDays,
     requests: selectedRequests,
     stayNotes: payload.stayNotes,
-    estimatedTotal,
+    invoiceAdjustments,
+    invoiceEvents: [...arrayValue(existingStay?.invoiceEvents), ...adjustmentEvents],
+    pricingSnapshot,
+    estimatedTotal: pricingSnapshot.total,
     kennelBuilding: location ? location.building : payload.kennelBuilding || "",
     kennelLocationId: location ? location.id : "",
     kennelLocationName: location ? location.name : "",
@@ -7236,6 +7546,13 @@ async function saveBoardingStayFromForm(formEl) {
     : {};
   const record = upsertRecord("boardingDog", { ...dog, ...statusUpdates, stays });
   await sendPayload(record);
+  if (invoiceAdjustmentsChanged(existingStay?.invoiceAdjustments || [], invoiceAdjustments)) {
+    const requestCode = boardingStayRequestCode(record, stay);
+    const details = normalizeInvoiceAdjustments(invoiceAdjustments)
+      .map((adjustment) => `${adjustment.label}: ${money(invoiceAdjustmentSignedAmount(adjustment))} - ${adjustment.reason}`)
+      .join(" | ") || "Adjustments removed";
+    await addAuditLog("Updated stay billing adjustments", "boardingDog", record, `Stay ID: ${requestCode} | ${details}`);
+  }
   if ($("#boardingDogForm")?.elements.id.value === record.id) {
     renderBoardingStays(record);
     renderBoardingHistory(record);
@@ -8096,7 +8413,7 @@ function renderBoardingRequests() {
           const services = boardingStayServicesText(stay);
           const status = entry.status;
           const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
-          const total = stay.estimatedTotal || record.estimatedTotal || 0;
+          const total = boardingStayInvoiceTotal(record, stay);
           const approveAction = status === "Cancelled" ? `<button type="button" class="secondary-button" data-action="approve-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>Approve Request</button>` : "";
           const actions = `<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>Change</button>${approveAction}</div>${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}`;
           return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-id="${escapeHtml(record.id)}"${stayAttr} data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}"${stayAttr}>${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : ""}${actions}</article>`;
@@ -9108,7 +9425,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? `<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button>`
         : "";
-      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay)}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Remove Stay</button></div></article>`;
+      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay)}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayInvoiceSummaryHtml(displayRecord, stay)}${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Remove Stay</button></div></article>`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -9392,7 +9709,8 @@ function renderMaintenance() {
 
 function money(value) {
   const number = Number(value || 0);
-  return `$${number.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  const prefix = number < 0 ? "-$" : "$";
+  return `${prefix}${Math.abs(number).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
 function dashboardMetrics() {
@@ -11583,6 +11901,7 @@ function renderCustomerDogs() {
   $("#requestBoardingButton").disabled = !dogs.length;
   $("#customerRequestActions")?.toggleAttribute("hidden", !dogs.length);
   $("#customerNoDogRequestPrompt")?.toggleAttribute("hidden", dogs.length);
+  renderCustomerCrateShareOptions();
   renderCustomerServiceOptions();
   updateCustomerEstimate();
   renderCustomerProgress();
@@ -11608,7 +11927,7 @@ function renderCustomerRequests() {
           const stay = record.stay || {};
           record = record.record || record;
           const services = boardingStayServicesText(stay);
-          const total = stay.estimatedTotal || record.estimatedTotal || 0;
+          const total = boardingStayInvoiceTotal(record, stay);
           const estimate = total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : "";
           const status = boardingStayDisplayStatus(record, stay);
           const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
@@ -11681,6 +12000,32 @@ function selectedCustomerDogs() {
     .map((input) => customerDogsForCurrentUser().find((dog) => dog.id === input.value))
     .filter((dog) => dog && !dog.removed);
   return uniqueCustomerBookingDogs(dogs);
+}
+
+function renderCustomerCrateShareOptions() {
+  const step = $("#customerCrateShareStep");
+  const container = $("#customerCrateShareOptions");
+  if (!step || !container) return;
+  const dogs = selectedCustomerDogs();
+  const isBoardingRequest = customerRequestMode() === "boarding";
+  const ratePlan = boardingRatePlanForCustomer();
+  const show = isBoardingRequest && ratePlan.isMemberPricing && dogs.length > 1;
+  step.hidden = !show;
+  if (!show) {
+    container.innerHTML = "";
+    return;
+  }
+  const prior = $("#customerSharedCrateRequested");
+  const checked = prior ? prior.checked : true;
+  const lines = boardingDogPricingLines(dogs, { ratePlan, days: 1, sharedCrateRequested: true })
+    .reduce((groups, line) => {
+      groups[line.crateGroupId] = [...(groups[line.crateGroupId] || []), line.dogName];
+      return groups;
+    }, {});
+  const groupSummary = Object.values(lines)
+    .map((names, index) => `Crate ${index + 1}: ${names.join(" + ")}`)
+    .join(" | ");
+  container.innerHTML = `<label class="toggle-row"><input type="checkbox" id="customerSharedCrateRequested" name="customerSharedCrateRequested" ${checked ? "checked" : ""} /> Request shared-crate member pricing when staff approve it</label><p>${escapeHtml(groupSummary)}. Max ${BOARDING_MAX_DOGS_PER_CRATE} dogs per crate.</p>`;
 }
 
 function customerBookingSelectionKey(dog = {}) {
@@ -11889,6 +12234,7 @@ function openCustomerBookingModal(mode = "boarding") {
   clearCustomerBookingTimeErrors();
   $("#requestBoardingButton").textContent = mode === "service" ? "Request Service" : "Request Boarding Time";
   renderCustomerBookingAvailabilityMessages();
+  renderCustomerCrateShareOptions();
 }
 
 function editCustomerRequest(record, stayId = "") {
@@ -11919,6 +12265,9 @@ function editCustomerRequest(record, stayId = "") {
     const checkbox = [...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]')].find((input) => input.value === dog.id);
     if (checkbox) checkbox.checked = true;
   }
+  renderCustomerCrateShareOptions();
+  const sharedCrateInput = $("#customerSharedCrateRequested");
+  if (sharedCrateInput && stay.pricingSnapshot) sharedCrateInput.checked = Boolean(stay.pricingSnapshot.sharedCrateRequested);
   const serviceQuantities = new Map(arrayValue(stay.requests).map((item) => {
     if (typeof item === "object") return [item.id || item.serviceId || item.serviceName, Number(item.quantity || 1)];
     const cleaned = String(item || "").replace(/\s+requested$/i, "").trim();
@@ -11965,8 +12314,8 @@ function isDayCareStay(dropoffTime, pickupTime) {
 
 function boardingBillingLabel(estimate = {}) {
   if (estimate.isServiceRequest) return "Service request";
-  if (estimate.isDayCare) return "Day Care (1 boarding day)";
-  return `${Number(estimate.days || 0)} boarding day(s)`;
+  const days = Number(estimate.days || 0);
+  return `${days} boarding day/night${days === 1 ? "" : "s"}`;
 }
 
 function customerEstimateDetails() {
@@ -11984,15 +12333,18 @@ function customerEstimateDetails() {
     .filter(Boolean);
   const days = isServiceRequest ? 0 : boardingDays(data.dropoffTime, data.pickupTime);
   const isDayCare = !isServiceRequest && isDayCareStay(data.dropoffTime, data.pickupTime);
-  const boardingService = boardingPricingServiceForCustomer();
-  const boardingRate = Number(boardingService?.basePrice || 0);
-  const boardingCost = isServiceRequest ? 0 : dogs.length * days * boardingRate;
+  const ratePlan = boardingRatePlanForCustomer();
+  const sharedCrateRequested = customerSharedCrateRequested();
+  const boardingLines = boardingDogPricingLines(dogs, { ratePlan, days, isServiceRequest, sharedCrateRequested });
+  const boardingRate = ratePlan.primaryRate;
+  const boardingCost = boardingLines.reduce((total, line) => total + Number(line.total || 0), 0);
   const serviceLines = services.map((service) => ({
     ...service,
+    perDogLineTotal: Number(service.basePrice || 0) * Number(service.quantity || 1),
     lineTotal: dogs.length * Number(service.basePrice || 0) * Number(service.quantity || 1),
   }));
   const serviceCost = serviceLines.reduce((total, service) => total + service.lineTotal, 0);
-  return { dogs, services: serviceLines, days, isDayCare, isServiceRequest, boardingRate, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
+  return { dogs, services: serviceLines, days, isDayCare, isServiceRequest, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
 }
 
 function boardingPricingServiceForCustomer(user = currentUser) {
@@ -12005,7 +12357,7 @@ function updateCustomerEstimate() {
   if (!$("#customerEstimate")) return;
   const estimate = customerEstimateDetails();
   renderCustomerBookingAvailabilityMessages();
-  const boardingLine = estimate.isServiceRequest ? "" : `<div class="estimate-line"><span>Boarding</span><span>${estimate.dogs.length} dog(s) x ${estimate.days || 0} day(s) x ${money(estimate.boardingRate)} = ${money(estimate.boardingCost)}</span></div>`;
+  const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => `<div class="estimate-line"><span>${escapeHtml(line.dogName)} - ${escapeHtml(boardingLineRoleLabel(line.role))}</span><span>${Number(line.days || 0)} x ${money(line.rate)} = ${money(line.total)}</span></div>`).join("");
   $("#customerEstimate").innerHTML = estimate.dogs.length
     ? `<strong>${escapeHtml(boardingBillingLabel(estimate))}</strong>${boardingLine}${estimate.services.map((service) => `<div class="estimate-line"><span>${escapeHtml(service.serviceName)}</span><span>${estimate.dogs.length} dog(s) x ${Number(service.quantity || 1)} x ${money(service.basePrice)} = ${money(service.lineTotal)}</span></div>`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>`
     : "Select dog(s), dates, and services to see an estimate.";
@@ -12020,7 +12372,11 @@ function showBookingConfirmDialog(estimate) {
   pendingCustomerBooking = { ...estimate, dogs: uniqueCustomerBookingDogs(estimate.dogs), submissionId: uid("customerBooking") };
   customerBookingSubmitInProgress = false;
   if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
-  const dogList = pendingCustomerBooking.dogs.map((dog) => `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}</li>`).join("");
+  const dogList = pendingCustomerBooking.dogs.map((dog) => {
+    const line = pendingCustomerBooking.boardingLines.find((item) => item.dogKey === boardingPricingDogKey(dog)) || {};
+    const rateText = pendingCustomerBooking.isServiceRequest ? "" : ` - ${escapeHtml(boardingLineRoleLabel(line.role))} at ${money(line.rate || 0)}`;
+    return `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}${rateText}</li>`;
+  }).join("");
   const serviceList = pendingCustomerBooking.services.length
     ? pendingCustomerBooking.services.map((service) => `<li>${escapeHtml(service.serviceName)} x${Number(service.quantity || 1)} for ${pendingCustomerBooking.dogs.length} dog(s) - ${money(service.lineTotal)} ${escapeHtml(service.unit || "")}</li>`).join("")
     : "<li>No added services selected</li>";
@@ -12028,7 +12384,7 @@ function showBookingConfirmDialog(estimate) {
   $("#bookingConfirmBody").innerHTML = `
     <div class="booking-summary">
       <div><strong>Dog(s)</strong><ul>${dogList}</ul></div>
-      <div><strong>${pendingCustomerBooking.isServiceRequest ? "Requested time" : "Stay"}</strong><p>${formatDateTime(pendingCustomerBooking.dropoffTime)}${pendingCustomerBooking.isServiceRequest ? "" : ` to ${formatDateTime(pendingCustomerBooking.pickupTime)}`}</p>${pendingCustomerBooking.isServiceRequest ? "" : `<p>${boardingBillingLabel(pendingCustomerBooking)} at ${money(pendingCustomerBooking.boardingRate)} per day/night</p><p>Boarding subtotal: ${money(pendingCustomerBooking.boardingCost)}</p>`}</div>
+      <div><strong>${pendingCustomerBooking.isServiceRequest ? "Requested time" : "Stay"}</strong><p>${formatDateTime(pendingCustomerBooking.dropoffTime)}${pendingCustomerBooking.isServiceRequest ? "" : ` to ${formatDateTime(pendingCustomerBooking.pickupTime)}`}</p>${pendingCustomerBooking.isServiceRequest ? "" : `<p>${boardingBillingLabel(pendingCustomerBooking)}${pendingCustomerBooking.sharedCrateRequested ? " with shared-crate member pricing requested" : ""}</p><p>Boarding subtotal: ${money(pendingCustomerBooking.boardingCost)}</p>`}</div>
       ${availabilityHtml ? `<div class="operation-confirm-notices">${availabilityHtml}</div>` : ""}
       <div><strong>Services</strong><ul>${serviceList}</ul></div>
       <div class="estimate-total"><strong>Estimated total</strong><span>${money(pendingCustomerBooking.total)}</span></div>
@@ -12074,6 +12430,37 @@ async function submitPendingCustomerBooking() {
       const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
       const useExisting = Boolean(existingTarget);
       const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
+      const stayRequests = estimate.services.map((service) => ({
+        id: service.id,
+        serviceId: service.id,
+        serviceName: service.serviceName,
+        label: `${service.serviceName}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`,
+        quantity: Number(service.quantity || 1),
+        unitPrice: Number(service.basePrice || service.unitPrice || 0),
+        unit: service.unit || "",
+        source: "customer-request",
+      }));
+      const dogLine = estimate.boardingLines.find((line) => line.dogKey === boardingPricingDogKey(dog)) || {};
+      const invoiceAdjustments = normalizeInvoiceAdjustments(existingStay.invoiceAdjustments || []);
+      const stayType = estimate.isServiceRequest ? "Service Request" : estimate.isDayCare ? "Day Care" : "Boarding";
+      const pricingSnapshot = boardingPricingSnapshotForStay(existingTarget || dog, {
+        ...existingStay,
+        dropoffTime: estimate.dropoffTime,
+        pickupTime: estimate.pickupTime,
+        stayType,
+        requests: stayRequests,
+        invoiceAdjustments,
+      }, {
+        ratePlan: estimate.ratePlan,
+        currentDogKey: dogLine.dogKey || boardingPricingDogKey(dog),
+        currentDogName: dogLine.dogName || dog.dogName || "Dog",
+        currentDogRole: dogLine.role || (estimate.ratePlan?.isMemberPricing ? "primary" : "non-member"),
+        sharedCrateRequested: estimate.sharedCrateRequested,
+        crateGroupId: dogLine.crateGroupId || "",
+        groupBoardingSubtotal: estimate.boardingCost,
+        groupServiceSubtotal: estimate.serviceCost,
+        groupTotal: estimate.total,
+      });
       const stay = {
         id: editingRecord ? existingStay.id || editingStayId || uid("stay") : customerBookingStableId("stay", estimate, dog),
         status: editingRecord ? existingStay.status || normalizeBoardingStatus(editingRecord) : "Pending",
@@ -12082,20 +12469,14 @@ async function submitPendingCustomerBooking() {
         source: "customer-request",
         dropoffTime: estimate.dropoffTime,
         pickupTime: estimate.pickupTime,
-        stayType: estimate.isServiceRequest ? "Service Request" : estimate.isDayCare ? "Day Care" : "Boarding",
-        billingDays: estimate.days,
-        requests: estimate.services.map((service) => ({
-          id: service.id,
-          serviceId: service.id,
-          serviceName: service.serviceName,
-          label: `${service.serviceName}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`,
-          quantity: Number(service.quantity || 1),
-          unitPrice: Number(service.basePrice || service.unitPrice || 0),
-          unit: service.unit || "",
-          source: "customer-request",
-        })),
+        stayType,
+        billingDays: pricingSnapshot.billingDays,
+        requests: stayRequests,
         stayNotes: estimate.requestNotes,
-        estimatedTotal: estimate.total,
+        invoiceAdjustments,
+        invoiceEvents: existingStay.invoiceEvents || [],
+        pricingSnapshot,
+        estimatedTotal: pricingSnapshot.total,
       };
       stay.bathPlan = bathPlanForStay(stay);
       stay.requestCode = boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, stay);
@@ -12144,9 +12525,9 @@ async function submitPendingCustomerBooking() {
         profilePhotoUrl: dog.profilePhotoUrl || "",
         vaccinationRecords: dog.vaccinationRecords || [],
         vaccinationFiles: dog.vaccinationFiles || "",
-        estimatedTotal: estimate.total,
-        stayType: estimate.isServiceRequest ? "Service Request" : estimate.isDayCare ? "Day Care" : "Boarding",
-        billingDays: estimate.days,
+        estimatedTotal: pricingSnapshot.total,
+        stayType,
+        billingDays: pricingSnapshot.billingDays,
         requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
         flags: ["Required update from owner"],
         stays: existingStays,
@@ -15742,6 +16123,7 @@ function initEvents() {
         if (event.target.checked && !quantityInput.value) quantityInput.value = "1";
       }
     }
+    if (event.target.id === "customerSharedCrateRequested") renderCustomerCrateShareOptions();
     updateCustomerEstimate();
   });
   $("#customerBookingForm").addEventListener("input", (event) => {
@@ -15749,6 +16131,7 @@ function initEvents() {
   });
   $("#customerBookingDogList").addEventListener("change", () => {
     validateCustomerDogSelection({ focus: false });
+    renderCustomerCrateShareOptions();
     updateCustomerEstimate();
   });
   $("#customerBookingDogList").addEventListener("click", (event) => {
