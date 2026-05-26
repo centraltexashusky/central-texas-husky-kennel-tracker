@@ -10510,6 +10510,26 @@ async function sendUrgentAlertFromForm(formEl) {
   return notification;
 }
 
+function urgentAlertResultDialog(notification = {}) {
+  const count = (notification.audienceEmails || []).length;
+  const recipientText = `${count} recipient${count === 1 ? "" : "s"}`;
+  const status = notification.deliveryStatus || "queued";
+  const emailReason = notification.emailResult?.reason || notification.deliveryError || "";
+  if (status === "sent") {
+    showDetailDialog("Alert Sent", `<p>The urgent alert email was sent to ${escapeHtml(recipientText)}.</p>`);
+    return;
+  }
+  if (status === "sms sent; email skipped") {
+    showDetailDialog("Email Skipped", `<p>The alert was saved and SMS was sent, but email was skipped for ${escapeHtml(recipientText)}.</p>${emailReason ? `<p>${escapeHtml(emailReason)}</p>` : ""}`);
+    return;
+  }
+  if (status === "skipped") {
+    showDetailDialog("Email Not Sent", `<p>The alert was saved in-app, but no email was sent to ${escapeHtml(recipientText)}.</p>${emailReason ? `<p>${escapeHtml(emailReason)}</p>` : ""}`);
+    return;
+  }
+  showDetailDialog("Alert Saved In App", `<p>The alert was saved for ${escapeHtml(recipientText)}, but external delivery did not complete.</p>${emailReason ? `<p>${escapeHtml(emailReason)}</p>` : ""}`);
+}
+
 function alertPreferencePopupHtml(selectedEmail = "") {
   const users = alertManagedUsers().sort((a, b) => String(a.name || a.email || "").localeCompare(String(b.name || b.email || ""), undefined, { sensitivity: "base" }));
   const selectedUser = users.find((user) => normalizeEmail(user.email) === normalizeEmail(selectedEmail)) || users[0] || {};
@@ -13969,7 +13989,7 @@ function initEvents() {
     }
     if (urgentAlertForm) {
       const notification = await sendUrgentAlertFromForm(urgentAlertForm);
-      if (notification) showDetailDialog("Alert Sent", `<p>The urgent alert was sent to ${escapeHtml((notification.audienceEmails || []).length)} recipient${(notification.audienceEmails || []).length === 1 ? "" : "s"}.</p>`);
+      if (notification) urgentAlertResultDialog(notification);
       return;
     }
     if (alertPreferenceForm) {
