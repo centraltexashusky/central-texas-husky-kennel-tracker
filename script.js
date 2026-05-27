@@ -4380,15 +4380,27 @@ function serviceDependencyChipHtml(service = {}) {
   const parent = serviceDependencyParent(service);
   if (!parent) return "";
   const label = serviceDependencyType(service) === "optional-addon" ? "Add-on after" : "Requires";
-  return `<span class="service-flag-list"><span class="service-flag-chip">${escapeHtml(label)} ${escapeHtml(parent.serviceName || "service")}</span></span>`;
+  return `<span class="service-flag-list"><span class="service-flag-chip">${escapeHtml(label)} ${escapeHtml(serviceDependencyOptionLabel(parent))}</span></span>`;
+}
+
+function servicePricingScopeLabel(service = {}) {
+  return serviceHasFlag(service, "Member Pricing") ? "Member Pricing" : "Regular Price (Non-Member)";
+}
+
+function serviceDependencyOptionLabel(service = {}) {
+  return [
+    service.serviceName || "Service",
+    service.category || "",
+    servicePricingScopeLabel(service),
+  ].filter(Boolean).join(" - ");
 }
 
 function serviceDependencyOptionsHtml(currentService = {}) {
   const currentId = currentService.id || "";
   const selectedId = serviceDependencyId(currentService);
   const options = readRecords("service")
-    .filter((service) => !service.removed && service.id !== currentId && service.category !== "Boarding")
-    .sort((a, b) => String(a.serviceName || "").localeCompare(String(b.serviceName || "")));
+    .filter((service) => !service.removed && service.id !== currentId)
+    .sort((a, b) => serviceDependencyOptionLabel(a).localeCompare(serviceDependencyOptionLabel(b)));
   const selectedParent = selectedId && !options.some((service) => service.id === selectedId)
     ? readRecords("service").find((service) => service.id === selectedId)
     : null;
@@ -4396,7 +4408,7 @@ function serviceDependencyOptionsHtml(currentService = {}) {
     ...(selectedParent ? [selectedParent] : []),
     ...options,
   ];
-  return `<option value="">No dependency</option>${serviceOptions.map((service) => `<option value="${escapeHtml(service.id || "")}">${escapeHtml(service.serviceName || "Service")}</option>`).join("")}`;
+  return `<option value="">No dependency</option>${serviceOptions.map((service) => `<option value="${escapeHtml(service.id || "")}">${escapeHtml(serviceDependencyOptionLabel(service))}</option>`).join("")}`;
 }
 
 function renderServiceDependencyFields(record = {}) {
@@ -12113,24 +12125,45 @@ function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options
   return `<label class="service-option${options.addOn ? " service-option-addon" : ""}"><span class="service-option-label"><input type="checkbox" name="customerServices" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(addOnPrefix)}${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-${escapeHtml(service.id)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity" /></label>`;
 }
 
+function customerImplicitDependencyIds() {
+  const ids = new Set();
+  if (customerRequestMode() === "boarding") {
+    const boardingService = boardingPricingServiceForCustomer(currentUser);
+    if (boardingService?.id) ids.add(boardingService.id);
+  }
+  return ids;
+}
+
+function customerDependencyIds(checkedIds = new Set()) {
+  return new Set([...checkedIds, ...customerImplicitDependencyIds()]);
+}
+
 function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
   applyLegacyServiceDependencyMigration();
   const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
+  const dependencyIds = customerDependencyIds(checkedIds);
   const customerIsMember = isMemberUser(currentUser);
-  const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && service.category !== "Boarding" && (customerIsMember || !serviceHasFlag(service, "Member Pricing")));
+  const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && (customerIsMember || !serviceHasFlag(service, "Member Pricing")));
   const visibleServices = services.filter((service) => !serviceDependencyId(service));
+  const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
+  const visibleHtml = visibleServices.map((service) => {
+    const optionHtml = customerServiceOptionHtml(service, checkedIds);
+    const addOnHtml = dependencyIds.has(service.id)
+      ? services
+          .filter((dependent) => serviceDependencyId(dependent) === service.id)
+          .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
+          .join("")
+      : "";
+    return `${optionHtml}${addOnHtml}`;
+  }).join("");
+  const implicitHtml = implicitDependencyServices
+    .map((service) => customerServiceOptionHtml(service, checkedIds, { addOn: serviceDependencyType(service) === "optional-addon" }))
+    .join("");
   $("#customerServiceOptions").innerHTML = visibleServices.length
-    ? visibleServices.map((service) => {
-        const optionHtml = customerServiceOptionHtml(service, checkedIds);
-        const addOnHtml = checkedIds.has(service.id)
-          ? services
-              .filter((dependent) => serviceDependencyId(dependent) === service.id)
-              .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
-              .join("")
-          : "";
-        return `${optionHtml}${addOnHtml}`;
-      }).join("")
+    ? `${visibleHtml}${implicitHtml}`
+    : implicitHtml
+      ? implicitHtml
     : "<p>No customer services are active yet.</p>";
 }
 
@@ -12468,6 +12501,7 @@ function customerEstimateDetails() {
   const isServiceRequest = customerRequestMode() === "service";
   const dogs = selectedCustomerDogs();
   const selectedServiceIds = new Set(checkedFrom(formEl, "customerServices"));
+  const dependencyIds = customerDependencyIds(selectedServiceIds);
   const services = [...selectedServiceIds]
     .map((id) => {
       const service = readRecords("service").find((item) => item.id === id);
@@ -12475,7 +12509,7 @@ function customerEstimateDetails() {
       const quantity = Math.max(1, Number(formFieldByName(formEl, `serviceQuantity-${id}`)?.value || 1));
       return { ...service, quantity };
     })
-    .filter((service) => service && serviceDependencySatisfied(service, selectedServiceIds))
+    .filter((service) => service && serviceDependencySatisfied(service, dependencyIds))
     .filter(Boolean);
   const days = isServiceRequest ? 0 : boardingDays(data.dropoffTime, data.pickupTime);
   const isDayCare = !isServiceRequest && isDayCareStay(data.dropoffTime, data.pickupTime);
