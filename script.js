@@ -12687,7 +12687,7 @@ function renderServices() {
   const query = $("#serviceSearch")?.value || "";
   const columns = tableColumns.service;
   const allRecords = sortRecordsForTable("service", readRecords("service").filter((record) => !record.removed && matches(record, query)));
-  const records = allRecords.filter(serviceMatchesPricingFilter);
+  const records = allRecords.filter((record) => serviceMatchesPricingFilter(record));
   const groupContainer = $("#serviceCatalogGroups");
   if (groupContainer) {
     const active = readRecords("service").filter((record) => !record.removed && serviceHasFlag(record, "Active"));
