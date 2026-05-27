@@ -1551,6 +1551,7 @@ textarea {
 .service-option-addon {
   background: rgba(13, 148, 136, 0.08);
   border-style: dashed;
+  margin-left: 26px;
 }
 
 .service-option > span,
@@ -1567,6 +1568,12 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .service-option-addon {
+    margin-left: 0;
+  }
 }
 
 .service-option-text {

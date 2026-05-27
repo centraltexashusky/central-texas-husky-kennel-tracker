@@ -551,6 +551,10 @@ function serviceFlagChipsHtml(flags = []) {
     : "";
 }
 
+function serviceChipsHtml(service = {}) {
+  return [serviceFlagChipsHtml(service.flags), serviceDependencyChipHtml(service)].filter(Boolean).join(" ");
+}
+
 function isMemberUser(user = currentUser) {
   if (!user) return false;
   const profile = savedUserFor(user) || {};
@@ -4346,6 +4350,95 @@ function normalizedServiceLookupText(value = "") {
     .replace(/\s+requested$/i, "")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function serviceDependencyId(service = {}) {
+  return String(service.requiresServiceId || service.parentServiceId || "").trim();
+}
+
+function serviceDependencyType(service = {}) {
+  if (!serviceDependencyId(service)) return "";
+  return String(service.dependentServiceType || "optional-addon").trim() || "optional-addon";
+}
+
+function serviceDependencyParent(service = {}, catalog = readRecords("service")) {
+  const parentId = serviceDependencyId(service);
+  if (!parentId) return null;
+  return catalog.find((item) => item.id === parentId && !item.removed) || null;
+}
+
+function serviceDependencySatisfied(service = {}, selectedIds = new Set()) {
+  const parentId = serviceDependencyId(service);
+  return !parentId || selectedIds.has(parentId);
+}
+
+function serviceHasDependentServices(service = {}, catalog = readRecords("service")) {
+  return Boolean(service?.id && catalog.some((item) => !item.removed && serviceDependencyId(item) === service.id));
+}
+
+function serviceDependencyChipHtml(service = {}) {
+  const parent = serviceDependencyParent(service);
+  if (!parent) return "";
+  const label = serviceDependencyType(service) === "optional-addon" ? "Add-on after" : "Requires";
+  return `<span class="service-flag-list"><span class="service-flag-chip">${escapeHtml(label)} ${escapeHtml(parent.serviceName || "service")}</span></span>`;
+}
+
+function serviceDependencyOptionsHtml(currentService = {}) {
+  const currentId = currentService.id || "";
+  const selectedId = serviceDependencyId(currentService);
+  const options = readRecords("service")
+    .filter((service) => !service.removed && service.id !== currentId && service.category !== "Boarding")
+    .sort((a, b) => String(a.serviceName || "").localeCompare(String(b.serviceName || "")));
+  const selectedParent = selectedId && !options.some((service) => service.id === selectedId)
+    ? readRecords("service").find((service) => service.id === selectedId)
+    : null;
+  const serviceOptions = [
+    ...(selectedParent ? [selectedParent] : []),
+    ...options,
+  ];
+  return `<option value="">No dependency</option>${serviceOptions.map((service) => `<option value="${escapeHtml(service.id || "")}">${escapeHtml(service.serviceName || "Service")}</option>`).join("")}`;
+}
+
+function renderServiceDependencyFields(record = {}) {
+  const requiresSelect = $("#serviceRequiresServiceId");
+  const typeSelect = $("#serviceDependentServiceType");
+  if (requiresSelect) requiresSelect.innerHTML = serviceDependencyOptionsHtml(record);
+  if (typeSelect && serviceDependencyId(record) && !record.dependentServiceType) typeSelect.value = "optional-addon";
+  syncServiceDependencyFields();
+}
+
+function syncServiceDependencyFields() {
+  const requiresSelect = $("#serviceRequiresServiceId");
+  const typeSelect = $("#serviceDependentServiceType");
+  if (!typeSelect) return;
+  const hasDependency = Boolean(requiresSelect?.value);
+  typeSelect.disabled = !hasDependency;
+  if (!hasDependency) typeSelect.value = "";
+  else if (!typeSelect.value) typeSelect.value = "optional-addon";
+}
+
+function applyLegacyServiceDependencyMigration(options = {}) {
+  const services = readRecords("service");
+  const fullBath = services.find((service) => !service.removed && ["full premium bath", "full bath"].includes(normalizedServiceLookupText(service.serviceName)));
+  const deshedAddon = services.find((service) => {
+    if (service.removed || service.id === fullBath?.id) return false;
+    const name = normalizedServiceLookupText(service.serviceName);
+    return name === "de shed w full bath" || name === "de shedding" || (name.includes("de shed") && name.includes("full bath"));
+  });
+  if (!fullBath?.id || !deshedAddon?.id) return null;
+  if (Object.prototype.hasOwnProperty.call(deshedAddon, "requiresServiceId") || serviceDependencyId(deshedAddon)) return null;
+  const updated = {
+    ...deshedAddon,
+    requiresServiceId: fullBath.id,
+    dependentServiceType: deshedAddon.dependentServiceType || "optional-addon",
+    itemDescription: deshedAddon.itemDescription || "May be added by staff when a dog requires more than 30 minutes of de-shedding for their regular bath.",
+    updatedAt: new Date().toISOString(),
+  };
+  writeRecords("service", services.map((service) => (service.id === updated.id ? updated : service)));
+  if (options.syncRemote && currentRole() === "admin") {
+    sendPayload(updated).catch((error) => console.warn("Could not sync service dependency migration.", error));
+  }
+  return updated;
 }
 
 function serviceCatalogMatchForRequest(value = {}) {
@@ -11990,25 +12083,13 @@ function customerRequestTimelineHtml(status = "Pending") {
 
 const CUSTOMER_PREMIUM_STAY_UPGRADE_LABEL = "Upgrade Stay";
 const CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION = "Upgrade your dog's stay with a spacious glass-front suite, larger play yards, and extra enrichment featuring obstacle courses and interactive activities.";
-const CUSTOMER_FULL_BATH_DESHED_LABEL = "De-shedding";
-const CUSTOMER_FULL_BATH_DESHED_DESCRIPTION = "May be added for by the staff when a dog requires more than 30-mins of de-shedding for their regular bath.";
 
 function customerServiceIsPremiumStayUpgrade(service = {}) {
   return normalizedServiceLookupText(service.serviceName || service.name || "") === "premium overnight boarding kennel";
 }
 
-function customerServiceIsFullBath(service = {}) {
-  return normalizedServiceLookupText(service.serviceName || service.name || "") === "full bath";
-}
-
-function customerServiceIsFullBathDeshedAddon(service = {}) {
-  const name = normalizedServiceLookupText(service.serviceName || service.name || "");
-  return name === "de shed w full bath" || name === "de shedding" || (name.includes("de shed") && name.includes("full bath"));
-}
-
 function customerServiceDisplayName(service = {}) {
   if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_LABEL;
-  if (customerServiceIsFullBathDeshedAddon(service)) return CUSTOMER_FULL_BATH_DESHED_LABEL;
   return service.serviceName || service.name || "Service";
 }
 
@@ -12016,7 +12097,6 @@ function customerServiceInfoText(service = {}) {
   const itemDescription = String(service.itemDescription || "").trim();
   if (itemDescription) return itemDescription;
   if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION;
-  if (customerServiceIsFullBathDeshedAddon(service)) return CUSTOMER_FULL_BATH_DESHED_DESCRIPTION;
   return "";
 }
 
@@ -12035,18 +12115,19 @@ function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options
 
 function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
+  applyLegacyServiceDependencyMigration();
   const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
   const customerIsMember = isMemberUser(currentUser);
   const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && service.category !== "Boarding" && (customerIsMember || !serviceHasFlag(service, "Member Pricing")));
-  const fullBathService = services.find(customerServiceIsFullBath);
-  const fullBathDeshedAddon = services.find(customerServiceIsFullBathDeshedAddon);
-  const fullBathSelected = Boolean(fullBathService?.id && checkedIds.has(fullBathService.id));
-  const visibleServices = services.filter((service) => !customerServiceIsFullBathDeshedAddon(service));
+  const visibleServices = services.filter((service) => !serviceDependencyId(service));
   $("#customerServiceOptions").innerHTML = visibleServices.length
     ? visibleServices.map((service) => {
         const optionHtml = customerServiceOptionHtml(service, checkedIds);
-        const addOnHtml = fullBathSelected && fullBathDeshedAddon?.id && fullBathService?.id === service.id
-          ? customerServiceOptionHtml(fullBathDeshedAddon, checkedIds, { addOn: true })
+        const addOnHtml = checkedIds.has(service.id)
+          ? services
+              .filter((dependent) => serviceDependencyId(dependent) === service.id)
+              .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
+              .join("")
           : "";
         return `${optionHtml}${addOnHtml}`;
       }).join("")
@@ -12386,13 +12467,15 @@ function customerEstimateDetails() {
   const data = formPayload(formEl);
   const isServiceRequest = customerRequestMode() === "service";
   const dogs = selectedCustomerDogs();
-  const services = checkedFrom(formEl, "customerServices")
+  const selectedServiceIds = new Set(checkedFrom(formEl, "customerServices"));
+  const services = [...selectedServiceIds]
     .map((id) => {
       const service = readRecords("service").find((item) => item.id === id);
       if (!service) return null;
       const quantity = Math.max(1, Number(formFieldByName(formEl, `serviceQuantity-${id}`)?.value || 1));
       return { ...service, quantity };
     })
+    .filter((service) => service && serviceDependencySatisfied(service, selectedServiceIds))
     .filter(Boolean);
   const days = isServiceRequest ? 0 : boardingDays(data.dropoffTime, data.pickupTime);
   const isDayCare = !isServiceRequest && isDayCareStay(data.dropoffTime, data.pickupTime);
@@ -12684,6 +12767,7 @@ function renderServicePricingTabs(records = []) {
 }
 
 function renderServices() {
+  applyLegacyServiceDependencyMigration({ syncRemote: true });
   const query = $("#serviceSearch")?.value || "";
   const columns = tableColumns.service;
   const allRecords = sortRecordsForTable("service", readRecords("service").filter((record) => !record.removed && matches(record, query)));
@@ -12704,7 +12788,7 @@ function renderServices() {
   $("#serviceTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}" data-table="service">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
   $("#serviceTableBody").innerHTML = records.length
     ? records
-        .map((record) => `<tr data-id="${record.id}"><td>${escapeHtml(record.serviceName || "")}</td><td>${escapeHtml(record.category || "")}</td><td>${money(record.basePrice)}</td><td>${escapeHtml(record.unit || "")}</td><td>${record.depositAmount ? money(record.depositAmount) : ""}</td><td>${record.taxRate ? `${escapeHtml(record.taxRate)}%` : ""}</td><td>${serviceFlagChipsHtml(record.flags)}</td><td><button type="button" class="secondary-button" data-action="edit-service" data-id="${escapeHtml(record.id)}">Edit</button></td></tr>`)
+        .map((record) => `<tr data-id="${record.id}"><td>${escapeHtml(record.serviceName || "")}</td><td>${escapeHtml(record.category || "")}</td><td>${money(record.basePrice)}</td><td>${escapeHtml(record.unit || "")}</td><td>${record.depositAmount ? money(record.depositAmount) : ""}</td><td>${record.taxRate ? `${escapeHtml(record.taxRate)}%` : ""}</td><td>${serviceChipsHtml(record)}</td><td><button type="button" class="secondary-button" data-action="edit-service" data-id="${escapeHtml(record.id)}">Edit</button></td></tr>`)
         .join("")
     : `<tr><td colspan="8">${escapeHtml(serviceEmptyStateText())}</td></tr>`;
 }
@@ -12716,11 +12800,13 @@ function openService(record = {}) {
   const form = $("#serviceForm");
   form.reset();
   form.dataset.mode = record.id ? "edit" : "create";
+  renderServiceDependencyFields(record);
   if (form.elements.id) {
     form.elements.id.value = record.id || "";
     form.elements.id.defaultValue = record.id || "";
   }
   setFormValues(form, record);
+  syncServiceDependencyFields();
   if (!record.id && form.elements.id) form.elements.id.value = "";
   const flags = normalizedServiceFlags(record.flags || ["Active"]);
   $$('input[name="serviceFlags"]').forEach((input) => {
@@ -16118,6 +16204,9 @@ function initEvents() {
     const editingId = formEl.dataset.mode === "edit" ? data.id : "";
     const existing = editingId ? readRecords("service").find((record) => record.id === editingId) : {};
     const serviceId = editingId || uid("service");
+    const validDependency = data.requiresServiceId && data.requiresServiceId !== serviceId && readRecords("service").some((record) => record.id === data.requiresServiceId && !record.removed);
+    const requiresServiceId = validDependency ? data.requiresServiceId : "";
+    const dependentServiceType = requiresServiceId ? data.dependentServiceType || "optional-addon" : "";
     const flags = normalizedServiceFlags(checkedFrom(formEl, "serviceFlags"));
     const deposit = Number(data.depositAmount || 0);
     const basePrice = Number(data.basePrice || 0);
@@ -16130,6 +16219,8 @@ function initEvents() {
       id: serviceId,
       type: "service",
       submittedAt: existing?.submittedAt || new Date().toISOString(),
+      requiresServiceId,
+      dependentServiceType,
       flags,
     };
     const record = upsertRecord("service", payload);
@@ -16144,6 +16235,7 @@ function initEvents() {
   $("#addServiceButton")?.addEventListener("click", () => openService());
   $("#closeServiceModalButton")?.addEventListener("click", closeServiceModal);
   $("#resetServiceForm").addEventListener("click", closeServiceModal);
+  $("#serviceRequiresServiceId")?.addEventListener("change", syncServiceDependencyFields);
   $("#removeServiceButton")?.addEventListener("click", () => {
     const id = $("#serviceForm")?.elements.id.value;
     const record = readRecords("service").find((item) => item.id === id && !item.removed);
@@ -16264,7 +16356,7 @@ function initEvents() {
         if (event.target.checked && !quantityInput.value) quantityInput.value = "1";
       }
       const service = readRecords("service").find((item) => item.id === event.target.value);
-      if (customerServiceIsFullBath(service)) renderCustomerServiceOptions();
+      if (serviceHasDependentServices(service)) renderCustomerServiceOptions();
     }
     if (event.target.id === "customerSharedCrateRequested") renderCustomerCrateShareOptions();
     updateCustomerEstimate();

@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260526-service-pricing-tabs" />
+    <link rel="stylesheet" href="styles.css?v=20260526-service-dependencies" />
   </head>
   <body>
     <div class="app-layout">
@@ -1093,6 +1093,8 @@
               <label>Deposit amount<input type="number" name="depositAmount" min="0" step="0.01" placeholder="Optional" /></label>
               <label>Tax rate %<input type="number" name="taxRate" min="0" step="0.01" placeholder="Example: 8.25" /></label>
               <label>Default duration<input type="text" name="defaultDuration" placeholder="Example: 60 minutes" /></label>
+              <label>Only show after service<select name="requiresServiceId" id="serviceRequiresServiceId"><option value="">No dependency</option></select></label>
+              <label>Dependent display<select name="dependentServiceType" id="serviceDependentServiceType"><option value="">Standalone / normal item</option><option value="optional-addon">Optional add-on under parent</option></select></label>
             </div>
             <div class="checklist compact">
               <label class="flag-option"><input type="checkbox" name="serviceFlags" value="Active" checked /> <span>Active</span><span class="service-info-icon" role="button" tabindex="0" aria-label="Shows this item in staff/admin pricing lists and allows it to be used by the app." title="Shows this item in staff/admin pricing lists and allows it to be used by the app." data-tooltip="Shows this item in staff/admin pricing lists and allows it to be used by the app."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span></label>
@@ -1269,6 +1271,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260526-service-pricing-tabs-filter-fix"></script>
+  <script src="script.js?v=20260526-service-dependencies"></script>
 </body>
 </html>
