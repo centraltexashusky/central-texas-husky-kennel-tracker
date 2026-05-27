@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260526-info-icon-replacement" />
+    <link rel="stylesheet" href="styles.css?v=20260526-service-pricing-tabs" />
   </head>
   <body>
     <div class="app-layout">
@@ -1111,10 +1111,11 @@
           <div class="section-heading"><span>P</span><div><h2>Pricing Catalog</h2><p>Customer-bookable services are separated from internal/admin-only services below.</p></div></div>
           <div class="button-row"><button type="button" id="addServiceButton">Add Service</button></div>
           <div class="service-catalog-groups" id="serviceCatalogGroups"></div>
+          <div class="profile-tabs service-pricing-tabs" id="servicePricingTabs" role="tablist" aria-label="Pricing catalog filter"></div>
           <div class="table-toolbar">
             <input type="search" id="serviceSearch" placeholder="Search pricing by service, category, description, price, unit, deposit, tax, flags, or notes" />
           </div>
-          <div class="table-wrap">
+          <div class="table-wrap service-table-wrap">
             <table class="data-table">
               <thead id="serviceTableHead"></thead>
               <tbody id="serviceTableBody"></tbody>
@@ -1268,6 +1269,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260526-info-icon-replacement"></script>
+  <script src="script.js?v=20260526-service-pricing-tabs"></script>
 </body>
 </html>

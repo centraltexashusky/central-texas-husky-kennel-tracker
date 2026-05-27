@@ -1730,6 +1730,34 @@ textarea {
   margin: 12px 0;
 }
 
+.service-pricing-tabs {
+  margin: 12px 0;
+}
+
+.service-pricing-tabs button span {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 800;
+  justify-content: center;
+  margin-left: 6px;
+  min-width: 24px;
+  padding: 2px 7px;
+}
+
+.service-table-wrap {
+  max-height: min(72vh, 820px);
+  overscroll-behavior: contain;
+}
+
+.service-table-wrap .data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
 .boarding-queue-card,
 .service-group-card {
   background:

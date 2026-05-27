@@ -59,6 +59,7 @@ let scheduleWeekDate = todayDate();
 let operationCalendarMonth = todayDate().slice(0, 7);
 let settingsUserTab = "admin";
 let settingsUserSort = { key: "name", direction: "asc" };
+let servicePricingFilter = "all";
 let kennelBuildingTab = "Shed";
 let boardingDogRosterFilter = "Active dogs";
 let showRemainingTasksOnly = true;
@@ -12636,10 +12637,43 @@ async function submitPendingCustomerBooking() {
   }
 }
 
+const servicePricingFilters = [
+  { key: "all", label: "All Prices" },
+  { key: "member", label: "Member Pricing" },
+  { key: "regular", label: "Regular Price (Non-Member)" },
+];
+
+function servicePricingFilterLabel(key = servicePricingFilter) {
+  return servicePricingFilters.find((filter) => filter.key === key)?.label || "All Prices";
+}
+
+function serviceMatchesPricingFilter(record = {}, key = servicePricingFilter) {
+  if (key === "member") return serviceHasFlag(record, "Member Pricing");
+  if (key === "regular") return !serviceHasFlag(record, "Member Pricing");
+  return true;
+}
+
+function serviceEmptyStateText() {
+  const label = servicePricingFilterLabel(servicePricingFilter);
+  if (servicePricingFilter === "all") return "No services match this search.";
+  return `No ${label.toLowerCase()} services match this view.`;
+}
+
+function renderServicePricingTabs(records = []) {
+  const container = $("#servicePricingTabs");
+  if (!container) return;
+  container.innerHTML = servicePricingFilters.map((filter) => {
+    const active = servicePricingFilter === filter.key;
+    const count = records.filter((record) => serviceMatchesPricingFilter(record, filter.key)).length;
+    return `<button type="button" class="secondary-button ${active ? "is-active" : ""}" data-service-pricing-filter="${escapeHtml(filter.key)}" role="tab" aria-selected="${active ? "true" : "false"}">${escapeHtml(filter.label)} <span>${count}</span></button>`;
+  }).join("");
+}
+
 function renderServices() {
   const query = $("#serviceSearch")?.value || "";
   const columns = tableColumns.service;
-  const records = sortRecordsForTable("service", readRecords("service").filter((record) => !record.removed && matches(record, query)));
+  const allRecords = sortRecordsForTable("service", readRecords("service").filter((record) => !record.removed && matches(record, query)));
+  const records = allRecords.filter(serviceMatchesPricingFilter);
   const groupContainer = $("#serviceCatalogGroups");
   if (groupContainer) {
     const active = readRecords("service").filter((record) => !record.removed && serviceHasFlag(record, "Active"));
@@ -12652,20 +12686,28 @@ function renderServices() {
       .map(([label, group]) => `<article class="service-group-card"><strong>${escapeHtml(label)}</strong><span>${group.length}</span><p>${escapeHtml(group.map((record) => record.serviceName).join(", ") || "None active")}</p></article>`)
       .join("");
   }
+  renderServicePricingTabs(allRecords);
   $("#serviceTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}" data-table="service">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
   $("#serviceTableBody").innerHTML = records.length
     ? records
         .map((record) => `<tr data-id="${record.id}"><td>${escapeHtml(record.serviceName || "")}</td><td>${escapeHtml(record.category || "")}</td><td>${money(record.basePrice)}</td><td>${escapeHtml(record.unit || "")}</td><td>${record.depositAmount ? money(record.depositAmount) : ""}</td><td>${record.taxRate ? `${escapeHtml(record.taxRate)}%` : ""}</td><td>${serviceFlagChipsHtml(record.flags)}</td><td><button type="button" class="secondary-button" data-action="edit-service" data-id="${escapeHtml(record.id)}">Edit</button></td></tr>`)
         .join("")
-    : `<tr><td colspan="8">No services saved yet.</td></tr>`;
+    : `<tr><td colspan="8">${escapeHtml(serviceEmptyStateText())}</td></tr>`;
 }
 
 function openService(record = {}) {
   const panel = $("#serviceEditorPanel");
   if (panel && panel.parentElement !== document.body) document.body.appendChild(panel);
   if (panel) panel.hidden = false;
-  $("#serviceForm").reset();
-  setFormValues($("#serviceForm"), record);
+  const form = $("#serviceForm");
+  form.reset();
+  form.dataset.mode = record.id ? "edit" : "create";
+  if (form.elements.id) {
+    form.elements.id.value = record.id || "";
+    form.elements.id.defaultValue = record.id || "";
+  }
+  setFormValues(form, record);
+  if (!record.id && form.elements.id) form.elements.id.value = "";
   const flags = normalizedServiceFlags(record.flags || ["Active"]);
   $$('input[name="serviceFlags"]').forEach((input) => {
     input.checked = flags.includes(input.value);
@@ -12676,6 +12718,8 @@ function openService(record = {}) {
 }
 
 function closeServiceModal() {
+  const form = $("#serviceForm");
+  if (form) form.dataset.mode = "create";
   $("#serviceEditorPanel").hidden = true;
 }
 
@@ -16054,10 +16098,13 @@ function initEvents() {
 
   $("#serviceForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!validateForm(event.currentTarget)) return;
-    const data = formPayload(event.currentTarget);
-    const existing = data.id ? readRecords("service").find((record) => record.id === data.id) : {};
-    const flags = normalizedServiceFlags(checkedFrom(event.currentTarget, "serviceFlags"));
+    const formEl = event.currentTarget;
+    if (!validateForm(formEl)) return;
+    const data = formPayload(formEl);
+    const editingId = formEl.dataset.mode === "edit" ? data.id : "";
+    const existing = editingId ? readRecords("service").find((record) => record.id === editingId) : {};
+    const serviceId = editingId || uid("service");
+    const flags = normalizedServiceFlags(checkedFrom(formEl, "serviceFlags"));
     const deposit = Number(data.depositAmount || 0);
     const basePrice = Number(data.basePrice || 0);
     if (deposit > 500 || (basePrice && deposit / basePrice > 0.2)) {
@@ -16066,6 +16113,7 @@ function initEvents() {
     const payload = {
       ...existing,
       ...data,
+      id: serviceId,
       type: "service",
       submittedAt: existing?.submittedAt || new Date().toISOString(),
       flags,
@@ -16086,6 +16134,12 @@ function initEvents() {
     const id = $("#serviceForm")?.elements.id.value;
     const record = readRecords("service").find((item) => item.id === id && !item.removed);
     if (record) openServiceRemoveConfirm(record);
+  });
+  $("#servicePricingTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-service-pricing-filter]");
+    if (!button) return;
+    servicePricingFilter = button.dataset.servicePricingFilter || "all";
+    renderServices();
   });
   $("#serviceSearch").addEventListener("input", renderServices);
   $("#serviceTableHead").addEventListener("click", (event) => {
