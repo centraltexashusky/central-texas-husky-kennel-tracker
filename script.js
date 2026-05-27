@@ -554,7 +554,7 @@ function serviceFlagChipsHtml(flags = []) {
 }
 
 function serviceChipsHtml(service = {}) {
-  return [serviceFlagChipsHtml(service.flags), serviceDependencyChipHtml(service)].filter(Boolean).join(" ");
+  return [serviceFlagChipsHtml(service.flags), serviceBoardingRateChipHtml(service), serviceDependencyChipHtml(service)].filter(Boolean).join(" ");
 }
 
 function isMemberUser(user = currentUser) {
@@ -4389,6 +4389,39 @@ function servicePricingScopeLabel(service = {}) {
   return serviceHasFlag(service, "Member Pricing") ? "Member Pricing" : "Regular Price (Non-Member)";
 }
 
+function normalizedBoardingRateType(value = "") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["boarding-program", "program", "stay-program"].includes(normalized)) return "boarding-program";
+  if (["standard-boarding", "boarding-rate", "standard"].includes(normalized)) return "standard-boarding";
+  return "";
+}
+
+function serviceBoardingRateType(service = {}) {
+  return normalizedBoardingRateType(service.boardingRateType || service.stayRateBehavior || service.boardingProgramType || "");
+}
+
+function serviceIsBoardingProgram(service = {}) {
+  return serviceBoardingRateType(service) === "boarding-program";
+}
+
+function serviceIsStandardBoardingRate(service = {}) {
+  const rateType = serviceBoardingRateType(service);
+  if (rateType === "standard-boarding") return true;
+  if (rateType || service.category !== "Boarding" || serviceDependencyId(service)) return false;
+  const name = normalizedServiceLookupText(service.serviceName || service.name || "");
+  const unit = normalizedServiceLookupText(service.unit || "");
+  const legacyBoardingRate = name.includes("boarding") && (unit.includes("night") || unit.includes("day"));
+  const legacyUpgrade = name === "premium overnight boarding kennel" || name.includes("upgrade");
+  return legacyBoardingRate && !legacyUpgrade;
+}
+
+function serviceBoardingRateChipHtml(service = {}) {
+  const rateType = serviceBoardingRateType(service) || (serviceIsStandardBoardingRate(service) ? "standard-boarding" : "");
+  if (rateType === "boarding-program") return `<span class="service-flag-list"><span class="service-flag-chip">Boarding program</span></span>`;
+  if (rateType === "standard-boarding") return `<span class="service-flag-list"><span class="service-flag-chip">Standard boarding rate</span></span>`;
+  return "";
+}
+
 function serviceDependencyOptionLabel(service = {}) {
   return [
     service.serviceName || "Service",
@@ -4455,6 +4488,32 @@ function applyLegacyServiceDependencyMigration(options = {}) {
   return updated;
 }
 
+function applyLegacyBoardingProgramMigration(options = {}) {
+  const services = readRecords("service");
+  const bootcamp = services.find((service) => {
+    if (service.removed || serviceBoardingRateType(service)) return false;
+    const name = normalizedServiceLookupText(service.serviceName || "");
+    const unit = normalizedServiceLookupText(service.unit || "");
+    return name.includes("bootcamp") && unit.includes("night");
+  });
+  if (!bootcamp?.id) return null;
+  const updated = {
+    ...bootcamp,
+    category: "Boarding",
+    unit: bootcamp.unit || "per night",
+    boardingRateType: "boarding-program",
+    includesBoardingAccommodation: true,
+    replacesStandardBoarding: true,
+    itemDescription: bootcamp.itemDescription || "Bootcamp training program with overnight accommodation included.",
+    updatedAt: new Date().toISOString(),
+  };
+  writeRecords("service", services.map((service) => (service.id === updated.id ? updated : service)));
+  if (options.syncRemote && currentRole() === "admin") {
+    sendPayload(updated).catch((error) => console.warn("Could not sync boarding program migration.", error));
+  }
+  return updated;
+}
+
 function serviceCatalogMatchForRequest(value = {}) {
   const item = value && typeof value === "object" ? value : {};
   const serviceId = item.serviceId || item.id || "";
@@ -4510,7 +4569,7 @@ function boardingStayRequestTotal(requests = []) {
 }
 
 function activeBoardingPricingServices() {
-  return readRecords("service").filter((service) => !service.removed && service.category === "Boarding" && serviceHasFlag(service, "Active"));
+  return readRecords("service").filter((service) => !service.removed && service.category === "Boarding" && serviceHasFlag(service, "Active") && serviceIsStandardBoardingRate(service));
 }
 
 function boardingRatePlanForCustomer(user = currentUser) {
@@ -4544,9 +4603,14 @@ function boardingPricingDogKey(dog = {}) {
 }
 
 function boardingLineRoleLabel(role = "") {
+  if (role === "boarding-program") return "Boarding program";
   if (role === "shared-crate-additional") return "Shared crate dog";
   if (role === "non-member") return "Non-member boarding";
   return "Primary crate dog";
+}
+
+function boardingLineDisplayLabel(line = {}) {
+  return line.stayProgramName || boardingLineRoleLabel(line.role);
 }
 
 function customerSharedCrateRequested() {
@@ -4556,21 +4620,25 @@ function customerSharedCrateRequested() {
 
 function boardingDogPricingLines(dogs = [], options = {}) {
   const ratePlan = options.ratePlan || boardingRatePlanForCustomer();
+  const stayProgram = options.stayProgram || null;
   const days = Number(options.days || 0);
   const isServiceRequest = Boolean(options.isServiceRequest);
-  const sharedCrateRequested = Boolean(options.sharedCrateRequested && ratePlan.isMemberPricing);
+  const sharedCrateRequested = Boolean(options.sharedCrateRequested && ratePlan.isMemberPricing && !stayProgram);
+  const programRate = Number(stayProgram?.rate ?? stayProgram?.basePrice ?? 0);
   return uniqueCustomerBookingDogs(dogs).map((dog, index) => {
     const pairIndex = Math.floor(index / ratePlan.maxDogsPerCrate);
     const position = index % ratePlan.maxDogsPerCrate;
     const sharedGroup = sharedCrateRequested && position > 0;
-    const role = ratePlan.isMemberPricing
+    const role = stayProgram ? "boarding-program" : ratePlan.isMemberPricing
       ? sharedGroup ? "shared-crate-additional" : "primary"
       : "non-member";
-    const rate = isServiceRequest ? 0 : sharedGroup ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
+    const rate = isServiceRequest ? 0 : stayProgram ? programRate : sharedGroup ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
     return {
       dogKey: boardingPricingDogKey(dog),
       dogId: dog.id || "",
       dogName: dog.dogName || "Dog",
+      stayProgramId: stayProgram?.id || stayProgram?.serviceId || "",
+      stayProgramName: stayProgram?.serviceName || stayProgram?.name || "",
       crateGroupId: sharedCrateRequested ? `crate-${pairIndex + 1}` : `solo-${boardingPricingDogKey(dog) || index}`,
       crateGroupPosition: sharedCrateRequested ? position + 1 : 1,
       role,
@@ -4716,9 +4784,12 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   const stayType = options.stayType || stay.stayType || record.stayType || "Boarding";
   const isServiceRequest = stayType === "Service Request";
   const days = isServiceRequest ? 0 : boardingDays(stay.dropoffTime, stay.pickupTime);
+  const stayProgram = options.stayProgram || stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
+  const stayProgramName = stayProgram?.serviceName || stayProgram?.name || stay.stayProgramName || stay.pricingSnapshot?.stayProgramName || "";
+  const stayProgramRate = Number(stayProgram?.rate ?? stayProgram?.basePrice ?? stay.stayProgramRate ?? stay.pricingSnapshot?.stayProgramRate ?? 0);
   const priorRole = stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.role || "";
-  const role = options.currentDogRole || priorRole || (ratePlan.isMemberPricing ? "primary" : "non-member");
-  const rate = isServiceRequest ? 0 : ratePlan.isMemberPricing && role === "shared-crate-additional" ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
+  const role = options.currentDogRole || priorRole || (stayProgram ? "boarding-program" : ratePlan.isMemberPricing ? "primary" : "non-member");
+  const rate = isServiceRequest ? 0 : stayProgram ? stayProgramRate : ratePlan.isMemberPricing && role === "shared-crate-additional" ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
   const requests = options.requests || stay.requests || [];
   const adjustments = normalizeInvoiceAdjustments(options.invoiceAdjustments || stay.invoiceAdjustments || []);
   const boardingSubtotal = isServiceRequest ? 0 : days * rate;
@@ -4731,6 +4802,11 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
     billingDays: days,
     isMemberPricing: ratePlan.isMemberPricing,
     maxDogsPerCrate: ratePlan.maxDogsPerCrate,
+    stayProgramId: stayProgram?.id || stayProgram?.serviceId || stay.stayProgramId || stay.pricingSnapshot?.stayProgramId || "",
+    stayProgramName,
+    stayProgramRate,
+    stayProgram: stayProgram ? { ...stayProgram, rate: stayProgramRate, serviceName: stayProgramName || stayProgram.serviceName || stayProgram.name || "Boarding program" } : null,
+    replacesStandardBoarding: Boolean(stayProgram),
     currentDogKey: options.currentDogKey || stay.pricingSnapshot?.currentDogKey || record.id || "",
     currentDogName: options.currentDogName || stay.pricingSnapshot?.currentDogName || record.dogName || "",
     currentDogRole: role,
@@ -4745,7 +4821,7 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
     groupServiceSubtotal: options.groupServiceSubtotal ?? stay.pricingSnapshot?.groupServiceSubtotal ?? serviceSubtotal,
     groupTotal: options.groupTotal ?? stay.pricingSnapshot?.groupTotal ?? total,
     lineItems: [
-      ...(boardingSubtotal ? [{ type: "boarding", label: boardingLineRoleLabel(role), quantity: days, unitPrice: rate, amount: boardingSubtotal }] : []),
+      ...(boardingSubtotal ? [{ type: stayProgram ? "boarding-program" : "boarding", label: stayProgramName || boardingLineRoleLabel(role), quantity: days, unitPrice: rate, amount: boardingSubtotal }] : []),
       ...arrayValue(requests).map((request) => ({
         type: "service",
         label: boardingServiceTaskDisplayName(request),
@@ -12015,6 +12091,7 @@ function renderCustomerDogs() {
   $("#requestBoardingButton").disabled = !dogs.length;
   $("#customerRequestActions")?.toggleAttribute("hidden", !dogs.length);
   $("#customerNoDogRequestPrompt")?.toggleAttribute("hidden", dogs.length);
+  renderCustomerStayProgramOptions();
   renderCustomerCrateShareOptions();
   renderCustomerServiceOptions();
   updateCustomerEstimate();
@@ -12194,11 +12271,72 @@ function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options
   return `<label class="service-option${options.addOn ? " service-option-addon" : ""}"><span class="service-option-label"><input type="checkbox" name="customerServices" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(addOnPrefix)}${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-${escapeHtml(service.id)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity" /></label>`;
 }
 
+function customerStayProgramServices(user = currentUser) {
+  applyLegacyBoardingProgramMigration();
+  const customerIsMember = isMemberUser(user);
+  return readRecords("service")
+    .filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && serviceIsBoardingProgram(service))
+    .filter((service) => customerIsMember || !serviceHasFlag(service, "Member Pricing"))
+    .sort((a, b) => String(a.serviceName || "").localeCompare(String(b.serviceName || "")));
+}
+
+function selectedCustomerStayProgramId() {
+  const checked = document.querySelector('#customerStayProgramOptions input[name="customerStayProgram"]:checked');
+  return checked?.value && checked.value !== "standard" ? checked.value : "";
+}
+
+function selectedCustomerStayProgram() {
+  const id = selectedCustomerStayProgramId();
+  if (!id) return null;
+  return customerStayProgramServices().find((service) => service.id === id) || null;
+}
+
+function customerStayProgramSnapshot(service = null) {
+  if (!service?.id) return null;
+  return {
+    id: service.id,
+    serviceId: service.id,
+    serviceName: service.serviceName || "Boarding program",
+    name: service.serviceName || "Boarding program",
+    rate: Number(service.basePrice || 0),
+    unit: service.unit || "per night",
+    isMemberPricing: serviceHasFlag(service, "Member Pricing"),
+    includesBoardingAccommodation: true,
+    replacesStandardBoarding: true,
+  };
+}
+
+function renderCustomerStayProgramOptions() {
+  const step = $("#customerStayProgramStep");
+  const container = $("#customerStayProgramOptions");
+  if (!step || !container) return;
+  const show = customerRequestMode() === "boarding";
+  const programs = show ? customerStayProgramServices() : [];
+  step.hidden = !show || !programs.length;
+  if (step.hidden) {
+    container.innerHTML = "";
+    return;
+  }
+  const existing = selectedCustomerStayProgramId();
+  const selectedId = existing && programs.some((program) => program.id === existing) ? existing : "standard";
+  const standardService = boardingPricingServiceForCustomer(currentUser);
+  const standardLabel = standardService?.serviceName || "Standard Overnight Boarding";
+  const options = [
+    `<label class="service-option customer-stay-program-card"><span class="service-option-label"><input type="radio" name="customerStayProgram" value="standard" ${selectedId === "standard" ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(standardLabel)} - ${money(standardService?.basePrice || boardingRatePlanForCustomer().primaryRate)} per night</span></span></span></label>`,
+    ...programs.map((program) => {
+      const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(program));
+      return `<label class="service-option customer-stay-program-card"><span class="service-option-label"><input type="radio" name="customerStayProgram" value="${escapeHtml(program.id)}" ${selectedId === program.id ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(customerServiceDisplayName(program))} - ${money(program.basePrice)} ${escapeHtml(program.unit || "per night")}</span>${infoIcon}</span></span></label>`;
+    }),
+  ];
+  container.innerHTML = options.join("");
+}
+
 function customerImplicitDependencyIds() {
   const ids = new Set();
   if (customerRequestMode() === "boarding") {
-    const boardingService = boardingPricingServiceForCustomer(currentUser);
-    if (boardingService?.id) ids.add(boardingService.id);
+    const stayProgram = selectedCustomerStayProgram();
+    const dependencyService = stayProgram || boardingPricingServiceForCustomer(currentUser);
+    if (dependencyService?.id) ids.add(dependencyService.id);
   }
   return ids;
 }
@@ -12210,6 +12348,7 @@ function customerDependencyIds(checkedIds = new Set()) {
 function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
   applyLegacyServiceDependencyMigration();
+  applyLegacyBoardingProgramMigration();
   const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
   const dependencyIds = customerDependencyIds(checkedIds);
   const customerIsMember = isMemberUser(currentUser);
@@ -12249,8 +12388,9 @@ function renderCustomerCrateShareOptions() {
   if (!step || !container) return;
   const dogs = selectedCustomerDogs();
   const isBoardingRequest = customerRequestMode() === "boarding";
+  const stayProgram = selectedCustomerStayProgram();
   const ratePlan = boardingRatePlanForCustomer();
-  const show = isBoardingRequest && ratePlan.isMemberPricing && dogs.length > 1;
+  const show = isBoardingRequest && !stayProgram && ratePlan.isMemberPricing && dogs.length > 1;
   step.hidden = !show;
   if (!show) {
     container.innerHTML = "";
@@ -12325,10 +12465,13 @@ function customerBookingDogMatchesRecord(dog = {}, record = {}) {
 }
 
 function customerBookingServiceKey(estimate = {}) {
-  return [...new Set(arrayValue(estimate.services)
+  return [
+    String(estimate.stayProgram?.serviceName || estimate.stayProgram?.name || "").trim().toLowerCase(),
+    ...new Set(arrayValue(estimate.services)
     .map((service) => `${service.serviceName || service.id || "Service"}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`)
     .map((label) => String(label || "").trim().toLowerCase())
-    .filter(Boolean))]
+    .filter(Boolean)),
+  ].filter(Boolean)
     .sort()
     .join("|");
 }
@@ -12452,6 +12595,7 @@ function resetCustomerBookingForm() {
   formEl.hidden = true;
   formEl.scrollTop = 0;
   renderCustomerDogs();
+  renderCustomerStayProgramOptions();
   renderCustomerBookingAvailabilityMessages();
   updateCustomerEstimate();
 }
@@ -12475,7 +12619,9 @@ function openCustomerBookingModal(mode = "boarding") {
   clearCustomerBookingTimeErrors();
   $("#requestBoardingButton").textContent = mode === "service" ? "Request Service" : "Request Boarding Time";
   renderCustomerBookingAvailabilityMessages();
+  renderCustomerStayProgramOptions();
   renderCustomerCrateShareOptions();
+  renderCustomerServiceOptions();
 }
 
 function editCustomerRequest(record, stayId = "") {
@@ -12506,6 +12652,11 @@ function editCustomerRequest(record, stayId = "") {
     const checkbox = [...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]')].find((input) => input.value === dog.id);
     if (checkbox) checkbox.checked = true;
   }
+  renderCustomerStayProgramOptions();
+  const stayProgramId = stay.stayProgramId || stay.pricingSnapshot?.stayProgramId || "";
+  $("#customerBookingForm").querySelectorAll('input[name="customerStayProgram"]').forEach((input) => {
+    input.checked = stayProgramId ? input.value === stayProgramId : input.value === "standard";
+  });
   renderCustomerCrateShareOptions();
   const sharedCrateInput = $("#customerSharedCrateRequested");
   if (sharedCrateInput && stay.pricingSnapshot) sharedCrateInput.checked = Boolean(stay.pricingSnapshot.sharedCrateRequested);
@@ -12583,9 +12734,10 @@ function customerEstimateDetails() {
   const days = isServiceRequest ? 0 : boardingDays(data.dropoffTime, data.pickupTime);
   const isDayCare = !isServiceRequest && isDayCareStay(data.dropoffTime, data.pickupTime);
   const ratePlan = boardingRatePlanForCustomer();
-  const sharedCrateRequested = customerSharedCrateRequested();
-  const boardingLines = boardingDogPricingLines(dogs, { ratePlan, days, isServiceRequest, sharedCrateRequested });
-  const boardingRate = ratePlan.primaryRate;
+  const stayProgram = isServiceRequest ? null : customerStayProgramSnapshot(selectedCustomerStayProgram());
+  const sharedCrateRequested = stayProgram ? false : customerSharedCrateRequested();
+  const boardingLines = boardingDogPricingLines(dogs, { ratePlan, days, isServiceRequest, sharedCrateRequested, stayProgram });
+  const boardingRate = stayProgram?.rate || ratePlan.primaryRate;
   const boardingCost = boardingLines.reduce((total, line) => total + Number(line.total || 0), 0);
   const serviceLines = services.map((service) => ({
     ...service,
@@ -12593,11 +12745,11 @@ function customerEstimateDetails() {
     lineTotal: dogs.length * Number(service.basePrice || 0) * Number(service.quantity || 1),
   }));
   const serviceCost = serviceLines.reduce((total, service) => total + service.lineTotal, 0);
-  return { dogs, services: serviceLines, days, isDayCare, isServiceRequest, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
+  return { dogs, services: serviceLines, days, isDayCare, isServiceRequest, stayProgram, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
 }
 
 function boardingPricingServiceForCustomer(user = currentUser) {
-  const activeBoarding = readRecords("service").filter((service) => service.category === "Boarding" && serviceHasFlag(service, "Active"));
+  const activeBoarding = activeBoardingPricingServices();
   if (isMemberUser(user)) return activeBoarding.find((service) => serviceHasFlag(service, "Member Pricing")) || activeBoarding[0];
   return activeBoarding.find((service) => !serviceHasFlag(service, "Member Pricing")) || activeBoarding[0];
 }
@@ -12606,7 +12758,7 @@ function updateCustomerEstimate() {
   if (!$("#customerEstimate")) return;
   const estimate = customerEstimateDetails();
   renderCustomerBookingAvailabilityMessages();
-  const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => `<div class="estimate-line"><span>${escapeHtml(line.dogName)} - ${escapeHtml(boardingLineRoleLabel(line.role))}:</span><span>${Number(line.days || 0)} x ${money(line.rate)} = ${money(line.total)}</span></div>`).join("");
+  const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => `<div class="estimate-line"><span>${escapeHtml(line.dogName)} - ${escapeHtml(boardingLineDisplayLabel(line))}:</span><span>${Number(line.days || 0)} x ${money(line.rate)} = ${money(line.total)}</span></div>`).join("");
   $("#customerEstimate").innerHTML = estimate.dogs.length
     ? `<strong>${escapeHtml(boardingBillingLabel(estimate))}</strong>${boardingLine}${estimate.services.map((service) => `<div class="estimate-line"><span>${escapeHtml(customerServiceDisplayName(service))}</span><span>${estimate.dogs.length} dog(s) x ${Number(service.quantity || 1)} x ${money(service.basePrice)} = ${money(service.lineTotal)}</span></div>`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>`
     : "Select dog(s), dates, and services to see an estimate.";
@@ -12623,7 +12775,7 @@ function showBookingConfirmDialog(estimate) {
   if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
   const dogList = pendingCustomerBooking.dogs.map((dog) => {
     const line = pendingCustomerBooking.boardingLines.find((item) => item.dogKey === boardingPricingDogKey(dog)) || {};
-    const rateText = pendingCustomerBooking.isServiceRequest ? "" : ` - ${escapeHtml(boardingLineRoleLabel(line.role))} at ${money(line.rate || 0)}`;
+    const rateText = pendingCustomerBooking.isServiceRequest ? "" : ` - ${escapeHtml(boardingLineDisplayLabel(line))} at ${money(line.rate || 0)}`;
     return `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}${rateText}</li>`;
   }).join("");
   const serviceList = pendingCustomerBooking.services.length
@@ -12706,6 +12858,7 @@ async function submitPendingCustomerBooking() {
         currentDogRole: dogLine.role || (estimate.ratePlan?.isMemberPricing ? "primary" : "non-member"),
         sharedCrateRequested: estimate.sharedCrateRequested,
         crateGroupId: dogLine.crateGroupId || "",
+        stayProgram: estimate.stayProgram,
         groupBoardingSubtotal: estimate.boardingCost,
         groupServiceSubtotal: estimate.serviceCost,
         groupTotal: estimate.total,
@@ -12719,6 +12872,10 @@ async function submitPendingCustomerBooking() {
         dropoffTime: estimate.dropoffTime,
         pickupTime: estimate.pickupTime,
         stayType,
+        stayProgramId: estimate.stayProgram?.id || "",
+        stayProgramName: estimate.stayProgram?.serviceName || estimate.stayProgram?.name || "",
+        stayProgramRate: estimate.stayProgram?.rate || "",
+        stayProgram: estimate.stayProgram || null,
         billingDays: pricingSnapshot.billingDays,
         requests: stayRequests,
         stayNotes: estimate.requestNotes,
@@ -12871,6 +13028,7 @@ function renderServicePricingTabs(records = []) {
 
 function renderServices() {
   applyLegacyServiceDependencyMigration({ syncRemote: true });
+  applyLegacyBoardingProgramMigration({ syncRemote: true });
   const query = $("#serviceSearch")?.value || "";
   const columns = tableColumns.service;
   const allRecords = sortRecordsForTable("service", readRecords("service").filter((record) => !record.removed && matches(record, query)));
@@ -12897,27 +13055,31 @@ function renderServices() {
 }
 
 function openService(record = {}) {
+  const formRecord = {
+    ...record,
+    boardingRateType: record.boardingRateType || (record.category === "Boarding" && serviceIsStandardBoardingRate(record) ? "standard-boarding" : ""),
+  };
   const panel = $("#serviceEditorPanel");
   if (panel && panel.parentElement !== document.body) document.body.appendChild(panel);
   if (panel) panel.hidden = false;
   const form = $("#serviceForm");
   form.reset();
-  form.dataset.mode = record.id ? "edit" : "create";
-  renderServiceDependencyFields(record);
+  form.dataset.mode = formRecord.id ? "edit" : "create";
+  renderServiceDependencyFields(formRecord);
   if (form.elements.id) {
-    form.elements.id.value = record.id || "";
-    form.elements.id.defaultValue = record.id || "";
+    form.elements.id.value = formRecord.id || "";
+    form.elements.id.defaultValue = formRecord.id || "";
   }
-  setFormValues(form, record);
+  setFormValues(form, formRecord);
   syncServiceDependencyFields();
-  if (!record.id && form.elements.id) form.elements.id.value = "";
-  const flags = normalizedServiceFlags(record.flags || ["Active"]);
+  if (!formRecord.id && form.elements.id) form.elements.id.value = "";
+  const flags = normalizedServiceFlags(formRecord.flags || ["Active"]);
   $$('input[name="serviceFlags"]').forEach((input) => {
     input.checked = flags.includes(input.value);
   });
-  $("#serviceEditorTitle").textContent = record.id ? "Edit Service" : "Add Service";
-  $("#serviceSaveButton").textContent = record.id ? "Update Service" : "Add Service";
-  $("#removeServiceButton").hidden = !record.id;
+  $("#serviceEditorTitle").textContent = formRecord.id ? "Edit Service" : "Add Service";
+  $("#serviceSaveButton").textContent = formRecord.id ? "Update Service" : "Add Service";
+  $("#removeServiceButton").hidden = !formRecord.id;
 }
 
 function closeServiceModal() {
@@ -16333,6 +16495,8 @@ function initEvents() {
     const editingId = formEl.dataset.mode === "edit" ? data.id : "";
     const existing = editingId ? readRecords("service").find((record) => record.id === editingId) : {};
     const serviceId = editingId || uid("service");
+    const boardingRateType = normalizedBoardingRateType(data.boardingRateType);
+    if (boardingRateType) data.category = "Boarding";
     const validDependency = data.requiresServiceId && data.requiresServiceId !== serviceId && readRecords("service").some((record) => record.id === data.requiresServiceId && !record.removed);
     const requiresServiceId = validDependency ? data.requiresServiceId : "";
     const dependentServiceType = requiresServiceId ? data.dependentServiceType || "optional-addon" : "";
@@ -16348,6 +16512,9 @@ function initEvents() {
       id: serviceId,
       type: "service",
       submittedAt: existing?.submittedAt || new Date().toISOString(),
+      boardingRateType,
+      includesBoardingAccommodation: boardingRateType === "boarding-program",
+      replacesStandardBoarding: boardingRateType === "boarding-program",
       requiresServiceId,
       dependentServiceType,
       flags,
@@ -16488,6 +16655,10 @@ function initEvents() {
       if (serviceHasDependentServices(service)) renderCustomerServiceOptions();
     }
     if (event.target.id === "customerSharedCrateRequested") renderCustomerCrateShareOptions();
+    if (event.target.name === "customerStayProgram") {
+      renderCustomerCrateShareOptions();
+      renderCustomerServiceOptions();
+    }
     updateCustomerEstimate();
   });
   $("#customerBookingForm").addEventListener("input", (event) => {

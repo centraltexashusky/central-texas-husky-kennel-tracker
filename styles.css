@@ -1554,6 +1554,14 @@ textarea {
   margin-left: 26px;
 }
 
+.customer-stay-program-options {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.customer-stay-program-card {
+  background: rgba(14, 165, 233, 0.08);
+}
+
 .service-option > span,
 .service-option-label {
   align-items: flex-start;

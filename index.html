@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260527-tooltip-layer" />
+    <link rel="stylesheet" href="styles.css?v=20260527-boarding-programs" />
   </head>
   <body>
     <div class="app-layout">
@@ -345,6 +345,10 @@
               <strong>Select one or more dogs for boarding.</strong>
               <div class="customer-dog-list" id="customerBookingDogList"></div>
               <p id="customerDogSelectionError" class="form-error" hidden>Select at least one dog for this request.</p>
+            </section>
+            <section class="customer-form-step customer-stay-program-step" id="customerStayProgramStep" hidden>
+              <strong>Choose stay type</strong>
+              <div class="checklist compact customer-stay-program-options" id="customerStayProgramOptions"></div>
             </section>
             <section class="customer-form-step customer-crate-share-step" id="customerCrateShareStep" hidden>
               <strong>Member shared-crate pricing</strong>
@@ -1093,6 +1097,7 @@
               <label>Deposit amount<input type="number" name="depositAmount" min="0" step="0.01" placeholder="Optional" /></label>
               <label>Tax rate %<input type="number" name="taxRate" min="0" step="0.01" placeholder="Example: 8.25" /></label>
               <label>Default duration<input type="text" name="defaultDuration" placeholder="Example: 60 minutes" /></label>
+              <label>Boarding/program role<select name="boardingRateType" id="serviceBoardingRateType"><option value="">Standard service/add-on</option><option value="standard-boarding">Standard boarding rate</option><option value="boarding-program">Boarding program (replaces boarding)</option></select></label>
               <label>Only show after service<select name="requiresServiceId" id="serviceRequiresServiceId"><option value="">No dependency</option></select></label>
               <label>Dependent display<select name="dependentServiceType" id="serviceDependentServiceType"><option value="">Standalone / normal item</option><option value="optional-addon">Optional add-on under parent</option></select></label>
             </div>
@@ -1271,6 +1276,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260527-tooltip-layer"></script>
+  <script src="script.js?v=20260527-boarding-programs"></script>
 </body>
 </html>
