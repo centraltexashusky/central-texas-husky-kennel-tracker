@@ -12653,6 +12653,13 @@ function serviceMatchesPricingFilter(record = {}, key = servicePricingFilter) {
   return true;
 }
 
+function setServicePricingFilter(key = "all") {
+  const next = servicePricingFilters.some((filter) => filter.key === key) ? key : "all";
+  servicePricingFilter = next;
+  renderServices();
+  $("#serviceTableBody")?.closest(".service-table-wrap")?.scrollTo({ top: 0, left: 0 });
+}
+
 function serviceEmptyStateText() {
   const label = servicePricingFilterLabel(servicePricingFilter);
   if (servicePricingFilter === "all") return "No services match this search.";
@@ -12667,6 +12674,13 @@ function renderServicePricingTabs(records = []) {
     const count = records.filter((record) => serviceMatchesPricingFilter(record, filter.key)).length;
     return `<button type="button" class="secondary-button ${active ? "is-active" : ""}" data-service-pricing-filter="${escapeHtml(filter.key)}" role="tab" aria-selected="${active ? "true" : "false"}">${escapeHtml(filter.label)} <span>${count}</span></button>`;
   }).join("");
+  container.querySelectorAll("[data-service-pricing-filter]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setServicePricingFilter(button.dataset.servicePricingFilter || "all");
+    });
+  });
 }
 
 function renderServices() {
@@ -16138,8 +16152,7 @@ function initEvents() {
   $("#servicePricingTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-service-pricing-filter]");
     if (!button) return;
-    servicePricingFilter = button.dataset.servicePricingFilter || "all";
-    renderServices();
+    setServicePricingFilter(button.dataset.servicePricingFilter || "all");
   });
   $("#serviceSearch").addEventListener("input", renderServices);
   $("#serviceTableHead").addEventListener("click", (event) => {
