@@ -1575,20 +1575,28 @@ textarea {
 
 .service-info-icon {
   align-items: center;
-  background: rgba(13, 148, 136, 0.14);
-  border: 1px solid rgba(13, 148, 136, 0.45);
+  background: transparent;
+  border: 0;
   border-radius: 999px;
-  color: var(--teal);
   cursor: help;
   display: inline-flex;
   flex: 0 0 auto;
-  font-size: 0.78rem;
-  font-weight: 800;
+  height: 28px;
   justify-content: center;
   line-height: 1;
-  min-height: 24px;
-  min-width: 24px;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
   position: relative;
+  width: 28px;
+}
+
+.service-info-icon img {
+  display: block;
+  height: 28px;
+  object-fit: contain;
+  pointer-events: none;
+  width: 28px;
 }
 
 .service-info-icon::after {

@@ -12020,7 +12020,7 @@ function customerServiceInfoText(service = {}) {
 }
 
 function customerServiceInfoIconHtml(infoText = "") {
-  return infoText ? `<span class="service-info-icon" role="button" tabindex="0" aria-label="${escapeHtml(infoText)}" title="${escapeHtml(infoText)}" data-tooltip="${escapeHtml(infoText)}">(i)</span>` : "";
+  return infoText ? `<span class="service-info-icon" role="button" tabindex="0" aria-label="${escapeHtml(infoText)}" title="${escapeHtml(infoText)}" data-tooltip="${escapeHtml(infoText)}"><img src="assets/icons/service-info-icon.png" alt="" aria-hidden="true" /></span>` : "";
 }
 
 function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options = {}) {
