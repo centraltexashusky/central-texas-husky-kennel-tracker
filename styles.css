@@ -1607,31 +1607,8 @@ textarea {
 }
 
 .service-info-icon::after {
-  background: #102331;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  bottom: calc(100% + 10px);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
-  color: #fff;
-  content: attr(data-tooltip);
   display: none;
-  font-size: 0.82rem;
-  font-weight: 650;
-  line-height: 1.35;
-  max-width: min(320px, 76vw);
-  min-width: 240px;
-  padding: 10px 12px;
-  position: absolute;
-  right: 0;
-  text-align: left;
-  white-space: normal;
-  z-index: 40;
-}
-
-.service-info-icon:hover::after,
-.service-info-icon:focus::after,
-.service-info-icon:focus-visible::after {
-  display: block;
+  content: none;
 }
 
 .service-info-icon:focus,
@@ -1646,6 +1623,25 @@ textarea {
 
 .flag-option .service-info-icon {
   margin-left: auto;
+}
+
+.floating-service-tooltip {
+  background: #102331;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+  color: #fff;
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.35;
+  min-width: min(240px, calc(100vw - 24px));
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+  pointer-events: none;
+  position: fixed;
+  text-align: left;
+  white-space: normal;
+  z-index: 5000;
 }
 
 .service-quantity {
@@ -4165,14 +4161,6 @@ button.mobile-dog-photo-button {
     font-size: 2.25rem;
   }
 
-  .service-info-icon::after {
-    bottom: calc(100% + 8px);
-    left: 50%;
-    max-width: calc(100vw - 48px);
-    min-width: min(260px, calc(100vw - 48px));
-    right: auto;
-    transform: translateX(-50%);
-  }
 }
 
 @media (max-width: 520px) {

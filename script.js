@@ -67,6 +67,8 @@ const selectedDogPhotos = { owned: null, boarding: null, customer: null };
 let ownedDogCareFilter = "All";
 let pendingStructuredCareLogs = [];
 let mediaZoomLevel = 1;
+let activeServiceInfoIcon = null;
+let serviceInfoTooltipEl = null;
 const signedMediaUrlCache = new Map();
 let customerProfileSyncInProgress = false;
 let authSessionSyncPromise = null;
@@ -12116,6 +12118,73 @@ function customerServiceInfoIconHtml(infoText = "") {
   return infoText ? `<span class="service-info-icon" role="button" tabindex="0" aria-label="${escapeHtml(infoText)}" title="${escapeHtml(infoText)}" data-tooltip="${escapeHtml(infoText)}"><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>` : "";
 }
 
+function serviceInfoTooltipText(icon) {
+  return String(icon?.dataset?.tooltip || icon?.getAttribute("aria-label") || icon?.getAttribute("title") || "").trim();
+}
+
+function serviceInfoTooltipNode(icon) {
+  if (!serviceInfoTooltipEl) {
+    serviceInfoTooltipEl = document.createElement("div");
+    serviceInfoTooltipEl.id = "serviceInfoTooltip";
+    serviceInfoTooltipEl.className = "floating-service-tooltip";
+    serviceInfoTooltipEl.setAttribute("role", "tooltip");
+    serviceInfoTooltipEl.hidden = true;
+  }
+  const host = icon?.closest?.("dialog[open]") || document.body;
+  if (serviceInfoTooltipEl.parentElement !== host) host.appendChild(serviceInfoTooltipEl);
+  return serviceInfoTooltipEl;
+}
+
+function positionServiceInfoTooltip(icon = activeServiceInfoIcon) {
+  if (!icon || !document.body.contains(icon) || !serviceInfoTooltipEl || serviceInfoTooltipEl.hidden) return;
+  const margin = 12;
+  const gap = 10;
+  const iconRect = icon.getBoundingClientRect();
+  serviceInfoTooltipEl.style.maxWidth = `${Math.max(180, Math.min(360, window.innerWidth - margin * 2))}px`;
+  serviceInfoTooltipEl.style.left = "0";
+  serviceInfoTooltipEl.style.top = "0";
+  serviceInfoTooltipEl.style.visibility = "hidden";
+  const tooltipRect = serviceInfoTooltipEl.getBoundingClientRect();
+  let top = iconRect.top - tooltipRect.height - gap;
+  let below = false;
+  if (top < margin) {
+    top = iconRect.bottom + gap;
+    below = true;
+  }
+  if (top + tooltipRect.height > window.innerHeight - margin) {
+    top = Math.max(margin, window.innerHeight - margin - tooltipRect.height);
+  }
+  const maxLeft = Math.max(margin, window.innerWidth - margin - tooltipRect.width);
+  const preferredLeft = iconRect.left + iconRect.width / 2 - tooltipRect.width / 2;
+  const left = Math.min(Math.max(margin, preferredLeft), maxLeft);
+  serviceInfoTooltipEl.classList.toggle("is-below", below);
+  serviceInfoTooltipEl.style.left = `${left}px`;
+  serviceInfoTooltipEl.style.top = `${top}px`;
+  serviceInfoTooltipEl.style.visibility = "visible";
+}
+
+function showServiceInfoTooltip(icon) {
+  const text = serviceInfoTooltipText(icon);
+  if (!icon || !text) return;
+  if (icon.hasAttribute("title")) {
+    icon.dataset.nativeTitle = icon.getAttribute("title") || "";
+    icon.removeAttribute("title");
+  }
+  const tooltip = serviceInfoTooltipNode(icon);
+  activeServiceInfoIcon = icon;
+  tooltip.textContent = text;
+  tooltip.hidden = false;
+  icon.setAttribute("aria-describedby", tooltip.id);
+  positionServiceInfoTooltip(icon);
+}
+
+function hideServiceInfoTooltip(icon = null) {
+  if (icon && activeServiceInfoIcon && icon !== activeServiceInfoIcon) return;
+  if (activeServiceInfoIcon) activeServiceInfoIcon.removeAttribute("aria-describedby");
+  activeServiceInfoIcon = null;
+  if (serviceInfoTooltipEl) serviceInfoTooltipEl.hidden = true;
+}
+
 function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options = {}) {
   const checked = checkedIds.has(service.id);
   const quantityValue = formFieldByName($("#customerBookingForm"), `serviceQuantity-${service.id}`)?.value || "1";
@@ -14216,10 +14285,13 @@ function initEvents() {
     resetDailyTaskTabPointerDrag();
     renderDailyTaskTabs();
     setDailyTaskTab(dailyTaskTab);
+    positionServiceInfoTooltip();
   });
   window.addEventListener("scroll", () => {
     lastUserScrollAt = Date.now();
+    positionServiceInfoTooltip();
   }, { passive: true });
+  document.addEventListener("scroll", () => positionServiceInfoTooltip(), { capture: true, passive: true });
   window.addEventListener("pageshow", (event) => {
     scheduleAppResumeRecovery(event.persisted ? "pageshow-bfcache" : "pageshow");
   });
@@ -14274,19 +14346,42 @@ function initEvents() {
     renderTimesheet();
   });
   $("#exportCareLogsButton")?.addEventListener("click", exportCareLogs);
+  document.addEventListener("pointerover", (event) => {
+    const infoIcon = event.target.closest(".service-info-icon");
+    if (infoIcon) showServiceInfoTooltip(infoIcon);
+  });
+  document.addEventListener("pointerout", (event) => {
+    const infoIcon = event.target.closest(".service-info-icon");
+    if (infoIcon && !infoIcon.contains(event.relatedTarget)) hideServiceInfoTooltip(infoIcon);
+  });
+  document.addEventListener("focusin", (event) => {
+    const infoIcon = event.target.closest(".service-info-icon");
+    if (infoIcon) showServiceInfoTooltip(infoIcon);
+  });
+  document.addEventListener("focusout", (event) => {
+    const infoIcon = event.target.closest(".service-info-icon");
+    if (infoIcon) hideServiceInfoTooltip(infoIcon);
+  });
   document.addEventListener("click", (event) => {
     const infoIcon = event.target.closest(".service-info-icon");
-    if (!infoIcon) return;
+    if (!infoIcon) {
+      hideServiceInfoTooltip();
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     infoIcon.focus();
+    showServiceInfoTooltip(infoIcon);
   }, true);
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setMobileMoreOpen(false);
+    if (event.key === "Escape") {
+      setMobileMoreOpen(false);
+      hideServiceInfoTooltip();
+    }
     const infoIcon = event.target.closest?.(".service-info-icon");
     if (infoIcon && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
-      infoIcon.focus();
+      showServiceInfoTooltip(infoIcon);
     }
   });
   $$(".nav-button").forEach((button) => {
