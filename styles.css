@@ -1144,6 +1144,15 @@ label {
   justify-content: space-between;
 }
 
+.has-field-info .field-label-text {
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.has-field-info .required-mark {
+  margin-left: auto;
+}
+
 .required-mark {
   color: var(--red);
   font-size: 1.1rem;
@@ -1631,6 +1640,18 @@ textarea {
 
 .flag-option .service-info-icon {
   margin-left: auto;
+}
+
+.has-field-info .service-info-icon {
+  height: 24px;
+  min-height: 24px;
+  min-width: 24px;
+  width: 24px;
+}
+
+.has-field-info .service-info-icon img {
+  height: 24px;
+  width: 24px;
 }
 
 .floating-service-tooltip {

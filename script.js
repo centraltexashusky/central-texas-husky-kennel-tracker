@@ -3977,6 +3977,21 @@ const fieldHelp = {
   unit: "Required so staff knows how the price is applied.",
 };
 
+const serviceFormFieldInfo = {
+  serviceName: "Customer and staff-facing item name. Keep it specific, for example Full Premium Bath or Bootcamp Training.",
+  category: "Groups revenue and controls where the item appears. Use Boarding for stay rates and boarding-related add-ons.",
+  basePrice: "Price before quantity, billing days, dog count, tax, or manual stay adjustments are applied.",
+  unit: "How the price is applied: per night or day for stays, per service or session for add-ons.",
+  depositAmount: "Optional deposit collected or tracked for this item. Leave blank when no deposit applies.",
+  taxRate: "Optional item-specific sales tax percentage. Leave blank when tax is not used for this item.",
+  defaultDuration: "Optional time estimate staff can use for scheduling, such as 30 minutes.",
+  boardingRateType: "Use Standard boarding rate for normal boarding prices. Use Boarding program when the item replaces normal boarding, such as Bootcamp with overnight accommodation.",
+  requiresServiceId: "Makes this item dependent on another selected service or stay type, such as de-shedding after Full Premium Bath.",
+  dependentServiceType: "Controls how a dependent item appears. Optional add-on shows under its parent when the parent is selected.",
+  itemDescription: "Shown to customers from the item info icon. Use plain language about what is included.",
+  pricingNotes: "Internal notes for staff/admin about rules, exceptions, discounts, or what to verify.",
+};
+
 function setupRequiredFields() {
   $$("label").forEach((label) => {
     const field = label.querySelector("input, select, textarea");
@@ -4006,6 +4021,21 @@ function setupRequiredFields() {
     }
     field.addEventListener("input", () => clearFieldError(field));
     field.addEventListener("change", () => clearFieldError(field));
+  });
+  setupServiceFormInfoIcons();
+}
+
+function setupServiceFormInfoIcons() {
+  const form = $("#serviceForm");
+  if (!form) return;
+  Object.entries(serviceFormFieldInfo).forEach(([fieldName, infoText]) => {
+    const field = formFieldByName(form, fieldName);
+    const label = field ? fieldLabel(field) : null;
+    const title = label?.querySelector(".field-label-text");
+    const titleText = title?.querySelector("span:not(.required-mark)");
+    if (!title || !titleText || title.querySelector(".service-info-icon")) return;
+    label.classList.add("has-field-info");
+    titleText.insertAdjacentHTML("afterend", customerServiceInfoIconHtml(infoText));
   });
 }
 
