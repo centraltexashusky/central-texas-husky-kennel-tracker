@@ -11989,18 +11989,47 @@ function customerRequestTimelineHtml(status = "Pending") {
 
 const CUSTOMER_PREMIUM_STAY_UPGRADE_LABEL = "Upgrade Stay";
 const CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION = "Upgrade your dog's stay with a spacious glass-front suite, larger play yards, and extra enrichment featuring obstacle courses and interactive activities.";
+const CUSTOMER_FULL_BATH_DESHED_LABEL = "De-shedding";
+const CUSTOMER_FULL_BATH_DESHED_DESCRIPTION = "May be added for by the staff when a dog requires more than 30-mins of de-shedding for their regular bath.";
 
 function customerServiceIsPremiumStayUpgrade(service = {}) {
   return normalizedServiceLookupText(service.serviceName || service.name || "") === "premium overnight boarding kennel";
 }
 
+function customerServiceIsFullBath(service = {}) {
+  return normalizedServiceLookupText(service.serviceName || service.name || "") === "full bath";
+}
+
+function customerServiceIsFullBathDeshedAddon(service = {}) {
+  const name = normalizedServiceLookupText(service.serviceName || service.name || "");
+  return name === "de shed w full bath" || name === "de shedding" || (name.includes("de shed") && name.includes("full bath"));
+}
+
 function customerServiceDisplayName(service = {}) {
   if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_LABEL;
+  if (customerServiceIsFullBathDeshedAddon(service)) return CUSTOMER_FULL_BATH_DESHED_LABEL;
   return service.serviceName || service.name || "Service";
 }
 
 function customerServiceInfoText(service = {}) {
-  return customerServiceIsPremiumStayUpgrade(service) ? CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION : "";
+  const itemDescription = String(service.itemDescription || "").trim();
+  if (itemDescription) return itemDescription;
+  if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION;
+  if (customerServiceIsFullBathDeshedAddon(service)) return CUSTOMER_FULL_BATH_DESHED_DESCRIPTION;
+  return "";
+}
+
+function customerServiceInfoIconHtml(infoText = "") {
+  return infoText ? `<span class="service-info-icon" role="button" tabindex="0" aria-label="${escapeHtml(infoText)}" title="${escapeHtml(infoText)}" data-tooltip="${escapeHtml(infoText)}">(i)</span>` : "";
+}
+
+function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options = {}) {
+  const checked = checkedIds.has(service.id);
+  const quantityValue = formFieldByName($("#customerBookingForm"), `serviceQuantity-${service.id}`)?.value || "1";
+  const displayName = customerServiceDisplayName(service);
+  const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(service));
+  const addOnPrefix = options.addOn ? "Add-on: " : "";
+  return `<label class="service-option${options.addOn ? " service-option-addon" : ""}"><span class="service-option-label"><input type="checkbox" name="customerServices" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(addOnPrefix)}${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-${escapeHtml(service.id)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity" /></label>`;
 }
 
 function renderCustomerServiceOptions() {
@@ -12008,14 +12037,17 @@ function renderCustomerServiceOptions() {
   const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
   const customerIsMember = isMemberUser(currentUser);
   const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && service.category !== "Boarding" && (customerIsMember || !serviceHasFlag(service, "Member Pricing")));
-  $("#customerServiceOptions").innerHTML = services.length
-    ? services.map((service) => {
-        const checked = checkedIds.has(service.id);
-        const quantityValue = formFieldByName($("#customerBookingForm"), `serviceQuantity-${service.id}`)?.value || "1";
-        const displayName = customerServiceDisplayName(service);
-        const infoText = customerServiceInfoText(service);
-        const infoIcon = infoText ? `<span class="service-info-icon" tabindex="0" aria-label="${escapeHtml(infoText)}" title="${escapeHtml(infoText)}" data-tooltip="${escapeHtml(infoText)}">(i)</span>` : "";
-        return `<label class="service-option"><span class="service-option-label"><input type="checkbox" name="customerServices" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-${escapeHtml(service.id)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity" /></label>`;
+  const fullBathService = services.find(customerServiceIsFullBath);
+  const fullBathDeshedAddon = services.find(customerServiceIsFullBathDeshedAddon);
+  const fullBathSelected = Boolean(fullBathService?.id && checkedIds.has(fullBathService.id));
+  const visibleServices = services.filter((service) => !customerServiceIsFullBathDeshedAddon(service));
+  $("#customerServiceOptions").innerHTML = visibleServices.length
+    ? visibleServices.map((service) => {
+        const optionHtml = customerServiceOptionHtml(service, checkedIds);
+        const addOnHtml = fullBathSelected && fullBathDeshedAddon?.id && fullBathService?.id === service.id
+          ? customerServiceOptionHtml(fullBathDeshedAddon, checkedIds, { addOn: true })
+          : "";
+        return `${optionHtml}${addOnHtml}`;
       }).join("")
     : "<p>No customer services are active yet.</p>";
 }
@@ -12299,16 +12331,21 @@ function editCustomerRequest(record, stayId = "") {
     const match = cleaned.match(/^(.*?)\s+x(\d+)$/);
     return [match ? match[1].trim() : cleaned, match ? Number(match[2]) : 1];
   }));
-  $("#customerBookingForm").querySelectorAll('input[name="customerServices"]').forEach((input) => {
-    const service = readRecords("service").find((item) => item.id === input.value);
-    const quantity = serviceQuantities.get(service?.id) || serviceQuantities.get(service?.serviceName);
-    input.checked = Boolean(quantity);
-    const quantityInput = formFieldByName($("#customerBookingForm"), `serviceQuantity-${input.value}`);
-    if (quantityInput) {
-      quantityInput.value = String(quantity || 1);
-      quantityInput.disabled = !input.checked;
-    }
-  });
+  const applyServiceQuantities = () => {
+    $("#customerBookingForm").querySelectorAll('input[name="customerServices"]').forEach((input) => {
+      const service = readRecords("service").find((item) => item.id === input.value);
+      const quantity = serviceQuantities.get(service?.id) || serviceQuantities.get(service?.serviceName);
+      input.checked = Boolean(quantity);
+      const quantityInput = formFieldByName($("#customerBookingForm"), `serviceQuantity-${input.value}`);
+      if (quantityInput) {
+        quantityInput.value = String(quantity || 1);
+        quantityInput.disabled = !input.checked;
+      }
+    });
+  };
+  applyServiceQuantities();
+  renderCustomerServiceOptions();
+  applyServiceQuantities();
   $("#requestBoardingButton").textContent = "Update Request";
   $("#customerBookingFormTitle").textContent = "Update Request";
   $("#customerBookingFormHelp").textContent = "Update boarding time, requested services, or notes.";
@@ -12382,7 +12419,7 @@ function updateCustomerEstimate() {
   if (!$("#customerEstimate")) return;
   const estimate = customerEstimateDetails();
   renderCustomerBookingAvailabilityMessages();
-  const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => `<div class="estimate-line"><span>${escapeHtml(line.dogName)} - ${escapeHtml(boardingLineRoleLabel(line.role))}</span><span>${Number(line.days || 0)} x ${money(line.rate)} = ${money(line.total)}</span></div>`).join("");
+  const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => `<div class="estimate-line"><span>${escapeHtml(line.dogName)} - ${escapeHtml(boardingLineRoleLabel(line.role))}:</span><span>${Number(line.days || 0)} x ${money(line.rate)} = ${money(line.total)}</span></div>`).join("");
   $("#customerEstimate").innerHTML = estimate.dogs.length
     ? `<strong>${escapeHtml(boardingBillingLabel(estimate))}</strong>${boardingLine}${estimate.services.map((service) => `<div class="estimate-line"><span>${escapeHtml(customerServiceDisplayName(service))}</span><span>${estimate.dogs.length} dog(s) x ${Number(service.quantity || 1)} x ${money(service.basePrice)} = ${money(service.lineTotal)}</span></div>`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>`
     : "Select dog(s), dates, and services to see an estimate.";
@@ -14059,8 +14096,20 @@ function initEvents() {
     renderTimesheet();
   });
   $("#exportCareLogsButton")?.addEventListener("click", exportCareLogs);
+  document.addEventListener("click", (event) => {
+    const infoIcon = event.target.closest(".service-info-icon");
+    if (!infoIcon) return;
+    event.preventDefault();
+    event.stopPropagation();
+    infoIcon.focus();
+  }, true);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setMobileMoreOpen(false);
+    const infoIcon = event.target.closest?.(".service-info-icon");
+    if (infoIcon && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      infoIcon.focus();
+    }
   });
   $$(".nav-button").forEach((button) => {
     button.addEventListener("click", () => switchPage(button.dataset.page));
@@ -16147,6 +16196,8 @@ function initEvents() {
         quantityInput.disabled = !event.target.checked;
         if (event.target.checked && !quantityInput.value) quantityInput.value = "1";
       }
+      const service = readRecords("service").find((item) => item.id === event.target.value);
+      if (customerServiceIsFullBath(service)) renderCustomerServiceOptions();
     }
     if (event.target.id === "customerSharedCrateRequested") renderCustomerCrateShareOptions();
     updateCustomerEstimate();

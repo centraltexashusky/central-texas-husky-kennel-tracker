@@ -834,6 +834,18 @@ body.owned-dog-modal-open {
   padding-left: 20px;
 }
 
+.estimate-line {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  justify-content: space-between;
+}
+
+.estimate-line span:last-child {
+  text-align: right;
+}
+
 .estimate-total {
   align-items: center;
   background: #fff6df;
@@ -1536,6 +1548,11 @@ textarea {
   justify-content: space-between;
 }
 
+.service-option-addon {
+  background: rgba(13, 148, 136, 0.08);
+  border-style: dashed;
+}
+
 .service-option > span,
 .service-option-label {
   align-items: flex-start;
@@ -1597,13 +1614,23 @@ textarea {
 }
 
 .service-info-icon:hover::after,
+.service-info-icon:focus::after,
 .service-info-icon:focus-visible::after {
   display: block;
 }
 
+.service-info-icon:focus,
 .service-info-icon:focus-visible {
   outline: 2px solid var(--teal);
   outline-offset: 2px;
+}
+
+.flag-option {
+  align-items: center;
+}
+
+.flag-option .service-info-icon {
+  margin-left: auto;
 }
 
 .service-quantity {
@@ -4093,6 +4120,15 @@ button.mobile-dog-photo-button {
 
   h1 {
     font-size: 2.25rem;
+  }
+
+  .service-info-icon::after {
+    bottom: calc(100% + 8px);
+    left: 50%;
+    max-width: calc(100vw - 48px);
+    min-width: min(260px, calc(100vw - 48px));
+    right: auto;
+    transform: translateX(-50%);
   }
 }
 
