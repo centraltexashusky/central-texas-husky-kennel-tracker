@@ -9660,10 +9660,13 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const status = boardingStayDisplayStatus(record, stay);
   const nextStatuses = boardingStatusTransitions[status] || [];
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
+  const servicesText = boardingStayServicesText(stay);
+  const serviceSummary = servicesText === "No service requests" ? "No service requested" : servicesText;
   return `<section class="popup-record-section">
     <article class="record-card compact-record-card">
       <strong>${escapeHtml(formatDateTime(stay.dropoffTime))} to ${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
       <div class="chip-row">${boardingStayRequestCodeChipHtml(record, stay)}${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}</div>
+      <p><strong>Service request:</strong> ${escapeHtml(serviceSummary)}</p>
       <p>Status changes apply only to this boarding request/stay.</p>
     </article>
     <div class="record-actions">${nextStatuses.length ? nextStatuses.map((nextStatus) => `<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="${escapeHtml(record.id || "")}"${stayAttrs} data-next-status="${escapeHtml(nextStatus)}">${escapeHtml(stayTransitionLabel(status, nextStatus))}</button>`).join("") : "<p>No status changes are available for this stay.</p>"}</div>
