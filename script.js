@@ -8619,6 +8619,122 @@ function saveBoardingRequestFilterFromForm(formEl) {
   showToast(statuses.length ? "Boarding request filter saved." : "Showing all boarding requests.");
 }
 
+function boardingFamilyOwnerKey(record = {}) {
+  const explicitId = String(record.householdId || record.familyGroupId || record.familyId || record.customerAccountId || "").trim();
+  if (explicitId) return `id:${explicitId}`;
+  const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail || record.linkedOwnerEmail || record.requestedByEmail || "");
+  if (ownerEmail) return `email:${ownerEmail}`;
+  const ownerPhone = String(record.ownerPhone || record.customerPhone || record.requestedByPhone || "").replace(/\D/g, "");
+  if (ownerPhone) return `phone:${ownerPhone}`;
+  const ownerName = String(record.ownerName || record.requestedByName || "").trim().toLowerCase();
+  return ownerName ? `name:${ownerName}` : "";
+}
+
+function boardingFamilyStayKey(stay = {}) {
+  const dropoff = String(stay.dropoffTime || "").trim();
+  const pickup = String(stay.pickupTime || "").trim();
+  if (!dropoff || !pickup) return "";
+  return `${dropoff}|${pickup}`;
+}
+
+function boardingFamilyGroupKey(entry = {}) {
+  const ownerKey = boardingFamilyOwnerKey(entry.record || {});
+  const stayKey = boardingFamilyStayKey(entry.stay || {});
+  return ownerKey && stayKey ? `${ownerKey}::${stayKey}` : "";
+}
+
+function boardingFamilyName(record = {}) {
+  const explicit = String(record.householdName || record.familyName || "").trim();
+  if (explicit) return boardingFamilyNameLabel(explicit.replace(/\s+family$/i, ""));
+  const ownerName = String(record.ownerName || record.requestedByName || "").trim();
+  const parts = ownerName
+    .replace(/[,&/]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length) return boardingFamilyNameLabel(parts[parts.length - 1]);
+  const emailPrefix = String(record.ownerEmail || record.customerEmail || record.requestedByEmail || "").split("@")[0] || "";
+  const emailParts = emailPrefix.split(/[._-]+/).filter(Boolean);
+  return emailParts.length ? boardingFamilyNameLabel(emailParts[emailParts.length - 1]) : "Family";
+}
+
+function boardingFamilyNameLabel(value = "") {
+  const label = String(value || "").trim();
+  if (!label) return "Family";
+  return label
+    .split(/\s+/)
+    .map((part) => part ? `${part.charAt(0).toUpperCase()}${part.slice(1)}` : "")
+    .join(" ");
+}
+
+function boardingFamilyStatusSummary(entries = []) {
+  const statuses = [...new Set(entries.map((entry) => entry.status).filter(Boolean))];
+  if (!statuses.length) return "Status not set";
+  return statuses.length === 1 ? statuses[0] : "Mixed statuses";
+}
+
+function boardingFamilyGroups(entries = []) {
+  const groups = new Map();
+  const singles = [];
+  entries.forEach((entry) => {
+    const key = boardingFamilyGroupKey(entry);
+    if (!key) {
+      singles.push(entry);
+      return;
+    }
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  });
+  const groupedKeys = new Set([...groups].filter(([, items]) => items.length > 1).map(([key]) => key));
+  const output = [];
+  const emitted = new Set();
+  entries.forEach((entry) => {
+    const key = boardingFamilyGroupKey(entry);
+    if (key && groupedKeys.has(key)) {
+      if (!emitted.has(key)) {
+        output.push({ type: "family", entries: groups.get(key) });
+        emitted.add(key);
+      }
+      return;
+    }
+    if (!key || singles.includes(entry) || !groupedKeys.has(key)) output.push({ type: "single", entry });
+  });
+  return output;
+}
+
+function boardingRequestCardHtml(entry = {}, options = {}) {
+  const record = entry.record || {};
+  const stay = entry.stay || {};
+  const services = boardingStayServicesText(stay);
+  const status = entry.status;
+  const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
+  const total = boardingStayInvoiceTotal(record, stay);
+  const approveAction = status === "Cancelled" ? `<button type="button" class="secondary-button" data-action="approve-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>Approve Request</button>` : "";
+  const actions = `<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>Change</button>${approveAction}</div>${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}`;
+  const familyChip = options.familyName ? `<span class="status-chip boarding-family-chip">Same family: ${escapeHtml(options.familyName)}</span>` : "";
+  return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-id="${escapeHtml(record.id)}"${stayAttr} data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${familyChip}${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}"${stayAttr}>${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : ""}${actions}</article>`;
+}
+
+function boardingFamilyGroupHtml(entries = []) {
+  const first = entries[0] || {};
+  const firstRecord = first.record || {};
+  const firstStay = first.stay || {};
+  const familyName = boardingFamilyName(firstRecord);
+  const familyTitle = familyName.toLowerCase() === "family" ? "Family Stay" : `${familyName} Family Stay`;
+  const dogNames = entries.map((entry) => entry.record?.dogName || "Dog").filter(Boolean);
+  const statusSummary = boardingFamilyStatusSummary(entries);
+  return `<section class="boarding-family-group">
+    <div class="boarding-family-header">
+      <div>
+        <strong>${escapeHtml(familyTitle)}</strong>
+        <span>${escapeHtml(dogNames.join(", "))}</span>
+        <p>${formatDateTime(firstStay.dropoffTime)} to ${formatDateTime(firstStay.pickupTime)}</p>
+      </div>
+      <div class="chip-row"><span class="status-chip boarding-family-chip">${entries.length} dogs</span><span class="status-chip">${escapeHtml(statusSummary)}</span></div>
+    </div>
+    <div class="boarding-family-dogs">${entries.map((entry) => boardingRequestCardHtml(entry, { familyName })).join("")}</div>
+  </section>`;
+}
+
 function renderBoardingRequests() {
   const list = $("#boardingRequestRecords");
   if (!list) return;
@@ -8631,19 +8747,8 @@ function renderBoardingRequests() {
     .filter((entry) => !statusFilters.length || statusFilters.includes(entry.status))
     .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
   list.innerHTML = entries.length
-    ? entries
-        .map((record) => {
-          const entry = record;
-          record = entry.record || {};
-          const stay = entry.stay || {};
-          const services = boardingStayServicesText(stay);
-          const status = entry.status;
-          const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
-          const total = boardingStayInvoiceTotal(record, stay);
-          const approveAction = status === "Cancelled" ? `<button type="button" class="secondary-button" data-action="approve-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>Approve Request</button>` : "";
-          const actions = `<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>Change</button>${approveAction}</div>${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}`;
-          return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-id="${escapeHtml(record.id)}"${stayAttr} data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}"${stayAttr}>${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : ""}${actions}</article>`;
-        })
+    ? boardingFamilyGroups(entries)
+        .map((item) => (item.type === "family" ? boardingFamilyGroupHtml(item.entries) : boardingRequestCardHtml(item.entry)))
         .join("")
     : `<p>No ${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>`;
 }

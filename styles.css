@@ -3682,6 +3682,57 @@ button.mobile-dog-photo-button {
   color: #e0f2fe;
 }
 
+.boarding-family-group {
+  background: rgba(11, 31, 48, 0.94);
+  border: 1px solid rgba(125, 211, 252, 0.42);
+  border-left: 5px solid #7dd3fc;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.boarding-family-header {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.boarding-family-header > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.boarding-family-header strong {
+  color: #fff;
+  font-size: 1.02rem;
+}
+
+.boarding-family-header span,
+.boarding-family-header p {
+  color: rgba(226, 242, 255, 0.78);
+  margin: 0;
+}
+
+.boarding-family-dogs {
+  display: grid;
+  gap: 10px;
+}
+
+.boarding-family-chip {
+  background: rgba(125, 211, 252, 0.18);
+  border-color: rgba(125, 211, 252, 0.48);
+  color: #e0f2fe;
+}
+
+@media (max-width: 640px) {
+  .boarding-family-header {
+    display: grid;
+  }
+}
+
 .boarding-service-task-list {
   display: grid;
   gap: 8px;
