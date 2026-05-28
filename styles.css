@@ -1754,8 +1754,7 @@ textarea {
   font-size: 0.8rem;
 }
 
-.boarding-queue-grid,
-.service-catalog-groups {
+.boarding-queue-grid {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -1790,8 +1789,7 @@ textarea {
   z-index: 3;
 }
 
-.boarding-queue-card,
-.service-group-card {
+.boarding-queue-card {
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
     rgba(8, 17, 27, 0.70);
@@ -1803,15 +1801,9 @@ textarea {
   padding: 12px;
 }
 
-.boarding-queue-card > span,
-.service-group-card > span {
+.boarding-queue-card > span {
   font-size: 1.5rem;
   font-weight: 900;
-}
-
-.service-group-card p {
-  color: rgba(255, 255, 255, 0.75);
-  margin: 0;
 }
 
 .boarding-queue-item {
@@ -3105,8 +3097,8 @@ option {
 }
 
 .data-table th {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.82);
+  background: #0b2133;
+  color: rgba(255, 255, 255, 0.94);
   font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -3114,7 +3106,7 @@ option {
 
 .data-table th[data-sort-column]:hover,
 .data-table th[data-settings-sort]:hover {
-  background: rgba(255, 255, 255, 0.20);
+  background: #12324b;
   color: #fff;
 }
 

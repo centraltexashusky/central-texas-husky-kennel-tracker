@@ -4419,6 +4419,11 @@ function servicePricingScopeLabel(service = {}) {
   return serviceHasFlag(service, "Member Pricing") ? "Member Pricing" : "Regular Price (Non-Member)";
 }
 
+function serviceMatchesCustomerPricingScope(service = {}, user = currentUser) {
+  const memberPricing = serviceHasFlag(service, "Member Pricing");
+  return isMemberUser(user) ? memberPricing : !memberPricing;
+}
+
 function normalizedBoardingRateType(value = "") {
   const normalized = String(value || "").trim().toLowerCase();
   if (["boarding-program", "program", "stay-program"].includes(normalized)) return "boarding-program";
@@ -12303,10 +12308,9 @@ function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options
 
 function customerStayProgramServices(user = currentUser) {
   applyLegacyBoardingProgramMigration();
-  const customerIsMember = isMemberUser(user);
   return readRecords("service")
     .filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && serviceIsBoardingProgram(service))
-    .filter((service) => customerIsMember || !serviceHasFlag(service, "Member Pricing"))
+    .filter((service) => serviceMatchesCustomerPricingScope(service, user))
     .sort((a, b) => String(a.serviceName || "").localeCompare(String(b.serviceName || "")));
 }
 
@@ -12381,8 +12385,7 @@ function renderCustomerServiceOptions() {
   applyLegacyBoardingProgramMigration();
   const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
   const dependencyIds = customerDependencyIds(checkedIds);
-  const customerIsMember = isMemberUser(currentUser);
-  const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && (customerIsMember || !serviceHasFlag(service, "Member Pricing")));
+  const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && serviceMatchesCustomerPricingScope(service, currentUser));
   const visibleServices = services.filter((service) => !serviceDependencyId(service));
   const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
   const visibleHtml = visibleServices.map((service) => {
@@ -13063,18 +13066,6 @@ function renderServices() {
   const columns = tableColumns.service;
   const allRecords = sortRecordsForTable("service", readRecords("service").filter((record) => !record.removed && matches(record, query)));
   const records = allRecords.filter((record) => serviceMatchesPricingFilter(record));
-  const groupContainer = $("#serviceCatalogGroups");
-  if (groupContainer) {
-    const active = readRecords("service").filter((record) => !record.removed && serviceHasFlag(record, "Active"));
-    const customerBookable = active.filter((record) => !serviceHasFlag(record, "Admin only"));
-    const internal = active.filter((record) => serviceHasFlag(record, "Admin only"));
-    groupContainer.innerHTML = [
-      ["Customer-bookable", customerBookable],
-      ["Internal / Admin-only", internal],
-    ]
-      .map(([label, group]) => `<article class="service-group-card"><strong>${escapeHtml(label)}</strong><span>${group.length}</span><p>${escapeHtml(group.map((record) => record.serviceName).join(", ") || "None active")}</p></article>`)
-      .join("");
-  }
   renderServicePricingTabs(allRecords);
   $("#serviceTableHead").innerHTML = `<tr>${columns.map((column) => `<th data-sort-column="${column.key}" data-table="service">${escapeHtml(column.label)}</th>`).join("")}<th>Actions</th></tr>`;
   $("#serviceTableBody").innerHTML = records.length
