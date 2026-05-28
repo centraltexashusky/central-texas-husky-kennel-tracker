@@ -12304,7 +12304,8 @@ function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options
   const displayName = customerServiceDisplayName(service);
   const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(service));
   const addOnPrefix = options.addOn ? "Add-on: " : "";
-  return `<label class="service-option${options.addOn ? " service-option-addon" : ""}"><span class="service-option-label"><input type="checkbox" name="customerServices" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(addOnPrefix)}${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-${escapeHtml(service.id)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity" /></label>`;
+  const extraClass = options.parent ? " service-option-parent" : "";
+  return `<label class="service-option${options.addOn ? " service-option-addon" : ""}${extraClass}"><span class="service-option-label"><input type="checkbox" name="customerServices" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(addOnPrefix)}${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-${escapeHtml(service.id)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity" /></label>`;
 }
 
 function customerStayProgramServices(user = currentUser) {
@@ -12390,14 +12391,16 @@ function renderCustomerServiceOptions() {
   const visibleServices = services.filter((service) => !serviceDependencyId(service));
   const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
   const visibleHtml = visibleServices.map((service) => {
-    const optionHtml = customerServiceOptionHtml(service, checkedIds);
-    const addOnHtml = dependencyIds.has(service.id)
+    const childServices = dependencyIds.has(service.id)
       ? services
           .filter((dependent) => serviceDependencyId(dependent) === service.id)
-          .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
-          .join("")
-      : "";
-    return `${optionHtml}${addOnHtml}`;
+      : [];
+    if (!childServices.length) return customerServiceOptionHtml(service, checkedIds);
+    const optionHtml = customerServiceOptionHtml(service, checkedIds, { parent: true });
+    const addOnHtml = childServices
+      .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
+      .join("");
+    return `<div class="service-option-group">${optionHtml}<div class="service-option-addons">${addOnHtml}</div></div>`;
   }).join("");
   const implicitHtml = implicitDependencyServices
     .map((service) => customerServiceOptionHtml(service, checkedIds, { addOn: serviceDependencyType(service) === "optional-addon" }))

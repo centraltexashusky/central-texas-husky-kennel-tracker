@@ -1418,6 +1418,7 @@ button:focus-visible {
 }
 
 .customer-additional-services .checklist.compact {
+  grid-template-columns: 1fr;
   margin-bottom: 0;
 }
 
@@ -1555,6 +1556,28 @@ textarea {
 .service-option {
   align-items: center;
   justify-content: space-between;
+  min-height: 64px;
+}
+
+.service-option-group {
+  background: rgba(15, 32, 50, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+}
+
+.service-option-group > .service-option {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.service-option-addons {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px 48px;
 }
 
 .service-option-addon {
@@ -1588,6 +1611,10 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  .service-option-addons {
+    padding-left: 30px;
+  }
+
   .service-option-addon {
     margin-left: 0;
   }
