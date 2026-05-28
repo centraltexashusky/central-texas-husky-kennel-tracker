@@ -560,7 +560,8 @@ function serviceChipsHtml(service = {}) {
 function isMemberUser(user = currentUser) {
   if (!user) return false;
   const profile = savedUserFor(user) || {};
-  return profile.isMember === true || profile.isMember === "on" || profile.isMember === "true" || profile.member === true;
+  return profile.isMember === true || profile.isMember === "on" || profile.isMember === "true" || profile.member === true
+    || user.isMember === true || user.isMember === "on" || user.isMember === "true" || user.member === true;
 }
 
 function dogTypeBadgeHtml(type) {
