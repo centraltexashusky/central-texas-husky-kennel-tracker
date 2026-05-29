@@ -2002,6 +2002,68 @@ textarea {
   margin: 12px 0;
 }
 
+.column-manager-header {
+  flex: 1 1 100%;
+}
+
+.column-manager-header strong,
+.column-manager-header small {
+  display: block;
+}
+
+.column-manager-header small {
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.table-settings-shell {
+  position: relative;
+}
+
+.table-settings-button {
+  height: 34px;
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 34px;
+  z-index: 6;
+}
+
+.table-settings-button svg {
+  fill: none;
+  height: 18px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 18px;
+}
+
+.table-settings-button.is-active {
+  background: rgba(10, 132, 255, 0.92);
+  border-color: rgba(100, 210, 255, 0.68);
+}
+
+.table-settings-popover {
+  align-items: stretch;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.20), transparent 42%),
+    rgba(9, 20, 34, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  box-shadow: var(--glass-shadow), var(--glass-specular);
+  flex-direction: column;
+  margin: 0;
+  max-height: min(420px, calc(100vh - 160px));
+  overflow: auto;
+  padding: 12px;
+  position: absolute;
+  right: 10px;
+  top: 50px;
+  width: min(340px, calc(100% - 20px));
+  z-index: 7;
+}
+
 .column-chip {
   align-items: center;
   background: #f6f8f7;
@@ -4156,7 +4218,8 @@ button.mobile-dog-photo-button {
   #boardingDogsPage .table-wrap,
   #settingsUsersPage .table-wrap,
   #ourDogsPage .column-manager,
-  #boardingDogsPage .column-manager {
+  #boardingDogsPage .column-manager,
+  #boardingDogsPage .table-settings-button {
     display: none !important;
   }
 

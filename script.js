@@ -1190,7 +1190,7 @@ function renderColumnManager(type, selector) {
   if (!container) return;
   const order = readTableConfig()[type] || [];
   const columns = tableColumns[type];
-  container.innerHTML = columns
+  container.innerHTML = `<div class="column-manager-header"><strong>Table columns</strong><small>Choose visible headers. Drag or use arrows to reorder.</small></div>` + columns
     .map((column) => {
       const visible = order.includes(column.key);
       const index = order.indexOf(column.key);
@@ -1201,6 +1201,15 @@ function renderColumnManager(type, selector) {
       </div>`;
     })
     .join("");
+}
+
+function setTableSettingsPopoverOpen(buttonSelector, panelSelector, open) {
+  const button = $(buttonSelector);
+  const panel = $(panelSelector);
+  if (!button || !panel) return;
+  panel.hidden = !open;
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+  button.classList.toggle("is-active", open);
 }
 
 function updateTableColumnConfig(type, columnKey, action) {
@@ -16166,6 +16175,19 @@ function initEvents() {
     if (!button) return;
     const record = boardingDogRecordForDisplay(button.dataset.id);
     if (record) await linkBoardingDogOwnerAccount(record);
+  });
+  $("#boardingDogTableSettingsButton")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const panel = $("#boardingDogColumnManager");
+    setTableSettingsPopoverOpen("#boardingDogTableSettingsButton", "#boardingDogColumnManager", Boolean(panel?.hidden));
+  });
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".table-settings-shell")) return;
+    setTableSettingsPopoverOpen("#boardingDogTableSettingsButton", "#boardingDogColumnManager", false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setTableSettingsPopoverOpen("#boardingDogTableSettingsButton", "#boardingDogColumnManager", false);
   });
   $("#boardingDogColumnManager").addEventListener("click", (event) => {
     const control = event.target.closest("[data-action]");

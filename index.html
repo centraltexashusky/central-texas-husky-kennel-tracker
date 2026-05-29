@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260528-family-groups" />
+    <link rel="stylesheet" href="styles.css?v=20260528-table-settings" />
   </head>
   <body>
     <div class="app-layout">
@@ -922,12 +922,19 @@
           </div>
           <div class="boarding-queue-grid" id="boardingQueueGroups" aria-label="Boarding queue groups"></div>
           <div class="mobile-roster-list boarding-quick-list" id="boardingDogQuickCards" aria-label="Mobile boarding check-in and check-out actions"></div>
-          <div class="column-manager" id="boardingDogColumnManager" hidden></div>
-          <div class="table-wrap">
-            <table class="data-table" id="boardingDogTable">
-              <thead id="boardingDogTableHead"></thead>
-              <tbody id="boardingDogTableBody"></tbody>
-            </table>
+          <div class="table-settings-shell">
+            <button type="button" class="icon-button table-settings-button" id="boardingDogTableSettingsButton" aria-label="Boarding table columns" aria-controls="boardingDogColumnManager" aria-expanded="false" title="Boarding table columns">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16M4 12h16M4 17h16M8 5v14M16 5v14" />
+              </svg>
+            </button>
+            <div class="column-manager table-settings-popover" id="boardingDogColumnManager" hidden></div>
+            <div class="table-wrap">
+              <table class="data-table" id="boardingDogTable">
+                <thead id="boardingDogTableHead"></thead>
+                <tbody id="boardingDogTableBody"></tbody>
+              </table>
+            </div>
           </div>
         </section>
 
@@ -1275,6 +1282,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="script.js?v=20260528-family-groups"></script>
+  <script src="script.js?v=20260528-table-settings"></script>
 </body>
 </html>
