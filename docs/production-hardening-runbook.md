@@ -83,10 +83,15 @@ dog_vaccinations
 dog_internal_notes
 dog_activity_logs
 reservation_customer_updates
+customer_proposed_changes
 legacy_dog_links
 ```
 
 These are intentionally non-breaking. The live app still uses `kennel_records` until the migration and RPC/Edge Function write paths are implemented in a later app release.
+
+`reservation_customer_updates` is the staff-to-customer update feed. Customer-requested edits should go through `customer_proposed_changes`, then staff can mark the proposal `merged` or `ignored` after review. `boarding_reservations.reviewed_by`, `reviewed_at`, `rejection_reason`, and `approved_notes` capture the handoff from customer request to approved or declined operational stay.
+
+Before running this schema against production, confirm the dog table boundary. The current production database already has a `public.dogs` table for public website/CMS dog profiles, while this staged boarding schema expects `public.dogs` to be the kennel/customer dog identity table. Resolve that naming/model conflict before applying the normalized boarding tables.
 
 ## 6. Production Smoke Test
 
