@@ -1,0 +1,9 @@
+import "./auth.js";
+import "./customer.js";
+import "./boarding.js";
+import "./staff-daily.js";
+import "./timesheet.js";
+import "./settings.js";
+import "./notifications.js";
+import "./search.js";
+import "../script.js?v=20260529-full-fixes";

@@ -146,8 +146,9 @@ stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select public.kennel_auth_email() in ('centraltexashusky@gmail.com', 'cthusky05@gmail.com')
-    or exists (
+  -- Bootstrap admin access by inserting a settingsUser kennel_records row
+  -- directly in Supabase Studio with payload.role = 'admin'.
+  select exists (
       select 1
       from public.kennel_records kr
       where kr.type = 'settingsUser'

@@ -138,10 +138,6 @@ iframe {
   display: none;
 }
 
-.mobile-page-menu {
-  display: none;
-}
-
 .mobile-bottom-nav,
 .mobile-more-backdrop,
 .mobile-more-sheet {
@@ -619,6 +615,56 @@ body.owned-dog-modal-open {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.dashboard-priority-panel {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.dashboard-priority-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-priority-card {
+  align-items: start;
+  background: rgba(8, 17, 27, 0.70);
+  border: 1px solid rgba(148, 185, 202, 0.38);
+  border-left-width: 6px;
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  gap: 4px;
+  min-height: 106px;
+  padding: 14px;
+  text-align: left;
+}
+
+.dashboard-priority-card strong {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.dashboard-priority-card span {
+  color: rgba(232, 239, 238, 0.78);
+  font-size: 0.85rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dashboard-priority-card.is-count-clear {
+  border-left-color: #22c55e;
+}
+
+.dashboard-priority-card.is-count-watch {
+  border-left-color: #f59e0b;
+}
+
+.dashboard-priority-card.is-count-urgent {
+  border-left-color: #ef4444;
+}
+
 .dashboard-filter {
   margin-bottom: 14px;
   max-width: 280px;
@@ -667,6 +713,98 @@ body.owned-dog-modal-open {
   margin-top: 14px;
 }
 
+.customer-welcome-card,
+.customer-dog-dashboard-card {
+  background: rgba(8, 17, 27, 0.72);
+  border: 1px solid rgba(148, 185, 202, 0.44);
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.customer-welcome-card {
+  justify-items: center;
+  margin-inline: auto;
+  max-width: 520px;
+  min-height: 260px;
+  text-align: center;
+}
+
+.customer-welcome-icon {
+  align-items: center;
+  background: var(--teal);
+  border-radius: 50%;
+  color: #05233b;
+  display: inline-flex;
+  font-size: 2rem;
+  font-weight: 950;
+  height: 82px;
+  justify-content: center;
+  width: 82px;
+}
+
+.customer-welcome-card h3,
+.customer-dog-dashboard-title h3 {
+  color: var(--text);
+  font-size: 1.45rem;
+  margin: 0;
+}
+
+.customer-welcome-card p,
+.customer-dog-dashboard-card p,
+.customer-current-stay p {
+  color: rgba(232, 239, 238, 0.74);
+}
+
+.customer-dog-dashboard-main {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.customer-dog-dashboard-main .customer-dog-photo {
+  height: 86px;
+  width: 86px;
+}
+
+.customer-dog-dashboard-title,
+.boarding-card-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.customer-dashboard-actions {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.customer-current-stay {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.muted-text {
+  color: rgba(232, 239, 238, 0.64);
+}
+
+.inline-success-message {
+  background: rgba(34, 197, 94, 0.14);
+  border: 1px solid rgba(34, 197, 94, 0.42);
+  border-radius: 8px;
+  color: #dcfce7;
+  font-weight: 850;
+  margin-top: 12px;
+  padding: 12px 14px;
+}
+
 .form-error {
   background: rgba(191, 78, 69, 0.16);
   border: 1px solid rgba(255, 118, 112, 0.55);
@@ -711,6 +849,34 @@ body.owned-dog-modal-open {
   inset: auto;
   left: auto;
   max-height: min(720px, calc(100dvh - 132px));
+  max-width: none;
+  position: static;
+  top: auto;
+  transform: none;
+  width: 100%;
+  z-index: auto;
+}
+
+#customerDogFormHome .customer-dog-modal:not([hidden]) {
+  box-shadow: var(--shadow);
+  inset: auto;
+  left: auto;
+  margin-top: 16px;
+  max-height: none;
+  max-width: none;
+  position: static;
+  top: auto;
+  transform: none;
+  width: 100%;
+  z-index: auto;
+}
+
+#customerRequestsPage .customer-request-modal:not([hidden]) {
+  box-shadow: var(--shadow);
+  inset: auto;
+  left: auto;
+  margin-top: 16px;
+  max-height: none;
   max-width: none;
   position: static;
   top: auto;
@@ -2805,8 +2971,7 @@ body::before {
   z-index: 1;
 }
 
-.sidebar,
-.mobile-page-menu {
+.sidebar {
   background: rgba(255, 255, 255, 0.10);
   backdrop-filter: blur(var(--glass-blur-high)) saturate(180%);
   -webkit-backdrop-filter: blur(var(--glass-blur-high)) saturate(180%);
@@ -3720,6 +3885,44 @@ button.mobile-dog-photo-button {
   border-color: rgba(255, 255, 255, 0.18);
 }
 
+.vaccination-status-chip.is-vaccine-ok {
+  background: rgba(34, 197, 94, 0.20);
+  border-color: rgba(34, 197, 94, 0.48);
+}
+
+.vaccination-status-chip.is-vaccine-needed {
+  background: rgba(245, 158, 11, 0.20);
+  border-color: rgba(245, 158, 11, 0.48);
+}
+
+.vaccination-status-chip.is-vaccine-expired {
+  background: rgba(239, 68, 68, 0.20);
+  border-color: rgba(239, 68, 68, 0.52);
+}
+
+.compact-chip-row {
+  margin-top: 6px;
+}
+
+.inline-save-status {
+  color: rgba(232, 239, 238, 0.72);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.inline-save-status.is-saved {
+  color: #bbf7d0;
+}
+
+.inline-save-status.is-error {
+  color: #fecaca;
+}
+
+button.is-loading {
+  opacity: 0.72;
+  position: relative;
+}
+
 .boarding-service-chip.is-service-complete {
   background: rgba(34, 197, 94, 0.22);
   border-color: rgba(34, 197, 94, 0.62);
@@ -4014,19 +4217,6 @@ button.mobile-dog-photo-button {
     display: none;
   }
 
-  .mobile-page-menu {
-    background: rgba(255, 255, 255, 0.10);
-    backdrop-filter: blur(var(--glass-blur-high)) saturate(180%);
-    -webkit-backdrop-filter: blur(var(--glass-blur-high)) saturate(180%);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--glass-radius);
-    box-shadow: var(--glass-shadow), var(--glass-specular);
-    display: grid;
-    gap: 8px;
-    margin-bottom: 16px;
-    padding: 14px;
-  }
-
   .app-shell {
     padding: 20px 14px 42px;
   }
@@ -4043,6 +4233,8 @@ button.mobile-dog-photo-button {
   .summary-grid,
   .operation-summary-grid,
   .care-summary-grid,
+  .dashboard-priority-grid,
+  .customer-dashboard-actions,
   .dashboard-grid,
   .activity-entry-grid,
   .admin-task-controls,
@@ -4100,19 +4292,6 @@ button.mobile-dog-photo-button {
     display: none;
   }
 
-  .mobile-page-menu {
-    background: rgba(255, 255, 255, 0.10);
-    backdrop-filter: blur(var(--glass-blur-high)) saturate(180%);
-    -webkit-backdrop-filter: blur(var(--glass-blur-high)) saturate(180%);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--glass-radius);
-    box-shadow: var(--glass-shadow), var(--glass-specular);
-    display: grid;
-    gap: 8px;
-    margin-bottom: 16px;
-    padding: 14px;
-  }
-
   .app-shell {
     padding: 18px 12px 38px;
   }
@@ -4129,6 +4308,8 @@ button.mobile-dog-photo-button {
   .summary-grid,
   .operation-summary-grid,
   .care-summary-grid,
+  .dashboard-priority-grid,
+  .customer-dashboard-actions,
   .dashboard-grid,
   .activity-entry-grid,
   .admin-task-controls,
@@ -4344,10 +4525,6 @@ button.mobile-dog-photo-button {
 }
 
 @media (max-width: 980px) {
-  .mobile-page-menu {
-    display: none !important;
-  }
-
   .app-shell {
     padding-bottom: calc(124px + env(safe-area-inset-bottom));
   }
@@ -4706,7 +4883,6 @@ body.is-login-view {
 body.is-login-view::before,
 body.is-login-view .sidebar,
 body.is-login-view .page-header,
-body.is-login-view .mobile-page-menu,
 body.is-login-view .mobile-bottom-nav,
 body.is-login-view .mobile-more-backdrop,
 body.is-login-view .mobile-more-sheet {

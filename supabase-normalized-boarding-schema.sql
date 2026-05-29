@@ -123,8 +123,12 @@ create table if not exists public.customer_proposed_changes (
   status text not null default 'pending' check (status in ('pending', 'merged', 'ignored')),
   reviewed_by uuid references auth.users(id),
   reviewed_at timestamptz,
+  staff_note text,
   created_at timestamptz not null default now()
 );
+
+alter table public.customer_proposed_changes
+  add column if not exists staff_note text;
 
 create table if not exists public.legacy_dog_links (
   id uuid primary key default gen_random_uuid(),
