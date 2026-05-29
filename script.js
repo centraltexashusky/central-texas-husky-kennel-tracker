@@ -12286,7 +12286,7 @@ function renderCustomerRequests() {
 }
 
 function customerCanEditStayRequestStatus(status = "") {
-  return ["Pending", "Approved"].includes(normalizeBoardingStatus({ boardingStatus: status }));
+  return normalizeBoardingStatus({ boardingStatus: status }) === "Pending";
 }
 
 function customerRequestEntries(statusFilter = "All") {

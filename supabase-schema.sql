@@ -33,6 +33,7 @@ create or replace function public.kennel_auth_email()
 returns text
 language sql
 stable
+set search_path = public, pg_temp
 as $$
   select lower(coalesce(auth.jwt() ->> 'email', ''))
 $$;
@@ -41,6 +42,7 @@ create or replace function public.kennel_payload_has_email(payload jsonb, email 
 returns boolean
 language sql
 stable
+set search_path = public, pg_temp
 as $$
   select lower(coalesce(email, '')) <> ''
     and (
@@ -58,6 +60,7 @@ create or replace function public.kennel_payload_audience_has_email(payload json
 returns boolean
 language sql
 stable
+set search_path = public, pg_temp
 as $$
   select lower(coalesce(email, '')) <> ''
     and exists (
@@ -72,6 +75,68 @@ as $$
     )
 $$;
 
+create or replace function public.kennel_customer_boarding_status_is_request(status text)
+returns boolean
+language sql
+immutable
+set search_path = public, pg_temp
+as $$
+  select lower(trim(coalesce(status, ''))) in ('', 'draft', 'pending', 'pending_customer_request', 'pending customer request', 'cancelled', 'canceled')
+$$;
+
+create or replace function public.kennel_customer_boarding_payload_is_request(payload jsonb)
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select public.kennel_payload_has_email(payload)
+    and lower(coalesce(payload ->> 'customerRequest', 'false')) in ('true', 't', '1', 'yes', 'on')
+    and lower(coalesce(payload ->> 'removed', 'false')) <> 'true'
+    and public.kennel_customer_boarding_status_is_request(coalesce(payload ->> 'boardingStatus', payload ->> 'status', 'Pending'))
+    and nullif(coalesce(payload ->> 'approvedAt', ''), '') is null
+    and nullif(coalesce(payload ->> 'approvedBy', ''), '') is null
+    and nullif(coalesce(payload ->> 'checkedInAt', ''), '') is null
+    and nullif(coalesce(payload ->> 'inKennelAt', ''), '') is null
+    and nullif(coalesce(payload ->> 'readyForPickupAt', ''), '') is null
+    and nullif(coalesce(payload ->> 'checkedOutAt', ''), '') is null
+    and nullif(coalesce(payload ->> 'kennelLocationId', ''), '') is null
+    and nullif(coalesce(payload ->> 'kennelLocationName', ''), '') is null
+    and nullif(coalesce(payload ->> 'kennelBuilding', ''), '') is null
+    and nullif(coalesce(payload ->> 'kennelAssignedAt', ''), '') is null
+    and not exists (
+      select 1
+      from jsonb_array_elements(
+        case
+          when jsonb_typeof(payload -> 'stays') = 'array' then payload -> 'stays'
+          else '[]'::jsonb
+        end
+      ) stay(value)
+      where not public.kennel_customer_boarding_status_is_request(stay.value ->> 'status')
+        or nullif(coalesce(stay.value ->> 'approvedAt', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'approvedBy', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'checkedInAt', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'inKennelAt', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'readyForPickupAt', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'checkedOutAt', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'kennelLocationId', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'kennelLocationName', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'kennelBuilding', ''), '') is not null
+        or nullif(coalesce(stay.value ->> 'kennelAssignedAt', ''), '') is not null
+    )
+    and not exists (
+      select 1
+      from jsonb_array_elements(
+        case
+          when jsonb_typeof(payload -> 'statusHistory') = 'array' then payload -> 'statusHistory'
+          else '[]'::jsonb
+        end
+      ) history(value)
+      where not public.kennel_customer_boarding_status_is_request(history.value ->> 'from')
+         or not public.kennel_customer_boarding_status_is_request(history.value ->> 'to')
+    )
+$$;
+
 create schema if not exists kennel_private;
 
 create or replace function kennel_private.kennel_is_staff_member()
@@ -79,7 +144,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select public.kennel_auth_email() in ('centraltexashusky@gmail.com', 'cthusky05@gmail.com')
     or exists (
@@ -100,6 +165,7 @@ create or replace function public.kennel_is_staff_member()
 returns boolean
 language sql
 stable
+set search_path = public, pg_temp
 as $$
   select kennel_private.kennel_is_staff_member()
 $$;
@@ -108,10 +174,12 @@ create or replace function public.kennel_customer_can_write(record_type text, pa
 returns boolean
 language sql
 stable
+set search_path = public, pg_temp
 as $$
   select case
     when kennel_private.kennel_is_staff_member() then true
-    when record_type in ('customerDog', 'boardingDog', 'request', 'maintenance') then public.kennel_payload_has_email(payload)
+    when record_type = 'boardingDog' then public.kennel_customer_boarding_payload_is_request(payload)
+    when record_type in ('customerDog', 'request', 'maintenance') then public.kennel_payload_has_email(payload)
     when record_type = 'settingsUser' then lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email()
       and lower(coalesce(payload ->> 'role', '')) in ('customer', 'member', 'customer | member')
     when record_type = 'notificationLog' then public.kennel_payload_audience_has_email(payload)
@@ -143,9 +211,7 @@ for update
 to authenticated
 using (
   kennel_private.kennel_is_staff_member()
-  or public.kennel_payload_has_email(payload)
-  or public.kennel_payload_audience_has_email(payload)
-  or (type = 'settingsUser' and lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email())
+  or public.kennel_customer_can_write(type, payload)
 )
 with check (public.kennel_customer_can_write(type, payload));
 

@@ -93,6 +93,14 @@ These are intentionally non-breaking. The live app still uses `kennel_records` u
 
 Before running this schema against production, confirm the dog table boundary. The current production database already has a `public.dogs` table for public website/CMS dog profiles, while this staged boarding schema expects `public.dogs` to be the kennel/customer dog identity table. Resolve that naming/model conflict before applying the normalized boarding tables.
 
+The migration sequence should be:
+
+1. Run the normalized schema and RLS policies in a Supabase branch after resolving the dog-table naming boundary.
+2. Backfill `customerDog` records from `kennel_records` into the normalized dog identity table and write `legacy_dog_links.old_customer_dog_id`.
+3. Backfill `boardingDog` stays into `boarding_reservations`, `reservation_services`, and `legacy_dog_links.old_boarding_dog_id`.
+4. Switch frontend reads first, then new booking writes, then customer edit proposals.
+5. Keep operational staff approval/rejection writes staff-only, with `reviewed_by`, `reviewed_at`, `approved_notes`, and `rejection_reason` populated during review.
+
 ## 6. Production Smoke Test
 
 After deploy:

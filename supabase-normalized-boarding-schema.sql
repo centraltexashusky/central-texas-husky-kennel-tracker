@@ -159,6 +159,185 @@ alter table public.reservation_customer_updates enable row level security;
 alter table public.customer_proposed_changes enable row level security;
 alter table public.legacy_dog_links enable row level security;
 
+create or replace function public.kennel_user_can_access_dog(target_dog_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select kennel_private.kennel_is_staff_member()
+    or exists (
+      select 1
+      from public.dogs dog
+      where dog.id = target_dog_id
+        and dog.owner_user_id = auth.uid()
+    )
+    or exists (
+      select 1
+      from public.user_dog_access access
+      where access.dog_id = target_dog_id
+        and access.user_id = auth.uid()
+        and access.role in ('owner', 'co_owner', 'staff_view', 'staff_manage', 'admin')
+    )
+$$;
+
+create or replace function public.kennel_user_can_access_reservation(target_reservation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select kennel_private.kennel_is_staff_member()
+    or exists (
+      select 1
+      from public.boarding_reservations reservation
+      where reservation.id = target_reservation_id
+        and (
+          reservation.customer_user_id = auth.uid()
+          or public.kennel_user_can_access_dog(reservation.dog_id)
+        )
+    )
+$$;
+
+create or replace function public.kennel_customer_can_write_reservation(target_reservation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.boarding_reservations reservation
+    where reservation.id = target_reservation_id
+      and reservation.customer_user_id = auth.uid()
+      and reservation.status in ('draft', 'pending_customer_request')
+  )
+$$;
+
+revoke all on function public.kennel_user_can_access_dog(uuid) from public;
+revoke all on function public.kennel_user_can_access_reservation(uuid) from public;
+revoke all on function public.kennel_customer_can_write_reservation(uuid) from public;
+grant execute on function public.kennel_user_can_access_dog(uuid) to authenticated;
+grant execute on function public.kennel_user_can_access_reservation(uuid) to authenticated;
+grant execute on function public.kennel_customer_can_write_reservation(uuid) to authenticated;
+
+drop policy if exists "Normalized dogs staff manage" on public.dogs;
+drop policy if exists "Normalized dog owners read" on public.dogs;
+drop policy if exists "Normalized dog owners create" on public.dogs;
+drop policy if exists "Normalized dog owners update" on public.dogs;
+create policy "Normalized dogs staff manage" on public.dogs for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+create policy "Normalized dog owners read" on public.dogs for select to authenticated
+using (public.kennel_user_can_access_dog(id));
+create policy "Normalized dog owners create" on public.dogs for insert to authenticated
+with check (owner_user_id = auth.uid());
+create policy "Normalized dog owners update" on public.dogs for update to authenticated
+using (public.kennel_user_can_access_dog(id))
+with check (owner_user_id = auth.uid() or public.kennel_user_can_access_dog(id));
+
+drop policy if exists "Normalized dog access staff manage" on public.user_dog_access;
+drop policy if exists "Normalized dog access users read own" on public.user_dog_access;
+create policy "Normalized dog access staff manage" on public.user_dog_access for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+create policy "Normalized dog access users read own" on public.user_dog_access for select to authenticated
+using (user_id = auth.uid());
+
+drop policy if exists "Normalized reservations staff manage" on public.boarding_reservations;
+drop policy if exists "Normalized reservations customers read" on public.boarding_reservations;
+drop policy if exists "Normalized reservations customers create pending" on public.boarding_reservations;
+drop policy if exists "Normalized reservations customers update pending" on public.boarding_reservations;
+create policy "Normalized reservations staff manage" on public.boarding_reservations for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+create policy "Normalized reservations customers read" on public.boarding_reservations for select to authenticated
+using (public.kennel_user_can_access_reservation(id));
+create policy "Normalized reservations customers create pending" on public.boarding_reservations for insert to authenticated
+with check (
+  customer_user_id = auth.uid()
+  and status in ('draft', 'pending_customer_request')
+  and public.kennel_user_can_access_dog(dog_id)
+);
+create policy "Normalized reservations customers update pending" on public.boarding_reservations for update to authenticated
+using (customer_user_id = auth.uid() and status in ('draft', 'pending_customer_request'))
+with check (customer_user_id = auth.uid() and status in ('draft', 'pending_customer_request'));
+
+drop policy if exists "Normalized reservation services staff manage" on public.reservation_services;
+drop policy if exists "Normalized reservation services customers read" on public.reservation_services;
+drop policy if exists "Normalized reservation services customers create pending" on public.reservation_services;
+drop policy if exists "Normalized reservation services customers update pending" on public.reservation_services;
+create policy "Normalized reservation services staff manage" on public.reservation_services for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+create policy "Normalized reservation services customers read" on public.reservation_services for select to authenticated
+using (public.kennel_user_can_access_reservation(reservation_id));
+create policy "Normalized reservation services customers create pending" on public.reservation_services for insert to authenticated
+with check (public.kennel_customer_can_write_reservation(reservation_id));
+create policy "Normalized reservation services customers update pending" on public.reservation_services for update to authenticated
+using (public.kennel_customer_can_write_reservation(reservation_id))
+with check (public.kennel_customer_can_write_reservation(reservation_id));
+
+drop policy if exists "Normalized vaccinations staff manage" on public.dog_vaccinations;
+drop policy if exists "Normalized vaccinations owners read" on public.dog_vaccinations;
+drop policy if exists "Normalized vaccinations owners create" on public.dog_vaccinations;
+drop policy if exists "Normalized vaccinations owners update" on public.dog_vaccinations;
+create policy "Normalized vaccinations staff manage" on public.dog_vaccinations for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+create policy "Normalized vaccinations owners read" on public.dog_vaccinations for select to authenticated
+using (public.kennel_user_can_access_dog(dog_id));
+create policy "Normalized vaccinations owners create" on public.dog_vaccinations for insert to authenticated
+with check (public.kennel_user_can_access_dog(dog_id));
+create policy "Normalized vaccinations owners update" on public.dog_vaccinations for update to authenticated
+using (public.kennel_user_can_access_dog(dog_id))
+with check (public.kennel_user_can_access_dog(dog_id));
+
+drop policy if exists "Normalized internal notes staff manage" on public.dog_internal_notes;
+drop policy if exists "Normalized internal notes customers read visible" on public.dog_internal_notes;
+create policy "Normalized internal notes staff manage" on public.dog_internal_notes for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+create policy "Normalized internal notes customers read visible" on public.dog_internal_notes for select to authenticated
+using (visible_to_customer and public.kennel_user_can_access_dog(dog_id));
+
+drop policy if exists "Normalized activity logs staff manage" on public.dog_activity_logs;
+create policy "Normalized activity logs staff manage" on public.dog_activity_logs for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+
+drop policy if exists "Normalized customer updates staff manage" on public.reservation_customer_updates;
+drop policy if exists "Normalized customer updates customers read" on public.reservation_customer_updates;
+create policy "Normalized customer updates staff manage" on public.reservation_customer_updates for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+create policy "Normalized customer updates customers read" on public.reservation_customer_updates for select to authenticated
+using (public.kennel_user_can_access_reservation(reservation_id));
+
+drop policy if exists "Normalized proposed changes staff manage" on public.customer_proposed_changes;
+drop policy if exists "Normalized proposed changes customers read" on public.customer_proposed_changes;
+drop policy if exists "Normalized proposed changes customers create" on public.customer_proposed_changes;
+create policy "Normalized proposed changes staff manage" on public.customer_proposed_changes for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+create policy "Normalized proposed changes customers read" on public.customer_proposed_changes for select to authenticated
+using (proposed_by = auth.uid() or public.kennel_user_can_access_dog(dog_id));
+create policy "Normalized proposed changes customers create" on public.customer_proposed_changes for insert to authenticated
+with check (
+  proposed_by = auth.uid()
+  and status = 'pending'
+  and public.kennel_user_can_access_dog(dog_id)
+  and (reservation_id is null or public.kennel_user_can_access_reservation(reservation_id))
+);
+
+drop policy if exists "Normalized legacy links staff manage" on public.legacy_dog_links;
+create policy "Normalized legacy links staff manage" on public.legacy_dog_links for all to authenticated
+using (kennel_private.kennel_is_staff_member())
+with check (kennel_private.kennel_is_staff_member());
+
 -- The first migration phase should use service-role maintenance scripts or
--- Edge Functions. Customer-facing RLS can be tightened when the frontend moves
--- from kennel_records to these normalized tables.
+-- Edge Functions. Customer-facing frontend write paths should move one
+-- operation at a time after these policies are verified in a branch database.
