@@ -843,24 +843,6 @@ function boardingDogDetailHtml(record, stayId = "") {
   return \`
     \${boardingDogSummaryHeaderHtml(displayRecord, selectedStay)}
     <div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${selectedStay.id ? boardingStayRequestCodeChipHtml(displayRecord, selectedStay) : ""}\${selectedStay.id ? boardingStayStatusChipHtml(displayRecord, selectedStay) : boardingStatusChipHtml(displayRecord)}\${linkedCustomerDogForBoarding(displayRecord) ? statusChipHtml("Owner Linked") : ""}</div>
-    <div class="record-grid compact-record-grid">
-      <article class="record-card compact-record-card"><strong>Owner contact</strong><p>\${escapeHtml(displayRecord.ownerName || "No owner saved")}</p><p>\${phoneLinkHtml(displayRecord.ownerPhone)}</p><p>\${escapeHtml(displayRecord.ownerEmail || "No email saved")}</p></article>
-      <article class="record-card compact-record-card"><strong>Emergency contact</strong><p>\${escapeHtml(displayRecord.emergencyName || "No emergency contact saved")}</p><p>\${phoneLinkHtml(displayRecord.emergencyPhone)}</p></article>
-    </div>
-    \${detailRows(displayRecord, [
-      ["Dog", "dogName"],
-      ["Owner", "ownerName"],
-      ["Owner phone", "ownerPhone"],
-      ["Owner email", "ownerEmail"],
-      ["Emergency contact", "emergencyName"],
-      ["Emergency phone", "emergencyPhone"],
-      ["Special care", "specialCare"],
-      ["Daily activity", "dailyActivity"],
-      ["Boarding history", "boardingHistory"],
-      ["Rabies", "rabiesDate"],
-      ["DHPP", "dhppDate"],
-      ["Bordetella", "bordetellaDate"],
-    ])}
     \${selectedStayHtml}
     \${customerUploadSectionHtml(displayRecord)}
     \${customerUpdates ? \`<h3>Customer Updates</h3>\${customerUpdates}\` : ""}

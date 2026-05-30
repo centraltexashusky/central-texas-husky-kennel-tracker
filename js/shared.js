@@ -10156,20 +10156,34 @@ function initEvents() {
   });
   $("#customerBookingForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const dropoffField = formFieldByName(event.currentTarget, "dropoffTime");
-    const pickupField = formFieldByName(event.currentTarget, "pickupTime");
-    if ($("#customerRequestMode")?.value === "service" && dropoffField?.value && !pickupField?.value) {
-      pickupField.value = dropoffField.value;
+    const submitButton = event.submitter || event.currentTarget.querySelector('[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.dataset.originalText = submitButton.textContent;
+      submitButton.textContent = "Reviewing…";
     }
-    if (!validateCustomerDogSelection()) return;
-    if (!validateForm(event.currentTarget)) return;
-    if (!validateCustomerBookingAvailability(event.currentTarget)) return;
-    const estimate = customerEstimateDetails();
-    if (!estimate.dogs.length) {
-      showToast("Select at least one dog for the boarding request.");
-      return;
+    try {
+      const dropoffField = formFieldByName(event.currentTarget, "dropoffTime");
+      const pickupField = formFieldByName(event.currentTarget, "pickupTime");
+      if ($("#customerRequestMode")?.value === "service" && dropoffField?.value && !pickupField?.value) {
+        pickupField.value = dropoffField.value;
+      }
+      if (!validateCustomerDogSelection()) return;
+      if (!validateForm(event.currentTarget)) return;
+      if (!validateCustomerBookingAvailability(event.currentTarget)) return;
+      const estimate = customerEstimateDetails();
+      if (!estimate.dogs.length) {
+        showToast("Select at least one dog for the boarding request.");
+        return;
+      }
+      showBookingConfirmDialog(estimate);
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = submitButton.dataset.originalText || "Review Request";
+        delete submitButton.dataset.originalText;
+      }
     }
-    showBookingConfirmDialog(estimate);
   });
   $("#cancelBookingRequestButton").addEventListener("click", () => {
     pendingCustomerBooking = null;

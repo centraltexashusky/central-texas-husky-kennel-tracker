@@ -5310,24 +5310,6 @@ function boardingDogDetailHtml(record, stayId = "") {
   return `
     ${boardingDogSummaryHeaderHtml(displayRecord, selectedStay)}
     <div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${selectedStay.id ? boardingStayRequestCodeChipHtml(displayRecord, selectedStay) : ""}${selectedStay.id ? boardingStayStatusChipHtml(displayRecord, selectedStay) : boardingStatusChipHtml(displayRecord)}${linkedCustomerDogForBoarding(displayRecord) ? statusChipHtml("Owner Linked") : ""}</div>
-    <div class="record-grid compact-record-grid">
-      <article class="record-card compact-record-card"><strong>Owner contact</strong><p>${escapeHtml(displayRecord.ownerName || "No owner saved")}</p><p>${phoneLinkHtml(displayRecord.ownerPhone)}</p><p>${escapeHtml(displayRecord.ownerEmail || "No email saved")}</p></article>
-      <article class="record-card compact-record-card"><strong>Emergency contact</strong><p>${escapeHtml(displayRecord.emergencyName || "No emergency contact saved")}</p><p>${phoneLinkHtml(displayRecord.emergencyPhone)}</p></article>
-    </div>
-    ${detailRows(displayRecord, [
-      ["Dog", "dogName"],
-      ["Owner", "ownerName"],
-      ["Owner phone", "ownerPhone"],
-      ["Owner email", "ownerEmail"],
-      ["Emergency contact", "emergencyName"],
-      ["Emergency phone", "emergencyPhone"],
-      ["Special care", "specialCare"],
-      ["Daily activity", "dailyActivity"],
-      ["Boarding history", "boardingHistory"],
-      ["Rabies", "rabiesDate"],
-      ["DHPP", "dhppDate"],
-      ["Bordetella", "bordetellaDate"],
-    ])}
     ${selectedStayHtml}
     ${customerUploadSectionHtml(displayRecord)}
     ${customerUpdates ? `<h3>Customer Updates</h3>${customerUpdates}` : ""}
@@ -13711,8 +13693,27 @@ function renderAllRecords() {
 // === MODULE: SEARCH ===
 function globalSearchEntries() {
   const entries = [];
-  readRecords("ownedDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: ownedDogDisplayName(record), detail: ownedDogCareSummary(record), type: "ownedDog", id: record.id, pageId: "ourDogsPage" }));
-  readRecords("boardingDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.dogName || "Boarding dog", detail: [record.ownerName, boardingDisplayStatus(record), boardingScheduleText(record)].filter(Boolean).join(" | "), type: "boardingDog", id: record.id, pageId: "boardingDogsPage" }));
+  readRecords("ownedDog").filter((record) => !record.removed).forEach((record) => {
+    const detail = [ownedDogCareSummary(record), record.ownerName, record.ownerEmail, (record.ownerPhone || "").replace(/\D/g, "")].filter(Boolean).join(" | ");
+    entries.push({ label: ownedDogDisplayName(record), detail, type: "ownedDog", id: record.id, pageId: "ourDogsPage" });
+  });
+  readRecords("boardingDog").filter((record) => !record.removed).forEach((record) => {
+    const phoneDigits = (record.ownerPhone || "").replace(/\D/g, "");
+    const phoneLast4 = phoneDigits.slice(-4);
+    const emergencyDigits = (record.emergencyPhone || "").replace(/\D/g, "");
+    const detail = [
+      record.ownerName,
+      record.ownerEmail,
+      phoneDigits,
+      phoneLast4,
+      emergencyDigits,
+      record.emergencyName,
+      boardingKennelLocationLabel(record),
+      boardingDisplayStatus(record),
+      boardingScheduleText(record),
+    ].filter(Boolean).join(" | ");
+    entries.push({ label: record.dogName || "Boarding dog", detail, type: "boardingDog", id: record.id, pageId: "boardingDogsPage" });
+  });
   readRecords("request").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.category || "Request", detail: record.requestText || record.reason || "", type: "request", id: record.id, pageId: "requestsPage" }));
   readRecords("maintenance").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.location || "Maintenance", detail: record.issue || record.suggestedAction || "", type: "maintenance", id: record.id, pageId: "maintenancePage" }));
   readRecords("service").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.serviceName || "Service", detail: [record.category, money(record.basePrice)].filter(Boolean).join(" | "), type: "service", id: record.id, pageId: "servicesPage" }));
@@ -13730,11 +13731,11 @@ function renderGlobalSearchResults() {
   if (panel.hidden) return;
   const query = input.value.trim().toLowerCase();
   if (!query) {
-    list.innerHTML = `<p>Type a dog, owner, request, service, note, or user name.</p>`;
+    list.innerHTML = `<p>Search by dog name, owner name, phone number, kennel location, status, or record type.</p>`;
     return;
   }
   const results = globalSearchEntries()
-    .filter((entry) => pageAllowed(entry.pageId) && `${entry.label} ${entry.detail}`.toLowerCase().includes(query))
+    .filter((entry) => pageAllowed(entry.pageId) && `${entry.label} ${entry.detail} ${entry.type}`.toLowerCase().includes(query))
     .slice(0, 8);
   list.innerHTML = results.length
     ? results.map((entry) => `<button type="button" class="global-search-result" data-type="${escapeHtml(entry.type)}" data-id="${escapeHtml(entry.id)}" data-page="${escapeHtml(entry.pageId)}"><strong>${escapeHtml(entry.label)}</strong><span>${escapeHtml(entry.detail || entry.type)}</span></button>`).join("")
@@ -17351,20 +17352,34 @@ function initEvents() {
   });
   $("#customerBookingForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const dropoffField = formFieldByName(event.currentTarget, "dropoffTime");
-    const pickupField = formFieldByName(event.currentTarget, "pickupTime");
-    if ($("#customerRequestMode")?.value === "service" && dropoffField?.value && !pickupField?.value) {
-      pickupField.value = dropoffField.value;
+    const submitButton = event.submitter || event.currentTarget.querySelector('[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.dataset.originalText = submitButton.textContent;
+      submitButton.textContent = "Reviewing…";
     }
-    if (!validateCustomerDogSelection()) return;
-    if (!validateForm(event.currentTarget)) return;
-    if (!validateCustomerBookingAvailability(event.currentTarget)) return;
-    const estimate = customerEstimateDetails();
-    if (!estimate.dogs.length) {
-      showToast("Select at least one dog for the boarding request.");
-      return;
+    try {
+      const dropoffField = formFieldByName(event.currentTarget, "dropoffTime");
+      const pickupField = formFieldByName(event.currentTarget, "pickupTime");
+      if ($("#customerRequestMode")?.value === "service" && dropoffField?.value && !pickupField?.value) {
+        pickupField.value = dropoffField.value;
+      }
+      if (!validateCustomerDogSelection()) return;
+      if (!validateForm(event.currentTarget)) return;
+      if (!validateCustomerBookingAvailability(event.currentTarget)) return;
+      const estimate = customerEstimateDetails();
+      if (!estimate.dogs.length) {
+        showToast("Select at least one dog for the boarding request.");
+        return;
+      }
+      showBookingConfirmDialog(estimate);
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = submitButton.dataset.originalText || "Review Request";
+        delete submitButton.dataset.originalText;
+      }
     }
-    showBookingConfirmDialog(estimate);
   });
   $("#cancelBookingRequestButton").addEventListener("click", () => {
     pendingCustomerBooking = null;

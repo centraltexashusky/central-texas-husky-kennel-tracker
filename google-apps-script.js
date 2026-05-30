@@ -1,3 +1,12 @@
+// =============================================================================
+// SETUP: Before deploying this script as a Web App, update the two constants
+// below to match your environment:
+//   OWNER_ALERT_EMAIL  - the email address that receives alert notifications
+//   SPREADSHEET_ID     - the ID of the Google Sheet this script writes to
+//
+// To find the Spreadsheet ID: open the sheet in Google Sheets and copy the
+// long string from the URL between /d/ and /edit.
+// =============================================================================
 // Google Apps Script endpoint for the final Google Sheet connection.
 // Paste this into Apps Script attached to the response spreadsheet, deploy it
 // as a web app, and put the deployment URL into GOOGLE_SCRIPT_URL in script.js.

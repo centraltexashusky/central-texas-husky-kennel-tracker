@@ -1,11 +1,18 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+function getCorsHeaders(req: Request): Record<string, string> {
+  const allowedOrigin =
+    Deno.env.get("APP_PRODUCTION_URL")?.replace(/\/$/, "") ||
+    "https://kennel.centraltexashusky.com";
+  const requestOrigin = req.headers.get("Origin") || "";
+  const origin = requestOrigin === allowedOrigin ? allowedOrigin : allowedOrigin;
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
 
 type NotifyBody = {
   eventName?: string;
@@ -16,10 +23,10 @@ type NotifyBody = {
 const MEDIA_BUCKET = "kennel-media";
 const DEFAULT_MEDIA_LINK_SECONDS = 7 * 24 * 60 * 60;
 
-const json = (body: Record<string, unknown>, status = 200) =>
+const json = (body: Record<string, unknown>, status: number, req: Request) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
   });
 
 function splitEnv(name: string) {
@@ -38,7 +45,13 @@ function uniqueEmails(values: unknown[]) {
 }
 
 function adminEmails() {
-  return splitEnv("ADMIN_ALERT_EMAILS").length ? splitEnv("ADMIN_ALERT_EMAILS") : splitEnv("ADMIN_EMAILS").length ? splitEnv("ADMIN_EMAILS") : ["centraltexashusky@gmail.com"];
+  const fromEnv = splitEnv("ADMIN_ALERT_EMAILS").length
+    ? splitEnv("ADMIN_ALERT_EMAILS")
+    : splitEnv("ADMIN_EMAILS");
+  if (!fromEnv.length) {
+    console.warn("No ADMIN_ALERT_EMAILS or ADMIN_EMAILS env var set. Admin notifications will not be delivered.");
+  }
+  return fromEnv;
 }
 
 function recordHasEmail(record: Record<string, unknown>, email: string) {
@@ -58,7 +71,7 @@ function recordHasEmail(record: Record<string, unknown>, email: string) {
 async function callerIsStaff(adminClient: ReturnType<typeof createClient>, email: string) {
   const normalized = normalizeEmail(email);
   if (!normalized) return false;
-  if (adminEmails().map(normalizeEmail).includes(normalized) || normalized === "centraltexashusky@gmail.com" || normalized === "cthusky05@gmail.com") return true;
+  if (adminEmails().map(normalizeEmail).includes(normalized)) return true;
   const { data } = await adminClient
     .from("kennel_records")
     .select("payload")
@@ -379,13 +392,13 @@ async function sendSms(message: string) {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
+  if (req.method === "OPTIONS") return new Response("ok", { headers: getCorsHeaders(req) });
+  if (req.method !== "POST") return json({ error: "Method not allowed." }, 405, req);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  if (!supabaseUrl || !anonKey || !serviceRoleKey) return json({ error: "Supabase function secrets are missing." }, 500);
+  if (!supabaseUrl || !anonKey || !serviceRoleKey) return json({ error: "Supabase function secrets are missing." }, 500, req);
 
   const authHeader = req.headers.get("Authorization") || "";
   const userClient = createClient(supabaseUrl, anonKey, {
@@ -393,12 +406,12 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
   const { data: { user }, error: userError } = await userClient.auth.getUser();
-  if (userError || !user?.email) return json({ error: "Login required." }, 401);
+  if (userError || !user?.email) return json({ error: "Login required." }, 401, req);
 
   const body = await req.json().catch(() => ({})) as NotifyBody;
   const eventName = String(body.eventName || "");
   const recordId = String(body.recordId || "");
-  if (!eventName || !recordId) return json({ error: "eventName and recordId are required." }, 400);
+  if (!eventName || !recordId) return json({ error: "eventName and recordId are required." }, 400, req);
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -409,8 +422,8 @@ Deno.serve(async (req) => {
     .select("id,type,payload")
     .eq("id", recordId)
     .maybeSingle();
-  if (sourceError) return json({ error: sourceError.message }, 500);
-  if (!sourceRow?.payload || typeof sourceRow.payload !== "object") return json({ error: "Source record not found." }, 404);
+  if (sourceError) return json({ error: sourceError.message }, 500, req);
+  if (!sourceRow?.payload || typeof sourceRow.payload !== "object") return json({ error: "Source record not found." }, 404, req);
 
   const sourceRecord = {
     ...(sourceRow.payload as Record<string, unknown>),
@@ -419,10 +432,10 @@ Deno.serve(async (req) => {
   };
   const isStaff = await callerIsStaff(adminClient, user.email);
   if (!isStaff && !recordHasEmail(sourceRecord, user.email)) {
-    return json({ error: "Not authorized for this notification source." }, 403);
+    return json({ error: "Not authorized for this notification source." }, 403, req);
   }
   if (eventName === "customerStayUpdateSent" && !isStaff) {
-    return json({ error: "Only staff can send customer stay update notifications." }, 403);
+    return json({ error: "Only staff can send customer stay update notifications." }, 403, req);
   }
 
   let notificationPayload: Record<string, unknown> = {};
@@ -432,7 +445,7 @@ Deno.serve(async (req) => {
   }
 
   const content = await notificationContent(adminClient, eventName, sourceRecord, notificationPayload);
-  if (!content) return json({ error: "Unsupported notification event." }, 400);
+  if (!content) return json({ error: "Unsupported notification event." }, 400, req);
 
   const emailResult = await sendEmail(uniqueEmails(content.to), content.subject, content.body);
   const smsResult = content.sms ? await sendSms(`${content.subject}: ${String(sourceRecord.dogName || sourceRecord.location || sourceRecord.category || "")}. ${appUrl()}`) : { skipped: true };
@@ -463,5 +476,5 @@ Deno.serve(async (req) => {
     });
   }
 
-  return json({ ok: true, eventName, emailResult, smsResult });
+  return json({ ok: true, eventName, emailResult, smsResult }, 200, req);
 });

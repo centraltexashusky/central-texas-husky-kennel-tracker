@@ -1,8 +1,27 @@
 // === MODULE: SEARCH ===
 const __snuggleStayModuleSource = `function globalSearchEntries() {
   const entries = [];
-  readRecords("ownedDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: ownedDogDisplayName(record), detail: ownedDogCareSummary(record), type: "ownedDog", id: record.id, pageId: "ourDogsPage" }));
-  readRecords("boardingDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.dogName || "Boarding dog", detail: [record.ownerName, boardingDisplayStatus(record), boardingScheduleText(record)].filter(Boolean).join(" | "), type: "boardingDog", id: record.id, pageId: "boardingDogsPage" }));
+  readRecords("ownedDog").filter((record) => !record.removed).forEach((record) => {
+    const detail = [ownedDogCareSummary(record), record.ownerName, record.ownerEmail, (record.ownerPhone || "").replace(/\\D/g, "")].filter(Boolean).join(" | ");
+    entries.push({ label: ownedDogDisplayName(record), detail, type: "ownedDog", id: record.id, pageId: "ourDogsPage" });
+  });
+  readRecords("boardingDog").filter((record) => !record.removed).forEach((record) => {
+    const phoneDigits = (record.ownerPhone || "").replace(/\\D/g, "");
+    const phoneLast4 = phoneDigits.slice(-4);
+    const emergencyDigits = (record.emergencyPhone || "").replace(/\\D/g, "");
+    const detail = [
+      record.ownerName,
+      record.ownerEmail,
+      phoneDigits,
+      phoneLast4,
+      emergencyDigits,
+      record.emergencyName,
+      boardingKennelLocationLabel(record),
+      boardingDisplayStatus(record),
+      boardingScheduleText(record),
+    ].filter(Boolean).join(" | ");
+    entries.push({ label: record.dogName || "Boarding dog", detail, type: "boardingDog", id: record.id, pageId: "boardingDogsPage" });
+  });
   readRecords("request").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.category || "Request", detail: record.requestText || record.reason || "", type: "request", id: record.id, pageId: "requestsPage" }));
   readRecords("maintenance").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.location || "Maintenance", detail: record.issue || record.suggestedAction || "", type: "maintenance", id: record.id, pageId: "maintenancePage" }));
   readRecords("service").filter((record) => !record.removed).forEach((record) => entries.push({ label: record.serviceName || "Service", detail: [record.category, money(record.basePrice)].filter(Boolean).join(" | "), type: "service", id: record.id, pageId: "servicesPage" }));
@@ -20,11 +39,11 @@ function renderGlobalSearchResults() {
   if (panel.hidden) return;
   const query = input.value.trim().toLowerCase();
   if (!query) {
-    list.innerHTML = \`<p>Type a dog, owner, request, service, note, or user name.</p>\`;
+    list.innerHTML = \`<p>Search by dog name, owner name, phone number, kennel location, status, or record type.</p>\`;
     return;
   }
   const results = globalSearchEntries()
-    .filter((entry) => pageAllowed(entry.pageId) && \`\${entry.label} \${entry.detail}\`.toLowerCase().includes(query))
+    .filter((entry) => pageAllowed(entry.pageId) && \`\${entry.label} \${entry.detail} \${entry.type}\`.toLowerCase().includes(query))
     .slice(0, 8);
   list.innerHTML = results.length
     ? results.map((entry) => \`<button type="button" class="global-search-result" data-type="\${escapeHtml(entry.type)}" data-id="\${escapeHtml(entry.id)}" data-page="\${escapeHtml(entry.pageId)}"><strong>\${escapeHtml(entry.label)}</strong><span>\${escapeHtml(entry.detail || entry.type)}</span></button>\`).join("")

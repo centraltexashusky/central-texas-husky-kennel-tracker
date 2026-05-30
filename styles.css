@@ -761,8 +761,12 @@ body.owned-dog-modal-open {
 .customer-home-empty,
 .customer-dog-dashboard-card,
 .customer-dog-summary-card {
-  background: rgba(8, 17, 27, 0.72);
-  border: 1px solid rgba(148, 185, 202, 0.44);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+    rgba(8, 17, 27, 0.52);
+  border: 1px solid rgba(148, 185, 202, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 8px;
   color: var(--text);
   display: grid;
@@ -2106,8 +2110,12 @@ textarea {
 }
 
 .boarding-detail-summary {
-  background: rgba(8, 17, 27, 0.72);
-  border: 1px solid rgba(148, 185, 202, 0.44);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+    rgba(8, 17, 27, 0.52);
+  border: 1px solid rgba(148, 185, 202, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 8px;
   display: grid;
   gap: 12px;
