@@ -1,3 +1,4 @@
+// === MODULE: SHARED ===
 const SUPABASE_URL = "https://vwvkzniygessvwifrwvn.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_IeKmeCMalVYUnYQUe3gEew_NdjAzmAQ";
 const MEDIA_BUCKET = "kennel-media";
@@ -9,8 +10,6 @@ const CUSTOMER_UPDATE_MEDIA_TYPES = [...IMAGE_UPLOAD_TYPES, ...VIDEO_UPLOAD_TYPE
 const CUSTOMER_UPDATE_MEDIA_EXTENSIONS = [".jpg", ".jpeg", ".png", ".mp4", ".mov", ".webm", ".m4v"];
 const VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png"];
 const DOG_DOCUMENT_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
-const ADMIN_EMAILS = ["centraltexashusky@gmail.com"];
-const OWNER_ALERT_EMAIL = "centraltexashusky@gmail.com";
 const APP_PRODUCTION_URL = "https://kennel.centraltexashusky.com/";
 const APP_WIX_EMBED_URL = "https://www.centraltexashusky.com/kennel-tracker";
 const APP_AUTH_REDIRECT_URL = APP_PRODUCTION_URL;
@@ -68,6 +67,7 @@ let servicePricingFilter = "all";
 let kennelBuildingTab = "Shed";
 let boardingDogRosterFilter = "Active dogs";
 let boardingDogPriorityFilter = "";
+let boardingViewMode = "board";
 let showRemainingTasksOnly = true;
 const selectedDogPhotos = { owned: null, boarding: null, customer: null };
 let ownedDogCareFilter = "All";
@@ -125,8 +125,21 @@ const defaultTaskTabMeta = [
   { id: "tuesday", label: "Tuesdays", system: true },
   { id: "monthly", label: "Monthly", system: true },
 ];
-const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
+const mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "timesheetPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
 const mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
+const mobileMoreMenuItems = [
+  { pageId: "boardingDogsPage", label: "Boarding Dogs", roles: ["helper", "admin"] },
+  { pageId: "ourDogsPage", label: "Our Dogs", roles: ["helper", "admin"] },
+  { pageId: "maintenancePage", label: "Maintenance", roles: ["helper", "admin"] },
+  { pageId: "requestsPage", label: "Requests", roles: ["helper", "admin"] },
+  { pageId: "financialsPage", label: "Financials", roles: ["admin"] },
+  { pageId: "settingsUsersPage", label: "Users", roles: ["admin"] },
+  { pageId: "settingsKennelLocationsPage", label: "Kennel Locations", roles: ["admin"] },
+  { pageId: "settingsHoursPage", label: "Hours of Operation", roles: ["admin"] },
+  { pageId: "servicesPage", label: "Services & Pricing", roles: ["admin"] },
+  { pageId: "settingsAlertsPage", label: "Alerts", roles: ["admin"] },
+  { pageId: "settingsAuditLogPage", label: "Audit Log", roles: ["admin"] },
+];
 const settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsHoursPage", "servicesPage", "settingsAlertsPage", "settingsAuditLogPage"]);
 const operationWeekdays = [
   { key: "monday", label: "Monday", shortLabel: "Mon", dayIndex: 1 },
@@ -579,6 +592,7 @@ function dogTypeBadgeHtml(type) {
   return statusChipHtml(labels[type] || "Dog", `dog-type-chip ${type}`);
 }
 
+// === MODULE: BOARDING ===
 function normalizeBoardingStatus(record = {}) {
   const status = String(record.boardingStatus || record.status || "").trim();
   if (boardingLifecycleStatuses.includes(status)) return status;
@@ -1316,6 +1330,7 @@ function tableHeaderHtml(type, columns) {
     .join("")}</tr>`;
 }
 
+// === MODULE: AUTH ===
 function supabaseReady() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
 }
@@ -1354,6 +1369,7 @@ function recordTypes() {
   ];
 }
 
+// === MODULE: SETTINGS ===
 function settingsUsers() {
   const activeUsers = readRecords("settingsUser").filter((user) => !user.removed);
   const usersWithoutEmail = [];
@@ -1372,6 +1388,20 @@ function settingsUsers() {
   ];
 }
 
+// Bootstrap: if no admin settingsUser records exist yet, grant access via
+// Supabase Studio by inserting a settingsUser record with role: "admin"
+// and the admin email. The app will pick it up on next load.
+function getAdminEmails() {
+  return readRecords("settingsUser")
+    .filter((user) => !user.removed && settingsUserDisplayRole(user) === "admin" && user.email)
+    .map((user) => user.email.trim().toLowerCase());
+}
+
+function getOwnerAlertEmail() {
+  const admins = getAdminEmails();
+  return admins[0] || "";
+}
+
 function savedUserFor(account = {}) {
   if (!account) return undefined;
   const email = normalizeEmail(account.email);
@@ -1384,7 +1414,7 @@ function roleForAccount(account = {}) {
   const saved = savedUserFor(account);
   if (saved?.role) return saved.role;
   if (account.role) return account.role;
-  if (ADMIN_EMAILS.map((item) => item.toLowerCase()).includes(email)) return "admin";
+  if (getAdminEmails().includes(email)) return "admin";
   return "customer";
 }
 
@@ -1518,7 +1548,7 @@ function hydrateLoginFromUrl() {
 }
 
 function adminEmailList() {
-  return ADMIN_EMAILS.map((email) => email.toLowerCase());
+  return getAdminEmails();
 }
 
 async function activeSupabaseAdminSession() {
@@ -2732,7 +2762,13 @@ function navigationPageEntries() {
 
 function mobileMoreEntries() {
   if (!helperIsLoggedIn()) return [];
-  return navigationPageEntries().filter((entry) => entry.pageId && entry.pageId !== "loginPage" && !mobilePrimaryPageSet.has(entry.pageId) && pageAllowed(entry.pageId));
+  const role = currentRole();
+  const configured = mobileMoreMenuItems
+    .filter((entry) => entry.pageId && !mobilePrimaryPageSet.has(entry.pageId) && pageAllowed(entry.pageId) && (!entry.roles?.length || entry.roles.includes(role)));
+  const configuredIds = new Set(configured.map((entry) => entry.pageId));
+  const remainingNavEntries = navigationPageEntries()
+    .filter((entry) => entry.pageId && entry.pageId !== "loginPage" && !mobilePrimaryPageSet.has(entry.pageId) && !configuredIds.has(entry.pageId) && pageAllowed(entry.pageId));
+  return [...configured, ...remainingNavEntries];
 }
 
 function renderMobileMoreMenu() {
@@ -2745,7 +2781,7 @@ function renderMobileMoreMenu() {
         .map(
           (entry) => {
             const active = entry.pageId === currentPage;
-            return `<button type="button" class="mobile-more-menu-item ${active ? "is-active" : ""}" data-page="${escapeHtml(entry.pageId)}"${active ? ' aria-current="page"' : ""}>${escapeHtml(entry.label)}</button>`;
+            return `<button type="button" class="mobile-more-menu-item mobile-more-item ${active ? "is-active" : ""}" data-page="${escapeHtml(entry.pageId)}"${active ? ' aria-current="page"' : ""}>${escapeHtml(entry.label)}</button>`;
           },
         )
         .join("")
@@ -2871,6 +2907,7 @@ function syncMobileReviewSections() {
   else details.setAttribute("open", "");
 }
 
+// === MODULE: DAILY ===
 function taskInputName(shift) {
   const names = {
     morning: "dailyTasks",
@@ -4250,6 +4287,18 @@ function detailRows(record, keys) {
     .join("");
 }
 
+function normalizedPhoneHref(phone = "") {
+  const digits = String(phone || "").replace(/[^\d+]/g, "");
+  return digits ? `tel:${digits}` : "";
+}
+
+function phoneLinkHtml(phone = "", label = "") {
+  const href = normalizedPhoneHref(phone);
+  const display = label || phone;
+  if (!href) return escapeHtml(display || "No phone saved");
+  return `<a class="tel-link" href="${escapeHtml(href)}">${escapeHtml(display || phone)}</a>`;
+}
+
 function showDetailDialog(title, html, context = null, options = {}) {
   detailDialogContext = context;
   const dialog = $("#detailDialog");
@@ -5226,6 +5275,24 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
   </article>`;
 }
 
+function boardingDogSummaryHeaderHtml(record = {}, stay = {}) {
+  const schedule = boardingScheduleText(record, stay);
+  const kennel = boardingKennelLocationLabel(record, stay);
+  const owner = record.ownerName || "No owner saved";
+  const emergency = [record.emergencyName, record.emergencyPhone].filter(Boolean).join(" | ");
+  return `<article class="boarding-detail-summary">
+    <div>
+      <strong>${escapeHtml(record.dogName || "Boarding dog")}</strong>
+      <span>${escapeHtml(schedule || "No stay schedule saved")}</span>
+    </div>
+    <div class="boarding-detail-summary-grid">
+      <span><strong>Owner</strong>${escapeHtml(owner)}${record.ownerPhone ? ` ${phoneLinkHtml(record.ownerPhone)}` : ""}</span>
+      <span><strong>Kennel</strong>${escapeHtml(kennel || "Not assigned")}</span>
+      <span><strong>Emergency</strong>${emergency ? escapeHtml(record.emergencyName || "") + (record.emergencyPhone ? ` ${phoneLinkHtml(record.emergencyPhone)}` : "") : "Not saved"}</span>
+    </div>
+  </article>`;
+}
+
 function boardingDogDetailHtml(record, stayId = "") {
   if (currentRole() === "customer") return customerBoardingDogDetailHtml(record, stayId);
   const displayRecord = boardingDogWithStayStatus(record || {});
@@ -5241,7 +5308,12 @@ function boardingDogDetailHtml(record, stayId = "") {
     .map((entry) => `<article class="record-card compact-record-card"><strong>${escapeHtml(entry.from || entry.fromStatus || "Unknown")} -> ${escapeHtml(entry.to || entry.toStatus || "Unknown")}</strong><span>${formatDateTime(entry.date || entry.changedAt)}${entry.by || entry.changedBy ? ` | ${escapeHtml(entry.by || entry.changedBy)}` : ""}</span></article>`)
     .join("");
   return `
+    ${boardingDogSummaryHeaderHtml(displayRecord, selectedStay)}
     <div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${selectedStay.id ? boardingStayRequestCodeChipHtml(displayRecord, selectedStay) : ""}${selectedStay.id ? boardingStayStatusChipHtml(displayRecord, selectedStay) : boardingStatusChipHtml(displayRecord)}${linkedCustomerDogForBoarding(displayRecord) ? statusChipHtml("Owner Linked") : ""}</div>
+    <div class="record-grid compact-record-grid">
+      <article class="record-card compact-record-card"><strong>Owner contact</strong><p>${escapeHtml(displayRecord.ownerName || "No owner saved")}</p><p>${phoneLinkHtml(displayRecord.ownerPhone)}</p><p>${escapeHtml(displayRecord.ownerEmail || "No email saved")}</p></article>
+      <article class="record-card compact-record-card"><strong>Emergency contact</strong><p>${escapeHtml(displayRecord.emergencyName || "No emergency contact saved")}</p><p>${phoneLinkHtml(displayRecord.emergencyPhone)}</p></article>
+    </div>
     ${detailRows(displayRecord, [
       ["Dog", "dogName"],
       ["Owner", "ownerName"],
@@ -5977,9 +6049,11 @@ function sameDateValue(value, date = todayDate()) {
 
 function boardingQueueStayMatchesGroup(title = "", record = {}, stay = {}) {
   const today = todayDate();
+  const tomorrow = addDays(today, 1);
   const status = boardingStayDisplayStatus(record, stay);
   if (title === "Pending Approval") return status === "Pending";
   if (title === "Today Drop-offs") return sameDateValue(stay.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
+  if (title === "Tomorrow Arrivals") return sameDateValue(stay.dropoffTime, tomorrow) && status === "Approved";
   if (title === "In Kennel") return status === "In Kennel" && Boolean(activeBoardingStay({ ...record, stays: [stay] }));
   if (title === "Today Pickups") return sameDateValue(stay.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
   return false;
@@ -5994,24 +6068,32 @@ function boardingQueueRecordMatchesGroup(title = "", record = {}) {
   if ((record.stays || []).length) return Boolean(boardingQueueStayForGroup(title, record));
   const status = normalizeBoardingStatus(record);
   const today = todayDate();
+  const tomorrow = addDays(today, 1);
   if (title === "Pending Approval") return status === "Pending";
   if (title === "Today Drop-offs") return sameDateValue(record.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
+  if (title === "Tomorrow Arrivals") return sameDateValue(record.dropoffTime, tomorrow) && status === "Approved";
   if (title === "In Kennel") return status === "In Kennel";
   if (title === "Today Pickups") return sameDateValue(record.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
   return false;
 }
 
 function boardingQueueGroupHtml(title, records = []) {
-  const preview = records.slice(0, 6);
+  const PREVIEW_LIMIT = 6;
+  const preview = records.slice(0, PREVIEW_LIMIT);
+  const overflow = records.length - PREVIEW_LIMIT;
+  const overflowHtml = overflow > 0
+    ? `<button type="button" class="boarding-queue-overflow" data-action="boarding-queue-show-more" data-filter="${escapeHtml(title)}">+${overflow} more - view all</button>`
+    : "";
   return `<article class="boarding-queue-card"><strong>${escapeHtml(title)}</strong><span>${records.length}</span>${
     preview.length
       ? preview.map((record) => {
         const stay = boardingQueueStayForGroup(title, record) || boardingPrimaryStay(record) || {};
         const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
-        return `<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="${escapeHtml(record.id)}"${stayAttrs}><span>${escapeHtml(record.dogName || "Dog")}</span><small>${escapeHtml(boardingScheduleText(record, stay))}</small></button>`;
+        const kennel = boardingKennelLocationLabel(record, stay);
+        return `<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="${escapeHtml(record.id)}"${stayAttrs}><span>${escapeHtml(record.dogName || "Dog")}${kennel ? ` <small class="kennel-tag">${escapeHtml(kennel)}</small>` : ""}</span><small>${escapeHtml(boardingScheduleText(record, stay))}</small></button>`;
       }).join("")
       : `<p>No dogs in this group.</p>`
-  }</article>`;
+  }${overflowHtml}</article>`;
 }
 
 function renderBoardingQueueGroups(records = []) {
@@ -6020,10 +6102,15 @@ function renderBoardingQueueGroups(records = []) {
   const groups = [
     ["Pending Approval", records.filter((record) => boardingQueueRecordMatchesGroup("Pending Approval", record))],
     ["Today Drop-offs", records.filter((record) => boardingQueueRecordMatchesGroup("Today Drop-offs", record))],
+    ["Tomorrow Arrivals", records.filter((record) => boardingQueueRecordMatchesGroup("Tomorrow Arrivals", record))],
     ["In Kennel", records.filter((record) => boardingQueueRecordMatchesGroup("In Kennel", record))],
     ["Today Pickups", records.filter((record) => boardingQueueRecordMatchesGroup("Today Pickups", record))],
   ];
-  container.innerHTML = groups.map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords)).join("");
+  const alwaysShowLanes = new Set(["Pending Approval", "Today Drop-offs", "In Kennel"]);
+  container.innerHTML = groups
+    .filter(([title, groupRecords]) => alwaysShowLanes.has(title) || groupRecords.length > 0)
+    .map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords))
+    .join("");
 }
 
 function linkedCustomerDogForBoarding(record = {}) {
@@ -7124,7 +7211,7 @@ function boardingPickupReviewHtml(record = {}, options = {}) {
   return `<section class="popup-record-section">
     <article class="record-card compact-record-card">
       <strong>${escapeHtml(record.dogName || "Boarding dog")}</strong>
-      <p>${escapeHtml(record.ownerName || "No owner saved")} | ${escapeHtml(record.ownerPhone || "No phone saved")}</p>
+      <p>${escapeHtml(record.ownerName || "No owner saved")} | ${phoneLinkHtml(record.ownerPhone)}</p>
       <p>${escapeHtml(record.ownerEmail || "No email saved")}</p>
     </article>
     ${stay.id ? boardingStayDetailCardHtml(record, stay, { compact: true, showServiceTasks: false }) : ""}
@@ -7154,7 +7241,7 @@ function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
   return `<section class="popup-record-section">
     <article class="record-card compact-record-card">
       <strong>${escapeHtml(record.dogName || "Boarding dog")} final invoice</strong>
-      <p>${escapeHtml(record.ownerName || "No owner saved")} | ${escapeHtml(record.ownerPhone || "No phone saved")}</p>
+      <p>${escapeHtml(record.ownerName || "No owner saved")} | ${phoneLinkHtml(record.ownerPhone)}</p>
       <p>Status: ${escapeHtml(paymentStatus)}${record.paymentMethod ? ` by ${escapeHtml(record.paymentMethod)}` : ""}</p>
     </article>
     ${stay.id ? boardingStayDetailCardHtml(record, stay, { compact: true, hideInvoiceSummary: true }) : ""}
@@ -7214,6 +7301,7 @@ function boardingDogMobilePhotoHtml(record = {}) {
 
 function boardingQuickCardHtml(record = {}) {
   const stay = boardingPrimaryStay(record) || {};
+  const kennel = boardingKennelLocationLabel(record, stay);
   return `
     <article class="record-card mobile-roster-card">
       <div class="mobile-roster-card-main boarding-mobile-card-main">
@@ -7222,7 +7310,8 @@ function boardingQuickCardHtml(record = {}) {
           <div class="boarding-card-title-row"><strong>${escapeHtml(record.dogName || "Boarding dog")}</strong>${vaccinationStatusBadgeHtml(record)}</div>
           <div class="chip-row">${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}${boardingRecordStatusButtonHtml(record)}</div>
           <span>${escapeHtml(boardingScheduleText(record))}</span>
-          <p>${escapeHtml([record.ownerName, record.ownerPhone].filter(Boolean).join(" | "))}</p>
+          ${kennel ? `<span class="boarding-kennel-label">${escapeHtml(kennel)}</span>` : ""}
+          <p>${escapeHtml(record.ownerName || "No owner saved")}${record.ownerPhone ? ` | ${phoneLinkHtml(record.ownerPhone)}` : ""}</p>
         </div>
       </div>
       ${boardingQuickActionButtons(record)}
@@ -8399,6 +8488,15 @@ function findMatchingBoardingDogProfile(record = {}, options = {}) {
     .find((item) => boardingDogIdentityTokens(item).some((token) => tokens.has(token))) || null;
 }
 
+function handleBoardingViewToggle(view = "board") {
+  boardingViewMode = view === "list" ? "list" : "board";
+  $("#boardingBoardViewBtn")?.classList.toggle("is-active", boardingViewMode === "board");
+  $("#boardingListViewBtn")?.classList.toggle("is-active", boardingViewMode === "list");
+  $("#boardingQueueGroups")?.classList.toggle("is-hidden", boardingViewMode !== "board");
+  $("#boardingDogsPage .table-settings-shell")?.classList.toggle("is-hidden", boardingViewMode !== "list");
+  $("#boardingDogQuickCards")?.classList.toggle("is-hidden", boardingViewMode !== "list");
+}
+
 function renderBoardingDogs() {
   const query = $("#boardingDogSearch").value || "";
   const allRecords = consolidatedBoardingDogRecords();
@@ -8423,6 +8521,7 @@ function renderBoardingDogs() {
   renderBoardingQuickCards(records);
   renderColumnManager("boardingDog", "#boardingDogColumnManager");
   renderCustomerDogUploadCards();
+  handleBoardingViewToggle(boardingViewMode);
 }
 
 function boardingStayNeedsDuplicateStatusSync(record = {}, stay = {}, nextStatus = "", options = {}) {
@@ -11047,6 +11146,10 @@ function showDashboardDetail(key) {
 
 function renderFinancials() {
   if (!$("#financialCards")) return;
+  if (currentRole() !== "admin") {
+    $("#financialCards").innerHTML = "";
+    return;
+  }
   const services = readRecords("service");
   const activeServices = services.filter((service) => (service.flags || []).includes("Active"));
   const catalogValue = activeServices.reduce((total, service) => total + Number(service.basePrice || 0), 0);
@@ -12289,7 +12392,7 @@ async function adminSetTemporaryPassword(formEl = activeSettingsUserForm(), butt
   }
   const { session, error: sessionError } = await activeSupabaseAdminSession();
   if (!session) {
-    showDetailDialog("Admin Sign-In Required", `<p>${escapeHtml(sessionError)}</p><p>Use the Login page with centraltexashusky@gmail.com, then return to Settings and set the temporary password.</p>`);
+    showDetailDialog("Admin Sign-In Required", `<p>${escapeHtml(sessionError)}</p><p>Use the Login page with an admin Settings user, then return to Settings and set the temporary password.</p>`);
     switchPage("loginPage");
     return;
   }
@@ -12379,6 +12482,7 @@ function fillCustomerDefaults() {
   $("#customerOwnerEmail").value = currentUser?.email || "";
 }
 
+// === MODULE: CUSTOMER ===
 function renderCustomerDogs() {
   if (!$("#customerDogList")) return;
   if (currentRole() !== "customer") {
@@ -12393,7 +12497,7 @@ function renderCustomerDogs() {
   const checkedIds = new Set([...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')].map((input) => input.value));
   $("#openCustomerDogModalButton")?.toggleAttribute("hidden", !dogs.length);
   $("#customerDogList").innerHTML = dogs.length
-    ? `${dogs.map(customerDogDashboardCardHtml).join("")}<div class="button-row"><button type="button" class="secondary-button" data-action="add-customer-dog-inline">Add Another Dog</button></div>`
+    ? `${dogs.map(customerDogSummaryCardHtml).join("")}<div class="button-row"><button type="button" class="secondary-button" data-action="add-customer-dog-inline">Add Another Dog</button></div>`
     : customerDogWelcomeHtml();
   if ($("#customerBookingDogList")) {
     $("#customerBookingDogList").innerHTML = dogs.length
@@ -12448,6 +12552,15 @@ function vaccinationStatusBadgeHtml(record = {}, options = {}) {
   return statusChipHtml(label, `vaccination-status-chip ${className}`);
 }
 
+function customerFacingVaccineStatus(dog = {}) {
+  const info = vaccinationStatusInfo(dog);
+  return {
+    label: info.customerLabel || info.label,
+    className: info.customerClassName || info.className,
+    hasVaccines: (info.customerClassName || info.className) === "is-vaccine-ok",
+  };
+}
+
 function vaccinationExpiresSoon(record = {}, days = 30) {
   const today = new Date(`${todayDate()}T00:00:00`);
   const cutoff = new Date(today);
@@ -12493,25 +12606,26 @@ function activeCustomerStayForDog(dog = {}) {
   return entries[0] || null;
 }
 
-function customerDogDashboardCardHtml(dog = {}) {
+function customerDogSummaryCardHtml(dog = {}) {
   const activeStay = activeCustomerStayForDog(dog);
   const stay = activeStay?.stay || {};
   const record = activeStay?.record || {};
   const stayStatus = activeStay ? boardingStayDisplayStatus(record, stay) : "";
   const facts = [dog.breedDescription || dog.breed || "", dog.sex || "", dogAgeText(dog)].filter(Boolean).join(" | ");
-  return `<article class="customer-dog-dashboard-card">
-    <div class="customer-dog-dashboard-main">
+  const vaccine = customerFacingVaccineStatus(dog);
+  return `<article class="customer-dog-summary-card">
+    <div class="customer-dog-summary-main">
       ${customerDogPhotoHtml(dog)}
       <div>
-        <div class="customer-dog-dashboard-title">
+        <div class="customer-dog-summary-title">
           <h3>${escapeHtml(dog.dogName || "Your dog")}</h3>
-          ${vaccinationStatusBadgeHtml(dog, { customer: true })}
+          ${statusChipHtml(vaccine.label, `vaccination-status-chip ${vaccine.className}`)}
         </div>
         <p>${escapeHtml(facts || "Dog profile")}</p>
       </div>
     </div>
     <div class="customer-dashboard-actions">
-      <button type="button" data-action="book-customer-stay" data-id="${escapeHtml(dog.id || "")}">Book a Stay</button>
+      <button type="button" data-action="open-customer-boarding-request" data-id="${escapeHtml(dog.id || "")}">Book a Stay</button>
       <button type="button" class="secondary-button" data-action="edit-customer-dog-inline" data-id="${escapeHtml(dog.id || "")}" data-boarding-id="${escapeHtml(dog.sourceBoardingDogId || dog.linkedBoardingDogId || "")}">Edit Profile</button>
     </div>
     <section class="customer-current-stay">
@@ -12521,9 +12635,15 @@ function customerDogDashboardCardHtml(dog = {}) {
   </article>`;
 }
 
+function customerDogDashboardCardHtml(dog = {}) {
+  return customerDogSummaryCardHtml(dog);
+}
+
 function customerDogWelcomeHtml() {
-  return `<article class="customer-welcome-card">
-    <div class="customer-welcome-icon" aria-hidden="true">D</div>
+  return `<article class="customer-home-empty customer-welcome-card">
+    <div class="customer-welcome-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M7.2 10.3c1.6-1.7 3.1-2.5 4.8-2.5s3.2.8 4.8 2.5" /><path d="M8.6 8.2 7.4 5.8a1.2 1.2 0 0 0-2.2.1L4.2 9" /><path d="m15.4 8.2 1.2-2.4a1.2 1.2 0 0 1 2.2.1l1 3.1" /><path d="M7.5 13.2c0 4 2.2 6.8 4.5 6.8s4.5-2.8 4.5-6.8" /><path d="M10 14h.01M14 14h.01M11 17h2" /></svg>
+    </div>
     <h3>Welcome to Snuggle Stay</h3>
     <p>Add your dog's profile to get started</p>
     <button type="button" data-action="add-customer-dog-inline">Add Your Dog</button>
@@ -13588,6 +13708,7 @@ function renderAllRecords() {
   renderGlobalSearchResults();
 }
 
+// === MODULE: SEARCH ===
 function globalSearchEntries() {
   const entries = [];
   readRecords("ownedDog").filter((record) => !record.removed).forEach((record) => entries.push({ label: ownedDogDisplayName(record), detail: ownedDogCareSummary(record), type: "ownedDog", id: record.id, pageId: "ourDogsPage" }));
@@ -13642,6 +13763,7 @@ function openGlobalSearchResult(button) {
   renderGlobalSearchResults();
 }
 
+// === MODULE: NOTIFICATIONS ===
 function currentUserNotificationKey() {
   return normalizeEmail(currentUser?.email || helperEmail?.value || currentUser?.name || helperName?.value || "unknown");
 }
@@ -13898,9 +14020,7 @@ function notificationAudienceEmails(config = {}, eventName = "") {
   } else if (audienceRoles.includes("helper") || audienceRoles.includes("admin")) {
     roleUsers.forEach((user) => emails.push(user.email));
   }
-  if (audienceRoles.includes("admin") && !hasSavedAdminUser) {
-    emails.push(...ADMIN_EMAILS);
-  }
+  if (audienceRoles.includes("admin") && !hasSavedAdminUser) emails.push(...getAdminEmails());
   if (audienceRoles.includes("customer")) {
     customerAlertUsers().forEach((user) => emails.push(user.email));
   }
@@ -14076,13 +14196,19 @@ async function openNotification(id = "") {
 }
 
 function emailNow(subjectText, bodyText) {
-  window.location.href = `mailto:${OWNER_ALERT_EMAIL}?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
+  const ownerAlertEmail = getOwnerAlertEmail();
+  if (!ownerAlertEmail) {
+    showToast("No admin email is configured for alerts.");
+    return;
+  }
+  window.location.href = `mailto:${ownerAlertEmail}?subject=${encodeURIComponent(subjectText)}&body=${encodeURIComponent(bodyText)}`;
 }
 
 function normalizeHelperName(value = "") {
   return value.toLowerCase().replace(/^ms\.?\s+/, "").replace(/\s+/g, " ").trim();
 }
 
+// === MODULE: TIMESHEET ===
 function timesheetBelongsToCurrentUser(record) {
   if (!record || !currentUser) return false;
   const currentEmail = (currentUser.email || helperEmail.value || "").toLowerCase();
@@ -14913,7 +15039,7 @@ function initEvents() {
     if (button.dataset.page) switchPage(button.dataset.page);
   });
   $("#mobileMoreMenuList").addEventListener("click", (event) => {
-    const button = event.target.closest(".mobile-more-menu-item[data-page]");
+    const button = event.target.closest(".mobile-more-menu-item[data-page], .mobile-more-item[data-page]");
     if (!button) return;
     switchPage(button.dataset.page);
   });
@@ -16457,9 +16583,28 @@ function initEvents() {
     boardingDogPriorityFilter = "";
     renderBoardingDogs();
   });
+  $("#boardingViewToggle")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-view]");
+    if (button) handleBoardingViewToggle(button.dataset.view);
+  });
   $("#boardingQueueGroups")?.addEventListener("click", (event) => {
-    const button = event.target.closest('[data-action="open-queue-stay-status"]');
+    const button = event.target.closest("[data-action]");
     if (!button) return;
+    if (button.dataset.action === "boarding-queue-show-more") {
+      const filterMap = {
+        "Pending Approval": "Pending",
+        "Today Drop-offs": "Active dogs",
+        "Tomorrow Arrivals": "Active dogs",
+        "In Kennel": "In Kennel",
+        "Today Pickups": "Ready For Pickup",
+      };
+      boardingDogRosterFilter = filterMap[button.dataset.filter || ""] || "All Boarding Dogs";
+      boardingDogPriorityFilter = "";
+      handleBoardingViewToggle("list");
+      renderBoardingDogs();
+      return;
+    }
+    if (button.dataset.action !== "open-queue-stay-status") return;
     const record = boardingDogRecordForDisplay(button.dataset.id);
     if (!record) return;
     const reference = boardingStayReferenceFromAction(button);
@@ -17147,7 +17292,7 @@ function initEvents() {
       openCustomerDogModal();
       return;
     }
-    if (button.dataset.action === "book-customer-stay") {
+    if (button.dataset.action === "book-customer-stay" || button.dataset.action === "open-customer-boarding-request") {
       switchPage("customerRequestsPage");
       openCustomerBookingModal("boarding");
       return;
@@ -17387,6 +17532,10 @@ function switchPage(pageId) {
     item.classList.toggle("is-active", exact || settingsRoot);
   });
   $$(".page-view").forEach((page) => page.classList.toggle("is-active", page.id === pageId));
+  if (pageId === "boardingDogsPage") {
+    boardingViewMode = window.innerWidth >= 768 ? "list" : "board";
+    handleBoardingViewToggle(boardingViewMode);
+  }
   syncMobileNavigationActive(pageId);
   setMobileMoreOpen(false);
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());

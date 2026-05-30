@@ -1,1 +1,1631 @@
-export const settingsModule = "settings";
+// === MODULE: SETTINGS ===
+const __snuggleStayModuleSource = `function normalizedServiceFlags(flags = []) {
+  return [...new Set((flags || []).map((flag) => (flag === "Alumni only" ? "Member Pricing" : flag)).filter(Boolean))];
+}
+
+function serviceHasFlag(service = {}, flag = "") {
+  return normalizedServiceFlags(service.flags).includes(flag);
+}
+
+function serviceFlagChipsHtml(flags = []) {
+  const normalized = normalizedServiceFlags(flags);
+  return normalized.length
+    ? \`<span class="service-flag-list">\${normalized.map((flag) => \`<span class="service-flag-chip">\${escapeHtml(flag)}</span>\`).join("")}</span>\`
+    : "";
+}
+
+function serviceChipsHtml(service = {}) {
+  return [serviceFlagChipsHtml(service.flags), serviceBoardingRateChipHtml(service), serviceDependencyChipHtml(service)].filter(Boolean).join(" ");
+}
+
+function readTableConfig() {
+  const saved = JSON.parse(localStorage.getItem(stateKeys.tableConfig) || "null") || {};
+  const withDefaults = {};
+  Object.entries(tableColumns).forEach(([type, columns]) => {
+    const currentKeys = columns.map((column) => column.key);
+    const savedKeys = (saved[type] || []).filter((key) => currentKeys.includes(key));
+    const newKeys = currentKeys.filter((key) => !savedKeys.includes(key));
+    withDefaults[type] = saved[type] ? [...savedKeys, ...newKeys] : currentKeys;
+  });
+  return withDefaults;
+}
+
+function writeTableConfig(config) {
+  localStorage.setItem(stateKeys.tableConfig, JSON.stringify(config));
+  saveCurrentUserTablePreferences(config);
+}
+
+function saveCurrentUserTablePreferences(config) {
+  if (!currentUser?.email) return;
+  const existing = savedUserFor(currentUser) || {};
+  const record = upsertRecord("settingsUser", {
+    ...profileRecordForUser(currentUser),
+    ...existing,
+    tableConfig: config,
+    tablePreferences: { ...(existing.tablePreferences || {}), tableConfig: config },
+    removed: false,
+  });
+  sendPayload(record).catch((error) => console.warn("Could not save table preferences to user profile.", error));
+}
+
+function readTableSort() {
+  return JSON.parse(localStorage.getItem(stateKeys.tableSort) || "{}") || {};
+}
+
+function writeTableSort(config) {
+  localStorage.setItem(stateKeys.tableSort, JSON.stringify(config));
+}
+
+function activeColumns(type) {
+  const order = readTableConfig()[type] || [];
+  return order.map((key) => tableColumns[type].find((column) => column.key === key)).filter(Boolean);
+}
+
+function renderColumnManager(type, selector) {
+  const container = $(selector);
+  if (!container) return;
+  const order = readTableConfig()[type] || [];
+  const columns = tableColumns[type];
+  container.innerHTML = \`<div class="column-manager-header"><strong>Table columns</strong><small>Choose visible headers. Drag or use arrows to reorder.</small></div>\` + columns
+    .map((column) => {
+      const visible = order.includes(column.key);
+      const index = order.indexOf(column.key);
+      return \`<div class="column-chip \${visible ? "" : "is-off"}" data-column="\${column.key}" data-table="\${type}" draggable="\${visible}">
+        <label><input type="checkbox" \${visible ? "checked" : ""} data-action="toggle-column" data-table="\${type}" data-column="\${column.key}" /> \${escapeHtml(column.label)}</label>
+        <button type="button" class="icon-button" data-action="move-column-up" data-table="\${type}" data-column="\${column.key}" \${index <= 0 ? "disabled" : ""} title="Move left">↑</button>
+        <button type="button" class="icon-button" data-action="move-column-down" data-table="\${type}" data-column="\${column.key}" \${index < 0 || index >= order.length - 1 ? "disabled" : ""} title="Move right">↓</button>
+      </div>\`;
+    })
+    .join("");
+}
+
+function setTableSettingsPopoverOpen(buttonSelector, panelSelector, open) {
+  const button = $(buttonSelector);
+  const panel = $(panelSelector);
+  if (!button || !panel) return;
+  panel.hidden = !open;
+  button.setAttribute("aria-expanded", open ? "true" : "false");
+  button.classList.toggle("is-active", open);
+}
+
+function updateTableColumnConfig(type, columnKey, action) {
+  if (!type || !columnKey || !action) return;
+  const config = readTableConfig();
+  const order = config[type] || [];
+  const currentIndex = order.indexOf(columnKey);
+  if (action === "toggle-column") {
+    config[type] = currentIndex >= 0 ? order.filter((key) => key !== columnKey) : [...order, columnKey];
+  } else if (currentIndex >= 0) {
+    const nextIndex = action === "move-column-up" ? currentIndex - 1 : currentIndex + 1;
+    if (nextIndex >= 0 && nextIndex < order.length) {
+      [order[currentIndex], order[nextIndex]] = [order[nextIndex], order[currentIndex]];
+      config[type] = order;
+    }
+  }
+  writeTableConfig(config);
+  if (type === "ownedDog") renderOwnedDogs();
+  if (type === "boardingDog") renderBoardingDogs();
+}
+
+function reorderTableColumn(type, sourceColumn, targetColumn) {
+  if (!type || !sourceColumn || !targetColumn || sourceColumn === targetColumn) return;
+  const config = readTableConfig();
+  const order = [...(config[type] || [])];
+  const sourceIndex = order.indexOf(sourceColumn);
+  const targetIndex = order.indexOf(targetColumn);
+  if (sourceIndex < 0 || targetIndex < 0) return;
+  const [moved] = order.splice(sourceIndex, 1);
+  order.splice(targetIndex, 0, moved);
+  config[type] = order;
+  writeTableConfig(config);
+  if (type === "ownedDog") renderOwnedDogs();
+  if (type === "boardingDog") renderBoardingDogs();
+}
+
+function handleTableHeaderDragStart(event) {
+  const header = event.target.closest('th[data-table][data-column]');
+  if (!header) return;
+  header.classList.add("is-dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", \`\${header.dataset.table}:\${header.dataset.column}\`);
+}
+
+function handleTableHeaderDragOver(event) {
+  const header = event.target.closest('th[data-table][data-column]');
+  if (!header) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+}
+
+function handleTableHeaderDrop(event) {
+  const header = event.target.closest('th[data-table][data-column]');
+  if (!header) return;
+  event.preventDefault();
+  const [sourceTable, sourceColumn] = event.dataTransfer.getData("text/plain").split(":");
+  if (sourceTable !== header.dataset.table) return;
+  reorderTableColumn(sourceTable, sourceColumn, header.dataset.column);
+}
+
+function handleTableHeaderDragEnd() {
+  $$("th.is-dragging").forEach((header) => header.classList.remove("is-dragging"));
+}
+
+function setTableSort(type, columnKey) {
+  if (!type || !columnKey) return;
+  const sortConfig = readTableSort();
+  const current = sortConfig[type] || {};
+  sortConfig[type] = {
+    key: columnKey,
+    direction: current.key === columnKey && current.direction === "asc" ? "desc" : "asc",
+  };
+  writeTableSort(sortConfig);
+  if (type === "ownedDog") renderOwnedDogs();
+  if (type === "boardingDog") renderBoardingDogs();
+  if (type === "service") renderServices();
+}
+
+function sortRecordsForTable(type, records) {
+  const sort = readTableSort()[type];
+  if (!sort?.key) return records;
+  const column = tableColumns[type]?.find((item) => item.key === sort.key);
+  if (!column) return records;
+  return [...records].sort((a, b) => {
+    const left = String(column.value(a) || "").toLowerCase();
+    const right = String(column.value(b) || "").toLowerCase();
+    return sort.direction === "desc" ? right.localeCompare(left, undefined, { numeric: true }) : left.localeCompare(right, undefined, { numeric: true });
+  });
+}
+
+function tableHeaderHtml(type, columns) {
+  const sort = readTableSort()[type] || {};
+  return \`<tr>\${columns
+    .map((column) => {
+      const marker = sort.key === column.key ? (sort.direction === "desc" ? " ↓" : " ↑") : "";
+      return \`<th data-sort-column="\${column.key}" title="Click to sort">\${escapeHtml(column.label)}\${marker}</th>\`;
+    })
+    .join("")}</tr>\`;
+}
+
+function settingsUsers() {
+  const activeUsers = readRecords("settingsUser").filter((user) => !user.removed);
+  const usersWithoutEmail = [];
+  const usersByEmail = new Map();
+  activeUsers.forEach((user) => {
+    const email = normalizeEmail(user.email);
+    if (!email) {
+      usersWithoutEmail.push(user);
+      return;
+    }
+    usersByEmail.set(email, [...(usersByEmail.get(email) || []), user]);
+  });
+  return [
+    ...usersWithoutEmail,
+    ...[...usersByEmail.values()].map((users) => (users.length > 1 ? mergeSettingsUserRecords(users) : { ...users[0], email: normalizeEmail(users[0].email) })),
+  ];
+}
+
+function settingsUserRoleRank(role = "") {
+  return { customer: 1, helper: 2, admin: 3 }[role] || 0;
+}
+
+function canonicalSettingsUser(users = []) {
+  return users
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.authId && !b.authId) return -1;
+      if (!a.authId && b.authId) return 1;
+      const roleDiff = settingsUserRoleRank(b.role) - settingsUserRoleRank(a.role);
+      if (roleDiff) return roleDiff;
+      return new Date(a.submittedAt || a.updatedAt || 0) - new Date(b.submittedAt || b.updatedAt || 0);
+    })[0] || {};
+}
+
+function mergeSettingsUserRecords(...users) {
+  const activeUsers = users.flat().filter(Boolean);
+  const canonical = canonicalSettingsUser(activeUsers);
+  const normalizedEmail = normalizeEmail(canonical.email || activeUsers.find((user) => user.email)?.email || "");
+  const strongestRole = activeUsers.reduce((role, user) => (settingsUserRoleRank(user.role) > settingsUserRoleRank(role) ? user.role : role), canonical.role || "customer");
+  const merged = activeUsers.reduce((acc, user) => ({ ...acc, ...user }), { ...canonical });
+  return {
+    ...merged,
+    type: "settingsUser",
+    id: canonical.id || merged.id || uid("settingsUser"),
+    submittedAt: activeUsers.map((user) => user.submittedAt).filter(Boolean).sort()[0] || merged.submittedAt || new Date().toISOString(),
+    name: canonical.name || merged.name || normalizedEmail,
+    email: normalizedEmail || merged.email || "",
+    role: strongestRole || "customer",
+    authId: canonical.authId || activeUsers.find((user) => user.authId)?.authId || "",
+    alternateAuthIds: mergeUniqueIds(...activeUsers.map((user) => [user.authId, ...(user.alternateAuthIds || [])])),
+    linkedCustomerDogIds: mergeUniqueIds(...activeUsers.map((user) => user.linkedCustomerDogIds || [])),
+    linkedBoardingDogIds: mergeUniqueIds(...activeUsers.map((user) => user.linkedBoardingDogIds || [])),
+    isMember: activeUsers.some((user) => user.isMember === true || user.isMember === "true" || user.isMember === "on" || user.member === true),
+    mergedFromIds: mergeUniqueIds(...activeUsers.map((user) => [user.id, ...(user.mergedFromIds || [])])).filter((id) => id !== (canonical.id || merged.id)),
+    removed: false,
+  };
+}
+
+async function addAuditLog(action, targetType, target = {}, details = "") {
+  if (currentRole() !== "admin") return null;
+  const record = upsertRecord("auditLog", {
+    type: "auditLog",
+    id: uid("audit"),
+    submittedAt: new Date().toISOString(),
+    action,
+    targetType,
+    targetId: target.id || "",
+    targetLabel: target.name || target.email || target.serviceName || target.dogName || target.title || targetType,
+    details,
+    actorName: currentUser?.name || "Admin",
+    actorEmail: currentUser?.email || "",
+    removed: false,
+  });
+  await sendPayload(record);
+  renderAuditLog();
+  return record;
+}
+
+function impersonationUserFromSettings(user = {}) {
+  const email = normalizeEmail(user.email);
+  return {
+    key: user.authId || user.id || email || uid("impersonatedUser"),
+    name: user.name || user.email || "Impersonated user",
+    email: user.email || "",
+    role: user.role || "customer",
+    isMember: userMemberFlag(user),
+    authId: user.authId || "",
+    authProvider: "admin-impersonation",
+    impersonatedUserId: user.id || "",
+  };
+}
+
+function seedDefaultServices() {
+  if (readRecords("service").length) return;
+  writeRecords(
+    "service",
+    defaultServices.map((service) => ({
+      ...service,
+      type: "service",
+      id: uid("service"),
+      submittedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })),
+  );
+}
+
+function seedDefaultCfoNotes() {
+  if (readRecords("cfoNote").length) return;
+  writeRecords(
+    "cfoNote",
+    defaultCfoNotes.map((note) => ({
+      ...note,
+      type: "cfoNote",
+      id: uid("cfoNote"),
+      submittedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })),
+  );
+}
+
+function seedDefaultKennelLocations() {
+  if (readRecords("kennelLocation").length) return;
+  writeRecords(
+    "kennelLocation",
+    defaultKennelLocations.map((location) => ({
+      ...location,
+      type: "kennelLocation",
+      id: uid("kennelLocation"),
+      submittedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      removed: false,
+    })),
+  );
+}
+
+function seedDefaultKennelBuildings() {
+  if (readRecords("kennelBuilding").length) return;
+  const names = [...new Set(defaultKennelLocations.map((location) => location.building).filter(Boolean))];
+  writeRecords(
+    "kennelBuilding",
+    names.map((name) => ({
+      type: "kennelBuilding",
+      id: uid("kennelBuilding"),
+      name,
+      submittedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      removed: false,
+    })),
+  );
+}
+
+function defaultOperationHourRecords() {
+  const now = new Date().toISOString();
+  return operationWeekdays.map((day) => ({
+    type: "operationHours",
+    id: \`operationHours-\${day.key}\`,
+    weekday: day.key,
+    weekdayLabel: day.label,
+    dayIndex: day.dayIndex,
+    isOpen: true,
+    openTime: defaultOperationOpenTime,
+    closeTime: defaultOperationCloseTime,
+    submittedAt: now,
+    updatedAt: now,
+    removed: false,
+  }));
+}
+
+function seedDefaultOperationHours() {
+  if (readRecords("operationHours").length) return;
+  writeRecords("operationHours", defaultOperationHourRecords());
+}
+
+function setupServiceFormInfoIcons() {
+  const form = $("#serviceForm");
+  if (!form) return;
+  Object.entries(serviceFormFieldInfo).forEach(([fieldName, infoText]) => {
+    const field = formFieldByName(form, fieldName);
+    const label = field ? fieldLabel(field) : null;
+    const title = label?.querySelector(".field-label-text");
+    const titleText = title?.querySelector("span:not(.required-mark)");
+    if (!title || !titleText || title.querySelector(".service-info-icon")) return;
+    label.classList.add("has-field-info");
+    titleText.insertAdjacentHTML("afterend", customerServiceInfoIconHtml(infoText));
+  });
+}
+
+function serviceCatalogForStayRequests() {
+  return readRecords("service")
+    .filter((service) => !service.removed && serviceHasFlag(service, "Active") && service.category !== "Boarding");
+}
+
+function normalizedServiceLookupText(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/\\s+-\\s+\\$[\\d,]+(?:\\.\\d{2})?.*$/i, "")
+    .replace(/\\s+requested$/i, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function serviceDependencyId(service = {}) {
+  return String(service.requiresServiceId || service.parentServiceId || "").trim();
+}
+
+function serviceDependencyType(service = {}) {
+  if (!serviceDependencyId(service)) return "";
+  return String(service.dependentServiceType || "optional-addon").trim() || "optional-addon";
+}
+
+function serviceDependencyParent(service = {}, catalog = readRecords("service")) {
+  const parentId = serviceDependencyId(service);
+  if (!parentId) return null;
+  return catalog.find((item) => item.id === parentId && !item.removed) || null;
+}
+
+function serviceDependencySatisfied(service = {}, selectedIds = new Set()) {
+  const parentId = serviceDependencyId(service);
+  return !parentId || selectedIds.has(parentId);
+}
+
+function serviceHasDependentServices(service = {}, catalog = readRecords("service")) {
+  return Boolean(service?.id && catalog.some((item) => !item.removed && serviceDependencyId(item) === service.id));
+}
+
+function serviceDependencyChipHtml(service = {}) {
+  const parent = serviceDependencyParent(service);
+  if (!parent) return "";
+  const label = serviceDependencyType(service) === "optional-addon" ? "Add-on after" : "Requires";
+  return \`<span class="service-flag-list"><span class="service-flag-chip">\${escapeHtml(label)} \${escapeHtml(serviceDependencyOptionLabel(parent))}</span></span>\`;
+}
+
+function servicePricingScopeLabel(service = {}) {
+  return serviceHasFlag(service, "Member Pricing") ? "Member Pricing" : "Regular Price (Non-Member)";
+}
+
+function serviceMatchesCustomerPricingScope(service = {}, user = currentUser) {
+  const memberPricing = serviceHasFlag(service, "Member Pricing");
+  return isMemberUser(user) ? memberPricing : !memberPricing;
+}
+
+function serviceBoardingRateType(service = {}) {
+  return normalizedBoardingRateType(service.boardingRateType || service.stayRateBehavior || service.boardingProgramType || "");
+}
+
+function serviceIsBoardingProgram(service = {}) {
+  return serviceBoardingRateType(service) === "boarding-program";
+}
+
+function serviceIsStandardBoardingRate(service = {}) {
+  const rateType = serviceBoardingRateType(service);
+  if (rateType === "standard-boarding") return true;
+  if (rateType || service.category !== "Boarding" || serviceDependencyId(service)) return false;
+  const name = normalizedServiceLookupText(service.serviceName || service.name || "");
+  const unit = normalizedServiceLookupText(service.unit || "");
+  const legacyBoardingRate = name.includes("boarding") && (unit.includes("night") || unit.includes("day"));
+  const legacyUpgrade = name === "premium overnight boarding kennel" || name.includes("upgrade");
+  return legacyBoardingRate && !legacyUpgrade;
+}
+
+function serviceBoardingRateChipHtml(service = {}) {
+  const rateType = serviceBoardingRateType(service) || (serviceIsStandardBoardingRate(service) ? "standard-boarding" : "");
+  if (rateType === "boarding-program") return \`<span class="service-flag-list"><span class="service-flag-chip">Boarding program</span></span>\`;
+  if (rateType === "standard-boarding") return \`<span class="service-flag-list"><span class="service-flag-chip">Standard boarding rate</span></span>\`;
+  return "";
+}
+
+function serviceDependencyOptionLabel(service = {}) {
+  return [
+    service.serviceName || "Service",
+    service.category || "",
+    servicePricingScopeLabel(service),
+  ].filter(Boolean).join(" - ");
+}
+
+function serviceDependencyOptionsHtml(currentService = {}) {
+  const currentId = currentService.id || "";
+  const selectedId = serviceDependencyId(currentService);
+  const options = readRecords("service")
+    .filter((service) => !service.removed && service.id !== currentId)
+    .sort((a, b) => serviceDependencyOptionLabel(a).localeCompare(serviceDependencyOptionLabel(b)));
+  const selectedParent = selectedId && !options.some((service) => service.id === selectedId)
+    ? readRecords("service").find((service) => service.id === selectedId)
+    : null;
+  const serviceOptions = [
+    ...(selectedParent ? [selectedParent] : []),
+    ...options,
+  ];
+  return \`<option value="">No dependency</option>\${serviceOptions.map((service) => \`<option value="\${escapeHtml(service.id || "")}">\${escapeHtml(serviceDependencyOptionLabel(service))}</option>\`).join("")}\`;
+}
+
+function renderServiceDependencyFields(record = {}) {
+  const requiresSelect = $("#serviceRequiresServiceId");
+  const typeSelect = $("#serviceDependentServiceType");
+  if (requiresSelect) requiresSelect.innerHTML = serviceDependencyOptionsHtml(record);
+  if (typeSelect && serviceDependencyId(record) && !record.dependentServiceType) typeSelect.value = "optional-addon";
+  syncServiceDependencyFields();
+}
+
+function syncServiceDependencyFields() {
+  const requiresSelect = $("#serviceRequiresServiceId");
+  const typeSelect = $("#serviceDependentServiceType");
+  if (!typeSelect) return;
+  const hasDependency = Boolean(requiresSelect?.value);
+  typeSelect.disabled = !hasDependency;
+  if (!hasDependency) typeSelect.value = "";
+  else if (!typeSelect.value) typeSelect.value = "optional-addon";
+}
+
+function applyLegacyServiceDependencyMigration(options = {}) {
+  const services = readRecords("service");
+  const fullBath = services.find((service) => !service.removed && ["full premium bath", "full bath"].includes(normalizedServiceLookupText(service.serviceName)));
+  const deshedAddon = services.find((service) => {
+    if (service.removed || service.id === fullBath?.id) return false;
+    const name = normalizedServiceLookupText(service.serviceName);
+    return name === "de shed w full bath" || name === "de shedding" || (name.includes("de shed") && name.includes("full bath"));
+  });
+  if (!fullBath?.id || !deshedAddon?.id) return null;
+  if (Object.prototype.hasOwnProperty.call(deshedAddon, "requiresServiceId") || serviceDependencyId(deshedAddon)) return null;
+  const updated = {
+    ...deshedAddon,
+    requiresServiceId: fullBath.id,
+    dependentServiceType: deshedAddon.dependentServiceType || "optional-addon",
+    itemDescription: deshedAddon.itemDescription || "May be added by staff when a dog requires more than 30 minutes of de-shedding for their regular bath.",
+    updatedAt: new Date().toISOString(),
+  };
+  writeRecords("service", services.map((service) => (service.id === updated.id ? updated : service)));
+  if (options.syncRemote && currentRole() === "admin") {
+    sendPayload(updated).catch((error) => console.warn("Could not sync service dependency migration.", error));
+  }
+  return updated;
+}
+
+function serviceCatalogMatchForRequest(value = {}) {
+  const item = value && typeof value === "object" ? value : {};
+  const serviceId = item.serviceId || item.id || "";
+  const catalog = serviceCatalogForStayRequests();
+  if (serviceId) {
+    const exactId = catalog.find((service) => service.id === serviceId);
+    if (exactId) return exactId;
+  }
+  const requestName = normalizedServiceLookupText(item.serviceName || boardingServiceTaskDisplayName(value));
+  if (!requestName) return null;
+  return catalog.find((service) => normalizedServiceLookupText(service.serviceName) === requestName)
+    || catalog.find((service) => normalizedServiceLookupText(service.serviceName).includes(requestName) || requestName.includes(normalizedServiceLookupText(service.serviceName)));
+}
+
+function stayServiceTaskByReference(record = {}, reference = {}, taskId = "", taskKey = "") {
+  const stay = boardingStayByReference(record, reference);
+  if (!stay) return null;
+  return boardingStayServiceTasks(record, stay)
+    .find((task) => task.id === taskId || (taskKey && boardingServiceTaskKey(task) === taskKey) || (taskKey && boardingServiceTaskNameKey(task) === boardingServiceTaskNameFromKey(taskKey)))
+    || null;
+}
+
+function stayServiceCompletionConfirmationHtml(record = {}, reference = {}, task = {}, alertFilter = "") {
+  const stay = boardingStayByReference(record, reference) || {};
+  const requestCode = stay.id ? boardingStayRequestCode(record, stay) : reference.requestCode || "";
+  const completedText = task.completedAt ? formatDateTime(task.completedAt) : formatDateTime(new Date().toISOString());
+  return \`<section class="popup-record-section">
+    <article class="record-card compact-record-card">
+      <strong>\${escapeHtml(task.label || task.serviceName || "Stay service")} completed</strong>
+      <p>\${escapeHtml(record.dogName || "Boarding dog")} | Stay ID: \${escapeHtml(requestCode || "Not recorded")}</p>
+      <p>Completed \${escapeHtml(completedText)}\${task.completedBy ? \` by \${escapeHtml(task.completedBy)}\` : ""}.</p>
+    </article>
+    <div class="button-row">
+      <button type="button" class="secondary-button" data-action="open-boarding-editor" data-id="\${escapeHtml(record.id || "")}" data-tab="Boarding & Request">Open Boarding & Request</button>
+      \${alertFilter ? \`<button type="button" class="secondary-button" data-action="open-dashboard-alert-popup" data-alert-filter="\${escapeHtml(alertFilter)}">Back to \${escapeHtml(alertFilter)}</button>\` : ""}
+      <button type="button" class="secondary-button" data-action="close-dialog">Close</button>
+    </div>
+  </section>\`;
+}
+
+function showStayServiceCompletionConfirmation(record = {}, reference = {}, taskId = "", taskKey = "", alertFilter = "") {
+  const task = stayServiceTaskByReference(record, reference, taskId, taskKey) || {};
+  showDetailDialog("Stay Service Completed", stayServiceCompletionConfirmationHtml(record, reference, task, alertFilter));
+}
+
+function openEditableCustomerDogById(id = "", boardingId = "") {
+  const normalizedBoardingId = boardingDogIdFromCustomerDogValue(boardingId);
+  const record = editableCustomerDogForCurrentUser(id, normalizedBoardingId);
+  if (!record) {
+    showToast("This dog profile could not be opened for editing.");
+    return;
+  }
+  if (record.isSharedBoardingDog || normalizedBoardingId) {
+    openCustomerDogEditorForRequest(normalizedBoardingId || record.sourceBoardingDogId || record.linkedBoardingDogId || record.id);
+    return;
+  }
+  openCustomerDog(record);
+}
+
+function stableLegacyPart(value = "") {
+  return String(value || "none")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "none";
+}
+
+function stableLegacyId(prefix = "legacy", ...parts) {
+  return [prefix, ...parts.map(stableLegacyPart)].join("-");
+}
+
+function structuredReservationServicePayloads(record = {}, reservation = {}, includeRootServices = false) {
+  const services = [];
+  (reservation.legacyStayRequests || []).forEach((requestText, index) => {
+    const original = String(requestText || "").trim();
+    if (!original) return;
+    services.push({
+      type: "reservationService",
+      id: stableLegacyId("reservationService", reservation.id, "stay-request", index, original),
+      submittedAt: reservation.submittedAt,
+      reservationId: reservation.id,
+      serviceName: original.replace(/\\s+requested$/i, "") || original,
+      quantity: 1,
+      unitPrice: 0,
+      status: "requested",
+      notes: original,
+      legacyBoardingDogId: record.id || "",
+      legacyStayId: reservation.legacyStayId || "",
+      legacySource: "stay.requests",
+      removed: false,
+    });
+  });
+  if (includeRootServices) {
+    (record.requestedServices || []).forEach((service, index) => {
+      const serviceName = typeof service === "object" ? service.serviceName || service.name || service.id || "Service" : String(service || "Service");
+      services.push({
+        type: "reservationService",
+        id: stableLegacyId("reservationService", reservation.id, "requested-service", index, serviceName),
+        submittedAt: reservation.submittedAt,
+        reservationId: reservation.id,
+        serviceId: typeof service === "object" ? service.id || "" : "",
+        serviceName,
+        quantity: Number(typeof service === "object" ? service.quantity || 1 : 1),
+        unitPrice: Number(typeof service === "object" ? service.unitPrice || service.basePrice || 0 : 0),
+        status: "requested",
+        notes: typeof service === "object" ? service.notes || service.pricingNotes || "" : String(service || ""),
+        legacyBoardingDogId: record.id || "",
+        legacySource: "boardingDog.requestedServices",
+        removed: false,
+      });
+    });
+  }
+  return services;
+}
+
+function activeCheckInServices() {
+  return readRecords("service")
+    .filter((service) => !service.removed && serviceHasFlag(service, "Active") && service.category !== "Boarding")
+    .sort((a, b) => String(a.category || "").localeCompare(String(b.category || "")) || String(a.serviceName || "").localeCompare(String(b.serviceName || "")));
+}
+
+function checkInServiceSnapshot(service = {}, quantity = 1) {
+  const numericQuantity = Math.max(1, Number(quantity || 1));
+  return {
+    id: service.id || "",
+    serviceName: service.serviceName || "Service",
+    category: service.category || "",
+    unit: service.unit || "",
+    quantity: numericQuantity,
+    unitPrice: Number(service.basePrice || 0),
+    addedAt: new Date().toISOString(),
+    addedBy: currentUser?.name || helperName?.value || "",
+    addedByEmail: currentUser?.email || helperEmail?.value || "",
+  };
+}
+
+async function submitBoardingCheckInServiceForm(formEl) {
+  if (!pendingBoardingCheckIn) return;
+  const record = boardingDogRecordForDisplay(pendingBoardingCheckIn.dogId);
+  if (!record) return;
+  const selected = checkedFrom(formEl, "checkInServices")
+    .map((id) => {
+      const service = readRecords("service").find((item) => item.id === id);
+      if (!service) return null;
+      return checkInServiceSnapshot(service, formEl.elements[\`serviceQuantity-\${id}\`]?.value || 1);
+    })
+    .filter(Boolean);
+  pendingBoardingCheckIn.addedServices = selected;
+  openBoardingCheckInPopup(record, pendingBoardingCheckIn.nextStatus, pendingBoardingCheckIn.options, pendingBoardingCheckIn);
+}
+
+function mergeBoardingStayServiceTasksForRequests(items = [], best = {}, mergedRequests = []) {
+  const allowedKeys = new Set([
+    ...mergeBoardingStayRequestList(mergedRequests).map(boardingServiceTaskNameKey),
+    ...boardingServiceTaskSources(best.record || {}, best.stay || {}).map(boardingServiceTaskNameKey),
+  ].filter(Boolean));
+  if (!allowedKeys.size) return [];
+  const byKey = new Map();
+  items.forEach(({ record, stay }) => {
+    boardingStayServiceTasks(record, stay).forEach((task) => {
+      const key = boardingServiceTaskNameKey(task);
+      if (!allowedKeys.has(key)) return;
+      const existing = byKey.get(key);
+      const statusDiff = Number(task.status === "completed") - Number(existing?.status === "completed");
+      const timeDiff = itemSortTime(task) - itemSortTime(existing || {});
+      if (!existing || statusDiff > 0 || (statusDiff === 0 && timeDiff >= 0)) byKey.set(key, task);
+    });
+  });
+  return [...byKey.values()];
+}
+
+function shortStableHash(value = "", length = 5) {
+  const text = String(value || "");
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36).toUpperCase().padStart(length, "0").slice(-length);
+}
+
+function selectedBoardingKennelLocation(record = {}) {
+  const stay = activeBoardingStay(record) || currentOrNextStay(record) || {};
+  const id = record.kennelLocationId || stay.kennelLocationId || "";
+  if (!id) return null;
+  return kennelLocations({ activeOnly: true }).find((location) => location.id === id) || null;
+}
+
+function dashboardBoardingServiceCardHtml(item = {}) {
+  const record = item.record || {};
+  const stay = item.stay || dashboardStayForBoardingRecord(record);
+  const task = item.task || {};
+  const dueInfo = item.dueInfo || boardingStayServiceDueInfo(record, stay) || {};
+  const stayAttrs = stay?.id ? boardingStayDataAttrs(record, stay) : "";
+  const taskKey = item.taskKey || boardingServiceTaskKey(task);
+  return \`<article class="record-card compact-record-card dashboard-detail-card boarding-service-due-card">
+    \${dashboardImagePreviewHtml(firstRecordImage(record), record.dogName || "Boarding dog")}
+    <div>
+      <strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong>
+      <span>\${escapeHtml(dueInfo.label || "Stay service due")}</span>
+      <p>\${escapeHtml(task.label || task.serviceName || "Requested service")} | Stay ID: \${escapeHtml(stay?.id ? boardingStayRequestCode(record, stay) : "not assigned")}</p>
+      <p>\${escapeHtml(stay?.pickupTime ? \`Pickup \${formatDateTime(stay.pickupTime)}\` : "Pickup time not saved")}</p>
+      <div class="record-actions"><button type="button" class="secondary-button" data-action="complete-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id || "")}" data-task-key="\${escapeHtml(taskKey)}">Mark Done</button><button type="button" class="secondary-button" data-action="dashboard-open-boarding" data-id="\${escapeHtml(record.id || "")}"\${stayAttrs}>Open Stay</button></div>
+    </div>
+  </article>\`;
+}
+
+function renderFinancials() {
+  if (!$("#financialCards")) return;
+  if (currentRole() !== "admin") {
+    $("#financialCards").innerHTML = "";
+    return;
+  }
+  const services = readRecords("service");
+  const activeServices = services.filter((service) => (service.flags || []).includes("Active"));
+  const catalogValue = activeServices.reduce((total, service) => total + Number(service.basePrice || 0), 0);
+  const depositExposure = services.reduce((total, service) => total + Number(service.depositAmount || 0), 0);
+  const puppyServices = services.filter((service) => service.category === "Puppy placement");
+  const yardRental = services.find((service) => service.category === "Private yard rental");
+  const cards = [
+    ["Active service count", activeServices.length, "Editable services currently active."],
+    ["Catalog price total", money(catalogValue), "Sum of active base prices for quick review."],
+    ["Deposit settings total", money(depositExposure), "Deposits configured across services."],
+    ["Puppy price bands", puppyServices.length, "Placement options in the catalog."],
+    ["Yard rental rate", yardRental ? \`\${money(yardRental.basePrice)} \${yardRental.unit}\` : "Not set", "Suggested start: $10-$12 per dog/hour."],
+    ["Open revenue tasks", readRecords("request").filter((record) => !record.completed && /price|revenue|yard|service|deposit/i.test(JSON.stringify(record))).length, "Requests mentioning pricing/revenue/service."],
+  ];
+  $("#financialCards").innerHTML = cards.map(([label, value, note]) => \`<article class="dashboard-card"><span>\${label}</span><strong>\${value}</strong><p>\${note}</p></article>\`).join("");
+}
+
+function renderCfoNotes() {
+  if (!$("#cfoNotesList")) return;
+  const notes = readRecords("cfoNote").filter((note) => !note.removed);
+  $("#cfoNotesList").innerHTML = notes.length
+    ? notes.map((note) => \`<article class="record-card"><strong>\${escapeHtml(note.title)}</strong><p>\${escapeHtml(note.note)}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="remove-cfo-note" data-id="\${escapeHtml(note.id)}">Remove</button></div></article>\`).join("")
+    : "<p>No CFO notes saved yet.</p>";
+}
+
+function settingsUserTabFor(user = {}) {
+  if (user.role === "admin") return "admin";
+  if (user.role === "helper") return "staff";
+  if (userMemberFlag(user)) return "member";
+  return "customer";
+}
+
+function settingsUserDisplayRole(user = {}) {
+  return \`\${roleLabel(user.role)}\${userMemberFlag(user) ? " | Member" : ""}\`;
+}
+
+function settingsUserPasswordText(user = {}) {
+  return user.passwordChangeRequired ? "Change required" : "Current";
+}
+
+function defaultSettingsUserForActiveTab() {
+  if (settingsUserTab === "admin") return { role: "admin" };
+  if (settingsUserTab === "staff") return { role: "helper" };
+  if (settingsUserTab === "member") return { role: "customer", isMember: true };
+  return { role: "customer" };
+}
+
+function settingsUserSortValue(user = {}, key = "name") {
+  if (key === "email") return user.email || "";
+  if (key === "role") return settingsUserDisplayRole(user);
+  if (key === "password") return settingsUserPasswordText(user);
+  return user.name || user.email || "";
+}
+
+function sortedSettingsUsers(users = []) {
+  const direction = settingsUserSort.direction === "desc" ? -1 : 1;
+  const key = settingsUserSort.key || "name";
+  return [...users].sort((a, b) => {
+    const left = String(settingsUserSortValue(a, key)).toLowerCase();
+    const right = String(settingsUserSortValue(b, key)).toLowerCase();
+    return left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" }) * direction;
+  });
+}
+
+function setSettingsUserSort(key = "name") {
+  settingsUserSort = {
+    key,
+    direction: settingsUserSort.key === key && settingsUserSort.direction === "asc" ? "desc" : "asc",
+  };
+  renderSettingsUsers();
+}
+
+function renderSettingsUserTabs(users = settingsUsers()) {
+  const counts = { admin: 0, staff: 0, customer: 0, member: 0 };
+  users.forEach((user) => {
+    const tab = settingsUserTabFor(user);
+    counts[tab] = (counts[tab] || 0) + 1;
+  });
+  $$("#settingsUserTabs [data-settings-user-tab]").forEach((button) => {
+    const active = button.dataset.settingsUserTab === settingsUserTab;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  Object.entries(counts).forEach(([tab, count]) => {
+    const counter = $(\`[data-settings-user-count="\${tab}"]\`);
+    if (counter) counter.textContent = count;
+  });
+}
+
+function renderSettingsUserSortHeaders() {
+  $$("#settingsUserTableHead [data-settings-sort]").forEach((header) => {
+    const active = header.dataset.settingsSort === settingsUserSort.key;
+    header.setAttribute("aria-sort", active ? (settingsUserSort.direction === "asc" ? "ascending" : "descending") : "none");
+    header.title = "Double-click to sort ascending or descending.";
+    const indicator = header.querySelector(".sort-indicator");
+    if (indicator) indicator.textContent = active ? settingsUserSort.direction.toUpperCase() : "";
+  });
+}
+
+function renderSettingsUsers() {
+  if (!$("#settingsUserTableBody")) return;
+  const users = settingsUsers();
+  const visibleUsers = sortedSettingsUsers(users.filter((user) => settingsUserTabFor(user) === settingsUserTab));
+  const emptyLabel = settingsUserTabLabels[settingsUserTab] || "selected";
+  renderSettingsUserTabs(users);
+  renderSettingsUserSortHeaders();
+  $("#settingsUserTableBody").innerHTML = visibleUsers.length
+    ? visibleUsers
+        .map((user) => \`<tr data-id="\${user.id}"><td>\${escapeHtml(user.name || "")}</td><td>\${escapeHtml(user.email || "")}</td><td>\${escapeHtml(settingsUserDisplayRole(user))}</td><td>\${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="\${user.id}">Remove</button></td></tr>\`)
+        .join("")
+    : \`<tr><td colspan="5">No \${escapeHtml(emptyLabel.toLowerCase())} users saved yet.</td></tr>\`;
+  if ($("#settingsUserCards")) {
+    $("#settingsUserCards").innerHTML = visibleUsers.length
+      ? visibleUsers.map((user) => \`<button type="button" class="settings-user-card" data-action="view-settings-user" data-id="\${escapeHtml(user.id)}"><strong>\${escapeHtml(user.name || user.email || "User")}</strong><span>\${escapeHtml(user.email || "")}</span><small>\${escapeHtml(settingsUserDisplayRole(user))}\${user.passwordChangeRequired ? " | Password change required" : ""}</small></button>\`).join("")
+      : \`<article class="record-card"><strong>No \${escapeHtml(emptyLabel.toLowerCase())} users saved yet.</strong></article>\`;
+  }
+}
+
+function kennelLocations({ activeOnly = false } = {}) {
+  return readRecords("kennelLocation")
+    .filter((location) => !location.removed)
+    .filter((location) => !activeOnly || location.active === "on" || location.active === true || location.active === "true")
+    .sort((a, b) => \`\${a.building || ""} \${a.name || ""}\`.localeCompare(\`\${b.building || ""} \${b.name || ""}\`));
+}
+
+function kennelBuildingRecords() {
+  const records = readRecords("kennelBuilding").filter((building) => !building.removed && building.name);
+  const byName = new Map(records.map((building) => [building.name, building]));
+  kennelLocations().forEach((location) => {
+    if (location.building && !byName.has(location.building)) {
+      byName.set(location.building, { type: "kennelBuilding", id: \`derived-\${location.building}\`, name: location.building, derived: true });
+    }
+  });
+  return [...byName.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, { numeric: true, sensitivity: "base" }));
+}
+
+function kennelBuildingNames(locations = kennelLocations()) {
+  const names = [...new Set([...kennelBuildingRecords().map((building) => building.name), ...locations.map((location) => location.building)].filter(Boolean))];
+  return names.length ? names : ["Shed", "Mansion"];
+}
+
+function kennelBuildings(locations = kennelLocations({ activeOnly: true })) {
+  const names = [...new Set(locations.map((location) => location.building || "").filter(Boolean))].sort();
+  return names.length ? names : kennelBuildingNames(locations);
+}
+
+function activeKennelBuildingName() {
+  const names = kennelBuildingNames();
+  if (!names.includes(kennelBuildingTab)) kennelBuildingTab = names[0] || "Shed";
+  return kennelBuildingTab;
+}
+
+function renderKennelBuildingTabs() {
+  const tabs = $("#kennelBuildingTabs");
+  if (!tabs) return;
+  const names = kennelBuildingNames();
+  const active = activeKennelBuildingName();
+  const canManage = currentRole() === "admin";
+  tabs.innerHTML = \`\${names.map((name) => \`<span class="task-tab-pill"><button type="button" data-kennel-building-tab="\${escapeHtml(name)}" role="tab" aria-selected="\${name === active ? "true" : "false"}" class="\${name === active ? "is-active" : ""}">\${escapeHtml(name)}</button></span>\`).join("")}\${canManage ? \`<button type="button" class="secondary-button task-add-tab-button" data-action="add-kennel-building-tab">Add Tab</button>\` : ""}\`;
+}
+
+function kennelLocationOptionsForBuilding(building = "", selectedId = "") {
+  const matching = kennelLocations({ activeOnly: true }).filter((location) => (location.building || "") === building);
+  return matching.length
+    ? matching.map((location) => \`<option value="\${escapeHtml(location.id)}" \${location.id === selectedId ? "selected" : ""}>\${escapeHtml(location.name || "Kennel")}</option>\`).join("")
+    : \`<option value="">No active kennels saved for \${escapeHtml(building || "this building")}</option>\`;
+}
+
+function renderKennelLocations() {
+  const list = $("#kennelLocationList");
+  if (!list) return;
+  renderKennelBuildingTabs();
+  const active = activeKennelBuildingName();
+  const actionRow = $("#kennelBuildingActionRow");
+  if (actionRow) {
+    actionRow.innerHTML = currentRole() === "admin"
+      ? \`<button type="button" class="secondary-button danger-button" data-action="remove-kennel-building-tab" data-building="\${escapeHtml(active)}">Delete \${escapeHtml(active)}</button>\`
+      : "";
+  }
+  const records = kennelLocations().filter((location) => (location.building || "") === active);
+  list.innerHTML = records.length
+    ? records
+        .map((location) => \`<article class="record-card compact-record-card"><strong>\${escapeHtml(location.name || "Kennel")}</strong><span>\${escapeHtml(active)} | \${(location.active === "on" || location.active === true || location.active === "true") ? "Active" : "Inactive"}</span><div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-kennel-location" data-id="\${escapeHtml(location.id)}">Remove</button></div></article>\`)
+        .join("")
+    : \`<article class="record-card compact-record-card"><strong>No locations saved for \${escapeHtml(active)}</strong><p>Add kennel, crate, room, or other useful location text above.</p></article>\`;
+}
+
+function kennelBuildingFormHtml() {
+  return \`<form id="kennelBuildingTabForm" class="tracker-form">
+    <label>Building name<input type="text" name="name" required placeholder="Example: Puppy room, Back kennels, Crates" /></label>
+    <div class="button-row"><button type="submit">Add Tab</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>\`;
+}
+
+function openKennelBuildingPopup() {
+  showDetailDialog("Add Building Tab", kennelBuildingFormHtml());
+}
+
+async function saveKennelBuildingFromForm(formEl) {
+  if (currentRole() !== "admin") return null;
+  if (!validateForm(formEl)) return null;
+  const name = formPayload(formEl).name.trim();
+  if (kennelBuildingNames().some((building) => building.toLowerCase() === name.toLowerCase())) {
+    showToast("A building tab with that name already exists.");
+    return null;
+  }
+  const record = upsertRecord("kennelBuilding", {
+    type: "kennelBuilding",
+    id: uid("kennelBuilding"),
+    name,
+    submittedAt: new Date().toISOString(),
+    removed: false,
+  });
+  await sendPayload(record);
+  await addAuditLog("Created kennel building", "kennelBuilding", record, name);
+  kennelBuildingTab = name;
+  renderKennelLocations();
+  return record;
+}
+
+function kennelBuildingRemoveConfirmHtml(building = "") {
+  const count = kennelLocations().filter((location) => (location.building || "") === building).length;
+  return \`<div class="tracker-form">
+    <article class="record-card compact-record-card danger-confirm-card">
+      <strong>Delete \${escapeHtml(building)}?</strong>
+      <p>This deletes the building tab and \${count} saved location\${count === 1 ? "" : "s"} under it.</p>
+    </article>
+    <div class="button-row"><button type="button" class="danger-button" data-action="confirm-remove-kennel-building-tab" data-building="\${escapeHtml(building)}">Delete \${escapeHtml(building)}</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </div>\`;
+}
+
+function openKennelBuildingRemoveConfirm(building = "") {
+  if (building) showDetailDialog("Confirm Delete Building Tab", kennelBuildingRemoveConfirmHtml(building));
+}
+
+async function removeKennelBuilding(building = "") {
+  if (!building || currentRole() !== "admin") return null;
+  const now = new Date().toISOString();
+  const buildingRecord = readRecords("kennelBuilding").find((record) => !record.removed && record.name === building);
+  if (buildingRecord) await sendPayload(upsertRecord("kennelBuilding", { ...buildingRecord, removed: true, removedAt: now }));
+  const locations = kennelLocations().filter((location) => (location.building || "") === building);
+  for (const location of locations) {
+    await sendPayload(upsertRecord("kennelLocation", { ...location, removed: true, removedAt: now }));
+  }
+  await addAuditLog("Removed kennel building", "kennelBuilding", buildingRecord || { name: building }, \`\${building} | \${locations.length} locations\`);
+  kennelBuildingTab = kennelBuildingNames()[0] || "Shed";
+  renderKennelLocations();
+  return { building, count: locations.length };
+}
+
+async function addKennelLocationToActiveBuilding() {
+  if (currentRole() !== "admin") return null;
+  const input = $("#newKennelLocationText");
+  const name = input?.value.trim() || "";
+  if (!name) {
+    showToast("Enter a kennel, crate, room, or location note before adding it.");
+    return null;
+  }
+  const building = activeKennelBuildingName();
+  if (kennelLocations().some((location) => (location.building || "") === building && (location.name || "").toLowerCase() === name.toLowerCase())) {
+    showToast("That location already exists in this building tab.");
+    return null;
+  }
+  const record = upsertRecord("kennelLocation", {
+    type: "kennelLocation",
+    id: uid("kennelLocation"),
+    submittedAt: new Date().toISOString(),
+    building,
+    name,
+    active: "on",
+    removed: false,
+  });
+  await sendPayload(record);
+  await addAuditLog("Created kennel location", "kennelLocation", record, \`\${building} active\`);
+  input.value = "";
+  renderKennelLocations();
+  showToast("Location added.");
+  return record;
+}
+
+async function removeKennelLocationById(id = "") {
+  if (currentRole() !== "admin") return null;
+  const location = readRecords("kennelLocation").find((record) => record.id === id && !record.removed);
+  if (!location) return null;
+  const updated = upsertRecord("kennelLocation", { ...location, removed: true, removedAt: new Date().toISOString() });
+  await sendPayload(updated);
+  await addAuditLog("Removed kennel location", "kennelLocation", updated, updated.building || "");
+  renderKennelLocations();
+  return updated;
+}
+
+function operationBoolean(value, fallback = true) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+  return !["false", "off", "no", "closed", "0"].includes(String(value).toLowerCase());
+}
+
+function normalizeOperationTime(value = "", fallback = defaultOperationOpenTime) {
+  const match = String(value || "").match(/^(\\d{1,2}):(\\d{2})/);
+  if (!match) return fallback;
+  const hour = Math.min(23, Math.max(0, Number(match[1])));
+  const minute = Math.min(59, Math.max(0, Number(match[2])));
+  return \`\${String(hour).padStart(2, "0")}:\${String(minute).padStart(2, "0")}\`;
+}
+
+function operationHoursRecords() {
+  const defaults = defaultOperationHourRecords();
+  const recordsByWeekday = new Map(defaults.map((record) => [record.weekday, record]));
+  readRecords("operationHours")
+    .filter((record) => !record.removed)
+    .forEach((record) => {
+      const weekday = record.weekday || operationWeekdays.find((day) => day.dayIndex === Number(record.dayIndex))?.key;
+      if (!weekday) return;
+      const fallback = recordsByWeekday.get(weekday) || {};
+      recordsByWeekday.set(weekday, { ...fallback, ...record, weekday });
+    });
+  return operationWeekdays.map((day) => {
+    const record = recordsByWeekday.get(day.key) || {};
+    return {
+      ...record,
+      type: "operationHours",
+      id: record.id || \`operationHours-\${day.key}\`,
+      weekday: day.key,
+      weekdayLabel: day.label,
+      dayIndex: day.dayIndex,
+      isOpen: operationBoolean(record.isOpen, true),
+      openTime: normalizeOperationTime(record.openTime, defaultOperationOpenTime),
+      closeTime: normalizeOperationTime(record.closeTime, defaultOperationCloseTime),
+      removed: false,
+    };
+  });
+}
+
+function operationHoursForDate(date = todayDate()) {
+  const parsed = new Date(\`\${dateOnly(date) || todayDate()}T12:00:00\`);
+  const dayIndex = Number.isNaN(parsed.getTime()) ? 1 : parsed.getDay();
+  return operationHoursRecords().find((record) => Number(record.dayIndex) === dayIndex) || operationHoursRecords()[0];
+}
+
+function operationOverrideForDate(date = "") {
+  const dateKey = dateOnly(date);
+  if (!dateKey) return null;
+  return readRecords("operationDateOverride")
+    .filter((record) => !record.removed && record.date === dateKey)
+    .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0))[0] || null;
+}
+
+function operationWindowForDate(date = "") {
+  const dateKey = dateOnly(date);
+  const weekly = operationHoursForDate(dateKey);
+  const override = operationOverrideForDate(dateKey);
+  const openSource = override || weekly;
+  const isOpen = operationBoolean(openSource.isOpen, true);
+  const openTime = normalizeOperationTime(openSource.openTime || weekly.openTime, weekly.openTime || defaultOperationOpenTime);
+  const closeTime = normalizeOperationTime(openSource.closeTime || weekly.closeTime, weekly.closeTime || defaultOperationCloseTime);
+  const invalidWindow = isOpen && timeToMinutes(closeTime) <= timeToMinutes(openTime);
+  return {
+    date: dateKey,
+    isOpen: isOpen && !invalidWindow,
+    openTime,
+    closeTime,
+    message: override?.customerMessage || "",
+    override,
+    weekly,
+    invalidWindow,
+  };
+}
+
+function operationWindowText(window = {}) {
+  if (!window.date) return "Choose a date to see available customer request hours.";
+  if (!window.isOpen) return window.invalidWindow ? "Hours need review by the kennel before customers can request this day." : "Closed to customer drop-off and pick-up requests.";
+  return \`Available \${displayTime(window.openTime)} - \${displayTime(window.closeTime)}\`;
+}
+
+function operationDateLabel(date = "") {
+  const dateKey = dateOnly(date);
+  if (!dateKey) return "Selected date";
+  return new Date(\`\${dateKey}T12:00:00\`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+}
+
+function operationCalendarDates(monthKey = operationCalendarMonth) {
+  const first = new Date(\`\${monthKey}-01T12:00:00\`);
+  if (Number.isNaN(first.getTime())) return [];
+  const firstOffset = (first.getDay() + 6) % 7;
+  const start = new Date(first);
+  start.setDate(first.getDate() - firstOffset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return localDateKey(date);
+  });
+}
+
+function operationOverrideSummaryHtml() {
+  const overrides = readRecords("operationDateOverride")
+    .filter((record) => !record.removed)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return overrides.length
+    ? overrides.map((record) => {
+      const open = operationBoolean(record.isOpen, true);
+      const timeText = open ? \`\${displayTime(record.openTime)} - \${displayTime(record.closeTime)}\` : "Closed";
+      return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(operationDateLabel(record.date))}</strong><span>\${escapeHtml(timeText)}</span>\${record.customerMessage ? \`<p>\${escapeHtml(record.customerMessage)}</p>\` : ""}<div class="record-actions"><button type="button" class="secondary-button" data-action="open-operation-date-override" data-date="\${escapeHtml(record.date)}">Edit</button></div></article>\`;
+    }).join("")
+    : \`<article class="record-card compact-record-card"><strong>No date overrides saved</strong><p>Weekly hours apply until a specific calendar date is changed.</p></article>\`;
+}
+
+function renderOperationHoursSettings() {
+  const list = $("#operationHoursList");
+  if (!list) return;
+  const hours = operationHoursRecords();
+  const openDays = hours.filter((record) => operationBoolean(record.isOpen, true)).length;
+  const overrideCount = readRecords("operationDateOverride").filter((record) => !record.removed).length;
+  const closedOverrides = readRecords("operationDateOverride").filter((record) => !record.removed && !operationBoolean(record.isOpen, true)).length;
+  $("#operationHoursSummary").innerHTML = [
+    ["Open days", openDays, "weekly customer request days"],
+    ["Date overrides", overrideCount, "calendar-specific changes"],
+    ["Closed dates", closedOverrides, "blocked request dates"],
+  ].map(([label, value, note]) => \`<div class="summary-card"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(String(value))}</strong><p>\${escapeHtml(note)}</p></div>\`).join("");
+  list.innerHTML = hours.map((record) => {
+    const open = operationBoolean(record.isOpen, true);
+    return \`<article class="record-card operation-day-card" data-weekday="\${escapeHtml(record.weekday)}">
+      <div class="operation-day-header">
+        <strong>\${escapeHtml(record.weekdayLabel || record.weekday)}</strong>
+        <label class="toggle-row"><input type="checkbox" data-operation-open \${open ? "checked" : ""} /> Open</label>
+      </div>
+      <div class="field-grid">
+        <label>Open time<input type="time" data-operation-open-time value="\${escapeHtml(record.openTime || defaultOperationOpenTime)}" \${open ? "" : "disabled"} /></label>
+        <label>Close time<input type="time" data-operation-close-time value="\${escapeHtml(record.closeTime || defaultOperationCloseTime)}" \${open ? "" : "disabled"} /></label>
+      </div>
+      <p>\${open ? \`Customers can request drop-off and pick-up from \${escapeHtml(displayTime(record.openTime))} to \${escapeHtml(displayTime(record.closeTime))}.\` : "Customers cannot request drop-off or pick-up on this weekday."}</p>
+    </article>\`;
+  }).join("");
+  const monthLabelEl = $("#operationCalendarMonthLabel");
+  if (monthLabelEl) monthLabelEl.textContent = monthLabel(operationCalendarMonth);
+  const calendar = $("#operationOverrideCalendar");
+  if (calendar) {
+    calendar.innerHTML = [
+      ...operationWeekdays.map((day) => \`<div class="operation-calendar-header">\${escapeHtml(day.shortLabel)}</div>\`),
+      ...operationCalendarDates(operationCalendarMonth).map((date) => {
+        const inMonth = date.slice(0, 7) === operationCalendarMonth;
+        const window = operationWindowForDate(date);
+        const override = window.override;
+        const status = !window.isOpen ? "Closed" : override ? "Custom" : "Open";
+        const message = override?.customerMessage ? "Message" : "";
+        return \`<button type="button" class="operation-calendar-day \${inMonth ? "" : "is-outside-month"} \${!window.isOpen ? "is-closed" : ""} \${override ? "has-override" : ""}" data-action="open-operation-date-override" data-date="\${escapeHtml(date)}">
+          <strong>\${Number(date.slice(8, 10))}</strong>
+          <span>\${escapeHtml(status)}</span>
+          \${message ? \`<small>\${escapeHtml(message)}</small>\` : ""}
+        </button>\`;
+      }),
+    ].join("");
+  }
+  const overrideList = $("#operationOverrideList");
+  if (overrideList) overrideList.innerHTML = operationOverrideSummaryHtml();
+}
+
+async function saveOperationHoursSettings() {
+  if (currentRole() !== "admin") return null;
+  const cards = $$("#operationHoursList .operation-day-card");
+  const now = new Date().toISOString();
+  const records = [];
+  for (const card of cards) {
+    const weekday = card.dataset.weekday || "";
+    const day = operationWeekdays.find((item) => item.key === weekday);
+    if (!day) continue;
+    const isOpen = Boolean(card.querySelector("[data-operation-open]")?.checked);
+    const openTime = normalizeOperationTime(card.querySelector("[data-operation-open-time]")?.value, defaultOperationOpenTime);
+    const closeTime = normalizeOperationTime(card.querySelector("[data-operation-close-time]")?.value, defaultOperationCloseTime);
+    if (isOpen && timeToMinutes(closeTime) <= timeToMinutes(openTime)) {
+      showToast(\`\${day.label} close time must be after open time.\`);
+      card.querySelector("[data-operation-close-time]")?.focus();
+      return null;
+    }
+    records.push({
+      type: "operationHours",
+      id: \`operationHours-\${day.key}\`,
+      weekday: day.key,
+      weekdayLabel: day.label,
+      dayIndex: day.dayIndex,
+      isOpen,
+      openTime,
+      closeTime,
+      submittedAt: readRecords("operationHours").find((record) => record.id === \`operationHours-\${day.key}\`)?.submittedAt || now,
+      updatedAt: now,
+      updatedBy: currentUser?.email || helperEmail?.value || "",
+      removed: false,
+    });
+  }
+  for (const record of records) await sendPayload(upsertRecord("operationHours", record));
+  await addAuditLog("Updated operation hours", "operationHours", { id: "weekly-operation-hours" }, "Weekly customer request hours updated.");
+  renderOperationHoursSettings();
+  renderCustomerBookingAvailabilityMessages();
+  showToast("Hours of operation saved.");
+  return records;
+}
+
+async function resetOperationHoursSettings() {
+  if (currentRole() !== "admin") return null;
+  const now = new Date().toISOString();
+  for (const record of defaultOperationHourRecords()) {
+    await sendPayload(upsertRecord("operationHours", { ...record, updatedAt: now, updatedBy: currentUser?.email || helperEmail?.value || "" }));
+  }
+  await addAuditLog("Reset operation hours", "operationHours", { id: "weekly-operation-hours" }, "Weekly customer request hours reset to 9 AM - 9 PM.");
+  renderOperationHoursSettings();
+  showToast("Weekly hours reset.");
+  return true;
+}
+
+function operationDateOverrideFormHtml(date = todayDate()) {
+  const dateKey = dateOnly(date) || todayDate();
+  const existing = operationOverrideForDate(dateKey) || {};
+  const weekly = operationHoursForDate(dateKey);
+  const open = operationBoolean(existing.isOpen, operationBoolean(weekly.isOpen, true));
+  const openTime = normalizeOperationTime(existing.openTime || weekly.openTime, defaultOperationOpenTime);
+  const closeTime = normalizeOperationTime(existing.closeTime || weekly.closeTime, defaultOperationCloseTime);
+  return \`<form id="operationDateOverrideForm" class="tracker-form" data-date="\${escapeHtml(dateKey)}" data-id="\${escapeHtml(existing.id || "")}">
+    <article class="record-card compact-record-card">
+      <strong>\${escapeHtml(operationDateLabel(dateKey))}</strong>
+      <span>Weekly default: \${operationBoolean(weekly.isOpen, true) ? \`\${escapeHtml(displayTime(weekly.openTime))} - \${escapeHtml(displayTime(weekly.closeTime))}\` : "Closed"}</span>
+    </article>
+    <label class="toggle-row"><input type="checkbox" name="isOpen" \${open ? "checked" : ""} /> Open to customer drop-off and pick-up requests</label>
+    <div class="field-grid">
+      <label>Open time<input type="time" name="openTime" value="\${escapeHtml(openTime)}" \${open ? "" : "disabled"} /></label>
+      <label>Close time<input type="time" name="closeTime" value="\${escapeHtml(closeTime)}" \${open ? "" : "disabled"} /></label>
+    </div>
+    <label>Customer message<textarea name="customerMessage" rows="3" placeholder="Message customers will see when they select this date.">\${escapeHtml(existing.customerMessage || "")}</textarea></label>
+    <div class="button-row">
+      <button type="submit">Save Date</button>
+      \${existing.id ? \`<button type="button" class="secondary-button danger-button" data-action="clear-operation-date-override" data-id="\${escapeHtml(existing.id)}">Clear Override</button>\` : ""}
+      <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+    </div>
+  </form>\`;
+}
+
+function openOperationDateOverridePopup(date = todayDate()) {
+  if (currentRole() !== "admin") {
+    showToast("Admin access required to edit hours of operation.");
+    return;
+  }
+  showDetailDialog("Date Hours Override", operationDateOverrideFormHtml(date));
+}
+
+async function saveOperationDateOverrideFromForm(formEl) {
+  if (currentRole() !== "admin") return null;
+  const date = formEl.dataset.date || todayDate();
+  const existing = formEl.dataset.id ? readRecords("operationDateOverride").find((record) => record.id === formEl.dataset.id) : operationOverrideForDate(date);
+  const isOpenField = formFieldByName(formEl, "isOpen");
+  const openTimeField = formFieldByName(formEl, "openTime");
+  const closeTimeField = formFieldByName(formEl, "closeTime");
+  const customerMessageField = formFieldByName(formEl, "customerMessage");
+  const isOpen = Boolean(isOpenField?.checked);
+  const openTime = normalizeOperationTime(openTimeField?.value, defaultOperationOpenTime);
+  const closeTime = normalizeOperationTime(closeTimeField?.value, defaultOperationCloseTime);
+  if (isOpen && timeToMinutes(closeTime) <= timeToMinutes(openTime)) {
+    showToast("Close time must be after open time.");
+    closeTimeField?.focus();
+    return null;
+  }
+  const now = new Date().toISOString();
+  const record = upsertRecord("operationDateOverride", {
+    ...(existing || {}),
+    type: "operationDateOverride",
+    id: existing?.id || \`operationDateOverride-\${date}\`,
+    submittedAt: existing?.submittedAt || now,
+    date,
+    isOpen,
+    openTime,
+    closeTime,
+    customerMessage: customerMessageField?.value.trim() || "",
+    updatedAt: now,
+    updatedBy: currentUser?.email || helperEmail?.value || "",
+    removed: false,
+  });
+  await sendPayload(record);
+  await addAuditLog("Updated operation date override", "operationDateOverride", record, \`\${operationDateLabel(date)} | \${isOpen ? \`\${displayTime(openTime)} - \${displayTime(closeTime)}\` : "Closed"}\`);
+  renderOperationHoursSettings();
+  renderCustomerBookingAvailabilityMessages();
+  return record;
+}
+
+async function clearOperationDateOverride(id = "") {
+  const record = readRecords("operationDateOverride").find((item) => item.id === id && !item.removed);
+  if (!record || currentRole() !== "admin") return null;
+  const updated = upsertRecord("operationDateOverride", { ...record, removed: true, removedAt: new Date().toISOString() });
+  await sendPayload(updated);
+  await addAuditLog("Cleared operation date override", "operationDateOverride", updated, operationDateLabel(updated.date));
+  renderOperationHoursSettings();
+  renderCustomerBookingAvailabilityMessages();
+  return updated;
+}
+
+function renderAuditLog() {
+  const list = $("#auditLogList");
+  if (!list) return;
+  const records = readRecords("auditLog").filter((record) => !record.removed).slice(0, 25);
+  list.innerHTML = records.length
+    ? records.map((record) => {
+      const canRestoreBoardingDog = record.action === "Deleted boarding dog" && record.targetType === "boardingDog" && readRecords("boardingDog").some((dog) => dog.id === record.targetId && dog.removed);
+      return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(record.action || "Change")} - \${escapeHtml(record.targetLabel || record.targetType || "")}</strong><span>\${escapeHtml(record.actorName || "Admin")} | \${escapeHtml(formatDateTime(record.submittedAt || record.updatedAt))}</span><p>\${escapeHtml(record.details || record.targetType || "")}</p>\${canRestoreBoardingDog ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="restore-boarding-dog" data-id="\${escapeHtml(record.targetId)}">Restore Dog</button></div>\` : ""}</article>\`;
+    }).join("")
+    : \`<article class="record-card compact-record-card"><strong>No audit activity yet</strong><p>Admin setting, service, user, and kennel changes will appear here.</p></article>\`;
+}
+
+function kennelAssignmentPopupHtml(record = {}, nextStatus = "In Kennel", options = {}) {
+  const locations = kennelLocations({ activeOnly: true });
+  const buildings = kennelBuildings(locations);
+  const targetStay = boardingStatusTargetStay(record, nextStatus, options) || {};
+  const selectedBuilding = targetStay.kennelBuilding || record.kennelBuilding || buildings[0] || "Shed";
+  const buildingOptions = buildings.map((building) => \`<option value="\${escapeHtml(building)}" \${building === selectedBuilding ? "selected" : ""}>\${escapeHtml(building)}</option>\`).join("");
+  const locationOptions = kennelLocationOptionsForBuilding(selectedBuilding, targetStay.kennelLocationId || record.kennelLocationId || "");
+  const hasLocationsForBuilding = locations.some((location) => (location.building || "") === selectedBuilding);
+  const help = locations.length ? "Choose the building first, then the exact kennel assignment." : "Add active kennel locations in Settings first.";
+  return \`<form id="kennelAssignmentForm" class="tracker-form" data-dog-id="\${escapeHtml(record.id || "")}" data-stay-id="\${escapeHtml(options.stayId || "")}" data-request-code="\${escapeHtml(options.requestCode || "")}" data-next-status="\${escapeHtml(nextStatus)}" data-allow-early="\${options.allowEarly ? "true" : "false"}" data-early="\${options.early ? "true" : "false"}">
+    <article class="record-card compact-record-card"><strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong><p>\${escapeHtml(boardingScheduleText(record))}</p></article>
+    <div class="field-grid">
+      <label>Building<select name="kennelBuilding" id="kennelAssignmentBuilding" required \${locations.length ? "" : "disabled"}>\${buildingOptions}</select><small>\${escapeHtml(help)}</small></label>
+      <label>Kennel<select name="kennelLocationId" id="kennelAssignmentLocation" required \${hasLocationsForBuilding ? "" : "disabled"}><option value="">Select kennel</option>\${locationOptions}</select><small id="kennelAssignmentHelp">\${hasLocationsForBuilding ? "Available active kennels for this building." : "No active kennels are saved for this building."}</small></label>
+    </div>
+    <div class="button-row"><button type="submit" \${hasLocationsForBuilding ? "" : "disabled"}>Assign Kennel</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>\`;
+}
+
+function openKennelAssignmentPopup(record = {}, nextStatus = "In Kennel", options = {}) {
+  showDetailDialog("Assign Kennel", kennelAssignmentPopupHtml(record, nextStatus, options));
+}
+
+function updateKennelAssignmentLocations(formEl) {
+  if (!formEl) return;
+  const building = formEl.elements.kennelBuilding?.value || "";
+  const locations = kennelLocations({ activeOnly: true }).filter((location) => (location.building || "") === building);
+  const locationSelect = formEl.elements.kennelLocationId;
+  const submitButton = formEl.querySelector('button[type="submit"]');
+  const help = $("#kennelAssignmentHelp");
+  if (!locationSelect) return;
+  locationSelect.innerHTML = \`<option value="">Select kennel</option>\${kennelLocationOptionsForBuilding(building)}\`;
+  locationSelect.disabled = !locations.length;
+  if (submitButton) submitButton.disabled = !locations.length;
+  if (help) help.textContent = locations.length ? "Available active kennels for this building." : "No active kennels are saved for this building.";
+}
+
+function openSettingsUser(record = {}) {
+  openSettingsUserPopup(record);
+}
+
+function settingsUserLastLoginText(user = {}) {
+  if (!user.lastLoginAt) return "No login has been recorded yet.";
+  const provider = user.lastLoginProvider ? \` via \${user.lastLoginProvider}\` : "";
+  return \`\${formatDateTime(user.lastLoginAt)}\${provider}\`;
+}
+
+function settingsUserPopupHtml(user = {}) {
+  const isEdit = Boolean(user.id);
+  const canImpersonate = isEdit && currentRole() === "admin" && normalizeEmail(user.email) !== normalizeEmail(currentUser?.email);
+  return \`
+    <form id="settingsUserPopupForm" class="tracker-form" data-user-id="\${escapeHtml(user.id || "")}">
+      <input type="hidden" name="id" value="\${escapeHtml(user.id || "")}" />
+      <article class="record-card compact-record-card settings-user-login-card">
+        <span>\${isEdit ? "Last Login" : "New User"}</span>
+        <strong>\${escapeHtml(isEdit ? settingsUserLastLoginText(user) : "Create access for a staff member, admin, customer, or member customer.")}</strong>
+        <p>\${isEdit ? (user.loginCount ? \`\${Number(user.loginCount)} recorded login\${Number(user.loginCount) === 1 ? "" : "s"}.\` : "This updates after the user signs in through the app.") : "Save the user first, then set a temporary password or send a reset email when needed."}</p>
+      </article>
+      <div class="field-grid">
+        <label>Name<input type="text" name="name" required value="\${escapeHtml(user.name || "")}" /></label>
+        <label>Email<input type="email" name="email" required value="\${escapeHtml(user.email || "")}" /></label>
+        <label>Role<select name="role" required><option value="customer" \${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" \${user.role === "helper" ? "selected" : ""}>Staff</option><option value="admin" \${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
+      </div>
+      <label class="inline-check"><input type="checkbox" name="isMember" \${userMemberFlag(user) ? "checked" : ""} /> Member customer pricing</label>
+      <div class="admin-password-panel">
+        <h3>Password Management</h3>
+        <p>Set a temporary Supabase password or send a reset email for this user.</p>
+        <div class="field-grid">
+          <label>Temporary password<input type="password" name="temporaryPassword" minlength="8" autocomplete="new-password" /></label>
+          <label>Confirm temporary password<input type="password" name="temporaryPasswordConfirm" minlength="8" autocomplete="new-password" /></label>
+          <label class="inline-check"><input type="checkbox" name="requirePasswordChange" checked /> Require password change at next login</label>
+        </div>
+        <div class="button-row">
+          <button type="button" class="secondary-button" data-action="popup-set-password">Set Temporary Password</button>
+          <button type="button" class="secondary-button" data-action="popup-send-reset">Send Reset Email</button>
+        </div>
+      </div>
+      <div class="button-row"><button type="submit">Save User</button>\${canImpersonate ? \`<button type="button" class="secondary-button" data-action="popup-impersonate-user" data-id="\${escapeHtml(user.id || "")}">Impersonate User</button>\` : ""}\${isEdit ? \`<button type="button" class="secondary-button danger-button" data-action="popup-remove-user" data-id="\${escapeHtml(user.id || "")}">Remove</button>\` : ""}<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+    </form>\`;
+}
+
+function openSettingsUserPopup(user = {}) {
+  showDetailDialog(user.id ? \`\${user.name || user.email || "User"} Access\` : "Add User", settingsUserPopupHtml(user));
+}
+
+function settingsUserRemoveConfirmHtml(user = {}, options = {}) {
+  return \`
+    <div class="tracker-form">
+      <article class="record-card compact-record-card danger-confirm-card">
+        <strong>Remove \${escapeHtml(user.name || user.email || "this user")}?</strong>
+        <p>This removes app access for \${escapeHtml(user.email || "this account")}. It does not delete dog, boarding, request, or timesheet history.</p>
+      </article>
+      <div class="button-row">
+        <button type="button" class="danger-button" data-action="confirm-remove-settings-user" data-id="\${escapeHtml(user.id || "")}">Confirm Remove</button>
+        <button type="button" class="secondary-button" data-action="\${options.returnToUser ? "cancel-remove-settings-user" : "close-dialog"}" data-id="\${escapeHtml(user.id || "")}">Cancel</button>
+      </div>
+    </div>\`;
+}
+
+function openSettingsUserRemoveConfirm(user = {}, options = {}) {
+  showDetailDialog("Confirm Remove User", settingsUserRemoveConfirmHtml(user, options));
+}
+
+async function removeSettingsUserById(id) {
+  const removed = await markRecordRemoved("settingsUser", id);
+  if (!removed) return null;
+  await addAuditLog("Removed user", "settingsUser", removed, removed.email || "");
+  renderSettingsUsers();
+  return removed;
+}
+
+function activeSettingsUserForm() {
+  return $("#settingsUserPopupForm") || $("#settingsUserForm");
+}
+
+function serviceInfoTooltipText(icon) {
+  return String(icon?.dataset?.tooltip || icon?.getAttribute("aria-label") || icon?.getAttribute("title") || "").trim();
+}
+
+function serviceInfoTooltipNode(icon) {
+  if (!serviceInfoTooltipEl) {
+    serviceInfoTooltipEl = document.createElement("div");
+    serviceInfoTooltipEl.id = "serviceInfoTooltip";
+    serviceInfoTooltipEl.className = "floating-service-tooltip";
+    serviceInfoTooltipEl.setAttribute("role", "tooltip");
+    serviceInfoTooltipEl.hidden = true;
+  }
+  const host = icon?.closest?.("dialog[open]") || document.body;
+  if (serviceInfoTooltipEl.parentElement !== host) host.appendChild(serviceInfoTooltipEl);
+  return serviceInfoTooltipEl;
+}
+
+function positionServiceInfoTooltip(icon = activeServiceInfoIcon) {
+  if (!icon || !document.body.contains(icon) || !serviceInfoTooltipEl || serviceInfoTooltipEl.hidden) return;
+  const margin = 12;
+  const gap = 10;
+  const iconRect = icon.getBoundingClientRect();
+  serviceInfoTooltipEl.style.maxWidth = \`\${Math.max(180, Math.min(360, window.innerWidth - margin * 2))}px\`;
+  serviceInfoTooltipEl.style.left = "0";
+  serviceInfoTooltipEl.style.top = "0";
+  serviceInfoTooltipEl.style.visibility = "hidden";
+  const tooltipRect = serviceInfoTooltipEl.getBoundingClientRect();
+  let top = iconRect.top - tooltipRect.height - gap;
+  let below = false;
+  if (top < margin) {
+    top = iconRect.bottom + gap;
+    below = true;
+  }
+  if (top + tooltipRect.height > window.innerHeight - margin) {
+    top = Math.max(margin, window.innerHeight - margin - tooltipRect.height);
+  }
+  const maxLeft = Math.max(margin, window.innerWidth - margin - tooltipRect.width);
+  const preferredLeft = iconRect.left + iconRect.width / 2 - tooltipRect.width / 2;
+  const left = Math.min(Math.max(margin, preferredLeft), maxLeft);
+  serviceInfoTooltipEl.classList.toggle("is-below", below);
+  serviceInfoTooltipEl.style.left = \`\${left}px\`;
+  serviceInfoTooltipEl.style.top = \`\${top}px\`;
+  serviceInfoTooltipEl.style.visibility = "visible";
+}
+
+function showServiceInfoTooltip(icon) {
+  const text = serviceInfoTooltipText(icon);
+  if (!icon || !text) return;
+  if (icon.hasAttribute("title")) {
+    icon.dataset.nativeTitle = icon.getAttribute("title") || "";
+    icon.removeAttribute("title");
+  }
+  const tooltip = serviceInfoTooltipNode(icon);
+  activeServiceInfoIcon = icon;
+  tooltip.textContent = text;
+  tooltip.hidden = false;
+  icon.setAttribute("aria-describedby", tooltip.id);
+  positionServiceInfoTooltip(icon);
+}
+
+function hideServiceInfoTooltip(icon = null) {
+  if (icon && activeServiceInfoIcon && icon !== activeServiceInfoIcon) return;
+  if (activeServiceInfoIcon) activeServiceInfoIcon.removeAttribute("aria-describedby");
+  activeServiceInfoIcon = null;
+  if (serviceInfoTooltipEl) serviceInfoTooltipEl.hidden = true;
+}
+
+function servicePricingFilterLabel(key = servicePricingFilter) {
+  return servicePricingFilters.find((filter) => filter.key === key)?.label || "All Prices";
+}
+
+function serviceMatchesPricingFilter(record = {}, key = servicePricingFilter) {
+  if (key === "member") return serviceHasFlag(record, "Member Pricing");
+  if (key === "regular") return !serviceHasFlag(record, "Member Pricing");
+  return true;
+}
+
+function setServicePricingFilter(key = "all") {
+  const next = servicePricingFilters.some((filter) => filter.key === key) ? key : "all";
+  servicePricingFilter = next;
+  renderServices();
+  $("#serviceTableBody")?.closest(".service-table-wrap")?.scrollTo({ top: 0, left: 0 });
+}
+
+function serviceEmptyStateText() {
+  const label = servicePricingFilterLabel(servicePricingFilter);
+  if (servicePricingFilter === "all") return "No services match this search.";
+  return \`No \${label.toLowerCase()} services match this view.\`;
+}
+
+function renderServicePricingTabs(records = []) {
+  const container = $("#servicePricingTabs");
+  if (!container) return;
+  container.innerHTML = servicePricingFilters.map((filter) => {
+    const active = servicePricingFilter === filter.key;
+    const count = records.filter((record) => serviceMatchesPricingFilter(record, filter.key)).length;
+    return \`<button type="button" class="secondary-button \${active ? "is-active" : ""}" data-service-pricing-filter="\${escapeHtml(filter.key)}" role="tab" aria-selected="\${active ? "true" : "false"}">\${escapeHtml(filter.label)} <span>\${count}</span></button>\`;
+  }).join("");
+  container.querySelectorAll("[data-service-pricing-filter]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setServicePricingFilter(button.dataset.servicePricingFilter || "all");
+    });
+  });
+}
+
+function renderServices() {
+  applyLegacyServiceDependencyMigration({ syncRemote: true });
+  applyLegacyBoardingProgramMigration({ syncRemote: true });
+  const query = $("#serviceSearch")?.value || "";
+  const columns = tableColumns.service;
+  const allRecords = sortRecordsForTable("service", readRecords("service").filter((record) => !record.removed && matches(record, query)));
+  const records = allRecords.filter((record) => serviceMatchesPricingFilter(record));
+  renderServicePricingTabs(allRecords);
+  $("#serviceTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="service">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
+  $("#serviceTableBody").innerHTML = records.length
+    ? records
+        .map((record) => \`<tr data-id="\${record.id}"><td>\${escapeHtml(record.serviceName || "")}</td><td>\${escapeHtml(record.category || "")}</td><td>\${money(record.basePrice)}</td><td>\${escapeHtml(record.unit || "")}</td><td>\${record.depositAmount ? money(record.depositAmount) : ""}</td><td>\${record.taxRate ? \`\${escapeHtml(record.taxRate)}%\` : ""}</td><td>\${serviceChipsHtml(record)}</td><td><button type="button" class="secondary-button" data-action="edit-service" data-id="\${escapeHtml(record.id)}">Edit</button></td></tr>\`)
+        .join("")
+    : \`<tr><td colspan="8">\${escapeHtml(serviceEmptyStateText())}</td></tr>\`;
+}
+
+function openService(record = {}) {
+  const formRecord = {
+    ...record,
+    boardingRateType: record.boardingRateType || (record.category === "Boarding" && serviceIsStandardBoardingRate(record) ? "standard-boarding" : ""),
+  };
+  const panel = $("#serviceEditorPanel");
+  if (panel && panel.parentElement !== document.body) document.body.appendChild(panel);
+  if (panel) panel.hidden = false;
+  const form = $("#serviceForm");
+  form.reset();
+  form.dataset.mode = formRecord.id ? "edit" : "create";
+  renderServiceDependencyFields(formRecord);
+  if (form.elements.id) {
+    form.elements.id.value = formRecord.id || "";
+    form.elements.id.defaultValue = formRecord.id || "";
+  }
+  setFormValues(form, formRecord);
+  syncServiceDependencyFields();
+  if (!formRecord.id && form.elements.id) form.elements.id.value = "";
+  const flags = normalizedServiceFlags(formRecord.flags || ["Active"]);
+  $$('input[name="serviceFlags"]').forEach((input) => {
+    input.checked = flags.includes(input.value);
+  });
+  $("#serviceEditorTitle").textContent = formRecord.id ? "Edit Service" : "Add Service";
+  $("#serviceSaveButton").textContent = formRecord.id ? "Update Service" : "Add Service";
+  $("#removeServiceButton").hidden = !formRecord.id;
+}
+
+function closeServiceModal() {
+  const form = $("#serviceForm");
+  if (form) form.dataset.mode = "create";
+  $("#serviceEditorPanel").hidden = true;
+}
+
+function serviceRemoveConfirmHtml(record = {}) {
+  return \`<div class="tracker-form">
+    <article class="record-card compact-record-card danger-confirm-card">
+      <strong>Remove this service?</strong>
+      <p>\${escapeHtml(record.serviceName || "Service")} | \${escapeHtml(record.category || "")} \${record.basePrice ? \`| \${money(record.basePrice)}\` : ""}</p>
+      <p>This hides it from staff/admin catalogs and customer request options.</p>
+    </article>
+    <div class="button-row">
+      <button type="button" class="danger-button" data-action="confirm-remove-service" data-id="\${escapeHtml(record.id || "")}">Remove Service</button>
+      <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+    </div>
+  </div>\`;
+}
+
+function openServiceRemoveConfirm(record = {}) {
+  if (!record?.id) return;
+  showDetailDialog("Confirm Remove Service", serviceRemoveConfirmHtml(record));
+}
+//# sourceURL=snuggle-stay/settings.js
+`;
+(0, eval)(__snuggleStayModuleSource);

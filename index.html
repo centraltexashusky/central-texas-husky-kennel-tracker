@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260529-full-fixes" />
+    <link rel="stylesheet" href="styles.css?v=20260529-v2-module-review" />
   </head>
   <body>
     <div class="app-layout">
@@ -131,13 +131,12 @@
           </svg>
           <span class="mobile-bottom-nav-label">Tasks</span>
         </button>
-        <button class="mobile-bottom-nav-button" type="button" data-page="ourDogsPage" data-roles="helper,admin" aria-label="Our Dogs">
-          <img class="mobile-bottom-nav-icon mobile-bottom-nav-image" src="assets/icons/our-dogs-gold-transparent-icon.png" alt="" />
-          <span class="mobile-bottom-nav-label">Our Dogs</span>
-        </button>
-        <button class="mobile-bottom-nav-button" type="button" data-page="boardingDogsPage" data-roles="helper,admin" aria-label="Boarding Dogs">
-          <img class="mobile-bottom-nav-icon mobile-bottom-nav-image" src="assets/icons/boarding-dogs-white-icon.png" alt="" />
-          <span class="mobile-bottom-nav-label">Boarding Dogs</span>
+        <button class="mobile-bottom-nav-button" type="button" data-page="timesheetPage" data-roles="helper,admin" aria-label="Timesheet">
+          <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 6v6l3.5 2" />
+            <path d="M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17Z" />
+          </svg>
+          <span class="mobile-bottom-nav-label">Timesheet</span>
         </button>
         <button class="mobile-bottom-nav-button mobile-more-trigger" type="button" id="mobileMoreButton" aria-expanded="false" aria-controls="mobileMoreSheet" aria-label="Open complete menu">
           <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -900,6 +899,10 @@
             <button type="button" data-boarding-filter="Ready For Pickup" role="tab" aria-selected="false">Ready for Pickup</button>
             <button type="button" data-boarding-filter="All Boarding Dogs" role="tab" aria-selected="false">All Boarding Dogs</button>
           </div>
+          <div class="view-toggle-row" id="boardingViewToggle" role="group" aria-label="View mode">
+            <button type="button" class="view-toggle-button is-active" data-view="board" id="boardingBoardViewBtn">Board view</button>
+            <button type="button" class="view-toggle-button" data-view="list" id="boardingListViewBtn">List view</button>
+          </div>
           <div class="boarding-queue-grid" id="boardingQueueGroups" aria-label="Boarding queue groups"></div>
           <div class="mobile-roster-list boarding-quick-list" id="boardingDogQuickCards" aria-label="Mobile boarding check-in and check-out actions"></div>
           <div class="table-settings-shell">
@@ -1262,6 +1265,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260529-full-fixes"></script>
+  <script type="module" src="js/main.js?v=20260529-v2-module-review"></script>
 </body>
 </html>

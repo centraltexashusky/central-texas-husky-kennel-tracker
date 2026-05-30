@@ -1,1 +1,1372 @@
-export const customerModule = "customer";
+// === MODULE: CUSTOMER ===
+const __snuggleStayModuleSource = `function customerRequestStatusLabel(status = "") {
+  const normalized = boardingLifecycleStatuses.includes(status) ? status : normalizeBoardingStatus({ boardingStatus: status, customerRequest: true });
+  const labels = {
+    Pending: "Request Pending",
+    Approved: "Request Approved",
+    "Checked In": "Checked In",
+    "In Kennel": "In Kennel",
+    "Ready For Pickup": "Ready For Pickup",
+    "Checked Out": "Completed",
+    Cancelled: "Request Cancelled",
+  };
+  return labels[normalized] || "Request Pending";
+}
+
+function customerRequestStatusChipHtml(record = {}) {
+  const status = boardingDisplayStatus(record);
+  return statusChipHtml(customerRequestStatusLabel(status), \`boarding-status-chip \${statusClassForBoardingStatus(status)}\`);
+}
+
+function customerRequestStayStatusChipHtml(record = {}, stay = {}) {
+  const status = boardingStayDisplayStatus(record, stay);
+  return statusChipHtml(customerRequestStatusLabel(status), \`boarding-status-chip \${statusClassForBoardingStatus(status)}\`);
+}
+
+function customerStayIdChipHtml(record = {}, stay = {}) {
+  return boardingStayRequestCodeChipHtml(record, stay, { labelPrefix: "Stay ID" });
+}
+
+function customerProfilePayload({ email = "", name = "", customerDogId = "", boardingDogId = "", authId = "" } = {}) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+  const existing = savedUserFor({ email: normalizedEmail, key: authId }) || {};
+  return {
+    ...existing,
+    type: "settingsUser",
+    id: existing.id || uid("settingsUser"),
+    submittedAt: existing.submittedAt || new Date().toISOString(),
+    name: existing.name || name || normalizedEmail,
+    email: normalizedEmail,
+    authId: existing.authId || authId || "",
+    role: existing.role || "customer",
+    authProvider: existing.authProvider || "customer-signup",
+    linkedCustomerDogIds: mergeUniqueIds(existing.linkedCustomerDogIds || [], [customerDogId]),
+    linkedBoardingDogIds: mergeUniqueIds(existing.linkedBoardingDogIds || [], [boardingDogId]),
+    removed: false,
+  };
+}
+
+function customerUploadSectionHtml(record = {}) {
+  const linkedDog = linkedCustomerDogForBoarding(record);
+  const sections = [];
+  const directMedia = mediaLinkHtml({
+    id: record.id || "",
+    type: record.type || "boardingDog",
+    profilePhotoUrl: record.profilePhotoUrl,
+    profilePhotoPath: record.profilePhotoPath || "",
+    vaccinationRecords: record.vaccinationRecords || [],
+    vaccinationFiles: record.vaccinationFiles || "",
+  });
+  if (directMedia) sections.push(\`<article class="record-card compact-record-card"><strong>Files attached to boarding record</strong>\${directMedia}</article>\`);
+  if (linkedDog) {
+    const linkedMedia = mediaLinkHtml({
+      id: linkedDog.id || "",
+      type: linkedDog.type || "customerDog",
+      profilePhotoUrl: linkedDog.profilePhotoUrl,
+      profilePhotoPath: linkedDog.profilePhotoPath || "",
+      vaccinationRecords: linkedDog.vaccinationRecords || [],
+      vaccinationFiles: linkedDog.vaccinationFiles || "",
+    });
+    sections.push(\`<article class="record-card compact-record-card"><strong>\${escapeHtml(linkedDog.dogName || record.dogName || "Customer dog")}</strong><p>\${escapeHtml(linkedDog.ownerEmail || linkedDog.customerEmail || record.ownerEmail || "")}</p>\${linkedMedia || "<p>No uploaded customer files saved for this dog yet.</p>"}</article>\`);
+  }
+  return sections.length ? \`<h3>Customer Uploaded Files</h3><div class="record-grid compact-record-grid">\${sections.join("")}</div>\` : "";
+}
+
+function customerFacingBoardingStayRequestLabel(value = {}, quantity = 1) {
+  const service = serviceCatalogMatchForRequest(value) || (value && typeof value === "object" ? value : {});
+  if (!customerServiceIsPremiumStayUpgrade(service)) return boardingStayRequestLabel(value);
+  return \`\${customerServiceDisplayName(service)}\${quantity > 1 ? \` x\${quantity}\` : ""} requested\`;
+}
+
+function customerSharedCrateRequested() {
+  const checkbox = $("#customerSharedCrateRequested");
+  return Boolean(checkbox && checkbox.checked);
+}
+
+function customerBoardingDogDetailHtml(record = {}, stayId = "") {
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayByReference(displayRecord, stayId) || boardingPrimaryStay(displayRecord) || displayRecord.stays?.[0] || {};
+  return \`
+    <div class="chip-row">\${stay.id ? customerStayIdChipHtml(displayRecord, stay) : ""}\${stay.id ? customerRequestStayStatusChipHtml(displayRecord, stay) : customerRequestStatusChipHtml(displayRecord)}</div>
+    \${detailRows(displayRecord, [
+      ["Dog", "dogName"],
+      ["Owner", "ownerName"],
+      ["Owner phone", "ownerPhone"],
+      ["Emergency contact", "emergencyName"],
+      ["Emergency phone", "emergencyPhone"],
+      ["Feeding instructions", "foodInstructions"],
+      ["Care notes", "specialCare"],
+    ])}
+    \${boardingStayDetailCardHtml(displayRecord, stay, { customer: true })}
+    \${customerUploadSectionHtml(displayRecord)}
+  \`;
+}
+
+function customerDogHasBoardingLink(dog = {}, boardingId = "") {
+  const id = boardingDogIdFromCustomerDogValue(boardingId);
+  if (!id) return false;
+  return [dog.sourceBoardingDogId, dog.linkedBoardingDogId]
+    .map(boardingDogIdFromCustomerDogValue)
+    .includes(id);
+}
+
+function customerDogForBoardingRequest(record = {}) {
+  if (!record?.id) return null;
+  const currentEmail = normalizeEmail(currentUser?.email);
+  const linkedDog = explicitLinkedCustomerDogForBoarding(record);
+  if (linkedDog && (currentRole() === "admin" || customerDogVisibleToCustomer(linkedDog, currentEmail))) return linkedDog;
+  return customerDogsForCurrentUser().find((dog) => customerDogHasBoardingLink(dog, record.id))
+    || customerDogFromBoardingDog(record, currentEmail, { explicitOnly: true });
+}
+
+function openCustomerDogEditorForRequest(requestId = "") {
+  const boardingId = boardingDogIdFromCustomerDogValue(requestId);
+  const record = readRecords("boardingDog").find((item) => item.id === boardingId && !item.removed);
+  if (!record || (currentRole() !== "admin" && !boardingDogVisibleToCustomer(record))) {
+    showToast("This request is no longer available.");
+    return;
+  }
+  const linkedDog = explicitLinkedCustomerDogForBoarding(record);
+  const canEditLinkedDog = linkedDog && (currentRole() === "admin" || customerDogVisibleToCustomer(linkedDog));
+  const dog = canEditLinkedDog
+    ? linkedDog
+    : customerDogFromBoardingDog(record, currentUser?.email, { explicitOnly: true });
+  if (!dog) {
+    showToast("The dog for this request could not be opened.");
+    return;
+  }
+  const formDog = canEditLinkedDog
+    ? { ...dog, sourceBoardingDogId: dog.sourceBoardingDogId || record.id, linkedBoardingDogId: dog.linkedBoardingDogId || record.id }
+    : { ...dog, id: "", sourceBoardingDogId: record.id, linkedBoardingDogId: record.id };
+  $("#detailDialog")?.close();
+  switchPage("customerPage");
+  openCustomerDog(formDog);
+}
+
+function openCustomerRequestDetail(record = {}, stayId = "") {
+  if (!record?.id) return;
+  const displayRecord = boardingDogWithStayStatus(record);
+  const stay = boardingStayByReference(displayRecord, stayId) || boardingPrimaryStay(displayRecord) || displayRecord.stays?.[0] || {};
+  const canShowStaffDogAction = currentRole() === "admin" && !isImpersonating() && activePageId() !== "customerRequestsPage";
+  showDetailDialog(titleForRecord("boardingDog", displayRecord), detailForRecord("boardingDog", displayRecord, { stayId: stay.id || stayId }), null, {
+    headerAction: canShowStaffDogAction ? {
+      label: "Edit Dog",
+      action: "open-boarding-dog-editor",
+      id: displayRecord.id,
+      stayId: stay.id || "",
+      requestCode: stay.id ? boardingStayRequestCode(displayRecord, stay) : "",
+    } : null,
+  });
+}
+
+function customerDogIdentityKey(dog = {}, email = currentUser?.email) {
+  const dogName = String(dog.dogName || "").trim().toLowerCase();
+  if (!dogName) return "";
+  const ownerEmails = uniqueEmails(dog.ownerEmail, dog.customerEmail, email);
+  const ownerPhone = String(dog.ownerPhone || "").replace(/\\D/g, "");
+  const ownerName = String(dog.ownerName || "").trim().toLowerCase();
+  const ownerKey = ownerEmails[0] || ownerPhone || ownerName;
+  return ownerKey ? \`\${dogName}|\${ownerKey}\` : "";
+}
+
+function customerDogVisibleToCustomer(dog = {}, email = currentUser?.email) {
+  const normalizedEmail = normalizeEmail(email);
+  return Boolean(normalizedEmail && uniqueEmails(dog.ownerEmail, dog.customerEmail).includes(normalizedEmail));
+}
+
+function customerDogFromBoardingDog(record = {}, email = currentUser?.email, options = {}) {
+  const linked = (options.explicitOnly ? explicitLinkedCustomerDogForBoarding(record) : linkedCustomerDogForBoarding(record)) || {};
+  const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail);
+  const currentEmail = normalizeEmail(email);
+  return {
+    ...linked,
+    type: "customerDog",
+    id: \`boarding:\${record.id}\`,
+    sourceType: "boardingDog",
+    isSharedBoardingDog: true,
+    sourceBoardingDogId: record.id,
+    linkedBoardingDogId: record.id,
+    dogName: record.dogName || linked.dogName || "Boarding dog",
+    breedDescription: record.breedDescription || linked.breedDescription || "",
+    dateOfBirth: record.dateOfBirth || linked.dateOfBirth || "",
+    sex: record.sex || linked.sex || "Unknown",
+    spayNeuterStatus: record.spayNeuterStatus || linked.spayNeuterStatus || "Unknown",
+    ownerName: record.ownerName || linked.ownerName || "",
+    ownerPhone: record.ownerPhone || linked.ownerPhone || "",
+    ownerEmail: ownerEmail || currentEmail,
+    customerEmail: currentEmail || ownerEmail,
+    secondaryOwnerEmail: normalizeEmail(record.secondaryOwnerEmail),
+    emergencyName: record.emergencyName || linked.emergencyName || "",
+    emergencyPhone: record.emergencyPhone || linked.emergencyPhone || "",
+    specialCare: record.specialCare || linked.specialCare || "",
+    foodInstructions: record.foodInstructions || linked.foodInstructions || "",
+    dhppDate: record.dhppDate || linked.dhppDate || "",
+    rabiesDate: record.rabiesDate || linked.rabiesDate || "",
+    bordetellaDate: record.bordetellaDate || linked.bordetellaDate || "",
+    heartwormDate: record.heartwormDate || linked.heartwormDate || "",
+    rabiesDuration: record.rabiesDuration || linked.rabiesDuration || "",
+    profilePhotoUrl: boardingDogPhotoSource(record),
+    profilePhotoData: record.profilePhotoData || linked.profilePhotoData || "",
+    vaccinationRecords: record.vaccinationRecords || linked.vaccinationRecords || [],
+    vaccinationFiles: record.vaccinationFiles || linked.vaccinationFiles || "",
+  };
+}
+
+function customerDogsForCurrentUser() {
+  const role = currentRole();
+  const email = normalizeEmail(currentUser?.email);
+  if (role !== "customer") return [];
+  const dogs = mergeCustomerDogDisplayRecords(readRecords("customerDog")
+    .filter((dog) => !dog.removed && customerDogVisibleToCustomer(dog, email))
+    .map((dog) => {
+      const boarding = boardingDogForCustomerDog(dog);
+      const boardingPhoto = boarding ? boardingDogPhotoSource(boarding) : "";
+      return boardingPhoto && !dog.profilePhotoUrl && !dog.profilePhotoData ? { ...dog, profilePhotoUrl: boardingPhoto } : dog;
+    }), email);
+  const seenCustomerIds = new Set(dogs.map((dog) => dog.id).filter(Boolean));
+  const seenIds = new Set(dogs.flatMap((dog) => [dog.linkedBoardingDogId, dog.sourceBoardingDogId].map(boardingDogIdFromCustomerDogValue)).filter(Boolean));
+  const seenIdentityKeys = new Set(dogs.map((dog) => customerDogIdentityKey(dog, email)).filter(Boolean));
+  consolidatedBoardingDogRecords(readRecords("boardingDog")
+    .filter((record) => !record.removed && boardingDogVisibleToCustomer(record, email))
+  )
+    .forEach((record) => {
+      const recordId = boardingDogIdFromCustomerDogValue(record.id);
+      if (seenIds.has(recordId)) return;
+      const linkedDog = explicitLinkedCustomerDogForBoarding(record);
+      if (linkedDog?.id && seenCustomerIds.has(linkedDog.id)) return;
+      const displayDog = customerDogFromBoardingDog(record, email);
+      const identityKey = customerDogIdentityKey(displayDog, email);
+      if (identityKey && seenIdentityKeys.has(identityKey)) return;
+      dogs.push(displayDog);
+      seenIds.add(recordId);
+      if (displayDog.id && !displayDog.isSharedBoardingDog) seenCustomerIds.add(displayDog.id);
+      if (identityKey) seenIdentityKeys.add(identityKey);
+    });
+  return dogs;
+}
+
+function customerDogPhotoHtml(dog = {}) {
+  const name = dog.dogName || "Dog";
+  const photo = dog.profilePhotoUrl || dog.profilePhotoData || "";
+  if (photo) return \`<img class="customer-dog-photo" src="\${escapeHtml(photo)}" alt="\${escapeHtml(name)}" />\`;
+  return \`<span class="customer-dog-photo customer-dog-photo-initials">\${escapeHtml(avatarText(name))}</span>\`;
+}
+
+function editableCustomerDogForCurrentUser(id = "", boardingId = "") {
+  const dogId = String(id || "");
+  const normalizedBoardingId = boardingDogIdFromCustomerDogValue(boardingId || dogId);
+  const visibleDog = customerDogsForCurrentUser().find((dog) => dog.id === dogId || customerDogHasBoardingLink(dog, normalizedBoardingId));
+  if (visibleDog) return visibleDog;
+  const savedDog = readRecords("customerDog").find((dog) => dog.id === dogId && !dog.removed && (currentRole() === "admin" || customerDogVisibleToCustomer(dog)));
+  if (savedDog) return savedDog;
+  const boarding = readRecords("boardingDog").find((record) => record.id === normalizedBoardingId && !record.removed && (currentRole() === "admin" || boardingDogVisibleToCustomer(record)));
+  return boarding ? customerDogForBoardingRequest(boarding) : null;
+}
+
+function customerUpdatesForCurrentUser() {
+  const email = normalizeEmail(currentUser?.email);
+  const updateKeys = new Set();
+  const boardingUpdates = readRecords("boardingDog")
+    .filter((record) => !record.removed && boardingDogVisibleToCustomer(record, email))
+    .flatMap((record) => {
+      const displayRecord = boardingDogRecordForDisplay(record.id) || boardingDogWithStayStatus(record);
+      const stays = displayRecord.stays || [];
+      return (displayRecord.customerUpdates || record.customerUpdates || []).map((update) => {
+        const stay = boardingStayByReference(displayRecord, { stayId: update.stayId || "", requestCode: update.requestCode || "" }) || activeBoardingStay(displayRecord) || currentOrNextStay(displayRecord) || stays[0] || {};
+        return { ...update, source: "boardingDog", dog: displayRecord, stay };
+      });
+    });
+  const customerDogUpdates = readRecords("customerDog")
+    .filter((dog) => !dog.removed && customerDogVisibleToCustomer(dog, email))
+    .flatMap((dog) => (dog.customerUpdates || []).map((update) => ({
+      ...update,
+      source: "customerDog",
+      dog,
+      stay: {
+        id: update.stayId || "",
+        dropoffTime: update.stayDropoffTime || "",
+        pickupTime: update.stayPickupTime || "",
+      },
+    })));
+  return [...boardingUpdates, ...customerDogUpdates]
+    .filter((update) => {
+      const key = update.id || \`\${update.createdAt || ""}|\${update.note || ""}|\${update.stayId || ""}\`;
+      if (updateKeys.has(key)) return false;
+      updateKeys.add(key);
+      return true;
+    })
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+}
+
+function renderCustomerUpdates() {
+  const list = $("#customerUpdatesList");
+  if (!list) return;
+  const updates = customerUpdatesForCurrentUser();
+  if (!updates.length) {
+    list.innerHTML = "<p>No boarding updates have been sent yet.</p>";
+    return;
+  }
+  const grouped = updates.reduce((groups, update) => {
+    const requestCode = update.requestCode || (update.stay?.id && update.dog ? boardingStayRequestCode(update.dog, update.stay) : "");
+    const stayText = update.stayLabel || (update.stay?.dropoffTime || update.stay?.pickupTime
+      ? \`\${formatDateTime(update.stay.dropoffTime)} to \${formatDateTime(update.stay.pickupTime)}\`
+      : "Current stay");
+    const key = \`\${update.dog?.dogName || update.dogName || "Dog"}|\${stayText}|\${requestCode || update.stayId || update.stay?.id || ""}\`;
+    groups[key] = groups[key] || { dogName: update.dog?.dogName || update.dogName || "Dog", stayText, requestCode, updates: [] };
+    groups[key].updates.push(update);
+    return groups;
+  }, {});
+  list.innerHTML = Object.values(grouped)
+    .map((group) => \`<section class="customer-update-group">
+      <h3>\${escapeHtml(group.dogName)}</h3>
+      <p>\${group.requestCode ? \`Stay ID: \${escapeHtml(group.requestCode)} | \` : ""}\${escapeHtml(group.stayText)}</p>
+      \${group.updates.map((update) => {
+        const requestCode = update.requestCode || group.requestCode || "";
+        const media = (update.mediaItems || []).map((item) => {
+          const src = item.url || item.dataUrl || "";
+          if (!src && !item.storagePath) return item.note ? \`<p class="muted-text">\${escapeHtml(item.name || "Media")}: \${escapeHtml(item.note)}</p>\` : "";
+          const isImage = String(item.type || "").startsWith("image/");
+          const isVideo = String(item.type || "").startsWith("video/");
+          const label = item.name || (isVideo ? "Open video" : isImage ? "Open photo" : "Open attachment");
+          return \`<button type="button" class="customer-update-media-button" data-action="view-media" data-src="\${escapeHtml(src)}" data-media-type="\${escapeHtml(item.type || "application/octet-stream")}" data-media-name="\${escapeHtml(item.name || "Customer update media")}"\${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>\${isImage && src ? \`<img src="\${escapeHtml(src)}" alt="\${escapeHtml(item.name || "Customer update photo")}" />\` : ""}<span>\${escapeHtml(label)}</span></button>\`;
+        }).join("");
+        return \`<article class="record-card compact-record-card customer-update-card">
+          <strong>\${escapeHtml(formatDateTime(update.createdAt) || "Update")}</strong>
+          <p>\${escapeHtml(update.note || "No note added.")}</p>
+          <small>\${escapeHtml([update.byName || "", requestCode ? \`Stay ID: \${requestCode}\` : ""].filter(Boolean).join(" | "))}</small>
+          \${media ? \`<div class="customer-update-media-grid">\${media}</div>\` : ""}
+        </article>\`;
+      }).join("")}
+    </section>\`)
+    .join("");
+}
+
+function customerUploadedFileEntriesForCurrentUser() {
+  return customerDogsForCurrentUser().flatMap((dog) => {
+    const dogName = dog.dogName || "Dog";
+    const entries = [];
+    if (dog.profilePhotoUrl || dog.profilePhotoData) {
+      entries.push({
+        dogName,
+        fileName: \`\${dogName} profile photo\`,
+        fileType: "Profile photo",
+        src: dog.profilePhotoUrl || dog.profilePhotoData || "",
+        mediaType: "image/jpeg",
+        savedAt: dog.updatedAt || dog.submittedAt || "",
+      });
+    }
+    (dog.vaccinationRecords || []).forEach((file, index) => {
+      entries.push({
+        dogName,
+        fileName: file.name || \`Vaccination record \${index + 1}\`,
+        fileType: file.vaccineType || "Vaccination record",
+        src: file.url || file.dataUrl || "",
+        mediaType: file.type || "application/pdf",
+        savedAt: file.savedAt || file.createdAt || dog.updatedAt || dog.submittedAt || "",
+      });
+    });
+    if (!(dog.vaccinationRecords || []).length && dog.vaccinationFiles) {
+      String(dog.vaccinationFiles).split(",").map((name) => name.trim()).filter(Boolean).forEach((name) => {
+        entries.push({
+          dogName,
+          fileName: name,
+          fileType: "Vaccination record",
+          src: "",
+          mediaType: "",
+          savedAt: dog.updatedAt || dog.submittedAt || "",
+        });
+      });
+    }
+    return entries;
+  }).sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+}
+
+function renderCustomerFiles() {
+  const list = $("#customerFilesList");
+  if (!list) return;
+  const files = customerUploadedFileEntriesForCurrentUser();
+  list.innerHTML = files.length
+    ? files.map((file) => {
+      const action = file.src
+        ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(file.src)}" data-media-type="\${escapeHtml(file.mediaType || "")}" data-media-name="\${escapeHtml(file.fileName)}">Open</button>\`
+        : \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="" data-media-name="\${escapeHtml(file.fileName)}">View Name</button>\`;
+      return \`<article class="record-card compact-record-card">
+        <strong>\${escapeHtml(file.fileName)}</strong>
+        <span>\${escapeHtml(file.dogName)} | \${escapeHtml(file.fileType)}</span>
+        \${file.savedAt ? \`<p>\${escapeHtml(formatDateTime(file.savedAt))}</p>\` : ""}
+        <div class="record-actions">\${action}</div>
+      </article>\`;
+    }).join("")
+    : "<p>No uploaded files are saved yet.</p>";
+}
+
+async function saveCanonicalCustomerDogForBoarding(record = {}, previousRecord = {}) {
+  const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail || record.linkedOwnerEmail);
+  if (!ownerEmail || !record.dogName) return null;
+  const existingDog = matchingCustomerDogForBoardingProfile(record) || matchingCustomerDogForBoardingProfile(previousRecord) || {};
+  const profilePatch = dogProfileFieldPatch(record);
+  const payload = {
+    ...existingDog,
+    ...profilePatch,
+    type: "customerDog",
+    id: existingDog.id || record.linkedCustomerDogId || uid("customerDog"),
+    submittedAt: existingDog.submittedAt || record.submittedAt || new Date().toISOString(),
+    ownerEmail,
+    customerEmail: ownerEmail,
+    ownerName: record.ownerName || existingDog.ownerName || "",
+    linkedBoardingDogId: record.id || previousRecord.id || existingDog.linkedBoardingDogId || "",
+    sourceBoardingDogId: record.id || previousRecord.id || existingDog.sourceBoardingDogId || "",
+    sourceType: "boardingDog",
+    removed: false,
+  };
+  const saved = upsertRecord("customerDog", payload);
+  await sendPayload(saved);
+  return saved;
+}
+
+function vaccinationPayloadsForDog(dog = {}) {
+  const dateFields = [
+    ["dhppDate", "DHPP"],
+    ["rabiesDate", "Rabies"],
+    ["bordetellaDate", "Bordetella"],
+    ["heartwormDate", "Heartworm"],
+  ];
+  const payloads = dateFields
+    .filter(([field]) => dog[field])
+    .map(([field, label]) => ({
+      type: "dogVaccination",
+      id: stableLegacyId("dogVaccination", dog.id, field, dog[field]),
+      submittedAt: dog.submittedAt,
+      dogId: dog.id,
+      vaccineType: label,
+      vaccinationDate: dog[field],
+      duration: field === "rabiesDate" ? dog.rabiesDuration || "" : "",
+      source: "legacy-dog-field",
+      removed: false,
+    }));
+  (dog.vaccinationRecords || []).forEach((file, index) => {
+    const key = file.id || file.url || file.dataUrl || file.name || index;
+    payloads.push({
+      type: "dogVaccination",
+      id: stableLegacyId("dogVaccination", dog.id, "file", key),
+      submittedAt: dog.submittedAt,
+      dogId: dog.id,
+      vaccineType: file.vaccineType || "Uploaded record",
+      vaccinationDate: file.vaccinationDate || "",
+      fileName: file.name || "",
+      fileUrl: file.url || file.dataUrl || "",
+      source: "legacy-vaccination-record",
+      removed: false,
+    });
+  });
+  return payloads;
+}
+
+function customerUpdatePayloadsForLegacyBoardingDog(record = {}, dogId = "", reservationIdsByStayId = new Map()) {
+  return (record.customerUpdates || []).map((update, index) => ({
+    type: "reservationCustomerUpdate",
+    id: stableLegacyId("reservationCustomerUpdate", record.id, update.id || update.createdAt || index),
+    submittedAt: update.createdAt || record.submittedAt || new Date().toISOString(),
+    dogId,
+    reservationId: reservationIdsByStayId.get(update.stayId || "") || reservationIdsByStayId.get("__first__") || "",
+    title: update.title || "Customer update",
+    note: update.note || "",
+    mediaItems: update.mediaItems || [],
+    visibleToCustomer: true,
+    createdByStaffId: update.byEmail || update.createdByEmail || "",
+    legacyBoardingDogId: record.id || "",
+    legacyUpdateId: update.id || "",
+    removed: false,
+  }));
+}
+
+function customerUpdateForStay(record = {}, stay = {}) {
+  if (!stay?.id) return null;
+  const requestCode = boardingStayRequestCode(record, stay);
+  return arrayValue(record.customerUpdates).find((update) => {
+    if (update.stayId && update.stayId === stay.id) return true;
+    if (requestCode && update.requestCode === requestCode) return true;
+    if (stay.dropoffTime && stay.pickupTime && update.stayDropoffTime === stay.dropoffTime && update.stayPickupTime === stay.pickupTime) return true;
+    return false;
+  }) || null;
+}
+
+function renderCustomerDogUploadCards() {
+  const list = $("#customerDogUploadCards");
+  if (!list) return;
+  const records = readRecords("customerDog")
+    .filter((record) => !record.removed)
+    .filter((record) => record.profilePhotoUrl || record.vaccinationRecords?.length || record.vaccinationFiles)
+    .sort((a, b) => String(a.dogName || "").localeCompare(String(b.dogName || "")));
+  list.innerHTML = records.length
+    ? records
+        .map((record) => {
+          const boardingRecord = boardingDogForCustomerDog(record);
+          const boardingAction = boardingRecord
+            ? \`<button type="button" class="secondary-button" data-action="open-linked-boarding-dog" data-id="\${escapeHtml(boardingRecord.id)}">Open boarding record</button>\`
+            : \`<button type="button" class="secondary-button" data-action="create-boarding-from-customer-dog" data-id="\${escapeHtml(record.id)}">Create boarding profile</button>\`;
+          return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(record.dogName || "Customer dog")}</strong><span>\${escapeHtml(record.ownerName || record.ownerEmail || record.customerEmail || "Customer")}</span><p>\${escapeHtml(record.breedDescription || "")}</p>\${mediaLinkHtml(record)}<div class="record-actions">\${boardingAction}</div></article>\`;
+        })
+        .join("")
+    : "<p>No customer-uploaded dog files are saved yet.</p>";
+}
+
+function customerUpdateMediaHtml(update = {}) {
+  const items = update.mediaItems || [];
+  return items.map((item) => {
+    const type = String(item.type || "");
+    const label = type.startsWith("video/") ? "Open video" : type.startsWith("image/") ? "Open photo" : "Open media";
+    return \`<button type="button" class="media-preview-button secondary-button" data-action="view-media" data-src="\${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="\${escapeHtml(type || "application/octet-stream")}" data-media-name="\${escapeHtml(item.name || "Customer update media")}"\${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>\${label}</button>\`;
+  }).join("");
+}
+
+function customerBookingAvailabilityForDateTime(value = "", label = "Selected time") {
+  if (!value) return { valid: true, notices: [] };
+  const date = dateOnly(value);
+  const parsed = new Date(value);
+  if (!date || Number.isNaN(parsed.getTime())) return { valid: false, fieldLabel: label, message: \`\${label} is not a valid date and time.\`, notices: [] };
+  const window = operationWindowForDate(date);
+  const notices = [];
+  if (window.message) notices.push(\`\${operationDateLabel(date)}: \${window.message}\`);
+  if (!window.isOpen) {
+    return {
+      valid: false,
+      fieldLabel: label,
+      message: \`\${label} falls on \${operationDateLabel(date)}. \${window.message || operationWindowText(window)}\`,
+      notices,
+      window,
+    };
+  }
+  const selectedMinutes = parsed.getHours() * 60 + parsed.getMinutes();
+  const openMinutes = timeToMinutes(window.openTime);
+  const closeMinutes = timeToMinutes(window.closeTime);
+  if (selectedMinutes < openMinutes || selectedMinutes > closeMinutes) {
+    return {
+      valid: false,
+      fieldLabel: label,
+      message: \`\${label} must be between \${displayTime(window.openTime)} and \${displayTime(window.closeTime)} on \${operationDateLabel(date)}.\`,
+      notices,
+      window,
+    };
+  }
+  notices.push(\`\${label}: \${operationWindowText(window)}.\`);
+  return { valid: true, fieldLabel: label, notices, window };
+}
+
+function customerBookingAvailabilityChecks(formEl = $("#customerBookingForm")) {
+  if (!formEl) return [];
+  const isServiceRequest = $("#customerRequestMode")?.value === "service";
+  const dropoffField = formFieldByName(formEl, "dropoffTime");
+  const pickupField = formFieldByName(formEl, "pickupTime");
+  const checks = [
+    { field: dropoffField, result: customerBookingAvailabilityForDateTime(dropoffField?.value || "", isServiceRequest ? "Ideal drop off time" : "Drop-off time") },
+  ];
+  if (pickupField?.value || !isServiceRequest) {
+    checks.push({ field: pickupField, result: customerBookingAvailabilityForDateTime(pickupField?.value || "", isServiceRequest ? "Alternative drop off time" : "Pick-up time") });
+  }
+  return checks;
+}
+
+function customerRequestMode() {
+  return $("#customerRequestMode")?.value === "service" ? "service" : "boarding";
+}
+
+function customerBookingDateOrderError(formEl = $("#customerBookingForm")) {
+  const mode = customerRequestMode();
+  const dropoffField = formFieldByName(formEl, "dropoffTime");
+  const pickupField = formFieldByName(formEl, "pickupTime");
+  const dropoff = parsedCustomerDateTime(dropoffField?.value || "");
+  const pickup = parsedCustomerDateTime(pickupField?.value || "");
+  if (dropoffField?.value && !dropoff) {
+    return { field: dropoffField, message: "Requested drop-off time is not a valid date and time." };
+  }
+  if (pickupField?.value && !pickup) {
+    return { field: pickupField, message: mode === "service" ? "Alternative drop off time is not a valid date and time." : "Pick-up time is not a valid date and time." };
+  }
+  const editingExisting = Boolean($("#editingCustomerRequestId")?.value);
+  if (!editingExisting && dropoff && dropoff.getTime() < Date.now() - 300000) {
+    return { field: dropoffField, message: "Requested drop-off time must be in the future." };
+  }
+  if (mode === "boarding" && dropoff && pickup && pickup <= dropoff) {
+    return { field: pickupField, message: "Pick-up time must be after the drop-off time." };
+  }
+  return null;
+}
+
+function customerBookingAvailabilityMessagesHtml(checks = customerBookingAvailabilityChecks()) {
+  const messages = [];
+  const seen = new Set();
+  checks.forEach(({ result }) => {
+    (result.notices || []).forEach((notice) => {
+      if (seen.has(notice)) return;
+      seen.add(notice);
+      messages.push({ type: result.valid ? "info" : "warning", text: notice });
+    });
+    if (!result.valid && result.message && !seen.has(result.message)) {
+      seen.add(result.message);
+      messages.push({ type: "warning", text: result.message });
+    }
+  });
+  return messages.map((item) => \`<article class="operation-availability-card \${item.type === "warning" ? "is-warning" : ""}">\${escapeHtml(item.text)}</article>\`).join("");
+}
+
+function renderCustomerBookingAvailabilityMessages() {
+  const container = $("#customerBookingAvailabilityMessages");
+  if (!container) return;
+  const formEl = $("#customerBookingForm");
+  if (!formEl || formEl.hidden) {
+    container.innerHTML = "";
+    return;
+  }
+  container.innerHTML = customerBookingAvailabilityMessagesHtml();
+}
+
+function customerBookingEstimateAvailabilityChecks(estimate = {}) {
+  const isServiceRequest = Boolean(estimate.isServiceRequest);
+  return [
+    { result: customerBookingAvailabilityForDateTime(estimate.dropoffTime || "", isServiceRequest ? "Ideal drop off time" : "Drop-off time") },
+    { result: customerBookingAvailabilityForDateTime(estimate.pickupTime || "", isServiceRequest ? "Alternative drop off time" : "Pick-up time") },
+  ].filter((item) => item.result);
+}
+
+function customerBookingEstimateAvailabilityValid(estimate = {}) {
+  return customerBookingEstimateAvailabilityChecks(estimate).every((item) => item.result.valid);
+}
+
+function fillCustomerDefaults() {
+  if (!$("#customerOwnerEmail")) return;
+  $("#customerOwnerName").value = currentUser?.name || "";
+  $("#customerOwnerEmail").value = currentUser?.email || "";
+}
+
+function renderCustomerDogs() {
+  if (!$("#customerDogList")) return;
+  if (currentRole() !== "customer") {
+    $("#customerDogList").innerHTML = "";
+    if ($("#customerBookingDogList")) $("#customerBookingDogList").innerHTML = "";
+    $("#customerRequestActions")?.toggleAttribute("hidden", true);
+    $("#customerNoDogRequestPrompt")?.toggleAttribute("hidden", true);
+    if (activePageId() === "customerPage") switchPage(defaultPageForRole());
+    return;
+  }
+  const dogs = customerDogsForCurrentUser();
+  const checkedIds = new Set([...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')].map((input) => input.value));
+  $("#openCustomerDogModalButton")?.toggleAttribute("hidden", !dogs.length);
+  $("#customerDogList").innerHTML = dogs.length
+    ? \`\${dogs.map(customerDogSummaryCardHtml).join("")}<div class="button-row"><button type="button" class="secondary-button" data-action="add-customer-dog-inline">Add Another Dog</button></div>\`
+    : customerDogWelcomeHtml();
+  if ($("#customerBookingDogList")) {
+    $("#customerBookingDogList").innerHTML = dogs.length
+      ? dogs.map((dog) => \`<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="\${dog.id}" \${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>\${escapeHtml(dog.dogName)}</strong><span>\${escapeHtml(dog.breedDescription || "")}</span></label>\`).join("")
+      : \`<article class="record-card compact-record-card"><strong>Add a dog before requesting boarding.</strong><p>Boarding requests need at least one dog profile first.</p><button type="button" class="secondary-button" data-action="customer-add-dog-cta">Add Dog</button></article>\`;
+  }
+  $("#customerBookingForm")?.classList.toggle("has-no-customer-dogs", !dogs.length);
+  $("#requestBoardingButton").disabled = !dogs.length;
+  $("#customerRequestActions")?.toggleAttribute("hidden", !dogs.length);
+  $("#customerNoDogRequestPrompt")?.toggleAttribute("hidden", dogs.length);
+  renderCustomerStayProgramOptions();
+  renderCustomerCrateShareOptions();
+  renderCustomerServiceOptions();
+  updateCustomerEstimate();
+  renderCustomerProgress();
+}
+
+function renderCustomerProgress() {
+  const panels = ["#customerOnboardingProgress", "#customerRequestProgress"].map((selector) => $(selector)).filter(Boolean);
+  panels.forEach((panel) => {
+    panel.innerHTML = "";
+    panel.hidden = true;
+  });
+}
+
+function vaccinationExpiryDate(record = {}) {
+  const value = record.expires_at || record.expiresAt || record.expirationDate || record.expiration_date || "";
+  const date = value ? new Date(\`\${String(value).slice(0, 10)}T12:00:00\`) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function vaccinationStatusInfo(record = {}) {
+  const records = arrayValue(record.vaccinationRecords);
+  const expirations = records.map(vaccinationExpiryDate).filter(Boolean);
+  const today = new Date(\`\${todayDate()}T00:00:00\`);
+  const hasVaccinationRecords = records.length > 0;
+  if (hasVaccinationRecords && expirations.some((date) => date >= today)) {
+    return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
+  }
+  if (records.length) {
+    return { label: "Vaccines Expired", customerLabel: "Vaccines on file", className: "is-vaccine-expired", customerClassName: "is-vaccine-ok" };
+  }
+  const hasLegacyDates = Boolean(record.dhppDate || record.rabiesDate || record.bordetellaDate || record.vaccinationFiles);
+  if (hasLegacyDates) return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
+  return { label: "No Vaccines on File", customerLabel: "Vaccines needed", className: "is-vaccine-needed", customerClassName: "is-vaccine-needed" };
+}
+
+function vaccinationStatusBadgeHtml(record = {}, options = {}) {
+  const info = vaccinationStatusInfo(record);
+  const label = options.customer ? info.customerLabel : info.label;
+  const className = options.customer ? info.customerClassName || info.className : info.className;
+  return statusChipHtml(label, \`vaccination-status-chip \${className}\`);
+}
+
+function customerFacingVaccineStatus(dog = {}) {
+  const info = vaccinationStatusInfo(dog);
+  return {
+    label: info.customerLabel || info.label,
+    className: info.customerClassName || info.className,
+    hasVaccines: (info.customerClassName || info.className) === "is-vaccine-ok",
+  };
+}
+
+function vaccinationExpiresSoon(record = {}, days = 30) {
+  const today = new Date(\`\${todayDate()}T00:00:00\`);
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() + days);
+  return arrayValue(record.vaccinationRecords)
+    .map(vaccinationExpiryDate)
+    .filter(Boolean)
+    .some((date) => date >= today && date <= cutoff);
+}
+
+function dogAgeText(dog = {}) {
+  const birth = dog.dateOfBirth || dog.birthday || "";
+  if (!birth) return "";
+  const birthDate = new Date(\`\${birth}T12:00:00\`);
+  if (Number.isNaN(birthDate.getTime())) return "";
+  const today = new Date();
+  let years = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) years -= 1;
+  if (years > 0) return \`\${years} year\${years === 1 ? "" : "s"} old\`;
+  const months = Math.max(0, (today.getFullYear() - birthDate.getFullYear()) * 12 + today.getMonth() - birthDate.getMonth());
+  return months ? \`\${months} month\${months === 1 ? "" : "s"} old\` : "Under 1 month old";
+}
+
+function boardingRecordMatchesCustomerDog(record = {}, dog = {}) {
+  const dogId = boardingDogIdFromCustomerDogValue(record.id);
+  const customerBoardingIds = [dog.sourceBoardingDogId, dog.linkedBoardingDogId].map(boardingDogIdFromCustomerDogValue).filter(Boolean);
+  if (record.linkedCustomerDogId && dog.id && record.linkedCustomerDogId === dog.id) return true;
+  if (customerBoardingIds.includes(dogId)) return true;
+  const recordEmail = normalizeEmail(record.ownerEmail || record.customerEmail || record.linkedOwnerEmail);
+  const dogEmail = normalizeEmail(dog.ownerEmail || dog.customerEmail || currentUser?.email);
+  const recordName = String(record.dogName || "").trim().toLowerCase();
+  const dogName = String(dog.dogName || "").trim().toLowerCase();
+  return Boolean(recordEmail && dogEmail && recordEmail === dogEmail && recordName && dogName && recordName === dogName);
+}
+
+function activeCustomerStayForDog(dog = {}) {
+  const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
+    .filter((record) => !record.removed && boardingDogVisibleToCustomer(record) && boardingRecordMatchesCustomerDog(record, dog)));
+  const entries = boardingStayEntries(records)
+    .filter(({ record, stay }) => ["Checked In", "In Kennel"].includes(boardingStayDisplayStatus(record, stay)))
+    .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
+  return entries[0] || null;
+}
+
+function customerDogSummaryCardHtml(dog = {}) {
+  const activeStay = activeCustomerStayForDog(dog);
+  const stay = activeStay?.stay || {};
+  const record = activeStay?.record || {};
+  const stayStatus = activeStay ? boardingStayDisplayStatus(record, stay) : "";
+  const facts = [dog.breedDescription || dog.breed || "", dog.sex || "", dogAgeText(dog)].filter(Boolean).join(" | ");
+  const vaccine = customerFacingVaccineStatus(dog);
+  return \`<article class="customer-dog-summary-card">
+    <div class="customer-dog-summary-main">
+      \${customerDogPhotoHtml(dog)}
+      <div>
+        <div class="customer-dog-summary-title">
+          <h3>\${escapeHtml(dog.dogName || "Your dog")}</h3>
+          \${statusChipHtml(vaccine.label, \`vaccination-status-chip \${vaccine.className}\`)}
+        </div>
+        <p>\${escapeHtml(facts || "Dog profile")}</p>
+      </div>
+    </div>
+    <div class="customer-dashboard-actions">
+      <button type="button" data-action="open-customer-boarding-request" data-id="\${escapeHtml(dog.id || "")}">Book a Stay</button>
+      <button type="button" class="secondary-button" data-action="edit-customer-dog-inline" data-id="\${escapeHtml(dog.id || "")}" data-boarding-id="\${escapeHtml(dog.sourceBoardingDogId || dog.linkedBoardingDogId || "")}">Edit Profile</button>
+    </div>
+    <section class="customer-current-stay">
+      <strong>Current Stay</strong>
+      \${activeStay ? \`<div class="detail-row"><strong>Drop-off</strong><span>\${escapeHtml(formatDateTime(stay.dropoffTime) || "Not scheduled")}</span></div><div class="detail-row"><strong>Pickup</strong><span>\${escapeHtml(formatDateTime(stay.pickupTime) || "Not scheduled")}</span></div><div class="chip-row">\${statusChipHtml(stayStatus, \`boarding-status-chip \${statusClassForBoardingStatus(stayStatus)}\`)}</div>\` : \`<p class="muted-text">No active stays</p>\`}
+    </section>
+  </article>\`;
+}
+
+function customerDogDashboardCardHtml(dog = {}) {
+  return customerDogSummaryCardHtml(dog);
+}
+
+function customerDogWelcomeHtml() {
+  return \`<article class="customer-home-empty customer-welcome-card">
+    <div class="customer-welcome-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M7.2 10.3c1.6-1.7 3.1-2.5 4.8-2.5s3.2.8 4.8 2.5" /><path d="M8.6 8.2 7.4 5.8a1.2 1.2 0 0 0-2.2.1L4.2 9" /><path d="m15.4 8.2 1.2-2.4a1.2 1.2 0 0 1 2.2.1l1 3.1" /><path d="M7.5 13.2c0 4 2.2 6.8 4.5 6.8s4.5-2.8 4.5-6.8" /><path d="M10 14h.01M14 14h.01M11 17h2" /></svg>
+    </div>
+    <h3>Welcome to Snuggle Stay</h3>
+    <p>Add your dog's profile to get started</p>
+    <button type="button" data-action="add-customer-dog-inline">Add Your Dog</button>
+  </article>\`;
+}
+
+function renderCustomerRequests() {
+  const list = $("#customerRequestList");
+  if (!list) return;
+  renderCustomerProgress();
+  const statusFilter = $("#customerRequestStatusFilter")?.value || "All";
+  const entries = customerRequestEntries(statusFilter);
+  list.innerHTML = entries.length
+    ? entries
+        .map((record) => {
+          const stay = record.stay || {};
+          record = record.record || record;
+          const services = boardingStayServicesText(stay, { customerFacing: true });
+          const total = boardingStayInvoiceTotal(record, stay);
+          const estimate = total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : "";
+          const status = boardingStayDisplayStatus(record, stay);
+          const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
+          const canCustomerEdit = customerCanEditStayRequestStatus(status);
+          const actions = canCustomerEdit
+            ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Update</button>\${canTransitionBoardingStatus(record, "Cancelled", stay.id ? { stayId: stay.id } : {}) ? \`<button type="button" class="secondary-button" data-action="cancel-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Cancel Request</button>\` : ""}</div>\`
+            : "";
+          return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${estimate}\${actions}</article>\`;
+        })
+        .join("")
+    : \`<p>No \${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>\`;
+}
+
+function customerCanEditStayRequestStatus(status = "") {
+  return normalizeBoardingStatus({ boardingStatus: status }) === "Pending";
+}
+
+function customerRequestEntries(statusFilter = "All") {
+  const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
+    .filter((record) => !record.removed && (record.customerRequest || (record.stays || []).length))
+    .filter((record) => currentRole() === "admin" || boardingDogVisibleToCustomer(record)));
+  return uniqueBoardingStayEntries(boardingStayEntries(records))
+    .filter(({ status }) => statusFilter === "All" || status === statusFilter)
+    .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
+}
+
+function customerRequestFingerprint(record = {}, stayOverride = null) {
+  const stay = stayOverride || record.stays?.[0] || {};
+  const serviceKey = arrayValue(stay.requests).map((item) => boardingStayRequestLabel(item).trim().toLowerCase()).sort().join("|");
+  const dogKey = [record.linkedCustomerDogId || "", normalizeEmail(record.ownerEmail || record.customerEmail), String(record.dogName || "").trim().toLowerCase()].join("|");
+  return [dogKey, stay.dropoffTime || "", stay.pickupTime || "", serviceKey].join("::");
+}
+
+function customerRequestTimelineHtml(status = "Pending") {
+  const normalized = boardingLifecycleStatuses.includes(status) ? status : "Pending";
+  const className = normalized === "Cancelled" ? "is-cancelled" : "is-done";
+  return \`<div class="request-timeline"><span class="\${className}">\${escapeHtml(customerRequestStatusLabel(normalized))}</span></div>\`;
+}
+
+function customerServiceIsPremiumStayUpgrade(service = {}) {
+  return normalizedServiceLookupText(service.serviceName || service.name || "") === "premium overnight boarding kennel";
+}
+
+function customerServiceDisplayName(service = {}) {
+  if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_LABEL;
+  return service.serviceName || service.name || "Service";
+}
+
+function customerServiceInfoText(service = {}) {
+  const itemDescription = String(service.itemDescription || "").trim();
+  if (itemDescription) return itemDescription;
+  if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION;
+  return "";
+}
+
+function customerServiceInfoIconHtml(infoText = "") {
+  return infoText ? \`<span class="service-info-icon" role="button" tabindex="0" aria-label="\${escapeHtml(infoText)}" title="\${escapeHtml(infoText)}" data-tooltip="\${escapeHtml(infoText)}"><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>\` : "";
+}
+
+function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options = {}) {
+  const checked = checkedIds.has(service.id);
+  const quantityValue = formFieldByName($("#customerBookingForm"), \`serviceQuantity-\${service.id}\`)?.value || "1";
+  const displayName = customerServiceDisplayName(service);
+  const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(service));
+  const addOnPrefix = options.addOn ? "Add-on: " : "";
+  const extraClass = options.parent ? " service-option-parent" : "";
+  return \`<label class="service-option\${options.addOn ? " service-option-addon" : ""}\${extraClass}"><span class="service-option-label"><input type="checkbox" name="customerServices" value="\${escapeHtml(service.id)}" \${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(addOnPrefix)}\${escapeHtml(displayName)} - \${money(service.basePrice)} \${escapeHtml(service.unit || "")}</span>\${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-\${escapeHtml(service.id)}" min="1" step="1" value="\${escapeHtml(quantityValue)}" \${checked ? "" : "disabled"} aria-label="\${escapeHtml(displayName)} quantity" /></label>\`;
+}
+
+function customerStayProgramServices(user = currentUser) {
+  applyLegacyBoardingProgramMigration();
+  return readRecords("service")
+    .filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && serviceIsBoardingProgram(service))
+    .filter((service) => serviceMatchesCustomerPricingScope(service, user))
+    .sort((a, b) => String(a.serviceName || "").localeCompare(String(b.serviceName || "")));
+}
+
+function customerStayProgramSnapshot(service = null) {
+  if (!service?.id) return null;
+  return {
+    id: service.id,
+    serviceId: service.id,
+    serviceName: service.serviceName || "Boarding program",
+    name: service.serviceName || "Boarding program",
+    rate: Number(service.basePrice || 0),
+    unit: service.unit || "per night",
+    isMemberPricing: serviceHasFlag(service, "Member Pricing"),
+    includesBoardingAccommodation: true,
+    replacesStandardBoarding: true,
+  };
+}
+
+function renderCustomerStayProgramOptions() {
+  const step = $("#customerStayProgramStep");
+  const container = $("#customerStayProgramOptions");
+  if (!step || !container) return;
+  const show = customerRequestMode() === "boarding";
+  const programs = show ? customerStayProgramServices() : [];
+  step.hidden = !show || !programs.length;
+  if (step.hidden) {
+    container.innerHTML = "";
+    return;
+  }
+  const existing = selectedCustomerStayProgramId();
+  const selectedId = existing && programs.some((program) => program.id === existing) ? existing : "standard";
+  const standardService = boardingPricingServiceForCustomer(currentUser);
+  const standardLabel = standardService?.serviceName || "Standard Overnight Boarding";
+  const options = [
+    \`<label class="service-option customer-stay-program-card"><span class="service-option-label"><input type="radio" name="customerStayProgram" value="standard" \${selectedId === "standard" ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(standardLabel)} - \${money(standardService?.basePrice || boardingRatePlanForCustomer().primaryRate)} per night</span></span></span></label>\`,
+    ...programs.map((program) => {
+      const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(program));
+      return \`<label class="service-option customer-stay-program-card"><span class="service-option-label"><input type="radio" name="customerStayProgram" value="\${escapeHtml(program.id)}" \${selectedId === program.id ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(customerServiceDisplayName(program))} - \${money(program.basePrice)} \${escapeHtml(program.unit || "per night")}</span>\${infoIcon}</span></span></label>\`;
+    }),
+  ];
+  container.innerHTML = options.join("");
+}
+
+function customerImplicitDependencyIds() {
+  const ids = new Set();
+  if (customerRequestMode() === "boarding") {
+    const stayProgram = selectedCustomerStayProgram();
+    const dependencyService = stayProgram || boardingPricingServiceForCustomer(currentUser);
+    if (dependencyService?.id) ids.add(dependencyService.id);
+  }
+  return ids;
+}
+
+function customerDependencyIds(checkedIds = new Set()) {
+  return new Set([...checkedIds, ...customerImplicitDependencyIds()]);
+}
+
+function renderCustomerServiceOptions() {
+  if (!$("#customerServiceOptions")) return;
+  applyLegacyServiceDependencyMigration();
+  applyLegacyBoardingProgramMigration();
+  const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
+  const dependencyIds = customerDependencyIds(checkedIds);
+  const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && serviceMatchesCustomerPricingScope(service, currentUser));
+  const visibleServices = services.filter((service) => !serviceDependencyId(service));
+  const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
+  const visibleHtml = visibleServices.map((service) => {
+    const childServices = dependencyIds.has(service.id)
+      ? services
+          .filter((dependent) => serviceDependencyId(dependent) === service.id)
+      : [];
+    if (!childServices.length) return customerServiceOptionHtml(service, checkedIds);
+    const optionHtml = customerServiceOptionHtml(service, checkedIds, { parent: true });
+    const addOnHtml = childServices
+      .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
+      .join("");
+    return \`<div class="service-option-group">\${optionHtml}<div class="service-option-addons">\${addOnHtml}</div></div>\`;
+  }).join("");
+  const implicitHtml = implicitDependencyServices
+    .map((service) => customerServiceOptionHtml(service, checkedIds, { addOn: serviceDependencyType(service) === "optional-addon" }))
+    .join("");
+  $("#customerServiceOptions").innerHTML = visibleServices.length
+    ? \`\${visibleHtml}\${implicitHtml}\`
+    : implicitHtml
+      ? implicitHtml
+    : "<p>No customer services are active yet.</p>";
+}
+
+function renderCustomerCrateShareOptions() {
+  const step = $("#customerCrateShareStep");
+  const container = $("#customerCrateShareOptions");
+  if (!step || !container) return;
+  const dogs = selectedCustomerDogs();
+  const isBoardingRequest = customerRequestMode() === "boarding";
+  const stayProgram = selectedCustomerStayProgram();
+  const ratePlan = boardingRatePlanForCustomer();
+  const show = isBoardingRequest && !stayProgram && ratePlan.isMemberPricing && dogs.length > 1;
+  step.hidden = !show;
+  if (!show) {
+    container.innerHTML = "";
+    return;
+  }
+  const prior = $("#customerSharedCrateRequested");
+  const checked = prior ? prior.checked : true;
+  const lines = boardingDogPricingLines(dogs, { ratePlan, days: 1, sharedCrateRequested: true })
+    .reduce((groups, line) => {
+      groups[line.crateGroupId] = [...(groups[line.crateGroupId] || []), line.dogName];
+      return groups;
+    }, {});
+  const groupSummary = Object.values(lines)
+    .map((names, index) => \`Crate \${index + 1}: \${names.join(" + ")}\`)
+    .join(" | ");
+  container.innerHTML = \`<label class="toggle-row"><input type="checkbox" id="customerSharedCrateRequested" name="customerSharedCrateRequested" \${checked ? "checked" : ""} /> Request shared-crate member pricing when staff approve it</label><p>\${escapeHtml(groupSummary)}. Max \${BOARDING_MAX_DOGS_PER_CRATE} dogs per crate.</p>\`;
+}
+
+function customerBookingSelectionKey(dog = {}) {
+  const boardingId = boardingDogIdFromCustomerDogValue(dog.sourceBoardingDogId || dog.linkedBoardingDogId || (String(dog.id || "").startsWith("boarding:") ? dog.id : ""));
+  if (boardingId) return \`boarding:\${boardingId}\`;
+  if (dog.id) return \`customer:\${dog.id}\`;
+  return customerDogIdentityKey(dog);
+}
+
+function customerBookingDogIdentityTokens(dog = {}) {
+  const dogName = normalizedDogIdentityName(dog);
+  if (!dogName) return [];
+  const tokens = new Set();
+  const addScoped = (kind = "", value = "") => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized) tokens.add(\`\${dogName}|\${kind}:\${normalized}\`);
+  };
+  [
+    dog.isSharedBoardingDog ? dog.linkedCustomerDogId : dog.id,
+    dog.linkedCustomerDogId,
+    dog.customerDogId,
+  ].forEach((id) => addScoped("customer-dog", id));
+  [
+    boardingDogIdFromCustomerDogValue(dog.sourceBoardingDogId),
+    boardingDogIdFromCustomerDogValue(dog.linkedBoardingDogId),
+    String(dog.id || "").startsWith("boarding:") ? boardingDogIdFromCustomerDogValue(dog.id) : "",
+  ].forEach((id) => addScoped("boarding-dog", id));
+  uniqueEmails(dog.ownerEmail, dog.customerEmail, currentUser?.email).forEach((email) => addScoped("email", email));
+  [
+    dog.ownerPhone,
+    dog.phone,
+    dog.customerPhone,
+    dog.emergencyPhone,
+  ].forEach((phone) => {
+    const normalized = normalizedPhoneToken(phone);
+    if (normalized) addScoped("phone", normalized);
+  });
+  if (!tokens.size) addScoped("owner-name", dog.ownerName);
+  return [...tokens];
+}
+
+function customerBookingDogMatchesRecord(dog = {}, record = {}) {
+  const dogTokens = new Set(customerBookingDogIdentityTokens(dog));
+  if (!dogTokens.size) return false;
+  return boardingDogIdentityTokens(record).some((token) => dogTokens.has(token));
+}
+
+function customerBookingServiceKey(estimate = {}) {
+  return [
+    String(estimate.stayProgram?.serviceName || estimate.stayProgram?.name || "").trim().toLowerCase(),
+    ...new Set(arrayValue(estimate.services)
+    .map((service) => \`\${service.serviceName || service.id || "Service"}\${Number(service.quantity || 1) > 1 ? \` x\${service.quantity}\` : ""} requested\`)
+    .map((label) => String(label || "").trim().toLowerCase())
+    .filter(Boolean)),
+  ].filter(Boolean)
+    .sort()
+    .join("|");
+}
+
+function customerBookingStableId(prefix = "customer-booking", estimate = {}, dog = {}) {
+  const seed = [
+    customerBookingSelectionKey(dog),
+    dog.dogName || "",
+    estimate.dropoffTime || "",
+    estimate.pickupTime || "",
+    customerBookingServiceKey(estimate),
+  ].join("|");
+  return \`\${prefix}-\${shortStableHash(seed, 10)}\`;
+}
+
+function openCustomerDogModal(record = {}) {
+  openCustomerDog(record);
+}
+
+function openCustomerDogInline(record = {}) {
+  const formEl = $("#customerDogForm");
+  const home = $("#customerDogFormHome");
+  if (!formEl || !home) return;
+  $("#detailDialog")?.close();
+  resetCustomerDogForm();
+  setFormValues(formEl, record);
+  $("#customerDogId").value = record.id || "";
+  $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
+  $("#customerDogFormTitle").textContent = record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog";
+  setDogPhoto("customer", record);
+  if (formEl.parentElement !== home) home.appendChild(formEl);
+  formEl.hidden = false;
+  formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function openCustomerDog(record = {}) {
+  const formEl = $("#customerDogForm");
+  resetCustomerDogForm();
+  setFormValues(formEl, record);
+  $("#customerDogId").value = record.id || "";
+  $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
+  $("#customerDogFormTitle").textContent = record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog";
+  setDogPhoto("customer", record);
+  showDetailDialog(record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog", \`<div id="customerDogPopupMount"></div>\`, null, { dialogClass: "is-customer-dog-editor" });
+  $("#customerDogPopupMount")?.appendChild(formEl);
+  formEl.hidden = false;
+  formEl.scrollTop = 0;
+}
+
+function openCustomerDogRemoveConfirm(record = {}) {
+  showDetailDialog(
+    "Remove Dog?",
+    \`<article class="record-card compact-record-card danger-confirm-card"><strong>Remove \${escapeHtml(record.dogName || "this dog")}?</strong><p>This removes the dog from your customer profile. Existing submitted requests stay on file.</p></article><div class="button-row"><button type="button" class="danger-button" data-action="confirm-remove-customer-dog" data-id="\${escapeHtml(record.id || "")}">Remove Dog</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>\`,
+  );
+}
+
+function openCustomerBookingModal(mode = "boarding") {
+  if (!customerDogsForCurrentUser().length) {
+    switchPage("customerPage");
+    openCustomerDogModal();
+    return;
+  }
+  $("#detailDialog")?.close();
+  $("#bookingConfirmDialog")?.close();
+  $("#customerBookingForm").hidden = true;
+  resetCustomerBookingForm();
+  $("#customerRequestMode").value = mode;
+  $("#customerBookingForm").hidden = false;
+  $("#customerBookingForm").scrollTop = 0;
+  $("#customerBookingFormTitle").textContent = mode === "service" ? "Request Service" : "Request Boarding";
+  $("#customerBookingFormHelp").textContent = mode === "service" ? "Choose dog(s), service, and requested drop-off time." : "Choose dog(s), requested stay, and optional services.";
+  setCustomerBookingTimeCopy(mode);
+  clearCustomerBookingTimeErrors();
+  $("#requestBoardingButton").textContent = "Send Request";
+  renderCustomerBookingAvailabilityMessages();
+  renderCustomerStayProgramOptions();
+  renderCustomerCrateShareOptions();
+  renderCustomerServiceOptions();
+}
+
+function customerEstimateDetails() {
+  const formEl = $("#customerBookingForm");
+  const data = formPayload(formEl);
+  const isServiceRequest = customerRequestMode() === "service";
+  const dogs = selectedCustomerDogs();
+  const selectedServiceIds = new Set(checkedFrom(formEl, "customerServices"));
+  const dependencyIds = customerDependencyIds(selectedServiceIds);
+  const services = [...selectedServiceIds]
+    .map((id) => {
+      const service = readRecords("service").find((item) => item.id === id);
+      if (!service) return null;
+      const quantity = Math.max(1, Number(formFieldByName(formEl, \`serviceQuantity-\${id}\`)?.value || 1));
+      return { ...service, quantity };
+    })
+    .filter((service) => service && serviceDependencySatisfied(service, dependencyIds))
+    .filter(Boolean);
+  const days = isServiceRequest ? 0 : boardingDays(data.dropoffTime, data.pickupTime);
+  const isDayCare = !isServiceRequest && isDayCareStay(data.dropoffTime, data.pickupTime);
+  const ratePlan = boardingRatePlanForCustomer();
+  const stayProgram = isServiceRequest ? null : customerStayProgramSnapshot(selectedCustomerStayProgram());
+  const sharedCrateRequested = stayProgram ? false : customerSharedCrateRequested();
+  const boardingLines = boardingDogPricingLines(dogs, { ratePlan, days, isServiceRequest, sharedCrateRequested, stayProgram });
+  const boardingRate = stayProgram?.rate || ratePlan.primaryRate;
+  const boardingCost = boardingLines.reduce((total, line) => total + Number(line.total || 0), 0);
+  const serviceLines = services.map((service) => ({
+    ...service,
+    perDogLineTotal: Number(service.basePrice || 0) * Number(service.quantity || 1),
+    lineTotal: dogs.length * Number(service.basePrice || 0) * Number(service.quantity || 1),
+  }));
+  const serviceCost = serviceLines.reduce((total, service) => total + service.lineTotal, 0);
+  return { dogs, services: serviceLines, days, isDayCare, isServiceRequest, stayProgram, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
+}
+
+async function submitPendingCustomerBooking() {
+  const estimate = pendingCustomerBooking;
+  if (customerBookingSubmitInProgress) return;
+  if (!estimate?.dogs?.length) return;
+  if (!customerBookingEstimateAvailabilityValid(estimate)) {
+    showToast("This request time is no longer inside the kennel hours. Please adjust it and try again.");
+    customerBookingSubmitInProgress = false;
+    $("#bookingConfirmDialog")?.close();
+    return;
+  }
+  customerBookingSubmitInProgress = true;
+  const confirmButton = $("#confirmBookingRequestButton");
+  if (confirmButton) confirmButton.disabled = true;
+  const editingId = $("#editingCustomerRequestId")?.value;
+  const editingStayId = $("#editingCustomerStayId")?.value || "";
+  const editingRecord = editingId ? boardingDogRecordForDisplay(editingId) : null;
+  let savedCount = 0;
+  let skippedCount = 0;
+  const submittedDogKeys = new Set();
+  try {
+    for (const dog of estimate.dogs) {
+      const submittedDogKey = [customerBookingSelectionKey(dog), estimate.dropoffTime || "", estimate.pickupTime || "", customerBookingServiceKey(estimate)].join("|");
+      if (submittedDogKeys.has(submittedDogKey)) {
+        skippedCount += 1;
+        continue;
+      }
+      submittedDogKeys.add(submittedDogKey);
+      const duplicateEntry = editingRecord ? null : existingCustomerBookingEntryForDog(dog, estimate, { editingRecordId: editingId, editingStayId });
+      if (duplicateEntry) {
+        skippedCount += 1;
+        continue;
+      }
+      const sharedBoardingRecord = dog.sourceBoardingDogId ? readRecords("boardingDog").find((record) => record.id === dog.sourceBoardingDogId && !record.removed) : null;
+      const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
+      const useExisting = Boolean(existingTarget);
+      const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
+      const stayRequests = estimate.services.map((service) => ({
+        id: service.id,
+        serviceId: service.id,
+        serviceName: service.serviceName,
+        label: \`\${service.serviceName}\${Number(service.quantity || 1) > 1 ? \` x\${service.quantity}\` : ""} requested\`,
+        quantity: Number(service.quantity || 1),
+        unitPrice: Number(service.basePrice || service.unitPrice || 0),
+        unit: service.unit || "",
+        source: "customer-request",
+      }));
+      const dogLine = estimate.boardingLines.find((line) => line.dogKey === boardingPricingDogKey(dog)) || {};
+      const invoiceAdjustments = normalizeInvoiceAdjustments(existingStay.invoiceAdjustments || []);
+      const stayType = estimate.isServiceRequest ? "Service Request" : estimate.isDayCare ? "Day Care" : "Boarding";
+      const pricingSnapshot = boardingPricingSnapshotForStay(existingTarget || dog, {
+        ...existingStay,
+        dropoffTime: estimate.dropoffTime,
+        pickupTime: estimate.pickupTime,
+        stayType,
+        requests: stayRequests,
+        invoiceAdjustments,
+      }, {
+        ratePlan: estimate.ratePlan,
+        currentDogKey: dogLine.dogKey || boardingPricingDogKey(dog),
+        currentDogName: dogLine.dogName || dog.dogName || "Dog",
+        currentDogRole: dogLine.role || (estimate.ratePlan?.isMemberPricing ? "primary" : "non-member"),
+        sharedCrateRequested: estimate.sharedCrateRequested,
+        crateGroupId: dogLine.crateGroupId || "",
+        stayProgram: estimate.stayProgram,
+        groupBoardingSubtotal: estimate.boardingCost,
+        groupServiceSubtotal: estimate.serviceCost,
+        groupTotal: estimate.total,
+      });
+      const stay = {
+        id: editingRecord ? existingStay.id || editingStayId || uid("stay") : customerBookingStableId("stay", estimate, dog),
+        status: editingRecord ? existingStay.status || normalizeBoardingStatus(editingRecord) : "pending_customer_request",
+        createdAt: editingRecord ? existingStay.createdAt || new Date().toISOString() : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        source: "customer-request",
+        dropoffTime: estimate.dropoffTime,
+        pickupTime: estimate.pickupTime,
+        stayType,
+        stayProgramId: estimate.stayProgram?.id || "",
+        stayProgramName: estimate.stayProgram?.serviceName || estimate.stayProgram?.name || "",
+        stayProgramRate: estimate.stayProgram?.rate || "",
+        stayProgram: estimate.stayProgram || null,
+        billingDays: pricingSnapshot.billingDays,
+        requests: stayRequests,
+        stayNotes: estimate.requestNotes,
+        invoiceAdjustments,
+        invoiceEvents: existingStay.invoiceEvents || [],
+        pricingSnapshot,
+        estimatedTotal: pricingSnapshot.total,
+      };
+      stay.bathPlan = bathPlanForStay(stay);
+      stay.requestCode = boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, stay);
+      stay.serviceTasks = boardingStayServiceTasks(existingTarget || sharedBoardingRecord || dog, stay);
+      const existingStays = useExisting ? (existingTarget.stays || []).filter((item) => !boardingStaySharesExplicitIdentity(item, stay)) : [];
+      existingStays.unshift(stay);
+      const ownerEmail = normalizeEmail(existingTarget?.ownerEmail || dog.ownerEmail || currentUser?.email);
+      const secondaryOwnerEmail = normalizeEmail(existingTarget?.secondaryOwnerEmail || dog.secondaryOwnerEmail);
+      const existingStatus = useExisting ? normalizeBoardingStatus(existingTarget) : "Pending";
+      const activeExistingStatus = ["Checked In", "In Kennel", "Ready For Pickup"].includes(existingStatus);
+      const requestStatus = editingRecord ? existingStatus : activeExistingStatus ? existingStatus : "pending_customer_request";
+      const statusHistory = useExisting
+        ? [
+            ...(existingTarget.statusHistory || []),
+            ...(requestStatus !== existingStatus ? [{ from: existingStatus, to: requestStatus, date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }] : []),
+          ]
+        : [{ from: "", to: "pending_customer_request", date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }];
+      const payload = {
+        ...(useExisting ? existingTarget : {}),
+        type: "boardingDog",
+        id: useExisting ? existingTarget.id : customerBookingStableId("boardingDog", estimate, dog),
+        submittedAt: useExisting ? existingTarget.submittedAt || new Date().toISOString() : new Date().toISOString(),
+        boardingStatus: requestStatus,
+        statusHistory,
+        customerRequest: true,
+        dogName: dog.dogName,
+        breedDescription: dog.breedDescription,
+        ownerName: dog.ownerName,
+        ownerPhone: dog.ownerPhone,
+        ownerEmail,
+        customerEmail: ownerEmail,
+        secondaryOwnerEmail,
+        requestedByEmail: currentUser?.email || ownerEmail,
+        requestedByName: currentUser?.name || dog.ownerName || "",
+        linkedCustomerDogId: dog.isSharedBoardingDog ? linkedCustomerDogForBoarding(sharedBoardingRecord || {})?.id || dog.linkedCustomerDogId || "" : dog.id,
+        linkedOwnerEmail: ownerEmail,
+        emergencyName: dog.emergencyName,
+        emergencyPhone: dog.emergencyPhone,
+        specialCare: dog.specialCare,
+        foodInstructions: dog.foodInstructions || existingTarget?.foodInstructions || "",
+        spayNeuterStatus: dog.spayNeuterStatus,
+        dhppDate: dog.dhppDate,
+        rabiesDate: dog.rabiesDate,
+        rabiesDuration: dog.rabiesDuration,
+        sourceBoardingDogId: dog.sourceBoardingDogId || "",
+        profilePhotoUrl: dog.profilePhotoUrl || "",
+        vaccinationRecords: dog.vaccinationRecords || [],
+        vaccinationFiles: dog.vaccinationFiles || "",
+        estimatedTotal: pricingSnapshot.total,
+        stayType,
+        billingDays: pricingSnapshot.billingDays,
+        requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
+        flags: ["Required update from owner"],
+        stays: existingStays,
+        cancelledAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.cancelledAt || "",
+        checkedOutAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.checkedOutAt || "",
+      };
+      const record = await saveAndNotify(payload, editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
+      savedCount += 1;
+      await ensureCustomerAccessProfile({
+        email: record.ownerEmail,
+        name: record.ownerName,
+        customerDogId: dog.isSharedBoardingDog ? record.linkedCustomerDogId : dog.id,
+        boardingDogId: record.id,
+      });
+      if (record.secondaryOwnerEmail) {
+        await ensureCustomerAccessProfile({
+          email: record.secondaryOwnerEmail,
+          name: record.secondaryOwnerName || record.ownerName,
+          boardingDogId: record.id,
+        });
+      }
+    }
+    pendingCustomerBooking = null;
+    $("#bookingConfirmDialog").close();
+    resetCustomerBookingForm();
+    renderBoardingDogs();
+    renderBoardingRequests();
+    renderCustomerDogs();
+    renderCustomerRequests();
+    renderDashboard();
+    switchPage("customerRequestsPage");
+    resetCustomerBookingForm();
+    const inlineStatus = $("#customerBookingInlineStatus");
+    if (inlineStatus) {
+      inlineStatus.textContent = editingId ? "Your request has been updated." : "Your request has been sent - we'll confirm within 24 hours.";
+      inlineStatus.hidden = false;
+      window.setTimeout(() => {
+        inlineStatus.hidden = true;
+      }, 8000);
+    }
+    if (!savedCount && skippedCount) {
+      showDetailDialog("Request Already Exists", \`<p>A matching request already exists for the selected dog\${skippedCount === 1 ? "" : "s"} at that time.</p>\`);
+    } else {
+      showToast(editingId ? "Request updated." : "Request sent.");
+    }
+  } catch (error) {
+    pendingCustomerBooking = estimate;
+    showToast(\`Request could not be saved: \${error.message || error}\`);
+  } finally {
+    customerBookingSubmitInProgress = false;
+    if ($("#bookingConfirmDialog")?.open && confirmButton) confirmButton.disabled = false;
+  }
+}
+//# sourceURL=snuggle-stay/customer.js
+`;
+(0, eval)(__snuggleStayModuleSource);
