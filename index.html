@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260530-v3-fix-pass" />
+    <link rel="stylesheet" href="styles.css?v=20260530-impersonation-guard" />
   </head>
   <body>
     <div class="app-layout">
@@ -147,6 +147,7 @@
           <span class="mobile-bottom-nav-label">...</span>
         </button>
       </nav>
+      <button type="button" class="customer-sticky-book-now" id="customerStickyBookNowButton" hidden>Book Now</button>
       <div class="mobile-more-backdrop" id="mobileMoreBackdrop" hidden></div>
       <section class="mobile-more-sheet" id="mobileMoreSheet" aria-labelledby="mobileMoreTitle" hidden>
         <div class="mobile-more-header">
@@ -255,6 +256,7 @@
             <input type="hidden" name="sourceBoardingDogId" id="customerSourceBoardingDogId" />
             <input type="hidden" name="linkedBoardingDogId" id="customerLinkedBoardingDogId" />
             <div class="section-heading"><span>D</span><div><h2 id="customerDogFormTitle">Add Dog</h2><p>Add or update a dog profile.</p></div></div>
+            <div class="customer-flow-stepper" id="customerDogWizardStepper" aria-label="Dog setup progress"></div>
             <div class="dog-profile-editor">
               <button type="button" class="dog-photo-button" id="customerDogPhotoButton" aria-label="Upload customer dog profile photo">
                 <img id="customerDogPhotoPreview" alt="Dog profile preview" hidden />
@@ -266,33 +268,44 @@
                 <input class="visually-hidden-file" type="file" name="profilePhoto" id="customerDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
               </div>
             </div>
-            <div class="customer-form-step">
-              <strong>Required to request boarding</strong>
+            <div class="customer-form-step customer-dog-wizard-panel" data-customer-dog-step="profile">
+              <strong>Dog profile</strong>
               <div class="field-grid">
                 <label>Dog name<input type="text" name="dogName" required /></label>
                 <label>Breed / description<input type="text" name="breedDescription" placeholder="Example: Siberian Husky, 3 years old" /></label>
                 <label>Date of birth<input type="date" name="dateOfBirth" /></label>
+                <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
+              </div>
+            </div>
+            <div class="customer-form-step customer-dog-wizard-panel" data-customer-dog-step="care" hidden>
+              <strong>Care, vet, and emergency info</strong>
+              <div class="field-grid">
                 <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
                 <label>Secondary owner email <small>Allows another owner to request boarding and receive stay updates.</small><input type="email" name="secondaryOwnerEmail" /></label>
                 <label>Emergency contact name <small>Highly recommended</small><input type="text" name="emergencyName" /></label>
                 <label>Emergency contact phone <small>Highly recommended</small><input type="tel" name="emergencyPhone" /></label>
                 <label>Veterinarian / clinic <small>This is the primary one your dog goes to.</small><input type="text" name="vetInfo" /></label>
-                <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
               </div>
+              <label>Feeding instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals, or special feeding notes"></textarea></label>
+              <label>Care notes<textarea name="specialCare" rows="3" placeholder="Behavior, allergies, handling notes, or other care details"></textarea></label>
             </div>
-            <div class="customer-form-step">
-              <strong>Vaccines, care details, and files</strong>
+            <div class="customer-form-step customer-dog-wizard-panel" data-customer-dog-step="records" hidden>
+              <strong>Vaccines and records</strong>
               <div class="field-grid">
                 <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
                 <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
                 <label>Last Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
                 <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple /><small>Optional PDF, PNG, or JPG records.</small></label>
               </div>
-              <label>Feeding instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals, or special feeding notes"></textarea></label>
-              <label>Care notes<textarea name="specialCare" rows="3" placeholder="Behavior, allergies, handling notes, or other care details"></textarea></label>
+              <p class="customer-flow-note">You can request a stay before staff verifies these files. We will review records before check-in.</p>
             </div>
             <div class="upload-status" id="customerUploadStatus" role="status"></div>
-            <div class="button-row"><button type="submit" id="saveCustomerDogButton">Save Dog</button><button type="button" class="secondary-button" id="newCustomerDogButton">Cancel</button></div>
+            <div class="button-row customer-wizard-actions">
+              <button type="button" class="secondary-button" id="customerDogBackButton">Back</button>
+              <button type="button" id="customerDogNextButton">Continue</button>
+              <button type="submit" id="saveCustomerDogButton">Save Dog</button>
+              <button type="button" class="secondary-button" id="newCustomerDogButton">Cancel</button>
+            </div>
           </form>
           </div>
         </section>
@@ -316,35 +329,58 @@
             <input type="hidden" name="editingRequestId" id="editingCustomerRequestId" />
             <input type="hidden" name="editingStayId" id="editingCustomerStayId" />
             <input type="hidden" name="requestMode" id="customerRequestMode" value="boarding" />
-            <section class="customer-form-step customer-dog-selection-step">
-              <strong>Select one or more dogs for boarding.</strong>
-              <div class="customer-dog-list" id="customerBookingDogList"></div>
-              <p id="customerDogSelectionError" class="form-error" hidden>Select at least one dog for this request.</p>
-            </section>
-            <section class="customer-form-step customer-stay-program-step" id="customerStayProgramStep" hidden>
-              <strong>Choose stay type</strong>
-              <div class="checklist compact customer-stay-program-options" id="customerStayProgramOptions"></div>
-            </section>
-            <section class="customer-form-step customer-crate-share-step" id="customerCrateShareStep" hidden>
-              <strong>Member shared-crate pricing</strong>
-              <div id="customerCrateShareOptions"></div>
-            </section>
-            <section class="customer-form-step customer-booking-time-box">
-              <strong>Requested drop off time</strong>
-              <p>Let us know what day and time you would like to request for the drop-off and pickup times.</p>
-              <div class="field-grid">
-                <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
-                <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
+            <div class="customer-flow-stepper" id="customerBookingWizardStepper" aria-label="Booking request progress"></div>
+            <section class="customer-booking-wizard-panel" data-customer-booking-step="pets">
+              <div class="customer-form-step customer-dog-selection-step">
+                <strong>Select one or more dogs for boarding.</strong>
+                <div class="customer-dog-list" id="customerBookingDogList"></div>
+                <p id="customerDogSelectionError" class="form-error" hidden>Select at least one dog for this request.</p>
               </div>
-              <div class="operation-availability-messages" id="customerBookingAvailabilityMessages" aria-live="polite"></div>
+              <section class="customer-form-step customer-booking-time-box">
+                <strong>Requested drop off time</strong>
+                <p>Let us know what day and time you would like to request for the drop-off and pickup times.</p>
+                <div class="field-grid">
+                  <label>Drop-off time<input type="datetime-local" name="dropoffTime" required /></label>
+                  <label>Pick-up time<input type="datetime-local" name="pickupTime" required /></label>
+                </div>
+                <div class="operation-availability-messages" id="customerBookingAvailabilityMessages" aria-live="polite"></div>
+              </section>
             </section>
-            <section class="customer-additional-services">
-              <strong>Add additional service(s) for your dog's stay:</strong>
-              <div class="checklist compact" id="customerServiceOptions"></div>
+            <section class="customer-booking-wizard-panel" data-customer-booking-step="options" hidden>
+              <section class="customer-form-step customer-stay-program-step" id="customerStayProgramStep" hidden>
+                <strong>Choose stay type</strong>
+                <div class="checklist compact customer-stay-program-options" id="customerStayProgramOptions"></div>
+              </section>
+              <section class="customer-form-step customer-crate-share-step" id="customerCrateShareStep" hidden>
+                <strong>Member shared-crate pricing</strong>
+                <div id="customerCrateShareOptions"></div>
+              </section>
+              <article class="customer-flow-empty" id="customerBoardingOptionsEmpty" hidden>
+                <strong>Standard boarding</strong>
+                <p>Your request will use the standard boarding rate unless staff applies a different approved option.</p>
+              </article>
             </section>
-            <div class="estimate-box" id="customerEstimate">Select dog(s), dates, and services to see an estimate.</div>
-            <label>Request notes<textarea name="requestNotes" rows="3" placeholder="Anything we should know about this boarding request?"></textarea></label>
-            <div class="button-row"><button type="submit" id="requestBoardingButton">Send Request</button><button type="button" class="secondary-button" id="resetCustomerBookingButton">New Request</button></div>
+            <section class="customer-booking-wizard-panel" data-customer-booking-step="services" hidden>
+              <section class="customer-additional-services">
+                <strong>Add additional service(s) for your dog's stay:</strong>
+                <div class="checklist compact" id="customerServiceOptions"></div>
+              </section>
+            </section>
+            <section class="customer-booking-wizard-panel" data-customer-booking-step="visit" hidden>
+              <section class="customer-form-step">
+                <strong>Visit notes</strong>
+                <label>Request notes<textarea name="requestNotes" rows="3" placeholder="Anything we should know about this boarding or service request?"></textarea></label>
+              </section>
+            </section>
+            <section class="customer-booking-wizard-panel" data-customer-booking-step="review" hidden>
+              <div class="estimate-box" id="customerEstimate">Select dog(s), dates, and services to see an estimate.</div>
+            </section>
+            <div class="button-row customer-wizard-actions">
+              <button type="button" class="secondary-button" id="customerBookingBackButton">Back</button>
+              <button type="button" id="customerBookingNextButton">Continue</button>
+              <button type="submit" id="requestBoardingButton">Review Request</button>
+              <button type="button" class="secondary-button" id="resetCustomerBookingButton">New Request</button>
+            </div>
           </form>
         </section>
         <section class="form-section">
@@ -634,7 +670,10 @@
             <button type="button" class="secondary-button" id="resetTimesheetDateFilterButton">This Week</button>
           </div>
           <p class="filter-summary" id="timesheetRangeSummary"></p>
-          <div class="button-row export-actions"><button type="button" class="secondary-button" id="exportTimesheetButton">Export Timesheet</button></div>
+          <div class="button-row export-actions">
+            <button type="button" class="secondary-button" id="exportTimesheetButton">Export Timesheet</button>
+            <button type="button" class="secondary-button" id="viewTimesheetButton">View Timesheet</button>
+          </div>
           <div class="table-wrap">
             <table class="data-table">
               <thead><tr><th>Date</th><th>Staff</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Note</th><th>Edit</th></tr></thead>
@@ -1265,6 +1304,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260530-v3-fix-pass"></script>
+  <script type="module" src="js/main.js?v=20260530-impersonation-guard"></script>
 </body>
 </html>

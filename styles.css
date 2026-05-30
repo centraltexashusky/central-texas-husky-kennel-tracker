@@ -1672,6 +1672,92 @@ button:focus-visible {
   margin-bottom: 12px;
 }
 
+.customer-progress-copy {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+}
+
+.customer-progress-copy strong,
+.customer-flow-kicker {
+  color: var(--gold);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.customer-progress-copy span {
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 0.9rem;
+}
+
+.customer-flow-stepper {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+
+.customer-flow-mobile-summary {
+  color: rgba(255, 255, 255, 0.76);
+  display: none;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.customer-flow-step-list {
+  align-items: flex-start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+}
+
+.customer-flow-step-list span {
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.66);
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 850;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
+.customer-flow-step-list i {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.84);
+  display: inline-flex;
+  flex: 0 0 24px;
+  font-size: 0.76rem;
+  font-style: normal;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.customer-flow-step-list span.is-active {
+  background: rgba(100, 210, 255, 0.15);
+  border-color: rgba(100, 210, 255, 0.44);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.customer-flow-step-list span.is-complete {
+  background: rgba(42, 157, 143, 0.18);
+  border-color: rgba(42, 157, 143, 0.48);
+  color: rgba(224, 255, 247, 0.98);
+}
+
+.customer-flow-step-list span.is-complete i {
+  background: rgba(42, 157, 143, 0.82);
+  color: #fff;
+}
+
 .progress-steps {
   display: flex;
   flex-wrap: wrap;
@@ -1691,6 +1777,141 @@ button:focus-visible {
   background: rgba(42, 157, 143, 0.18);
   border-color: rgba(42, 157, 143, 0.46);
   color: var(--teal-dark);
+}
+
+.customer-next-action-card,
+.customer-flow-empty,
+.customer-service-group {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 14px;
+}
+
+.customer-next-action-card {
+  display: grid;
+  gap: 14px;
+}
+
+.customer-next-action-summary {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.customer-next-action-summary h3,
+.customer-welcome-card h3 {
+  color: rgba(255, 255, 255, 0.96);
+  margin: 2px 0 4px;
+}
+
+.customer-next-action-summary p,
+.customer-flow-empty p,
+.customer-welcome-card p,
+.customer-flow-note {
+  color: rgba(255, 255, 255, 0.72);
+  margin: 0;
+}
+
+.customer-next-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.customer-welcome-checklist {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  margin: 12px 0;
+}
+
+.customer-welcome-checklist span {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.9rem;
+  font-weight: 780;
+  padding: 8px 10px;
+}
+
+.customer-booking-wizard-panel,
+.customer-dog-wizard-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.customer-service-group {
+  padding: 0;
+}
+
+.customer-service-group summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 12px 14px;
+}
+
+.customer-service-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.customer-service-group summary span {
+  color: rgba(255, 255, 255, 0.94);
+  font-weight: 900;
+}
+
+.customer-service-group summary small {
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 750;
+}
+
+.customer-service-group-body {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.estimate-heading {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.estimate-heading strong {
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 1.04rem;
+}
+
+.estimate-heading span,
+.muted-estimate-line span {
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.estimate-box h4 {
+  color: var(--gold);
+  font-size: 0.82rem;
+  letter-spacing: 0;
+  margin: 12px 0 5px;
+  text-transform: uppercase;
+}
+
+.customer-sticky-book-now {
+  bottom: 24px;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.26);
+  min-width: 156px;
+  position: fixed;
+  right: 24px;
+  z-index: 880;
 }
 
 .reminder-panel {
@@ -1723,6 +1944,43 @@ button:focus-visible {
 
 .export-actions {
   margin-bottom: 12px;
+}
+
+.timesheet-popup-summary,
+.timesheet-popup-totals {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.timesheet-popup-meta,
+.timesheet-popup-totals div {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.timesheet-popup-meta span,
+.timesheet-popup-totals strong {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.timesheet-popup-meta strong,
+.timesheet-popup-totals span {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.timesheet-popup-table {
+  margin-top: 4px;
 }
 
 .timesheet-date-filter {
@@ -4437,7 +4695,7 @@ button.is-loading {
   }
 
   .app-shell {
-    padding: 18px 12px 38px;
+    padding: 18px 12px 132px;
   }
 
   .page-header,
@@ -4465,6 +4723,38 @@ button.is-loading {
 
   .dog-profile-editor {
     align-items: stretch;
+  }
+
+  .customer-flow-mobile-summary {
+    display: block;
+  }
+
+  .customer-flow-step-list {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-flow-step-list span:not(.is-active) {
+    display: none;
+  }
+
+  .customer-next-action-summary {
+    align-items: flex-start;
+  }
+
+  .customer-next-action-buttons,
+  .customer-wizard-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .customer-sticky-book-now {
+    bottom: auto;
+    left: auto;
+    margin: 0 0 12px;
+    position: sticky;
+    right: auto;
+    top: max(8px, env(safe-area-inset-top));
+    width: 100%;
   }
 
   .boarding-dog-modal:not([hidden]),
@@ -4942,6 +5232,9 @@ button.is-loading {
   body:not(.is-login-view) .dashboard-card,
   body:not(.is-login-view) .role-note,
   body:not(.is-login-view) .customer-dog-item,
+  body:not(.is-login-view) .customer-next-action-card,
+  body:not(.is-login-view) .customer-flow-empty,
+  body:not(.is-login-view) .customer-service-group,
   body:not(.is-login-view) .estimate-box,
   body:not(.is-login-view) .estimate-total,
   body:not(.is-login-view) .task-calendar,
@@ -4971,6 +5264,9 @@ button.is-loading {
 
   body:not(.is-login-view) .record-card,
   body:not(.is-login-view) .customer-dog-item,
+  body:not(.is-login-view) .customer-next-action-card,
+  body:not(.is-login-view) .customer-flow-empty,
+  body:not(.is-login-view) .customer-service-group,
   body:not(.is-login-view) .checklist label,
   body:not(.is-login-view) .operation-calendar-day,
   body:not(.is-login-view) .detail-row,

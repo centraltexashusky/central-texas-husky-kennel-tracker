@@ -1,10 +1,10 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260530-v3-fix-pass";
-import "./auth.js?v=20260530-v3-fix-pass";
-import "./customer.js?v=20260530-v3-fix-pass";
+import "./shared.js?v=20260530-impersonation-guard";
+import "./auth.js?v=20260530-impersonation-guard";
+import "./customer.js?v=20260530-customer-wizard";
 import "./boarding.js?v=20260530-v3-fix-pass";
 import "./daily.js?v=20260530-v3-fix-pass";
-import "./timesheet.js?v=20260530-v3-fix-pass";
+import "./timesheet.js?v=20260530-timesheet-view";
 import "./settings.js?v=20260530-v3-fix-pass";
 import "./notifications.js?v=20260530-v3-fix-pass";
 import "./search.js?v=20260530-v3-fix-pass";

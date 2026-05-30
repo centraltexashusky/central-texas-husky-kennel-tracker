@@ -95,6 +95,16 @@ function timesheetActiveRange() {
   return { start, end, isFiltered: true };
 }
 
+function timesheetSelectedRange() {
+  let start = dateOnly($("#timesheetStartDate")?.value) || "";
+  let end = dateOnly($("#timesheetEndDate")?.value) || "";
+  if (!start && !end) return timesheetActiveRange();
+  if (!start) start = end;
+  if (!end) end = start;
+  if (start > end) [start, end] = [end, start];
+  return { start, end, isFiltered: true };
+}
+
 function timesheetRecordDate(record = {}) {
   return dateOnly(record.date) || localDateFromStoredDateTime(record.clockInTime) || dateOnly(record.clockInTime);
 }
@@ -116,6 +126,21 @@ function timesheetDateLabel(date = "") {
   return new Date(\`\${dateKey}T12:00:00\`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function timesheetRangeLabel(range = {}) {
+  const startLabel = timesheetDateLabel(range.start);
+  const endLabel = timesheetDateLabel(range.end);
+  if (range.start === range.end) return startLabel || endLabel || "";
+  return [startLabel, endLabel].filter(Boolean).join(" to ");
+}
+
+function timesheetRecordsForRange(range = timesheetActiveRange()) {
+  const isAdmin = currentRole() === "admin";
+  return readRecords("timesheet")
+    .filter((record) => !record.removed && (isAdmin || timesheetBelongsToCurrentUser(record)))
+    .filter((record) => timesheetRecordInDateRange(record, range.start, range.end))
+    .sort((a, b) => timesheetRecordTime(b) - timesheetRecordTime(a));
+}
+
 function syncTimesheetRangeUi(range = timesheetActiveRange()) {
   const startInput = $("#timesheetStartDate");
   const endInput = $("#timesheetEndDate");
@@ -124,7 +149,7 @@ function syncTimesheetRangeUi(range = timesheetActiveRange()) {
   const title = $("#timesheetTableTitle");
   const help = $("#timesheetTableHelp");
   const summary = $("#timesheetRangeSummary");
-  const label = range.start === range.end ? timesheetDateLabel(range.start) : \`\${timesheetDateLabel(range.start)} to \${timesheetDateLabel(range.end)}\`;
+  const label = timesheetRangeLabel(range);
   if (title) title.textContent = range.isFiltered ? "Selected Date Range" : "Current Week";
   if (help) help.textContent = range.isFiltered ? "Clock in and clock out records for the selected date range." : "Clock in and clock out records for this week.";
   if (summary) summary.textContent = label ? \`Showing timesheet records for \${label}.\` : "";
@@ -145,9 +170,7 @@ function renderTimesheet() {
   const thisYearStart = new Date(now.getFullYear(), 0, 1);
   const currentWeekRecords = records.filter((record) => inRange(record, thisWeekStart, nextWeekStart));
   const activeRange = timesheetActiveRange();
-  const visibleRecords = records
-    .filter((record) => timesheetRecordInDateRange(record, activeRange.start, activeRange.end))
-    .sort((a, b) => timesheetRecordTime(b) - timesheetRecordTime(a));
+  const visibleRecords = timesheetRecordsForRange(activeRange);
   syncTimesheetRangeUi(activeRange);
 
   $("#timesheetRows").innerHTML = visibleRecords.length
@@ -693,21 +716,49 @@ function currentShiftForStaff(staffEmailValue = "", atDate = new Date()) {
     .find((shift) => minutes >= timeToMinutes(shift.startTime) - 30 && minutes <= timeToMinutes(shift.endTime) + 30) || null;
 }
 
-function exportTimesheet() {
+function timesheetStaffTotalsHtml(records = []) {
   const isAdmin = currentRole() === "admin";
-  const range = timesheetActiveRange();
-  const rows = readRecords("timesheet")
-    .filter((record) => !record.removed && (isAdmin || timesheetBelongsToCurrentUser(record)))
-    .filter((record) => timesheetRecordInDateRange(record, range.start, range.end))
-    .sort((a, b) => timesheetRecordTime(b) - timesheetRecordTime(a))
-    .map((record) => ({
-      date: record.date || "",
-      staff: record.helperName || "",
-      clockIn: formatDateTime(record.clockInTime),
-      clockOut: formatDateTime(record.clockOutTime),
-      hours: Number(record.hours || 0).toFixed(2),
-      note: record.note || "",
-    }));
+  const totals = records.reduce((memo, record) => {
+    const staff = record.helperName || "Unassigned staff";
+    memo[staff] = (memo[staff] || 0) + Number(record.hours || 0);
+    return memo;
+  }, {});
+  const entries = Object.entries(totals).sort((a, b) => a[0].localeCompare(b[0]));
+  if (!entries.length) return "";
+  return '<div class="timesheet-popup-totals">' + entries.map(([staff, hours]) => (
+    '<div><strong>' + escapeHtml(isAdmin ? staff : "Your total") + '</strong><span>' + hours.toFixed(2) + ' hours</span></div>'
+  )).join("") + '</div>';
+}
+
+function timesheetViewPopupHtml(range = timesheetSelectedRange()) {
+  const records = timesheetRecordsForRange(range);
+  const label = timesheetRangeLabel(range) || "selected date range";
+  const totalHours = sumHours(records).toFixed(2);
+  const rows = records.length
+    ? records.map((record) => (
+      '<tr><td>' + escapeHtml(timesheetRecordDate(record) || record.date || "") + '</td><td>' + escapeHtml(record.helperName || "") + '</td><td>' + formatDateTime(record.clockInTime) + '</td><td>' + formatDateTime(record.clockOutTime) + '</td><td>' + Number(record.hours || 0).toFixed(2) + '</td><td>' + escapeHtml(record.note || "") + '</td></tr>'
+    )).join("")
+    : '<tr><td colspan="6">No time entries for this date range.</td></tr>';
+  return '<section class="timesheet-popup-summary"><div class="timesheet-popup-meta"><span>Date range</span><strong>' + escapeHtml(label) + '</strong></div><div class="timesheet-popup-meta"><span>Total hours</span><strong>' + escapeHtml(totalHours) + '</strong></div></section>' +
+    timesheetStaffTotalsHtml(records) +
+    '<div class="table-wrap timesheet-popup-table"><table class="data-table"><thead><tr><th>Date</th><th>Staff</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function openTimesheetViewPopup() {
+  const range = timesheetSelectedRange();
+  showDetailDialog("View Timesheet", timesheetViewPopupHtml(range));
+}
+
+function exportTimesheet() {
+  const range = timesheetSelectedRange();
+  const rows = timesheetRecordsForRange(range).map((record) => ({
+    date: record.date || "",
+    staff: record.helperName || "",
+    clockIn: formatDateTime(record.clockInTime),
+    clockOut: formatDateTime(record.clockOutTime),
+    hours: Number(record.hours || 0).toFixed(2),
+    note: record.note || "",
+  }));
   downloadCsv(\`timesheet-\${range.start}-to-\${range.end}.csv\`, rows);
 }
 

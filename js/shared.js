@@ -1083,7 +1083,7 @@ function profileRecordForUser(user) {
     name: user.name || user.email,
     email: user.email,
     authId: user.key || "",
-    role: user.role || "customer",
+    role: existing.role || user.role || "customer",
     authProvider: user.authProvider || "supabase",
     removed: false,
   };
@@ -1234,11 +1234,12 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
   authSessionSyncStartedAt = Date.now();
   authSessionSyncPromise = (async () => {
     await loadRemoteRecords({ render: false });
-    const profile = await ensureAppUserProfile(user);
+    const refreshedUser = { ...user, role: roleForAccount(user) || user.role || "customer" };
+    const profile = await ensureAppUserProfile(refreshedUser);
     const syncedUser = {
-      ...user,
-      role: profile?.role || roleForAccount(user),
-      name: profile?.name || user.name,
+      ...refreshedUser,
+      role: profile?.role || roleForAccount(refreshedUser),
+      name: profile?.name || refreshedUser.name,
     };
     setHelper(syncedUser, { switchAfterLogin: false, render: false });
     updateNavigationAccess();
@@ -1865,7 +1866,10 @@ function startUserImpersonation(user = {}) {
     showToast("Save the user before impersonating.");
     return;
   }
-  const admin = { ...currentUser };
+  const admin = {
+    ...currentUser,
+    role: roleForAccount(currentUser) || currentUser.role || "admin",
+  };
   const target = impersonationUserFromSettings(user);
   impersonationSession = {
     admin,
@@ -1875,7 +1879,7 @@ function startUserImpersonation(user = {}) {
   };
   localStorage.setItem(stateKeys.impersonation, JSON.stringify(impersonationSession));
   $("#detailDialog")?.close();
-  setHelper(target, { switchAfterLogin: false });
+  setHelper(target, { switchAfterLogin: false, persistSession: false });
   switchPage(defaultPageForRole(target.role));
   showToast(\`Viewing the app as \${target.name || target.email || "selected user"}.\`);
 }
@@ -1885,7 +1889,11 @@ function stopUserImpersonation() {
   const session = impersonationSession;
   impersonationSession = null;
   localStorage.removeItem(stateKeys.impersonation);
-  setHelper(session.admin, { switchAfterLogin: false });
+  const admin = {
+    ...session.admin,
+    role: roleForAccount(session.admin) || session.admin?.role || "admin",
+  };
+  setHelper(admin, { switchAfterLogin: false });
   switchPage(session.returnPage || "settingsUsersPage");
   showToast("Admin session restored.");
   return true;
@@ -7110,6 +7118,7 @@ function resetCustomerDogForm() {
   $("#customerDogFormTitle").textContent = "Add Dog";
   fillCustomerDefaults();
   resetSelectedDogPhoto("customer", {});
+  if (typeof setCustomerDogWizardStep === "function") setCustomerDogWizardStep("profile");
 }
 
 function restoreCustomerDogFormHome() {
@@ -7162,7 +7171,7 @@ function resetCustomerBookingForm() {
   $("#customerBookingFormTitle").textContent = "Request Boarding";
   $("#customerBookingFormHelp").textContent = "Choose dog(s), requested time, and optional services.";
   setCustomerBookingTimeCopy("boarding");
-  $("#requestBoardingButton").textContent = "Send Request";
+  $("#requestBoardingButton").textContent = "Review Request";
   pendingCustomerBooking = null;
   customerBookingSubmitInProgress = false;
   if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
@@ -7172,7 +7181,9 @@ function resetCustomerBookingForm() {
   renderCustomerDogs();
   renderCustomerStayProgramOptions();
   renderCustomerBookingAvailabilityMessages();
+  if (typeof setCustomerBookingWizardStep === "function") setCustomerBookingWizardStep("pets");
   updateCustomerEstimate();
+  if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
 }
 
 // Extracted to js/customer.js: openCustomerBookingModal
@@ -7235,10 +7246,11 @@ function editCustomerRequest(record, stayId = "") {
   applyServiceQuantities();
   renderCustomerServiceOptions();
   applyServiceQuantities();
-  $("#requestBoardingButton").textContent = "Update Request";
+  $("#requestBoardingButton").textContent = "Review Updates";
   $("#customerBookingFormTitle").textContent = "Update Request";
   $("#customerBookingFormHelp").textContent = "Update boarding time, requested services, or notes.";
   renderCustomerBookingAvailabilityMessages();
+  if (typeof setCustomerBookingWizardStep === "function") setCustomerBookingWizardStep("pets");
   updateCustomerEstimate();
 }
 
@@ -7266,10 +7278,16 @@ function updateCustomerEstimate() {
   if (!$("#customerEstimate")) return;
   const estimate = customerEstimateDetails();
   renderCustomerBookingAvailabilityMessages();
-  const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => \`<div class="estimate-line"><span>\${escapeHtml(line.dogName)} - \${escapeHtml(boardingLineDisplayLabel(line))}:</span><span>\${Number(line.days || 0)} x \${money(line.rate)} = \${money(line.total)}</span></div>\`).join("");
+  const dogSummary = estimate.dogs.length ? \`<div class="estimate-line"><span>Dog\${estimate.dogs.length === 1 ? "" : "s"}</span><span>\${escapeHtml(estimate.dogs.map((dog) => dog.dogName || "Dog").join(", "))}</span></div>\` : "";
+  const staySummary = estimate.dropoffTime ? \`<div class="estimate-line"><span>\${estimate.isServiceRequest ? "Requested time" : "Drop-off"}</span><span>\${escapeHtml(formatDateTime(estimate.dropoffTime))}</span></div>\${!estimate.isServiceRequest && estimate.pickupTime ? \`<div class="estimate-line"><span>Pick-up</span><span>\${escapeHtml(formatDateTime(estimate.pickupTime))}</span></div>\` : ""}\` : "";
+  const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => \`<div class="estimate-line"><span>\${escapeHtml(line.dogName)} - \${escapeHtml(boardingLineDisplayLabel(line))}</span><span>\${Number(line.days || 0)} x \${money(line.rate)} = \${money(line.total)}</span></div>\`).join("");
+  const serviceLine = estimate.services.length
+    ? estimate.services.map((service) => \`<div class="estimate-line"><span>\${escapeHtml(customerServiceDisplayName(service))}</span><span>\${estimate.dogs.length} dog(s) x \${Number(service.quantity || 1)} x \${money(service.basePrice)} = \${money(service.lineTotal)}</span></div>\`).join("")
+    : \`<div class="estimate-line muted-estimate-line"><span>Add-ons</span><span>None selected</span></div>\`;
   $("#customerEstimate").innerHTML = estimate.dogs.length
-    ? \`<strong>\${escapeHtml(boardingBillingLabel(estimate))}</strong>\${boardingLine}\${estimate.services.map((service) => \`<div class="estimate-line"><span>\${escapeHtml(customerServiceDisplayName(service))}</span><span>\${estimate.dogs.length} dog(s) x \${Number(service.quantity || 1)} x \${money(service.basePrice)} = \${money(service.lineTotal)}</span></div>\`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>\${money(estimate.total)}</span></div>\`
+    ? \`<div class="estimate-heading"><strong>Reservation Summary</strong><span>Final approval comes from staff</span></div>\${dogSummary}\${staySummary}\${estimate.isServiceRequest ? "" : \`<h4>Boarding</h4><strong>\${escapeHtml(boardingBillingLabel(estimate))}</strong>\${boardingLine || \`<div class="estimate-line muted-estimate-line"><span>Boarding subtotal</span><span>Choose dates to estimate</span></div>\`}\`}<h4>Add-ons</h4>\${serviceLine}<div class="estimate-total"><strong>Estimated total</strong><span>\${money(estimate.total)}</span></div>\`
     : "Select dog(s), dates, and services to see an estimate.";
+  if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
 }
 
 function showBookingConfirmDialog(estimate) {
@@ -7857,6 +7875,7 @@ function initEvents() {
   });
   $("#exportBoardingQueueButton")?.addEventListener("click", exportBoardingQueue);
   $("#exportTimesheetButton")?.addEventListener("click", exportTimesheet);
+  $("#viewTimesheetButton")?.addEventListener("click", openTimesheetViewPopup);
   $("#applyTimesheetDateFilterButton")?.addEventListener("click", () => {
     const start = dateOnly($("#timesheetStartDate")?.value);
     const end = dateOnly($("#timesheetEndDate")?.value);
@@ -9971,6 +9990,11 @@ function initEvents() {
 
   $("#customerDogPhotoButton").addEventListener("click", () => handleDogPhotoClick("customer"));
   $("#customerDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("customer"));
+  $("#customerDogBackButton")?.addEventListener("click", goToPreviousCustomerDogStep);
+  $("#customerDogNextButton")?.addEventListener("click", goToNextCustomerDogStep);
+  $("#customerBookingBackButton")?.addEventListener("click", goToPreviousCustomerBookingStep);
+  $("#customerBookingNextButton")?.addEventListener("click", goToNextCustomerBookingStep);
+  $("#customerStickyBookNowButton")?.addEventListener("click", handleCustomerBookNowClick);
   $("#customerDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
@@ -9979,6 +10003,8 @@ function initEvents() {
     try {
       const data = formPayload(formEl);
       const existing = data.id ? readRecords("customerDog").find((record) => record.id === data.id) || {} : {};
+      const isNewCustomerDog = !existing?.id;
+      const hadCustomerDogsBeforeSave = customerDogsForCurrentUser().length > 0;
       const dogId = existing.id || data.id || uid("customerDog");
       const sourceBoardingDogId = boardingDogIdFromCustomerDogValue(data.sourceBoardingDogId || existing.sourceBoardingDogId || "");
       const linkedBoardingDogId = boardingDogIdFromCustomerDogValue(data.linkedBoardingDogId || existing.linkedBoardingDogId || sourceBoardingDogId);
@@ -10025,6 +10051,7 @@ function initEvents() {
       });
       resetCustomerDogForm();
       closeCustomerDogModal();
+      customerLastSavedDogId = isNewCustomerDog ? record.id : "";
       renderCustomerDogs();
       renderCustomerFiles();
       renderBoardingDogs();
@@ -10033,7 +10060,11 @@ function initEvents() {
       const message = photo.photoError
         ? \`<p>\${escapeHtml(record.dogName || "Dog")} has been saved, but the profile photo could not be uploaded: \${escapeHtml(photo.photoError)}</p>\`
         : \`<p>\${escapeHtml(record.dogName || "Dog")} has been saved to your list.</p><p>\${escapeHtml(uploadText)}</p>\`;
-      showDetailDialog(existing?.id ? "Dog Updated" : "Dog Saved", message);
+      if (isNewCustomerDog && !photo.photoError) {
+        showToast(hadCustomerDogsBeforeSave ? "Dog added. Choose what to do next." : "First dog added. You can book now.");
+      } else {
+        showDetailDialog(existing?.id ? "Dog Updated" : "Dog Saved", message);
+      }
     } catch (error) {
       if (uploadStatus) uploadStatus.textContent = "The dog profile or files could not be saved.";
       showDetailDialog("Dog Not Saved", \`<p>The dog record could not be saved: \${escapeHtml(error.message)}</p>\`);
@@ -10100,6 +10131,11 @@ function initEvents() {
     if (button.dataset.action === "book-customer-stay" || button.dataset.action === "open-customer-boarding-request") {
       switchPage("customerRequestsPage");
       openCustomerBookingModal("boarding");
+      return;
+    }
+    if (button.dataset.action === "request-customer-service") {
+      switchPage("customerRequestsPage");
+      openCustomerBookingModal("service");
       return;
     }
     if (button.dataset.action === "edit-customer-dog-inline") {
@@ -10358,6 +10394,7 @@ function switchPage(pageId) {
   syncMobileNavigationActive(pageId);
   setMobileMoreOpen(false);
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
+  if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
   if (pageId === "ourDogsPage") window.setTimeout(() => $("#ownedDogSearch")?.focus(), 100);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }

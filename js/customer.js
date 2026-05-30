@@ -1,5 +1,21 @@
 // === MODULE: CUSTOMER ===
-const __snuggleStayModuleSource = `function customerRequestStatusLabel(status = "") {
+const __snuggleStayModuleSource = `var customerDogWizardStep = "profile";
+var customerBookingWizardStep = "pets";
+var customerLastSavedDogId = "";
+var customerDogWizardSteps = [
+  { key: "profile", label: "Dog Profile" },
+  { key: "care", label: "Care Info" },
+  { key: "records", label: "Records" },
+];
+var customerBookingWizardSteps = [
+  { key: "pets", label: "Pets & Dates" },
+  { key: "options", label: "Boarding Options" },
+  { key: "services", label: "Add-ons" },
+  { key: "visit", label: "Visit Info" },
+  { key: "review", label: "Review" },
+];
+
+function customerRequestStatusLabel(status = "") {
   const normalized = boardingLifecycleStatuses.includes(status) ? status : normalizeBoardingStatus({ boardingStatus: status, customerRequest: true });
   const labels = {
     Pending: "Request Pending",
@@ -634,6 +650,226 @@ function customerBookingEstimateAvailabilityValid(estimate = {}) {
   return customerBookingEstimateAvailabilityChecks(estimate).every((item) => item.result.valid);
 }
 
+function customerFlowStepperHtml(steps = [], activeKey = "", options = {}) {
+  const activeIndex = Math.max(0, steps.findIndex((step) => step.key === activeKey));
+  const mobileLabel = steps[activeIndex]?.label || steps[0]?.label || "";
+  const mobile = options.mobileSummary !== false
+    ? \`<div class="customer-flow-mobile-summary">Step \${activeIndex + 1} of \${steps.length}: \${escapeHtml(mobileLabel)}</div>\`
+    : "";
+  return \`\${mobile}<div class="customer-flow-step-list">\${steps.map((step, index) => {
+    const state = index < activeIndex ? "is-complete" : index === activeIndex ? "is-active" : "";
+    return \`<span class="\${state}"><i>\${index + 1}</i>\${escapeHtml(step.label)}</span>\`;
+  }).join("")}</div>\`;
+}
+
+function visibleCustomerBookingWizardSteps() {
+  if (customerRequestMode() === "service") {
+    return customerBookingWizardSteps.filter((step) => step.key !== "options");
+  }
+  return customerBookingWizardSteps;
+}
+
+function renderCustomerOnboardingProgress(dogs = customerDogsForCurrentUser()) {
+  const panel = $("#customerOnboardingProgress");
+  if (!panel) return;
+  if (currentRole() !== "customer") {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+  const activeKey = dogs.length ? "request" : "dog";
+  const steps = [
+    { key: "account", label: "Account" },
+    { key: "dog", label: "Dog Profile" },
+    { key: "request", label: "Request Stay" },
+  ];
+  panel.hidden = false;
+  panel.innerHTML = \`<div class="customer-progress-copy"><strong>\${dogs.length ? "Ready when you are" : "First visit setup"}</strong><span>\${dogs.length ? "Book a stay or keep adding dog profiles." : "Add your first dog before requesting boarding or services."}</span></div>\${customerFlowStepperHtml(steps, activeKey, { mobileSummary: false })}\`;
+  const markers = panel.querySelectorAll(".customer-flow-step-list span");
+  if (markers[0]) markers[0].classList.add("is-complete");
+  if (dogs.length && markers[1]) markers[1].classList.add("is-complete");
+}
+
+function renderCustomerProgress() {
+  renderCustomerOnboardingProgress();
+}
+
+function renderCustomerDogWizardStep() {
+  const formEl = $("#customerDogForm");
+  if (!formEl) return;
+  const steps = customerDogWizardSteps;
+  if (!steps.some((step) => step.key === customerDogWizardStep)) customerDogWizardStep = steps[0].key;
+  const activeIndex = steps.findIndex((step) => step.key === customerDogWizardStep);
+  $("#customerDogWizardStepper").innerHTML = customerFlowStepperHtml(steps, customerDogWizardStep);
+  formEl.querySelectorAll("[data-customer-dog-step]").forEach((panel) => {
+    panel.hidden = panel.dataset.customerDogStep !== customerDogWizardStep;
+  });
+  $("#customerDogBackButton").hidden = activeIndex <= 0;
+  $("#customerDogNextButton").hidden = activeIndex >= steps.length - 1;
+  $("#saveCustomerDogButton").hidden = activeIndex < steps.length - 1;
+}
+
+function customerVisibleStepFields(container) {
+  return [...(container?.querySelectorAll("input, select, textarea") || [])]
+    .filter((field) => field.name && !field.disabled && field.type !== "hidden" && field.type !== "file");
+}
+
+function validateCustomerDogWizardStep() {
+  const panel = document.querySelector(\`[data-customer-dog-step="\${cssEscapeValue(customerDogWizardStep)}"]\`);
+  let firstInvalid = null;
+  customerVisibleStepFields(panel).forEach(clearFieldError);
+  customerVisibleStepFields(panel).forEach((field) => {
+    const empty = field.required && !String(field.value || "").trim();
+    const badFormat = field.value && !field.checkValidity();
+    if (empty || badFormat) {
+      setFieldError(field, empty ? \`\${friendlyName(field)} is required before continuing.\` : \`Check \${friendlyName(field).toLowerCase()} before continuing.\`);
+      firstInvalid = firstInvalid || field;
+    }
+  });
+  if (!firstInvalid) return true;
+  firstInvalid.focus({ preventScroll: true });
+  firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+  showToast("Please fix the highlighted fields before continuing.");
+  return false;
+}
+
+function setCustomerDogWizardStep(stepKey = "profile") {
+  customerDogWizardStep = customerDogWizardSteps.some((step) => step.key === stepKey) ? stepKey : "profile";
+  renderCustomerDogWizardStep();
+}
+
+function goToNextCustomerDogStep() {
+  if (!validateCustomerDogWizardStep()) return;
+  const index = customerDogWizardSteps.findIndex((step) => step.key === customerDogWizardStep);
+  if (index < customerDogWizardSteps.length - 1) setCustomerDogWizardStep(customerDogWizardSteps[index + 1].key);
+}
+
+function goToPreviousCustomerDogStep() {
+  const index = customerDogWizardSteps.findIndex((step) => step.key === customerDogWizardStep);
+  if (index > 0) setCustomerDogWizardStep(customerDogWizardSteps[index - 1].key);
+}
+
+function updateCustomerBookingOptionsEmptyState() {
+  const empty = $("#customerBoardingOptionsEmpty");
+  if (!empty) return;
+  const optionsStep = document.querySelector('[data-customer-booking-step="options"]');
+  const visibleOptions = [...(optionsStep?.querySelectorAll(".customer-form-step") || [])].some((panel) => !panel.hidden);
+  empty.hidden = customerRequestMode() !== "boarding" || visibleOptions;
+}
+
+function renderCustomerBookingWizardStep() {
+  const formEl = $("#customerBookingForm");
+  if (!formEl) return;
+  const steps = visibleCustomerBookingWizardSteps();
+  if (!steps.some((step) => step.key === customerBookingWizardStep)) customerBookingWizardStep = steps[0].key;
+  const activeIndex = steps.findIndex((step) => step.key === customerBookingWizardStep);
+  $("#customerBookingWizardStepper").innerHTML = customerFlowStepperHtml(steps, customerBookingWizardStep);
+  formEl.querySelectorAll("[data-customer-booking-step]").forEach((panel) => {
+    panel.hidden = panel.dataset.customerBookingStep !== customerBookingWizardStep;
+  });
+  updateCustomerBookingOptionsEmptyState();
+  $("#customerBookingBackButton").hidden = activeIndex <= 0;
+  $("#customerBookingNextButton").hidden = activeIndex >= steps.length - 1;
+  $("#requestBoardingButton").hidden = activeIndex < steps.length - 1;
+  updateCustomerEstimate();
+  updateCustomerStickyBookNow();
+}
+
+function setCustomerBookingWizardStep(stepKey = "pets") {
+  const steps = visibleCustomerBookingWizardSteps();
+  customerBookingWizardStep = steps.some((step) => step.key === stepKey) ? stepKey : steps[0].key;
+  renderCustomerBookingWizardStep();
+}
+
+function validateCustomerBookingWizardStep() {
+  const formEl = $("#customerBookingForm");
+  const dropoffField = formFieldByName(formEl, "dropoffTime");
+  const pickupField = formFieldByName(formEl, "pickupTime");
+  if ($("#customerRequestMode")?.value === "service" && dropoffField?.value && !pickupField?.value) {
+    pickupField.value = dropoffField.value;
+  }
+  if (customerBookingWizardStep === "pets") {
+    if (!validateCustomerDogSelection()) return false;
+    const panel = document.querySelector('[data-customer-booking-step="pets"]');
+    const fields = customerVisibleStepFields(panel);
+    let firstInvalid = null;
+    fields.forEach(clearFieldError);
+    fields.forEach((field) => {
+      const empty = field.required && !String(field.value || "").trim();
+      const badFormat = field.value && !field.checkValidity();
+      if (empty || badFormat) {
+        setFieldError(field, empty ? \`\${friendlyName(field)} is required before continuing.\` : \`Check \${friendlyName(field).toLowerCase()} before continuing.\`);
+        firstInvalid = firstInvalid || field;
+      }
+    });
+    if (firstInvalid) {
+      firstInvalid.focus({ preventScroll: true });
+      firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+      showToast("Please choose the dog and requested times before continuing.");
+      return false;
+    }
+    return validateCustomerBookingAvailability(formEl);
+  }
+  return true;
+}
+
+function goToNextCustomerBookingStep() {
+  if (!validateCustomerBookingWizardStep()) return;
+  const steps = visibleCustomerBookingWizardSteps();
+  const index = steps.findIndex((step) => step.key === customerBookingWizardStep);
+  if (index < steps.length - 1) setCustomerBookingWizardStep(steps[index + 1].key);
+}
+
+function goToPreviousCustomerBookingStep() {
+  const steps = visibleCustomerBookingWizardSteps();
+  const index = steps.findIndex((step) => step.key === customerBookingWizardStep);
+  if (index > 0) setCustomerBookingWizardStep(steps[index - 1].key);
+}
+
+function handleCustomerBookNowClick() {
+  if (currentRole() !== "customer") return;
+  const dogs = customerDogsForCurrentUser();
+  const bookingForm = $("#customerBookingForm");
+  if (!dogs.length) {
+    switchPage("customerPage");
+    openCustomerDogModal();
+    return;
+  }
+  if (bookingForm && !bookingForm.hidden) {
+    const steps = visibleCustomerBookingWizardSteps();
+    const activeIndex = steps.findIndex((step) => step.key === customerBookingWizardStep);
+    if (activeIndex < steps.length - 1) {
+      goToNextCustomerBookingStep();
+      return;
+    }
+    $("#requestBoardingButton")?.click();
+    return;
+  }
+  switchPage("customerRequestsPage");
+  openCustomerBookingModal("boarding");
+}
+
+function updateCustomerStickyBookNow() {
+  const button = $("#customerStickyBookNowButton");
+  if (!button) return;
+  if (currentRole() !== "customer" || activePageId() === "loginPage") {
+    button.hidden = true;
+    return;
+  }
+  const dogs = customerDogsForCurrentUser();
+  const bookingOpen = $("#customerBookingForm") && !$("#customerBookingForm").hidden;
+  button.hidden = false;
+  if (!dogs.length) {
+    button.textContent = "Add Your First Dog";
+  } else if (bookingOpen) {
+    const steps = visibleCustomerBookingWizardSteps();
+    const activeIndex = steps.findIndex((step) => step.key === customerBookingWizardStep);
+    button.textContent = activeIndex >= steps.length - 1 ? "Review Request" : "Continue";
+  } else {
+    button.textContent = "Book Now";
+  }
+}
+
 function fillCustomerDefaults() {
   if (!$("#customerOwnerEmail")) return;
   $("#customerOwnerName").value = currentUser?.name || "";
@@ -647,14 +883,17 @@ function renderCustomerDogs() {
     if ($("#customerBookingDogList")) $("#customerBookingDogList").innerHTML = "";
     $("#customerRequestActions")?.toggleAttribute("hidden", true);
     $("#customerNoDogRequestPrompt")?.toggleAttribute("hidden", true);
+    updateCustomerStickyBookNow();
     if (activePageId() === "customerPage") switchPage(defaultPageForRole());
     return;
   }
   const dogs = customerDogsForCurrentUser();
   const checkedIds = new Set([...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')].map((input) => input.value));
   $("#openCustomerDogModalButton")?.toggleAttribute("hidden", !dogs.length);
+  const savedDog = customerLastSavedDogId ? dogs.find((dog) => dog.id === customerLastSavedDogId) : null;
+  const savedPanel = savedDog ? customerDogSavedNextActionHtml(savedDog) : "";
   $("#customerDogList").innerHTML = dogs.length
-    ? \`\${dogs.map(customerDogSummaryCardHtml).join("")}<div class="button-row"><button type="button" class="secondary-button" data-action="add-customer-dog-inline">Add Another Dog</button></div>\`
+    ? \`\${savedPanel}\${dogs.map(customerDogSummaryCardHtml).join("")}<div class="button-row"><button type="button" class="secondary-button" data-action="add-customer-dog-inline">Add Another Dog</button></div>\`
     : customerDogWelcomeHtml();
   if ($("#customerBookingDogList")) {
     $("#customerBookingDogList").innerHTML = dogs.length
@@ -670,14 +909,7 @@ function renderCustomerDogs() {
   renderCustomerServiceOptions();
   updateCustomerEstimate();
   renderCustomerProgress();
-}
-
-function renderCustomerProgress() {
-  const panels = ["#customerOnboardingProgress", "#customerRequestProgress"].map((selector) => $(selector)).filter(Boolean);
-  panels.forEach((panel) => {
-    panel.innerHTML = "";
-    panel.hidden = true;
-  });
+  updateCustomerStickyBookNow();
 }
 
 function vaccinationExpiryDate(record = {}) {
@@ -796,14 +1028,42 @@ function customerDogDashboardCardHtml(dog = {}) {
   return customerDogSummaryCardHtml(dog);
 }
 
+function customerDogSavedNextActionHtml(dog = {}) {
+  const vaccine = customerFacingVaccineStatus(dog);
+  const facts = [dog.spayNeuterStatus || dog.sex || "", dog.breedDescription || "", dogAgeText(dog)].filter(Boolean).join(" | ");
+  return \`<article class="customer-next-action-card">
+    <div class="customer-next-action-summary">
+      \${customerDogPhotoHtml(dog)}
+      <div>
+        <span class="customer-flow-kicker">Dog saved</span>
+        <h3>\${escapeHtml(dog.dogName || "Your dog")} has been added</h3>
+        <p>\${escapeHtml(facts || "Profile ready for booking requests")}</p>
+        <div class="chip-row">\${statusChipHtml(vaccine.label, \`vaccination-status-chip \${vaccine.className}\`)}</div>
+      </div>
+    </div>
+    <div class="customer-next-action-buttons">
+      <button type="button" class="secondary-button" data-action="add-another-customer-dog">Add Another Dog</button>
+      <button type="button" data-action="open-customer-boarding-request">Request Boarding Stay</button>
+      <button type="button" class="secondary-button" data-action="request-customer-service">Request Service Only</button>
+    </div>
+  </article>\`;
+}
+
 function customerDogWelcomeHtml() {
   return \`<article class="customer-home-empty customer-welcome-card">
     <div class="customer-welcome-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24"><path d="M7.2 10.3c1.6-1.7 3.1-2.5 4.8-2.5s3.2.8 4.8 2.5" /><path d="M8.6 8.2 7.4 5.8a1.2 1.2 0 0 0-2.2.1L4.2 9" /><path d="m15.4 8.2 1.2-2.4a1.2 1.2 0 0 1 2.2.1l1 3.1" /><path d="M7.5 13.2c0 4 2.2 6.8 4.5 6.8s4.5-2.8 4.5-6.8" /><path d="M10 14h.01M14 14h.01M11 17h2" /></svg>
     </div>
-    <h3>Welcome to Snuggle Stay</h3>
-    <p>Add your dog's profile to get started</p>
-    <button type="button" data-action="add-customer-dog-inline">Add Your Dog</button>
+    <span class="customer-flow-kicker">Welcome\${currentUser?.name ? \`, \${escapeHtml(currentUser.name.split(" ")[0])}\` : ""}</span>
+    <h3>Add your first dog to start booking</h3>
+    <p>Add the basics now. Vaccines and records can be uploaded here and staff can review them before check-in.</p>
+    <div class="customer-welcome-checklist">
+      <span>Dog profile</span>
+      <span>Care notes</span>
+      <span>Vet and emergency info</span>
+      <span>Vaccine records</span>
+    </div>
+    <button type="button" data-action="add-customer-dog-inline">Add Your First Dog</button>
   </article>\`;
 }
 
@@ -921,6 +1181,7 @@ function renderCustomerStayProgramOptions() {
   step.hidden = !show || !programs.length;
   if (step.hidden) {
     container.innerHTML = "";
+    updateCustomerBookingOptionsEmptyState();
     return;
   }
   const existing = selectedCustomerStayProgramId();
@@ -935,6 +1196,7 @@ function renderCustomerStayProgramOptions() {
     }),
   ];
   container.innerHTML = options.join("");
+  updateCustomerBookingOptionsEmptyState();
 }
 
 function customerImplicitDependencyIds() {
@@ -960,7 +1222,7 @@ function renderCustomerServiceOptions() {
   const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && serviceMatchesCustomerPricingScope(service, currentUser));
   const visibleServices = services.filter((service) => !serviceDependencyId(service));
   const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
-  const visibleHtml = visibleServices.map((service) => {
+  const serviceBlockHtml = (service) => {
     const childServices = dependencyIds.has(service.id)
       ? services
           .filter((dependent) => serviceDependencyId(dependent) === service.id)
@@ -971,6 +1233,16 @@ function renderCustomerServiceOptions() {
       .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
       .join("");
     return \`<div class="service-option-group">\${optionHtml}<div class="service-option-addons">\${addOnHtml}</div></div>\`;
+  };
+  const groupedVisibleServices = visibleServices.reduce((groups, service) => {
+    const category = String(service.category || "Other Services").trim() || "Other Services";
+    groups[category] = [...(groups[category] || []), service];
+    return groups;
+  }, {});
+  const visibleHtml = Object.entries(groupedVisibleServices).map(([category, items]) => {
+    const hasChecked = items.some((service) => checkedIds.has(service.id));
+    const categoryHtml = items.map(serviceBlockHtml).join("");
+    return \`<details class="customer-service-group" \${hasChecked ? "open" : ""}><summary><span>\${escapeHtml(category)}</span><small>\${items.length} option\${items.length === 1 ? "" : "s"}</small></summary><div class="customer-service-group-body">\${categoryHtml}</div></details>\`;
   }).join("");
   const implicitHtml = implicitDependencyServices
     .map((service) => customerServiceOptionHtml(service, checkedIds, { addOn: serviceDependencyType(service) === "optional-addon" }))
@@ -994,6 +1266,7 @@ function renderCustomerCrateShareOptions() {
   step.hidden = !show;
   if (!show) {
     container.innerHTML = "";
+    updateCustomerBookingOptionsEmptyState();
     return;
   }
   const prior = $("#customerSharedCrateRequested");
@@ -1007,6 +1280,7 @@ function renderCustomerCrateShareOptions() {
     .map((names, index) => \`Crate \${index + 1}: \${names.join(" + ")}\`)
     .join(" | ");
   container.innerHTML = \`<label class="toggle-row"><input type="checkbox" id="customerSharedCrateRequested" name="customerSharedCrateRequested" \${checked ? "checked" : ""} /> Request shared-crate member pricing when staff approve it</label><p>\${escapeHtml(groupSummary)}. Max \${BOARDING_MAX_DOGS_PER_CRATE} dogs per crate.</p>\`;
+  updateCustomerBookingOptionsEmptyState();
 }
 
 function customerBookingSelectionKey(dog = {}) {
@@ -1092,6 +1366,7 @@ function openCustomerDogInline(record = {}) {
   $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
   $("#customerDogFormTitle").textContent = record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog";
   setDogPhoto("customer", record);
+  setCustomerDogWizardStep("profile");
   if (formEl.parentElement !== home) home.appendChild(formEl);
   formEl.hidden = false;
   formEl.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1105,6 +1380,7 @@ function openCustomerDog(record = {}) {
   $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
   $("#customerDogFormTitle").textContent = record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog";
   setDogPhoto("customer", record);
+  setCustomerDogWizardStep("profile");
   showDetailDialog(record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog", \`<div id="customerDogPopupMount"></div>\`, null, { dialogClass: "is-customer-dog-editor" });
   $("#customerDogPopupMount")?.appendChild(formEl);
   formEl.hidden = false;
@@ -1135,11 +1411,12 @@ function openCustomerBookingModal(mode = "boarding") {
   $("#customerBookingFormHelp").textContent = mode === "service" ? "Choose dog(s), service, and requested drop-off time." : "Choose dog(s), requested stay, and optional services.";
   setCustomerBookingTimeCopy(mode);
   clearCustomerBookingTimeErrors();
-  $("#requestBoardingButton").textContent = "Send Request";
+  $("#requestBoardingButton").textContent = "Review Request";
   renderCustomerBookingAvailabilityMessages();
   renderCustomerStayProgramOptions();
   renderCustomerCrateShareOptions();
   renderCustomerServiceOptions();
+  setCustomerBookingWizardStep("pets");
 }
 
 function customerEstimateDetails() {

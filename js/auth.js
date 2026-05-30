@@ -217,7 +217,7 @@ function setHelper(user, options = {}) {
   currentUser = { ...user, role: user.role || "helper" };
   localTestMode = currentUser.authProvider === "local-test" || String(currentUser.key || "").startsWith("local-test-");
   if (localTestMode) supabaseClient = null;
-  localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
+  if (options.persistSession !== false) localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
   setDefaultDateAndDay();
   helperName.value = user.name || "";
   helperEmail.value = user.email || "";
