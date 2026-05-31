@@ -944,11 +944,21 @@ body.owned-dog-modal-open {
   margin-top: 16px;
   max-height: none;
   max-width: none;
+  overflow: visible;
+  overscroll-behavior: auto;
   position: static;
   top: auto;
   transform: none;
   width: 100%;
   z-index: auto;
+}
+
+#customerPage.is-active > .form-section {
+  max-height: calc(100dvh - 84px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-bottom: 96px;
+  -webkit-overflow-scrolling: touch;
 }
 
 #customerRequestsPage .customer-request-modal:not([hidden]) {
@@ -1834,7 +1844,7 @@ button:focus-visible {
 
 .customer-flow-note.is-vaccine-warning {
   color: #ff6b6b;
-  font-weight: 900;
+  font-weight: 400;
 }
 
 .customer-next-action-buttons {
@@ -4828,6 +4838,11 @@ button.is-loading {
 
   #customerDogPopupMount .customer-dog-modal:not([hidden]) {
     max-height: calc(100dvh - 166px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+
+  #customerPage.is-active > .form-section {
+    height: calc(100dvh - 132px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 132px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 
   .dog-photo-picker,
