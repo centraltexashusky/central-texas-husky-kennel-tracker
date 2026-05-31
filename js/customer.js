@@ -826,16 +826,38 @@ function goToPreviousCustomerBookingStep() {
   if (index > 0) setCustomerBookingWizardStep(steps[index - 1].key);
 }
 
+function scrollCustomerBookingAreaIntoView(preferOpenForm = true) {
+  window.setTimeout(() => {
+    const bookingForm = $("#customerBookingForm");
+    const target = preferOpenForm && bookingForm && !bookingForm.hidden
+      ? bookingForm
+      : $("#customerRequestActions") || $("#customerNoDogRequestPrompt") || $("#customerRequestsPage");
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 80);
+}
+
 function handleCustomerBookNowClick() {
   if (currentRole() !== "customer") return;
   const dogs = customerDogsForCurrentUser();
   const bookingForm = $("#customerBookingForm");
+  const requestPageActive = activePageId() === "customerRequestsPage";
+  const bookingOpen = bookingForm && !bookingForm.hidden;
+  if (bookingOpen && !requestPageActive) {
+    switchPage("customerRequestsPage");
+    scrollCustomerBookingAreaIntoView();
+    return;
+  }
   if (!dogs.length) {
+    if (!requestPageActive) {
+      switchPage("customerRequestsPage");
+      scrollCustomerBookingAreaIntoView(false);
+      return;
+    }
     switchPage("customerPage");
     openCustomerDogModal();
     return;
   }
-  if (bookingForm && !bookingForm.hidden) {
+  if (bookingOpen) {
     const steps = visibleCustomerBookingWizardSteps();
     const activeIndex = steps.findIndex((step) => step.key === customerBookingWizardStep);
     if (activeIndex < steps.length - 1) {
@@ -857,14 +879,15 @@ function updateCustomerStickyBookNow() {
     return;
   }
   const dogs = customerDogsForCurrentUser();
+  const requestPageActive = activePageId() === "customerRequestsPage";
   const bookingOpen = $("#customerBookingForm") && !$("#customerBookingForm").hidden;
   button.hidden = false;
-  if (!dogs.length) {
+  if (!dogs.length && requestPageActive) {
     button.textContent = "Add Your First Dog";
   } else if (bookingOpen) {
     const steps = visibleCustomerBookingWizardSteps();
     const activeIndex = steps.findIndex((step) => step.key === customerBookingWizardStep);
-    button.textContent = activeIndex >= steps.length - 1 ? "Review Request" : "Continue";
+    button.textContent = requestPageActive && activeIndex >= steps.length - 1 ? "Review Request" : "Continue";
   } else {
     button.textContent = "Book Now";
   }

@@ -943,7 +943,10 @@ body.owned-dog-modal-open {
   margin-top: 16px;
   max-height: none;
   max-width: none;
+  overflow: visible;
+  overscroll-behavior: auto;
   position: static;
+  scroll-margin-top: 88px;
   top: auto;
   transform: none;
   width: 100%;
@@ -5874,6 +5877,23 @@ body:not(.is-login-view) .operation-calendar-day.is-outside-month {
 
   .timesheet-date-filter .secondary-button {
     width: 100%;
+  }
+
+  #customerRequestsPage .customer-request-modal:not([hidden]) {
+    box-shadow: var(--glass-shadow), var(--glass-specular);
+    height: auto;
+    inset: auto;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+    position: static;
+    scroll-margin-top: 96px;
+    transform: none;
+    width: 100%;
+  }
+
+  body:not(.is-login-view) #customerRequestsPage .customer-request-modal:not([hidden]) {
+    box-shadow: var(--glass-shadow), var(--glass-specular);
   }
 }
 
