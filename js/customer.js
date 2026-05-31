@@ -915,9 +915,11 @@ function renderCustomerDogs() {
   $("#openCustomerDogModalButton")?.toggleAttribute("hidden", !dogs.length);
   const savedDog = customerLastSavedDogId ? dogs.find((dog) => dog.id === customerLastSavedDogId) : null;
   const savedPanel = savedDog ? customerDogSavedNextActionHtml(savedDog) : "";
+  const inlineFirstDogFormOpen = !dogs.length && !$("#customerDogForm")?.hidden && $("#customerDogForm")?.parentElement?.id === "customerDogFormHome";
+  $("#customerDogList").toggleAttribute("hidden", inlineFirstDogFormOpen);
   $("#customerDogList").innerHTML = dogs.length
     ? \`\${savedPanel}\${dogs.map(customerDogSummaryCardHtml).join("")}<div class="button-row"><button type="button" class="secondary-button" data-action="add-customer-dog-inline">Add Another Dog</button></div>\`
-    : customerDogWelcomeHtml();
+    : inlineFirstDogFormOpen ? "" : customerDogWelcomeHtml();
   if ($("#customerBookingDogList")) {
     $("#customerBookingDogList").innerHTML = dogs.length
       ? dogs.map((dog) => \`<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="\${dog.id}" \${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>\${escapeHtml(dog.dogName)}</strong><span>\${escapeHtml(dog.breedDescription || "")}</span></label>\`).join("")
@@ -1392,6 +1394,7 @@ function openCustomerDogInline(record = {}) {
   setCustomerDogWizardStep("profile");
   if (formEl.parentElement !== home) home.appendChild(formEl);
   formEl.hidden = false;
+  renderCustomerDogs();
   formEl.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 

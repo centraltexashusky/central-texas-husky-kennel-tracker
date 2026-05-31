@@ -7127,6 +7127,7 @@ function restoreCustomerDogFormHome() {
   if (formEl) formEl.hidden = true;
   if (formEl && home && formEl.parentElement !== home) home.appendChild(formEl);
   $("#detailDialog")?.classList.remove("is-customer-dog-editor");
+  if (typeof renderCustomerDogs === "function") renderCustomerDogs();
 }
 
 function closeCustomerDogModal() {

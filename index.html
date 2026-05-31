@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260530-my-dog-logo-crop" />
+    <link rel="stylesheet" href="styles.css?v=20260530-customer-dog-required" />
   </head>
   <body>
     <div class="app-layout">
@@ -264,9 +264,9 @@
               <strong>Dog profile</strong>
               <div class="field-grid">
                 <label>Dog name<input type="text" name="dogName" required /></label>
-                <label>Breed / description<input type="text" name="breedDescription" placeholder="Example: Siberian Husky, 3 years old" /></label>
+                <label>Breed / description<input type="text" name="breedDescription" placeholder="Siberian Husky" /></label>
                 <label>Date of birth<input type="date" name="dateOfBirth" /></label>
-                <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
+                <label>Spayed / neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Male Intact</option><option>Male Neutered</option><option>Male Unknown</option><option>Female Intact</option><option>Female Spayed</option><option>Female Unknown</option></select></label>
               </div>
             </div>
             <div class="customer-form-step customer-dog-wizard-panel" data-customer-dog-step="care" hidden>
@@ -274,11 +274,11 @@
               <div class="field-grid">
                 <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
                 <label>Secondary owner email <small>Allows another owner to request boarding and receive stay updates.</small><input type="email" name="secondaryOwnerEmail" /></label>
-                <label>Emergency contact name <small>Highly recommended</small><input type="text" name="emergencyName" /></label>
-                <label>Emergency contact phone <small>Highly recommended</small><input type="tel" name="emergencyPhone" /></label>
+                <label>Emergency contact name <small>Required for boarding safety.</small><input type="text" name="emergencyName" required /></label>
+                <label>Emergency contact phone <small>Required for boarding safety.</small><input type="tel" name="emergencyPhone" required /></label>
                 <label>Veterinarian / clinic <small>This is the primary one your dog goes to.</small><input type="text" name="vetInfo" /></label>
               </div>
-              <label>Feeding instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals, or special feeding notes"></textarea></label>
+              <label>Feeding instructions<textarea name="foodInstructions" rows="3" required placeholder="Food amount, feeding schedule, medication with meals, or special feeding notes"></textarea></label>
               <label>Care notes<textarea name="specialCare" rows="3" placeholder="Behavior, allergies, handling notes, or other care details"></textarea></label>
             </div>
             <div class="customer-form-step customer-dog-wizard-panel" data-customer-dog-step="records" hidden>
@@ -289,7 +289,7 @@
                 <label>Last Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
                 <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple /><small>Optional PDF, PNG, or JPG records.</small></label>
               </div>
-              <p class="customer-flow-note">You can request a stay before staff verifies these files. We will review records before check-in.</p>
+              <p class="customer-flow-note is-vaccine-warning">You can request a stay before staff verifies the vaccination records. All dogs are required to be up-to-date on their vaccinations before we approve a stay or service.</p>
             </div>
             <div class="upload-status" id="customerUploadStatus" role="status"></div>
             <div class="button-row customer-wizard-actions">
@@ -1296,6 +1296,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260530-my-dog-logo-crop"></script>
+  <script type="module" src="js/main.js?v=20260530-customer-dog-required"></script>
 </body>
 </html>

@@ -1832,6 +1832,11 @@ button:focus-visible {
   margin: 0;
 }
 
+.customer-flow-note.is-vaccine-warning {
+  color: #ff6b6b;
+  font-weight: 900;
+}
+
 .customer-next-action-buttons {
   display: flex;
   flex-wrap: wrap;
@@ -3549,6 +3554,20 @@ h2,
   background: rgba(4, 14, 26, 0.74);
   border-color: rgba(255, 255, 255, 0.22);
   color: rgba(255, 255, 255, 0.94);
+}
+
+#customerDogForm input:required,
+#customerDogForm select:required,
+#customerDogForm textarea:required {
+  border-color: rgba(248, 113, 113, 0.9);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(248, 113, 113, 0.28);
+}
+
+#customerDogForm input:required:focus,
+#customerDogForm select:required:focus,
+#customerDogForm textarea:required:focus {
+  border-color: rgba(248, 113, 113, 1);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.26), inset 0 1px 3px rgba(0, 0, 0, 0.16);
 }
 
 .notification-bell-button.is-alert-panel-open {
