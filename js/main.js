@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260530-impersonation-guard";
+import "./shared.js?v=20260530-signup-cleanup";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260530-customer-request-fix";
 import "./boarding.js?v=20260530-v3-fix-pass";

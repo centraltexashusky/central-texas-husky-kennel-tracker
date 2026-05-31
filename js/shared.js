@@ -8170,7 +8170,7 @@ function initEvents() {
     $("#customerSignupForm").hidden = false;
     $("#customerSignupForm").elements.firstName.focus();
   });
-  $("#cancelCustomerSignupButton").addEventListener("click", () => {
+  $("#cancelCustomerSignupButton")?.addEventListener("click", () => {
     $("#customerSignupForm").reset();
     $("#customerSignupForm").hidden = true;
   });

@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260530-customer-request-fix" />
+    <link rel="stylesheet" href="styles.css?v=20260530-signup-cleanup" />
   </head>
   <body>
     <div class="app-layout">
@@ -199,17 +199,15 @@
               </div>
             </div>
             <input type="hidden" name="role" value="customer" />
-            <div class="field-grid">
+            <div class="field-grid customer-signup-fields">
               <label>First name<input type="text" name="firstName" required autocomplete="given-name" /></label>
               <label>Last name<input type="text" name="lastName" required autocomplete="family-name" /></label>
               <label>Email address<input type="email" name="email" required autocomplete="email" /></label>
               <label>New password<input type="password" name="password" required minlength="8" autocomplete="new-password" /></label>
-              <label>Confirm password<input type="password" name="confirmPassword" required minlength="8" autocomplete="new-password" /></label>
-              <label>Account type<input type="text" value="Customer" readonly /></label>
+              <label class="field-span-full">Confirm password<input type="password" name="confirmPassword" required minlength="8" autocomplete="new-password" /></label>
             </div>
             <div class="button-row">
               <button type="submit">Create Account</button>
-              <button type="button" class="secondary-button" id="cancelCustomerSignupButton">Cancel</button>
             </div>
           </form>
 
@@ -1304,6 +1302,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260530-customer-request-fix"></script>
+  <script type="module" src="js/main.js?v=20260530-signup-cleanup"></script>
 </body>
 </html>

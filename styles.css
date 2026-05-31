@@ -5619,8 +5619,21 @@ body.is-login-view #loginPage .login-auth-section {
   color: #666970;
 }
 
+#loginPage .customer-signup-fields .field-span-full {
+  grid-column: 1 / -1;
+}
+
+#loginPage #customerSignupForm .button-row {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
 #loginPage .signup-panel .button-row button {
   min-height: 48px;
+}
+
+#loginPage #customerSignupForm .button-row button {
+  width: 100%;
 }
 
 @media (max-width: 620px) {
