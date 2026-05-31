@@ -1074,8 +1074,8 @@ function customerDogSavedNextActionHtml(dog = {}) {
 
 function customerDogWelcomeHtml() {
   return \`<article class="customer-home-empty customer-welcome-card">
-    <div class="customer-welcome-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><path d="M7.2 10.3c1.6-1.7 3.1-2.5 4.8-2.5s3.2.8 4.8 2.5" /><path d="M8.6 8.2 7.4 5.8a1.2 1.2 0 0 0-2.2.1L4.2 9" /><path d="m15.4 8.2 1.2-2.4a1.2 1.2 0 0 1 2.2.1l1 3.1" /><path d="M7.5 13.2c0 4 2.2 6.8 4.5 6.8s4.5-2.8 4.5-6.8" /><path d="M10 14h.01M14 14h.01M11 17h2" /></svg>
+    <div class="customer-welcome-icon is-logo" aria-hidden="true">
+      <img class="customer-welcome-logo" src="assets/icons/arkinlight-husky-logo-transparent.png?v=20260530-my-dog-logo-crop" alt="" />
     </div>
     <span class="customer-flow-kicker">Welcome\${currentUser?.name ? \`, \${escapeHtml(currentUser.name.split(" ")[0])}\` : ""}</span>
     <h3>Add your first dog to start booking</h3>

@@ -805,6 +805,21 @@ body.owned-dog-modal-open {
   width: 46px;
 }
 
+.customer-welcome-icon.is-logo {
+  background: transparent;
+  border-radius: 0;
+  height: 128px;
+  width: 128px;
+}
+
+.customer-welcome-logo {
+  display: block;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.34));
+  height: 128px;
+  object-fit: contain;
+  width: 128px;
+}
+
 .customer-welcome-card h3,
 .customer-dog-dashboard-title h3,
 .customer-dog-summary-title h3 {
@@ -5055,6 +5070,14 @@ button.is-loading {
     height: 28px;
     stroke: none;
     width: 28px;
+  }
+
+  .mobile-bottom-nav-image.my-dog-menu-logo {
+    border-radius: 7px;
+    height: 36px;
+    margin-bottom: -3px;
+    margin-top: -3px;
+    width: 36px;
   }
 
   .mobile-bottom-nav-label {
