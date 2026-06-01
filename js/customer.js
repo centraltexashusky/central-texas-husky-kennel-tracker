@@ -672,7 +672,9 @@ function visibleCustomerBookingWizardSteps() {
 function renderCustomerOnboardingProgress(dogs = customerDogsForCurrentUser()) {
   const panel = $("#customerOnboardingProgress");
   if (!panel) return;
-  if (currentRole() !== "customer") {
+  const dogForm = $("#customerDogForm");
+  const inlineDogFormOpen = dogForm && !dogForm.hidden && dogForm.parentElement?.id === "customerDogFormHome";
+  if (currentRole() !== "customer" || inlineDogFormOpen) {
     panel.hidden = true;
     panel.innerHTML = "";
     return;

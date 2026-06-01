@@ -1,7 +1,7 @@
 // === MODULE: MAIN ===
 import "./shared.js?v=20260530-customer-dog-required";
 import "./auth.js?v=20260530-impersonation-guard";
-import "./customer.js?v=20260530-customer-dog-required";
+import "./customer.js?v=20260531-hide-onboarding-progress";
 import "./boarding.js?v=20260530-v3-fix-pass";
 import "./daily.js?v=20260530-v3-fix-pass";
 import "./timesheet.js?v=20260530-timesheet-view";
