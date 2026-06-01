@@ -100,6 +100,105 @@ function stayTransitionLabel(currentStatus = "", nextStatus = "") {
   return transitionLabel(nextStatus);
 }
 
+function normalizedBoardingDeclineNote(note = "") {
+  return String(note || "").trim();
+}
+
+function boardingDeclineNotePayload(note = "", record = {}, stay = {}, timestamp = new Date().toISOString()) {
+  const cleanNote = normalizedBoardingDeclineNote(note);
+  if (!cleanNote) return null;
+  return {
+    note: cleanNote,
+    createdAt: timestamp,
+    createdBy: currentUser?.name || helperName?.value || "Staff",
+    createdByEmail: currentUser?.email || helperEmail?.value || "",
+    requestId: stay.id || "",
+    requestCode: stay.id ? boardingStayRequestCode(record, stay) : record.requestCode || record.id || "",
+  };
+}
+
+function boardingDeclineNoteMatchesStay(note = {}, record = {}, stay = {}) {
+  if (!stay?.id) return true;
+  const requestId = String(note.requestId || "").trim();
+  const requestCode = String(note.requestCode || "").trim();
+  const stayCode = boardingStayRequestCode(record, stay);
+  return requestId === stay.id || Boolean(requestCode && requestCode === stayCode);
+}
+
+function boardingDeclineNoteFor(record = {}, stay = {}) {
+  const stayNote = stay.declineNote || null;
+  if (stayNote?.note) return stayNote;
+  const recordNote = record.declineNote || null;
+  if (recordNote?.note && boardingDeclineNoteMatchesStay(recordNote, record, stay)) return recordNote;
+  const legacy = normalizedBoardingDeclineNote(stay.declineReason || stay.customerDeclineNote || (!stay?.id ? record.declineReason || record.customerDeclineNote : "") || "");
+  return legacy ? { note: legacy, createdAt: stay.declinedAt || record.declinedAt || stay.cancelledAt || record.cancelledAt || "", createdBy: stay.declinedBy || record.declinedBy || "" } : null;
+}
+
+function boardingDeclineNoteHtml(record = {}, stay = {}) {
+  const note = boardingDeclineNoteFor(record, stay);
+  if (!note?.note) return "";
+  const meta = [formatDateTime(note.createdAt), note.createdBy].filter(Boolean).join(" | ");
+  return \`<div class="boarding-decline-note"><strong>Decline note for customer</strong>\${meta ? \`<span>\${escapeHtml(meta)}</span>\` : ""}<p>\${escapeHtml(note.note)}</p></div>\`;
+}
+
+function shouldPromptBoardingDecline(record = {}, nextStatus = "", options = {}) {
+  if (nextStatus !== "Cancelled" || options.declineSubmitted || currentRole() === "customer") return false;
+  if (!["admin", "helper"].includes(currentRole())) return false;
+  const targetStay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) : boardingStatusTargetStay(record, nextStatus, options);
+  const status = targetStay ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
+  const customerRequest = Boolean(record.customerRequest || targetStay?.source === "customer-request" || targetStay?.source === "customer");
+  return customerRequest && status === "Pending";
+}
+
+function boardingDeclineRequestFormHtml(record = {}, nextStatus = "Cancelled", options = {}) {
+  const stay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) : boardingStatusTargetStay(record, nextStatus, options) || {};
+  const requestCode = stay.id ? boardingStayRequestCode(record, stay) : record.requestCode || record.id || "";
+  return \`<form id="boardingDeclineRequestForm" class="tracker-form" data-id="\${escapeHtml(record.id || "")}" data-next-status="\${escapeHtml(nextStatus)}"\${stay.id ? boardingStayDataAttrs(record, stay) : ""}>
+    <article class="record-card compact-record-card">
+      <strong>\${escapeHtml(record.dogName || "Boarding request")}</strong>
+      <p>\${requestCode ? \`Stay ID: \${escapeHtml(requestCode)}. \` : ""}This note will be visible to the customer and saved with this request.</p>
+    </article>
+    <label>Reason for declining
+      <textarea name="declineNote" rows="4" required placeholder="Explain why this request is being declined and what the customer should do next."></textarea>
+    </label>
+    <div class="button-row">
+      <button type="submit" class="danger-button">Decline Request</button>
+      <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+    </div>
+  </form>\`;
+}
+
+function openBoardingDeclineRequestPopup(record = {}, nextStatus = "Cancelled", options = {}) {
+  showDetailDialog("Decline Boarding Request", boardingDeclineRequestFormHtml(record, nextStatus, options));
+}
+
+async function submitBoardingDeclineRequest(formEl) {
+  const record = boardingDogRecordForDisplay(formEl.dataset.id);
+  if (!record) {
+    showToast("This boarding request could not be found.");
+    return null;
+  }
+  const note = normalizedBoardingDeclineNote(formEl.elements.declineNote?.value || "");
+  if (!note) {
+    showToast("Enter a note before declining this request.");
+    return null;
+  }
+  const reference = boardingStayReferenceFromAction(formEl);
+  const options = {
+    ...reference,
+    declineSubmitted: true,
+    declineNote: note,
+  };
+  const updated = reference.stayId
+    ? await saveBoardingStayStatusTransition(record, reference.stayId, "Cancelled", options)
+    : await saveBoardingStatusTransition(record, "Cancelled", options);
+  if (!updated) return null;
+  const updatedStay = reference.stayId ? boardingStayByReference(updated, reference) : boardingStatusTargetStay(updated, "Cancelled", options) || {};
+  await addAuditLog("Declined customer boarding request", "boardingDog", updated, \`\${updated.dogName || "Dog"}\${updatedStay?.id ? \` stay \${boardingStayRequestCode(updated, updatedStay)}\` : ""}: \${note}\`);
+  showDetailDialog("Request Declined", \`<p>The decline note was saved with this request and will be visible to the customer.</p>\${boardingDeclineNoteHtml(updated, updatedStay)}\`);
+  return updated;
+}
+
 function canTransitionBoardingStatus(record = {}, nextStatus, options = {}) {
   const targetStay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) : null;
   const currentStatus = targetStay ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
@@ -134,11 +233,13 @@ function boardingStatusTargetStay(record = {}, nextStatus = "", options = {}) {
 function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new Date().toISOString(), options = {}) {
   const targetStay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) : boardingStatusTargetStay(record, nextStatus);
   const targetStayId = targetStay?.id || "";
+  const declineNoteText = nextStatus === "Cancelled" ? normalizedBoardingDeclineNote(options.declineNote) : "";
   return (record.stays || []).map((stay) => {
     if (!targetStayId || !boardingStayMatchesIdentity(stay, targetStay)) return stay;
     const checkInDetails = nextStatus === "Checked In" ? options.checkInDetails || null : null;
     const checkInDropoffTime = checkInDetails?.dropoffTime || "";
     const clearsActiveStayState = nextStatus === "Approved" || nextStatus === "Checked In";
+    const declineNote = declineNoteText ? boardingDeclineNotePayload(declineNoteText, record, stay, timestamp) : null;
     return {
       ...stay,
       requestCode: stay.requestCode || boardingStayRequestCode(record, stay),
@@ -148,6 +249,12 @@ function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new
       actualDropoffAt: nextStatus === "Approved" ? "" : nextStatus === "Checked In" ? checkInDropoffTime || stay.actualDropoffAt || timestamp : stay.actualDropoffAt || "",
       actualPickupAt: nextStatus === "Checked Out" ? stay.actualPickupAt || timestamp : stay.actualPickupAt || "",
       readyForPickupAt: ["Approved", "Checked In", "In Kennel"].includes(nextStatus) ? "" : stay.readyForPickupAt || "",
+      cancelledAt: nextStatus === "Cancelled" ? timestamp : stay.cancelledAt || "",
+      declineNote: declineNote || stay.declineNote || null,
+      declineReason: declineNote?.note || stay.declineReason || "",
+      declinedAt: declineNote?.createdAt || stay.declinedAt || "",
+      declinedBy: declineNote?.createdBy || stay.declinedBy || "",
+      declinedByEmail: declineNote?.createdByEmail || stay.declinedByEmail || "",
       kennelLocationId: clearsActiveStayState ? "" : stay.kennelLocationId || "",
       kennelLocationName: clearsActiveStayState ? "" : stay.kennelLocationName || "",
       kennelBuilding: clearsActiveStayState ? "" : stay.kennelBuilding || "",
@@ -188,6 +295,8 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
   const timestamp = new Date().toISOString();
   const early = Boolean(options.early || boardingTransitionIsEarly(record, nextStatus, options));
   const kennelLocation = options.kennelLocation || null;
+  const declineNoteText = nextStatus === "Cancelled" ? normalizedBoardingDeclineNote(options.declineNote) : "";
+  const declineNote = declineNoteText ? boardingDeclineNotePayload(declineNoteText, record, targetStay || boardingStatusTargetStay(record, nextStatus, options) || {}, timestamp) : null;
   const scopedStays = boardingStatusScopedStays(record, nextStatus, timestamp, options).map((stay) => {
     if (nextStatus !== "In Kennel" || !kennelLocation) return stay;
     const targetStay = boardingStatusTargetStay(record, nextStatus, options);
@@ -214,6 +323,8 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
         date: timestamp,
         by: currentUser?.name || helperName?.value || "",
         early,
+        note: declineNote?.note || "",
+        customerNote: declineNote?.note || "",
       },
     ],
     checkedInAt: summaryStatus === "Approved" ? "" : summaryStatus === "Checked In" ? record.checkedInAt || timestamp : record.checkedInAt || "",
@@ -221,6 +332,11 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
     readyForPickupAt: summaryStatus === "Ready For Pickup" ? timestamp : ["Approved", "Checked In", "In Kennel"].includes(summaryStatus) ? "" : record.readyForPickupAt || "",
     checkedOutAt: summaryStatus === "Checked Out" ? timestamp : record.checkedOutAt || "",
     cancelledAt: summaryStatus === "Cancelled" ? timestamp : record.cancelledAt || "",
+    declineNote: declineNote || record.declineNote || null,
+    declineReason: declineNote?.note || record.declineReason || "",
+    declinedAt: declineNote?.createdAt || record.declinedAt || "",
+    declinedBy: declineNote?.createdBy || record.declinedBy || "",
+    declinedByEmail: declineNote?.createdByEmail || record.declinedByEmail || "",
     earlyCheckInAt: nextStatus === "Checked In" && early ? timestamp : record.earlyCheckInAt || "",
     earlyCheckOutAt: nextStatus === "Checked Out" && early ? timestamp : record.earlyCheckOutAt || "",
     kennelLocationId: summaryStatus === "In Kennel" && kennelLocation ? kennelLocation.id : clearsDogLocation ? "" : record.kennelLocationId || "",
@@ -804,6 +920,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
     \${options.showServiceTasks ? boardingStayServiceTaskListHtml(record, stay, { actions: options.serviceActions }) : ""}
     \${stay.bathPlan ? \`<p>\${escapeHtml(stay.bathPlan)}</p>\` : ""}
     \${stay.stayNotes ? \`<p>\${escapeHtml(stay.stayNotes)}</p>\` : ""}
+    \${boardingDeclineNoteHtml(record, stay)}
     \${invoiceSummary}
   </article>\`;
 }
@@ -1944,6 +2061,10 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
     openKennelAssignmentPopup(record, nextStatus, options);
     return null;
   }
+  if (shouldPromptBoardingDecline(record, nextStatus, options)) {
+    openBoardingDeclineRequestPopup(record, nextStatus, options);
+    return null;
+  }
   const transitioned = withBoardingStatusTransition(record, nextStatus, options);
   if (!transitioned) {
     showToast("That boarding status transition is not allowed.");
@@ -2721,6 +2842,10 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   const options = typeof reference === "object" ? { ...reference, stayId: reference.stayId || stayId } : { stayId };
   if (!record?.id || !options.stayId || !boardingLifecycleStatuses.includes(nextStatus)) return null;
   const targetStay = boardingStayByReference(record, options);
+  if (shouldPromptBoardingDecline(record, nextStatus, options)) {
+    openBoardingDeclineRequestPopup(record, nextStatus, options);
+    return null;
+  }
   const transitioned = withBoardingStatusTransition(record, nextStatus, options);
   if (!transitioned) {
     showToast("That stay status transition is not allowed.");

@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260531-customer-cleanup-care-photos";
+import "./shared.js?v=20260601-decline-note";
 import "./auth.js?v=20260530-impersonation-guard";
-import "./customer.js?v=20260531-customer-cleanup-care-photos";
-import "./boarding.js?v=20260530-v3-fix-pass";
+import "./customer.js?v=20260601-decline-note";
+import "./boarding.js?v=20260601-decline-note";
 import "./daily.js?v=20260531-customer-cleanup-care-photos";
 import "./timesheet.js?v=20260530-timesheet-view";
 import "./settings.js?v=20260530-v3-fix-pass";

@@ -8294,12 +8294,18 @@ function initEvents() {
     const ownedDogPhotoUploadForm = event.target.closest("#ownedDogPhotoUploadForm");
     const boardingCheckInForm = event.target.closest("#boardingCheckInForm");
     const boardingCheckInServiceForm = event.target.closest("#boardingCheckInServiceForm");
+    const boardingDeclineRequestForm = event.target.closest("#boardingDeclineRequestForm");
     const paymentMethodForm = event.target.closest("#paymentMethodForm");
     const urgentAlertForm = event.target.closest("#urgentAlertForm");
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
     const boardingRequestFilterForm = event.target.closest("#boardingRequestFilterForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !operationDateOverrideForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm && !boardingRequestFilterForm) return;
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !operationDateOverrideForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !boardingDeclineRequestForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm && !boardingRequestFilterForm) return;
     event.preventDefault();
+    if (boardingDeclineRequestForm) {
+      if (!validateForm(boardingDeclineRequestForm)) return;
+      await submitBoardingDeclineRequest(boardingDeclineRequestForm);
+      return;
+    }
     if (boardingRequestFilterForm) {
       saveBoardingRequestFilterFromForm(boardingRequestFilterForm);
       return;

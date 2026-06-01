@@ -1113,10 +1113,12 @@ function renderCustomerRequests() {
           const status = boardingStayDisplayStatus(record, stay);
           const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
           const canCustomerEdit = customerCanEditStayRequestStatus(status);
+          const declineNote = boardingDeclineNoteFor(record, stay);
+          const declineHtml = status === "Cancelled" && declineNote?.note ? \`<p><strong>Decline reason:</strong> \${escapeHtml(declineNote.note)}</p>\` : "";
           const actions = canCustomerEdit
             ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Update</button>\${canTransitionBoardingStatus(record, "Cancelled", stay.id ? { stayId: stay.id } : {}) ? \`<button type="button" class="secondary-button" data-action="cancel-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Cancel Request</button>\` : ""}</div>\`
             : "";
-          return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${estimate}\${actions}</article>\`;
+          return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${estimate}\${declineHtml}\${actions}</article>\`;
         })
         .join("")
     : \`<p>No \${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>\`;

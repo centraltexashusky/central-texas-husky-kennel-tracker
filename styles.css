@@ -1602,6 +1602,30 @@ button:focus-visible {
   color: var(--red);
 }
 
+.boarding-decline-note {
+  background: rgba(127, 29, 29, 0.18);
+  border: 1px solid rgba(248, 113, 113, 0.48);
+  border-radius: 12px;
+  color: var(--ink);
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 10px 12px;
+}
+
+.boarding-decline-note strong {
+  color: #fecaca;
+}
+
+.boarding-decline-note span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.boarding-decline-note p {
+  margin: 0;
+}
+
 .toggle-row {
   align-items: center;
   background: #f6f8f7;
