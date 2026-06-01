@@ -954,11 +954,10 @@ body.owned-dog-modal-open {
 }
 
 #customerPage.is-active > .form-section {
-  max-height: calc(100dvh - 84px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scroll-padding-bottom: 96px;
-  -webkit-overflow-scrolling: touch;
+  max-height: none;
+  min-height: calc(100dvh - 84px);
+  overflow: visible;
+  overscroll-behavior: auto;
 }
 
 #customerRequestsPage .customer-request-modal:not([hidden]) {
@@ -4841,8 +4840,9 @@ button.is-loading {
   }
 
   #customerPage.is-active > .form-section {
-    height: calc(100dvh - 132px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    max-height: calc(100dvh - 132px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    height: auto;
+    max-height: none;
+    min-height: calc(100dvh - 132px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 
   .dog-photo-picker,
