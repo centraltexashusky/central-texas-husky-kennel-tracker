@@ -674,7 +674,7 @@ function renderCustomerOnboardingProgress(dogs = customerDogsForCurrentUser()) {
   if (!panel) return;
   const dogForm = $("#customerDogForm");
   const inlineDogFormOpen = dogForm && !dogForm.hidden && dogForm.parentElement?.id === "customerDogFormHome";
-  if (currentRole() !== "customer" || inlineDogFormOpen) {
+  if (currentRole() !== "customer" || inlineDogFormOpen || dogs.length) {
     panel.hidden = true;
     panel.innerHTML = "";
     return;
@@ -914,13 +914,15 @@ function renderCustomerDogs() {
   }
   const dogs = customerDogsForCurrentUser();
   const checkedIds = new Set([...document.querySelectorAll('#customerBookingDogList input[name="customerDogSelect"]:checked')].map((input) => input.value));
-  $("#openCustomerDogModalButton")?.toggleAttribute("hidden", !dogs.length);
-  const savedDog = customerLastSavedDogId ? dogs.find((dog) => dog.id === customerLastSavedDogId) : null;
-  const savedPanel = savedDog ? customerDogSavedNextActionHtml(savedDog) : "";
+  const addDogButton = $("#openCustomerDogModalButton");
+  if (addDogButton) {
+    addDogButton.hidden = !dogs.length;
+    addDogButton.textContent = "Add Another Dog";
+  }
   const inlineFirstDogFormOpen = !dogs.length && !$("#customerDogForm")?.hidden && $("#customerDogForm")?.parentElement?.id === "customerDogFormHome";
   $("#customerDogList").toggleAttribute("hidden", inlineFirstDogFormOpen);
   $("#customerDogList").innerHTML = dogs.length
-    ? \`\${savedPanel}\${dogs.map(customerDogSummaryCardHtml).join("")}<div class="button-row"><button type="button" class="secondary-button" data-action="add-customer-dog-inline">Add Another Dog</button></div>\`
+    ? dogs.map(customerDogSummaryCardHtml).join("")
     : inlineFirstDogFormOpen ? "" : customerDogWelcomeHtml();
   if ($("#customerBookingDogList")) {
     $("#customerBookingDogList").innerHTML = dogs.length
@@ -1269,7 +1271,7 @@ function renderCustomerServiceOptions() {
   const visibleHtml = Object.entries(groupedVisibleServices).map(([category, items]) => {
     const hasChecked = items.some((service) => checkedIds.has(service.id));
     const categoryHtml = items.map(serviceBlockHtml).join("");
-    return \`<details class="customer-service-group" \${hasChecked ? "open" : ""}><summary><span>\${escapeHtml(category)}</span><small>\${items.length} option\${items.length === 1 ? "" : "s"}</small></summary><div class="customer-service-group-body">\${categoryHtml}</div></details>\`;
+    return \`<details class="customer-service-group" \${hasChecked ? "open" : ""}><summary><span><strong>\${escapeHtml(category)}</strong><em>Click to view services</em></span><small>\${items.length} option\${items.length === 1 ? "" : "s"}</small></summary><div class="customer-service-group-body">\${categoryHtml}</div></details>\`;
   }).join("");
   const implicitHtml = implicitDependencyServices
     .map((service) => customerServiceOptionHtml(service, checkedIds, { addOn: serviceDependencyType(service) === "optional-addon" }))

@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260531-customer-inline-fit" />
+    <link rel="stylesheet" href="styles.css?v=20260531-customer-cleanup-care-photos" />
   </head>
   <body>
     <div class="app-layout">
@@ -490,6 +490,7 @@
               <label id="careQuickDateLabel">Date<input type="date" id="careQuickDate" /></label>
             </div>
             <label id="careQuickNoteLabel">Care note<textarea id="careQuickNote" rows="2" placeholder="Session details, bath products, heat observation, medical/care note"></textarea></label>
+            <label id="careQuickPhotosLabel">Care note photo(s)<input type="file" id="careQuickPhotos" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple /></label>
             <div class="button-row"><button type="button" id="addCareQuickLog">Add Care Log</button></div>
             <div id="structuredCareLogList" class="record-grid compact-record-grid"></div>
           </div>
@@ -1296,6 +1297,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260531-hide-onboarding-progress"></script>
+  <script type="module" src="js/main.js?v=20260531-customer-cleanup-care-photos"></script>
 </body>
 </html>

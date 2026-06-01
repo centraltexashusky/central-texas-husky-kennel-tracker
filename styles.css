@@ -1894,8 +1894,17 @@ button:focus-visible {
 }
 
 .customer-service-group summary span {
+  display: grid;
+  gap: 2px;
   color: rgba(255, 255, 255, 0.94);
   font-weight: 900;
+}
+
+.customer-service-group summary em {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 760;
 }
 
 .customer-service-group summary small {

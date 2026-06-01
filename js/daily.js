@@ -227,6 +227,7 @@ function careLogEditFormHtml(log = {}) {
       <label>Minutes<input type="number" name="minutes" min="0" value="\${escapeHtml(log.minutes || "")}" /></label>
     </div>
     <label>Care note<textarea name="note" rows="4">\${escapeHtml(log.note || "")}</textarea></label>
+    \${mediaLinkHtml(log)}
     <div class="button-row"><button type="submit">Update</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </form>\`;
 }
@@ -441,7 +442,7 @@ function dailyDetailHtml(record) {
     ? \`<div class="detail-row"><strong>Completed tasks</strong><span>\${completedTasks.map((task) => \`\${task.shiftLabel || taskTabLabel(task.shift)}: \${task.taskText} - \${task.completedBy || "Staff"}\${task.completedAt ? \` at \${formatDateTime(task.completedAt)}\` : ""}\`).map(escapeHtml).join("<br>")}</span></div>\`
     : "";
   const careLogHtml = careLogs.length
-    ? \`<div class="detail-row"><strong>Structured care logs</strong><span>\${careLogs.map((log) => \`\${log.dogName || "Dog"} - \${log.careType || log.category || "Care"}\${log.minutes ? \` (\${log.minutes} min)\` : ""}\${log.note || log.notes ? \`: \${log.note || log.notes}\` : ""}\`).map(escapeHtml).join("<br>")}</span></div>\`
+    ? \`<section class="popup-record-section"><h3>Structured care logs</h3>\${careLogs.map((log) => \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || log.category || "Care")}</strong><p>\${escapeHtml([log.minutes ? \`\${log.minutes} min\` : "", log.note || log.notes || ""].filter(Boolean).join(" | ") || "No extra details")}</p>\${mediaLinkHtml(log)}</article>\`).join("")}</section>\`
     : "";
   const monthlyTasksHtml = monthlyTasks.length
     ? \`<div class="detail-row"><strong>Monthly tasks</strong><span>\${escapeHtml(\`Building cleaned: \${monthlyDeepCleanBuildingForRecord(record)}\`)}<br>\${monthlyTasks.map(escapeHtml).join("<br>")}</span></div>\`
@@ -822,7 +823,7 @@ function ownedDogActivityEntriesHtml(record = {}, filter = "All", { removable = 
   }, {});
   return logs.length
     ? Object.entries(grouped)
-        .map(([group, items]) => \`<section class="activity-group"><h3>\${escapeHtml(group)}</h3>\${items.map((log) => \`<article class="record-card"><strong>\${escapeHtml(log.type)} - \${escapeHtml(log.date || "")}</strong><p>\${escapeHtml([log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ") || "No notes")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${removable ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="\${escapeHtml(log.id)}">Remove Entry</button></div>\` : ""}</article>\`).join("")}</section>\`)
+        .map(([group, items]) => \`<section class="activity-group"><h3>\${escapeHtml(group)}</h3>\${items.map((log) => \`<article class="record-card"><strong>\${escapeHtml(log.type)} - \${escapeHtml(log.date || "")}</strong><p>\${escapeHtml([log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ") || "No notes")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${removable ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="\${escapeHtml(log.id)}">Remove Entry</button></div>\` : ""}</article>\`).join("")}</section>\`)
         .join("")
     : "<p>No activity or training entries yet.</p>";
 }

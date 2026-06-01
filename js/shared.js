@@ -2231,6 +2231,7 @@ function resetCareQuickLogForm() {
   $("#careQuickType").value = "";
   $("#careQuickMinutes").value = "";
   $("#careQuickNote").value = "";
+  if ($("#careQuickPhotos")) $("#careQuickPhotos").value = "";
   $("#careQuickDate").value = form?.elements.date?.value || todayDate();
   updateCareQuickFields();
 }
@@ -2244,7 +2245,7 @@ function renderStructuredCareLogs() {
           const details = [log.date, log.minutes ? \`\${log.minutes} minutes\` : "", log.note].filter(Boolean).join(" | ");
           const canModify = canModifyCareLog(log);
           const actions = canModify ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-care-log" data-id="\${escapeHtml(log.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-care-log" data-id="\${escapeHtml(log.id)}">Remove</button></div>\` : "";
-          return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || "Care")}</strong><p>\${escapeHtml(details || "No extra details")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${actions}</article>\`;
+          return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || "Care")}</strong><p>\${escapeHtml(details || "No extra details")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${actions}</article>\`;
         })
         .join("")
     : "<p>No structured care logs added to this daily report yet.</p>";
@@ -2307,6 +2308,7 @@ function updateCareQuickFields() {
   setCareFieldVisibility("#careQuickMinutesLabel", isExercise);
   setCareFieldVisibility("#careQuickDateLabel", isBath || isHeat || isMedical || isTraining || !careType);
   setCareFieldVisibility("#careQuickNoteLabel", isBath || isHeat || isMedical || isTraining || !careType);
+  setCareFieldVisibility("#careQuickPhotosLabel", isBath || isHeat || isMedical || isTraining || !careType);
   if (isExercise && dog) $("#careQuickMinutes").value = lastExerciseMinutesForDog(dog, careType);
   if (!isExercise) $("#careQuickMinutes").value = "";
   if (isMedical) $("#careQuickNote").placeholder = medicalCarePlaceholder;
@@ -2342,22 +2344,29 @@ async function addPendingCareLog() {
   if (["Bath", "Heat Note", "Medical/Behavior Note", "Training"].includes(careType) && !($("#careQuickDate")?.value || "")) {
     $("#careQuickDate").value = form?.elements.date?.value || todayDate();
   }
+  const logDate = $("#careQuickDate")?.value || form?.elements.date?.value || todayDate();
+  const mediaItems = await uploadMediaFiles($("#careQuickPhotos"), \`care-notes/\${dog.id}/\${logDate}\`, {
+    allowedTypes: IMAGE_UPLOAD_TYPES,
+    allowedExtensions: [".jpg", ".jpeg", ".png"],
+    label: "care photo",
+  });
   const log = buildStructuredCareLog(dog, {
     careType,
     minutes: $("#careQuickMinutes")?.value || "",
     note: $("#careQuickNote")?.value || "",
-    date: $("#careQuickDate")?.value || form?.elements.date?.value || todayDate(),
+    date: logDate,
+    mediaItems,
   });
   const record = await saveStructuredCareLog(log);
   resetCareQuickLogForm();
   showDetailDialog(
     \`\${careType} Logged\`,
-    \`<div class="detail-row"><strong>Dog</strong><span>\${escapeHtml(log.dogName)}</span></div><div class="detail-row"><strong>Date</strong><span>\${escapeHtml(log.date)}</span></div>\${log.minutes ? \`<div class="detail-row"><strong>Minutes</strong><span>\${escapeHtml(log.minutes)}</span></div>\` : ""}\${log.note ? \`<div class="detail-row"><strong>Note</strong><span>\${escapeHtml(log.note)}</span></div>\` : ""}<div class="detail-row"><strong>Saved by</strong><span>\${escapeHtml(log.completedBy || "Staff")}</span></div>\`,
+    \`<div class="detail-row"><strong>Dog</strong><span>\${escapeHtml(log.dogName)}</span></div><div class="detail-row"><strong>Date</strong><span>\${escapeHtml(log.date)}</span></div>\${log.minutes ? \`<div class="detail-row"><strong>Minutes</strong><span>\${escapeHtml(log.minutes)}</span></div>\` : ""}\${log.note ? \`<div class="detail-row"><strong>Note</strong><span>\${escapeHtml(log.note)}</span></div>\` : ""}\${mediaLinkHtml(log)}<div class="detail-row"><strong>Saved by</strong><span>\${escapeHtml(log.completedBy || "Staff")}</span></div>\`,
   );
   return record;
 }
 
-function buildStructuredCareLog(dog, { careType, minutes = "", note = "", date = todayDate() } = {}) {
+function buildStructuredCareLog(dog, { careType, minutes = "", note = "", date = todayDate(), mediaItems = [] } = {}) {
   return {
     id: uid("care"),
     dogId: dog.id,
@@ -2365,6 +2374,7 @@ function buildStructuredCareLog(dog, { careType, minutes = "", note = "", date =
     careType,
     minutes,
     note,
+    mediaItems: arrayValue(mediaItems),
     completedBy: helperName.value || currentUser?.name || "",
     completedEmail: helperEmail.value || currentUser?.email || "",
     date: date || todayDate(),
@@ -3617,6 +3627,33 @@ function detailForRecord(type, record, options = {}) {
   return genericDetailHtml(record);
 }
 
+function alertRecordContextHtml(type, record = {}) {
+  const linkedCustomerDog = type === "boardingDog" ? explicitLinkedCustomerDogForBoarding(record) : null;
+  const dogName = record.dogName || record.callName || record.showName || linkedCustomerDog?.dogName || "";
+  const customerName = record.ownerName || record.customerName || linkedCustomerDog?.ownerName || record.requestedBy || "";
+  const customerEmail = record.ownerEmail || record.customerEmail || linkedCustomerDog?.ownerEmail || "";
+  const customerPhone = record.ownerPhone || record.customerPhone || linkedCustomerDog?.ownerPhone || "";
+  const rows = [
+    ["Dog", dogName],
+    ["Customer", customerName],
+    ["Customer email", customerEmail],
+    ["Customer phone", customerPhone],
+  ].filter(([, value]) => value);
+  if (!rows.length) return "";
+  return \`<section class="popup-record-section alert-context-section"><h3>Alert context</h3>\${rows.map(([label, value]) => \`<div class="detail-row"><strong>\${escapeHtml(label)}</strong><span>\${escapeHtml(value)}</span></div>\`).join("")}</section>\`;
+}
+
+function alertDetailForRecord(type, record = {}) {
+  return \`\${alertRecordContextHtml(type, record)}\${detailForRecord(type, record)}\`;
+}
+
+function alertTitleForRecord(type, record = {}) {
+  const linkedCustomerDog = type === "boardingDog" ? explicitLinkedCustomerDogForBoarding(record) : null;
+  const dogName = record.dogName || record.callName || record.showName || linkedCustomerDog?.dogName || "";
+  if (dogName) return \`Alert: \${dogName}\`;
+  return \`Alert: \${titleForRecord(type, record).replace(/^Record Details$/, "Record")}\`;
+}
+
 function titleForRecord(type, record = {}) {
   if (currentRole() === "customer" && type === "boardingDog") return \`Request: \${record.dogName || "Dog"}\`;
   const labels = {
@@ -3672,6 +3709,7 @@ function generatedCareEntry(record, log, type) {
     date,
     minutes: log.minutes || "",
     note: log.note || "",
+    mediaItems: arrayValue(log.mediaItems),
     completedBy: log.completedBy || record.helperName || "",
     createdAt: new Date().toISOString(),
   };
@@ -8511,7 +8549,7 @@ function initEvents() {
     }
     if (action.dataset.action === "view-alert") {
       const record = readRecords(action.dataset.type).find((item) => item.id === action.dataset.id);
-      if (record) showDetailDialog(titleForRecord(action.dataset.type, record), detailForRecord(action.dataset.type, record), { type: action.dataset.type, id: record.id });
+      if (record) showDetailDialog(alertTitleForRecord(action.dataset.type, record), alertDetailForRecord(action.dataset.type, record), { type: action.dataset.type, id: record.id });
       return;
     }
     if (action.dataset.action === "dashboard-open-owned") {
