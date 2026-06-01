@@ -4839,6 +4839,13 @@ button.is-loading {
     max-height: calc(100dvh - 166px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
 
+  #customerDogFormHome .customer-dog-modal:not([hidden]) {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+
   #customerPage.is-active > .form-section {
     height: auto;
     max-height: none;
