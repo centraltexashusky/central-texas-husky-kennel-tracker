@@ -7219,6 +7219,7 @@ function resetCustomerBookingForm() {
   formEl.scrollTop = 0;
   renderCustomerDogs();
   renderCustomerStayProgramOptions();
+  renderCustomerServiceOptions();
   renderCustomerBookingAvailabilityMessages();
   if (typeof setCustomerBookingWizardStep === "function") setCustomerBookingWizardStep("pets");
   updateCustomerEstimate();
@@ -7271,17 +7272,20 @@ function editCustomerRequest(record, stayId = "") {
     return [match ? match[1].trim() : cleaned, match ? Number(match[2]) : 1];
   }));
   const applyServiceQuantities = () => {
-    $("#customerBookingForm").querySelectorAll('input[name="customerServices"]').forEach((input) => {
+    const selectedDog = dog || selectedCustomerDogs()[0] || {};
+    const serviceFieldName = customerServiceFieldNameForDog(selectedDog);
+    $("#customerBookingForm").querySelectorAll(\`input[name="\${serviceFieldName}"]\`).forEach((input) => {
       const service = readRecords("service").find((item) => item.id === input.value);
       const quantity = serviceQuantities.get(service?.id) || serviceQuantities.get(service?.serviceName);
       input.checked = Boolean(quantity);
-      const quantityInput = formFieldByName($("#customerBookingForm"), \`serviceQuantity-\${input.value}\`);
+      const quantityInput = formFieldByName($("#customerBookingForm"), customerServiceQuantityFieldName(input.value, selectedDog));
       if (quantityInput) {
         quantityInput.value = String(quantity || 1);
         quantityInput.disabled = !input.checked;
       }
     });
   };
+  renderCustomerServiceOptions();
   applyServiceQuantities();
   renderCustomerServiceOptions();
   applyServiceQuantities();
@@ -7321,7 +7325,7 @@ function updateCustomerEstimate() {
   const staySummary = estimate.dropoffTime ? \`<div class="estimate-line"><span>\${estimate.isServiceRequest ? "Requested time" : "Drop-off"}</span><span>\${escapeHtml(formatDateTime(estimate.dropoffTime))}</span></div>\${!estimate.isServiceRequest && estimate.pickupTime ? \`<div class="estimate-line"><span>Pick-up</span><span>\${escapeHtml(formatDateTime(estimate.pickupTime))}</span></div>\` : ""}\` : "";
   const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => \`<div class="estimate-line"><span>\${escapeHtml(line.dogName)} - \${escapeHtml(boardingLineDisplayLabel(line))}</span><span>\${Number(line.days || 0)} x \${money(line.rate)} = \${money(line.total)}</span></div>\`).join("");
   const serviceLine = estimate.services.length
-    ? estimate.services.map((service) => \`<div class="estimate-line"><span>\${escapeHtml(customerServiceDisplayName(service))}</span><span>\${estimate.dogs.length} dog(s) x \${Number(service.quantity || 1)} x \${money(service.basePrice)} = \${money(service.lineTotal)}</span></div>\`).join("")
+    ? estimate.services.map((service) => \`<div class="estimate-line"><span>\${escapeHtml(service.dogName || "Dog")} - \${escapeHtml(customerServiceDisplayName(service))}</span><span>\${Number(service.quantity || 1)} x \${money(service.basePrice)} = \${money(service.lineTotal)}</span></div>\`).join("")
     : \`<div class="estimate-line muted-estimate-line"><span>Add-ons</span><span>None selected</span></div>\`;
   $("#customerEstimate").innerHTML = estimate.dogs.length
     ? \`<div class="estimate-heading"><strong>Reservation Summary</strong><span>Final approval comes from staff</span></div>\${dogSummary}\${staySummary}\${estimate.isServiceRequest ? "" : \`<h4>Boarding</h4><strong>\${escapeHtml(boardingBillingLabel(estimate))}</strong>\${boardingLine || \`<div class="estimate-line muted-estimate-line"><span>Boarding subtotal</span><span>Choose dates to estimate</span></div>\`}\`}<h4>Add-ons</h4>\${serviceLine}<div class="estimate-total"><strong>Estimated total</strong><span>\${money(estimate.total)}</span></div>\`
@@ -7344,7 +7348,7 @@ function showBookingConfirmDialog(estimate) {
     return \`<li>\${escapeHtml(dog.dogName)}\${dog.breedDescription ? \` (\${escapeHtml(dog.breedDescription)})\` : ""}\${rateText}</li>\`;
   }).join("");
   const serviceList = pendingCustomerBooking.services.length
-    ? pendingCustomerBooking.services.map((service) => \`<li>\${escapeHtml(customerServiceDisplayName(service))} x\${Number(service.quantity || 1)} for \${pendingCustomerBooking.dogs.length} dog(s) - \${money(service.lineTotal)} \${escapeHtml(service.unit || "")}</li>\`).join("")
+    ? pendingCustomerBooking.services.map((service) => \`<li>\${escapeHtml(service.dogName || "Dog")}: \${escapeHtml(customerServiceDisplayName(service))} x\${Number(service.quantity || 1)} - \${money(service.lineTotal)} \${escapeHtml(service.unit || "")}</li>\`).join("")
     : "<li>No added services selected</li>";
   const availabilityHtml = customerBookingAvailabilityMessagesHtml(customerBookingEstimateAvailabilityChecks(pendingCustomerBooking));
   $("#bookingConfirmBody").innerHTML = \`
@@ -10131,11 +10135,17 @@ function initEvents() {
     openCustomerDogModal();
   });
   $("#customerBookingForm").addEventListener("change", (event) => {
-    if (event.target.name === "customerServices") {
+    const dogServiceCheckbox = event.target.matches('input[type="checkbox"][data-service-scope="dog"]');
+    if (dogServiceCheckbox) {
       const quantityInput = formFieldByName($("#customerBookingForm"), \`serviceQuantity-\${event.target.value}\`);
+      const scopedQuantityInput = event.target.closest(".service-option")?.querySelector(".service-quantity");
       if (quantityInput) {
         quantityInput.disabled = !event.target.checked;
         if (event.target.checked && !quantityInput.value) quantityInput.value = "1";
+      }
+      if (scopedQuantityInput) {
+        scopedQuantityInput.disabled = !event.target.checked;
+        if (event.target.checked && !scopedQuantityInput.value) scopedQuantityInput.value = "1";
       }
       const service = readRecords("service").find((item) => item.id === event.target.value);
       if (serviceHasDependentServices(service)) renderCustomerServiceOptions();
@@ -10153,6 +10163,7 @@ function initEvents() {
   $("#customerBookingDogList").addEventListener("change", () => {
     validateCustomerDogSelection({ focus: false });
     renderCustomerCrateShareOptions();
+    renderCustomerServiceOptions();
     updateCustomerEstimate();
   });
   $("#customerBookingDogList").addEventListener("click", (event) => {

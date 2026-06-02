@@ -1943,6 +1943,53 @@ button:focus-visible {
   padding: 10px;
 }
 
+.customer-dog-service-menu {
+  background: rgba(8, 17, 27, 0.62);
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  border-radius: 8px;
+  display: grid;
+  overflow: hidden;
+}
+
+.customer-dog-service-menu + .customer-dog-service-menu {
+  margin-top: 10px;
+}
+
+.customer-dog-service-menu > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 12px 14px;
+}
+
+.customer-dog-service-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.customer-dog-service-menu > summary span {
+  color: rgba(255, 255, 255, 0.94);
+  display: grid;
+  gap: 2px;
+}
+
+.customer-dog-service-menu > summary em,
+.customer-dog-service-menu > summary small {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 760;
+}
+
+.customer-dog-service-menu-body {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
 .estimate-heading {
   align-items: baseline;
   display: flex;

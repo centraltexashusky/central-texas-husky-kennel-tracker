@@ -1170,14 +1170,39 @@ function customerServiceInfoIconHtml(infoText = "") {
   return infoText ? \`<span class="service-info-icon" role="button" tabindex="0" aria-label="\${escapeHtml(infoText)}" title="\${escapeHtml(infoText)}" data-tooltip="\${escapeHtml(infoText)}"><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>\` : "";
 }
 
+function customerServiceDogKey(dog = {}) {
+  return customerBookingSelectionKey(dog) || dog.id || normalizedDogIdentityName(dog) || dog.dogName || "dog";
+}
+
+function customerServiceDogFieldKey(dog = {}) {
+  return \`dog-\${shortStableHash(customerServiceDogKey(dog), 10)}\`;
+}
+
+function customerServiceFieldNameForDog(dog = {}) {
+  return \`customerServices-\${customerServiceDogFieldKey(dog)}\`;
+}
+
+function customerServiceQuantityFieldName(serviceId = "", dog = {}) {
+  return \`serviceQuantity-\${customerServiceDogFieldKey(dog)}-\${serviceId}\`;
+}
+
+function customerServicesForDog(estimate = {}, dog = {}) {
+  const dogKey = customerServiceDogKey(dog);
+  return arrayValue(estimate.services).filter((service) => service.dogKey === dogKey || (!service.dogKey && arrayValue(estimate.dogs).length <= 1));
+}
+
 function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options = {}) {
   const checked = checkedIds.has(service.id);
-  const quantityValue = formFieldByName($("#customerBookingForm"), \`serviceQuantity-\${service.id}\`)?.value || "1";
+  const fieldDog = options.dog || {};
+  const serviceFieldName = options.serviceFieldName || (options.dog ? customerServiceFieldNameForDog(fieldDog) : "customerServices");
+  const quantityFieldName = options.quantityFieldName || (options.dog ? customerServiceQuantityFieldName(service.id, fieldDog) : \`serviceQuantity-\${service.id}\`);
+  const quantityValue = formFieldByName($("#customerBookingForm"), quantityFieldName)?.value || "1";
   const displayName = customerServiceDisplayName(service);
   const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(service));
   const addOnPrefix = options.addOn ? "Add-on: " : "";
   const extraClass = options.parent ? " service-option-parent" : "";
-  return \`<label class="service-option\${options.addOn ? " service-option-addon" : ""}\${extraClass}"><span class="service-option-label"><input type="checkbox" name="customerServices" value="\${escapeHtml(service.id)}" \${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(addOnPrefix)}\${escapeHtml(displayName)} - \${money(service.basePrice)} \${escapeHtml(service.unit || "")}</span>\${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-\${escapeHtml(service.id)}" min="1" step="1" value="\${escapeHtml(quantityValue)}" \${checked ? "" : "disabled"} aria-label="\${escapeHtml(displayName)} quantity" /></label>\`;
+  const dogAttrs = options.dog ? \` data-service-scope="dog" data-dog-key="\${escapeHtml(customerServiceDogKey(fieldDog))}"\` : "";
+  return \`<label class="service-option\${options.addOn ? " service-option-addon" : ""}\${extraClass}"><span class="service-option-label"><input type="checkbox" name="\${escapeHtml(serviceFieldName)}" value="\${escapeHtml(service.id)}" \${checked ? "checked" : ""}\${dogAttrs} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(addOnPrefix)}\${escapeHtml(displayName)} - \${money(service.basePrice)} \${escapeHtml(service.unit || "")}</span>\${infoIcon}</span></span><input class="service-quantity" type="number" name="\${escapeHtml(quantityFieldName)}" min="1" step="1" value="\${escapeHtml(quantityValue)}" \${checked ? "" : "disabled"} aria-label="\${escapeHtml(displayName)} quantity"\${dogAttrs} /></label>\`;
 }
 
 function customerStayProgramServices(user = currentUser) {
@@ -1248,41 +1273,51 @@ function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
   applyLegacyServiceDependencyMigration();
   applyLegacyBoardingProgramMigration();
-  const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
-  const dependencyIds = customerDependencyIds(checkedIds);
+  const formEl = $("#customerBookingForm");
+  const dogs = selectedCustomerDogs();
   const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && serviceMatchesCustomerPricingScope(service, currentUser));
   const visibleServices = services.filter((service) => !serviceDependencyId(service));
-  const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
-  const serviceBlockHtml = (service) => {
-    const childServices = dependencyIds.has(service.id)
-      ? services
-          .filter((dependent) => serviceDependencyId(dependent) === service.id)
-      : [];
-    if (!childServices.length) return customerServiceOptionHtml(service, checkedIds);
-    const optionHtml = customerServiceOptionHtml(service, checkedIds, { parent: true });
-    const addOnHtml = childServices
-      .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
-      .join("");
-    return \`<div class="service-option-group">\${optionHtml}<div class="service-option-addons">\${addOnHtml}</div></div>\`;
-  };
   const groupedVisibleServices = visibleServices.reduce((groups, service) => {
     const category = String(service.category || "Other Services").trim() || "Other Services";
     groups[category] = [...(groups[category] || []), service];
     return groups;
   }, {});
-  const visibleHtml = Object.entries(groupedVisibleServices).map(([category, items]) => {
-    const hasChecked = items.some((service) => checkedIds.has(service.id));
-    const categoryHtml = items.map(serviceBlockHtml).join("");
-    return \`<details class="customer-service-group" \${hasChecked ? "open" : ""}><summary><span><strong>\${escapeHtml(category)}</strong><em>Click to view services</em></span><small>\${items.length} option\${items.length === 1 ? "" : "s"}</small></summary><div class="customer-service-group-body">\${categoryHtml}</div></details>\`;
+  if (!dogs.length) {
+    $("#customerServiceOptions").innerHTML = "<p>Select dog(s) first to choose services for each dog.</p>";
+    return;
+  }
+  const dogGroupsHtml = dogs.map((dog, index) => {
+    const checkedIds = new Set(checkedFrom(formEl, customerServiceFieldNameForDog(dog)));
+    const dependencyIds = customerDependencyIds(checkedIds);
+    const selectedCount = [...checkedIds].filter((id) => services.some((service) => service.id === id && serviceDependencySatisfied(service, dependencyIds))).length;
+    const serviceBlockHtml = (service) => {
+      const childServices = dependencyIds.has(service.id)
+        ? services
+            .filter((dependent) => serviceDependencyId(dependent) === service.id)
+        : [];
+      if (!childServices.length) return customerServiceOptionHtml(service, checkedIds, { dog });
+      const optionHtml = customerServiceOptionHtml(service, checkedIds, { dog, parent: true });
+      const addOnHtml = childServices
+        .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { dog, addOn: serviceDependencyType(dependent) === "optional-addon" }))
+        .join("");
+      return \`<div class="service-option-group">\${optionHtml}<div class="service-option-addons">\${addOnHtml}</div></div>\`;
+    };
+    const visibleHtml = Object.entries(groupedVisibleServices).map(([category, items]) => {
+      const hasChecked = items.some((service) => checkedIds.has(service.id));
+      const categoryHtml = items.map(serviceBlockHtml).join("");
+      return \`<details class="customer-service-group" \${hasChecked ? "open" : ""}><summary><span><strong>\${escapeHtml(category)}</strong><em>Click to view services</em></span><small>\${items.length} option\${items.length === 1 ? "" : "s"}</small></summary><div class="customer-service-group-body">\${categoryHtml}</div></details>\`;
+    }).join("");
+    const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
+    const implicitHtml = implicitDependencyServices
+      .map((service) => customerServiceOptionHtml(service, checkedIds, { dog, addOn: serviceDependencyType(service) === "optional-addon" }))
+      .join("");
+    const bodyHtml = visibleServices.length || implicitHtml
+      ? \`\${visibleHtml}\${implicitHtml}\`
+      : "<p>No customer services are active yet.</p>";
+    const openAttr = selectedCount || dogs.length <= 2 || index === 0 ? "open" : "";
+    return \`<details class="customer-dog-service-menu" \${openAttr}><summary><span><strong>\${escapeHtml(dog.dogName || "Dog")}</strong><em>Click to view services for this dog</em></span><small>\${selectedCount} selected</small></summary><div class="customer-dog-service-menu-body">\${bodyHtml}</div></details>\`;
   }).join("");
-  const implicitHtml = implicitDependencyServices
-    .map((service) => customerServiceOptionHtml(service, checkedIds, { addOn: serviceDependencyType(service) === "optional-addon" }))
-    .join("");
-  $("#customerServiceOptions").innerHTML = visibleServices.length
-    ? \`\${visibleHtml}\${implicitHtml}\`
-    : implicitHtml
-      ? implicitHtml
-    : "<p>No customer services are active yet.</p>";
+  $("#customerServiceOptions").innerHTML = dogGroupsHtml;
 }
 
 function renderCustomerCrateShareOptions() {
@@ -1359,11 +1394,12 @@ function customerBookingDogMatchesRecord(dog = {}, record = {}) {
   return boardingDogIdentityTokens(record).some((token) => dogTokens.has(token));
 }
 
-function customerBookingServiceKey(estimate = {}) {
+function customerBookingServiceKey(estimate = {}, dog = null) {
+  const services = dog ? customerServicesForDog(estimate, dog) : arrayValue(estimate.services);
   return [
     String(estimate.stayProgram?.serviceName || estimate.stayProgram?.name || "").trim().toLowerCase(),
-    ...new Set(arrayValue(estimate.services)
-    .map((service) => \`\${service.serviceName || service.id || "Service"}\${Number(service.quantity || 1) > 1 ? \` x\${service.quantity}\` : ""} requested\`)
+    ...new Set(services
+    .map((service) => \`\${dog ? "" : (service.dogName || "Dog") + ": "}\${service.serviceName || service.id || "Service"}\${Number(service.quantity || 1) > 1 ? \` x\${service.quantity}\` : ""} requested\`)
     .map((label) => String(label || "").trim().toLowerCase())
     .filter(Boolean)),
   ].filter(Boolean)
@@ -1377,7 +1413,7 @@ function customerBookingStableId(prefix = "customer-booking", estimate = {}, dog
     dog.dogName || "",
     estimate.dropoffTime || "",
     estimate.pickupTime || "",
-    customerBookingServiceKey(estimate),
+    customerBookingServiceKey(estimate, dog),
   ].join("|");
   return \`\${prefix}-\${shortStableHash(seed, 10)}\`;
 }
@@ -1456,17 +1492,30 @@ function customerEstimateDetails() {
   const data = formPayload(formEl);
   const isServiceRequest = customerRequestMode() === "service";
   const dogs = selectedCustomerDogs();
-  const selectedServiceIds = new Set(checkedFrom(formEl, "customerServices"));
-  const dependencyIds = customerDependencyIds(selectedServiceIds);
-  const services = [...selectedServiceIds]
-    .map((id) => {
-      const service = readRecords("service").find((item) => item.id === id);
-      if (!service) return null;
-      const quantity = Math.max(1, Number(formFieldByName(formEl, \`serviceQuantity-\${id}\`)?.value || 1));
-      return { ...service, quantity };
-    })
-    .filter((service) => service && serviceDependencySatisfied(service, dependencyIds))
-    .filter(Boolean);
+  const serviceCatalog = readRecords("service");
+  const services = dogs.flatMap((dog) => {
+    const selectedServiceIds = new Set(checkedFrom(formEl, customerServiceFieldNameForDog(dog)));
+    const dependencyIds = customerDependencyIds(selectedServiceIds);
+    return [...selectedServiceIds]
+      .map((id) => {
+        const service = serviceCatalog.find((item) => item.id === id);
+        if (!service) return null;
+        const quantity = Math.max(1, Number(formFieldByName(formEl, customerServiceQuantityFieldName(id, dog))?.value || 1));
+        const unitPrice = Number(service.basePrice || 0);
+        return {
+          ...service,
+          dogKey: customerServiceDogKey(dog),
+          dogFieldKey: customerServiceDogFieldKey(dog),
+          dogId: dog.id || "",
+          dogName: dog.dogName || "Dog",
+          quantity,
+          perDogLineTotal: unitPrice * quantity,
+          lineTotal: unitPrice * quantity,
+        };
+      })
+      .filter((service) => service && serviceDependencySatisfied(service, dependencyIds))
+      .filter(Boolean);
+  });
   const days = isServiceRequest ? 0 : boardingDays(data.dropoffTime, data.pickupTime);
   const isDayCare = !isServiceRequest && isDayCareStay(data.dropoffTime, data.pickupTime);
   const ratePlan = boardingRatePlanForCustomer();
@@ -1475,13 +1524,8 @@ function customerEstimateDetails() {
   const boardingLines = boardingDogPricingLines(dogs, { ratePlan, days, isServiceRequest, sharedCrateRequested, stayProgram });
   const boardingRate = stayProgram?.rate || ratePlan.primaryRate;
   const boardingCost = boardingLines.reduce((total, line) => total + Number(line.total || 0), 0);
-  const serviceLines = services.map((service) => ({
-    ...service,
-    perDogLineTotal: Number(service.basePrice || 0) * Number(service.quantity || 1),
-    lineTotal: dogs.length * Number(service.basePrice || 0) * Number(service.quantity || 1),
-  }));
-  const serviceCost = serviceLines.reduce((total, service) => total + service.lineTotal, 0);
-  return { dogs, services: serviceLines, days, isDayCare, isServiceRequest, stayProgram, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
+  const serviceCost = services.reduce((total, service) => total + service.lineTotal, 0);
+  return { dogs, services, days, isDayCare, isServiceRequest, stayProgram, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
 }
 
 async function submitPendingCustomerBooking() {
@@ -1505,7 +1549,8 @@ async function submitPendingCustomerBooking() {
   const submittedDogKeys = new Set();
   try {
     for (const dog of estimate.dogs) {
-      const submittedDogKey = [customerBookingSelectionKey(dog), estimate.dropoffTime || "", estimate.pickupTime || "", customerBookingServiceKey(estimate)].join("|");
+      const dogServices = customerServicesForDog(estimate, dog);
+      const submittedDogKey = [customerBookingSelectionKey(dog), estimate.dropoffTime || "", estimate.pickupTime || "", customerBookingServiceKey(estimate, dog)].join("|");
       if (submittedDogKeys.has(submittedDogKey)) {
         skippedCount += 1;
         continue;
@@ -1520,7 +1565,7 @@ async function submitPendingCustomerBooking() {
       const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
       const useExisting = Boolean(existingTarget);
       const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
-      const stayRequests = estimate.services.map((service) => ({
+      const stayRequests = dogServices.map((service) => ({
         id: service.id,
         serviceId: service.id,
         serviceName: service.serviceName,
@@ -1623,7 +1668,7 @@ async function submitPendingCustomerBooking() {
         estimatedTotal: pricingSnapshot.total,
         stayType,
         billingDays: pricingSnapshot.billingDays,
-        requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
+        requestedServices: dogServices.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0), dogName: dog.dogName || "Dog" })),
         flags: ["Required update from owner"],
         stays: existingStays,
         cancelledAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.cancelledAt || "",
