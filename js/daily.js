@@ -204,7 +204,7 @@ function taskLabel(task, shift) {
   if (completed && showRemainingTasksOnly) return "";
   const adminTools =
     canManageTasks
-      ? \`<span class="task-admin-tools"><span class="task-drag-handle" aria-hidden="true">Drag</span><button type="button" class="remove-task-button" data-action="remove-task" data-shift="\${shift}" data-id="\${task.id}" title="Remove task">&times;</button></span>\`
+      ? \`<span class="task-admin-tools"><span class="task-drag-handle" aria-hidden="true">Drag</span><label class="task-edit-label"><span class="sr-only">Edit task</span><input class="task-edit-input" type="text" value="\${taskText}" data-action="edit-task" data-shift="\${shift}" data-id="\${task.id}" aria-label="Edit task text" /></label><button type="button" class="remove-task-button" data-action="remove-task" data-shift="\${shift}" data-id="\${task.id}" title="Remove task">&times;</button></span>\`
       : "";
   const completedMeta = completed ? \`<span class="task-completed-meta">Completed by \${escapeHtml(completed.completedBy || "staff")} at \${escapeHtml(formatDateTime(completed.completedAt))}</span>\` : "";
   return \`<div class="task-item \${completed ? "is-complete" : ""}" draggable="\${canManageTasks && !completed}" data-shift="\${shift}" data-id="\${task.id}"><span class="task-text">\${taskText}</span>\${completedMeta}<button type="button" class="task-done-button" data-action="complete-task" data-shift="\${shift}" data-id="\${task.id}" data-task-text="\${taskText}" \${completed ? "disabled" : ""}>\${completed ? "Done" : "Done"}</button>\${adminTools}</div>\`;
@@ -322,6 +322,7 @@ function customTaskPanelHtml(tab = {}, tasks = []) {
       <div class="admin-task-controls" \${currentRole() === "admin" ? "" : "hidden"}>
         <input type="text" data-custom-task-input="\${escapeHtml(tab.id)}" placeholder="Add a task to \${escapeHtml(tab.label)}" />
         <button type="button" data-action="add-custom-tab-task" data-shift="\${escapeHtml(tab.id)}">Add Task</button>
+        <span class="task-add-status" aria-live="polite"></span>
       </div>
       \${taskTabDeleteRowHtml(tab)}
     </div>

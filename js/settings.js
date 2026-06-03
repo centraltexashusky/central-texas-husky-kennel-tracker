@@ -373,9 +373,14 @@ function setupServiceFormInfoIcons() {
   });
 }
 
-function serviceCatalogForStayRequests() {
+function serviceCatalogForStayRequests(options = {}) {
+  const user = options.user || null;
+  const includeAdminOnly = Boolean(options.includeAdminOnly);
   return readRecords("service")
-    .filter((service) => !service.removed && serviceHasFlag(service, "Active") && service.category !== "Boarding");
+    .filter((service) => !service.removed && serviceHasFlag(service, "Active"))
+    .filter((service) => includeAdminOnly || !serviceHasFlag(service, "Admin only"))
+    .filter((service) => service.category !== "Boarding" || serviceDependencyId(service))
+    .filter((service) => !user || serviceMatchesCustomerPricingScope(service, user));
 }
 
 function normalizedServiceLookupText(value = "") {
@@ -519,10 +524,10 @@ function applyLegacyServiceDependencyMigration(options = {}) {
   return updated;
 }
 
-function serviceCatalogMatchForRequest(value = {}) {
+function serviceCatalogMatchForRequest(value = {}, options = {}) {
   const item = value && typeof value === "object" ? value : {};
   const serviceId = item.serviceId || item.id || "";
-  const catalog = serviceCatalogForStayRequests();
+  const catalog = serviceCatalogForStayRequests(options);
   if (serviceId) {
     const exactId = catalog.find((service) => service.id === serviceId);
     if (exactId) return exactId;

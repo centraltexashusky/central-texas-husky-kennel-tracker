@@ -2568,6 +2568,13 @@ textarea {
   width: 100%;
 }
 
+.task-edit-label {
+  display: inline-flex;
+  flex: 1 1 13rem;
+  margin: 0;
+  min-width: 180px;
+}
+
 .task-edit-input:focus {
   border-color: var(--teal);
   box-shadow: 0 0 0 3px rgba(55, 111, 106, 0.14);
@@ -2643,6 +2650,73 @@ textarea {
   gap: 10px;
   grid-template-columns: minmax(0, 1fr) auto;
   margin-top: 12px;
+  padding: 12px;
+}
+
+.task-add-status {
+  color: rgba(99, 230, 190, 0.96);
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 850;
+  grid-column: 1 / -1;
+  min-height: 1.1em;
+}
+
+.task-add-status:empty {
+  min-height: 0;
+}
+
+.task-add-status.is-visible::before {
+  content: "Saved: ";
+}
+
+.care-log-history-box {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--glass-radius-sm);
+  padding: 0;
+}
+
+.care-log-history-box summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 14px 16px;
+}
+
+.care-log-history-box summary::-webkit-details-marker {
+  display: none;
+}
+
+.care-log-history-box summary span {
+  font-weight: 900;
+}
+
+.care-log-history-box summary small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.care-log-history-box summary::after {
+  color: var(--muted);
+  content: "View";
+  font-weight: 900;
+}
+
+.care-log-history-box[open] summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.care-log-history-box[open] summary::after {
+  content: "Hide";
+}
+
+.care-log-history-list {
+  display: grid;
+  gap: 10px;
   padding: 12px;
 }
 

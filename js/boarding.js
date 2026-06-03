@@ -443,23 +443,40 @@ function boardingStayRequestLabel(value = {}) {
   return \`\${serviceName}\${quantity > 1 ? \` x\${quantity}\` : ""} requested\`;
 }
 
-function boardingStayRequestUnitPrice(value = {}) {
+function stayRequestIsFullBathLike(value = {}) {
   const item = value && typeof value === "object" ? value : {};
-  const savedPrice = Number(item.unitPrice || item.basePrice || 0);
-  if (savedPrice) return savedPrice;
-  return Number(serviceCatalogMatchForRequest(value)?.basePrice || 0);
+  const text = normalizedServiceLookupText(
+    item.serviceName || item.name || item.label || item.value || boardingStayRequestLabel(value),
+  );
+  return text === "bath" || text.startsWith("full bath") || text.startsWith("full premium bath");
 }
 
-function boardingStayRequestUnit(value = {}) {
+function stayRequestServiceUnitPriceForUser(serviceOrRequest = {}, user = currentUser) {
+  if (isMemberUser(user) && stayRequestIsFullBathLike(serviceOrRequest)) return 100;
+  return Number(serviceOrRequest?.basePrice || serviceOrRequest?.unitPrice || 0);
+}
+
+function boardingStayRequestUnitPrice(value = {}, options = {}) {
   const item = value && typeof value === "object" ? value : {};
-  return item.unit || serviceCatalogMatchForRequest(value)?.unit || "";
+  const catalogService = serviceCatalogMatchForRequest(value, options);
+  if (options.preferCatalogPricing && catalogService?.basePrice !== undefined) return stayRequestServiceUnitPriceForUser(catalogService, options.user);
+  if (options.preferCatalogPricing && isMemberUser(options.user) && stayRequestIsFullBathLike(value)) return 100;
+  const savedPrice = Number(item.unitPrice || item.basePrice || 0);
+  if (isMemberUser(options.user) && stayRequestIsFullBathLike(value)) return 100;
+  if (savedPrice) return savedPrice;
+  return catalogService ? stayRequestServiceUnitPriceForUser(catalogService, options.user) : 0;
+}
+
+function boardingStayRequestUnit(value = {}, options = {}) {
+  const item = value && typeof value === "object" ? value : {};
+  return item.unit || serviceCatalogMatchForRequest(value, options)?.unit || "";
 }
 
 function boardingStayRequestDisplayText(value = {}, options = {}) {
   const quantity = boardingServiceTaskQuantity(value);
   const label = options.customerFacing ? customerFacingBoardingStayRequestLabel(value, quantity) : boardingStayRequestLabel(value);
-  const unitPrice = boardingStayRequestUnitPrice(value);
-  const unit = boardingStayRequestUnit(value);
+  const unitPrice = boardingStayRequestUnitPrice(value, options);
+  const unit = boardingStayRequestUnit(value, options);
   const priceText = unitPrice ? \` - \${money(unitPrice * quantity)}\${unit ? \` \${unit}\` : ""}\` : "";
   return \`\${label}\${priceText}\`;
 }
@@ -469,9 +486,9 @@ function boardingStayServicesText(stay = {}, options = {}) {
   return requests.length ? requests.join(", ") : "No service requests";
 }
 
-function boardingStayRequestTotal(requests = []) {
+function boardingStayRequestTotal(requests = [], options = {}) {
   return arrayValue(requests).reduce((total, request) => {
-    const unitPrice = boardingStayRequestUnitPrice(request);
+    const unitPrice = boardingStayRequestUnitPrice(request, options);
     const quantity = boardingServiceTaskQuantity(request);
     return total + (unitPrice * quantity);
   }, 0);
@@ -500,6 +517,10 @@ function boardingRatePlanForCustomer(user = currentUser) {
 function boardingRatePlanForRecord(record = {}) {
   const owner = ownerAccountForBoarding(record) || savedUserFor({ email: record.ownerEmail || record.customerEmail }) || {};
   return boardingRatePlanForCustomer(owner);
+}
+
+function boardingPricingUserForRecord(record = {}, options = {}) {
+  return options.user || options.ownerUser || ownerAccountForBoarding(record) || savedUserFor({ email: record.ownerEmail || record.customerEmail }) || null;
 }
 
 function boardingPricingDogKey(dog = {}) {
@@ -556,6 +577,11 @@ function boardingDogPricingLines(dogs = [], options = {}) {
 
 function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   const ratePlan = options.ratePlan || boardingRatePlanForRecord(record);
+  const pricingUser = boardingPricingUserForRecord(record, options);
+  const servicePricingOptions = {
+    user: pricingUser,
+    preferCatalogPricing: Boolean(options.preferCatalogPricing || options.forceCurrentPricing || boardingStayCanUseCurrentPricing(record, stay)),
+  };
   const stayType = options.stayType || stay.stayType || record.stayType || "Boarding";
   const isServiceRequest = stayType === "Service Request";
   const days = isServiceRequest ? 0 : boardingDays(stay.dropoffTime, stay.pickupTime);
@@ -568,7 +594,7 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   const requests = options.requests || stay.requests || [];
   const adjustments = normalizeInvoiceAdjustments(options.invoiceAdjustments || stay.invoiceAdjustments || []);
   const boardingSubtotal = isServiceRequest ? 0 : days * rate;
-  const serviceSubtotal = boardingStayRequestTotal(requests);
+  const serviceSubtotal = boardingStayRequestTotal(requests, servicePricingOptions);
   const adjustmentsTotal = invoiceAdjustmentsTotal(adjustments);
   const total = Math.max(0, boardingSubtotal + serviceSubtotal + adjustmentsTotal);
   return {
@@ -601,8 +627,8 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
         type: "service",
         label: boardingServiceTaskDisplayName(request),
         quantity: boardingServiceTaskQuantity(request),
-        unitPrice: boardingStayRequestUnitPrice(request),
-        amount: boardingStayRequestUnitPrice(request) * boardingServiceTaskQuantity(request),
+        unitPrice: boardingStayRequestUnitPrice(request, servicePricingOptions),
+        amount: boardingStayRequestUnitPrice(request, servicePricingOptions) * boardingServiceTaskQuantity(request),
       })),
       ...adjustments.map((adjustment) => ({
         type: adjustment.type,
@@ -711,6 +737,7 @@ function boardingServiceTaskNameFromKey(taskKey = "") {
 function boardingServiceTaskSources(record = {}, stay = {}) {
   const sources = [];
   const seenServiceKeys = new Set();
+  const pricingOptions = { user: boardingPricingUserForRecord(record), preferCatalogPricing: true };
   const requestedSource = arrayValue(stay.requests);
   requestedSource.forEach((item, index) => {
     const service = item && typeof item === "object" ? item : {};
@@ -722,8 +749,8 @@ function boardingServiceTaskSources(record = {}, stay = {}) {
       serviceName,
       label: \`\${serviceName}\${quantity > 1 ? \` x\${quantity}\` : ""}\`,
       quantity,
-      unit: service.unit || boardingStayRequestUnit(item),
-      unitPrice: boardingStayRequestUnitPrice(item),
+      unit: service.unit || boardingStayRequestUnit(item, pricingOptions),
+      unitPrice: boardingStayRequestUnitPrice(item, pricingOptions),
       source: "requested",
       sourceIndex: index,
       requestedAt: stay.createdAt || record.submittedAt || "",
@@ -743,8 +770,8 @@ function boardingServiceTaskSources(record = {}, stay = {}) {
       serviceName,
       label: \`\${serviceName}\${quantity > 1 ? \` x\${quantity}\` : ""}\`,
       quantity,
-      unit: service.unit || boardingStayRequestUnit(service),
-      unitPrice: Number(service.unitPrice || service.basePrice || 0),
+      unit: service.unit || boardingStayRequestUnit(service, pricingOptions),
+      unitPrice: boardingStayRequestUnitPrice(service, pricingOptions),
       source: "check-in",
       sourceIndex: index,
       requestedAt: stay.checkIn?.verifiedAt || stay.updatedAt || "",
@@ -954,7 +981,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
   return \`<article class="record-card \${options.compact ? "compact-record-card" : ""}">
     <strong>\${escapeHtml(formatDateTime(stay.dropoffTime) || "Requested stay")}\${stay.pickupTime ? \` to \${escapeHtml(formatDateTime(stay.pickupTime))}\` : ""}</strong>
     <div class="chip-row">\${requestCode}\${statusChip}\${boardingStayServiceFlagHtml(record, stay)}</div>
-    <p>\${escapeHtml(boardingStayServicesText(stay, { customerFacing: isCustomer }))}</p>
+    <p>\${escapeHtml(boardingStayServicesText(stay, { customerFacing: isCustomer, user: boardingPricingUserForRecord(record), preferCatalogPricing: true }))}</p>
     \${options.showServiceTasks ? boardingStayServiceTaskListHtml(record, stay, { actions: options.serviceActions }) : ""}
     \${stay.bathPlan ? \`<p>\${escapeHtml(stay.bathPlan)}</p>\` : ""}
     \${stay.stayNotes ? \`<p>\${escapeHtml(stay.stayNotes)}</p>\` : ""}
@@ -1159,11 +1186,12 @@ function boardingDogVisibleToCustomer(record = {}, email = currentUser?.email) {
 }
 
 function boardingDraftFromCustomerDog(dog = {}) {
+  const combinedStatus = combinedDogSpayNeuterStatus(dog);
   return {
     dogName: dog.dogName || "",
     breedDescription: dog.breedDescription || "",
-    sex: dog.sex || "Unknown",
-    spayNeuterStatus: dog.spayNeuterStatus || "Unknown",
+    sex: sexFromCombinedDogSpayNeuterStatus(combinedStatus) || dog.sex || "Unknown",
+    spayNeuterStatus: combinedStatus,
     ownerName: dog.ownerName || "",
     ownerPhone: dog.ownerPhone || "",
     ownerEmail: dog.ownerEmail || dog.customerEmail || "",
@@ -1406,9 +1434,9 @@ function boardingQuickCardHtml(record = {}) {
     </article>\`;
 }
 
-function serviceForStayRequestOption(option = {}) {
+function serviceForStayRequestOption(option = {}, options = {}) {
   const terms = arrayValue(option.matchTerms).map(normalizedServiceLookupText).filter(Boolean);
-  const services = serviceCatalogForStayRequests();
+  const services = serviceCatalogForStayRequests(options);
   return services.find((service) => terms.includes(normalizedServiceLookupText(service.serviceName)))
     || services.find((service) => {
       const name = normalizedServiceLookupText(service.serviceName);
@@ -1417,8 +1445,12 @@ function serviceForStayRequestOption(option = {}) {
     || null;
 }
 
-function stayRequestOptionSnapshot(option = {}) {
-  const service = serviceForStayRequestOption(option) || {};
+function stayRequestOptionSnapshot(option = {}, options = {}) {
+  const service = serviceForStayRequestOption(option, options) || {};
+  const fallbackPrice = isMemberUser(options.user) ? option.memberFallbackPrice : option.nonMemberFallbackPrice;
+  const unitPrice = service.id
+    ? stayRequestServiceUnitPriceForUser(service, options.user)
+    : Number(fallbackPrice || 0);
   return {
     id: service.id || "",
     serviceId: service.id || "",
@@ -1427,7 +1459,7 @@ function stayRequestOptionSnapshot(option = {}) {
     category: service.category || "",
     unit: service.unit || "",
     quantity: 1,
-    unitPrice: Number(service.basePrice || 0),
+    unitPrice,
   };
 }
 
@@ -1439,11 +1471,46 @@ function stayRequestMatchesOption(request = {}, option = {}) {
   return arrayValue(option.matchTerms).map(normalizedServiceLookupText).filter(Boolean).some((term) => requestLabel.includes(term) || requestName.includes(term));
 }
 
-function stayRequestCheckboxesHtml(stay = {}) {
+function stayRequestMatchesService(request = {}, service = {}, options = {}) {
+  if (!service?.id) return false;
+  const item = request && typeof request === "object" ? request : {};
+  const requestServiceId = item.serviceId || item.id || "";
+  if (requestServiceId && requestServiceId === service.id) return true;
+  const matched = serviceCatalogMatchForRequest(request, options);
+  if (matched?.id === service.id) return true;
+  const requestName = normalizedServiceLookupText(item.serviceName || boardingServiceTaskDisplayName(request));
+  const serviceName = normalizedServiceLookupText(service.serviceName || "");
+  if (!requestName || !serviceName) return false;
+  return requestName === serviceName || requestName.includes(serviceName) || serviceName.includes(requestName);
+}
+
+function boardingStayRequestServiceCatalog(record = {}, stay = {}) {
+  const user = boardingPricingUserForRecord(record);
   const requests = arrayValue(stay.requests);
+  const selectedIds = new Set(requests.map((request) => (request && typeof request === "object" ? request.serviceId || request.id || "" : "")).filter(Boolean));
+  return serviceCatalogForStayRequests({ user })
+    .filter((service) => !serviceDependencyId(service) || selectedIds.has(serviceDependencyId(service)))
+    .sort((a, b) => [a.category || "", customerServiceDisplayName(a)].join("|").localeCompare([b.category || "", customerServiceDisplayName(b)].join("|")));
+}
+
+function stayRequestCheckboxesHtml(stay = {}, record = {}) {
+  const requests = arrayValue(stay.requests);
+  const user = boardingPricingUserForRecord(record);
+  const activeServices = boardingStayRequestServiceCatalog(record, stay);
+  if (activeServices.length) {
+    return activeServices
+      .map((service) => {
+        const checked = requests.some((request) => stayRequestMatchesService(request, service, { user }));
+        const label = \`\${customerServiceDisplayName(service)} requested\`;
+        const unitPrice = stayRequestServiceUnitPriceForUser(service, user);
+        const price = unitPrice ? \` - \${money(unitPrice)}\${service.unit ? \` \${service.unit}\` : ""}\` : "";
+        return \`<label><input type="checkbox" name="stayRequests" value="\${escapeHtml(label)}" data-service-id="\${escapeHtml(service.id || "")}" data-service-name="\${escapeHtml(service.serviceName || "")}" data-unit-price="\${escapeHtml(unitPrice)}" data-unit="\${escapeHtml(service.unit || "")}" \${checked ? "checked" : ""} /> \${escapeHtml(label)}\${escapeHtml(price)}</label>\`;
+      })
+      .join("");
+  }
   return stayRequestServiceOptions
     .map((option) => {
-      const snapshot = stayRequestOptionSnapshot(option);
+      const snapshot = stayRequestOptionSnapshot(option, { user });
       const checked = requests.some((request) => stayRequestMatchesOption(request, option));
       const price = snapshot.unitPrice ? \` - \${money(snapshot.unitPrice)}\${snapshot.unit ? \` \${snapshot.unit}\` : ""}\` : "";
       return \`<label><input type="checkbox" name="stayRequests" value="\${escapeHtml(option.value)}" data-service-id="\${escapeHtml(snapshot.serviceId || "")}" data-service-name="\${escapeHtml(snapshot.serviceName || "")}" data-unit-price="\${escapeHtml(snapshot.unitPrice || 0)}" data-unit="\${escapeHtml(snapshot.unit || "")}" \${checked ? "checked" : ""} /> \${escapeHtml(option.value)}\${escapeHtml(price)}</label>\`;
@@ -1452,7 +1519,7 @@ function stayRequestCheckboxesHtml(stay = {}) {
 }
 
 function boardingStayEstimatedTotal(record = {}, existingStay = {}, selectedRequests = []) {
-  const snapshot = boardingPricingSnapshotForStay(record, { ...existingStay, requests: selectedRequests });
+  const snapshot = boardingPricingSnapshotForStay(record, { ...existingStay, requests: selectedRequests }, { forceCurrentPricing: true, preferCatalogPricing: true });
   return snapshot.total;
 }
 
@@ -1512,7 +1579,7 @@ function boardingStayFormHtml(record = {}, stay = {}) {
         <label>Pick-up time<input type="datetime-local" name="pickupTime" required value="\${escapeHtml(stay.pickupTime?.slice(0, 16) || "")}" /></label>
       </div>
       \${boardingStayLocationFieldsHtml(stay)}
-      <div class="checklist compact">\${stayRequestCheckboxesHtml(stay)}</div>
+      <div class="checklist compact">\${stayRequestCheckboxesHtml(stay, record)}</div>
       \${boardingStayBillingAdjustmentFieldsHtml(stay)}
       <label>Stay notes<textarea name="stayNotes" rows="3" placeholder="Owner instructions or pickup grooming notes">\${escapeHtml(stay.stayNotes || "")}</textarea></label>
       <div class="button-row"><button type="submit">\${isEdit ? "Save Boarding Stay" : "Add Boarding Stay"}</button></div>
@@ -2274,7 +2341,10 @@ function boardingFamilyPricingSnapshots(entries = []) {
       stayProgram,
     });
   const groupBoardingSubtotal = lines.reduce((total, line) => total + Number(line.total || 0), 0);
-  const groupServiceSubtotal = activeEntries.reduce((total, entry) => total + boardingStayRequestTotal(entry.stay?.requests || []), 0);
+  const groupServiceSubtotal = activeEntries.reduce((total, entry) => total + boardingStayRequestTotal(entry.stay?.requests || [], {
+    user: boardingPricingUserForRecord(entry.record || {}),
+    preferCatalogPricing: true,
+  }), 0);
   const groupTotal = groupBoardingSubtotal + groupServiceSubtotal;
   activeEntries.forEach((entry, index) => {
     const record = entry.record || {};
@@ -2348,7 +2418,7 @@ function boardingFamilyGroups(entries = []) {
 function boardingRequestCardHtml(entry = {}, options = {}) {
   const record = entry.record || {};
   const stay = entry.stay || {};
-  const services = boardingStayServicesText(stay);
+  const services = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
   const status = entry.status;
   const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const pricingSnapshot = options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay);
@@ -2800,6 +2870,9 @@ function resetBoardingDogFormForRecord(record = {}) {
   });
   selectedDogPhotos.boarding = null;
   setFormValues(formEl, record);
+  const combinedStatus = combinedDogSpayNeuterStatus(record);
+  if (formEl.elements.spayNeuterStatus) formEl.elements.spayNeuterStatus.value = combinedStatus;
+  if (formEl.elements.sex) formEl.elements.sex.value = sexFromCombinedDogSpayNeuterStatus(combinedStatus) || record.sex || "";
   if (formEl.elements.rabiesGoodThreeYears) formEl.elements.rabiesGoodThreeYears.checked = vaccineDurationIsThreeYears(record, "rabies");
   if (formEl.elements.dhppGoodThreeYears) formEl.elements.dhppGoodThreeYears.checked = vaccineDurationIsThreeYears(record, "dhpp");
   formEl.elements.id.value = record.id || "";
@@ -2925,7 +2998,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? \`<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="\${escapeHtml(displayRecord.id)}" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Update Owner</button>\`
         : "";
-      return \`<article class="record-card"><strong>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Remove Stay</button></div></article>\`;
+      return \`<article class="record-card"><strong>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Remove Stay</button></div></article>\`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -2934,7 +3007,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const status = boardingStayDisplayStatus(record, stay);
   const nextStatuses = boardingStatusTransitions[status] || [];
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
-  const servicesText = boardingStayServicesText(stay);
+  const servicesText = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
   const serviceSummary = servicesText === "No service requests" ? "No service requested" : servicesText;
   return \`<section class="popup-record-section">
     <article class="record-card compact-record-card">
@@ -3111,7 +3184,7 @@ function renderBoardingHistory(record = activeBoardingDog()) {
           return \`<article class="record-card clickable-card compact-record-card" data-action="view-boarding-stay-history" data-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(requestCode)}">
             <strong>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
             <div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusChipHtml(displayRecord, stay)}</div>
-            <p>\${escapeHtml(location || boardingStayServicesText(stay) || "No location or service request saved")}</p>
+            <p>\${escapeHtml(location || boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }) || "No location or service request saved")}</p>
             <span>\${events.length} lifecycle event\${events.length === 1 ? "" : "s"}</span>
           </article>\`;
         })

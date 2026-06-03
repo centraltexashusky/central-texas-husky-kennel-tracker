@@ -954,18 +954,48 @@ function vaccinationExpiryDate(record = {}) {
   return date && !Number.isNaN(date.getTime()) ? date : null;
 }
 
+function vaccinationFieldDate(record = {}, keys = []) {
+  const value = keys.map((key) => record[key]).find(Boolean) || "";
+  const date = value ? new Date(\`\${String(value).slice(0, 10)}T12:00:00\`) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function vaccinationDateExpiry(record = {}, vaccineKey = "", keys = [], defaultYears = 1) {
+  const date = vaccinationFieldDate(record, keys);
+  if (!date) return null;
+  const years = vaccineDurationIsThreeYears(record, vaccineKey) ? 3 : defaultYears;
+  const expiry = new Date(date);
+  expiry.setFullYear(expiry.getFullYear() + years);
+  return expiry;
+}
+
+function legacyVaccinationDateStatus(record = {}) {
+  const expirations = [
+    vaccinationDateExpiry(record, "rabies", ["rabiesDate", "rabiesVaccinationDate", "lastRabiesVaccination"], 1),
+    vaccinationDateExpiry(record, "dhpp", ["dhppDate", "dhppVaccinationDate", "lastDhppVaccination"], 1),
+    vaccinationDateExpiry(record, "bordetella", ["bordetellaDate", "bordetellaVaccinationDate", "lastBordetellaVaccination"], 1),
+  ].filter(Boolean);
+  if (!expirations.length) return "";
+  const today = new Date(\`\${todayDate()}T00:00:00\`);
+  return expirations.some((date) => date >= today) ? "ok" : "expired";
+}
+
 function vaccinationStatusInfo(record = {}) {
   const records = arrayValue(record.vaccinationRecords);
   const expirations = records.map(vaccinationExpiryDate).filter(Boolean);
   const today = new Date(\`\${todayDate()}T00:00:00\`);
   const hasVaccinationRecords = records.length > 0;
+  const legacyDateStatus = legacyVaccinationDateStatus(record);
+  if (legacyDateStatus === "ok") {
+    return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
+  }
   if (hasVaccinationRecords && expirations.some((date) => date >= today)) {
     return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
   }
-  if (records.length) {
+  if (records.length || legacyDateStatus === "expired") {
     return { label: "Vaccines Expired", customerLabel: "Vaccines on file", className: "is-vaccine-expired", customerClassName: "is-vaccine-ok" };
   }
-  const hasLegacyDates = Boolean(record.dhppDate || record.rabiesDate || record.bordetellaDate || record.vaccinationFiles);
+  const hasLegacyDates = Boolean(record.dhppDate || record.dhppVaccinationDate || record.lastDhppVaccination || record.rabiesDate || record.rabiesVaccinationDate || record.lastRabiesVaccination || record.bordetellaDate || record.bordetellaVaccinationDate || record.lastBordetellaVaccination || record.vaccinationFiles);
   if (hasLegacyDates) return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
   return { label: "No Vaccines on File", customerLabel: "Vaccines needed", className: "is-vaccine-needed", customerClassName: "is-vaccine-needed" };
 }

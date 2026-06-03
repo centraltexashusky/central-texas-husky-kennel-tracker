@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260602-dog-service-menus" />
+    <link rel="stylesheet" href="styles.css?v=20260603-board-daily-fixes" />
   </head>
   <body>
     <div class="app-layout">
@@ -522,6 +522,7 @@
             <div class="admin-task-controls" id="dailyTaskAdminControls" hidden>
               <input type="text" id="newTaskText" placeholder="Add a new daily task" />
               <button type="button" id="addDailyTaskButton">Add Task</button>
+              <span class="task-add-status" aria-live="polite"></span>
             </div>
           </div>
         </section>
@@ -541,6 +542,7 @@
             <div class="admin-task-controls" id="pmTaskAdminControls" hidden>
               <input type="text" id="newPmTaskText" placeholder="Add a new evening task" />
               <button type="button" id="addPmTaskButton">Add Task</button>
+              <span class="task-add-status" aria-live="polite"></span>
             </div>
           </div>
         </section>
@@ -560,6 +562,7 @@
             <div class="admin-task-controls" id="weeklyTaskAdminControls" hidden>
               <input type="text" id="newWeeklyTaskText" placeholder="Add a new weekly task" />
               <button type="button" id="addWeeklyTaskButton">Add Task</button>
+              <span class="task-add-status" aria-live="polite"></span>
             </div>
           </div>
         </section>
@@ -579,6 +582,7 @@
             <div class="admin-task-controls" id="tuesdayTaskAdminControls" hidden>
               <input type="text" id="newTuesdayTaskText" placeholder="Add a new Tuesday task" />
               <button type="button" id="addTuesdayTaskButton">Add Task</button>
+              <span class="task-add-status" aria-live="polite"></span>
             </div>
           </div>
         </section>
@@ -599,6 +603,7 @@
             <div class="admin-task-controls" id="monthlyTaskAdminControls" hidden>
               <input type="text" id="newMonthlyTaskText" placeholder="Add a new monthly task" />
               <button type="button" id="addMonthlyTaskButton">Add Task</button>
+              <span class="task-add-status" aria-live="polite"></span>
             </div>
           </div>
         </section>
@@ -1005,8 +1010,8 @@
                 <label>Breed / description<input type="text" name="breedDescription" /></label>
                 <label>Date of birth<input type="date" name="dateOfBirth" /></label>
                 <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
-                <label>Sex<select name="sex" required><option value="">Select sex</option><option>Male</option><option>Female</option><option>Unknown</option></select></label>
-                <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
+                <input type="hidden" name="sex" />
+                <label>Sex / Spayed-Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Male Intact</option><option>Male Neutered</option><option>Male Unknown</option><option>Female Intact</option><option>Female Spayed</option><option>Female Unknown</option></select><small>Matches the customer dog profile selection.</small></label>
                 <label>Owner name<input type="text" name="ownerName" required /></label>
                 <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
                 <label>Owner email<input type="email" name="ownerEmail" /></label>
@@ -1298,6 +1303,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260603-dhpp-duration"></script>
+  <script type="module" src="js/main.js?v=20260603-board-daily-fixes"></script>
 </body>
 </html>

@@ -524,6 +524,53 @@ function isMemberUser(user = currentUser) {
     || user.isMember === true || user.isMember === "on" || user.isMember === "true" || user.member === true;
 }
 
+var dogSexSpayNeuterOptions = ["Male Intact", "Male Neutered", "Male Unknown", "Female Intact", "Female Spayed", "Female Unknown"];
+
+function canonicalDogSpayNeuterStatus(value = "") {
+  const clean = String(value || "").trim();
+  if (!clean) return "";
+  const exact = dogSexSpayNeuterOptions.find((option) => option.toLowerCase() === clean.toLowerCase());
+  if (exact) return exact;
+  const normalized = clean.toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  if (normalized.includes("female") && normalized.includes("spay")) return "Female Spayed";
+  if (normalized.includes("female") && normalized.includes("intact")) return "Female Intact";
+  if (normalized.includes("female") && normalized.includes("unknown")) return "Female Unknown";
+  if (normalized.includes("male") && normalized.includes("neuter")) return "Male Neutered";
+  if (normalized.includes("male") && normalized.includes("intact")) return "Male Intact";
+  if (normalized.includes("male") && normalized.includes("unknown")) return "Male Unknown";
+  if (normalized === "spayed") return "Female Spayed";
+  if (normalized === "neutered") return "Male Neutered";
+  return clean;
+}
+
+function combinedDogSpayNeuterStatus(recordOrSex = {}, statusValue = "") {
+  const record = recordOrSex && typeof recordOrSex === "object" ? recordOrSex : {};
+  const sex = String(record.sex || (typeof recordOrSex === "string" ? recordOrSex : "") || "").trim();
+  const rawStatus = statusValue || record.spayNeuterStatus || "";
+  const canonical = canonicalDogSpayNeuterStatus(rawStatus);
+  if (dogSexSpayNeuterOptions.includes(canonical)) return canonical;
+  const sexKey = sex.toLowerCase();
+  const statusKey = String(rawStatus || canonical || "").toLowerCase();
+  if (sexKey.includes("female")) {
+    if (statusKey.includes("spay")) return "Female Spayed";
+    if (statusKey.includes("intact")) return "Female Intact";
+    return "Female Unknown";
+  }
+  if (sexKey.includes("male")) {
+    if (statusKey.includes("neuter")) return "Male Neutered";
+    if (statusKey.includes("intact")) return "Male Intact";
+    return "Male Unknown";
+  }
+  return "";
+}
+
+function sexFromCombinedDogSpayNeuterStatus(status = "") {
+  const combined = combinedDogSpayNeuterStatus({ spayNeuterStatus: status });
+  if (combined.startsWith("Female")) return "Female";
+  if (combined.startsWith("Male")) return "Male";
+  return "";
+}
+
 // Extracted to js/boarding.js: dogTypeBadgeHtml
 
 
@@ -2239,16 +2286,20 @@ function resetCareQuickLogForm() {
 function renderStructuredCareLogs() {
   const list = $("#structuredCareLogList");
   if (!list) return;
-  list.innerHTML = pendingStructuredCareLogs.length
-    ? pendingStructuredCareLogs
-        .map((log) => {
-          const details = [log.date, log.minutes ? \`\${log.minutes} minutes\` : "", log.note].filter(Boolean).join(" | ");
-          const canModify = canModifyCareLog(log);
-          const actions = canModify ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-care-log" data-id="\${escapeHtml(log.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-care-log" data-id="\${escapeHtml(log.id)}">Remove</button></div>\` : "";
-          return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || "Care")}</strong><p>\${escapeHtml(details || "No extra details")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${actions}</article>\`;
-        })
-        .join("")
-    : "<p>No structured care logs added to this daily report yet.</p>";
+  if (!pendingStructuredCareLogs.length) {
+    list.innerHTML = "<p>No structured care logs added to this daily report yet.</p>";
+    return;
+  }
+  const logItems = pendingStructuredCareLogs
+    .map((log) => {
+      const details = [log.date, log.minutes ? \`\${log.minutes} minutes\` : "", log.note].filter(Boolean).join(" | ");
+      const canModify = canModifyCareLog(log);
+      const actions = canModify ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-care-log" data-id="\${escapeHtml(log.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-care-log" data-id="\${escapeHtml(log.id)}">Remove</button></div>\` : "";
+      return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || "Care")}</strong><p>\${escapeHtml(details || "No extra details")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${actions}</article>\`;
+    })
+    .join("");
+  const countLabel = \`\${pendingStructuredCareLogs.length} care log\${pendingStructuredCareLogs.length === 1 ? "" : "s"}\`;
+  list.innerHTML = \`<details class="care-log-history-box"><summary><span>Saved care logs</span><small>\${escapeHtml(countLabel)}</small></summary><div class="care-log-history-list">\${logItems}</div></details>\`;
 }
 
 function canModifyCareLog(log = {}) {
@@ -2710,6 +2761,29 @@ async function editTask(shift, id, text, sourceInput) {
   showToast("Task text updated.");
 }
 
+function showTaskAddedStatus(input, message = "Task added.") {
+  const controls = input?.closest?.(".admin-task-controls");
+  const status = controls?.querySelector?.(".task-add-status");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.add("is-visible");
+  window.clearTimeout(Number(status.dataset.clearTimer || 0));
+  const timer = window.setTimeout(() => {
+    status.textContent = "";
+    status.classList.remove("is-visible");
+    delete status.dataset.clearTimer;
+  }, 2600);
+  status.dataset.clearTimer = String(timer);
+}
+
+function clearAddedTaskInput(input, selector = "") {
+  const freshInput = selector ? $(selector) : input;
+  [input, freshInput].filter(Boolean).forEach((target) => {
+    target.value = "";
+  });
+  showTaskAddedStatus(freshInput || input);
+}
+
 async function removeTask(shift, id) {
   const config = readTaskConfig();
   config[shift] = (config[shift] || []).filter((task) => task.id !== id);
@@ -2722,23 +2796,23 @@ async function removeTask(shift, id) {
 
 async function addCustomTask() {
   const input = $("#newTaskText");
-  if (input && await addTaskToShift("morning", input.value)) input.value = "";
+  if (input && await addTaskToShift("morning", input.value)) clearAddedTaskInput(input, "#newTaskText");
 }
 
 async function addPmCustomTask() {
   const input = $("#newPmTaskText");
-  if (input && await addTaskToShift("pm", input.value)) input.value = "";
+  if (input && await addTaskToShift("pm", input.value)) clearAddedTaskInput(input, "#newPmTaskText");
 }
 
 async function addManagedTask(shift, inputSelector) {
   const input = $(inputSelector);
-  if (input && await addTaskToShift(shift, input.value)) input.value = "";
+  if (input && await addTaskToShift(shift, input.value)) clearAddedTaskInput(input, inputSelector);
 }
 
 async function addCustomTabTask(button) {
   const shift = button.dataset.shift || "";
   const input = $(\`[data-custom-task-input="\${shift}"]\`);
-  if (input && await addTaskToShift(shift, input.value)) input.value = "";
+  if (input && await addTaskToShift(shift, input.value)) clearAddedTaskInput(input, \`[data-custom-task-input="\${shift}"]\`);
 }
 
 // Extracted to js/daily.js: setOwnedFormLocked
@@ -4635,7 +4709,7 @@ async function syncLinkedCustomerDogPhotoFromBoarding(record = {}) {
 
 
 var stayRequestServiceOptions = [
-  { value: "Bath requested", fallbackServiceName: "Bath", matchTerms: ["full bath", "bath"] },
+  { value: "Full Bath requested", fallbackServiceName: "Full Bath", matchTerms: ["full premium bath", "full bath", "bath"], memberFallbackPrice: 100 },
   { value: "Nail trim requested", fallbackServiceName: "Nail trim", matchTerms: ["nail trim", "nail"] },
   { value: "Paw trim requested", fallbackServiceName: "Paw trim", matchTerms: ["paw trim", "paw"] },
   { value: "Training requested", fallbackServiceName: "Training", matchTerms: ["training"] },
@@ -9770,11 +9844,14 @@ function initEvents() {
   });
   $("#boardingDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const formEl = event.currentTarget;
-    try {
-      const formData = formPayload(formEl);
-      if (!validateForm(formEl)) return;
-      let existing = activeBoardingDog() || {};
+      const formEl = event.currentTarget;
+      try {
+        const formData = formPayload(formEl);
+        const combinedStatus = combinedDogSpayNeuterStatus(formData);
+        const derivedSex = sexFromCombinedDogSpayNeuterStatus(combinedStatus) || formData.sex || "";
+        if (formEl.elements.sex) formEl.elements.sex.value = derivedSex;
+        if (!validateForm(formEl)) return;
+        let existing = activeBoardingDog() || {};
       if (!existing.id) {
         existing = findMatchingBoardingDogProfile(formData) || {};
       }
@@ -9789,12 +9866,14 @@ function initEvents() {
       const statusHistory = existing.statusHistory || [];
       const statusScopedStays = existing.stays || [];
       let payload = {
-        ...existing,
-        type: "boardingDog",
-        id: dogId,
-        submittedAt: existing.submittedAt || timestamp,
-        ...formData,
-        ownerEmail: normalizeEmail(formData.ownerEmail),
+	        ...existing,
+	        type: "boardingDog",
+	        id: dogId,
+	        submittedAt: existing.submittedAt || timestamp,
+	        ...formData,
+	        sex: derivedSex || formData.sex || existing.sex || "",
+	        spayNeuterStatus: combinedStatus || formData.spayNeuterStatus || existing.spayNeuterStatus || "",
+	        ownerEmail: normalizeEmail(formData.ownerEmail),
         customerEmail: normalizeEmail(formData.customerEmail || formData.ownerEmail || existing.customerEmail),
         linkedOwnerEmail: normalizeEmail(formData.ownerEmail || existing.linkedOwnerEmail),
         secondaryOwnerEmail: normalizeEmail(formData.secondaryOwnerEmail),

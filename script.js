@@ -583,6 +583,53 @@ function isMemberUser(user = currentUser) {
     || user.isMember === true || user.isMember === "on" || user.isMember === "true" || user.member === true;
 }
 
+var dogSexSpayNeuterOptions = ["Male Intact", "Male Neutered", "Male Unknown", "Female Intact", "Female Spayed", "Female Unknown"];
+
+function canonicalDogSpayNeuterStatus(value = "") {
+  const clean = String(value || "").trim();
+  if (!clean) return "";
+  const exact = dogSexSpayNeuterOptions.find((option) => option.toLowerCase() === clean.toLowerCase());
+  if (exact) return exact;
+  const normalized = clean.toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  if (normalized.includes("female") && normalized.includes("spay")) return "Female Spayed";
+  if (normalized.includes("female") && normalized.includes("intact")) return "Female Intact";
+  if (normalized.includes("female") && normalized.includes("unknown")) return "Female Unknown";
+  if (normalized.includes("male") && normalized.includes("neuter")) return "Male Neutered";
+  if (normalized.includes("male") && normalized.includes("intact")) return "Male Intact";
+  if (normalized.includes("male") && normalized.includes("unknown")) return "Male Unknown";
+  if (normalized === "spayed") return "Female Spayed";
+  if (normalized === "neutered") return "Male Neutered";
+  return clean;
+}
+
+function combinedDogSpayNeuterStatus(recordOrSex = {}, statusValue = "") {
+  const record = recordOrSex && typeof recordOrSex === "object" ? recordOrSex : {};
+  const sex = String(record.sex || (typeof recordOrSex === "string" ? recordOrSex : "") || "").trim();
+  const rawStatus = statusValue || record.spayNeuterStatus || "";
+  const canonical = canonicalDogSpayNeuterStatus(rawStatus);
+  if (dogSexSpayNeuterOptions.includes(canonical)) return canonical;
+  const sexKey = sex.toLowerCase();
+  const statusKey = String(rawStatus || canonical || "").toLowerCase();
+  if (sexKey.includes("female")) {
+    if (statusKey.includes("spay")) return "Female Spayed";
+    if (statusKey.includes("intact")) return "Female Intact";
+    return "Female Unknown";
+  }
+  if (sexKey.includes("male")) {
+    if (statusKey.includes("neuter")) return "Male Neutered";
+    if (statusKey.includes("intact")) return "Male Intact";
+    return "Male Unknown";
+  }
+  return "";
+}
+
+function sexFromCombinedDogSpayNeuterStatus(status = "") {
+  const combined = combinedDogSpayNeuterStatus({ spayNeuterStatus: status });
+  if (combined.startsWith("Female")) return "Female";
+  if (combined.startsWith("Male")) return "Male";
+  return "";
+}
+
 function dogTypeBadgeHtml(type) {
   const labels = {
     ownedDog: "Our Dog",
@@ -3080,7 +3127,7 @@ function taskLabel(task, shift) {
   if (completed && showRemainingTasksOnly) return "";
   const adminTools =
     canManageTasks
-      ? `<span class="task-admin-tools"><span class="task-drag-handle" aria-hidden="true">Drag</span><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">&times;</button></span>`
+      ? `<span class="task-admin-tools"><span class="task-drag-handle" aria-hidden="true">Drag</span><label class="task-edit-label"><span class="sr-only">Edit task</span><input class="task-edit-input" type="text" value="${taskText}" data-action="edit-task" data-shift="${shift}" data-id="${task.id}" aria-label="Edit task text" /></label><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task">&times;</button></span>`
       : "";
   const completedMeta = completed ? `<span class="task-completed-meta">Completed by ${escapeHtml(completed.completedBy || "staff")} at ${escapeHtml(formatDateTime(completed.completedAt))}</span>` : "";
   return `<div class="task-item ${completed ? "is-complete" : ""}" draggable="${canManageTasks && !completed}" data-shift="${shift}" data-id="${task.id}"><span class="task-text">${taskText}</span>${completedMeta}<button type="button" class="task-done-button" data-action="complete-task" data-shift="${shift}" data-id="${task.id}" data-task-text="${taskText}" ${completed ? "disabled" : ""}>${completed ? "Done" : "Done"}</button>${adminTools}</div>`;
@@ -3116,16 +3163,20 @@ function resetCareQuickLogForm() {
 function renderStructuredCareLogs() {
   const list = $("#structuredCareLogList");
   if (!list) return;
-  list.innerHTML = pendingStructuredCareLogs.length
-    ? pendingStructuredCareLogs
-        .map((log) => {
-          const details = [log.date, log.minutes ? `${log.minutes} minutes` : "", log.note].filter(Boolean).join(" | ");
-          const canModify = canModifyCareLog(log);
-          const actions = canModify ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-care-log" data-id="${escapeHtml(log.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-care-log" data-id="${escapeHtml(log.id)}">Remove</button></div>` : "";
-          return `<article class="record-card compact-record-card"><strong>${escapeHtml(log.dogName || "Dog")} - ${escapeHtml(log.careType || "Care")}</strong><p>${escapeHtml(details || "No extra details")}</p><span>${escapeHtml(log.completedBy || "")}</span>${actions}</article>`;
-        })
-        .join("")
-    : "<p>No structured care logs added to this daily report yet.</p>";
+  if (!pendingStructuredCareLogs.length) {
+    list.innerHTML = "<p>No structured care logs added to this daily report yet.</p>";
+    return;
+  }
+  const logItems = pendingStructuredCareLogs
+    .map((log) => {
+      const details = [log.date, log.minutes ? `${log.minutes} minutes` : "", log.note].filter(Boolean).join(" | ");
+      const canModify = canModifyCareLog(log);
+      const actions = canModify ? `<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-care-log" data-id="${escapeHtml(log.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-care-log" data-id="${escapeHtml(log.id)}">Remove</button></div>` : "";
+      return `<article class="record-card compact-record-card"><strong>${escapeHtml(log.dogName || "Dog")} - ${escapeHtml(log.careType || "Care")}</strong><p>${escapeHtml(details || "No extra details")}</p><span>${escapeHtml(log.completedBy || "")}</span>${mediaLinkHtml(log)}${actions}</article>`;
+    })
+    .join("");
+  const countLabel = `${pendingStructuredCareLogs.length} care log${pendingStructuredCareLogs.length === 1 ? "" : "s"}`;
+  list.innerHTML = `<details class="care-log-history-box"><summary><span>Saved care logs</span><small>${escapeHtml(countLabel)}</small></summary><div class="care-log-history-list">${logItems}</div></details>`;
 }
 
 function canModifyCareLog(log = {}) {
@@ -3430,6 +3481,7 @@ function customTaskPanelHtml(tab = {}, tasks = []) {
       <div class="admin-task-controls" ${currentRole() === "admin" ? "" : "hidden"}>
         <input type="text" data-custom-task-input="${escapeHtml(tab.id)}" placeholder="Add a task to ${escapeHtml(tab.label)}" />
         <button type="button" data-action="add-custom-tab-task" data-shift="${escapeHtml(tab.id)}">Add Task</button>
+        <span class="task-add-status" aria-live="polite"></span>
       </div>
       ${taskTabDeleteRowHtml(tab)}
     </div>
@@ -3722,6 +3774,29 @@ async function editTask(shift, id, text, sourceInput) {
   showToast("Task text updated.");
 }
 
+function showTaskAddedStatus(input, message = "Task added.") {
+  const controls = input?.closest?.(".admin-task-controls");
+  const status = controls?.querySelector?.(".task-add-status");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.add("is-visible");
+  window.clearTimeout(Number(status.dataset.clearTimer || 0));
+  const timer = window.setTimeout(() => {
+    status.textContent = "";
+    status.classList.remove("is-visible");
+    delete status.dataset.clearTimer;
+  }, 2600);
+  status.dataset.clearTimer = String(timer);
+}
+
+function clearAddedTaskInput(input, selector = "") {
+  const freshInput = selector ? $(selector) : input;
+  [input, freshInput].filter(Boolean).forEach((target) => {
+    target.value = "";
+  });
+  showTaskAddedStatus(freshInput || input);
+}
+
 async function removeTask(shift, id) {
   const config = readTaskConfig();
   config[shift] = (config[shift] || []).filter((task) => task.id !== id);
@@ -3746,23 +3821,23 @@ async function addTaskToShift(shift = "", text = "") {
 
 async function addCustomTask() {
   const input = $("#newTaskText");
-  if (input && await addTaskToShift("morning", input.value)) input.value = "";
+  if (input && await addTaskToShift("morning", input.value)) clearAddedTaskInput(input, "#newTaskText");
 }
 
 async function addPmCustomTask() {
   const input = $("#newPmTaskText");
-  if (input && await addTaskToShift("pm", input.value)) input.value = "";
+  if (input && await addTaskToShift("pm", input.value)) clearAddedTaskInput(input, "#newPmTaskText");
 }
 
 async function addManagedTask(shift, inputSelector) {
   const input = $(inputSelector);
-  if (input && await addTaskToShift(shift, input.value)) input.value = "";
+  if (input && await addTaskToShift(shift, input.value)) clearAddedTaskInput(input, inputSelector);
 }
 
 async function addCustomTabTask(button) {
   const shift = button.dataset.shift || "";
   const input = $(`[data-custom-task-input="${shift}"]`);
-  if (input && await addTaskToShift(shift, input.value)) input.value = "";
+  if (input && await addTaskToShift(shift, input.value)) clearAddedTaskInput(input, `[data-custom-task-input="${shift}"]`);
 }
 
 function setOwnedFormLocked(locked) {
@@ -4430,9 +4505,27 @@ function boardingStayRequestLabel(value = {}) {
   return `${serviceName}${quantity > 1 ? ` x${quantity}` : ""} requested`;
 }
 
-function serviceCatalogForStayRequests() {
+function stayRequestIsFullBathLike(value = {}) {
+  const item = value && typeof value === "object" ? value : {};
+  const text = normalizedServiceLookupText(
+    item.serviceName || item.name || item.label || item.value || boardingStayRequestLabel(value),
+  );
+  return text === "bath" || text.startsWith("full bath") || text.startsWith("full premium bath");
+}
+
+function stayRequestServiceUnitPriceForUser(serviceOrRequest = {}, user = currentUser) {
+  if (isMemberUser(user) && stayRequestIsFullBathLike(serviceOrRequest)) return 100;
+  return Number(serviceOrRequest?.basePrice || serviceOrRequest?.unitPrice || 0);
+}
+
+function serviceCatalogForStayRequests(options = {}) {
+  const user = options.user || null;
+  const includeAdminOnly = Boolean(options.includeAdminOnly);
   return readRecords("service")
-    .filter((service) => !service.removed && serviceHasFlag(service, "Active") && service.category !== "Boarding");
+    .filter((service) => !service.removed && serviceHasFlag(service, "Active"))
+    .filter((service) => includeAdminOnly || !serviceHasFlag(service, "Admin only"))
+    .filter((service) => service.category !== "Boarding" || serviceDependencyId(service))
+    .filter((service) => !user || serviceMatchesCustomerPricingScope(service, user));
 }
 
 function normalizedServiceLookupText(value = "") {
@@ -4609,10 +4702,10 @@ function applyLegacyBoardingProgramMigration(options = {}) {
   return updated;
 }
 
-function serviceCatalogMatchForRequest(value = {}) {
+function serviceCatalogMatchForRequest(value = {}, options = {}) {
   const item = value && typeof value === "object" ? value : {};
   const serviceId = item.serviceId || item.id || "";
-  const catalog = serviceCatalogForStayRequests();
+  const catalog = serviceCatalogForStayRequests(options);
   if (serviceId) {
     const exactId = catalog.find((service) => service.id === serviceId);
     if (exactId) return exactId;
@@ -4623,16 +4716,20 @@ function serviceCatalogMatchForRequest(value = {}) {
     || catalog.find((service) => normalizedServiceLookupText(service.serviceName).includes(requestName) || requestName.includes(normalizedServiceLookupText(service.serviceName)));
 }
 
-function boardingStayRequestUnitPrice(value = {}) {
+function boardingStayRequestUnitPrice(value = {}, options = {}) {
   const item = value && typeof value === "object" ? value : {};
+  const catalogService = serviceCatalogMatchForRequest(value, options);
+  if (options.preferCatalogPricing && catalogService?.basePrice !== undefined) return stayRequestServiceUnitPriceForUser(catalogService, options.user);
+  if (options.preferCatalogPricing && isMemberUser(options.user) && stayRequestIsFullBathLike(value)) return 100;
   const savedPrice = Number(item.unitPrice || item.basePrice || 0);
+  if (isMemberUser(options.user) && stayRequestIsFullBathLike(value)) return 100;
   if (savedPrice) return savedPrice;
-  return Number(serviceCatalogMatchForRequest(value)?.basePrice || 0);
+  return catalogService ? stayRequestServiceUnitPriceForUser(catalogService, options.user) : 0;
 }
 
-function boardingStayRequestUnit(value = {}) {
+function boardingStayRequestUnit(value = {}, options = {}) {
   const item = value && typeof value === "object" ? value : {};
-  return item.unit || serviceCatalogMatchForRequest(value)?.unit || "";
+  return item.unit || serviceCatalogMatchForRequest(value, options)?.unit || "";
 }
 
 function customerFacingBoardingStayRequestLabel(value = {}, quantity = 1) {
@@ -4644,8 +4741,8 @@ function customerFacingBoardingStayRequestLabel(value = {}, quantity = 1) {
 function boardingStayRequestDisplayText(value = {}, options = {}) {
   const quantity = boardingServiceTaskQuantity(value);
   const label = options.customerFacing ? customerFacingBoardingStayRequestLabel(value, quantity) : boardingStayRequestLabel(value);
-  const unitPrice = boardingStayRequestUnitPrice(value);
-  const unit = boardingStayRequestUnit(value);
+  const unitPrice = boardingStayRequestUnitPrice(value, options);
+  const unit = boardingStayRequestUnit(value, options);
   const priceText = unitPrice ? ` - ${money(unitPrice * quantity)}${unit ? ` ${unit}` : ""}` : "";
   return `${label}${priceText}`;
 }
@@ -4655,9 +4752,9 @@ function boardingStayServicesText(stay = {}, options = {}) {
   return requests.length ? requests.join(", ") : "No service requests";
 }
 
-function boardingStayRequestTotal(requests = []) {
+function boardingStayRequestTotal(requests = [], options = {}) {
   return arrayValue(requests).reduce((total, request) => {
-    const unitPrice = boardingStayRequestUnitPrice(request);
+    const unitPrice = boardingStayRequestUnitPrice(request, options);
     const quantity = boardingServiceTaskQuantity(request);
     return total + (unitPrice * quantity);
   }, 0);
@@ -4686,6 +4783,10 @@ function boardingRatePlanForCustomer(user = currentUser) {
 function boardingRatePlanForRecord(record = {}) {
   const owner = ownerAccountForBoarding(record) || savedUserFor({ email: record.ownerEmail || record.customerEmail }) || {};
   return boardingRatePlanForCustomer(owner);
+}
+
+function boardingPricingUserForRecord(record = {}, options = {}) {
+  return options.user || options.ownerUser || ownerAccountForBoarding(record) || savedUserFor({ email: record.ownerEmail || record.customerEmail }) || null;
 }
 
 function boardingPricingDogKey(dog = {}) {
@@ -4876,6 +4977,11 @@ function invoiceAdjustmentsChanged(previous = [], next = []) {
 
 function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   const ratePlan = options.ratePlan || boardingRatePlanForRecord(record);
+  const pricingUser = boardingPricingUserForRecord(record, options);
+  const servicePricingOptions = {
+    user: pricingUser,
+    preferCatalogPricing: Boolean(options.preferCatalogPricing || options.forceCurrentPricing || boardingStayCanUseCurrentPricing(record, stay)),
+  };
   const stayType = options.stayType || stay.stayType || record.stayType || "Boarding";
   const isServiceRequest = stayType === "Service Request";
   const days = isServiceRequest ? 0 : boardingDays(stay.dropoffTime, stay.pickupTime);
@@ -4888,7 +4994,7 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   const requests = options.requests || stay.requests || [];
   const adjustments = normalizeInvoiceAdjustments(options.invoiceAdjustments || stay.invoiceAdjustments || []);
   const boardingSubtotal = isServiceRequest ? 0 : days * rate;
-  const serviceSubtotal = boardingStayRequestTotal(requests);
+  const serviceSubtotal = boardingStayRequestTotal(requests, servicePricingOptions);
   const adjustmentsTotal = invoiceAdjustmentsTotal(adjustments);
   const total = Math.max(0, boardingSubtotal + serviceSubtotal + adjustmentsTotal);
   return {
@@ -4921,8 +5027,8 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
         type: "service",
         label: boardingServiceTaskDisplayName(request),
         quantity: boardingServiceTaskQuantity(request),
-        unitPrice: boardingStayRequestUnitPrice(request),
-        amount: boardingStayRequestUnitPrice(request) * boardingServiceTaskQuantity(request),
+        unitPrice: boardingStayRequestUnitPrice(request, servicePricingOptions),
+        amount: boardingStayRequestUnitPrice(request, servicePricingOptions) * boardingServiceTaskQuantity(request),
       })),
       ...adjustments.map((adjustment) => ({
         type: adjustment.type,
@@ -5031,6 +5137,7 @@ function boardingServiceTaskNameFromKey(taskKey = "") {
 function boardingServiceTaskSources(record = {}, stay = {}) {
   const sources = [];
   const seenServiceKeys = new Set();
+  const pricingOptions = { user: boardingPricingUserForRecord(record), preferCatalogPricing: true };
   const requestedSource = arrayValue(stay.requests);
   requestedSource.forEach((item, index) => {
     const service = item && typeof item === "object" ? item : {};
@@ -5042,8 +5149,8 @@ function boardingServiceTaskSources(record = {}, stay = {}) {
       serviceName,
       label: `${serviceName}${quantity > 1 ? ` x${quantity}` : ""}`,
       quantity,
-      unit: service.unit || boardingStayRequestUnit(item),
-      unitPrice: boardingStayRequestUnitPrice(item),
+      unit: service.unit || boardingStayRequestUnit(item, pricingOptions),
+      unitPrice: boardingStayRequestUnitPrice(item, pricingOptions),
       source: "requested",
       sourceIndex: index,
       requestedAt: stay.createdAt || record.submittedAt || "",
@@ -5063,8 +5170,8 @@ function boardingServiceTaskSources(record = {}, stay = {}) {
       serviceName,
       label: `${serviceName}${quantity > 1 ? ` x${quantity}` : ""}`,
       quantity,
-      unit: service.unit || boardingStayRequestUnit(service),
-      unitPrice: Number(service.unitPrice || service.basePrice || 0),
+      unit: service.unit || boardingStayRequestUnit(service, pricingOptions),
+      unitPrice: boardingStayRequestUnitPrice(service, pricingOptions),
       source: "check-in",
       sourceIndex: index,
       requestedAt: stay.checkIn?.verifiedAt || stay.updatedAt || "",
@@ -5305,7 +5412,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
   return `<article class="record-card ${options.compact ? "compact-record-card" : ""}">
     <strong>${escapeHtml(formatDateTime(stay.dropoffTime) || "Requested stay")}${stay.pickupTime ? ` to ${escapeHtml(formatDateTime(stay.pickupTime))}` : ""}</strong>
     <div class="chip-row">${requestCode}${statusChip}${boardingStayServiceFlagHtml(record, stay)}</div>
-    <p>${escapeHtml(boardingStayServicesText(stay, { customerFacing: isCustomer }))}</p>
+    <p>${escapeHtml(boardingStayServicesText(stay, { customerFacing: isCustomer, user: boardingPricingUserForRecord(record), preferCatalogPricing: true }))}</p>
     ${options.showServiceTasks ? boardingStayServiceTaskListHtml(record, stay, { actions: options.serviceActions }) : ""}
     ${stay.bathPlan ? `<p>${escapeHtml(stay.bathPlan)}</p>` : ""}
     ${stay.stayNotes ? `<p>${escapeHtml(stay.stayNotes)}</p>` : ""}
@@ -6499,11 +6606,12 @@ async function mirrorBoardingCustomerUpdateToCustomerDog(boardingRecord = {}, up
 }
 
 function boardingDraftFromCustomerDog(dog = {}) {
+  const combinedStatus = combinedDogSpayNeuterStatus(dog);
   return {
     dogName: dog.dogName || "",
     breedDescription: dog.breedDescription || "",
-    sex: dog.sex || "Unknown",
-    spayNeuterStatus: dog.spayNeuterStatus || "Unknown",
+    sex: sexFromCombinedDogSpayNeuterStatus(combinedStatus) || dog.sex || "Unknown",
+    spayNeuterStatus: combinedStatus,
     ownerName: dog.ownerName || "",
     ownerPhone: dog.ownerPhone || "",
     ownerEmail: dog.ownerEmail || dog.customerEmail || "",
@@ -7357,16 +7465,16 @@ function boardingQuickCardHtml(record = {}) {
 }
 
 const stayRequestServiceOptions = [
-  { value: "Bath requested", fallbackServiceName: "Bath", matchTerms: ["full bath", "bath"] },
+  { value: "Full Bath requested", fallbackServiceName: "Full Bath", matchTerms: ["full premium bath", "full bath", "bath"], memberFallbackPrice: 100 },
   { value: "Nail trim requested", fallbackServiceName: "Nail trim", matchTerms: ["nail trim", "nail"] },
   { value: "Paw trim requested", fallbackServiceName: "Paw trim", matchTerms: ["paw trim", "paw"] },
   { value: "Training requested", fallbackServiceName: "Training", matchTerms: ["training"] },
   { value: "Exercise requested", fallbackServiceName: "Exercise", matchTerms: ["treadmill exercise", "exercise", "treadmill"] },
 ];
 
-function serviceForStayRequestOption(option = {}) {
+function serviceForStayRequestOption(option = {}, options = {}) {
   const terms = arrayValue(option.matchTerms).map(normalizedServiceLookupText).filter(Boolean);
-  const services = serviceCatalogForStayRequests();
+  const services = serviceCatalogForStayRequests(options);
   return services.find((service) => terms.includes(normalizedServiceLookupText(service.serviceName)))
     || services.find((service) => {
       const name = normalizedServiceLookupText(service.serviceName);
@@ -7375,8 +7483,12 @@ function serviceForStayRequestOption(option = {}) {
     || null;
 }
 
-function stayRequestOptionSnapshot(option = {}) {
-  const service = serviceForStayRequestOption(option) || {};
+function stayRequestOptionSnapshot(option = {}, options = {}) {
+  const service = serviceForStayRequestOption(option, options) || {};
+  const fallbackPrice = isMemberUser(options.user) ? option.memberFallbackPrice : option.nonMemberFallbackPrice;
+  const unitPrice = service.id
+    ? stayRequestServiceUnitPriceForUser(service, options.user)
+    : Number(fallbackPrice || 0);
   return {
     id: service.id || "",
     serviceId: service.id || "",
@@ -7385,7 +7497,7 @@ function stayRequestOptionSnapshot(option = {}) {
     category: service.category || "",
     unit: service.unit || "",
     quantity: 1,
-    unitPrice: Number(service.basePrice || 0),
+    unitPrice,
   };
 }
 
@@ -7397,11 +7509,46 @@ function stayRequestMatchesOption(request = {}, option = {}) {
   return arrayValue(option.matchTerms).map(normalizedServiceLookupText).filter(Boolean).some((term) => requestLabel.includes(term) || requestName.includes(term));
 }
 
-function stayRequestCheckboxesHtml(stay = {}) {
+function stayRequestMatchesService(request = {}, service = {}, options = {}) {
+  if (!service?.id) return false;
+  const item = request && typeof request === "object" ? request : {};
+  const requestServiceId = item.serviceId || item.id || "";
+  if (requestServiceId && requestServiceId === service.id) return true;
+  const matched = serviceCatalogMatchForRequest(request, options);
+  if (matched?.id === service.id) return true;
+  const requestName = normalizedServiceLookupText(item.serviceName || boardingServiceTaskDisplayName(request));
+  const serviceName = normalizedServiceLookupText(service.serviceName || "");
+  if (!requestName || !serviceName) return false;
+  return requestName === serviceName || requestName.includes(serviceName) || serviceName.includes(requestName);
+}
+
+function boardingStayRequestServiceCatalog(record = {}, stay = {}) {
+  const user = boardingPricingUserForRecord(record);
   const requests = arrayValue(stay.requests);
+  const selectedIds = new Set(requests.map((request) => (request && typeof request === "object" ? request.serviceId || request.id || "" : "")).filter(Boolean));
+  return serviceCatalogForStayRequests({ user })
+    .filter((service) => !serviceDependencyId(service) || selectedIds.has(serviceDependencyId(service)))
+    .sort((a, b) => [a.category || "", customerServiceDisplayName(a)].join("|").localeCompare([b.category || "", customerServiceDisplayName(b)].join("|")));
+}
+
+function stayRequestCheckboxesHtml(stay = {}, record = {}) {
+  const requests = arrayValue(stay.requests);
+  const user = boardingPricingUserForRecord(record);
+  const activeServices = boardingStayRequestServiceCatalog(record, stay);
+  if (activeServices.length) {
+    return activeServices
+      .map((service) => {
+        const checked = requests.some((request) => stayRequestMatchesService(request, service, { user }));
+        const label = `${customerServiceDisplayName(service)} requested`;
+        const unitPrice = stayRequestServiceUnitPriceForUser(service, user);
+        const price = unitPrice ? ` - ${money(unitPrice)}${service.unit ? ` ${service.unit}` : ""}` : "";
+        return `<label><input type="checkbox" name="stayRequests" value="${escapeHtml(label)}" data-service-id="${escapeHtml(service.id || "")}" data-service-name="${escapeHtml(service.serviceName || "")}" data-unit-price="${escapeHtml(unitPrice)}" data-unit="${escapeHtml(service.unit || "")}" ${checked ? "checked" : ""} /> ${escapeHtml(label)}${escapeHtml(price)}</label>`;
+      })
+      .join("");
+  }
   return stayRequestServiceOptions
     .map((option) => {
-      const snapshot = stayRequestOptionSnapshot(option);
+      const snapshot = stayRequestOptionSnapshot(option, { user });
       const checked = requests.some((request) => stayRequestMatchesOption(request, option));
       const price = snapshot.unitPrice ? ` - ${money(snapshot.unitPrice)}${snapshot.unit ? ` ${snapshot.unit}` : ""}` : "";
       return `<label><input type="checkbox" name="stayRequests" value="${escapeHtml(option.value)}" data-service-id="${escapeHtml(snapshot.serviceId || "")}" data-service-name="${escapeHtml(snapshot.serviceName || "")}" data-unit-price="${escapeHtml(snapshot.unitPrice || 0)}" data-unit="${escapeHtml(snapshot.unit || "")}" ${checked ? "checked" : ""} /> ${escapeHtml(option.value)}${escapeHtml(price)}</label>`;
@@ -7423,7 +7570,7 @@ function selectedStayRequestsFromForm(formEl) {
 }
 
 function boardingStayEstimatedTotal(record = {}, existingStay = {}, selectedRequests = []) {
-  const snapshot = boardingPricingSnapshotForStay(record, { ...existingStay, requests: selectedRequests });
+  const snapshot = boardingPricingSnapshotForStay(record, { ...existingStay, requests: selectedRequests }, { forceCurrentPricing: true, preferCatalogPricing: true });
   return snapshot.total;
 }
 
@@ -7483,7 +7630,7 @@ function boardingStayFormHtml(record = {}, stay = {}) {
         <label>Pick-up time<input type="datetime-local" name="pickupTime" required value="${escapeHtml(stay.pickupTime?.slice(0, 16) || "")}" /></label>
       </div>
       ${boardingStayLocationFieldsHtml(stay)}
-      <div class="checklist compact">${stayRequestCheckboxesHtml(stay)}</div>
+      <div class="checklist compact">${stayRequestCheckboxesHtml(stay, record)}</div>
       ${boardingStayBillingAdjustmentFieldsHtml(stay)}
       <label>Stay notes<textarea name="stayNotes" rows="3" placeholder="Owner instructions or pickup grooming notes">${escapeHtml(stay.stayNotes || "")}</textarea></label>
       <div class="button-row"><button type="submit">${isEdit ? "Save Boarding Stay" : "Add Boarding Stay"}</button></div>
@@ -7498,7 +7645,7 @@ function boardingSchedulePopupHtml(record = {}) {
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? `<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button>`
         : "";
-      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayInvoiceSummaryHtml(displayRecord, stay)}${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}</div></article>`;
+      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>${boardingStayInvoiceSummaryHtml(displayRecord, stay)}${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}</div></article>`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
   return `${boardingStayFormHtml(displayRecord)}<section class="popup-record-section"><h3>Boarding stays</h3>${staysHtml}</section>`;
@@ -8967,7 +9114,10 @@ function boardingFamilyPricingSnapshots(entries = []) {
       stayProgram,
     });
   const groupBoardingSubtotal = lines.reduce((total, line) => total + Number(line.total || 0), 0);
-  const groupServiceSubtotal = activeEntries.reduce((total, entry) => total + boardingStayRequestTotal(entry.stay?.requests || []), 0);
+  const groupServiceSubtotal = activeEntries.reduce((total, entry) => total + boardingStayRequestTotal(entry.stay?.requests || [], {
+    user: boardingPricingUserForRecord(entry.record || {}),
+    preferCatalogPricing: true,
+  }), 0);
   const groupTotal = groupBoardingSubtotal + groupServiceSubtotal;
   activeEntries.forEach((entry, index) => {
     const record = entry.record || {};
@@ -9041,7 +9191,7 @@ function boardingFamilyGroups(entries = []) {
 function boardingRequestCardHtml(entry = {}, options = {}) {
   const record = entry.record || {};
   const stay = entry.stay || {};
-  const services = boardingStayServicesText(stay);
+  const services = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
   const status = entry.status;
   const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const pricingSnapshot = options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay);
@@ -9615,6 +9765,9 @@ function resetBoardingDogFormForRecord(record = {}) {
   });
   selectedDogPhotos.boarding = null;
   setFormValues(formEl, record);
+  const combinedStatus = combinedDogSpayNeuterStatus(record);
+  if (formEl.elements.spayNeuterStatus) formEl.elements.spayNeuterStatus.value = combinedStatus;
+  if (formEl.elements.sex) formEl.elements.sex.value = sexFromCombinedDogSpayNeuterStatus(combinedStatus) || record.sex || "";
   if (formEl.elements.rabiesGoodThreeYears) formEl.elements.rabiesGoodThreeYears.checked = vaccineDurationIsThreeYears(record, "rabies");
   if (formEl.elements.dhppGoodThreeYears) formEl.elements.dhppGoodThreeYears.checked = vaccineDurationIsThreeYears(record, "dhpp");
   formEl.elements.id.value = record.id || "";
@@ -10097,7 +10250,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? `<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button>`
         : "";
-      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay)}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay))}</p>${boardingStayInvoiceSummaryHtml(displayRecord, stay)}${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Remove Stay</button></div></article>`;
+      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay)}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>${boardingStayInvoiceSummaryHtml(displayRecord, stay)}${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Remove Stay</button></div></article>`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -10106,7 +10259,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const status = boardingStayDisplayStatus(record, stay);
   const nextStatuses = boardingStatusTransitions[status] || [];
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
-  const servicesText = boardingStayServicesText(stay);
+  const servicesText = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
   const serviceSummary = servicesText === "No service requests" ? "No service requested" : servicesText;
   return `<section class="popup-record-section">
     <article class="record-card compact-record-card">
@@ -10279,7 +10432,7 @@ function renderBoardingHistory(record = activeBoardingDog()) {
           return `<article class="record-card clickable-card compact-record-card" data-action="view-boarding-stay-history" data-id="${escapeHtml(stay.id || "")}" data-request-code="${escapeHtml(requestCode)}">
             <strong>${escapeHtml(formatDateTime(stay.dropoffTime))} to ${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
             <div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusChipHtml(displayRecord, stay)}</div>
-            <p>${escapeHtml(location || boardingStayServicesText(stay) || "No location or service request saved")}</p>
+            <p>${escapeHtml(location || boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }) || "No location or service request saved")}</p>
             <span>${events.length} lifecycle event${events.length === 1 ? "" : "s"}</span>
           </article>`;
         })
@@ -12663,18 +12816,48 @@ function vaccinationExpiryDate(record = {}) {
   return date && !Number.isNaN(date.getTime()) ? date : null;
 }
 
+function vaccinationFieldDate(record = {}, keys = []) {
+  const value = keys.map((key) => record[key]).find(Boolean) || "";
+  const date = value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function vaccinationDateExpiry(record = {}, vaccineKey = "", keys = [], defaultYears = 1) {
+  const date = vaccinationFieldDate(record, keys);
+  if (!date) return null;
+  const years = vaccineDurationIsThreeYears(record, vaccineKey) ? 3 : defaultYears;
+  const expiry = new Date(date);
+  expiry.setFullYear(expiry.getFullYear() + years);
+  return expiry;
+}
+
+function legacyVaccinationDateStatus(record = {}) {
+  const expirations = [
+    vaccinationDateExpiry(record, "rabies", ["rabiesDate", "rabiesVaccinationDate", "lastRabiesVaccination"], 1),
+    vaccinationDateExpiry(record, "dhpp", ["dhppDate", "dhppVaccinationDate", "lastDhppVaccination"], 1),
+    vaccinationDateExpiry(record, "bordetella", ["bordetellaDate", "bordetellaVaccinationDate", "lastBordetellaVaccination"], 1),
+  ].filter(Boolean);
+  if (!expirations.length) return "";
+  const today = new Date(`${todayDate()}T00:00:00`);
+  return expirations.some((date) => date >= today) ? "ok" : "expired";
+}
+
 function vaccinationStatusInfo(record = {}) {
   const records = arrayValue(record.vaccinationRecords);
   const expirations = records.map(vaccinationExpiryDate).filter(Boolean);
   const today = new Date(`${todayDate()}T00:00:00`);
   const hasVaccinationRecords = records.length > 0;
+  const legacyDateStatus = legacyVaccinationDateStatus(record);
+  if (legacyDateStatus === "ok") {
+    return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
+  }
   if (hasVaccinationRecords && expirations.some((date) => date >= today)) {
     return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
   }
-  if (records.length) {
+  if (records.length || legacyDateStatus === "expired") {
     return { label: "Vaccines Expired", customerLabel: "Vaccines on file", className: "is-vaccine-expired", customerClassName: "is-vaccine-ok" };
   }
-  const hasLegacyDates = Boolean(record.dhppDate || record.rabiesDate || record.bordetellaDate || record.vaccinationFiles);
+  const hasLegacyDates = Boolean(record.dhppDate || record.dhppVaccinationDate || record.lastDhppVaccination || record.rabiesDate || record.rabiesVaccinationDate || record.lastRabiesVaccination || record.bordetellaDate || record.bordetellaVaccinationDate || record.lastBordetellaVaccination || record.vaccinationFiles);
   if (hasLegacyDates) return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
   return { label: "No Vaccines on File", customerLabel: "Vaccines needed", className: "is-vaccine-needed", customerClassName: "is-vaccine-needed" };
 }
@@ -12940,14 +13123,39 @@ function hideServiceInfoTooltip(icon = null) {
   if (serviceInfoTooltipEl) serviceInfoTooltipEl.hidden = true;
 }
 
+function customerServiceDogKey(dog = {}) {
+  return customerBookingSelectionKey(dog) || dog.id || normalizedDogIdentityName(dog) || dog.dogName || "dog";
+}
+
+function customerServiceDogFieldKey(dog = {}) {
+  return `dog-${shortStableHash(customerServiceDogKey(dog), 10)}`;
+}
+
+function customerServiceFieldNameForDog(dog = {}) {
+  return `customerServices-${customerServiceDogFieldKey(dog)}`;
+}
+
+function customerServiceQuantityFieldName(serviceId = "", dog = {}) {
+  return `serviceQuantity-${customerServiceDogFieldKey(dog)}-${serviceId}`;
+}
+
+function customerServicesForDog(estimate = {}, dog = {}) {
+  const dogKey = customerServiceDogKey(dog);
+  return arrayValue(estimate.services).filter((service) => service.dogKey === dogKey || (!service.dogKey && arrayValue(estimate.dogs).length <= 1));
+}
+
 function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options = {}) {
   const checked = checkedIds.has(service.id);
-  const quantityValue = formFieldByName($("#customerBookingForm"), `serviceQuantity-${service.id}`)?.value || "1";
+  const fieldDog = options.dog || {};
+  const serviceFieldName = options.serviceFieldName || (options.dog ? customerServiceFieldNameForDog(fieldDog) : "customerServices");
+  const quantityFieldName = options.quantityFieldName || (options.dog ? customerServiceQuantityFieldName(service.id, fieldDog) : `serviceQuantity-${service.id}`);
+  const quantityValue = formFieldByName($("#customerBookingForm"), quantityFieldName)?.value || "1";
   const displayName = customerServiceDisplayName(service);
   const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(service));
   const addOnPrefix = options.addOn ? "Add-on: " : "";
   const extraClass = options.parent ? " service-option-parent" : "";
-  return `<label class="service-option${options.addOn ? " service-option-addon" : ""}${extraClass}"><span class="service-option-label"><input type="checkbox" name="customerServices" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(addOnPrefix)}${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="serviceQuantity-${escapeHtml(service.id)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity" /></label>`;
+  const dogAttrs = options.dog ? ` data-service-scope="dog" data-dog-key="${escapeHtml(customerServiceDogKey(fieldDog))}"` : "";
+  return `<label class="service-option${options.addOn ? " service-option-addon" : ""}${extraClass}"><span class="service-option-label"><input type="checkbox" name="${escapeHtml(serviceFieldName)}" value="${escapeHtml(service.id)}" ${checked ? "checked" : ""}${dogAttrs} /><span class="service-option-copy"><span class="service-option-text">${escapeHtml(addOnPrefix)}${escapeHtml(displayName)} - ${money(service.basePrice)} ${escapeHtml(service.unit || "")}</span>${infoIcon}</span></span><input class="service-quantity" type="number" name="${escapeHtml(quantityFieldName)}" min="1" step="1" value="${escapeHtml(quantityValue)}" ${checked ? "" : "disabled"} aria-label="${escapeHtml(displayName)} quantity"${dogAttrs} /></label>`;
 }
 
 function customerStayProgramServices(user = currentUser) {
@@ -13027,31 +13235,51 @@ function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
   applyLegacyServiceDependencyMigration();
   applyLegacyBoardingProgramMigration();
-  const checkedIds = new Set(checkedFrom($("#customerBookingForm"), "customerServices"));
-  const dependencyIds = customerDependencyIds(checkedIds);
+  const formEl = $("#customerBookingForm");
+  const dogs = selectedCustomerDogs();
   const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && serviceMatchesCustomerPricingScope(service, currentUser));
   const visibleServices = services.filter((service) => !serviceDependencyId(service));
-  const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
-  const visibleHtml = visibleServices.map((service) => {
-    const childServices = dependencyIds.has(service.id)
-      ? services
-          .filter((dependent) => serviceDependencyId(dependent) === service.id)
-      : [];
-    if (!childServices.length) return customerServiceOptionHtml(service, checkedIds);
-    const optionHtml = customerServiceOptionHtml(service, checkedIds, { parent: true });
-    const addOnHtml = childServices
-      .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { addOn: serviceDependencyType(dependent) === "optional-addon" }))
+  const groupedVisibleServices = visibleServices.reduce((groups, service) => {
+    const category = String(service.category || "Other Services").trim() || "Other Services";
+    groups[category] = [...(groups[category] || []), service];
+    return groups;
+  }, {});
+  if (!dogs.length) {
+    $("#customerServiceOptions").innerHTML = "<p>Select dog(s) first to choose services for each dog.</p>";
+    return;
+  }
+  const dogGroupsHtml = dogs.map((dog, index) => {
+    const checkedIds = new Set(checkedFrom(formEl, customerServiceFieldNameForDog(dog)));
+    const dependencyIds = customerDependencyIds(checkedIds);
+    const selectedCount = [...checkedIds].filter((id) => services.some((service) => service.id === id && serviceDependencySatisfied(service, dependencyIds))).length;
+    const serviceBlockHtml = (service) => {
+      const childServices = dependencyIds.has(service.id)
+        ? services
+            .filter((dependent) => serviceDependencyId(dependent) === service.id)
+        : [];
+      if (!childServices.length) return customerServiceOptionHtml(service, checkedIds, { dog });
+      const optionHtml = customerServiceOptionHtml(service, checkedIds, { dog, parent: true });
+      const addOnHtml = childServices
+        .map((dependent) => customerServiceOptionHtml(dependent, checkedIds, { dog, addOn: serviceDependencyType(dependent) === "optional-addon" }))
+        .join("");
+      return `<div class="service-option-group">${optionHtml}<div class="service-option-addons">${addOnHtml}</div></div>`;
+    };
+    const visibleHtml = Object.entries(groupedVisibleServices).map(([category, items]) => {
+      const hasChecked = items.some((service) => checkedIds.has(service.id));
+      const categoryHtml = items.map(serviceBlockHtml).join("");
+      return `<details class="customer-service-group" ${hasChecked ? "open" : ""}><summary><span><strong>${escapeHtml(category)}</strong><em>Click to view services</em></span><small>${items.length} option${items.length === 1 ? "" : "s"}</small></summary><div class="customer-service-group-body">${categoryHtml}</div></details>`;
+    }).join("");
+    const implicitDependencyServices = services.filter((service) => serviceDependencyId(service) && serviceDependencySatisfied(service, dependencyIds) && !visibleServices.some((parent) => parent.id === serviceDependencyId(service)));
+    const implicitHtml = implicitDependencyServices
+      .map((service) => customerServiceOptionHtml(service, checkedIds, { dog, addOn: serviceDependencyType(service) === "optional-addon" }))
       .join("");
-    return `<div class="service-option-group">${optionHtml}<div class="service-option-addons">${addOnHtml}</div></div>`;
+    const bodyHtml = visibleServices.length || implicitHtml
+      ? `${visibleHtml}${implicitHtml}`
+      : "<p>No customer services are active yet.</p>";
+    const openAttr = selectedCount || dogs.length <= 2 || index === 0 ? "open" : "";
+    return `<details class="customer-dog-service-menu" ${openAttr}><summary><span><strong>${escapeHtml(dog.dogName || "Dog")}</strong><em>Click to view services for this dog</em></span><small>${selectedCount} selected</small></summary><div class="customer-dog-service-menu-body">${bodyHtml}</div></details>`;
   }).join("");
-  const implicitHtml = implicitDependencyServices
-    .map((service) => customerServiceOptionHtml(service, checkedIds, { addOn: serviceDependencyType(service) === "optional-addon" }))
-    .join("");
-  $("#customerServiceOptions").innerHTML = visibleServices.length
-    ? `${visibleHtml}${implicitHtml}`
-    : implicitHtml
-      ? implicitHtml
-    : "<p>No customer services are active yet.</p>";
+  $("#customerServiceOptions").innerHTML = dogGroupsHtml;
 }
 
 function selectedCustomerDogs() {
@@ -13143,11 +13371,12 @@ function customerBookingDogMatchesRecord(dog = {}, record = {}) {
   return boardingDogIdentityTokens(record).some((token) => dogTokens.has(token));
 }
 
-function customerBookingServiceKey(estimate = {}) {
+function customerBookingServiceKey(estimate = {}, dog = null) {
+  const services = dog ? customerServicesForDog(estimate, dog) : arrayValue(estimate.services);
   return [
     String(estimate.stayProgram?.serviceName || estimate.stayProgram?.name || "").trim().toLowerCase(),
-    ...new Set(arrayValue(estimate.services)
-    .map((service) => `${service.serviceName || service.id || "Service"}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`)
+    ...new Set(services
+    .map((service) => `${dog ? "" : (service.dogName || "Dog") + ": "}${service.serviceName || service.id || "Service"}${Number(service.quantity || 1) > 1 ? ` x${service.quantity}` : ""} requested`)
     .map((label) => String(label || "").trim().toLowerCase())
     .filter(Boolean)),
   ].filter(Boolean)
@@ -13175,7 +13404,7 @@ function customerBookingStableId(prefix = "customer-booking", estimate = {}, dog
     dog.dogName || "",
     estimate.dropoffTime || "",
     estimate.pickupTime || "",
-    customerBookingServiceKey(estimate),
+    customerBookingServiceKey(estimate, dog),
   ].join("|");
   return `${prefix}-${shortStableHash(seed, 10)}`;
 }
@@ -13362,15 +13591,17 @@ function editCustomerRequest(record, stayId = "") {
     return [match ? match[1].trim() : cleaned, match ? Number(match[2]) : 1];
   }));
   const applyServiceQuantities = () => {
-    $("#customerBookingForm").querySelectorAll('input[name="customerServices"]').forEach((input) => {
-      const service = readRecords("service").find((item) => item.id === input.value);
-      const quantity = serviceQuantities.get(service?.id) || serviceQuantities.get(service?.serviceName);
-      input.checked = Boolean(quantity);
-      const quantityInput = formFieldByName($("#customerBookingForm"), `serviceQuantity-${input.value}`);
-      if (quantityInput) {
-        quantityInput.value = String(quantity || 1);
-        quantityInput.disabled = !input.checked;
-      }
+    selectedCustomerDogs().forEach((selectedDog) => {
+      $("#customerBookingForm").querySelectorAll(`input[name="${customerServiceFieldNameForDog(selectedDog)}"]`).forEach((input) => {
+        const service = readRecords("service").find((item) => item.id === input.value);
+        const quantity = serviceQuantities.get(service?.id) || serviceQuantities.get(service?.serviceName);
+        input.checked = Boolean(quantity);
+        const quantityInput = formFieldByName($("#customerBookingForm"), customerServiceQuantityFieldName(input.value, selectedDog));
+        if (quantityInput) {
+          quantityInput.value = String(quantity || 1);
+          quantityInput.disabled = !input.checked;
+        }
+      });
     });
   };
   applyServiceQuantities();
@@ -13415,17 +13646,30 @@ function customerEstimateDetails() {
   const data = formPayload(formEl);
   const isServiceRequest = customerRequestMode() === "service";
   const dogs = selectedCustomerDogs();
-  const selectedServiceIds = new Set(checkedFrom(formEl, "customerServices"));
-  const dependencyIds = customerDependencyIds(selectedServiceIds);
-  const services = [...selectedServiceIds]
-    .map((id) => {
-      const service = readRecords("service").find((item) => item.id === id);
-      if (!service) return null;
-      const quantity = Math.max(1, Number(formFieldByName(formEl, `serviceQuantity-${id}`)?.value || 1));
-      return { ...service, quantity };
-    })
-    .filter((service) => service && serviceDependencySatisfied(service, dependencyIds))
-    .filter(Boolean);
+  const serviceCatalog = readRecords("service");
+  const services = dogs.flatMap((dog) => {
+    const selectedServiceIds = new Set(checkedFrom(formEl, customerServiceFieldNameForDog(dog)));
+    const dependencyIds = customerDependencyIds(selectedServiceIds);
+    return [...selectedServiceIds]
+      .map((id) => {
+        const service = serviceCatalog.find((item) => item.id === id);
+        if (!service) return null;
+        const quantity = Math.max(1, Number(formFieldByName(formEl, customerServiceQuantityFieldName(id, dog))?.value || 1));
+        const unitPrice = Number(service.basePrice || 0);
+        return {
+          ...service,
+          dogKey: customerServiceDogKey(dog),
+          dogFieldKey: customerServiceDogFieldKey(dog),
+          dogId: dog.id || "",
+          dogName: dog.dogName || "Dog",
+          quantity,
+          perDogLineTotal: unitPrice * quantity,
+          lineTotal: unitPrice * quantity,
+        };
+      })
+      .filter((service) => service && serviceDependencySatisfied(service, dependencyIds))
+      .filter(Boolean);
+  });
   const days = isServiceRequest ? 0 : boardingDays(data.dropoffTime, data.pickupTime);
   const isDayCare = !isServiceRequest && isDayCareStay(data.dropoffTime, data.pickupTime);
   const ratePlan = boardingRatePlanForCustomer();
@@ -13434,13 +13678,8 @@ function customerEstimateDetails() {
   const boardingLines = boardingDogPricingLines(dogs, { ratePlan, days, isServiceRequest, sharedCrateRequested, stayProgram });
   const boardingRate = stayProgram?.rate || ratePlan.primaryRate;
   const boardingCost = boardingLines.reduce((total, line) => total + Number(line.total || 0), 0);
-  const serviceLines = services.map((service) => ({
-    ...service,
-    perDogLineTotal: Number(service.basePrice || 0) * Number(service.quantity || 1),
-    lineTotal: dogs.length * Number(service.basePrice || 0) * Number(service.quantity || 1),
-  }));
-  const serviceCost = serviceLines.reduce((total, service) => total + service.lineTotal, 0);
-  return { dogs, services: serviceLines, days, isDayCare, isServiceRequest, stayProgram, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
+  const serviceCost = services.reduce((total, service) => total + service.lineTotal, 0);
+  return { dogs, services, days, isDayCare, isServiceRequest, stayProgram, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
 }
 
 function boardingPricingServiceForCustomer(user = currentUser) {
@@ -13455,7 +13694,7 @@ function updateCustomerEstimate() {
   renderCustomerBookingAvailabilityMessages();
   const boardingLine = estimate.isServiceRequest ? "" : estimate.boardingLines.map((line) => `<div class="estimate-line"><span>${escapeHtml(line.dogName)} - ${escapeHtml(boardingLineDisplayLabel(line))}:</span><span>${Number(line.days || 0)} x ${money(line.rate)} = ${money(line.total)}</span></div>`).join("");
   $("#customerEstimate").innerHTML = estimate.dogs.length
-    ? `<strong>${escapeHtml(boardingBillingLabel(estimate))}</strong>${boardingLine}${estimate.services.map((service) => `<div class="estimate-line"><span>${escapeHtml(customerServiceDisplayName(service))}</span><span>${estimate.dogs.length} dog(s) x ${Number(service.quantity || 1)} x ${money(service.basePrice)} = ${money(service.lineTotal)}</span></div>`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>`
+    ? `<strong>${escapeHtml(boardingBillingLabel(estimate))}</strong>${boardingLine}${estimate.services.map((service) => `<div class="estimate-line"><span>${escapeHtml(service.dogName || "Dog")} - ${escapeHtml(customerServiceDisplayName(service))}</span><span>${Number(service.quantity || 1)} x ${money(service.basePrice)} = ${money(service.lineTotal)}</span></div>`).join("")}<div class="estimate-total"><strong>Estimated total</strong><span>${money(estimate.total)}</span></div>`
     : "Select dog(s), dates, and services to see an estimate.";
 }
 
@@ -13474,7 +13713,7 @@ function showBookingConfirmDialog(estimate) {
     return `<li>${escapeHtml(dog.dogName)}${dog.breedDescription ? ` (${escapeHtml(dog.breedDescription)})` : ""}${rateText}</li>`;
   }).join("");
   const serviceList = pendingCustomerBooking.services.length
-    ? pendingCustomerBooking.services.map((service) => `<li>${escapeHtml(customerServiceDisplayName(service))} x${Number(service.quantity || 1)} for ${pendingCustomerBooking.dogs.length} dog(s) - ${money(service.lineTotal)} ${escapeHtml(service.unit || "")}</li>`).join("")
+    ? pendingCustomerBooking.services.map((service) => `<li>${escapeHtml(service.dogName || "Dog")} - ${escapeHtml(customerServiceDisplayName(service))} x${Number(service.quantity || 1)} - ${money(service.lineTotal)} ${escapeHtml(service.unit || "")}</li>`).join("")
     : "<li>No added services selected</li>";
   const availabilityHtml = customerBookingAvailabilityMessagesHtml(customerBookingEstimateAvailabilityChecks(pendingCustomerBooking));
   $("#bookingConfirmBody").innerHTML = `
@@ -13511,7 +13750,8 @@ async function submitPendingCustomerBooking() {
   const submittedDogKeys = new Set();
   try {
     for (const dog of estimate.dogs) {
-      const submittedDogKey = [customerBookingSelectionKey(dog), estimate.dropoffTime || "", estimate.pickupTime || "", customerBookingServiceKey(estimate)].join("|");
+      const dogServices = customerServicesForDog(estimate, dog);
+      const submittedDogKey = [customerBookingSelectionKey(dog), estimate.dropoffTime || "", estimate.pickupTime || "", customerBookingServiceKey(estimate, dog)].join("|");
       if (submittedDogKeys.has(submittedDogKey)) {
         skippedCount += 1;
         continue;
@@ -13526,7 +13766,7 @@ async function submitPendingCustomerBooking() {
       const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
       const useExisting = Boolean(existingTarget);
       const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
-      const stayRequests = estimate.services.map((service) => ({
+      const stayRequests = dogServices.map((service) => ({
         id: service.id,
         serviceId: service.id,
         serviceName: service.serviceName,
@@ -13632,7 +13872,7 @@ async function submitPendingCustomerBooking() {
         estimatedTotal: pricingSnapshot.total,
         stayType,
         billingDays: pricingSnapshot.billingDays,
-        requestedServices: estimate.services.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0) })),
+        requestedServices: dogServices.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0), dogName: dog.dogName || "Dog" })),
         flags: ["Required update from owner"],
         stays: existingStays,
         cancelledAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.cancelledAt || "",
@@ -17039,6 +17279,9 @@ function initEvents() {
     const formEl = event.currentTarget;
     try {
       const formData = formPayload(formEl);
+      const combinedStatus = combinedDogSpayNeuterStatus(formData);
+      const derivedSex = sexFromCombinedDogSpayNeuterStatus(combinedStatus) || formData.sex || "";
+      if (formEl.elements.sex) formEl.elements.sex.value = derivedSex;
       if (!validateForm(formEl)) return;
       let existing = activeBoardingDog() || {};
       if (!existing.id) {
@@ -17060,6 +17303,8 @@ function initEvents() {
         id: dogId,
         submittedAt: existing.submittedAt || timestamp,
         ...formData,
+        sex: derivedSex || formData.sex || existing.sex || "",
+        spayNeuterStatus: combinedStatus || formData.spayNeuterStatus || existing.spayNeuterStatus || "",
         ownerEmail: normalizeEmail(formData.ownerEmail),
         customerEmail: normalizeEmail(formData.customerEmail || formData.ownerEmail || existing.customerEmail),
         linkedOwnerEmail: normalizeEmail(formData.ownerEmail || existing.linkedOwnerEmail),
