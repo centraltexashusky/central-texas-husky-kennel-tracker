@@ -614,7 +614,43 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   };
 }
 
-function boardingStayInvoiceTotal(record = {}, stay = {}) {
+var boardingCurrentPricingStatuses = ["Pending", "Approved", "Checked In", "In Kennel", "Ready For Pickup"];
+
+function boardingStayCanUseCurrentPricing(record = {}, stay = {}) {
+  const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
+  const customerRequest = Boolean(record.customerRequest || stay.source === "customer-request" || stay.source === "customer");
+  return customerRequest && boardingCurrentPricingStatuses.includes(status);
+}
+
+function boardingCurrentDogRoleForStay(stay = {}, ratePlan = {}, options = {}) {
+  const stayProgram = options.stayProgram || stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
+  if (stayProgram) return "boarding-program";
+  if (!ratePlan.isMemberPricing) return "non-member";
+  const requestedRole = options.currentDogRole || stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.role || "";
+  return requestedRole === "shared-crate-additional" ? "shared-crate-additional" : "primary";
+}
+
+function boardingCurrentPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
+  if (!boardingStayCanUseCurrentPricing(record, stay) && !options.forceCurrentPricing) return null;
+  if (!options.forceCurrentPricing && !options.skipFamilyPricing) {
+    const familySnapshot = boardingFamilyPricingSnapshotForStay(record, stay);
+    if (familySnapshot) return familySnapshot;
+  }
+  const ratePlan = options.ratePlan || boardingRatePlanForRecord(record);
+  const stayProgram = options.stayProgram || stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
+  const sharedCrateRequested = Boolean(options.sharedCrateRequested ?? (stay.pricingSnapshot?.sharedCrateRequested && ratePlan.isMemberPricing));
+  return boardingPricingSnapshotForStay(record, stay, {
+    ...options,
+    ratePlan,
+    stayProgram,
+    currentDogRole: boardingCurrentDogRoleForStay(stay, ratePlan, { ...options, stayProgram }),
+    sharedCrateRequested,
+  });
+}
+
+function boardingStayInvoiceTotal(record = {}, stay = {}, options = {}) {
+  const currentSnapshot = options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay, options);
+  if (currentSnapshot) return Number(currentSnapshot.total || 0);
   if (stay.pricingSnapshot?.total !== undefined) return Number(stay.pricingSnapshot.total || 0);
   if (stay.estimatedTotal !== undefined && stay.estimatedTotal !== "") return Number(stay.estimatedTotal || 0);
   if (record.finalInvoiceTotal !== undefined && record.finalInvoiceTotal !== "") return Number(record.finalInvoiceTotal || 0);
@@ -622,21 +658,23 @@ function boardingStayInvoiceTotal(record = {}, stay = {}) {
 }
 
 function boardingStayInvoiceSummaryHtml(record = {}, stay = {}, options = {}) {
-  const hasSnapshot = Boolean(stay.pricingSnapshot?.version || stay.pricingSnapshot?.lineItems);
-  const snapshot = hasSnapshot ? stay.pricingSnapshot : {};
+  const currentSnapshot = options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay, options);
+  const snapshot = currentSnapshot || (stay.pricingSnapshot || {});
+  const hasSnapshot = Boolean(snapshot.version || snapshot.lineItems);
   const adjustments = normalizeInvoiceAdjustments(stay.invoiceAdjustments);
   const lines = hasSnapshot ? arrayValue(snapshot.lineItems).filter((line) => Number(line.amount || 0)) : [];
   const customerAdjustments = adjustments.filter((adjustment) => adjustment.visibleToCustomer !== false);
   const adjustmentLines = customerAdjustments
     .map((adjustment) => \`<div class="estimate-line"><span>\${escapeHtml(adjustment.label)}\${adjustment.reason ? \`: \${escapeHtml(adjustment.reason)}\` : ""}</span><span>\${money(invoiceAdjustmentSignedAmount(adjustment))}</span></div>\`)
     .join("");
-  if (!lines.length && !adjustmentLines && !boardingStayInvoiceTotal(record, stay)) return "";
+  const total = currentSnapshot ? Number(currentSnapshot.total || 0) : boardingStayInvoiceTotal(record, stay);
+  if (!lines.length && !adjustmentLines && !total) return "";
   const lineHtml = lines
     .filter((line) => !["charge", "discount"].includes(line.type))
     .map((line) => \`<div class="estimate-line"><span>\${escapeHtml(line.label || "Invoice item")}</span><span>\${line.quantity ? \`\${escapeHtml(line.quantity)} x \${money(line.unitPrice || 0)} = \` : ""}\${money(line.amount || 0)}</span></div>\`)
     .join("");
   const totalLabel = options.final ? "Final total" : "Estimated total";
-  return \`<div class="estimate-box stay-invoice-summary">\${lineHtml}\${adjustmentLines}<div class="estimate-total"><strong>\${totalLabel}</strong><span>\${money(boardingStayInvoiceTotal(record, stay))}</span></div></div>\`;
+  return \`<div class="estimate-box stay-invoice-summary">\${lineHtml}\${adjustmentLines}<div class="estimate-total"><strong>\${totalLabel}</strong><span>\${money(total)}</span></div></div>\`;
 }
 
 function boardingStayHasService(stay = {}, label = "") {
@@ -2192,6 +2230,88 @@ function boardingFamilyStatusSummary(entries = []) {
   return statuses.length === 1 ? statuses[0] : "Mixed statuses";
 }
 
+function boardingFamilyPricingSnapshots(entries = []) {
+  const snapshots = new Map();
+  const activeEntries = entries.filter((entry) => boardingStayCanUseCurrentPricing(entry.record || {}, entry.stay || {}));
+  if (!activeEntries.length) return snapshots;
+  const first = activeEntries[0] || {};
+  const firstRecord = first.record || {};
+  const firstStay = first.stay || {};
+  const ratePlan = boardingRatePlanForRecord(firstRecord);
+  const stayProgram = firstStay.stayProgram || firstStay.pricingSnapshot?.stayProgram || null;
+  const isServiceRequest = String(firstStay.stayType || firstRecord.stayType || "").trim() === "Service Request";
+  const days = isServiceRequest ? 0 : boardingDays(firstStay.dropoffTime, firstStay.pickupTime);
+  const hadMemberSnapshot = activeEntries.some((entry) => entry.stay?.pricingSnapshot?.isMemberPricing);
+  const explicitSharedCrate = activeEntries.some((entry) => entry.stay?.pricingSnapshot?.sharedCrateRequested);
+  const sharedCrateRequested = Boolean(ratePlan.isMemberPricing && !stayProgram && activeEntries.length > 1 && (explicitSharedCrate || !hadMemberSnapshot));
+  const useSavedMemberRoles = Boolean(ratePlan.isMemberPricing && activeEntries.some((entry) => entry.stay?.pricingSnapshot?.isMemberPricing && ["primary", "shared-crate-additional"].includes(entry.stay?.pricingSnapshot?.currentDogRole)));
+  const lines = useSavedMemberRoles
+    ? activeEntries.map((entry) => {
+      const record = entry.record || {};
+      const savedRole = entry.stay?.pricingSnapshot?.currentDogRole === "shared-crate-additional" ? "shared-crate-additional" : "primary";
+      const rate = isServiceRequest ? 0 : savedRole === "shared-crate-additional" ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
+      return {
+        dogKey: boardingPricingDogKey(record),
+        dogId: record.id || "",
+        dogName: record.dogName || "Dog",
+        role: savedRole,
+        rate,
+        days,
+        total: days * rate,
+        sharedCrateRequested,
+        crateGroupId: entry.stay?.pricingSnapshot?.crateGroupId || "",
+      };
+    })
+    : boardingDogPricingLines(activeEntries.map((entry) => entry.record || {}), {
+      ratePlan,
+      days,
+      isServiceRequest,
+      sharedCrateRequested,
+      stayProgram,
+    });
+  const groupBoardingSubtotal = lines.reduce((total, line) => total + Number(line.total || 0), 0);
+  const groupServiceSubtotal = activeEntries.reduce((total, entry) => total + boardingStayRequestTotal(entry.stay?.requests || []), 0);
+  const groupTotal = groupBoardingSubtotal + groupServiceSubtotal;
+  activeEntries.forEach((entry, index) => {
+    const record = entry.record || {};
+    const stay = entry.stay || {};
+    const line = lines[index] || {};
+    snapshots.set(entry, boardingCurrentPricingSnapshotForStay(record, stay, {
+      forceCurrentPricing: true,
+      ratePlan,
+      currentDogKey: line.dogKey || boardingPricingDogKey(record),
+      currentDogName: line.dogName || record.dogName || "Dog",
+      currentDogRole: line.role,
+      sharedCrateRequested,
+      crateGroupId: line.crateGroupId || "",
+      stayProgram,
+      groupBoardingSubtotal,
+      groupServiceSubtotal,
+      groupTotal,
+    }));
+  });
+  return snapshots;
+}
+
+function boardingFamilyPricingSnapshotForStay(record = {}, stay = {}) {
+  if (!stay?.id || !boardingStayCanUseCurrentPricing(record, stay)) return null;
+  const targetEntry = boardingStayEntryForRecord(record, stay);
+  const targetKey = boardingFamilyGroupKey(targetEntry);
+  if (!targetKey) return null;
+  const records = consolidatedBoardingDogRecords(readRecords("boardingDog").filter((item) => item.customerRequest && !item.removed));
+  const entries = uniqueBoardingStayEntries(boardingStayEntries(records)).filter((entry) => boardingFamilyGroupKey(entry) === targetKey);
+  if (entries.length <= 1) return null;
+  const snapshots = boardingFamilyPricingSnapshots(entries);
+  const recordIds = new Set([record.id, ...(record.sourceRecordIds || [])].filter(Boolean));
+  const matchedEntry = entries.find((entry) => {
+    const entryRecordIds = [entry.record?.id, ...(entry.record?.sourceRecordIds || [])].filter(Boolean);
+    const sameRecord = entryRecordIds.some((id) => recordIds.has(id));
+    const sameStay = boardingStaySharesExplicitIdentity(entry.stay || {}, stay) || boardingStayMatchesIdentity(entry.stay || {}, stay);
+    return sameRecord && sameStay;
+  });
+  return matchedEntry ? snapshots.get(matchedEntry) || null : null;
+}
+
 function boardingFamilyGroups(entries = []) {
   const groups = new Map();
   const singles = [];
@@ -2227,7 +2347,8 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   const services = boardingStayServicesText(stay);
   const status = entry.status;
   const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
-  const total = boardingStayInvoiceTotal(record, stay);
+  const pricingSnapshot = options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay);
+  const total = boardingStayInvoiceTotal(record, stay, pricingSnapshot ? { pricingSnapshot } : {});
   const approveAction = status === "Cancelled" ? \`<button type="button" class="secondary-button" data-action="approve-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Approve Request</button>\` : "";
   const actions = \`<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change</button>\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}\`;
   const familyChip = options.familyName ? \`<span class="status-chip boarding-family-chip">Same family: \${escapeHtml(options.familyName)}</span>\` : "";
@@ -2242,6 +2363,7 @@ function boardingFamilyGroupHtml(entries = []) {
   const familyTitle = familyName.toLowerCase() === "family" ? "Family Stay" : \`\${familyName} Family Stay\`;
   const dogNames = entries.map((entry) => entry.record?.dogName || "Dog").filter(Boolean);
   const statusSummary = boardingFamilyStatusSummary(entries);
+  const pricingSnapshots = boardingFamilyPricingSnapshots(entries);
   return \`<section class="boarding-family-group">
     <div class="boarding-family-header">
       <div>
@@ -2251,7 +2373,7 @@ function boardingFamilyGroupHtml(entries = []) {
       </div>
       <div class="chip-row"><span class="status-chip boarding-family-chip">\${entries.length} dogs</span><span class="status-chip">\${escapeHtml(statusSummary)}</span></div>
     </div>
-    <div class="boarding-family-dogs">\${entries.map((entry) => boardingRequestCardHtml(entry, { familyName })).join("")}</div>
+    <div class="boarding-family-dogs">\${entries.map((entry) => boardingRequestCardHtml(entry, { familyName, pricingSnapshot: pricingSnapshots.get(entry) })).join("")}</div>
   </section>\`;
 }
 
