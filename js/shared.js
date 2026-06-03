@@ -4142,7 +4142,10 @@ var canonicalDogProfileFields = [
   "dhppDate",
   "bordetellaDate",
   "heartwormDate",
+  "rabiesGoodThreeYears",
+  "dhppGoodThreeYears",
   "rabiesDuration",
+  "dhppDuration",
   "profilePhotoUrl",
   "profilePhotoData",
   "vaccinationRecords",
@@ -4296,6 +4299,9 @@ function canonicalDogPayloadFromLegacy(dogId = "", sources = {}) {
     dhppDate: customerDog.dhppDate || boardingDog.dhppDate || "",
     rabiesDate: customerDog.rabiesDate || boardingDog.rabiesDate || "",
     rabiesDuration: customerDog.rabiesDuration || boardingDog.rabiesDuration || "",
+    dhppDuration: customerDog.dhppDuration || boardingDog.dhppDuration || "",
+    rabiesGoodThreeYears: customerDog.rabiesGoodThreeYears || boardingDog.rabiesGoodThreeYears || "",
+    dhppGoodThreeYears: customerDog.dhppGoodThreeYears || boardingDog.dhppGoodThreeYears || "",
     bordetellaDate: customerDog.bordetellaDate || boardingDog.bordetellaDate || "",
     heartwormDate: customerDog.heartwormDate || boardingDog.heartwormDate || "",
     profilePhotoUrl: customerDog.profilePhotoUrl || boardingDogPhotoSource(boardingDog) || "",
@@ -4906,6 +4912,10 @@ async function linkBoardingDogOwnerAccount(record = {}) {
     vetInfo: record.vetInfo || existingCustomerDog.vetInfo || "",
     rabiesDate: record.rabiesDate || existingCustomerDog.rabiesDate || "",
     dhppDate: record.dhppDate || existingCustomerDog.dhppDate || "",
+    rabiesGoodThreeYears: record.rabiesGoodThreeYears || existingCustomerDog.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(record, "rabies") || vaccineDurationIsThreeYears(existingCustomerDog, "rabies") ? "Yes" : ""),
+    dhppGoodThreeYears: record.dhppGoodThreeYears || existingCustomerDog.dhppGoodThreeYears || (vaccineDurationIsThreeYears(record, "dhpp") || vaccineDurationIsThreeYears(existingCustomerDog, "dhpp") ? "Yes" : ""),
+    rabiesDuration: record.rabiesDuration || existingCustomerDog.rabiesDuration || (vaccineDurationIsThreeYears(record, "rabies") || vaccineDurationIsThreeYears(existingCustomerDog, "rabies") ? "3 years" : ""),
+    dhppDuration: record.dhppDuration || existingCustomerDog.dhppDuration || (vaccineDurationIsThreeYears(record, "dhpp") || vaccineDurationIsThreeYears(existingCustomerDog, "dhpp") ? "3 years" : ""),
     bordetellaDate: record.bordetellaDate || existingCustomerDog.bordetellaDate || "",
     heartwormDate: record.heartwormDate || existingCustomerDog.heartwormDate || "",
     specialCare: record.specialCare || existingCustomerDog.specialCare || "",
@@ -5827,6 +5837,19 @@ function money(value) {
   return \`\${prefix}\${Math.abs(number).toLocaleString("en-US", { maximumFractionDigits: 0 })}\`;
 }
 
+function vaccineDurationIsThreeYears(record = {}, vaccineKey = "") {
+  const duration = String(record?.[vaccineKey + "Duration"] || "").toLowerCase();
+  const flag = String(record?.[vaccineKey + "GoodThreeYears"] || "").toLowerCase();
+  return duration.includes("3") || flag === "yes" || flag === "true";
+}
+
+function dogNeedsDhppVaccineReview(dog = {}) {
+  if (!dog.dhppDate) return false;
+  const dhppDays = (new Date() - new Date(String(dog.dhppDate) + "T12:00:00")) / 86400000;
+  const reviewThresholdDays = vaccineDurationIsThreeYears(dog, "dhpp") ? 1065 : 335;
+  return dhppDays >= reviewThresholdDays;
+}
+
 function dashboardMetrics() {
   const ownedDogs = readRecords("ownedDog").filter((record) => !record.removed);
   const allBoardingDogs = consolidatedBoardingDogRecords();
@@ -5903,10 +5926,7 @@ function dashboardMetrics() {
     return heat.expectedSoon || heat.overdue || heat.state === "unknown";
   });
   const medicalCareDogs = ownedDogs.filter(ownedDogHasCareNote);
-  const vaccineIssues = ownedDogs.filter((dog) => {
-    const dhpp = dog.dhppDate ? (new Date() - new Date(\`\${dog.dhppDate}T12:00:00\`)) / 86400000 : 0;
-    return dhpp >= 335;
-  }).length;
+  const vaccineIssues = ownedDogs.filter(dogNeedsDhppVaccineReview).length;
   return {
     selectedDate,
     ownedDogs,
@@ -5928,10 +5948,7 @@ function dashboardMetrics() {
     ownerUpdates,
     vaccineIssues,
     ownerUpdateDogs: boardingDogs.filter((dog) => (dog.flags || []).includes("Required update from owner")),
-    vaccineIssueDogs: ownedDogs.filter((dog) => {
-      const dhpp = dog.dhppDate ? (new Date() - new Date(\`\${dog.dhppDate}T12:00:00\`)) / 86400000 : 0;
-      return dhpp >= 335;
-    }),
+    vaccineIssueDogs: ownedDogs.filter(dogNeedsDhppVaccineReview),
     openRequestRecords: requests.filter((record) => !record.completed),
     urgentRequestRecords: requests.filter((record) => !record.completed && record.urgentNeeds),
     urgentMaintenanceRecords: maintenance.filter((record) => !record.completed && record.urgentAttention),
@@ -9785,6 +9802,9 @@ function initEvents() {
         statusHistory,
         entrySource: existing.entrySource || (existing.customerRequest ? "customer" : "staff-admin"),
         rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears.checked ? "Yes" : "",
+        dhppGoodThreeYears: formEl.elements.dhppGoodThreeYears?.checked ? "Yes" : "",
+        rabiesDuration: formEl.elements.rabiesGoodThreeYears.checked ? "3 years" : "",
+        dhppDuration: formEl.elements.dhppGoodThreeYears?.checked ? "3 years" : "",
         flags: formEl.querySelector('[name="boardingFlags"]') ? checkedFrom(formEl, "boardingFlags") : existing.flags || [],
         profilePhotoUrl: photo.profilePhotoUrl,
         profilePhotoPath: photo.profilePhotoPath,

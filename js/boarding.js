@@ -1173,6 +1173,10 @@ function boardingDraftFromCustomerDog(dog = {}) {
     vetInfo: dog.vetInfo || "",
     rabiesDate: dog.rabiesDate || "",
     dhppDate: dog.dhppDate || "",
+    rabiesGoodThreeYears: dog.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(dog, "rabies") ? "Yes" : ""),
+    dhppGoodThreeYears: dog.dhppGoodThreeYears || (vaccineDurationIsThreeYears(dog, "dhpp") ? "Yes" : ""),
+    rabiesDuration: dog.rabiesDuration || (vaccineDurationIsThreeYears(dog, "rabies") ? "3 years" : ""),
+    dhppDuration: dog.dhppDuration || (vaccineDurationIsThreeYears(dog, "dhpp") ? "3 years" : ""),
     bordetellaDate: dog.bordetellaDate || "",
     heartwormDate: dog.heartwormDate || "",
     specialCare: dog.specialCare || "",
@@ -2796,6 +2800,8 @@ function resetBoardingDogFormForRecord(record = {}) {
   });
   selectedDogPhotos.boarding = null;
   setFormValues(formEl, record);
+  if (formEl.elements.rabiesGoodThreeYears) formEl.elements.rabiesGoodThreeYears.checked = vaccineDurationIsThreeYears(record, "rabies");
+  if (formEl.elements.dhppGoodThreeYears) formEl.elements.dhppGoodThreeYears.checked = vaccineDurationIsThreeYears(record, "dhpp");
   formEl.elements.id.value = record.id || "";
   if (formEl.elements.profilePhotoUrl && !record.id) formEl.elements.profilePhotoUrl.value = "";
   if ($("#boardingDogPhotoInput")) $("#boardingDogPhotoInput").value = "";

@@ -222,6 +222,9 @@ function customerDogFromBoardingDog(record = {}, email = currentUser?.email, opt
     bordetellaDate: record.bordetellaDate || linked.bordetellaDate || "",
     heartwormDate: record.heartwormDate || linked.heartwormDate || "",
     rabiesDuration: record.rabiesDuration || linked.rabiesDuration || "",
+    dhppDuration: record.dhppDuration || linked.dhppDuration || "",
+    rabiesGoodThreeYears: record.rabiesGoodThreeYears || linked.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(record, "rabies") || vaccineDurationIsThreeYears(linked, "rabies") ? "Yes" : ""),
+    dhppGoodThreeYears: record.dhppGoodThreeYears || linked.dhppGoodThreeYears || (vaccineDurationIsThreeYears(record, "dhpp") || vaccineDurationIsThreeYears(linked, "dhpp") ? "Yes" : ""),
     profilePhotoUrl: boardingDogPhotoSource(record),
     profilePhotoData: record.profilePhotoData || linked.profilePhotoData || "",
     vaccinationRecords: record.vaccinationRecords || linked.vaccinationRecords || [],
@@ -457,7 +460,11 @@ function vaccinationPayloadsForDog(dog = {}) {
       dogId: dog.id,
       vaccineType: label,
       vaccinationDate: dog[field],
-      duration: field === "rabiesDate" ? dog.rabiesDuration || "" : "",
+      duration: field === "rabiesDate"
+        ? dog.rabiesDuration || (vaccineDurationIsThreeYears(dog, "rabies") ? "3 years" : "")
+        : field === "dhppDate"
+          ? dog.dhppDuration || (vaccineDurationIsThreeYears(dog, "dhpp") ? "3 years" : "")
+          : "",
       source: "legacy-dog-field",
       removed: false,
     }));
@@ -1661,6 +1668,9 @@ async function submitPendingCustomerBooking() {
         dhppDate: dog.dhppDate,
         rabiesDate: dog.rabiesDate,
         rabiesDuration: dog.rabiesDuration,
+        dhppDuration: dog.dhppDuration,
+        rabiesGoodThreeYears: dog.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(dog, "rabies") ? "Yes" : ""),
+        dhppGoodThreeYears: dog.dhppGoodThreeYears || (vaccineDurationIsThreeYears(dog, "dhpp") ? "Yes" : ""),
         sourceBoardingDogId: dog.sourceBoardingDogId || "",
         profilePhotoUrl: dog.profilePhotoUrl || "",
         vaccinationRecords: dog.vaccinationRecords || [],
