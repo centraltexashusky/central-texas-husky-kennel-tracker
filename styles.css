@@ -4381,6 +4381,38 @@ option {
   padding-right: 4px;
 }
 
+.notification-trace-summary {
+  color: rgba(149, 226, 255, 0.9);
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin-top: 6px;
+}
+
+.notification-trace-section {
+  margin-top: 14px;
+}
+
+.notification-trace-section .detail-row {
+  align-items: start;
+}
+
+.notification-trace-stack {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(149, 226, 255, 0.24);
+  border-radius: 8px;
+  color: rgba(230, 245, 255, 0.92);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .alert-checkbox-grid {
   display: grid;
   gap: 12px;
