@@ -1573,20 +1573,15 @@ function completeLocalTestLogin(email, reason = "", role = "admin") {
 }
 
 function hydrateLoginFromUrl() {
+  if (!isLocalTestingOrigin()) return;
   const params = new URLSearchParams(window.location.search);
   const email = params.get("email") || "";
   const password = params.get("password") || "";
   const role = params.get("role") || "admin";
-  const isLocalTest = isLocalTestingOrigin();
   const loginForm = $("#passwordLoginForm");
-  const emailField = loginForm?.querySelector('input[name="email"]');
-  const passwordField = loginForm?.querySelector('input[name="password"]');
-  if (email && emailField) emailField.value = email;
-  if (password && isLocalTest && passwordField) passwordField.value = password;
-  if (password && !isLocalTest) {
-    loginHelp.textContent = "For security, passwords are not read from website links. Enter the password below to sign in.";
-  }
-  if (params.get("localTest") === "1" && email && isLocalTest) {
+  if (email && loginForm?.elements.email) loginForm.elements.email.value = email;
+  if (password && loginForm?.elements.password) loginForm.elements.password.value = password;
+  if (params.get("localTest") === "1" && email) {
     params.delete("localTest");
     completeLocalTestLogin(email, "localTest=1 was used on a local testing URL", role);
   }
@@ -2868,20 +2863,19 @@ function updateMobileNavigationAccess() {
   const nav = $("#mobileBottomNav");
   if (!nav) return;
   const signedIn = helperIsLoggedIn();
-  const loginView = activePageId() === "loginPage";
-  nav.hidden = !signedIn || loginView;
+  nav.hidden = !signedIn;
   $$(".mobile-bottom-nav-button[data-page]").forEach((button) => {
     const allowed = pageAllowed(button.dataset.page);
     button.disabled = !allowed;
-    button.hidden = !signedIn || loginView || !allowed;
+    button.hidden = !signedIn || !allowed;
   });
   const moreButton = $("#mobileMoreButton");
   if (moreButton) {
     const hasMorePages = mobileMoreEntries().length > 0;
-    moreButton.disabled = !signedIn || loginView || !hasMorePages;
-    moreButton.hidden = !signedIn || loginView || !hasMorePages;
+    moreButton.disabled = !signedIn || !hasMorePages;
+    moreButton.hidden = !signedIn || !hasMorePages;
   }
-  if (!signedIn || loginView) setMobileMoreOpen(false);
+  if (!signedIn) setMobileMoreOpen(false);
   syncMobileNavigationActive();
 }
 
@@ -11737,7 +11731,6 @@ function alertHistoryHtml(target = "staff") {
       <strong>${escapeHtml(notificationDisplayTitle(record))}</strong>
       <span>${escapeHtml(formatDateTime(record.submittedAt || record.updatedAt))} | ${escapeHtml((record.audienceEmails || []).length)} recipient${(record.audienceEmails || []).length === 1 ? "" : "s"} | ${escapeHtml(record.deliveryStatus || "queued")}</span>
       <p>${multilineHtml(notificationDisplayMessage(record))}</p>
-      ${notificationCreationTraceSummaryHtml(record)}
     </article>`).join("")}</div>`
     : `<article class="record-card compact-record-card"><strong>No ${escapeHtml(urgentAlertTargetLabel(target).toLowerCase())} urgent alerts sent yet</strong><p>Sent alerts will show here for review.</p></article>`;
 }
@@ -14563,122 +14556,6 @@ function notificationAudienceEmails(config = {}, eventName = "") {
   return [...new Set(emails.map(normalizeEmail).filter(Boolean))];
 }
 
-function notificationSourceDebugLabel(record = {}) {
-  return [
-    record.dogName,
-    record.callName,
-    record.showName,
-    record.ownerName,
-    record.customerEmail,
-    record.ownerEmail,
-    record.staffName,
-    record.location,
-    record.category,
-    record.requestCode,
-    record.id,
-  ]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .filter((item, index, items) => items.findIndex((candidate) => candidate.toLowerCase() === item.toLowerCase()) === index)
-    .slice(0, 4)
-    .join(" | ");
-}
-
-function notificationTraceStackFrames(stack = "") {
-  const internalNames = [
-    "notificationCreationTrace",
-    "createNotificationRecord",
-    "notifyIfNeeded",
-  ];
-  return String(stack || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !line.startsWith("Error:"))
-    .filter((line) => !internalNames.some((name) => line.includes(name)))
-    .slice(0, 8);
-}
-
-function notificationCreationTrace(record = {}, eventName = "", config = {}, now = new Date().toISOString(), options = {}) {
-  let stackFrames = [];
-  try {
-    throw new Error("Notification creation trace: " + (eventName || "missing event"));
-  } catch (error) {
-    stackFrames = notificationTraceStackFrames(error.stack || "");
-  }
-  let eventLabel = String(eventName || "");
-  let role = "";
-  let page = "";
-  try {
-    eventLabel = typeof notificationEventDisplayLabel === "function" ? notificationEventDisplayLabel(eventName) : eventLabel;
-  } catch (error) {
-    eventLabel = String(eventName || "");
-  }
-  try {
-    role = typeof currentRole === "function" ? currentRole() : "";
-  } catch (error) {
-    role = "";
-  }
-  try {
-    page = typeof activePageId === "function" ? activePageId() : "";
-  } catch (error) {
-    page = "";
-  }
-  const sourceType = String(record.type || "").trim();
-  const originalSourceId = String(record.id || "").trim();
-  const sourceId = originalSourceId || options.generatedSourceId || "";
-  const missingContext = [];
-  if (!String(eventName || "").trim()) missingContext.push("eventName");
-  if (!sourceType) missingContext.push("sourceType");
-  if (!originalSourceId) missingContext.push("sourceId");
-  return {
-    capturedAt: now,
-    eventName: String(eventName || ""),
-    eventLabel,
-    sourceType,
-    sourceId,
-    generatedSourceId: originalSourceId ? "" : sourceId,
-    sourceLabel: notificationSourceDebugLabel(record),
-    missingContext,
-    deliveryChannels: config.channels || ["inApp"],
-    priority: config.priority || "normal",
-    role,
-    page,
-    route: typeof window !== "undefined" ? window.location.pathname + (window.location.hash || "") : "",
-    stackFrames,
-    stack: stackFrames.join("\n"),
-  };
-}
-
-function notificationCreationTraceSummaryHtml(notification = {}) {
-  if (!["admin", "helper"].includes(currentRole())) return "";
-  const trace = notification.creationTrace;
-  if (!trace || typeof trace !== "object") return "";
-  const source = [trace.eventName || "", trace.sourceType || "", trace.sourceLabel || trace.sourceId || ""].filter(Boolean).join(" | ");
-  return source ? '<small class="notification-trace-summary">Trace: ' + escapeHtml(source) + "</small>" : "";
-}
-
-function notificationCreationTraceHtml(notification = {}) {
-  if (!["admin", "helper"].includes(currentRole())) return "";
-  const trace = notification.creationTrace;
-  if (!trace || typeof trace !== "object") return "";
-  const rows = [
-    ["Event", trace.eventName || "Missing event name"],
-    ["Source", [trace.sourceType || "Missing source type", trace.sourceLabel || trace.sourceId || "Missing source ID"].filter(Boolean).join(" | ")],
-    ["Page", [trace.page || "", trace.route || ""].filter(Boolean).join(" | ")],
-    ["Role", trace.role || ""],
-    ["Priority", trace.priority || notification.priority || ""],
-    ["Missing context", Array.isArray(trace.missingContext) && trace.missingContext.length ? trace.missingContext.join(", ") : "None captured"],
-    ["Captured", formatDateTime(trace.capturedAt || notification.submittedAt || notification.updatedAt)],
-  ];
-  const rowHtml = rows
-    .filter(([, value]) => value)
-    .map(([label, value]) => '<div class="detail-row"><strong>' + escapeHtml(label) + "</strong><span>" + escapeHtml(value) + "</span></div>")
-    .join("");
-  const stack = Array.isArray(trace.stackFrames) && trace.stackFrames.length ? trace.stackFrames.join("\n") : trace.stack || "";
-  return '<section class="popup-record-section notification-trace-section"><h3>Alert creation trace</h3>' + rowHtml + '<pre class="notification-trace-stack">' + escapeHtml(stack || "No stack trace was saved for this alert.") + "</pre></section>";
-}
-
 function createNotificationRecord(record = {}, eventName = "", config = {}) {
   const now = new Date().toISOString();
   const sourceType = record.type || "";
@@ -14688,18 +14565,6 @@ function createNotificationRecord(record = {}, eventName = "", config = {}) {
   const existing = readRecords("notificationLog").find((item) => item.dedupeKey === dedupeKey && !item.removed);
   if (existing) return existing;
   const displaySeed = { eventName, sourceType, sourceId, sourceSnapshot, title: config.title, message: config.message };
-  let creationTrace = {};
-  try {
-    creationTrace = notificationCreationTrace(record, eventName, config, now, { generatedSourceId: record.id ? "" : sourceId });
-  } catch (error) {
-    creationTrace = {
-      capturedAt: now,
-      eventName: String(eventName || ""),
-      sourceType: String(sourceType || ""),
-      sourceId: String(sourceId || ""),
-      traceError: error.message || String(error),
-    };
-  }
   return upsertRecord("notificationLog", {
     type: "notificationLog",
     id: uid("notification"),
@@ -14715,7 +14580,6 @@ function createNotificationRecord(record = {}, eventName = "", config = {}) {
     sourceType,
     sourceId,
     sourceSnapshot,
-    creationTrace,
     readBy: [],
     deliveryStatus: "queued",
   });
@@ -14857,7 +14721,7 @@ async function openNotification(id = "") {
       return;
     }
   }
-  showDetailDialog(notificationDisplayTitle(notification), `<p>${escapeHtml(notificationDisplayMessage(notification))}</p>${notificationCreationTraceHtml(notification)}`);
+  showDetailDialog(notificationDisplayTitle(notification), `<p>${escapeHtml(notificationDisplayMessage(notification))}</p>`);
 }
 
 function emailNow(subjectText, bodyText) {
@@ -18223,7 +18087,6 @@ function switchPage(pageId) {
   syncMobileNavigationActive(pageId);
   setMobileMoreOpen(false);
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
-  if (pageId === "loginPage" && !helperIsLoggedIn()) hydrateLoginFromUrl();
   if (pageId === "ourDogsPage") window.setTimeout(() => $("#ownedDogSearch")?.focus(), 100);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -18310,7 +18173,6 @@ async function initializeApp() {
         clearLocalAppSession({ switchToLogin: false });
       }
     }
-    if (!helperIsLoggedIn()) hydrateLoginFromUrl();
     updateNavigationAccess();
     if (helperIsLoggedIn()) {
       if (!renderedDuringSessionRestore) renderAllRecords();
