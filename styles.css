@@ -2154,6 +2154,39 @@ textarea {
   margin-bottom: 16px;
 }
 
+.stay-request-service-group {
+  display: grid;
+  gap: 8px;
+}
+
+.stay-request-linked-options {
+  border-left: 2px solid rgba(88, 196, 255, 0.68);
+  display: grid;
+  gap: 8px;
+  margin-left: 16px;
+  padding-left: 12px;
+}
+
+.stay-request-linked-heading {
+  color: rgba(149, 226, 255, 0.92);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.checklist label.stay-request-linked-label {
+  background: rgba(88, 196, 255, 0.08);
+  border-color: rgba(88, 196, 255, 0.32);
+}
+
+.stay-request-linked-note {
+  color: var(--muted);
+  display: block;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
 .service-option {
   align-items: center;
   justify-content: space-between;
@@ -2670,15 +2703,40 @@ textarea {
   content: "Saved: ";
 }
 
+.task-filter-toggle {
+  margin-top: 0;
+  width: fit-content;
+}
+
+.section-heading .task-filter-toggle {
+  margin-top: 10px;
+}
+
+.structured-care-section #careQuickPhotosLabel {
+  margin-top: 14px;
+}
+
+.structured-care-section #careQuickPhotos {
+  margin-top: 8px;
+}
+
+.structured-care-section .button-row {
+  margin-top: 14px;
+}
+
 .care-log-history-box {
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 2px solid rgba(88, 196, 255, 0.78);
   border-radius: var(--glass-radius-sm);
+  box-shadow:
+    0 0 0 1px rgba(88, 196, 255, 0.14),
+    0 16px 36px rgba(0, 0, 0, 0.22);
   padding: 0;
 }
 
 .care-log-history-box summary {
   align-items: center;
+  background: rgba(24, 132, 216, 0.12);
   cursor: pointer;
   display: flex;
   gap: 10px;

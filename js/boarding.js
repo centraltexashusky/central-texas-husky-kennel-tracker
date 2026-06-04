@@ -1486,11 +1486,30 @@ function stayRequestMatchesService(request = {}, service = {}, options = {}) {
 
 function boardingStayRequestServiceCatalog(record = {}, stay = {}) {
   const user = boardingPricingUserForRecord(record);
-  const requests = arrayValue(stay.requests);
-  const selectedIds = new Set(requests.map((request) => (request && typeof request === "object" ? request.serviceId || request.id || "" : "")).filter(Boolean));
   return serviceCatalogForStayRequests({ user })
-    .filter((service) => !serviceDependencyId(service) || selectedIds.has(serviceDependencyId(service)))
-    .sort((a, b) => [a.category || "", customerServiceDisplayName(a)].join("|").localeCompare([b.category || "", customerServiceDisplayName(b)].join("|")));
+    .sort((a, b) => [
+      a.category || "",
+      serviceDependencyId(a) ? serviceDependencyId(a) : "",
+      serviceDependencyId(a) ? "1" : "0",
+      customerServiceDisplayName(a),
+    ].join("|").localeCompare([
+      b.category || "",
+      serviceDependencyId(b) ? serviceDependencyId(b) : "",
+      serviceDependencyId(b) ? "1" : "0",
+      customerServiceDisplayName(b),
+    ].join("|")));
+}
+
+function stayRequestServiceCheckboxHtml(service = {}, requests = [], user = currentUser, options = {}) {
+  const checked = requests.some((request) => stayRequestMatchesService(request, service, { user }));
+  const label = \`\${customerServiceDisplayName(service)} requested\`;
+  const unitPrice = stayRequestServiceUnitPriceForUser(service, user);
+  const price = unitPrice ? \` - \${money(unitPrice)}\${service.unit ? \` \${service.unit}\` : ""}\` : "";
+  const linkedNote = options.linkedParent
+    ? \`<span class="stay-request-linked-note">Linked to \${escapeHtml(customerServiceDisplayName(options.linkedParent))}</span>\`
+    : "";
+  const className = options.linked ? ' class="stay-request-linked-label"' : "";
+  return \`<label\${className}><input type="checkbox" name="stayRequests" value="\${escapeHtml(label)}" data-service-id="\${escapeHtml(service.id || "")}" data-service-name="\${escapeHtml(service.serviceName || "")}" data-unit-price="\${escapeHtml(unitPrice)}" data-unit="\${escapeHtml(service.unit || "")}" \${checked ? "checked" : ""} /> <span>\${escapeHtml(label)}\${escapeHtml(price)}\${linkedNote}</span></label>\`;
 }
 
 function stayRequestCheckboxesHtml(stay = {}, record = {}) {
@@ -1498,15 +1517,28 @@ function stayRequestCheckboxesHtml(stay = {}, record = {}) {
   const user = boardingPricingUserForRecord(record);
   const activeServices = boardingStayRequestServiceCatalog(record, stay);
   if (activeServices.length) {
-    return activeServices
+    const parentServices = activeServices.filter((service) => !serviceDependencyId(service));
+    const parentIds = new Set(parentServices.map((service) => service.id).filter(Boolean));
+    const linkedServices = activeServices.filter((service) => serviceDependencyId(service));
+    const linkedByParent = new Map();
+    linkedServices.forEach((service) => {
+      const parentId = serviceDependencyId(service);
+      if (!linkedByParent.has(parentId)) linkedByParent.set(parentId, []);
+      linkedByParent.get(parentId).push(service);
+    });
+    const parentHtml = parentServices
       .map((service) => {
-        const checked = requests.some((request) => stayRequestMatchesService(request, service, { user }));
-        const label = \`\${customerServiceDisplayName(service)} requested\`;
-        const unitPrice = stayRequestServiceUnitPriceForUser(service, user);
-        const price = unitPrice ? \` - \${money(unitPrice)}\${service.unit ? \` \${service.unit}\` : ""}\` : "";
-        return \`<label><input type="checkbox" name="stayRequests" value="\${escapeHtml(label)}" data-service-id="\${escapeHtml(service.id || "")}" data-service-name="\${escapeHtml(service.serviceName || "")}" data-unit-price="\${escapeHtml(unitPrice)}" data-unit="\${escapeHtml(service.unit || "")}" \${checked ? "checked" : ""} /> \${escapeHtml(label)}\${escapeHtml(price)}</label>\`;
+        const childHtml = (linkedByParent.get(service.id) || [])
+          .map((childService) => stayRequestServiceCheckboxHtml(childService, requests, user, { linked: true, linkedParent: service }))
+          .join("");
+        return \`<div class="stay-request-service-group">\${stayRequestServiceCheckboxHtml(service, requests, user)}\${childHtml ? \`<div class="stay-request-linked-options"><span class="stay-request-linked-heading">Linked add-ons</span>\${childHtml}</div>\` : ""}</div>\`;
       })
       .join("");
+    const orphanHtml = linkedServices
+      .filter((service) => !parentIds.has(serviceDependencyId(service)))
+      .map((service) => stayRequestServiceCheckboxHtml(service, requests, user))
+      .join("");
+    return \`\${parentHtml}\${orphanHtml}\`;
   }
   return stayRequestServiceOptions
     .map((option) => {

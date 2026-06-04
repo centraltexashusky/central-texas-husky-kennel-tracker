@@ -2151,6 +2151,52 @@ function updateCompletionCount() {
   if (summary) summary.textContent = \`\${completed} completed | \${remaining} still open\`;
 }
 
+function bindTaskFilterToggle(row = $("#dailyTaskFilterToggleRow")) {
+  if (!row || row.dataset.taskFilterBound === "true") return row;
+  row.dataset.taskFilterBound = "true";
+  const input = row.querySelector("#showRemainingTasksOnly") || row.querySelector('input[type="checkbox"]');
+  if (input) {
+    input.checked = !!showRemainingTasksOnly;
+    input.addEventListener("change", (event) => {
+      showRemainingTasksOnly = event.target.checked;
+      renderDailyTaskLists();
+    });
+  }
+  return row;
+}
+
+function ensureTaskFilterToggleRow() {
+  let row = $("#dailyTaskFilterToggleRow");
+  if (!row) {
+    row = document.createElement("label");
+    row.className = "toggle-row task-filter-toggle";
+    row.id = "dailyTaskFilterToggleRow";
+    row.innerHTML = '<input type="checkbox" id="showRemainingTasksOnly" /> Remaining tasks only';
+  }
+  const input = row.querySelector("#showRemainingTasksOnly") || row.querySelector('input[type="checkbox"]');
+  if (input) {
+    input.id = "showRemainingTasksOnly";
+    input.checked = !!showRemainingTasksOnly;
+  }
+  return bindTaskFilterToggle(row);
+}
+
+function parkTaskFilterToggle() {
+  const row = ensureTaskFilterToggleRow();
+  const progress = $("#dailyTaskProgress");
+  if (row && progress && row.parentElement !== progress.parentElement) progress.insertAdjacentElement("afterend", row);
+  return row;
+}
+
+function syncTaskFilterTogglePlacement() {
+  const row = ensureTaskFilterToggleRow();
+  if (!row) return;
+  const panel = $$("[data-task-panel]").find((item) => item.dataset.taskPanel === dailyTaskTab);
+  const headingBody = panel?.querySelector(".section-heading > div");
+  if (headingBody && row.parentElement !== headingBody) headingBody.appendChild(row);
+  row.hidden = !headingBody;
+}
+
 function syncMobileReviewSections() {
   const details = $("#boardingRequestsDetails");
   if (!details) return;
@@ -8329,10 +8375,7 @@ function initEvents() {
   $("#addCareQuickLog").addEventListener("click", addPendingCareLog);
   $("#careQuickDogId").addEventListener("change", updateCareQuickFields);
   $("#careQuickType").addEventListener("change", updateCareQuickFields);
-  $("#showRemainingTasksOnly")?.addEventListener("change", (event) => {
-    showRemainingTasksOnly = event.target.checked;
-    renderDailyTaskLists();
-  });
+  bindTaskFilterToggle(ensureTaskFilterToggleRow());
   $("#structuredCareLogList").addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="remove-care-log"], [data-action="edit-care-log"]');
     if (!button) return;

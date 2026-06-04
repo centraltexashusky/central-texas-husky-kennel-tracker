@@ -366,6 +366,7 @@ function renderDailyTaskLists(selected = {}) {
     list.innerHTML = (config[shift] || []).map((task) => taskLabel(task, shift)).join("");
     bindTaskListInteractions(list);
   });
+  parkTaskFilterToggle();
   renderCustomTaskPanels(config);
   syncStaticTaskTabDeleteRows(config);
   const canManageTasks = currentRole() === "admin";
@@ -395,6 +396,7 @@ function setDailyTaskTab(tab = "morning") {
   panels.forEach((panel) => {
     panel.hidden = panel.dataset.taskPanel !== dailyTaskTab;
   });
+  syncTaskFilterTogglePlacement();
 }
 
 function taskTabFormHtml() {

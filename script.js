@@ -2947,6 +2947,52 @@ function updateCompletionCount() {
   if (summary) summary.textContent = `${completed} completed | ${remaining} still open`;
 }
 
+function bindTaskFilterToggle(row = $("#dailyTaskFilterToggleRow")) {
+  if (!row || row.dataset.taskFilterBound === "true") return row;
+  row.dataset.taskFilterBound = "true";
+  const input = row.querySelector("#showRemainingTasksOnly") || row.querySelector('input[type="checkbox"]');
+  if (input) {
+    input.checked = !!showRemainingTasksOnly;
+    input.addEventListener("change", (event) => {
+      showRemainingTasksOnly = event.target.checked;
+      renderDailyTaskLists();
+    });
+  }
+  return row;
+}
+
+function ensureTaskFilterToggleRow() {
+  let row = $("#dailyTaskFilterToggleRow");
+  if (!row) {
+    row = document.createElement("label");
+    row.className = "toggle-row task-filter-toggle";
+    row.id = "dailyTaskFilterToggleRow";
+    row.innerHTML = '<input type="checkbox" id="showRemainingTasksOnly" /> Remaining tasks only';
+  }
+  const input = row.querySelector("#showRemainingTasksOnly") || row.querySelector('input[type="checkbox"]');
+  if (input) {
+    input.id = "showRemainingTasksOnly";
+    input.checked = !!showRemainingTasksOnly;
+  }
+  return bindTaskFilterToggle(row);
+}
+
+function parkTaskFilterToggle() {
+  const row = ensureTaskFilterToggleRow();
+  const progress = $("#dailyTaskProgress");
+  if (row && progress && row.parentElement !== progress.parentElement) progress.insertAdjacentElement("afterend", row);
+  return row;
+}
+
+function syncTaskFilterTogglePlacement() {
+  const row = ensureTaskFilterToggleRow();
+  if (!row) return;
+  const panel = $$("[data-task-panel]").find((item) => item.dataset.taskPanel === dailyTaskTab);
+  const headingBody = panel?.querySelector(".section-heading > div");
+  if (headingBody && row.parentElement !== headingBody) headingBody.appendChild(row);
+  row.hidden = !headingBody;
+}
+
 function syncMobileReviewSections() {
   const details = $("#boardingRequestsDetails");
   if (!details) return;
@@ -3628,6 +3674,7 @@ function renderDailyTaskLists(selected = {}) {
     list.innerHTML = (config[shift] || []).map((task) => taskLabel(task, shift)).join("");
     bindTaskListInteractions(list);
   });
+  parkTaskFilterToggle();
   renderCustomTaskPanels(config);
   syncStaticTaskTabDeleteRows(config);
   const canManageTasks = currentRole() === "admin";
@@ -3657,6 +3704,7 @@ function setDailyTaskTab(tab = "morning") {
   panels.forEach((panel) => {
     panel.hidden = panel.dataset.taskPanel !== dailyTaskTab;
   });
+  syncTaskFilterTogglePlacement();
 }
 
 function taskTabFormHtml() {
@@ -7524,11 +7572,30 @@ function stayRequestMatchesService(request = {}, service = {}, options = {}) {
 
 function boardingStayRequestServiceCatalog(record = {}, stay = {}) {
   const user = boardingPricingUserForRecord(record);
-  const requests = arrayValue(stay.requests);
-  const selectedIds = new Set(requests.map((request) => (request && typeof request === "object" ? request.serviceId || request.id || "" : "")).filter(Boolean));
   return serviceCatalogForStayRequests({ user })
-    .filter((service) => !serviceDependencyId(service) || selectedIds.has(serviceDependencyId(service)))
-    .sort((a, b) => [a.category || "", customerServiceDisplayName(a)].join("|").localeCompare([b.category || "", customerServiceDisplayName(b)].join("|")));
+    .sort((a, b) => [
+      a.category || "",
+      serviceDependencyId(a) ? serviceDependencyId(a) : "",
+      serviceDependencyId(a) ? "1" : "0",
+      customerServiceDisplayName(a),
+    ].join("|").localeCompare([
+      b.category || "",
+      serviceDependencyId(b) ? serviceDependencyId(b) : "",
+      serviceDependencyId(b) ? "1" : "0",
+      customerServiceDisplayName(b),
+    ].join("|")));
+}
+
+function stayRequestServiceCheckboxHtml(service = {}, requests = [], user = currentUser, options = {}) {
+  const checked = requests.some((request) => stayRequestMatchesService(request, service, { user }));
+  const label = `${customerServiceDisplayName(service)} requested`;
+  const unitPrice = stayRequestServiceUnitPriceForUser(service, user);
+  const price = unitPrice ? ` - ${money(unitPrice)}${service.unit ? ` ${service.unit}` : ""}` : "";
+  const linkedNote = options.linkedParent
+    ? `<span class="stay-request-linked-note">Linked to ${escapeHtml(customerServiceDisplayName(options.linkedParent))}</span>`
+    : "";
+  const className = options.linked ? ' class="stay-request-linked-label"' : "";
+  return `<label${className}><input type="checkbox" name="stayRequests" value="${escapeHtml(label)}" data-service-id="${escapeHtml(service.id || "")}" data-service-name="${escapeHtml(service.serviceName || "")}" data-unit-price="${escapeHtml(unitPrice)}" data-unit="${escapeHtml(service.unit || "")}" ${checked ? "checked" : ""} /> <span>${escapeHtml(label)}${escapeHtml(price)}${linkedNote}</span></label>`;
 }
 
 function stayRequestCheckboxesHtml(stay = {}, record = {}) {
@@ -7536,15 +7603,28 @@ function stayRequestCheckboxesHtml(stay = {}, record = {}) {
   const user = boardingPricingUserForRecord(record);
   const activeServices = boardingStayRequestServiceCatalog(record, stay);
   if (activeServices.length) {
-    return activeServices
+    const parentServices = activeServices.filter((service) => !serviceDependencyId(service));
+    const parentIds = new Set(parentServices.map((service) => service.id).filter(Boolean));
+    const linkedServices = activeServices.filter((service) => serviceDependencyId(service));
+    const linkedByParent = new Map();
+    linkedServices.forEach((service) => {
+      const parentId = serviceDependencyId(service);
+      if (!linkedByParent.has(parentId)) linkedByParent.set(parentId, []);
+      linkedByParent.get(parentId).push(service);
+    });
+    const parentHtml = parentServices
       .map((service) => {
-        const checked = requests.some((request) => stayRequestMatchesService(request, service, { user }));
-        const label = `${customerServiceDisplayName(service)} requested`;
-        const unitPrice = stayRequestServiceUnitPriceForUser(service, user);
-        const price = unitPrice ? ` - ${money(unitPrice)}${service.unit ? ` ${service.unit}` : ""}` : "";
-        return `<label><input type="checkbox" name="stayRequests" value="${escapeHtml(label)}" data-service-id="${escapeHtml(service.id || "")}" data-service-name="${escapeHtml(service.serviceName || "")}" data-unit-price="${escapeHtml(unitPrice)}" data-unit="${escapeHtml(service.unit || "")}" ${checked ? "checked" : ""} /> ${escapeHtml(label)}${escapeHtml(price)}</label>`;
+        const childHtml = (linkedByParent.get(service.id) || [])
+          .map((childService) => stayRequestServiceCheckboxHtml(childService, requests, user, { linked: true, linkedParent: service }))
+          .join("");
+        return `<div class="stay-request-service-group">${stayRequestServiceCheckboxHtml(service, requests, user)}${childHtml ? `<div class="stay-request-linked-options"><span class="stay-request-linked-heading">Linked add-ons</span>${childHtml}</div>` : ""}</div>`;
       })
       .join("");
+    const orphanHtml = linkedServices
+      .filter((service) => !parentIds.has(serviceDependencyId(service)))
+      .map((service) => stayRequestServiceCheckboxHtml(service, requests, user))
+      .join("");
+    return `${parentHtml}${orphanHtml}`;
   }
   return stayRequestServiceOptions
     .map((option) => {
@@ -14225,6 +14305,53 @@ function notificationStayIdText(source = {}) {
     || (stay.id ? boardingStayRequestCode(source, stay) : "");
 }
 
+function notificationSourceTypeLabel(sourceType = "") {
+  const normalized = String(sourceType || "").trim();
+  const lower = normalized.toLowerCase();
+  if (!lower) return "";
+  if (lower === "boardingdog") return "Boarding dog";
+  if (lower === "owneddog") return "Our dog";
+  if (lower === "customerdog") return "Customer dog";
+  if (lower === "dailywork" || lower === "dailyreport") return "Daily report";
+  if (lower === "dailytask") return "Daily task";
+  if (lower === "carelog" || lower === "structuredcarelog") return "Care log";
+  if (lower === "request") return "Kennel request";
+  if (lower === "maintenance") return "Maintenance";
+  if (lower === "timesheet") return "Timesheet";
+  if (lower === "schedule") return "Schedule";
+  if (lower === "customerupdate") return "Customer update";
+  return notificationEventDisplayLabel(normalized);
+}
+
+function notificationRecordDescriptor(notification = {}, source = {}) {
+  const dogName = source.dogName || source.latestCustomerUpdate?.dogName || source.dog?.dogName || "";
+  const owner = source.ownerName || source.ownerEmail || source.customerEmail || source.linkedOwnerEmail || "";
+  const location = source.location || source.kennelLocation || source.kennel || source.building || "";
+  const category = source.category || source.careType || source.taskText || source.issueType || "";
+  const staff = source.staffName || source.helperName || source.completedBy || "";
+  const status = source.status || source.boardingStatus || "";
+  const stayId = notificationStayIdText(source);
+  const sourceId = notification.sourceId || source.id || "";
+  const pieces = [dogName, owner, location, category, staff, status, stayId ? `Stay ID: ${stayId}` : ""]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item, index, items) => items.findIndex((candidate) => candidate.toLowerCase() === item.toLowerCase()) === index);
+  if (!pieces.length && sourceId) pieces.push(`Record ${sourceId}`);
+  return pieces.slice(0, 4).join(" | ");
+}
+
+function notificationFallbackMessage(notification = {}, source = {}) {
+  const sourceLabel = notificationSourceTypeLabel(notification.sourceType);
+  const descriptor = notificationRecordDescriptor(notification, source);
+  const eventLabel = notification.eventName ? notificationEventDisplayLabel(notification.eventName) : "";
+  const timestamp = notification.submittedAt || notification.updatedAt || notification.createdAt || source.submittedAt || source.updatedAt || source.createdAt || "";
+  const when = timestamp ? formatDateTime(timestamp) : "";
+  const sourceId = notification.sourceId || source.id || "";
+  const subject = [sourceLabel || eventLabel || "Kennel alert", descriptor].filter(Boolean).join(": ");
+  const details = [when ? `Created ${when}` : "", sourceId ? `Source ID: ${sourceId}` : ""].filter(Boolean).join(" | ");
+  return `${subject} needs review.${details ? ` ${details}.` : ""} Open the related kennel record and complete the required follow-up.`;
+}
+
 function notificationDisplayTitle(notification = {}) {
   const savedTitle = String(notification.title || "").trim();
   if (notificationSavedTitleIsSpecific(savedTitle)) return savedTitle;
@@ -14243,10 +14370,15 @@ function notificationDisplayTitle(notification = {}) {
   if (eventName === "urgentStaffAlertSent") return "Urgent staff alert";
   if (eventName === "urgentCustomerAlertSent") return "Urgent customer alert";
   if (eventName === "customerStayUpdateSent") return `Stay update: ${dogName || "Customer dog"}`;
-  if (notification.sourceType === "boardingDog") return `Boarding dog alert: ${dogName || "Dog"}`;
+  if (notification.sourceType === "boardingDog") return `Boarding dog alert: ${notificationRecordDescriptor(notification, source) || dogName || "Dog"}`;
   if (notification.sourceType === "request") return `Request alert: ${source.category || "Kennel request"}`;
   if (notification.sourceType === "maintenance") return `Maintenance alert: ${source.location || "Kennel"}`;
-  return notificationEventDisplayLabel(eventName);
+  const sourceLabel = notificationSourceTypeLabel(notification.sourceType);
+  const descriptor = notificationRecordDescriptor(notification, source);
+  if (sourceLabel && descriptor) return `${sourceLabel}: ${descriptor}`;
+  if (descriptor) return `Snuggle Stay alert: ${descriptor}`;
+  if (sourceLabel) return `${sourceLabel} alert`;
+  return notificationEventDisplayLabel(eventName || notification.sourceType || "Snuggle Stay alert");
 }
 
 function notificationDisplayMessage(notification = {}) {
@@ -14274,16 +14406,17 @@ function notificationDisplayMessage(notification = {}) {
     const text = update.note || source.dailyActivity || "";
     return `${update.byName || "Kennel staff"} sent an update for ${dogName || "your dog"}${stayId ? ` (Stay ID: ${stayId})` : ""}.${text ? ` ${text}` : ""}`;
   }
-  if (source.message) return source.message;
+  if (notificationSavedMessageIsSpecific(source.message)) return source.message;
   if (notification.sourceType === "boardingDog") {
     const stayId = notificationStayIdText(source);
     const status = source.boardingStatus || boardingDisplayStatus(source) || source.status || "Review needed";
-    return `${dogName || "Boarding dog"} needs review${stayId ? ` for Stay ID: ${stayId}` : ""}. Current status: ${status}.`;
+    const ownerText = owner && owner !== "A customer" ? ` for ${owner}` : "";
+    return `${dogName || "Boarding dog"}${ownerText} needs review${stayId ? ` for Stay ID: ${stayId}` : ""}. Current status: ${status}.`;
   }
   if (source.requestText) return source.requestText;
   if (source.issue) return source.issue;
   if (source.note) return source.note;
-  return "Open this alert to review the related kennel record.";
+  return notificationFallbackMessage(notification, source);
 }
 
 function notificationChannelsText(notification = {}) {
@@ -15767,10 +15900,7 @@ function initEvents() {
   $("#addCareQuickLog").addEventListener("click", addPendingCareLog);
   $("#careQuickDogId").addEventListener("change", updateCareQuickFields);
   $("#careQuickType").addEventListener("change", updateCareQuickFields);
-  $("#showRemainingTasksOnly")?.addEventListener("change", (event) => {
-    showRemainingTasksOnly = event.target.checked;
-    renderDailyTaskLists();
-  });
+  bindTaskFilterToggle(ensureTaskFilterToggleRow());
   $("#structuredCareLogList").addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="remove-care-log"], [data-action="edit-care-log"]');
     if (!button) return;

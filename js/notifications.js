@@ -574,6 +574,53 @@ function notificationStayIdText(source = {}) {
     || (stay.id ? boardingStayRequestCode(source, stay) : "");
 }
 
+function notificationSourceTypeLabel(sourceType = "") {
+  const normalized = String(sourceType || "").trim();
+  const lower = normalized.toLowerCase();
+  if (!lower) return "";
+  if (lower === "boardingdog") return "Boarding dog";
+  if (lower === "owneddog") return "Our dog";
+  if (lower === "customerdog") return "Customer dog";
+  if (lower === "dailywork" || lower === "dailyreport") return "Daily report";
+  if (lower === "dailytask") return "Daily task";
+  if (lower === "carelog" || lower === "structuredcarelog") return "Care log";
+  if (lower === "request") return "Kennel request";
+  if (lower === "maintenance") return "Maintenance";
+  if (lower === "timesheet") return "Timesheet";
+  if (lower === "schedule") return "Schedule";
+  if (lower === "customerupdate") return "Customer update";
+  return notificationEventDisplayLabel(normalized);
+}
+
+function notificationRecordDescriptor(notification = {}, source = {}) {
+  const dogName = source.dogName || source.latestCustomerUpdate?.dogName || source.dog?.dogName || "";
+  const owner = source.ownerName || source.ownerEmail || source.customerEmail || source.linkedOwnerEmail || "";
+  const location = source.location || source.kennelLocation || source.kennel || source.building || "";
+  const category = source.category || source.careType || source.taskText || source.issueType || "";
+  const staff = source.staffName || source.helperName || source.completedBy || "";
+  const status = source.status || source.boardingStatus || "";
+  const stayId = notificationStayIdText(source);
+  const sourceId = notification.sourceId || source.id || "";
+  const pieces = [dogName, owner, location, category, staff, status, stayId ? \`Stay ID: \${stayId}\` : ""]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item, index, items) => items.findIndex((candidate) => candidate.toLowerCase() === item.toLowerCase()) === index);
+  if (!pieces.length && sourceId) pieces.push(\`Record \${sourceId}\`);
+  return pieces.slice(0, 4).join(" | ");
+}
+
+function notificationFallbackMessage(notification = {}, source = {}) {
+  const sourceLabel = notificationSourceTypeLabel(notification.sourceType);
+  const descriptor = notificationRecordDescriptor(notification, source);
+  const eventLabel = notification.eventName ? notificationEventDisplayLabel(notification.eventName) : "";
+  const timestamp = notification.submittedAt || notification.updatedAt || notification.createdAt || source.submittedAt || source.updatedAt || source.createdAt || "";
+  const when = timestamp ? formatDateTime(timestamp) : "";
+  const sourceId = notification.sourceId || source.id || "";
+  const subject = [sourceLabel || eventLabel || "Kennel alert", descriptor].filter(Boolean).join(": ");
+  const details = [when ? \`Created \${when}\` : "", sourceId ? \`Source ID: \${sourceId}\` : ""].filter(Boolean).join(" | ");
+  return \`\${subject} needs review.\${details ? \` \${details}.\` : ""} Open the related kennel record and complete the required follow-up.\`;
+}
+
 function notificationDisplayTitle(notification = {}) {
   const savedTitle = String(notification.title || "").trim();
   if (notificationSavedTitleIsSpecific(savedTitle)) return savedTitle;
@@ -592,10 +639,15 @@ function notificationDisplayTitle(notification = {}) {
   if (eventName === "urgentStaffAlertSent") return "Urgent staff alert";
   if (eventName === "urgentCustomerAlertSent") return "Urgent customer alert";
   if (eventName === "customerStayUpdateSent") return \`Stay update: \${dogName || "Customer dog"}\`;
-  if (notification.sourceType === "boardingDog") return \`Boarding dog alert: \${dogName || "Dog"}\`;
+  if (notification.sourceType === "boardingDog") return \`Boarding dog alert: \${notificationRecordDescriptor(notification, source) || dogName || "Dog"}\`;
   if (notification.sourceType === "request") return \`Request alert: \${source.category || "Kennel request"}\`;
   if (notification.sourceType === "maintenance") return \`Maintenance alert: \${source.location || "Kennel"}\`;
-  return notificationEventDisplayLabel(eventName);
+  const sourceLabel = notificationSourceTypeLabel(notification.sourceType);
+  const descriptor = notificationRecordDescriptor(notification, source);
+  if (sourceLabel && descriptor) return \`\${sourceLabel}: \${descriptor}\`;
+  if (descriptor) return \`Snuggle Stay alert: \${descriptor}\`;
+  if (sourceLabel) return \`\${sourceLabel} alert\`;
+  return notificationEventDisplayLabel(eventName || notification.sourceType || "Snuggle Stay alert");
 }
 
 function notificationDisplayMessage(notification = {}) {
@@ -623,16 +675,17 @@ function notificationDisplayMessage(notification = {}) {
     const text = update.note || source.dailyActivity || "";
     return \`\${update.byName || "Kennel staff"} sent an update for \${dogName || "your dog"}\${stayId ? \` (Stay ID: \${stayId})\` : ""}.\${text ? \` \${text}\` : ""}\`;
   }
-  if (source.message) return source.message;
+  if (notificationSavedMessageIsSpecific(source.message)) return source.message;
   if (notification.sourceType === "boardingDog") {
     const stayId = notificationStayIdText(source);
     const status = source.boardingStatus || boardingDisplayStatus(source) || source.status || "Review needed";
-    return \`\${dogName || "Boarding dog"} needs review\${stayId ? \` for Stay ID: \${stayId}\` : ""}. Current status: \${status}.\`;
+    const ownerText = owner && owner !== "A customer" ? \` for \${owner}\` : "";
+    return \`\${dogName || "Boarding dog"}\${ownerText} needs review\${stayId ? \` for Stay ID: \${stayId}\` : ""}. Current status: \${status}.\`;
   }
   if (source.requestText) return source.requestText;
   if (source.issue) return source.issue;
   if (source.note) return source.note;
-  return "Open this alert to review the related kennel record.";
+  return notificationFallbackMessage(notification, source);
 }
 
 function notificationChannelsText(notification = {}) {

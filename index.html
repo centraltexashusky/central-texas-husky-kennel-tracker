@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260603-board-daily-fixes" />
+    <link rel="stylesheet" href="styles.css?v=20260603-linked-addons-alerts" />
   </head>
   <body>
     <div class="app-layout">
@@ -505,7 +505,7 @@
           <button type="button" class="secondary-button task-add-tab-button" data-action="add-task-tab" hidden>Add Tab</button>
         </div>
         <div class="task-progress-banner" id="dailyTaskProgress" aria-live="polite">0 completed | tasks loading</div>
-        <label class="toggle-row task-filter-toggle"><input type="checkbox" id="showRemainingTasksOnly" checked /> Remaining tasks only</label>
+        <label class="toggle-row task-filter-toggle" id="dailyTaskFilterToggleRow"><input type="checkbox" id="showRemainingTasksOnly" checked /> Remaining tasks only</label>
 
         <section class="form-section collapsible-section" data-task-panel="morning" data-collapsible-section>
           <div class="section-heading">
@@ -1303,6 +1303,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260603-board-daily-fixes"></script>
+  <script type="module" src="js/main.js?v=20260603-linked-addons-alerts"></script>
 </body>
 </html>
