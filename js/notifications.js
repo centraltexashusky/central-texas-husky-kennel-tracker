@@ -869,6 +869,24 @@ function notificationCreationTrace(record = {}, eventName = "", config = {}, now
   } catch (error) {
     stackFrames = notificationTraceStackFrames(error.stack || "");
   }
+  let eventLabel = String(eventName || "");
+  let role = "";
+  let page = "";
+  try {
+    eventLabel = typeof notificationEventDisplayLabel === "function" ? notificationEventDisplayLabel(eventName) : eventLabel;
+  } catch (error) {
+    eventLabel = String(eventName || "");
+  }
+  try {
+    role = typeof currentRole === "function" ? currentRole() : "";
+  } catch (error) {
+    role = "";
+  }
+  try {
+    page = typeof activePageId === "function" ? activePageId() : "";
+  } catch (error) {
+    page = "";
+  }
   const sourceType = String(record.type || "").trim();
   const originalSourceId = String(record.id || "").trim();
   const sourceId = originalSourceId || options.generatedSourceId || "";
@@ -879,7 +897,7 @@ function notificationCreationTrace(record = {}, eventName = "", config = {}, now
   return {
     capturedAt: now,
     eventName: String(eventName || ""),
-    eventLabel: notificationEventDisplayLabel(eventName),
+    eventLabel,
     sourceType,
     sourceId,
     generatedSourceId: originalSourceId ? "" : sourceId,
@@ -887,8 +905,8 @@ function notificationCreationTrace(record = {}, eventName = "", config = {}, now
     missingContext,
     deliveryChannels: config.channels || ["inApp"],
     priority: config.priority || "normal",
-    role: currentRole(),
-    page: typeof activePageId === "function" ? activePageId() : "",
+    role,
+    page,
     route: typeof window !== "undefined" ? window.location.pathname + (window.location.hash || "") : "",
     stackFrames,
     stack: stackFrames.join("\n"),
@@ -933,8 +951,18 @@ function createNotificationRecord(record = {}, eventName = "", config = {}) {
   const existing = readRecords("notificationLog").find((item) => item.dedupeKey === dedupeKey && !item.removed);
   if (existing) return existing;
   const displaySeed = { eventName, sourceType, sourceId, sourceSnapshot, title: config.title, message: config.message };
-  const creationTrace = notificationCreationTrace(record, eventName, config, now, { generatedSourceId: record.id ? "" : sourceId });
-  console.info("Notification creation trace", creationTrace);
+  let creationTrace = {};
+  try {
+    creationTrace = notificationCreationTrace(record, eventName, config, now, { generatedSourceId: record.id ? "" : sourceId });
+  } catch (error) {
+    creationTrace = {
+      capturedAt: now,
+      eventName: String(eventName || ""),
+      sourceType: String(sourceType || ""),
+      sourceId: String(sourceId || ""),
+      traceError: error.message || String(error),
+    };
+  }
   return upsertRecord("notificationLog", {
     type: "notificationLog",
     id: uid("notification"),
