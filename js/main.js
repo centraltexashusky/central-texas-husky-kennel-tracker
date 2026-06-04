@@ -1,6 +1,6 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260603-linked-addons-alerts";
-import "./auth.js?v=20260530-impersonation-guard";
+import "./shared.js?v=20260604-login-auth-fix-4";
+import "./auth.js?v=20260604-login-auth-fix-4";
 import "./customer.js?v=20260603-board-daily-fixes";
 import "./boarding.js?v=20260603-linked-addons-alerts";
 import "./daily.js?v=20260603-linked-addons-alerts";

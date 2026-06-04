@@ -81,15 +81,20 @@ function showAuthRedirectError() {
 }
 
 function hydrateLoginFromUrl() {
-  if (!isLocalTestingOrigin()) return;
   const params = new URLSearchParams(window.location.search);
   const email = params.get("email") || "";
   const password = params.get("password") || "";
   const role = params.get("role") || "admin";
+  const isLocalTest = isLocalTestingOrigin();
   const loginForm = $("#passwordLoginForm");
-  if (email && loginForm?.elements.email) loginForm.elements.email.value = email;
-  if (password && loginForm?.elements.password) loginForm.elements.password.value = password;
-  if (params.get("localTest") === "1" && email) {
+  const emailField = loginForm?.querySelector('input[name="email"]');
+  const passwordField = loginForm?.querySelector('input[name="password"]');
+  if (email && emailField) emailField.value = email;
+  if (password && isLocalTest && passwordField) passwordField.value = password;
+  if (password && !isLocalTest) {
+    loginHelp.textContent = "For security, passwords are not read from website links. Enter the password below to sign in.";
+  }
+  if (params.get("localTest") === "1" && email && isLocalTest) {
     params.delete("localTest");
     completeLocalTestLogin(email, "localTest=1 was used on a local testing URL", role);
   }

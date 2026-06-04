@@ -1573,15 +1573,20 @@ function completeLocalTestLogin(email, reason = "", role = "admin") {
 }
 
 function hydrateLoginFromUrl() {
-  if (!isLocalTestingOrigin()) return;
   const params = new URLSearchParams(window.location.search);
   const email = params.get("email") || "";
   const password = params.get("password") || "";
   const role = params.get("role") || "admin";
+  const isLocalTest = isLocalTestingOrigin();
   const loginForm = $("#passwordLoginForm");
-  if (email && loginForm?.elements.email) loginForm.elements.email.value = email;
-  if (password && loginForm?.elements.password) loginForm.elements.password.value = password;
-  if (params.get("localTest") === "1" && email) {
+  const emailField = loginForm?.querySelector('input[name="email"]');
+  const passwordField = loginForm?.querySelector('input[name="password"]');
+  if (email && emailField) emailField.value = email;
+  if (password && isLocalTest && passwordField) passwordField.value = password;
+  if (password && !isLocalTest) {
+    loginHelp.textContent = "For security, passwords are not read from website links. Enter the password below to sign in.";
+  }
+  if (params.get("localTest") === "1" && email && isLocalTest) {
     params.delete("localTest");
     completeLocalTestLogin(email, "localTest=1 was used on a local testing URL", role);
   }
@@ -2863,19 +2868,20 @@ function updateMobileNavigationAccess() {
   const nav = $("#mobileBottomNav");
   if (!nav) return;
   const signedIn = helperIsLoggedIn();
-  nav.hidden = !signedIn;
+  const loginView = activePageId() === "loginPage";
+  nav.hidden = !signedIn || loginView;
   $$(".mobile-bottom-nav-button[data-page]").forEach((button) => {
     const allowed = pageAllowed(button.dataset.page);
     button.disabled = !allowed;
-    button.hidden = !signedIn || !allowed;
+    button.hidden = !signedIn || loginView || !allowed;
   });
   const moreButton = $("#mobileMoreButton");
   if (moreButton) {
     const hasMorePages = mobileMoreEntries().length > 0;
-    moreButton.disabled = !signedIn || !hasMorePages;
-    moreButton.hidden = !signedIn || !hasMorePages;
+    moreButton.disabled = !signedIn || loginView || !hasMorePages;
+    moreButton.hidden = !signedIn || loginView || !hasMorePages;
   }
-  if (!signedIn) setMobileMoreOpen(false);
+  if (!signedIn || loginView) setMobileMoreOpen(false);
   syncMobileNavigationActive();
 }
 
@@ -18217,6 +18223,7 @@ function switchPage(pageId) {
   syncMobileNavigationActive(pageId);
   setMobileMoreOpen(false);
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
+  if (pageId === "loginPage" && !helperIsLoggedIn()) hydrateLoginFromUrl();
   if (pageId === "ourDogsPage") window.setTimeout(() => $("#ownedDogSearch")?.focus(), 100);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -18303,6 +18310,7 @@ async function initializeApp() {
         clearLocalAppSession({ switchToLogin: false });
       }
     }
+    if (!helperIsLoggedIn()) hydrateLoginFromUrl();
     updateNavigationAccess();
     if (helperIsLoggedIn()) {
       if (!renderedDuringSessionRestore) renderAllRecords();
