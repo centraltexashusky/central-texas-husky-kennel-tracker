@@ -3036,7 +3036,7 @@ var fieldHelp = {
   requestText: "Required. Describe what is needed or suggested.",
   issue: "Required. Describe what needs attention.",
   manualClockIn: "Required for manual time entries.",
-  manualClockOut: "Required for manual time entries.",
+  manualClockOut: "Optional. Leave blank while the staff member is still on shift.",
   serviceName: "Required for the pricing catalog.",
   category: "Required so revenue can be grouped.",
   basePrice: "Required. Use 0 only for no-charge services.",
@@ -8635,7 +8635,9 @@ function initEvents() {
         note: payload.manualNote,
       }, { silent: true });
       $("#detailDialog").close();
-      showToast(\`Timesheet saved with \${Number(record.hours || 0).toFixed(2)} hours recorded.\`);
+      showToast(record.clockOutTime
+        ? \`Timesheet saved with \${Number(record.hours || 0).toFixed(2)} hours recorded.\`
+        : "Open clock-in saved. Add the clock-out time after the shift ends.");
     }
   });
   $("#detailDialogBody").addEventListener("click", async (event) => {

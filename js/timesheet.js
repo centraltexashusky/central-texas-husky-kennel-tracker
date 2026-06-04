@@ -288,7 +288,7 @@ function timesheetEditFormHtml(record = {}) {
       <label>Staff email<input type="email" name="manualHelperEmailDisplay" value="\${escapeHtml(helperEmailValue)}" readonly /></label>
       <label>Entry date<input type="date" name="manualDate" value="\${escapeHtml(localDateFromStoredDateTime(record.clockInTime) || record.date || todayDate())}" required /></label>
       <label>Clock in<input type="datetime-local" name="manualClockIn" value="\${escapeHtml(clockInValue)}" required /></label>
-      <label>Clock out<input type="datetime-local" name="manualClockOut" value="\${escapeHtml(clockOutValue)}" required /></label>
+      <label>Clock out <small>Optional. Leave blank if this staff member is still on shift.</small><input type="datetime-local" name="manualClockOut" value="\${escapeHtml(clockOutValue)}" /></label>
     </div>
     <label>Timesheet note<textarea name="manualNote" rows="3" placeholder="Reason for manual entry or edit">\${escapeHtml(record.note || "")}</textarea></label>
     <div class="button-row"><button type="submit">Save Timesheet</button>\${canDelete ? \`<button type="button" class="secondary-button danger-button" data-action="delete-timesheet" data-id="\${escapeHtml(record.id)}">Delete Timesheet</button>\` : ""}<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>

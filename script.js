@@ -4141,7 +4141,7 @@ const fieldHelp = {
   requestText: "Required. Describe what is needed or suggested.",
   issue: "Required. Describe what needs attention.",
   manualClockIn: "Required for manual time entries.",
-  manualClockOut: "Required for manual time entries.",
+  manualClockOut: "Optional. Leave blank while the staff member is still on shift.",
   serviceName: "Required for the pricing catalog.",
   category: "Required so revenue can be grouped.",
   basePrice: "Required. Use 0 only for no-charge services.",
@@ -14980,7 +14980,7 @@ function timesheetEditFormHtml(record = {}) {
       <label>Staff email<input type="email" name="manualHelperEmailDisplay" value="${escapeHtml(helperEmailValue)}" readonly /></label>
       <label>Entry date<input type="date" name="manualDate" value="${escapeHtml(localDateFromStoredDateTime(record.clockInTime) || record.date || todayDate())}" required /></label>
       <label>Clock in<input type="datetime-local" name="manualClockIn" value="${escapeHtml(clockInValue)}" required /></label>
-      <label>Clock out<input type="datetime-local" name="manualClockOut" value="${escapeHtml(clockOutValue)}" required /></label>
+      <label>Clock out <small>Optional. Leave blank if this staff member is still on shift.</small><input type="datetime-local" name="manualClockOut" value="${escapeHtml(clockOutValue)}" /></label>
     </div>
     <label>Timesheet note<textarea name="manualNote" rows="3" placeholder="Reason for manual entry or edit">${escapeHtml(record.note || "")}</textarea></label>
     <div class="button-row"><button type="submit">Save Timesheet</button>${canDelete ? `<button type="button" class="secondary-button danger-button" data-action="delete-timesheet" data-id="${escapeHtml(record.id)}">Delete Timesheet</button>` : ""}<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
@@ -16154,7 +16154,9 @@ function initEvents() {
         note: payload.manualNote,
       }, { silent: true });
       $("#detailDialog").close();
-      showToast(`Timesheet saved with ${Number(record.hours || 0).toFixed(2)} hours recorded.`);
+      showToast(record.clockOutTime
+        ? `Timesheet saved with ${Number(record.hours || 0).toFixed(2)} hours recorded.`
+        : "Open clock-in saved. Add the clock-out time after the shift ends.");
     }
   });
   $("#detailDialogBody").addEventListener("click", async (event) => {
