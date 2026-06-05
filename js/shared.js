@@ -300,6 +300,7 @@ var stateKeys = {
   tableConfig: "cth-table-column-config",
   tableSort: "cth-table-sort-config",
   boardingRequestStatusFilter: "cth-boarding-request-status-filter",
+  boardingRequestsDetailsOpen: "cth-boarding-requests-details-open",
   session: "cth-current-session",
   impersonation: "cth-impersonation-session",
   authThrottle: "cth-auth-throttle",
@@ -2226,8 +2227,26 @@ function syncTaskFilterTogglePlacement() {
 function syncMobileReviewSections() {
   const details = $("#boardingRequestsDetails");
   if (!details) return;
-  if (window.matchMedia("(max-width: 760px)").matches) details.removeAttribute("open");
-  else details.setAttribute("open", "");
+  const isMobile = window.matchMedia("(max-width: 760px)").matches;
+  if (!isMobile) {
+    details.setAttribute("open", "");
+    return;
+  }
+  const savedState = localStorage.getItem(boardingRequestsDetailsStateKey());
+  if (savedState === "open") details.setAttribute("open", "");
+  else if (savedState === "closed") details.removeAttribute("open");
+  else details.removeAttribute("open");
+}
+
+function boardingRequestsDetailsStateKey() {
+  const userKey = String(currentUser?.email || currentUser?.key || "default").trim().toLowerCase() || "default";
+  return stateKeys.boardingRequestsDetailsOpen + ":" + userKey;
+}
+
+function rememberBoardingRequestsDetailsState() {
+  const details = $("#boardingRequestsDetails");
+  if (!details || !window.matchMedia("(max-width: 760px)").matches) return;
+  localStorage.setItem(boardingRequestsDetailsStateKey(), details.open ? "open" : "closed");
 }
 
 // === MODULE: DAILY ===
@@ -8174,6 +8193,7 @@ function exportCareLogs() {
 
 function initEvents() {
   syncMobileReviewSections();
+  $("#boardingRequestsDetails")?.addEventListener("toggle", rememberBoardingRequestsDetailsState);
   window.addEventListener("resize", () => {
     syncMobileReviewSections();
     resetDailyTaskTabPointerDrag();
