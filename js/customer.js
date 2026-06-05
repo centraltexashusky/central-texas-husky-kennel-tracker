@@ -365,22 +365,28 @@ function customerUploadedFileEntriesForCurrentUser() {
   return customerDogsForCurrentUser().flatMap((dog) => {
     const dogName = dog.dogName || "Dog";
     const entries = [];
-    if (dog.profilePhotoUrl || dog.profilePhotoData) {
+    if (dog.profilePhotoUrl || dog.profilePhotoData || dog.profilePhotoPath) {
       entries.push({
+        sourceRecordId: dog.id || "",
+        sourceRecordType: dog.type || "customerDog",
         dogName,
         fileName: \`\${dogName} profile photo\`,
         fileType: "Profile photo",
         src: dog.profilePhotoUrl || dog.profilePhotoData || "",
+        storagePath: dog.profilePhotoPath || "",
         mediaType: "image/jpeg",
         savedAt: dog.updatedAt || dog.submittedAt || "",
       });
     }
     (dog.vaccinationRecords || []).forEach((file, index) => {
       entries.push({
+        sourceRecordId: dog.id || file.sourceRecordId || "",
+        sourceRecordType: dog.type || file.sourceRecordType || "customerDog",
         dogName,
         fileName: file.name || \`Vaccination record \${index + 1}\`,
         fileType: file.vaccineType || "Vaccination record",
         src: file.url || file.dataUrl || "",
+        storagePath: file.storagePath || "",
         mediaType: file.type || "application/pdf",
         savedAt: file.savedAt || file.createdAt || dog.updatedAt || dog.submittedAt || "",
       });
@@ -407,8 +413,8 @@ function renderCustomerFiles() {
   const files = customerUploadedFileEntriesForCurrentUser();
   list.innerHTML = files.length
     ? files.map((file) => {
-      const action = file.src
-        ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(file.src)}" data-media-type="\${escapeHtml(file.mediaType || "")}" data-media-name="\${escapeHtml(file.fileName)}">Open</button>\`
+      const action = file.src || file.storagePath
+        ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(file.src || "")}" data-media-type="\${escapeHtml(file.mediaType || "")}" data-media-name="\${escapeHtml(file.fileName)}"\${mediaAccessAttrs(file, { sourceRecordId: file.sourceRecordId || "", sourceRecordType: file.sourceRecordType || "" })}>Open</button>\`
         : \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="" data-media-name="\${escapeHtml(file.fileName)}">View Name</button>\`;
       return \`<article class="record-card compact-record-card">
         <strong>\${escapeHtml(file.fileName)}</strong>
@@ -1236,10 +1242,12 @@ function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options
   const quantityValue = formFieldByName($("#customerBookingForm"), quantityFieldName)?.value || "1";
   const displayName = customerServiceDisplayName(service);
   const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(service));
+  const pricingError = servicePriceError(service, displayName);
+  const priceText = pricingError ? "Pricing not configured" : \`\${money(servicePriceValue(service))} \${escapeHtml(service.unit || "")}\`;
   const addOnPrefix = options.addOn ? "Add-on: " : "";
   const extraClass = options.parent ? " service-option-parent" : "";
   const dogAttrs = options.dog ? \` data-service-scope="dog" data-dog-key="\${escapeHtml(customerServiceDogKey(fieldDog))}"\` : "";
-  return \`<label class="service-option\${options.addOn ? " service-option-addon" : ""}\${extraClass}"><span class="service-option-label"><input type="checkbox" name="\${escapeHtml(serviceFieldName)}" value="\${escapeHtml(service.id)}" \${checked ? "checked" : ""}\${dogAttrs} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(addOnPrefix)}\${escapeHtml(displayName)} - \${money(service.basePrice)} \${escapeHtml(service.unit || "")}</span>\${infoIcon}</span></span><input class="service-quantity" type="number" name="\${escapeHtml(quantityFieldName)}" min="1" step="1" value="\${escapeHtml(quantityValue)}" \${checked ? "" : "disabled"} aria-label="\${escapeHtml(displayName)} quantity"\${dogAttrs} /></label>\`;
+  return \`<label class="service-option\${options.addOn ? " service-option-addon" : ""}\${extraClass}"><span class="service-option-label"><input type="checkbox" name="\${escapeHtml(serviceFieldName)}" value="\${escapeHtml(service.id)}" \${checked ? "checked" : ""}\${dogAttrs} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(addOnPrefix)}\${escapeHtml(displayName)} - \${priceText}</span>\${infoIcon}</span></span><input class="service-quantity" type="number" name="\${escapeHtml(quantityFieldName)}" min="1" step="1" value="\${escapeHtml(quantityValue)}" \${checked ? "" : "disabled"} aria-label="\${escapeHtml(displayName)} quantity"\${dogAttrs} /></label>\`;
 }
 
 function customerStayProgramServices(user = currentUser) {
@@ -1252,16 +1260,20 @@ function customerStayProgramServices(user = currentUser) {
 
 function customerStayProgramSnapshot(service = null) {
   if (!service?.id) return null;
+  const pricingError = servicePriceError(service, customerServiceDisplayName(service));
+  const rate = pricingError ? 0 : servicePriceValue(service);
   return {
     id: service.id,
     serviceId: service.id,
     serviceName: service.serviceName || "Boarding program",
     name: service.serviceName || "Boarding program",
-    rate: Number(service.basePrice || 0),
+    rate,
     unit: service.unit || "per night",
     isMemberPricing: serviceHasFlag(service, "Member Pricing"),
     includesBoardingAccommodation: true,
     replacesStandardBoarding: true,
+    pricingScope: servicePricingScope(service),
+    pricingError,
   };
 }
 
@@ -1279,13 +1291,20 @@ function renderCustomerStayProgramOptions() {
   }
   const existing = selectedCustomerStayProgramId();
   const selectedId = existing && programs.some((program) => program.id === existing) ? existing : "standard";
-  const standardService = boardingPricingServiceForCustomer(currentUser);
+  const ratePlan = boardingRatePlanForCustomer(currentUser);
+  const standardRate = ratePlan.primaryRateConfig || {};
+  const standardService = standardRate.ok ? standardRate.service : null;
   const standardLabel = standardService?.serviceName || "Standard Overnight Boarding";
+  const standardPriceText = standardRate.ok
+    ? \`\${money(standardRate.rate)} \${escapeHtml(standardRate.unit || "per night")}\`
+    : "Pricing not configured";
   const options = [
-    \`<label class="service-option customer-stay-program-card"><span class="service-option-label"><input type="radio" name="customerStayProgram" value="standard" \${selectedId === "standard" ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(standardLabel)} - \${money(standardService?.basePrice || boardingRatePlanForCustomer().primaryRate)} per night</span></span></span></label>\`,
+    \`<label class="service-option customer-stay-program-card"><span class="service-option-label"><input type="radio" name="customerStayProgram" value="standard" \${selectedId === "standard" ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(standardLabel)} - \${standardPriceText}</span></span></span></label>\`,
     ...programs.map((program) => {
       const infoIcon = customerServiceInfoIconHtml(customerServiceInfoText(program));
-      return \`<label class="service-option customer-stay-program-card"><span class="service-option-label"><input type="radio" name="customerStayProgram" value="\${escapeHtml(program.id)}" \${selectedId === program.id ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(customerServiceDisplayName(program))} - \${money(program.basePrice)} \${escapeHtml(program.unit || "per night")}</span>\${infoIcon}</span></span></label>\`;
+      const pricingError = servicePriceError(program, customerServiceDisplayName(program));
+      const priceText = pricingError ? "Pricing not configured" : \`\${money(servicePriceValue(program))} \${escapeHtml(program.unit || "per night")}\`;
+      return \`<label class="service-option customer-stay-program-card"><span class="service-option-label"><input type="radio" name="customerStayProgram" value="\${escapeHtml(program.id)}" \${selectedId === program.id ? "checked" : ""} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(customerServiceDisplayName(program))} - \${priceText}</span>\${infoIcon}</span></span></label>\`;
     }),
   ];
   container.innerHTML = options.join("");
@@ -1538,7 +1557,8 @@ function customerEstimateDetails() {
         const service = serviceCatalog.find((item) => item.id === id);
         if (!service) return null;
         const quantity = Math.max(1, Number(formFieldByName(formEl, customerServiceQuantityFieldName(id, dog))?.value || 1));
-        const unitPrice = Number(service.basePrice || 0);
+        const pricingError = servicePriceError(service, customerServiceDisplayName(service));
+        const unitPrice = pricingError ? 0 : servicePriceValue(service);
         return {
           ...service,
           dogKey: customerServiceDogKey(dog),
@@ -1548,6 +1568,7 @@ function customerEstimateDetails() {
           quantity,
           perDogLineTotal: unitPrice * quantity,
           lineTotal: unitPrice * quantity,
+          pricingError,
         };
       })
       .filter((service) => service && serviceDependencySatisfied(service, dependencyIds))
@@ -1562,13 +1583,45 @@ function customerEstimateDetails() {
   const boardingRate = stayProgram?.rate || ratePlan.primaryRate;
   const boardingCost = boardingLines.reduce((total, line) => total + Number(line.total || 0), 0);
   const serviceCost = services.reduce((total, service) => total + service.lineTotal, 0);
-  return { dogs, services, days, isDayCare, isServiceRequest, stayProgram, boardingRate, ratePlan, sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing, boardingLines, boardingCost, serviceCost, total: boardingCost + serviceCost, dropoffTime: data.dropoffTime, pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime, requestNotes: data.requestNotes };
+  const serviceErrors = services.map((service) => service.pricingError).filter(Boolean);
+  const boardingErrors = isServiceRequest ? [] : boardingLines.map((line) => line.pricingError).filter(Boolean);
+  const pricingErrors = [
+    ...(isServiceRequest && dogs.length && !services.length ? ["Select at least one service before submitting a service request."] : []),
+    ...(stayProgram?.pricingError ? [stayProgram.pricingError] : []),
+    ...boardingErrors,
+    ...serviceErrors,
+  ].filter(Boolean);
+  return {
+    dogs,
+    services,
+    days,
+    isDayCare,
+    isServiceRequest,
+    stayProgram,
+    boardingRate,
+    ratePlan,
+    sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing,
+    boardingLines,
+    boardingCost,
+    serviceCost,
+    pricingErrors: [...new Set(pricingErrors)],
+    total: pricingErrors.length ? 0 : boardingCost + serviceCost,
+    dropoffTime: data.dropoffTime,
+    pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime,
+    requestNotes: data.requestNotes,
+  };
 }
 
 async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
   if (customerBookingSubmitInProgress) return;
   if (!estimate?.dogs?.length) return;
+  const pricingErrors = customerEstimateBlockingErrors(estimate);
+  if (pricingErrors.length) {
+    showDetailDialog("Request Needs Staff Pricing", customerEstimateErrorsHtml(estimate));
+    customerBookingSubmitInProgress = false;
+    return;
+  }
   if (!customerBookingEstimateAvailabilityValid(estimate)) {
     showToast("This request time is no longer inside the kennel hours. Please adjust it and try again.");
     customerBookingSubmitInProgress = false;
@@ -1581,6 +1634,10 @@ async function submitPendingCustomerBooking() {
   const editingId = $("#editingCustomerRequestId")?.value;
   const editingStayId = $("#editingCustomerStayId")?.value || "";
   const editingRecord = editingId ? boardingDogRecordForDisplay(editingId) : null;
+  const requestGroupId = editingRecord?.requestGroupId || editingRecord?.reservationGroupId || estimate.requestGroupId || estimate.submissionId || uid("requestGroup");
+  const groupDogNames = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.dogName || "Dog");
+  const groupDogIds = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.id || dog.sourceBoardingDogId || "").filter(Boolean);
+  const groupSelectedServices = [...new Set(arrayValue(estimate.services).map((service) => service.serviceName || service.name || "").filter(Boolean))];
   let savedCount = 0;
   let skippedCount = 0;
   const submittedDogKeys = new Set();
@@ -1615,6 +1672,31 @@ async function submitPendingCustomerBooking() {
       const dogLine = estimate.boardingLines.find((line) => line.dogKey === boardingPricingDogKey(dog)) || {};
       const invoiceAdjustments = normalizeInvoiceAdjustments(existingStay.invoiceAdjustments || []);
       const stayType = estimate.isServiceRequest ? "Service Request" : estimate.isDayCare ? "Day Care" : "Boarding";
+      const requestProfileSnapshot = {
+        customerDogId: dog.id || "",
+        sourceBoardingDogId: dog.sourceBoardingDogId || "",
+        dogName: dog.dogName || "",
+        breedDescription: dog.breedDescription || "",
+        sex: dog.sex || "",
+        spayNeuterStatus: dog.spayNeuterStatus || "",
+        dateOfBirth: dog.dateOfBirth || "",
+        age: typeof dogAgeText === "function" ? dogAgeText(dog) : "",
+        vetInfo: dog.vetInfo || "",
+        emergencyName: dog.emergencyName || "",
+        emergencyPhone: dog.emergencyPhone || "",
+        emergencyRelation: dog.emergencyRelation || "",
+        foodInstructions: dog.foodInstructions || "",
+        specialCare: dog.specialCare || "",
+        medicationInstructions: dog.medicationInstructions || "",
+        dhppDate: dog.dhppDate || "",
+        rabiesDate: dog.rabiesDate || "",
+        bordetellaDate: dog.bordetellaDate || "",
+        heartwormDate: dog.heartwormDate || "",
+        profilePhotoUrl: dog.profilePhotoUrl || "",
+        profilePhotoPath: dog.profilePhotoPath || "",
+        vaccinationRecords: dog.vaccinationRecords || [],
+        vaccinationFiles: dog.vaccinationFiles || "",
+      };
       const pricingSnapshot = boardingPricingSnapshotForStay(existingTarget || dog, {
         ...existingStay,
         dropoffTime: estimate.dropoffTime,
@@ -1633,6 +1715,9 @@ async function submitPendingCustomerBooking() {
         groupBoardingSubtotal: estimate.boardingCost,
         groupServiceSubtotal: estimate.serviceCost,
         groupTotal: estimate.total,
+        dogCount: estimate.dogs.length,
+        perDogBreakdown: estimate.boardingLines,
+        pricingErrors: estimate.pricingErrors || [],
       });
       const stay = {
         id: editingRecord ? existingStay.id || editingStayId || uid("stay") : customerBookingStableId("stay", estimate, dog),
@@ -1640,8 +1725,15 @@ async function submitPendingCustomerBooking() {
         createdAt: editingRecord ? existingStay.createdAt || new Date().toISOString() : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         source: "customer-request",
+        requestGroupId,
+        reservationGroupId: requestGroupId,
+        familyReservationId: requestGroupId,
         dropoffTime: estimate.dropoffTime,
         pickupTime: estimate.pickupTime,
+        scheduledDropoffTime: estimate.dropoffTime,
+        requestedDropoffTime: estimate.dropoffTime,
+        scheduledPickupTime: estimate.pickupTime,
+        requestedPickupTime: estimate.pickupTime,
         stayType,
         stayProgramId: estimate.stayProgram?.id || "",
         stayProgramName: estimate.stayProgram?.serviceName || estimate.stayProgram?.name || "",
@@ -1653,6 +1745,8 @@ async function submitPendingCustomerBooking() {
         invoiceAdjustments,
         invoiceEvents: existingStay.invoiceEvents || [],
         pricingSnapshot,
+        groupTotal: estimate.total,
+        requestProfileSnapshot,
         estimatedTotal: pricingSnapshot.total,
       };
       stay.bathPlan = bathPlanForStay(stay);
@@ -1679,8 +1773,18 @@ async function submitPendingCustomerBooking() {
         boardingStatus: requestStatus,
         statusHistory,
         customerRequest: true,
+        requestGroupId,
+        reservationGroupId: requestGroupId,
+        familyReservationId: requestGroupId,
+        requestGroupDogIds: groupDogIds,
+        requestGroupDogNames: groupDogNames,
+        requestGroupServiceNames: groupSelectedServices,
+        requestGroupTotal: estimate.total,
+        requestGroupStatus: requestStatus,
         dogName: dog.dogName,
         breedDescription: dog.breedDescription,
+        dateOfBirth: dog.dateOfBirth || existingTarget?.dateOfBirth || "",
+        sex: dog.sex || existingTarget?.sex || "",
         ownerName: dog.ownerName,
         ownerPhone: dog.ownerPhone,
         ownerEmail,
@@ -1692,19 +1796,26 @@ async function submitPendingCustomerBooking() {
         linkedOwnerEmail: ownerEmail,
         emergencyName: dog.emergencyName,
         emergencyPhone: dog.emergencyPhone,
+        emergencyRelation: dog.emergencyRelation || existingTarget?.emergencyRelation || "",
         specialCare: dog.specialCare,
+        medicationInstructions: dog.medicationInstructions || existingTarget?.medicationInstructions || "",
         foodInstructions: dog.foodInstructions || existingTarget?.foodInstructions || "",
         spayNeuterStatus: dog.spayNeuterStatus,
+        vetInfo: dog.vetInfo || existingTarget?.vetInfo || "",
         dhppDate: dog.dhppDate,
         rabiesDate: dog.rabiesDate,
+        bordetellaDate: dog.bordetellaDate || existingTarget?.bordetellaDate || "",
+        heartwormDate: dog.heartwormDate || existingTarget?.heartwormDate || "",
         rabiesDuration: dog.rabiesDuration,
         dhppDuration: dog.dhppDuration,
         rabiesGoodThreeYears: dog.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(dog, "rabies") ? "Yes" : ""),
         dhppGoodThreeYears: dog.dhppGoodThreeYears || (vaccineDurationIsThreeYears(dog, "dhpp") ? "Yes" : ""),
         sourceBoardingDogId: dog.sourceBoardingDogId || "",
         profilePhotoUrl: dog.profilePhotoUrl || "",
+        profilePhotoPath: dog.profilePhotoPath || "",
         vaccinationRecords: dog.vaccinationRecords || [],
         vaccinationFiles: dog.vaccinationFiles || "",
+        requestProfileSnapshot,
         estimatedTotal: pricingSnapshot.total,
         stayType,
         billingDays: pricingSnapshot.billingDays,

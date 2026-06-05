@@ -424,16 +424,42 @@ function serviceDependencyChipHtml(service = {}) {
 }
 
 function servicePricingScopeLabel(service = {}) {
-  return serviceHasFlag(service, "Member Pricing") ? "Member Pricing" : "Regular Price (Non-Member)";
+  const scope = servicePricingScope(service);
+  if (scope === "member") return "Member Pricing";
+  if (scope === "non-member") return "Regular Price (Non-Member)";
+  return "All Customers";
 }
 
 function serviceMatchesCustomerPricingScope(service = {}, user = currentUser) {
-  const memberPricing = serviceHasFlag(service, "Member Pricing");
-  return isMemberUser(user) ? memberPricing : !memberPricing;
+  const scope = servicePricingScope(service);
+  if (scope === "all") return true;
+  return isMemberUser(user) ? scope === "member" : scope === "non-member";
 }
 
 function serviceBoardingRateType(service = {}) {
   return normalizedBoardingRateType(service.boardingRateType || service.stayRateBehavior || service.boardingProgramType || "");
+}
+
+function normalizedPricingScope(value = "") {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[_\s]+/g, "-");
+  if (["member", "members", "member-only", "member-pricing"].includes(normalized)) return "member";
+  if (["non-member", "nonmember", "regular", "public", "standard", "non-member-pricing"].includes(normalized)) return "non-member";
+  if (["all", "any", "everyone", "all-customers"].includes(normalized)) return "all";
+  return "";
+}
+
+function servicePricingScope(service = {}) {
+  const explicit = normalizedPricingScope(service.pricingScope || service.customerPricingScope || "");
+  if (explicit) return explicit;
+  if (serviceHasFlag(service, "Member Pricing")) return "member";
+  return serviceBoardingRateType(service) === "standard-boarding" ? "non-member" : "all";
+}
+
+function normalizedBoardingRateRole(value = "") {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[_\s]+/g, "-");
+  if (["shared-crate-additional", "additional", "additional-dog", "shared", "shared-crate"].includes(normalized)) return "shared-crate-additional";
+  if (["primary", "standard", "main", ""].includes(normalized)) return "primary";
+  return normalized;
 }
 
 function serviceIsBoardingProgram(service = {}) {
@@ -441,14 +467,7 @@ function serviceIsBoardingProgram(service = {}) {
 }
 
 function serviceIsStandardBoardingRate(service = {}) {
-  const rateType = serviceBoardingRateType(service);
-  if (rateType === "standard-boarding") return true;
-  if (rateType || service.category !== "Boarding" || serviceDependencyId(service)) return false;
-  const name = normalizedServiceLookupText(service.serviceName || service.name || "");
-  const unit = normalizedServiceLookupText(service.unit || "");
-  const legacyBoardingRate = name.includes("boarding") && (unit.includes("night") || unit.includes("day"));
-  const legacyUpgrade = name === "premium overnight boarding kennel" || name.includes("upgrade");
-  return legacyBoardingRate && !legacyUpgrade;
+  return serviceBoardingRateType(service) === "standard-boarding";
 }
 
 function serviceBoardingRateChipHtml(service = {}) {
@@ -1528,8 +1547,9 @@ function servicePricingFilterLabel(key = servicePricingFilter) {
 }
 
 function serviceMatchesPricingFilter(record = {}, key = servicePricingFilter) {
-  if (key === "member") return serviceHasFlag(record, "Member Pricing");
-  if (key === "regular") return !serviceHasFlag(record, "Member Pricing");
+  const scope = servicePricingScope(record);
+  if (key === "member") return scope === "member" || scope === "all";
+  if (key === "regular") return scope === "non-member" || scope === "all";
   return true;
 }
 
@@ -1582,7 +1602,9 @@ function renderServices() {
 function openService(record = {}) {
   const formRecord = {
     ...record,
-    boardingRateType: record.boardingRateType || (record.category === "Boarding" && serviceIsStandardBoardingRate(record) ? "standard-boarding" : ""),
+    boardingRateType: record.boardingRateType || "",
+    pricingScope: normalizedPricingScope(record.pricingScope) || (serviceHasFlag(record, "Member Pricing") ? "member" : serviceBoardingRateType(record) === "standard-boarding" ? "non-member" : "all"),
+    boardingRateRole: normalizedBoardingRateRole(record.boardingRateRole) || "primary",
   };
   const panel = $("#serviceEditorPanel");
   if (panel && panel.parentElement !== document.body) document.body.appendChild(panel);

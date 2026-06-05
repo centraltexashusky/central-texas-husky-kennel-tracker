@@ -218,12 +218,12 @@ with check (public.kennel_customer_can_write(type, payload));
 
 -- Storage bucket for direct file uploads.
 -- If your Supabase project does not allow bucket creation from SQL, create this
--- manually in Storage as a public bucket named kennel-media, then run the
+-- manually in Storage as a private bucket named kennel-media, then run the
 -- policies below.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('kennel-media', 'kennel-media', true, 52428800, array['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']::text[])
+values ('kennel-media', 'kennel-media', false, 52428800, array['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']::text[])
 on conflict (id) do update
-set public = true,
+set public = false,
     file_size_limit = 52428800,
     allowed_mime_types = array['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']::text[];
 
@@ -231,17 +231,24 @@ drop policy if exists "Kennel app can read media" on storage.objects;
 drop policy if exists "Kennel app can upload media" on storage.objects;
 drop policy if exists "Kennel app can update media" on storage.objects;
 drop policy if exists "Kennel media is publicly readable" on storage.objects;
+drop policy if exists "Authenticated users can read kennel media" on storage.objects;
 drop policy if exists "Authenticated users can upload kennel media" on storage.objects;
 drop policy if exists "Anon users can upload kennel media" on storage.objects;
 drop policy if exists "Authenticated users can update kennel media" on storage.objects;
 drop policy if exists "Anon users can update kennel media" on storage.objects;
 drop policy if exists "Authenticated users can delete kennel media" on storage.objects;
 
-create policy "Kennel media is publicly readable"
+create policy "Authenticated users can read kennel media"
 on storage.objects
 for select
-to anon, authenticated
-using ( bucket_id = 'kennel-media' );
+to authenticated
+using (
+  bucket_id = 'kennel-media'
+  and (
+    kennel_private.kennel_is_staff_member()
+    or (storage.foldername(name))[2] = auth.uid()::text
+  )
+);
 
 create policy "Authenticated users can upload kennel media"
 on storage.objects

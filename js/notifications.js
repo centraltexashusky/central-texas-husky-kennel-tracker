@@ -630,6 +630,9 @@ function notificationDisplayTitle(notification = {}) {
   if (eventName === "customerBoardingRequestCreated") return \`New boarding request: \${dogName || "Customer dog"}\`;
   if (eventName === "customerBoardingRequestUpdated") return \`Boarding request updated: \${dogName || "Customer dog"}\`;
   if (eventName === "customerDogFileUploaded") return \`Customer file uploaded: \${dogName || "Customer dog"}\`;
+  if (eventName === "careLogAdminAlertCreated") return \`Medical/behavior alert: \${source.dogName || "Our dog"}\`;
+  if (eventName === "kennelRequestCreated") return \`New request: \${source.category || "Kennel request"}\`;
+  if (eventName === "maintenanceCreated") return \`New maintenance: \${source.location || "Kennel"}\`;
   if (eventName === "urgentKennelRequestCreated") return \`Urgent request: \${source.category || "Kennel request"}\`;
   if (eventName === "urgentMaintenanceCreated") return \`Urgent maintenance: \${source.location || "Kennel"}\`;
   if (eventName === "timeOffRequested") return \`Time off request: \${source.staffName || "Staff"}\`;
@@ -663,6 +666,9 @@ function notificationDisplayMessage(notification = {}) {
   }
   if (eventName === "customerBoardingRequestUpdated") return \`\${owner} updated a boarding request\${dogName ? \` for \${dogName}\` : ""}.\`;
   if (eventName === "customerDogFileUploaded") return \`\${owner} uploaded a file\${dogName ? \` for \${dogName}\` : ""}.\`;
+  if (eventName === "careLogAdminAlertCreated") return source.note || "A medical/behavior note needs admin attention.";
+  if (eventName === "kennelRequestCreated") return source.requestText || "A staff kennel request was submitted.";
+  if (eventName === "maintenanceCreated") return source.issue || "A maintenance item was submitted.";
   if (eventName === "urgentKennelRequestCreated") return source.requestText || "An urgent kennel request was submitted.";
   if (eventName === "urgentMaintenanceCreated") return source.issue || "An urgent maintenance item was submitted.";
   if (eventName === "timeOffRequested") return \`\${source.staffName || "Staff"} requested \${dateRangeText(source.startDate, source.endDate)} off.\`;
@@ -734,6 +740,27 @@ function notificationEventConfig(eventName = "", record = {}) {
     customerDogFileUploaded: {
       title: \`Customer file uploaded: \${record.dogName || "Customer dog"}\`,
       message: \`\${record.ownerName || record.ownerEmail || record.customerEmail || "A customer"} uploaded a file\${record.dogName ? \` for \${record.dogName}\` : ""}.\`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    careLogAdminAlertCreated: {
+      title: \`Medical/behavior alert: \${record.dogName || "Our dog"}\`,
+      message: record.note || "A medical/behavior note needs admin attention.",
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    kennelRequestCreated: {
+      title: \`New request: \${record.category || "Kennel request"}\`,
+      message: record.requestText || "A staff kennel request was submitted.",
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    maintenanceCreated: {
+      title: \`New maintenance: \${record.location || "Kennel"}\`,
+      message: record.issue || "A maintenance item was submitted.",
       priority: "review",
       channels: ["email", "inApp"],
       audienceRoles: ["admin"],
@@ -909,6 +936,34 @@ async function markAllNotificationsRead() {
   renderNotifications();
 }
 
+function openOperationalNotificationRecord(sourceType = "", sourceId = "") {
+  if (!["request", "maintenance"].includes(sourceType)) return false;
+  const record = readRecords(sourceType).find((item) => item.id === sourceId);
+  if (!record) return false;
+  if (sourceType === "maintenance") {
+    switchPage("maintenancePage");
+    renderMaintenance();
+  } else {
+    switchPage("requestsPage");
+    renderRequests();
+  }
+  showDetailDialog(titleForRecord(sourceType, record), detailForRecord(sourceType, record), { type: sourceType, id: record.id });
+  return true;
+}
+
+function openCareLogNotificationRecord(sourceId = "") {
+  const record = readRecords("careLog").find((item) => item.id === sourceId);
+  if (!record) return false;
+  if (record.date && form?.elements?.date) {
+    form.elements.date.value = record.date;
+    updateDayFromDate();
+  }
+  switchPage("dailyPage");
+  renderDailyTaskLists();
+  showDetailDialog(titleForRecord("careLog", record), detailForRecord("careLog", record), { type: "careLog", id: record.id });
+  return true;
+}
+
 async function openNotification(id = "") {
   const notification = await markNotificationRead(id);
   if (!notification) return;
@@ -930,11 +985,10 @@ async function openNotification(id = "") {
     }
   }
   if (sourceType === "request" || sourceType === "maintenance") {
-    const record = readRecords(sourceType).find((item) => item.id === sourceId);
-    if (record) {
-      showDetailDialog(titleForRecord(sourceType, record), detailForRecord(sourceType, record), { type: sourceType, id: record.id });
-      return;
-    }
+    if (openOperationalNotificationRecord(sourceType, sourceId)) return;
+  }
+  if (sourceType === "careLog") {
+    if (openCareLogNotificationRecord(sourceId)) return;
   }
   if (sourceType === "timeOffRequest") {
     const record = readRecords("timeOffRequest").find((item) => item.id === sourceId);

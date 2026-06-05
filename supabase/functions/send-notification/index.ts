@@ -217,6 +217,46 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       sms: false,
     };
   }
+  if (eventName === "careLogAdminAlertCreated") {
+    const media = await recordMediaLines(adminClient, record);
+    return {
+      subject: `Medical/behavior alert: ${record.dogName || "Our dog"}`,
+      body: [
+        "A medical/behavior care note needs admin attention.",
+        "",
+        `Dog: ${record.dogName || ""}`,
+        `Date: ${record.date || record.dailyReportDate || ""}`,
+        `Logged by: ${record.completedBy || record.completedEmail || ""}`,
+        `Note: ${record.note || ""}`,
+        ...(media.length ? ["", "Media links:", ...media] : []),
+        "",
+        `Review daily care log: ${appLink("#dailyPage")}`,
+      ].join("\n"),
+      priority: "review",
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
+      sms: false,
+    };
+  }
+  if (eventName === "kennelRequestCreated") {
+    const media = await recordMediaLines(adminClient, record);
+    return {
+      subject: `New kennel request: ${record.category || "Request"}`,
+      body: [
+        "A staff kennel request was submitted.",
+        "",
+        `Requested by: ${record.requestedBy || record.requestedByEmail || ""}`,
+        `Category: ${record.category || ""}`,
+        `Request: ${record.requestText || ""}`,
+        `Reason: ${record.reason || ""}`,
+        ...(media.length ? ["", "Media links:", ...media] : []),
+        "",
+        `Review request: ${appLink("#requestsPage")}`,
+      ].join("\n"),
+      priority: "review",
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
+      sms: false,
+    };
+  }
   if (eventName === "urgentKennelRequestCreated") {
     const media = await recordMediaLines(adminClient, record);
     return {
@@ -235,6 +275,27 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       priority: "urgent",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
       sms: true,
+    };
+  }
+  if (eventName === "maintenanceCreated") {
+    const media = await recordMediaLines(adminClient, record);
+    return {
+      subject: `New maintenance: ${record.location || "Kennel"}`,
+      body: [
+        "A maintenance item was submitted.",
+        "",
+        `Reported by: ${record.reportedBy || record.reportedByEmail || ""}`,
+        `Location: ${record.location || ""}`,
+        `Issue: ${record.issue || ""}`,
+        `Suggested action: ${record.suggestedAction || ""}`,
+        `Files: ${record.mediaFiles || ""}`,
+        ...(media.length ? ["", "Media links:", ...media] : []),
+        "",
+        `Review request: ${appLink("#maintenancePage")}`,
+      ].join("\n"),
+      priority: "review",
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
+      sms: false,
     };
   }
   if (eventName === "urgentMaintenanceCreated") {

@@ -18,7 +18,7 @@
         </div>
         <nav class="side-nav" aria-label="Kennel tracker sections">
           <button class="nav-button is-active" type="button" data-page="loginPage" data-roles="public">Login</button>
-          <button class="nav-button" type="button" data-page="customerPage" data-roles="customer">My Dog</button>
+          <button class="nav-button" type="button" data-page="customerPage" data-roles="customer">My Dogs</button>
           <button class="nav-button" type="button" data-page="customerRequestsPage" data-roles="customer">My Requests</button>
           <button class="nav-button" type="button" data-page="customerUpdatesPage" data-roles="customer">Updates</button>
           <button class="nav-button" type="button" data-page="customerFilesPage" data-roles="customer">My Records</button>
@@ -84,7 +84,7 @@
       <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile kennel sections">
         <button class="mobile-bottom-nav-button" type="button" data-page="customerPage" data-roles="customer" aria-label="My Dog">
           <img class="mobile-bottom-nav-icon mobile-bottom-nav-image my-dog-menu-logo" src="assets/icons/arkinlight-husky-logo-transparent.png?v=20260530-my-dog-logo-crop" alt="" aria-hidden="true" />
-          <span class="mobile-bottom-nav-label">My Dog</span>
+          <span class="mobile-bottom-nav-label">My Dogs</span>
         </button>
         <button class="mobile-bottom-nav-button" type="button" data-page="customerRequestsPage" data-roles="customer" aria-label="My Requests">
           <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -236,7 +236,7 @@
 
       <section class="page-view" id="customerPage">
         <section class="form-section">
-          <div class="section-heading"><span>C</span><div><h2>My Dog</h2><p>Keep your dog profiles and care details current.</p></div></div>
+          <div class="section-heading"><span>C</span><div><h2>My Dogs</h2><p>Keep your dog profiles and care details current.</p></div></div>
           <div class="customer-progress-panel" id="customerOnboardingProgress"></div>
           <div class="table-toolbar"><button type="button" id="openCustomerDogModalButton">Add Your Dog</button></div>
           <div class="customer-dog-list" id="customerDogList"></div>
@@ -371,7 +371,7 @@
               <button type="button" class="secondary-button" id="customerBookingBackButton">Back</button>
               <button type="button" id="customerBookingNextButton">Continue</button>
               <button type="submit" id="requestBoardingButton">Review Request</button>
-              <button type="button" class="secondary-button" id="resetCustomerBookingButton">New Request</button>
+              <button type="button" class="secondary-button" id="resetCustomerBookingButton">Cancel</button>
             </div>
           </form>
         </section>
@@ -491,6 +491,7 @@
             </div>
             <label id="careQuickNoteLabel">Care note<textarea id="careQuickNote" rows="2" placeholder="Session details, bath products, heat observation, medical/care note"></textarea></label>
             <label id="careQuickPhotosLabel">Care note photo(s)<input type="file" id="careQuickPhotos" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple /></label>
+            <label id="careQuickAdminAlertLabel" class="inline-check" hidden><input type="checkbox" id="careQuickAlertAdmin" /> Alert Admin</label>
             <div class="button-row"><button type="button" id="addCareQuickLog">Add Care Log</button></div>
             <div id="structuredCareLogList" class="record-grid compact-record-grid"></div>
           </div>
@@ -1126,6 +1127,8 @@
               <label>Tax rate %<input type="number" name="taxRate" min="0" step="0.01" placeholder="Example: 8.25" /></label>
               <label>Default duration<input type="text" name="defaultDuration" placeholder="Example: 60 minutes" /></label>
               <label>Boarding/program role<select name="boardingRateType" id="serviceBoardingRateType"><option value="">Standard service/add-on</option><option value="standard-boarding">Standard boarding rate</option><option value="boarding-program">Boarding program (replaces boarding)</option></select></label>
+              <label>Pricing scope<select name="pricingScope" id="servicePricingScope"><option value="">Catalog default</option><option value="all">All customers</option><option value="member">Members only</option><option value="non-member">Non-members only</option></select></label>
+              <label>Boarding rate role<select name="boardingRateRole" id="serviceBoardingRateRole"><option value="">Primary rate</option><option value="primary">Primary dog/crate</option><option value="shared-crate-additional">Shared-crate additional dog</option></select></label>
               <label>Only show after service<select name="requiresServiceId" id="serviceRequiresServiceId"><option value="">No dependency</option></select></label>
               <label>Dependent display<select name="dependentServiceType" id="serviceDependentServiceType"><option value="">Standalone / normal item</option><option value="optional-addon">Optional add-on under parent</option></select></label>
             </div>
@@ -1136,6 +1139,7 @@
               <label class="flag-option"><input type="checkbox" name="serviceFlags" value="Vaccine proof required" /> <span>Vaccine proof required</span><span class="service-info-icon" role="button" tabindex="0" aria-label="Use when staff should confirm current vaccine records before approving the request." title="Use when staff should confirm current vaccine records before approving the request." data-tooltip="Use when staff should confirm current vaccine records before approving the request."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span></label>
               <label class="flag-option"><input type="checkbox" name="serviceFlags" value="Owner bookable later" /> <span>Future customer-booking option</span><span class="service-info-icon" role="button" tabindex="0" aria-label="Planning flag for items that may become customer-bookable later. It does not hide the item by itself." title="Planning flag for items that may become customer-bookable later. It does not hide the item by itself." data-tooltip="Planning flag for items that may become customer-bookable later. It does not hide the item by itself."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span></label>
               <label class="flag-option"><input type="checkbox" name="serviceFlags" value="Taxable" /> <span>Taxable</span><span class="service-info-icon" role="button" tabindex="0" aria-label="Marks the item as subject to sales tax when tax calculation is used." title="Marks the item as subject to sales tax when tax calculation is used." data-tooltip="Marks the item as subject to sales tax when tax calculation is used."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span></label>
+              <label class="flag-option"><input type="checkbox" name="serviceFlags" value="Explicitly free" /> <span>Explicitly free</span><span class="service-info-icon" role="button" tabindex="0" aria-label="Allows a zero-dollar active service. Leave unchecked for billable services." title="Allows a zero-dollar active service. Leave unchecked for billable services." data-tooltip="Allows a zero-dollar active service. Leave unchecked for billable services."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span></label>
             </div>
             <label>Customer item description<textarea name="itemDescription" rows="3" placeholder="Shown to customers when they tap or hover the item info icon"></textarea></label>
             <label>Pricing notes / guardrails<textarea name="pricingNotes" rows="3" placeholder="What is included, price justification, discount rules, or contract notes"></textarea></label>
@@ -1303,6 +1307,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260604-open-timesheet"></script>
+  <script type="module" src="js/main.js?v=20260605-care-admin-alert"></script>
 </body>
 </html>
