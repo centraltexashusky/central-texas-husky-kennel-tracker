@@ -1604,11 +1604,11 @@ function boardingCalendarDogMeta(record = {}, stay = {}) {
   return [owner, kennel].filter(Boolean).join(" | ");
 }
 
-function boardingCalendarDayHeadingHtml(day = "") {
+function boardingCalendarDayHeadingHtml(day = "", index = 0) {
   const date = new Date(day + "T12:00:00");
   const weekday = Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-US", { weekday: "short" });
   const label = Number.isNaN(date.getTime()) ? day.slice(-2) : String(date.getDate());
-  return '<div class="boarding-calendar-day-heading"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(weekday) + '</span></div>';
+  return '<div class="boarding-calendar-day-heading" style="grid-row: 1; grid-column: ' + (index + 2) + ';"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(weekday) + '</span></div>';
 }
 
 function boardingCalendarStatusLegendHtml(entries = []) {
@@ -1623,6 +1623,18 @@ function boardingCalendarStatusLegendHtml(entries = []) {
     const count = counts[status] || 0;
     return '<span class="boarding-calendar-status-flag ' + escapeHtml(statusClassForBoardingStatus(status)) + '"><span>' + escapeHtml(boardingCalendarStatusLabel(status)) + '</span><small>' + escapeHtml(String(count)) + '</small></span>';
   }).join("") + '</div>';
+}
+
+function boardingCalendarCurrentTimeLineHtml(days = [], rowCount = 0) {
+  const today = todayDate();
+  const dayIndex = days.indexOf(today);
+  if (dayIndex < 0 || rowCount <= 0) return "";
+  const now = new Date();
+  const startOfDay = new Date(today + "T00:00:00");
+  const dayFraction = Number.isNaN(startOfDay.getTime()) ? 0 : Math.max(0, Math.min(1, (now - startOfDay) / 86400000));
+  const offset = Math.round(dayFraction * 10000) / 100;
+  const title = "Current time: " + formatDateTime(now.toISOString());
+  return '<span class="boarding-calendar-now-line" aria-hidden="true" title="' + escapeHtml(title) + '" style="grid-row: 1 / span ' + (rowCount + 1) + '; grid-column: ' + (dayIndex + 2) + '; --boarding-calendar-now-offset: ' + offset + '%;"></span>';
 }
 
 function boardingCalendarEntryHtml(entry = {}, index = 0, days = []) {
@@ -1657,9 +1669,10 @@ function renderBoardingCalendar(records = []) {
   const dogCount = new Set(entries.map((entry) => entry.record?.id || entry.record?.dogName || "")).size;
   const dayHeadings = days.map(boardingCalendarDayHeadingHtml).join("");
   const rows = entries.map((entry, index) => boardingCalendarEntryHtml(entry, index, days)).join("");
+  const nowLine = boardingCalendarCurrentTimeLineHtml(days, entries.length);
   const emptyState = entries.length ? "" : '<article class="record-card compact-record-card boarding-calendar-empty"><strong>No boarding stays in ' + escapeHtml(boardingCalendarMonthLabel(boardingCalendarMonth)) + '</strong><p>No stays match the current month and filters.</p></article>';
   const grid = entries.length
-    ? '<div class="boarding-calendar-scroll" tabindex="0"><div class="boarding-calendar-grid" style="--boarding-calendar-days: ' + days.length + '; --boarding-calendar-rows: ' + entries.length + ';"><div class="boarding-calendar-corner">Dog</div>' + dayHeadings + rows + '</div></div>'
+    ? '<div class="boarding-calendar-scroll" tabindex="0"><div class="boarding-calendar-grid" style="--boarding-calendar-days: ' + days.length + '; --boarding-calendar-rows: ' + entries.length + ';"><div class="boarding-calendar-corner">Dog</div>' + dayHeadings + rows + nowLine + '</div></div>'
     : emptyState;
   container.innerHTML = '<section class="boarding-calendar-card">'
     + '<div class="boarding-calendar-header"><div><strong>Monthly Stay Timeline</strong><span>' + escapeHtml(entries.length + " stay" + (entries.length === 1 ? "" : "s") + " | " + dogCount + " dog" + (dogCount === 1 ? "" : "s")) + '</span></div>'

@@ -2598,6 +2598,25 @@ textarea {
   min-width: 0;
 }
 
+.boarding-calendar-now-line {
+  align-self: stretch;
+  justify-self: stretch;
+  pointer-events: none;
+  position: relative;
+  z-index: 6;
+}
+
+.boarding-calendar-now-line::before {
+  border-left: 2px solid rgba(203, 213, 225, 0.86);
+  bottom: 0;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.22), 0 0 14px rgba(203, 213, 225, 0.34);
+  content: "";
+  left: var(--boarding-calendar-now-offset, 0%);
+  margin-left: -1px;
+  position: absolute;
+  top: 0;
+}
+
 .boarding-calendar-bar,
 .boarding-calendar-status-flag {
   --calendar-status-border: rgba(148, 163, 184, 0.56);
