@@ -2761,11 +2761,27 @@ textarea {
 }
 
 .boarding-calendar-status-flag.is-inactive {
-  --calendar-status-border: rgba(148, 163, 184, 0.48);
-  --calendar-status-from: #475569;
-  --calendar-status-to: #64748b;
+  --calendar-status-border: rgba(148, 163, 184, 0.7);
+  --calendar-status-from: #334155;
+  --calendar-status-to: #475569;
   --calendar-status-text: rgba(241, 245, 249, 0.82);
-  opacity: 0.72;
+  border-style: dashed;
+  box-shadow: inset 0 0 0 1px rgba(203, 213, 225, 0.18);
+  opacity: 0.8;
+}
+
+.boarding-calendar-status-flag.is-inactive::after {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(203, 213, 225, 0.32);
+  border-radius: 999px;
+  color: #e2e8f0;
+  content: "Off";
+  font-size: 0.68rem;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  margin-left: 8px;
+  padding: 2px 7px;
+  text-transform: uppercase;
 }
 
 .boarding-calendar-status-flag.is-inactive small {
