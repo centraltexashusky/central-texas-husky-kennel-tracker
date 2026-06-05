@@ -968,6 +968,33 @@ function boardingStayInvoiceTotal(record = {}, stay = {}, options = {}) {
   return Number(record.estimatedTotal || 0);
 }
 
+function boardingPositiveAmount(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function boardingSnapshotHasFamilyTotal(snapshot = {}) {
+  return Number(snapshot.dogCount || 0) > 1
+    || arrayValue(snapshot.perDogBreakdown).length > 1
+    || Boolean(snapshot.sharedCrateRequested);
+}
+
+function boardingEntrySavedFamilyTotal(entry = {}) {
+  const recordTotal = boardingPositiveAmount(entry.record?.requestGroupTotal);
+  if (recordTotal) return recordTotal;
+  const stay = entry.stay || {};
+  const snapshot = stay.pricingSnapshot || {};
+  if (!boardingSnapshotHasFamilyTotal(snapshot)) return 0;
+  return boardingPositiveAmount(stay.groupTotal ?? snapshot.groupTotal);
+}
+
+function boardingStayRateRoleChipHtml(stay = {}, options = {}) {
+  const role = stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.boardingRateRole || "";
+  if (!role || (!options.familyName && role === "primary")) return "";
+  if (!["primary", "shared-crate-additional", "boarding-program", "non-member"].includes(role)) return "";
+  return \`<span class="status-chip boarding-rate-role-chip">\${escapeHtml(boardingLineRoleLabel(role))}</span>\`;
+}
+
 function boardingStayInvoiceSummaryHtml(record = {}, stay = {}, options = {}) {
   const currentSnapshot = options.forceCurrentPricing ? (options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay, options)) : null;
   const snapshot = currentSnapshot || stay.pricingSnapshot || {};
@@ -1937,6 +1964,16 @@ function updateBoardingStayLocationOptions(formEl) {
   if (help) help.textContent = building ? (locations.length ? "Available active kennels for this building." : "No active kennels are saved for this building.") : "Choose a building first.";
 }
 
+function boardingStayRateRoleFieldHtml(record = {}, stay = {}) {
+  const ratePlan = boardingRatePlanForRecord(record);
+  if (!ratePlan.isMemberPricing) return "";
+  const role = boardingCurrentDogRoleForStay(stay, ratePlan);
+  const sharedHelp = ratePlan.sharedCrateRateConfig?.ok
+    ? \`Shared-crate additional dog rate: \${money(ratePlan.sharedCrateRate)} \${escapeHtml(ratePlan.sharedCrateRateConfig.unit || "per night")}.\`
+    : "No active shared-crate additional dog rate is configured in Services & Pricing.";
+  return \`<label>Boarding rate role<select name="boardingRateRole"><option value="primary" \${role !== "shared-crate-additional" ? "selected" : ""}>Primary dog/crate</option><option value="shared-crate-additional" \${role === "shared-crate-additional" ? "selected" : ""}>Shared-crate additional dog</option></select><small>\${sharedHelp}</small></label>\`;
+}
+
 function boardingStayFormHtml(record = {}, stay = {}) {
   const isEdit = Boolean(stay.id);
   return \`
@@ -1946,6 +1983,7 @@ function boardingStayFormHtml(record = {}, stay = {}) {
       <div class="field-grid">
         <label>Drop-off time<input type="datetime-local" name="dropoffTime" required value="\${escapeHtml(stay.dropoffTime?.slice(0, 16) || "")}" /></label>
         <label>Pick-up time<input type="datetime-local" name="pickupTime" required value="\${escapeHtml(stay.pickupTime?.slice(0, 16) || "")}" /></label>
+        \${boardingStayRateRoleFieldHtml(record, stay)}
       </div>
       \${boardingStayLocationFieldsHtml(stay)}
       <div class="checklist compact">\${stayRequestCheckboxesHtml(stay, record)}</div>
@@ -2104,6 +2142,7 @@ async function saveBoardingStayFromForm(formEl) {
   const location = payload.kennelLocationId
     ? kennelLocations({ activeOnly: true }).find((item) => item.id === payload.kennelLocationId)
     : null;
+  const boardingRateRole = normalizedBoardingRateRole(payload.boardingRateRole || existingStay?.pricingSnapshot?.currentDogRole || "");
   const draftStay = {
     ...(existingStay || {}),
     dropoffTime: payload.dropoffTime,
@@ -2112,7 +2151,10 @@ async function saveBoardingStayFromForm(formEl) {
     requests: selectedRequests,
     invoiceAdjustments,
   };
-  const pricingSnapshot = boardingPricingSnapshotForStay(dog, draftStay);
+  const pricingSnapshot = boardingPricingSnapshotForStay(dog, draftStay, {
+    currentDogRole: boardingRateRole,
+    sharedCrateRequested: boardingRateRole === "shared-crate-additional",
+  });
   const stay = {
     ...existingStay,
     id: payload.stayId || uid("stay"),
@@ -2718,11 +2760,28 @@ function boardingFamilyMixedStatusHtml(entries = []) {
 }
 
 function boardingFamilyGroupSavedTotal(entries = []) {
-  const groupTotals = entries
-    .map((entry) => Number(entry.record?.requestGroupTotal ?? entry.stay?.groupTotal ?? entry.stay?.pricingSnapshot?.groupTotal ?? 0))
+  const savedFamilyTotals = entries
+    .map(boardingEntrySavedFamilyTotal)
     .filter((value) => Number.isFinite(value) && value > 0);
-  if (groupTotals.length) return groupTotals[0];
+  if (savedFamilyTotals.length) return savedFamilyTotals[0];
   return entries.reduce((total, entry) => total + boardingStayInvoiceTotal(entry.record || {}, entry.stay || {}), 0);
+}
+
+function boardingFamilySharedCrateReviewHtml(entries = []) {
+  const activeEntries = entries.filter((entry) => !["Cancelled", "Checked Out"].includes(entry.status));
+  if (activeEntries.length <= 1) return "";
+  const first = activeEntries[0] || {};
+  const ratePlan = boardingRatePlanForRecord(first.record || {});
+  if (!ratePlan.isMemberPricing) return "";
+  const snapshots = activeEntries.map((entry) => entry.stay?.pricingSnapshot || {});
+  const hasSharedRole = snapshots.some((snapshot) => snapshot.sharedCrateRequested || snapshot.currentDogRole === "shared-crate-additional");
+  if (hasSharedRole) return "";
+  const allPrimary = snapshots.every((snapshot) => !snapshot.currentDogRole || snapshot.currentDogRole === "primary");
+  if (!allPrimary) return "";
+  const message = ratePlan.sharedCrateRateConfig?.ok
+    ? "Same-family group is billed as separate primary crates. Shared-crate pricing is not applied to this stay."
+    : "Same-family group is billed as separate primary crates. No active shared-crate additional dog rate is configured in Services & Pricing, so a same-kennel discount cannot be calculated.";
+  return \`<article class="operation-availability-card is-warning"><strong>Pricing needs review</strong><p>\${escapeHtml(message)}</p></article>\`;
 }
 
 function boardingFamilyPricingSnapshots(entries = []) {
@@ -2872,7 +2931,8 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   const approveAction = status === "Cancelled" ? \`<button type="button" class="secondary-button" data-action="approve-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Approve Request</button>\` : "";
   const actions = \`<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change</button>\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}\`;
   const familyChip = options.familyName ? \`<span class="status-chip boarding-family-chip">Same family: \${escapeHtml(options.familyName)}</span>\` : "";
-  return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${cancellationAudit}\${boardingCancellationReasonHtml(record, stay)}\${actions}</article>\`;
+  const rateRoleChip = boardingStayRateRoleChipHtml(stay, { familyName: options.familyName });
+  return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${rateRoleChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${cancellationAudit}\${boardingCancellationReasonHtml(record, stay)}\${actions}</article>\`;
 }
 
 function boardingFamilyGroupHtml(entries = [], options = {}) {
@@ -2899,6 +2959,7 @@ function boardingFamilyGroupHtml(entries = [], options = {}) {
       <div class="chip-row"><span class="status-chip boarding-family-chip">\${entries.length} dogs</span><span class="status-chip">\${escapeHtml(statusSummary)}</span></div>
     </div>
     \${boardingFamilyMixedStatusHtml(entries)}
+    \${boardingFamilySharedCrateReviewHtml(entries)}
     \${groupActions}
     <div class="boarding-family-dogs">\${entries.map((entry) => boardingRequestCardHtml(entry, { familyName })).join("")}</div>
   </section>\`;
