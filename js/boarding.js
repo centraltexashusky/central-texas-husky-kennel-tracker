@@ -2492,12 +2492,19 @@ function boardingFamilyStayKey(stay = {}) {
   return \`\${dropoff}|\${pickup}\`;
 }
 
-function boardingFamilyGroupKey(entry = {}) {
+function boardingFamilyExplicitGroupKey(entry = {}) {
   const explicitGroupId = String(entry.stay?.requestGroupId || entry.stay?.reservationGroupId || entry.stay?.familyReservationId || entry.record?.requestGroupId || entry.record?.reservationGroupId || entry.record?.familyReservationId || "").trim();
-  if (explicitGroupId) return \`group:\${explicitGroupId}\`;
+  return explicitGroupId ? \`group:\${explicitGroupId}\` : "";
+}
+
+function boardingFamilyHouseholdStayKey(entry = {}) {
   const ownerKey = boardingFamilyOwnerKey(entry.record || {});
   const stayKey = boardingFamilyStayKey(entry.stay || {});
   return ownerKey && stayKey ? \`\${ownerKey}::\${stayKey}\` : "";
+}
+
+function boardingFamilyGroupKey(entry = {}) {
+  return boardingFamilyHouseholdStayKey(entry) || boardingFamilyExplicitGroupKey(entry);
 }
 
 function boardingFamilyName(record = {}) {
@@ -2537,6 +2544,11 @@ function boardingFamilyMixedStatusHtml(entries = []) {
 }
 
 function boardingFamilyGroupSavedTotal(entries = []) {
+  const currentSnapshots = boardingFamilyPricingSnapshots(entries);
+  const currentGroupTotals = [...currentSnapshots.values()]
+    .map((snapshot) => Number(snapshot?.groupTotal || 0))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (currentGroupTotals.length) return currentGroupTotals[0];
   const groupTotals = entries
     .map((entry) => Number(entry.stay?.pricingSnapshot?.groupTotal ?? entry.record?.requestGroupTotal ?? entry.stay?.groupTotal ?? 0))
     .filter((value) => Number.isFinite(value) && value > 0);
