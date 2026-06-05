@@ -2685,12 +2685,20 @@ textarea {
   border: 1px solid var(--calendar-status-border);
   border-radius: 999px;
   color: var(--calendar-status-text);
+  cursor: pointer;
   display: flex;
+  font-family: inherit;
   font-size: 0.8rem;
   font-weight: 900;
   justify-content: space-between;
   min-height: 36px;
   padding: 7px 11px;
+  text-align: left;
+}
+
+.boarding-calendar-status-flag:focus-visible {
+  box-shadow: var(--focus);
+  outline: none;
 }
 
 .boarding-calendar-status-flag small {
@@ -2750,6 +2758,18 @@ textarea {
   --calendar-status-border: rgba(196, 181, 253, 0.72);
   --calendar-status-from: #6d28d9;
   --calendar-status-to: #a78bfa;
+}
+
+.boarding-calendar-status-flag.is-inactive {
+  --calendar-status-border: rgba(148, 163, 184, 0.48);
+  --calendar-status-from: #475569;
+  --calendar-status-to: #64748b;
+  --calendar-status-text: rgba(241, 245, 249, 0.82);
+  opacity: 0.72;
+}
+
+.boarding-calendar-status-flag.is-inactive small {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .boarding-calendar-empty {

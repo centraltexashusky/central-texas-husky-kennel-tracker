@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260605-boarding-calendar";
+import "./shared.js?v=20260605-calendar-status-toggle";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260605-customer-cancel-alert";
-import "./boarding.js?v=20260605-calendar-now-line";
+import "./boarding.js?v=20260605-calendar-status-toggle";
 import "./daily.js?v=20260603-linked-addons-alerts";
 import "./timesheet.js?v=20260604-open-timesheet";
 import "./settings.js?v=20260604-pricing-groups-private-media";

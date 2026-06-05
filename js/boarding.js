@@ -4,6 +4,7 @@ const __snuggleStayModuleSource = `function statusChipHtml(label, className = ""
 }
 
 var boardingCalendarMonth = todayDate().slice(0, 7);
+var boardingCalendarInactiveStatuses = new Set();
 
 function dogTypeBadgeHtml(type) {
   const labels = {
@@ -1621,8 +1622,16 @@ function boardingCalendarStatusLegendHtml(entries = []) {
   if (!statuses.length) return "";
   return '<div class="boarding-calendar-status-flags" aria-label="Boarding status colors">' + statuses.map((status) => {
     const count = counts[status] || 0;
-    return '<span class="boarding-calendar-status-flag ' + escapeHtml(statusClassForBoardingStatus(status)) + '"><span>' + escapeHtml(boardingCalendarStatusLabel(status)) + '</span><small>' + escapeHtml(String(count)) + '</small></span>';
+    const active = !boardingCalendarInactiveStatuses.has(status);
+    return '<button type="button" class="boarding-calendar-status-flag ' + escapeHtml(statusClassForBoardingStatus(status)) + (active ? "" : " is-inactive") + '" data-action="toggle-calendar-status" data-status="' + escapeHtml(status) + '" aria-pressed="' + (active ? "true" : "false") + '"><span>' + escapeHtml(boardingCalendarStatusLabel(status)) + '</span><small>' + escapeHtml(String(count)) + '</small></button>';
   }).join("") + '</div>';
+}
+
+function toggleBoardingCalendarStatus(status = "") {
+  if (!boardingLifecycleStatuses.includes(status)) return;
+  if (boardingCalendarInactiveStatuses.has(status)) boardingCalendarInactiveStatuses.delete(status);
+  else boardingCalendarInactiveStatuses.add(status);
+  renderBoardingDogs();
 }
 
 function boardingCalendarCurrentTimeLineHtml(days = [], rowCount = 0) {
@@ -1665,12 +1674,14 @@ function renderBoardingCalendar(records = []) {
   if (!container) return;
   boardingCalendarMonth = boardingCalendarMonthKey(boardingCalendarMonth);
   const days = boardingCalendarDays(boardingCalendarMonth);
-  const entries = boardingCalendarEntries(records, boardingCalendarMonth);
+  const allEntries = boardingCalendarEntries(records, boardingCalendarMonth);
+  const entries = allEntries.filter((entry) => !boardingCalendarInactiveStatuses.has(entry.status || "Approved"));
   const dogCount = new Set(entries.map((entry) => entry.record?.id || entry.record?.dogName || "")).size;
   const dayHeadings = days.map(boardingCalendarDayHeadingHtml).join("");
   const rows = entries.map((entry, index) => boardingCalendarEntryHtml(entry, index, days)).join("");
   const nowLine = boardingCalendarCurrentTimeLineHtml(days, entries.length);
-  const emptyState = entries.length ? "" : '<article class="record-card compact-record-card boarding-calendar-empty"><strong>No boarding stays in ' + escapeHtml(boardingCalendarMonthLabel(boardingCalendarMonth)) + '</strong><p>No stays match the current month and filters.</p></article>';
+  const emptyMessage = allEntries.length ? "No stays match the active status flags." : "No stays match the current month and filters.";
+  const emptyState = entries.length ? "" : '<article class="record-card compact-record-card boarding-calendar-empty"><strong>No boarding stays in ' + escapeHtml(boardingCalendarMonthLabel(boardingCalendarMonth)) + '</strong><p>' + escapeHtml(emptyMessage) + '</p></article>';
   const grid = entries.length
     ? '<div class="boarding-calendar-scroll" tabindex="0"><div class="boarding-calendar-grid" style="--boarding-calendar-days: ' + days.length + '; --boarding-calendar-rows: ' + entries.length + ';"><div class="boarding-calendar-corner">Dog</div>' + dayHeadings + rows + nowLine + '</div></div>'
     : emptyState;
@@ -1678,7 +1689,7 @@ function renderBoardingCalendar(records = []) {
     + '<div class="boarding-calendar-header"><div><strong>Monthly Stay Timeline</strong><span>' + escapeHtml(entries.length + " stay" + (entries.length === 1 ? "" : "s") + " | " + dogCount + " dog" + (dogCount === 1 ? "" : "s")) + '</span></div>'
     + '<div class="boarding-calendar-controls"><button type="button" class="icon-button boarding-calendar-icon-button" data-action="boarding-calendar-month" data-month-delta="-1" aria-label="Previous month">&lsaquo;</button><button type="button" class="secondary-button boarding-calendar-month-button" data-action="boarding-calendar-today">' + escapeHtml(boardingCalendarMonthLabel(boardingCalendarMonth)) + '</button><button type="button" class="icon-button boarding-calendar-icon-button" data-action="boarding-calendar-month" data-month-delta="1" aria-label="Next month">&rsaquo;</button></div></div>'
     + grid
-    + boardingCalendarStatusLegendHtml(entries)
+    + boardingCalendarStatusLegendHtml(allEntries)
     + '</section>';
 }
 

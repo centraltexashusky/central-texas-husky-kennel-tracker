@@ -9832,6 +9832,10 @@ function initEvents() {
       renderBoardingDogs();
       return;
     }
+    if (button.dataset.action === "toggle-calendar-status") {
+      toggleBoardingCalendarStatus(button.dataset.status || "");
+      return;
+    }
     if (["open-calendar-dog", "open-calendar-stay"].includes(button.dataset.action)) {
       const record = boardingDogRecordForDisplay(button.dataset.id);
       if (record) openBoardingDogToTab(record, "Boarding & Request");
