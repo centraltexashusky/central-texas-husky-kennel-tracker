@@ -2493,9 +2493,16 @@ function boardingFamilyOwnerKey(record = {}) {
   return boardingFamilyOwnerKeys(record)[0] || "";
 }
 
+function boardingFamilyStayTimeKey(value = "") {
+  const raw = String(value || "").trim();
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toISOString().slice(0, 16);
+}
+
 function boardingFamilyStayKey(stay = {}) {
-  const dropoff = String(stay.dropoffTime || "").trim();
-  const pickup = String(stay.pickupTime || "").trim();
+  const dropoff = boardingFamilyStayTimeKey(stay.dropoffTime);
+  const pickup = boardingFamilyStayTimeKey(stay.pickupTime);
   if (!dropoff || !pickup) return "";
   return \`\${dropoff}|\${pickup}\`;
 }
