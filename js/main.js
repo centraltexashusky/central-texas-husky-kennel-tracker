@@ -2,7 +2,7 @@
 import "./shared.js?v=20260605-care-admin-alert";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260604-pricing-groups-private-media";
-import "./boarding.js?v=20260605-family-grouping";
+import "./boarding.js?v=20260605-family-phone-grouping";
 import "./daily.js?v=20260603-linked-addons-alerts";
 import "./timesheet.js?v=20260604-open-timesheet";
 import "./settings.js?v=20260604-pricing-groups-private-media";

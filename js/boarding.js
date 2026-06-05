@@ -2474,15 +2474,23 @@ function saveBoardingRequestFilterFromForm(formEl) {
   showToast(statuses.length ? "Boarding request filter saved." : "Showing all boarding requests.");
 }
 
-function boardingFamilyOwnerKey(record = {}) {
+function boardingFamilyOwnerKeys(record = {}) {
+  const keys = [];
   const explicitId = String(record.householdId || record.familyGroupId || record.familyId || record.customerAccountId || "").trim();
-  if (explicitId) return \`id:\${explicitId}\`;
-  const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail || record.linkedOwnerEmail || record.requestedByEmail || "");
-  if (ownerEmail) return \`email:\${ownerEmail}\`;
-  const ownerPhone = String(record.ownerPhone || record.customerPhone || record.requestedByPhone || "").replace(/\\D/g, "");
-  if (ownerPhone) return \`phone:\${ownerPhone}\`;
+  if (explicitId) keys.push(\`id:\${explicitId}\`);
+  [...new Set([record.ownerEmail, record.customerEmail, record.linkedOwnerEmail, record.requestedByEmail].map(normalizeEmail).filter(Boolean))]
+    .forEach((email) => keys.push(\`email:\${email}\`));
+  [record.ownerPhone, record.customerPhone, record.requestedByPhone]
+    .map((phone) => String(phone || "").replace(/\\D/g, ""))
+    .filter(Boolean)
+    .forEach((phone) => keys.push(\`phone:\${phone}\`));
   const ownerName = String(record.ownerName || record.requestedByName || "").trim().toLowerCase();
-  return ownerName ? \`name:\${ownerName}\` : "";
+  if (ownerName) keys.push(\`name:\${ownerName}\`);
+  return [...new Set(keys)];
+}
+
+function boardingFamilyOwnerKey(record = {}) {
+  return boardingFamilyOwnerKeys(record)[0] || "";
 }
 
 function boardingFamilyStayKey(stay = {}) {
@@ -2497,14 +2505,23 @@ function boardingFamilyExplicitGroupKey(entry = {}) {
   return explicitGroupId ? \`group:\${explicitGroupId}\` : "";
 }
 
-function boardingFamilyHouseholdStayKey(entry = {}) {
-  const ownerKey = boardingFamilyOwnerKey(entry.record || {});
+function boardingFamilyHouseholdStayKeys(entry = {}) {
+  const ownerKeys = boardingFamilyOwnerKeys(entry.record || {});
   const stayKey = boardingFamilyStayKey(entry.stay || {});
-  return ownerKey && stayKey ? \`\${ownerKey}::\${stayKey}\` : "";
+  if (!stayKey) return [];
+  return ownerKeys.map((ownerKey) => \`\${ownerKey}::\${stayKey}\`);
+}
+
+function boardingFamilyHouseholdStayKey(entry = {}) {
+  return boardingFamilyHouseholdStayKeys(entry)[0] || "";
+}
+
+function boardingFamilyGroupKeys(entry = {}) {
+  return [...new Set([boardingFamilyExplicitGroupKey(entry), ...boardingFamilyHouseholdStayKeys(entry)].filter(Boolean))];
 }
 
 function boardingFamilyGroupKey(entry = {}) {
-  return boardingFamilyHouseholdStayKey(entry) || boardingFamilyExplicitGroupKey(entry);
+  return boardingFamilyGroupKeys(entry)[0] || "";
 }
 
 function boardingFamilyName(record = {}) {
@@ -2625,10 +2642,10 @@ function boardingFamilyPricingSnapshots(entries = []) {
 function boardingFamilyPricingSnapshotForStay(record = {}, stay = {}) {
   if (!stay?.id || !boardingStayCanUseCurrentPricing(record, stay)) return null;
   const targetEntry = boardingStayEntryForRecord(record, stay);
-  const targetKey = boardingFamilyGroupKey(targetEntry);
-  if (!targetKey) return null;
+  const targetKeys = boardingFamilyGroupKeys(targetEntry);
+  if (!targetKeys.length) return null;
   const records = consolidatedBoardingDogRecords(readRecords("boardingDog").filter((item) => item.customerRequest && !item.removed));
-  const entries = uniqueBoardingStayEntries(boardingStayEntries(records)).filter((entry) => boardingFamilyGroupKey(entry) === targetKey);
+  const entries = uniqueBoardingStayEntries(boardingStayEntries(records)).filter((entry) => boardingFamilyGroupKeys(entry).some((key) => targetKeys.includes(key)));
   if (entries.length <= 1) return null;
   const snapshots = boardingFamilyPricingSnapshots(entries);
   const recordIds = new Set([record.id, ...(record.sourceRecordIds || [])].filter(Boolean));
@@ -2643,31 +2660,49 @@ function boardingFamilyPricingSnapshotForStay(record = {}, stay = {}) {
 
 function boardingFamilyGroups(entries = []) {
   const groups = new Map();
-  const singles = [];
+  const keyToGroup = new Map();
   entries.forEach((entry) => {
-    const key = boardingFamilyGroupKey(entry);
-    if (!key) {
-      singles.push(entry);
+    const keys = boardingFamilyGroupKeys(entry);
+    if (!keys.length) {
+      const singleKey = uid("boarding-family-single");
+      groups.set(singleKey, { entries: [entry], keys: [] });
       return;
     }
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(entry);
+    const existingGroupKeys = [...new Set(keys.map((key) => keyToGroup.get(key)).filter(Boolean))];
+    const groupKey = existingGroupKeys[0] || uid("boarding-family-group");
+    if (!groups.has(groupKey)) groups.set(groupKey, { entries: [], keys: [] });
+    existingGroupKeys.slice(1).forEach((sourceKey) => {
+      const source = groups.get(sourceKey);
+      const target = groups.get(groupKey);
+      if (!source || !target) return;
+      target.entries.push(...source.entries);
+      target.keys.push(...source.keys);
+      groups.delete(sourceKey);
+      keyToGroup.forEach((mappedGroupKey, mappedKey) => {
+        if (mappedGroupKey === sourceKey) keyToGroup.set(mappedKey, groupKey);
+      });
+    });
+    const group = groups.get(groupKey);
+    group.entries.push(entry);
+    group.keys.push(...keys);
+    keys.forEach((key) => keyToGroup.set(key, groupKey));
   });
-  const groupedKeys = new Set([...groups].filter(([, items]) => items.length > 1).map(([key]) => key));
+  groups.forEach((group) => {
+    group.keys = [...new Set(group.keys)];
+  });
   const output = [];
-  const emitted = new Set();
-  entries.forEach((entry) => {
-    const key = boardingFamilyGroupKey(entry);
-    if (key && groupedKeys.has(key)) {
-      if (!emitted.has(key)) {
-        output.push({ type: "family", entries: groups.get(key) });
-        emitted.add(key);
-      }
-      return;
-    }
-    if (!key || singles.includes(entry) || !groupedKeys.has(key)) output.push({ type: "single", entry });
+  groups.forEach((group) => {
+    const groupEntries = group.entries.filter(Boolean);
+    if (groupEntries.length > 1) output.push({ type: "family", entries: groupEntries, groupKey: boardingFamilySharedGroupKey(groupEntries) || group.keys[0] || "" });
+    else if (groupEntries[0]) output.push({ type: "single", entry: groupEntries[0] });
   });
   return output;
+}
+
+function boardingFamilySharedGroupKey(entries = []) {
+  const keyLists = entries.map((entry) => boardingFamilyGroupKeys(entry));
+  const firstKeys = keyLists[0] || [];
+  return firstKeys.find((key) => keyLists.every((keys) => keys.includes(key))) || firstKeys[0] || "";
 }
 
 function boardingRequestCardHtml(entry = {}, options = {}) {
@@ -2687,7 +2722,7 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${actions}</article>\`;
 }
 
-function boardingFamilyGroupHtml(entries = []) {
+function boardingFamilyGroupHtml(entries = [], options = {}) {
   const first = entries[0] || {};
   const firstRecord = first.record || {};
   const firstStay = first.stay || {};
@@ -2695,7 +2730,7 @@ function boardingFamilyGroupHtml(entries = []) {
   const familyTitle = familyName.toLowerCase() === "family" ? "Family Stay" : \`\${familyName} Family Stay\`;
   const dogNames = entries.map((entry) => entry.record?.dogName || "Dog").filter(Boolean);
   const statusSummary = boardingFamilyStatusSummary(entries);
-  const groupKey = boardingFamilyGroupKey(first);
+  const groupKey = options.groupKey || boardingFamilySharedGroupKey(entries) || boardingFamilyGroupKey(first);
   const groupTotal = boardingFamilyGroupSavedTotal(entries);
   const canApproveGroup = entries.some((entry) => ["Pending", "Cancelled"].includes(entry.status));
   const canCancelGroup = entries.some((entry) => !["Cancelled", "Checked Out"].includes(entry.status));
@@ -2722,7 +2757,7 @@ function boardingRequestEntriesForGroupKey(groupKey = "") {
     .filter((record) => record.customerRequest)
     .filter((record) => !record.removed));
   return uniqueBoardingStayEntries(boardingStayEntries(records))
-    .filter((entry) => boardingFamilyGroupKey(entry) === groupKey);
+    .filter((entry) => boardingFamilyGroupKeys(entry).includes(groupKey));
 }
 
 async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approved") {
@@ -2776,7 +2811,7 @@ function renderBoardingRequests() {
     .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
   list.innerHTML = entries.length
     ? boardingFamilyGroups(entries)
-        .map((item) => (item.type === "family" ? boardingFamilyGroupHtml(item.entries) : boardingRequestCardHtml(item.entry)))
+        .map((item) => (item.type === "family" ? boardingFamilyGroupHtml(item.entries, { groupKey: item.groupKey }) : boardingRequestCardHtml(item.entry)))
         .join("")
     : \`<p>No \${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>\`;
 }
