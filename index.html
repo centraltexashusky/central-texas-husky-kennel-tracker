@@ -256,8 +256,8 @@
               </button>
               <div>
                 <strong id="customerDogPhotoName">New dog</strong>
-                <p>Tap the square to upload an optional JPG or PNG photo from your device.</p>
-                <input class="visually-hidden-file" type="file" name="profilePhoto" id="customerDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
+                <p>Tap the square to upload an optional JPG, PNG, or WebP photo from your device.</p>
+                <input class="visually-hidden-file" type="file" name="profilePhoto" id="customerDogPhotoInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" tabindex="-1" />
               </div>
             </div>
             <div class="customer-form-step customer-dog-wizard-panel" data-customer-dog-step="profile">
@@ -287,7 +287,7 @@
                 <label>Last DHPP vaccination<input type="date" name="dhppDate" /></label>
                 <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
                 <label>Last Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
-                <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple /><small>Optional PDF, PNG, or JPG records.</small></label>
+                <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp" multiple /><small>Optional PDF, PNG, JPG, or WebP records.</small></label>
               </div>
               <p class="customer-flow-note is-vaccine-warning">You can request a stay before staff verifies the vaccination records. All dogs are required to be up-to-date on their vaccinations before we approve a stay or service.</p>
             </div>
@@ -490,7 +490,7 @@
               <label id="careQuickDateLabel">Date<input type="date" id="careQuickDate" /></label>
             </div>
             <label id="careQuickNoteLabel">Care note<textarea id="careQuickNote" rows="2" placeholder="Session details, bath products, heat observation, medical/care note"></textarea></label>
-            <label id="careQuickPhotosLabel">Care note photo(s)<input type="file" id="careQuickPhotos" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple /></label>
+            <label id="careQuickPhotosLabel">Care note photo(s)<input type="file" id="careQuickPhotos" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple /></label>
             <label id="careQuickAdminAlertLabel" class="inline-check" hidden><input type="checkbox" id="careQuickAlertAdmin" /> Alert Admin</label>
             <div class="button-row"><button type="button" id="addCareQuickLog">Add Care Log</button></div>
             <div id="structuredCareLogList" class="record-grid compact-record-grid"></div>
@@ -767,8 +767,8 @@
               </button>
               <div>
                 <strong id="ownedDogPhotoName">New dog</strong>
-                <p>Tap the square to upload an optional JPG or PNG photo from your device.</p>
-                <input class="visually-hidden-file" type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
+                <p>Tap the square to upload an optional JPG, PNG, or WebP photo from your device.</p>
+                <input class="visually-hidden-file" type="file" name="profilePhoto" id="ownedDogPhotoInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" tabindex="-1" />
               </div>
             </div>
             <div class="profile-tabs" id="ownedDogProfileTabs" aria-label="Our Dog profile sections">
@@ -886,7 +886,7 @@
 
             <section class="owned-profile-section" data-owned-profile-section="Files" hidden>
               <div class="section-heading compact-heading"><span>F</span><div><h2>Files</h2><p>Upload, view, and rename documents for this dog.</p></div></div>
-              <label>Dog documents<input type="file" id="ownedDogDocumentFiles" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg,.doc,.docx" multiple /><small>Upload PDFs, photos, or Word documents.</small></label>
+              <label>Dog documents<input type="file" id="ownedDogDocumentFiles" accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp,.doc,.docx" multiple /><small>Upload PDFs, photos, or Word documents.</small></label>
               <div class="button-row"><button type="button" id="uploadOwnedDogFilesButton">Upload Files</button></div>
               <div id="ownedDogFileList" class="record-grid compact-record-grid"></div>
             </section>
@@ -992,8 +992,8 @@
               <div>
                 <strong id="boardingDogPhotoName">New boarding dog</strong>
                 <p id="boardingDogHeaderOwner">Owner not assigned</p>
-                <p>Tap the square to upload an optional JPG or PNG photo from your device.</p>
-                <input class="visually-hidden-file" type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" tabindex="-1" />
+                <p>Tap the square to upload an optional JPG, PNG, or WebP photo from your device.</p>
+                <input class="visually-hidden-file" type="file" name="profilePhoto" id="boardingDogPhotoInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" tabindex="-1" />
               </div>
             </div>
 
@@ -1037,7 +1037,7 @@
                 <label class="inline-check"><input type="checkbox" name="dhppGoodThreeYears" value="Yes" /> DHPP good for 3 years from last vaccination</label>
                 <label>Bordetella vaccination<input type="date" name="bordetellaDate" /></label>
                 <label>Heartworm medication<input type="date" name="heartwormDate" /></label>
-                <label>Upload health records<input type="file" id="boardingDogVaccinationFiles" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" multiple /></label>
+                <label>Upload health records<input type="file" id="boardingDogVaccinationFiles" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" multiple /></label>
               </div>
               <div id="boardingDogVaccinationList" class="record-grid compact-record-grid"></div>
             </section>
@@ -1048,7 +1048,7 @@
 
             <section class="boarding-profile-section" data-boarding-profile-section="Uploaded Files" hidden>
               <div class="field-grid">
-                <label>Upload dog files<input type="file" id="boardingDogUploadedFiles" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,.pdf,.doc,.docx,.jpg,.jpeg,.png" multiple /></label>
+                <label>Upload dog files<input type="file" id="boardingDogUploadedFiles" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,.pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" multiple /></label>
               </div>
               <div class="button-row"><button type="button" class="secondary-button" id="uploadBoardingDogFilesButton">Upload Files</button></div>
               <div id="boardingDogUploadedFileList" class="record-grid compact-record-grid"></div>
@@ -1087,7 +1087,7 @@
             <div class="checklist">
               <label><input type="checkbox" name="urgentNeeds" value="Yes" /> Urgent Needs</label>
             </div>
-            <label>Image upload<input type="file" name="requestMedia" id="requestMedia" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple /><small>Optional. Upload JPG or PNG images only, up to 50 MB each.</small></label>
+            <label>Image upload<input type="file" name="requestMedia" id="requestMedia" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple /><small>Optional JPG, PNG, or WebP images.</small></label>
             <label>Request / suggestion<textarea name="requestText" rows="4" required></textarea></label>
             <label>Reason or benefit<textarea name="reason" rows="3" placeholder="Why this helps kennel care, safety, efficiency, or dog comfort"></textarea></label>
             <button type="submit">Submit Request</button>
@@ -1107,7 +1107,7 @@
               <label><input type="checkbox" name="urgentAttention" value="Yes" /> Urgent Attention</label>
             </div>
             <label>Issue or repair needed<textarea name="issue" rows="4" required placeholder="What needs attention? Include photos separately if useful."></textarea></label>
-            <label>Image upload<input type="file" name="maintenanceMedia" id="maintenanceMedia" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple /><small>Optional. Upload JPG or PNG images only, up to 50 MB each.</small></label>
+            <label>Image upload<input type="file" name="maintenanceMedia" id="maintenanceMedia" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple /><small>Optional JPG, PNG, or WebP images.</small></label>
             <label>Suggested action<textarea name="suggestedAction" rows="3" placeholder="Repair, replace, inspect, schedule service, order part"></textarea></label>
             <button type="submit">Submit Maintenance Item</button>
           </form>
@@ -1309,6 +1309,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260605-calendar-status-off"></script>
+  <script type="module" src="js/main.js?v=20260605-upload-image-optimization"></script>
 </body>
 </html>

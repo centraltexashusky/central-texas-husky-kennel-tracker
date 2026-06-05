@@ -4,7 +4,7 @@ const __snuggleStayModuleSource = `function statusChipHtml(label, className = ""
 }
 
 var boardingCalendarMonth = todayDate().slice(0, 7);
-var boardingCalendarInactiveStatuses = new Set();
+var boardingCalendarInactiveStatuses = new Set(["Cancelled"]);
 
 function dogTypeBadgeHtml(type) {
   const labels = {
@@ -2188,7 +2188,7 @@ function boardingCheckInPhotoHtml(record = {}) {
         <strong>\${escapeHtml(name)}</strong>
         <small>\${photo ? "Tap to update the profile photo." : "Tap to upload or take a profile photo."}</small>
       </span>
-      <input class="visually-hidden-file" id="boardingCheckInPhotoInput" type="file" name="profilePhoto" accept="image/jpeg,image/png,.jpg,.jpeg,.png" />
+      <input class="visually-hidden-file" id="boardingCheckInPhotoInput" type="file" name="profilePhoto" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
     </label>\`;
 }
 
@@ -3234,7 +3234,10 @@ function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
   if (!list) return;
   const files = record.vaccinationRecords || [];
   list.innerHTML = files.length
-    ? files.map((file) => \`<article class="record-card compact-record-card"><strong>\${escapeHtml(file.name || "Health record")}</strong><span>\${escapeHtml(formatDateTime(file.savedAt || file.createdAt))}</span>\${file.note ? \`<p>\${escapeHtml(file.note)}</p>\` : ""}<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(file.url || file.dataUrl || "")}" data-media-type="\${escapeHtml(file.type || "")}" data-media-name="\${escapeHtml(file.name || "Health record")}"\${mediaAccessAttrs(file, { sourceRecordId: record.id || file.sourceRecordId || "", sourceRecordType: "boardingDog" })}>Open</button></div></article>\`).join("")
+    ? files.map((file) => {
+        const openButton = mediaItemHasOpenableSource(file) ? \`<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(file.url || file.dataUrl || "")}" data-media-type="\${escapeHtml(file.type || "")}" data-media-name="\${escapeHtml(file.name || "Health record")}"\${mediaAccessAttrs(file, { sourceRecordId: record.id || file.sourceRecordId || "", sourceRecordType: "boardingDog" })}>Open</button></div>\` : "";
+        return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(file.name || "Health record")}</strong><span>\${escapeHtml(formatDateTime(file.savedAt || file.createdAt))}</span>\${file.note ? \`<p>\${escapeHtml(file.note)}</p>\` : ""}\${openButton}</article>\`;
+      }).join("")
     : \`<article class="record-card compact-record-card"><strong>No health records uploaded yet.</strong><p>Choose files in this tab, then save the dog profile.</p></article>\`;
 }
 
@@ -3272,6 +3275,11 @@ function boardingDogDocumentItems(record = {}) {
     url: item.url || "",
     storagePath: item.storagePath || item.path || "",
     dataUrl: item.dataUrl || "",
+    originalName: item.originalName || item.name || item.fileName || "",
+    originalType: item.originalType || item.type || item.contentType || "",
+    originalSize: item.originalSize || item.size || 0,
+    optimized: Boolean(item.optimized),
+    compression: item.compression || {},
     note: item.note || "",
   }));
 }
@@ -3290,6 +3298,11 @@ function boardingDogFileItem(item = {}, source, sourceLabel, options = {}) {
     url: item.url || "",
     storagePath: item.storagePath || item.path || "",
     dataUrl: item.dataUrl || "",
+    originalName: item.originalName || item.name || item.fileName || "",
+    originalType: item.originalType || item.type || item.contentType || "",
+    originalSize: item.originalSize || item.size || 0,
+    optimized: Boolean(item.optimized),
+    compression: item.compression || {},
     note: item.note || "",
     canRename: options.canRename !== false,
     canRemove: options.canRemove !== false,
@@ -3347,7 +3360,8 @@ function renderBoardingDogFiles(record = activeBoardingDog() || {}) {
         const renameInput = file.canRename ? \`<label>File name<input type="text" value="\${escapeHtml(file.name)}" data-action="rename-boarding-file-input" data-id="\${escapeHtml(file.id)}" data-source="\${escapeHtml(file.source)}" data-parent-id="\${escapeHtml(file.parentId)}" data-source-record-id="\${escapeHtml(file.sourceRecordId)}" /></label>\` : "";
         const renameButton = file.canRename ? \`<button type="button" class="secondary-button" data-action="save-boarding-file-name" data-id="\${escapeHtml(file.id)}" data-source="\${escapeHtml(file.source)}" data-parent-id="\${escapeHtml(file.parentId)}" data-source-record-id="\${escapeHtml(file.sourceRecordId)}">Rename</button>\` : "";
         const removeButton = file.canRemove ? \`<button type="button" class="secondary-button danger-button" data-action="remove-boarding-file" data-id="\${escapeHtml(file.id)}" data-source="\${escapeHtml(file.source)}" data-parent-id="\${escapeHtml(file.parentId)}" data-source-record-id="\${escapeHtml(file.sourceRecordId)}">Remove</button>\` : "";
-        return \`<article class="record-card compact-record-card dog-file-card" data-file-id="\${escapeHtml(file.id)}"><strong>\${escapeHtml(file.name)}</strong><span>\${escapeHtml(savedText)}</span>\${sourceText}\${noteText}\${renameInput}<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(source)}" data-media-type="\${escapeHtml(file.type)}" data-media-name="\${escapeHtml(file.name)}"\${mediaAccessAttrs(file, { sourceRecordId: file.sourceRecordId || record.id || "", sourceRecordType: file.sourceRecordType || (file.source?.startsWith("customer") ? "customerDog" : "boardingDog") })}>Open</button>\${renameButton}\${removeButton}</div></article>\`;
+        const openButton = mediaItemHasOpenableSource(file) ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(source)}" data-media-type="\${escapeHtml(file.type)}" data-media-name="\${escapeHtml(file.name)}"\${mediaAccessAttrs(file, { sourceRecordId: file.sourceRecordId || record.id || "", sourceRecordType: file.sourceRecordType || (file.source?.startsWith("customer") ? "customerDog" : "boardingDog") })}>Open</button>\` : "";
+        return \`<article class="record-card compact-record-card dog-file-card" data-file-id="\${escapeHtml(file.id)}"><strong>\${escapeHtml(file.name)}</strong><span>\${escapeHtml(savedText)}</span>\${sourceText}\${noteText}\${renameInput}<div class="record-actions">\${openButton}\${renameButton}\${removeButton}</div></article>\`;
       }).join("")
     : "<p>No uploaded files saved for this boarding dog yet.</p>";
 }
@@ -3516,6 +3530,7 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
   const mediaItems = options.mediaItems || await uploadMediaFiles(input, \`boarding-customer-updates/\${displayRecord.id}/\${targetStay.id}\`, {
     allowedTypes: CUSTOMER_UPDATE_MEDIA_TYPES,
     allowedExtensions: CUSTOMER_UPDATE_MEDIA_EXTENSIONS,
+    imagePreset: "generalPhoto",
     label: "customer update media",
   });
   if (!note && !mediaItems.length) {

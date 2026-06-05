@@ -660,7 +660,7 @@ function ownedDogPhotoUploadDialogHtml(record = {}) {
           <p>\${escapeHtml([record.sex, ownedDogCareSummary(record)].filter(Boolean).join(" | "))}</p>
         </div>
       </section>
-      <label>Profile photo<input type="file" id="ownedDogMobilePhotoInput" accept="image/jpeg,image/png,.jpg,.jpeg,.png" required /></label>
+      <label>Profile photo<input type="file" id="ownedDogMobilePhotoInput" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required /></label>
       <div class="button-row"><button type="submit">Upload Photo</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
     </form>\`;
 }
@@ -841,6 +841,11 @@ function ownedDogDocumentItems(record = {}) {
     url: item.url || "",
     storagePath: item.storagePath || item.path || "",
     dataUrl: item.dataUrl || "",
+    originalName: item.originalName || item.name || item.fileName || "",
+    originalType: item.originalType || item.type || item.contentType || "",
+    originalSize: item.originalSize || item.size || 0,
+    optimized: Boolean(item.optimized),
+    compression: item.compression || {},
     note: item.note || "",
   }));
 }
@@ -858,7 +863,8 @@ function renderOwnedDogFiles(record = activeOwnedDog()) {
         const source = file.url || file.dataUrl || "";
         const savedText = file.savedAt ? \`Uploaded \${formatDateTime(file.savedAt)}\` : "Uploaded date not recorded";
         const statusText = file.note ? \`<p>\${escapeHtml(file.note)}</p>\` : "";
-        return \`<article class="record-card compact-record-card dog-file-card" data-file-id="\${escapeHtml(file.id)}"><strong>\${escapeHtml(file.name)}</strong><span>\${escapeHtml(savedText)}</span>\${statusText}<label>Rename file<input type="text" value="\${escapeHtml(file.name)}" data-action="rename-owned-file-input" data-id="\${escapeHtml(file.id)}" /></label><div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(source)}" data-media-type="\${escapeHtml(file.type)}" data-media-name="\${escapeHtml(file.name)}"\${mediaAccessAttrs(file, { sourceRecordId: record.id || "", sourceRecordType: "ownedDog" })}>Open</button><button type="button" class="secondary-button" data-action="save-owned-file-name" data-id="\${escapeHtml(file.id)}">Rename</button><button type="button" class="secondary-button danger-button" data-action="remove-owned-file" data-id="\${escapeHtml(file.id)}">Remove</button></div></article>\`;
+        const openButton = mediaItemHasOpenableSource(file) ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(source)}" data-media-type="\${escapeHtml(file.type)}" data-media-name="\${escapeHtml(file.name)}"\${mediaAccessAttrs(file, { sourceRecordId: record.id || "", sourceRecordType: "ownedDog" })}>Open</button>\` : "";
+        return \`<article class="record-card compact-record-card dog-file-card" data-file-id="\${escapeHtml(file.id)}"><strong>\${escapeHtml(file.name)}</strong><span>\${escapeHtml(savedText)}</span>\${statusText}<label>Rename file<input type="text" value="\${escapeHtml(file.name)}" data-action="rename-owned-file-input" data-id="\${escapeHtml(file.id)}" /></label><div class="record-actions">\${openButton}<button type="button" class="secondary-button" data-action="save-owned-file-name" data-id="\${escapeHtml(file.id)}">Rename</button><button type="button" class="secondary-button danger-button" data-action="remove-owned-file" data-id="\${escapeHtml(file.id)}">Remove</button></div></article>\`;
       }).join("")
     : "<p>No documents uploaded for this dog yet.</p>";
 }

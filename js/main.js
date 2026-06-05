@@ -1,9 +1,9 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260605-calendar-status-off";
+import "./shared.js?v=20260605-upload-image-optimization";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260605-customer-cancel-alert";
-import "./boarding.js?v=20260605-calendar-status-off";
-import "./daily.js?v=20260603-linked-addons-alerts";
+import "./boarding.js?v=20260605-upload-image-optimization";
+import "./daily.js?v=20260605-upload-image-optimization";
 import "./timesheet.js?v=20260604-open-timesheet";
 import "./settings.js?v=20260604-pricing-groups-private-media";
 import "./notifications.js?v=20260605-customer-cancel-alert";

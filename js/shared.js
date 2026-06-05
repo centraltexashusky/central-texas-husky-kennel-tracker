@@ -6,12 +6,43 @@ var MEDIA_BUCKET = "kennel-media";
 var MEDIA_UPLOADS_ARE_PRIVATE = true;
 var MAX_MEDIA_UPLOAD_MB = 50;
 var MAX_MEDIA_UPLOAD_BYTES = MAX_MEDIA_UPLOAD_MB * 1024 * 1024;
-var IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png"];
+var MAX_IMAGE_SOURCE_UPLOAD_MB = 25;
+var MAX_IMAGE_SOURCE_UPLOAD_BYTES = MAX_IMAGE_SOURCE_UPLOAD_MB * 1024 * 1024;
+var MAX_DOCUMENT_UPLOAD_MB = 10;
+var MAX_DOCUMENT_UPLOAD_BYTES = MAX_DOCUMENT_UPLOAD_MB * 1024 * 1024;
+var IMAGE_UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"];
 var VIDEO_UPLOAD_TYPES = ["video/mp4", "video/quicktime", "video/webm", "video/x-m4v"];
 var CUSTOMER_UPDATE_MEDIA_TYPES = [...IMAGE_UPLOAD_TYPES, ...VIDEO_UPLOAD_TYPES];
-var CUSTOMER_UPDATE_MEDIA_EXTENSIONS = [".jpg", ".jpeg", ".png", ".mp4", ".mov", ".webm", ".m4v"];
-var VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png"];
-var DOG_DOCUMENT_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+var CUSTOMER_UPDATE_MEDIA_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".mp4", ".mov", ".webm", ".m4v"];
+var VACCINATION_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+var DOG_DOCUMENT_UPLOAD_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+var COMPRESSIBLE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+var COMPRESSIBLE_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+var IMAGE_OPTIMIZATION_OUTPUT_TYPE = "image/jpeg";
+var IMAGE_OPTIMIZATION_QUALITY_STEP = 0.04;
+var IMAGE_OPTIMIZATION_PRESETS = {
+  profilePhoto: {
+    maxLongEdge: 900,
+    initialQuality: 0.82,
+    minQuality: 0.70,
+    targetBytes: 600 * 1024,
+    suffix: "profile",
+  },
+  documentScan: {
+    maxLongEdge: 2400,
+    initialQuality: 0.86,
+    minQuality: 0.74,
+    targetBytes: 1.5 * 1024 * 1024,
+    suffix: "document",
+  },
+  generalPhoto: {
+    maxLongEdge: 1600,
+    initialQuality: 0.80,
+    minQuality: 0.68,
+    targetBytes: 1024 * 1024,
+    suffix: "photo",
+  },
+};
 var APP_PRODUCTION_URL = "https://kennel.centraltexashusky.com/";
 var APP_WIX_EMBED_URL = "https://www.centraltexashusky.com/kennel-tracker";
 var APP_AUTH_REDIRECT_URL = APP_PRODUCTION_URL;
@@ -766,22 +797,32 @@ function readRecords(type) {
   return records.map(cloneCachedRecord);
 }
 
+function compactMediaItemsForStorage(items = [], maxInlineMediaLength = 1800000) {
+  return items.map((item) => {
+    const clean = { ...item };
+    if (clean.url || clean.storagePath) delete clean.dataUrl;
+    if (clean.dataUrl && clean.dataUrl.length > maxInlineMediaLength) {
+      clean.dataUrl = "";
+      clean.note = clean.note || "Large media file was logged by filename only.";
+    }
+    return clean;
+  });
+}
+
 function compactRecordsForStorage(records) {
   const maxInlineMediaLength = 1800000;
   return records.map((record) => {
     const copy = { ...record };
     delete copy.profilePhotoData;
     delete copy.profilePhoto;
-    if (Array.isArray(copy.mediaItems)) {
-      copy.mediaItems = copy.mediaItems.map((item) => {
-        const clean = { ...item };
-        if (clean.url) delete clean.dataUrl;
-        if (clean.dataUrl && clean.dataUrl.length > maxInlineMediaLength) {
-          clean.dataUrl = "";
-          clean.note = "Large media file was logged by filename only.";
-        }
-        return clean;
-      });
+    if (Array.isArray(copy.mediaItems)) copy.mediaItems = compactMediaItemsForStorage(copy.mediaItems, maxInlineMediaLength);
+    if (Array.isArray(copy.documents)) copy.documents = compactMediaItemsForStorage(copy.documents, maxInlineMediaLength);
+    if (Array.isArray(copy.vaccinationRecords)) copy.vaccinationRecords = compactMediaItemsForStorage(copy.vaccinationRecords, maxInlineMediaLength);
+    if (Array.isArray(copy.customerUpdates)) {
+      copy.customerUpdates = copy.customerUpdates.map((update) => ({
+        ...update,
+        mediaItems: Array.isArray(update.mediaItems) ? compactMediaItemsForStorage(update.mediaItems, maxInlineMediaLength) : update.mediaItems,
+      }));
     }
     return copy;
   });
@@ -1633,7 +1674,7 @@ function isSupportedDogPhoto(file) {
   if (!file) return true;
   const type = (file.type || "").toLowerCase();
   const name = (file.name || "").toLowerCase();
-  return ["image/jpeg", "image/png"].includes(type) || /\\.(jpe?g|png)$/.test(name);
+  return COMPRESSIBLE_IMAGE_TYPES.includes(type) || /\\.(jpe?g|png|webp)$/.test(name);
 }
 
 function fileMatchesTypes(file, allowedTypes = [], allowedExtensions = []) {
@@ -1644,6 +1685,168 @@ function fileMatchesTypes(file, allowedTypes = [], allowedExtensions = []) {
     const clean = allowed.toLowerCase();
     return clean.endsWith("/*") ? type.startsWith(clean.slice(0, -1)) : type === clean;
   }) || allowedExtensions.some((extension) => name.endsWith(extension.toLowerCase()));
+}
+
+function fileSizeLabel(bytes = 0) {
+  const mb = Number(bytes || 0) / (1024 * 1024);
+  return (Math.round(mb * 10) / 10) + " MB";
+}
+
+function isCompressibleImageFile(file) {
+  if (!file) return false;
+  const type = String(file.type || "").toLowerCase();
+  const name = String(file.name || "").toLowerCase();
+  return COMPRESSIBLE_IMAGE_TYPES.includes(type) || COMPRESSIBLE_IMAGE_EXTENSIONS.some((extension) => name.endsWith(extension));
+}
+
+function sanitizedUploadBaseName(originalName = "image") {
+  const clean = String(originalName || "image").split(/[\\\\/]/).pop().replace(/\\.[^.]*$/, "").replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  return clean || "image";
+}
+
+function optimizedImageFileName(originalName = "image", suffix = "photo") {
+  const safeSuffix = String(suffix || "photo").replace(/[^a-zA-Z0-9_-]+/g, "-") || "photo";
+  return sanitizedUploadBaseName(originalName) + "-" + safeSuffix + ".jpg";
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    if (!canvas?.toBlob) {
+      reject(new Error("This browser cannot prepare image uploads."));
+      return;
+    }
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("The image could not be compressed for upload."));
+    }, type, quality);
+  });
+}
+
+function fileFromBlob(blob, name, type, lastModified) {
+  try {
+    return new File([blob], name, { type, lastModified });
+  } catch (error) {
+    blob.name = name;
+    blob.lastModified = lastModified;
+    return blob;
+  }
+}
+
+async function decodeImageForCanvas(file) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+      return {
+        source: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        close: () => {
+          if (typeof bitmap.close === "function") bitmap.close();
+        },
+      };
+    } catch (error) {
+      // Fall back to an HTMLImageElement below for browsers that reject bitmap options.
+    }
+  }
+  if (!globalThis.URL?.createObjectURL) throw new Error("This browser cannot read image uploads.");
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("The image could not be decoded for upload."));
+      img.src = objectUrl;
+    });
+    return {
+      source: image,
+      width: image.naturalWidth || image.width,
+      height: image.naturalHeight || image.height,
+      close: () => URL.revokeObjectURL(objectUrl),
+    };
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
+async function optimizeImageUploadFile(file, presetName = "generalPhoto") {
+  const preset = IMAGE_OPTIMIZATION_PRESETS[presetName] || IMAGE_OPTIMIZATION_PRESETS.generalPhoto;
+  const decoded = await decodeImageForCanvas(file);
+  let canvas = null;
+  try {
+    const sourceWidth = Number(decoded.width || 0);
+    const sourceHeight = Number(decoded.height || 0);
+    if (!sourceWidth || !sourceHeight) throw new Error("The image size could not be read.");
+    const sourceLongEdge = Math.max(sourceWidth, sourceHeight);
+    const scale = Math.min(1, preset.maxLongEdge / sourceLongEdge);
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This browser cannot prepare image uploads.");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(decoded.source, 0, 0, width, height);
+    let quality = preset.initialQuality;
+    let blob = await canvasToBlob(canvas, IMAGE_OPTIMIZATION_OUTPUT_TYPE, quality);
+    while (blob.size > preset.targetBytes && quality > preset.minQuality) {
+      quality = Math.max(preset.minQuality, Math.round((quality - IMAGE_OPTIMIZATION_QUALITY_STEP) * 100) / 100);
+      blob = await canvasToBlob(canvas, IMAGE_OPTIMIZATION_OUTPUT_TYPE, quality);
+    }
+    const compressedName = optimizedImageFileName(file.name || "image", preset.suffix);
+    const compressedFile = fileFromBlob(blob, compressedName, IMAGE_OPTIMIZATION_OUTPUT_TYPE, Date.now());
+    return {
+      file: compressedFile,
+      optimized: true,
+      metadata: {
+        originalName: file.name || "",
+        originalType: file.type || "",
+        originalSize: file.size || 0,
+        compressedName,
+        compressedType: IMAGE_OPTIMIZATION_OUTPUT_TYPE,
+        compressedSize: blob.size || 0,
+        sourceWidth,
+        sourceHeight,
+        width,
+        height,
+        compressionPreset: presetName,
+        compressionQuality: quality,
+        optimized: true,
+      },
+    };
+  } finally {
+    if (typeof decoded.close === "function") decoded.close();
+    if (canvas) {
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+  }
+}
+
+async function prepareFileForUpload(file, options = {}) {
+  if (!file) return { file, optimized: false, metadata: {} };
+  if (options.optimizeImages === false || !isCompressibleImageFile(file)) return { file, optimized: false, metadata: {} };
+  if ((file.size || 0) > MAX_IMAGE_SOURCE_UPLOAD_BYTES) {
+    throw new Error("Image files must be " + MAX_IMAGE_SOURCE_UPLOAD_MB + " MB or smaller before optimization.");
+  }
+  try {
+    return await optimizeImageUploadFile(file, options.imagePreset || "generalPhoto");
+  } catch (error) {
+    return {
+      file,
+      optimized: false,
+      metadata: {
+        originalName: file.name || "",
+        originalType: file.type || "",
+        originalSize: file.size || 0,
+        compressionPreset: options.imagePreset || "generalPhoto",
+        optimized: false,
+        optimizationError: error.message || "Image optimization failed.",
+      },
+    };
+  }
 }
 
 function dogPhotoElements(kind) {
@@ -1692,7 +1895,7 @@ async function uploadFileToSupabase(file, folder) {
   if (!supabaseClient || !file) return { url: "", error: "No Supabase connection or file selected." };
   const userId = currentDbUserId();
   if (!userId) return { url: "", error: "Sign in before uploading files." };
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const safeName = String(file.name || "upload.bin").replace(/[^a-zA-Z0-9._-]/g, "_");
   const safeFolder = String(folder || "uploads").replace(/[^a-zA-Z0-9/_-]/g, "-").replace(/^\\/+|\\/+$/g, "");
   const path = \`users/\${userId}/\${safeFolder}/\${Date.now()}-\${safeName}\`;
   const { data, error } = await supabaseClient.storage.from(MEDIA_BUCKET).upload(path, file, {
@@ -1707,35 +1910,66 @@ async function uploadFileToSupabase(file, folder) {
 
 async function uploadDogPhotoToSupabase(file, dogId) {
   if (!file) return { url: "", error: "" };
-  if (!isSupportedDogPhoto(file)) return { url: "", error: "Only JPG and PNG profile photos can be uploaded." };
-  if ((file.size || 0) > MAX_MEDIA_UPLOAD_BYTES) return { url: "", error: \`Profile photos must be \${MAX_MEDIA_UPLOAD_MB} MB or smaller.\` };
+  if (!isSupportedDogPhoto(file)) return { url: "", error: "Only JPG, PNG, or WebP profile photos can be uploaded." };
   if (!supabaseClient) return { url: "", error: "The database connection is not available for photo upload." };
   const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
-  const { url, error, storagePath } = await uploadFileToSupabase(file, \`dog-photos/\${safeDogId}\`);
-  return { url, error, storagePath };
+  let prepared;
+  try {
+    prepared = await prepareFileForUpload(file, { imagePreset: "profilePhoto" });
+  } catch (error) {
+    return { url: "", error: error.message || "The profile photo could not be prepared.", storagePath: "" };
+  }
+  const uploadFile = prepared.file || file;
+  if ((uploadFile.size || 0) > MAX_MEDIA_UPLOAD_BYTES) {
+    return { url: "", error: "Profile photos must be " + MAX_MEDIA_UPLOAD_MB + " MB or smaller after optimization.", storagePath: "", mediaMeta: prepared.metadata || {}, optimized: prepared.optimized };
+  }
+  const { url, error, storagePath } = await uploadFileToSupabase(uploadFile, \`dog-photos/\${safeDogId}\`);
+  return { url, error, storagePath, mediaMeta: prepared.metadata || {}, compression: prepared.metadata || {}, optimized: prepared.optimized };
 }
 
 async function durableDogPhoto(kind, existing, formData, photoInput, dogId) {
   const file = selectedPhotoFor(kind, photoInput);
   if (file) {
-    const { url, error, storagePath } = await uploadDogPhotoToSupabase(file, dogId);
-    if (url || storagePath) return { profilePhotoUrl: url || "", profilePhotoPath: storagePath || "", profilePhotoData: "", photoError: "" };
+    const { url, error, storagePath, mediaMeta } = await uploadDogPhotoToSupabase(file, dogId);
+    if (url || storagePath) return { profilePhotoUrl: url || "", profilePhotoPath: storagePath || "", profilePhotoData: "", profilePhotoMeta: mediaMeta || {}, photoError: "" };
     resetSelectedDogPhoto(kind, {});
     return { profilePhotoUrl: "", profilePhotoPath: "", profilePhotoData: "", photoError: error || "The profile photo could not be uploaded." };
   }
   if (formData.profilePhotoUrl) {
-    return { profilePhotoUrl: formData.profilePhotoUrl, profilePhotoPath: formData.profilePhotoPath || existing.profilePhotoPath || "", profilePhotoData: "", photoError: "" };
+    return { profilePhotoUrl: formData.profilePhotoUrl, profilePhotoPath: formData.profilePhotoPath || existing.profilePhotoPath || "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
   }
   if (existing.profilePhotoUrl) {
-    return { profilePhotoUrl: existing.profilePhotoUrl, profilePhotoPath: existing.profilePhotoPath || "", profilePhotoData: "", photoError: "" };
+    return { profilePhotoUrl: existing.profilePhotoUrl, profilePhotoPath: existing.profilePhotoPath || "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
   }
-  return { profilePhotoUrl: "", profilePhotoPath: "", profilePhotoData: "", photoError: "" };
+  return { profilePhotoUrl: "", profilePhotoPath: "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
+}
+
+function uploadFailureMediaRecord(file, now, note, metadata = {}) {
+  return {
+    id: uid("media"),
+    name: file?.name || "Upload",
+    originalName: file?.name || "",
+    type: file?.type || "application/octet-stream",
+    originalType: file?.type || "",
+    size: file?.size || 0,
+    originalSize: file?.size || 0,
+    savedAt: now,
+    url: "",
+    storagePath: "",
+    dataUrl: "",
+    optimized: false,
+    compression: metadata,
+    note,
+  };
 }
 
 async function uploadMediaFiles(input, folder, options = {}) {
   const allowedTypes = options.allowedTypes || [];
   const allowedExtensions = options.allowedExtensions || [];
   const label = options.label || "file";
+  const maxBytes = Number(options.maxBytes || MAX_MEDIA_UPLOAD_BYTES);
+  const imagePreset = options.imagePreset || "generalPhoto";
+  const optimizeImages = options.optimizeImages !== false;
   const files = [...(input?.files || [])];
   if (!files.length) return [];
   const acceptedFiles = files.filter((file) => fileMatchesTypes(file, allowedTypes, allowedExtensions));
@@ -1745,10 +1979,6 @@ async function uploadMediaFiles(input, folder, options = {}) {
   }
   if (!acceptedFiles.length) return [];
   const now = new Date().toISOString();
-  const oversized = acceptedFiles.filter((file) => (file.size || 0) > MAX_MEDIA_UPLOAD_BYTES);
-  if (oversized.length) {
-    showToast(\`Files over \${MAX_MEDIA_UPLOAD_MB} MB cannot be uploaded.\`);
-  }
   if (!supabaseClient || !currentDbUserId()) {
     showToast("Sign in to upload files to the database.");
     return [];
@@ -1756,41 +1986,47 @@ async function uploadMediaFiles(input, folder, options = {}) {
   showToast(\`Uploading \${acceptedFiles.length} file\${acceptedFiles.length > 1 ? "s" : ""}...\`);
   const results = await Promise.all(
     acceptedFiles.map(async (file) => {
-      if ((file.size || 0) > MAX_MEDIA_UPLOAD_BYTES) {
-        return {
-          id: uid("media"),
-          name: file.name,
-          type: file.type || "application/octet-stream",
-          size: file.size || 0,
-          savedAt: now,
-          url: "",
-          dataUrl: "",
-          note: \`Not uploaded. Maximum file size is \${MAX_MEDIA_UPLOAD_MB} MB.\`,
-        };
+      let prepared;
+      try {
+        prepared = await prepareFileForUpload(file, { imagePreset, optimizeImages });
+      } catch (error) {
+        return uploadFailureMediaRecord(file, now, "Not uploaded. " + (error.message || "The file could not be prepared."));
       }
-      const { url, error, storagePath } = await uploadFileToSupabase(file, folder);
+      const uploadFile = prepared.file || file;
+      if ((uploadFile.size || 0) > maxBytes) {
+        return uploadFailureMediaRecord(file, now, "Not uploaded. Maximum upload size is " + fileSizeLabel(maxBytes) + ".", prepared.metadata || {});
+      }
+      const { url, error, storagePath } = await uploadFileToSupabase(uploadFile, folder);
+      const optimizationNote = prepared.metadata?.optimizationError ? "Uploaded original. Image optimization skipped: " + prepared.metadata.optimizationError : "";
       return {
         id: uid("media"),
-        name: file.name,
-        type: file.type || "application/octet-stream",
-        size: file.size || 0,
+        name: uploadFile.name || file.name,
+        originalName: file.name || "",
+        type: uploadFile.type || file.type || "application/octet-stream",
+        originalType: file.type || "",
+        size: uploadFile.size || 0,
+        originalSize: file.size || 0,
         savedAt: now,
         url,
         storagePath: storagePath || "",
         dataUrl: "",
-        note: error ? \`Upload failed: \${error}\` : "",
+        optimized: Boolean(prepared.optimized),
+        compression: prepared.metadata || {},
+        note: error ? \`Upload failed: \${error}\` : optimizationNote,
       };
     }),
   );
-  if (results.some((item) => item.note)) showToast("One or more files could not be uploaded.");
-  return results.filter((item) => item.url || item.storagePath || item.dataUrl);
+  if (results.some((item) => item.note)) showToast("One or more files could not be uploaded or optimized.");
+  return results.filter((item) => item.url || item.storagePath || item.dataUrl || item.note);
 }
 
 async function uploadVaccinationFiles(input, dogId) {
   const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
   return uploadMediaFiles(input, \`vaccination-records/\${safeDogId}\`, {
     allowedTypes: VACCINATION_UPLOAD_TYPES,
-    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg"],
+    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".webp"],
+    imagePreset: "documentScan",
+    maxBytes: MAX_DOCUMENT_UPLOAD_BYTES,
     label: "vaccination record",
   });
 }
@@ -1799,7 +2035,9 @@ async function uploadOwnedDogDocumentFiles(input, dogId) {
   const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
   return uploadMediaFiles(input, \`owned-dog-documents/\${safeDogId}\`, {
     allowedTypes: DOG_DOCUMENT_UPLOAD_TYPES,
-    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx"],
+    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx"],
+    imagePreset: "documentScan",
+    maxBytes: MAX_DOCUMENT_UPLOAD_BYTES,
     label: "dog document",
   });
 }
@@ -1808,7 +2046,9 @@ async function uploadBoardingDogDocumentFiles(input, dogId) {
   const safeDogId = String(dogId || uid("dog")).replace(/[^a-z0-9_-]/gi, "-");
   return uploadMediaFiles(input, \`boarding-dog-documents/\${safeDogId}\`, {
     allowedTypes: DOG_DOCUMENT_UPLOAD_TYPES,
-    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".doc", ".docx"],
+    allowedExtensions: [".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx"],
+    imagePreset: "documentScan",
+    maxBytes: MAX_DOCUMENT_UPLOAD_BYTES,
     label: "boarding dog file",
   });
 }
@@ -1852,7 +2092,7 @@ async function previewSelectedDogPhoto(kind) {
   if (!file) return;
   if (!isSupportedDogPhoto(file)) {
     resetSelectedDogPhoto(kind, {});
-    showDetailDialog("Photo Not Uploaded", "<p>Please choose a JPG or PNG file for the dog profile photo.</p>");
+    showDetailDialog("Photo Not Uploaded", "<p>Please choose a JPG, PNG, or WebP file for the dog profile photo.</p>");
     return;
   }
   selectedDogPhotos[kind] = { file, previewDataUrl: "" };
@@ -2493,7 +2733,7 @@ async function addPendingCareLog() {
   const alertAdmin = careType === "Medical/Behavior Note" && Boolean($("#careQuickAlertAdmin")?.checked);
   const mediaItems = await uploadMediaFiles($("#careQuickPhotos"), \`care-notes/\${dog.id}/\${logDate}\`, {
     allowedTypes: IMAGE_UPLOAD_TYPES,
-    allowedExtensions: [".jpg", ".jpeg", ".png"],
+    allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
     label: "care photo",
   });
   const log = buildStructuredCareLog(dog, {
@@ -3253,6 +3493,10 @@ function mediaAccessAttrs(item = {}, context = {}) {
   return attrs.length ? \` \${attrs.join(" ")}\` : "";
 }
 
+function mediaItemHasOpenableSource(item = {}) {
+  return Boolean(item.url || item.dataUrl || item.storagePath || item.profilePhotoPath);
+}
+
 async function signedMediaUrlForPath(storagePath = "", context = {}) {
   const path = String(storagePath || "").trim();
   if (!path || !supabaseClient || localTestMode) return "";
@@ -3305,19 +3549,27 @@ function mediaLinkHtml(record) {
     links.push(\`<button type="button" class="media-preview-button" data-action="view-media" data-src="\${escapeHtml(record.profilePhotoUrl || "")}" data-media-type="image/jpeg" data-media-name="Profile photo"\${mediaAccessAttrs({ profilePhotoPath: record.profilePhotoPath || record.storagePath || "" }, { sourceRecordId: record.id || "", sourceRecordType: record.type || "" })}>Open profile photo</button>\`);
   }
   if (record.mediaItems?.length) {
+    const mediaNotes = record.mediaItems
+      .filter((item) => !mediaItemHasOpenableSource(item) && item.note)
+      .map((item) => \`<p class="muted-text">\${escapeHtml(item.name || "Upload")}: \${escapeHtml(item.note)}</p>\`);
     links.push(
-      ...record.mediaItems.map(
+      ...record.mediaItems.filter(mediaItemHasOpenableSource).map(
         (item) =>
           \`<button type="button" class="media-preview-button" data-action="view-media" data-src="\${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="\${escapeHtml(item.type)}" data-media-name="\${escapeHtml(item.name)}"\${mediaAccessAttrs(item, { sourceRecordId: record.id || item.sourceRecordId || "", sourceRecordType: record.type || item.sourceRecordType || "" })}>Open \${escapeHtml(item.name)}</button>\`,
       ),
+      ...mediaNotes,
     );
   }
   if (record.vaccinationRecords?.length) {
+    const vaccinationNotes = record.vaccinationRecords
+      .filter((item) => !mediaItemHasOpenableSource(item) && item.note)
+      .map((item) => \`<p class="muted-text">\${escapeHtml(item.name || "Vaccination record")}: \${escapeHtml(item.note)}</p>\`);
     links.push(
-      ...record.vaccinationRecords.map(
+      ...record.vaccinationRecords.filter(mediaItemHasOpenableSource).map(
         (item) =>
           \`<button type="button" class="media-preview-button" data-action="view-media" data-src="\${escapeHtml(item.url || item.dataUrl || "")}" data-media-type="\${escapeHtml(item.type)}" data-media-name="\${escapeHtml(item.name)}"\${mediaAccessAttrs(item, { sourceRecordId: record.id || item.sourceRecordId || "", sourceRecordType: record.type || item.sourceRecordType || "" })}>Open vaccine record: \${escapeHtml(item.name)}</button>\`,
       ),
+      ...vaccinationNotes,
     );
   } else if (record.vaccinationFiles) {
     links.push(\`<button type="button" class="media-preview-button" data-action="view-media" data-src="" data-media-type="" data-media-name="\${escapeHtml(record.vaccinationFiles)}">Open vaccine record</button>\`);
@@ -4159,7 +4411,7 @@ function previewOwnedDogMobilePhoto(input) {
   if (!file || !preview || !initials) return;
   if (!isSupportedDogPhoto(file)) {
     input.value = "";
-    showToast("Choose a JPG or PNG profile photo.");
+    showToast("Choose a JPG, PNG, or WebP profile photo.");
     return;
   }
   const objectUrl = URL.createObjectURL(file);
@@ -4178,7 +4430,7 @@ async function submitOwnedDogPhotoUpload(formEl) {
     return;
   }
   if (!isSupportedDogPhoto(file)) {
-    showToast("Choose a JPG or PNG profile photo.");
+    showToast("Choose a JPG, PNG, or WebP profile photo.");
     return;
   }
   const submitButton = formEl.querySelector('button[type="submit"]');
@@ -4186,7 +4438,10 @@ async function submitOwnedDogPhotoUpload(formEl) {
     submitButton.disabled = true;
     submitButton.textContent = "Uploading...";
   }
-  const { url, error, storagePath } = await uploadDogPhotoToSupabase(file, record.id);
+  const photoUpload = await uploadDogPhotoToSupabase(file, record.id);
+  const url = photoUpload.url;
+  const error = photoUpload.error;
+  const storagePath = photoUpload.storagePath;
   if (!url && !storagePath) {
     if (submitButton) {
       submitButton.disabled = false;
@@ -4195,7 +4450,7 @@ async function submitOwnedDogPhotoUpload(formEl) {
     showToast(error || "The profile photo could not be uploaded.");
     return;
   }
-  const updated = upsertRecord("ownedDog", { ...record, profilePhotoUrl: url || "", profilePhotoPath: storagePath || "", profilePhotoData: "", updatedAt: new Date().toISOString() });
+  const updated = upsertRecord("ownedDog", { ...record, profilePhotoUrl: url || "", profilePhotoPath: storagePath || "", profilePhotoData: "", profilePhotoMeta: photoUpload.mediaMeta || {}, updatedAt: new Date().toISOString() });
   await sendPayload(updated);
   await addAuditLog("Uploaded dog profile photo", "ownedDog", updated, ownedDogDisplayName(updated));
   renderOwnedDogs();
@@ -5040,7 +5295,7 @@ function captureBoardingCheckInState(formEl = $("#boardingCheckInForm")) {
 function previewBoardingCheckInPhoto(input) {
   const file = input.files?.[0];
   if (!file || !isSupportedDogPhoto(file)) {
-    if (file) showToast("Use a JPG or PNG dog photo.");
+    if (file) showToast("Use a JPG, PNG, or WebP dog photo.");
     input.value = "";
     return;
   }
@@ -5073,11 +5328,12 @@ async function submitBoardingCheckIn(formEl) {
   let profilePhotoData = record.profilePhotoData || "";
   if (checkInPhoto) {
     try {
-      const { url, error, storagePath } = await uploadDogPhotoToSupabase(checkInPhoto, record.id);
+      const { url, error, storagePath, mediaMeta } = await uploadDogPhotoToSupabase(checkInPhoto, record.id);
       if (error || (!url && !storagePath)) throw new Error(error || "The profile photo could not be uploaded.");
       profilePhotoUrl = url || "";
       profilePhotoPath = storagePath || "";
       profilePhotoData = "";
+      record.profilePhotoMeta = mediaMeta || record.profilePhotoMeta || {};
       await addAuditLog("Uploaded boarding dog profile photo", "boardingDog", record, record.dogName || "");
     } catch (error) {
       showToast(\`Photo upload failed: \${error.message}\`);
@@ -5110,6 +5366,7 @@ async function submitBoardingCheckIn(formEl) {
     profilePhotoUrl,
     profilePhotoPath,
     profilePhotoData,
+    profilePhotoMeta: record.profilePhotoMeta || {},
     updatedAt: timestamp,
   };
   const updated = await saveBoardingStatusTransition(prepared, formEl.dataset.nextStatus || "Checked In", {
@@ -9719,6 +9976,7 @@ function initEvents() {
         profilePhotoUrl: photo.profilePhotoUrl,
         profilePhotoPath: photo.profilePhotoPath,
         profilePhotoData: photo.profilePhotoData,
+        profilePhotoMeta: photo.profilePhotoMeta || existing.profilePhotoMeta || {},
         exerciseLogs: normalizedExisting.exerciseLogs || [],
         trainingLogs: normalizedExisting.trainingLogs || [],
         bathHistory: normalizedExisting.bathHistory || [],
@@ -10159,6 +10417,7 @@ function initEvents() {
         profilePhotoUrl: photo.profilePhotoUrl,
         profilePhotoPath: photo.profilePhotoPath,
         profilePhotoData: photo.profilePhotoData,
+        profilePhotoMeta: photo.profilePhotoMeta || existing.profilePhotoMeta || {},
         documents: [...boardingDogDocumentItems(existing), ...documentUploads],
         vaccinationRecords: [...(existing.vaccinationRecords || []), ...vaccinationUploads],
         vaccinationFiles: [...(existing.vaccinationRecords || []), ...vaccinationUploads].map((file) => file.name).join(", "),
@@ -10251,7 +10510,7 @@ function initEvents() {
     try {
       const mediaItems = await uploadMediaFiles($("#requestMedia"), "requests", {
         allowedTypes: IMAGE_UPLOAD_TYPES,
-        allowedExtensions: [".jpg", ".jpeg", ".png"],
+        allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
         label: "request image",
       });
       const files = mediaItems.map((file) => file.name).join(", ");
@@ -10274,7 +10533,7 @@ function initEvents() {
     try {
       const mediaItems = await uploadMediaFiles($("#maintenanceMedia"), "maintenance", {
         allowedTypes: IMAGE_UPLOAD_TYPES,
-        allowedExtensions: [".jpg", ".jpeg", ".png"],
+        allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
         label: "maintenance image",
       });
       const files = mediaItems.map((file) => file.name).join(", ");
@@ -10452,6 +10711,7 @@ function initEvents() {
         profilePhotoUrl: photo.profilePhotoUrl,
         profilePhotoPath: photo.profilePhotoPath,
         profilePhotoData: photo.profilePhotoData,
+        profilePhotoMeta: photo.profilePhotoMeta || existing.profilePhotoMeta || {},
         vaccinationRecords: [...(existing.vaccinationRecords || []), ...vaccinationUploads],
         vaccinationFiles: [...(existing.vaccinationRecords || []), ...vaccinationUploads].map((file) => file.name).join(", "),
         removed: false,
