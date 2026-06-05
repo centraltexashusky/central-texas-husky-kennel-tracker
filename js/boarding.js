@@ -2568,11 +2568,6 @@ function boardingFamilyMixedStatusHtml(entries = []) {
 }
 
 function boardingFamilyGroupSavedTotal(entries = []) {
-  const currentSnapshots = boardingFamilyPricingSnapshots(entries);
-  const currentGroupTotals = [...currentSnapshots.values()]
-    .map((snapshot) => Number(snapshot?.groupTotal || 0))
-    .filter((value) => Number.isFinite(value) && value > 0);
-  if (currentGroupTotals.length) return currentGroupTotals[0];
   const groupTotals = entries
     .map((entry) => Number(entry.stay?.pricingSnapshot?.groupTotal ?? entry.record?.requestGroupTotal ?? entry.stay?.groupTotal ?? 0))
     .filter((value) => Number.isFinite(value) && value > 0);
