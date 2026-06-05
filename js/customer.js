@@ -1139,6 +1139,67 @@ function customerDogWelcomeHtml() {
   </article>\`;
 }
 
+function customerCanCancelStayRequestStatus(status = "") {
+  return ["Pending", "Approved"].includes(normalizeBoardingStatus({ boardingStatus: status }));
+}
+
+function customerCancellationReasonFormHtml(record = {}, reference = {}) {
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayByReference(displayRecord, reference) || boardingPrimaryStay(displayRecord) || {};
+  const stayAttrs = stay.id ? boardingStayDataAttrs(displayRecord, stay) : "";
+  const requestCode = stay.id ? boardingStayRequestCode(displayRecord, stay) : "";
+  return \`<form id="customerCancellationReasonForm" class="tracker-form" data-id="\${escapeHtml(displayRecord.id || "")}"\${stayAttrs || \` data-request-code="\${escapeHtml(requestCode)}"\`}>
+    <article class="record-card compact-record-card">
+      <strong>\${escapeHtml(displayRecord.dogName || "Boarding dog")}</strong>
+      <div class="chip-row">\${stay.id ? customerStayIdChipHtml(displayRecord, stay) : ""}\${stay.id ? customerRequestStayStatusChipHtml(displayRecord, stay) : customerRequestStatusChipHtml(displayRecord)}</div>
+      <p>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</p>
+    </article>
+    <label>Reason for cancellation<textarea name="customerCancellationReason" rows="4" required placeholder="Tell us why you need to cancel this stay."></textarea></label>
+    <div class="button-row"><button type="submit" class="danger-button">Cancel Stay</button><button type="button" class="secondary-button" data-action="close-dialog">Keep Stay</button></div>
+  </form>\`;
+}
+
+function openCustomerCancellationReason(record = {}, reference = {}) {
+  showDetailDialog("Cancel Stay", customerCancellationReasonFormHtml(record, reference));
+}
+
+async function submitCustomerCancellationReason(formEl) {
+  const record = boardingDogRecordForDisplay(formEl.dataset.id);
+  if (!record) {
+    showToast("This stay could not be found.");
+    return null;
+  }
+  const reference = boardingStayReferenceFromAction(formEl);
+  const stay = boardingStayByReference(record, reference) || boardingPrimaryStay(record) || {};
+  const currentStatus = stay.id ? boardingStayDisplayStatus(record, stay) : boardingDisplayStatus(record);
+  const reason = normalizedBoardingDeclineNote(formEl.elements.customerCancellationReason?.value || "");
+  if (!reason) {
+    showToast("Enter a cancellation reason before cancelling this stay.");
+    return null;
+  }
+  const options = {
+    ...reference,
+    customerCancellationReason: reason,
+    role: "customer",
+    source: "customer",
+    name: currentUser?.name || record.ownerName || "Customer",
+    email: currentUser?.email || record.ownerEmail || record.customerEmail || "",
+  };
+  const updated = reference.stayId
+    ? await saveBoardingStayStatusTransition(record, reference.stayId, "Cancelled", options)
+    : await saveBoardingStatusTransition(record, "Cancelled", options);
+  if (!updated) return null;
+  const staffNotified = currentStatus === "Approved";
+  if (staffNotified) await notifyIfNeeded(updated, "customerApprovedStayCancelled");
+  renderCustomerRequests();
+  renderBoardingDogs();
+  renderBoardingRequests();
+  renderDashboard();
+  $("#detailDialog")?.close();
+  showDetailDialog("Stay Cancelled", \`<p>\${escapeHtml(record.dogName || "This stay")} has been cancelled.\${staffNotified ? " Staff has been notified." : ""}</p>\`);
+  return updated;
+}
+
 function renderCustomerRequests() {
   const list = $("#customerRequestList");
   if (!list) return;
@@ -1156,13 +1217,15 @@ function renderCustomerRequests() {
           const status = boardingStayDisplayStatus(record, stay);
           const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
           const canCustomerEdit = customerCanEditStayRequestStatus(status);
+          const canCustomerCancel = customerCanCancelStayRequestStatus(status) && canTransitionBoardingStatus(record, "Cancelled", stay.id ? { stayId: stay.id } : {});
           const declineNote = boardingDeclineNoteFor(record, stay);
           const declineHtml = status === "Cancelled" && declineNote?.note ? \`<p><strong>Decline reason:</strong> \${escapeHtml(declineNote.note)}</p>\` : "";
           const cancellationAudit = status === "Cancelled" ? boardingCancellationAuditHtml(record, stay, { customer: true }) : "";
-          const actions = canCustomerEdit
-            ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Update</button>\${canTransitionBoardingStatus(record, "Cancelled", stay.id ? { stayId: stay.id } : {}) ? \`<button type="button" class="secondary-button" data-action="cancel-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Cancel Request</button>\` : ""}</div>\`
+          const reasonHtml = status === "Cancelled" ? boardingCancellationReasonHtml(record, stay, { customer: true }) : "";
+          const actions = canCustomerEdit || canCustomerCancel
+            ? \`<div class="record-actions">\${canCustomerEdit ? \`<button type="button" class="secondary-button" data-action="edit-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Update</button>\` : ""}\${canCustomerCancel ? \`<button type="button" class="secondary-button danger-button" data-action="cancel-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Cancel Request</button>\` : ""}</div>\`
             : "";
-          return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${estimate}\${cancellationAudit}\${declineHtml}\${actions}</article>\`;
+          return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${estimate}\${cancellationAudit}\${reasonHtml}\${declineHtml}\${actions}</article>\`;
         })
         .join("")
     : \`<p>No \${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>\`;

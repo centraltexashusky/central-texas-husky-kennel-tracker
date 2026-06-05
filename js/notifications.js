@@ -130,7 +130,7 @@ function openVaccineAlert(dogId) {
 function renderDashboardAlertTabs(alerts) {
   const container = $("#dashboardAlertTabs");
   if (!container) return;
-  const ordered = ["All", "Treadmill", "Scooter", "Yard Run", "Training", "Baths", "Stay Services", "Heat", "Medical/Care", "Owner Updates", "Requests", "Maintenance", "Vaccines"];
+  const ordered = ["All", "Customer Cancellations", "Treadmill", "Scooter", "Yard Run", "Training", "Baths", "Stay Services", "Heat", "Medical/Care", "Owner Updates", "Requests", "Maintenance", "Vaccines"];
   const counts = alerts.reduce((acc, alert) => {
     acc[alert.category] = (acc[alert.category] || 0) + 1;
     acc.All = (acc.All || 0) + 1;
@@ -153,6 +153,7 @@ function dashboardAlertButtonLabel(alert = {}) {
   if (alert.action === "view-medical-care") return "View Care";
   if (alert.action === "view-vaccine-alert") return "Update Vaccine";
   if (alert.action === "view-owner-update") return "Update Owner";
+  if (alert.action === "view-customer-cancellation") return "View Stay";
   if (alert.action === "complete-stay-service") return "Mark Done";
   return alert.type ? "Open" : "";
 }
@@ -166,6 +167,9 @@ function dashboardAlertActionAttrs(alert = {}) {
   }
   if (alert.action === "view-owner-update") {
     return \`data-action="view-owner-update" data-id="\${escapeHtml(alert.id)}" data-stay-id="\${escapeHtml(alert.stayId || "")}" data-request-code="\${escapeHtml(alert.requestCode || "")}"\`;
+  }
+  if (alert.action === "view-customer-cancellation") {
+    return \`data-action="view-customer-cancellation" data-notification-id="\${escapeHtml(alert.notificationId || "")}" data-id="\${escapeHtml(alert.id || "")}" data-stay-id="\${escapeHtml(alert.stayId || "")}" data-request-code="\${escapeHtml(alert.requestCode || "")}"\`;
   }
   if (alert.action === "complete-stay-service") {
     return \`data-action="complete-stay-service" data-dog-id="\${escapeHtml(alert.dogId)}" data-stay-id="\${escapeHtml(alert.stayId)}" data-request-code="\${escapeHtml(alert.requestCode)}" data-task-id="\${escapeHtml(alert.taskId)}" data-task-key="\${escapeHtml(alert.taskKey || "")}"\`;
@@ -183,8 +187,28 @@ function dashboardAlertCardHtml(alert = {}) {
   return \`<article class="record-card \${clickableClass}is-urgent" \${attrs}><span class="status-chip">\${escapeHtml(alert.category || "Alert")}</span>\${alert.html || ""}\${buttonLabel ? \`<div class="record-actions"><button type="button" class="secondary-button">\${escapeHtml(buttonLabel)}</button></div>\` : ""}</article>\`;
 }
 
+function customerCancellationAlertNotifications() {
+  return readRecords("notificationLog")
+    .filter((item) => !item.removed && item.eventName === "customerApprovedStayCancelled" && notificationVisibleToCurrentUser(item) && !notificationIsRead(item))
+    .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
+}
+
 function dashboardAlertsForMetrics(metrics = dashboardMetrics()) {
   const alerts = [];
+  customerCancellationAlertNotifications().forEach((notification) => {
+    const source = notificationSourceSnapshot(notification);
+    const reference = customerCancellationNotificationReference(notification);
+    const reason = customerCancellationNotificationReason(notification);
+    alerts.push({
+      category: "Customer Cancellations",
+      action: "view-customer-cancellation",
+      notificationId: notification.id,
+      id: notification.sourceId || source.id || "",
+      stayId: reference.stayId,
+      requestCode: reference.requestCode,
+      html: \`<strong>Approved stay cancelled: \${escapeHtml(source.dogName || "Boarding dog")}</strong><p>\${escapeHtml([source.ownerName || source.ownerEmail || "Customer", reference.requestCode ? \`Stay ID: \${reference.requestCode}\` : ""].filter(Boolean).join(" | "))}</p>\${reason ? \`<p><strong>Reason:</strong> \${escapeHtml(reason)}</p>\` : ""}\`,
+    });
+  });
   metrics.exerciseDueDogs.forEach((dog) => {
     const careType = dashboardExerciseCategory(dog);
     alerts.push({ category: careType, action: "dashboard-quick-care", dogId: dog.id, careType, html: \`<strong>\${escapeHtml(careType)} due: \${escapeHtml(ownedDogDisplayName(dog))}</strong><p>\${escapeHtml(dog.exerciseRoutine || dog.exerciseNotes || \`Log \${careType.toLowerCase()} today.\`)}</p>\` });
@@ -568,10 +592,26 @@ function notificationSavedMessageIsSpecific(message = "") {
 
 function notificationStayIdText(source = {}) {
   const stay = boardingPrimaryStay(source) || {};
-  return source.latestCustomerUpdate?.requestCode
+  return source.latestCustomerCancellation?.requestCode
+    || source.latestCustomerUpdate?.requestCode
     || source.requestCode
     || stay.requestCode
     || (stay.id ? boardingStayRequestCode(source, stay) : "");
+}
+
+function customerCancellationNotificationReference(notification = {}) {
+  const source = notificationSourceSnapshot(notification);
+  const latest = source.latestCustomerCancellation || {};
+  return {
+    stayId: latest.stayId || source.stayId || "",
+    requestCode: latest.requestCode || source.requestCode || notificationStayIdText(source) || "",
+  };
+}
+
+function customerCancellationNotificationReason(notification = {}) {
+  const source = notificationSourceSnapshot(notification);
+  const latest = source.latestCustomerCancellation || {};
+  return latest.reason || source.customerCancellationReason || source.cancellationReason || "";
 }
 
 function notificationSourceTypeLabel(sourceType = "") {
@@ -665,6 +705,10 @@ function notificationDisplayMessage(notification = {}) {
     return \`\${owner} submitted a boarding request\${dogName ? \` for \${dogName}\` : ""}\${boardingScheduleText(source) ? \` for \${boardingScheduleText(source)}\` : ""}.\`;
   }
   if (eventName === "customerBoardingRequestUpdated") return \`\${owner} updated a boarding request\${dogName ? \` for \${dogName}\` : ""}.\`;
+  if (eventName === "customerApprovedStayCancelled") {
+    const reason = source.latestCustomerCancellation?.reason || source.customerCancellationReason || "";
+    return \`\${owner} cancelled an approved stay\${dogName ? \` for \${dogName}\` : ""}\${stayId ? \` (Stay ID: \${stayId})\` : ""}.\${reason ? \` Reason: \${reason}\` : ""}\`;
+  }
   if (eventName === "customerDogFileUploaded") return \`\${owner} uploaded a file\${dogName ? \` for \${dogName}\` : ""}.\`;
   if (eventName === "careLogAdminAlertCreated") return source.note || "A medical/behavior note needs admin attention.";
   if (eventName === "kennelRequestCreated") return source.requestText || "A staff kennel request was submitted.";
@@ -736,6 +780,13 @@ function notificationEventConfig(eventName = "", record = {}) {
       priority: "normal",
       channels: ["email", "inApp"],
       audienceRoles: ["admin"],
+    },
+    customerApprovedStayCancelled: {
+      title: \`Approved stay cancelled: \${record.dogName || "Customer dog"}\`,
+      message: \`\${record.ownerName || record.ownerEmail || "A customer"} cancelled an approved stay\${notificationStayIdText(record) ? \` (Stay ID: \${notificationStayIdText(record)})\` : ""}.\${record.latestCustomerCancellation?.reason ? \` Reason: \${record.latestCustomerCancellation.reason}\` : ""}\`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin", "helper"],
     },
     customerDogFileUploaded: {
       title: \`Customer file uploaded: \${record.dogName || "Customer dog"}\`,
@@ -964,6 +1015,43 @@ function openCareLogNotificationRecord(sourceId = "") {
   return true;
 }
 
+function openBoardingCustomerCancellationAlert(notification = {}) {
+  const source = notificationSourceSnapshot(notification);
+  const sourceId = notification.sourceId || source.id || "";
+  const record = boardingDogRecordForDisplay(sourceId) || readRecords("boardingDog").find((item) => item.id === sourceId && !item.removed);
+  const reference = customerCancellationNotificationReference(notification);
+  if (!record) {
+    showDetailDialog(notificationDisplayTitle(notification), \`<p>\${escapeHtml(notificationDisplayMessage(notification))}</p>\`);
+    return false;
+  }
+  const stay = boardingStayByReference(record, reference) || boardingPrimaryStay(record) || {};
+  switchPage("boardingDogsPage");
+  showDetailDialog(
+    \`Cancelled Stay: \${record.dogName || "Boarding dog"}\`,
+    boardingDogDetailHtml(record, reference),
+    { type: "boardingDog", id: record.id },
+    {
+      headerAction: {
+        label: "Edit Dog",
+        action: "open-boarding-dog-editor",
+        id: record.id,
+        stayId: stay.id || reference.stayId || "",
+        requestCode: stay.id ? boardingStayRequestCode(record, stay) : reference.requestCode || "",
+        tab: "Boarding & Request",
+      },
+    },
+  );
+  return true;
+}
+
+async function openCustomerCancellationAlertById(id = "") {
+  const notification = await markNotificationRead(id);
+  if (!notification) return false;
+  $("#notificationPanel").hidden = true;
+  renderDashboard();
+  return openBoardingCustomerCancellationAlert(notification);
+}
+
 async function openNotification(id = "") {
   const notification = await markNotificationRead(id);
   if (!notification) return;
@@ -971,6 +1059,11 @@ async function openNotification(id = "") {
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;
   if (sourceType === "boardingDog") {
+    if (notification.eventName === "customerApprovedStayCancelled") {
+      openBoardingCustomerCancellationAlert(notification);
+      renderDashboard();
+      return;
+    }
     if (currentRole() === "customer") {
       switchPage("customerUpdatesPage");
       renderCustomerUpdates();

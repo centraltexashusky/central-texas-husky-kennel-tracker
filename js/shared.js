@@ -159,6 +159,7 @@ var defaultOperationCloseTime = "21:00";
 var alertTypeDefinitions = [
   { key: "customerBoardingRequestCreated", label: "New customer boarding request", group: "Customer" },
   { key: "customerBoardingRequestUpdated", label: "Customer boarding request update", group: "Customer" },
+  { key: "customerApprovedStayCancelled", label: "Customer cancelled approved stay", group: "Customer" },
   { key: "customerDogFileUploaded", label: "Customer uploaded dog file", group: "Customer" },
   { key: "customerStayUpdateSent", label: "Customer stay update sent", group: "Customer" },
   { key: "careLogAdminAlertCreated", label: "Medical/behavior care alert", group: "Operations" },
@@ -176,6 +177,7 @@ var alertTypeDefinitions = [
 var adminDefaultAlertTypes = new Set([
   "customerBoardingRequestCreated",
   "customerBoardingRequestUpdated",
+  "customerApprovedStayCancelled",
   "customerDogFileUploaded",
   "careLogAdminAlertCreated",
   "kennelRequestCreated",
@@ -186,7 +188,7 @@ var adminDefaultAlertTypes = new Set([
   "urgentStaffAlertSent",
   "urgentCustomerAlertSent",
 ]);
-var staffDefaultAlertTypes = new Set(["timeOffReviewed", "schedulePublished", "scheduleChangedAfterPublish", "urgentStaffAlertSent"]);
+var staffDefaultAlertTypes = new Set(["customerApprovedStayCancelled", "timeOffReviewed", "schedulePublished", "scheduleChangedAfterPublish", "urgentStaffAlertSent"]);
 
 var boardingLifecycleStatuses = ["Pending", "Approved", "Checked In", "In Kennel", "Ready For Pickup", "Checked Out", "Cancelled"];
 var activeBoardingStayStatuses = ["Checked In", "In Kennel", "Ready For Pickup"];
@@ -8601,8 +8603,14 @@ function initEvents() {
     const urgentAlertForm = event.target.closest("#urgentAlertForm");
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
     const boardingRequestFilterForm = event.target.closest("#boardingRequestFilterForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !operationDateOverrideForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !boardingDeclineRequestForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm && !boardingRequestFilterForm) return;
+    const customerCancellationReasonForm = event.target.closest("#customerCancellationReasonForm");
+    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !operationDateOverrideForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !boardingDeclineRequestForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm && !boardingRequestFilterForm && !customerCancellationReasonForm) return;
     event.preventDefault();
+    if (customerCancellationReasonForm) {
+      if (!validateForm(customerCancellationReasonForm)) return;
+      await submitCustomerCancellationReason(customerCancellationReasonForm);
+      return;
+    }
     if (boardingDeclineRequestForm) {
       if (!validateForm(boardingDeclineRequestForm)) return;
       await submitBoardingDeclineRequest(boardingDeclineRequestForm);
@@ -8855,6 +8863,10 @@ function initEvents() {
     }
     if (action.dataset.action === "view-owner-update") {
       openOwnerUpdateAlert(action.dataset.id, boardingStayReferenceFromAction(action));
+      return;
+    }
+    if (action.dataset.action === "view-customer-cancellation") {
+      await openCustomerCancellationAlertById(action.dataset.notificationId);
       return;
     }
     if (action.dataset.action === "view-alert") {
@@ -10551,14 +10563,7 @@ function initEvents() {
       const record = boardingDogRecordForDisplay(actionButton.dataset.id);
       if (!record) return;
       const reference = boardingStayReferenceFromAction(actionButton);
-      const updated = actionButton.dataset.stayId
-        ? await saveBoardingStayStatusTransition(record, reference.stayId, "Cancelled", reference)
-        : await saveBoardingStatusTransition(record, "Cancelled");
-      if (!updated) return;
-      renderCustomerRequests();
-      renderBoardingDogs();
-      renderBoardingRequests();
-      showDetailDialog("Request Cancelled", \`<p>\${escapeHtml(record.dogName || "This request")} has been cancelled.</p>\`);
+      openCustomerCancellationReason(record, reference);
       return;
     }
     const card = event.target.closest('[data-action="view-customer-request"]');

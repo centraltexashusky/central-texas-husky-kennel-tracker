@@ -1,12 +1,12 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260605-care-admin-alert";
+import "./shared.js?v=20260605-customer-cancel-alert";
 import "./auth.js?v=20260530-impersonation-guard";
-import "./customer.js?v=20260605-cancellation-audit";
-import "./boarding.js?v=20260605-cancellation-audit";
+import "./customer.js?v=20260605-customer-cancel-alert";
+import "./boarding.js?v=20260605-customer-cancel-alert";
 import "./daily.js?v=20260603-linked-addons-alerts";
 import "./timesheet.js?v=20260604-open-timesheet";
 import "./settings.js?v=20260604-pricing-groups-private-media";
-import "./notifications.js?v=20260605-care-admin-alert";
+import "./notifications.js?v=20260605-customer-cancel-alert";
 import "./search.js?v=20260530-v3-fix-pass";
 
 initializeApp().catch((error) => {
