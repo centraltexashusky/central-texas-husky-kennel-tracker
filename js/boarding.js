@@ -141,6 +141,64 @@ function boardingDeclineNoteHtml(record = {}, stay = {}) {
   return \`<div class="boarding-decline-note"><strong>Decline note for customer</strong>\${meta ? \`<span>\${escapeHtml(meta)}</span>\` : ""}<p>\${escapeHtml(note.note)}</p></div>\`;
 }
 
+function boardingTransitionActorPayload(options = {}) {
+  const role = options.role || currentRole();
+  const name = options.name || currentUser?.name || helperName?.value || (role === "customer" ? "Customer" : role ? roleLabel(role) : "Staff");
+  const source = options.source || (role === "customer" ? "customer" : role === "admin" ? "admin" : role === "helper" ? "staff" : "staff");
+  return {
+    name,
+    email: options.email || currentUser?.email || helperEmail?.value || "",
+    role,
+    source,
+  };
+}
+
+function boardingCancellationHistoryEntry(record = {}, stay = {}) {
+  const stayIds = new Set(boardingStaySourceIds(stay));
+  const requestCode = stay?.id ? boardingStayRequestCode(record, stay) : "";
+  const hasSingleStay = arrayValue(record.stays).length <= 1;
+  return arrayValue(record.statusHistory)
+    .filter((entry) => normalizeBoardingStatus({ boardingStatus: entry.to || entry.toStatus || entry.status }) === "Cancelled")
+    .filter((entry) => {
+      const entryStayId = String(entry.stayId || entry.requestId || "").trim();
+      const entryRequestCode = String(entry.requestCode || "").trim();
+      if (!stay?.id) return true;
+      if (entryStayId && stayIds.has(entryStayId)) return true;
+      if (entryRequestCode && entryRequestCode === requestCode) return true;
+      return !entryStayId && !entryRequestCode && hasSingleStay;
+    })
+    .sort((a, b) => new Date(b.date || b.changedAt || 0) - new Date(a.date || a.changedAt || 0))[0] || null;
+}
+
+function boardingCancellationAudit(record = {}, stay = {}) {
+  const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
+  if (status !== "Cancelled") return null;
+  const history = boardingCancellationHistoryEntry(record, stay) || {};
+  const declineNote = boardingDeclineNoteFor(record, stay) || {};
+  const cancelledAt = stay.cancelledAt || history.date || history.changedAt || stay.declinedAt || declineNote.createdAt || record.cancelledAt || record.declinedAt || "";
+  const cancelledBy = stay.cancelledBy || history.by || history.changedBy || stay.declinedBy || declineNote.createdBy || record.cancelledBy || record.declinedBy || "";
+  return {
+    cancelledAt,
+    cancelledBy,
+    cancelledByEmail: stay.cancelledByEmail || history.byEmail || history.changedByEmail || stay.declinedByEmail || declineNote.createdByEmail || record.cancelledByEmail || record.declinedByEmail || "",
+    cancelledByRole: stay.cancelledByRole || history.byRole || history.role || record.cancelledByRole || "",
+    cancelledSource: stay.cancelledSource || history.source || record.cancelledSource || "",
+  };
+}
+
+function boardingCancellationAuditHtml(record = {}, stay = {}, options = {}) {
+  const audit = boardingCancellationAudit(record, stay);
+  if (!audit) return "";
+  const customerFacing = Boolean(options.customer);
+  const actor = String(audit.cancelledBy || "").trim();
+  const role = audit.cancelledByRole && !customerFacing ? \` (\${roleLabel(audit.cancelledByRole)})\` : "";
+  const date = audit.cancelledAt ? \` on \${formatDateTime(audit.cancelledAt)}\` : "";
+  const email = audit.cancelledByEmail && !customerFacing ? \` | \${audit.cancelledByEmail}\` : "";
+  const source = audit.cancelledSource && !customerFacing && !audit.cancelledByRole ? \` | Source: \${audit.cancelledSource}\` : "";
+  const label = actor ? \`Cancelled by \${actor}\${role}\${date}\${email}\${source}\` : \`Cancellation actor not recorded\${date}\${source}\`;
+  return \`<p class="boarding-cancellation-audit"><strong>Cancellation:</strong> \${escapeHtml(label)}</p>\`;
+}
+
 function shouldPromptBoardingDecline(record = {}, nextStatus = "", options = {}) {
   if (nextStatus !== "Cancelled" || options.declineSubmitted || currentRole() === "customer") return false;
   if (!["admin", "helper"].includes(currentRole())) return false;
@@ -234,6 +292,7 @@ function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new
   const targetStay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) : boardingStatusTargetStay(record, nextStatus);
   const targetStayId = targetStay?.id || "";
   const declineNoteText = nextStatus === "Cancelled" ? normalizedBoardingDeclineNote(options.declineNote) : "";
+  const transitionActor = boardingTransitionActorPayload(options);
   return (record.stays || []).map((stay) => {
     if (!targetStayId || !boardingStayMatchesIdentity(stay, targetStay)) return stay;
     const checkInDetails = nextStatus === "Checked In" ? options.checkInDetails || null : null;
@@ -260,6 +319,10 @@ function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new
       billingStartTime: nextStatus === "Checked In" ? checkInDetails?.billingStartTime || stay.billingStartTime || scheduledDropoffTime : stay.billingStartTime || "",
       readyForPickupAt: ["Approved", "Checked In", "In Kennel"].includes(nextStatus) ? "" : stay.readyForPickupAt || "",
       cancelledAt: nextStatus === "Cancelled" ? timestamp : stay.cancelledAt || "",
+      cancelledBy: nextStatus === "Cancelled" ? transitionActor.name : clearsActiveStayState ? "" : stay.cancelledBy || "",
+      cancelledByEmail: nextStatus === "Cancelled" ? transitionActor.email : clearsActiveStayState ? "" : stay.cancelledByEmail || "",
+      cancelledByRole: nextStatus === "Cancelled" ? transitionActor.role : clearsActiveStayState ? "" : stay.cancelledByRole || "",
+      cancelledSource: nextStatus === "Cancelled" ? transitionActor.source : clearsActiveStayState ? "" : stay.cancelledSource || "",
       declineNote: declineNote || stay.declineNote || null,
       declineReason: declineNote?.note || stay.declineReason || "",
       declinedAt: declineNote?.createdAt || stay.declinedAt || "",
@@ -307,6 +370,8 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
   const kennelLocation = options.kennelLocation || null;
   const declineNoteText = nextStatus === "Cancelled" ? normalizedBoardingDeclineNote(options.declineNote) : "";
   const declineNote = declineNoteText ? boardingDeclineNotePayload(declineNoteText, record, targetStay || boardingStatusTargetStay(record, nextStatus, options) || {}, timestamp) : null;
+  const transitionActor = boardingTransitionActorPayload(options);
+  const targetRequestCode = targetStay?.id ? boardingStayRequestCode(record, targetStay) : String(options.requestCode || "").trim();
   const scopedStays = boardingStatusScopedStays(record, nextStatus, timestamp, options).map((stay) => {
     if (nextStatus !== "In Kennel" || !kennelLocation) return stay;
     const targetStay = boardingStatusTargetStay(record, nextStatus, options);
@@ -330,8 +395,12 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
         from: currentStatus,
         to: nextStatus,
         stayId: options.stayId || "",
+        requestCode: targetRequestCode,
         date: timestamp,
-        by: currentUser?.name || helperName?.value || "",
+        by: transitionActor.name,
+        byEmail: transitionActor.email,
+        byRole: transitionActor.role,
+        source: transitionActor.source,
         early,
         note: declineNote?.note || "",
         customerNote: declineNote?.note || "",
@@ -342,6 +411,10 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
     readyForPickupAt: summaryStatus === "Ready For Pickup" ? timestamp : ["Approved", "Checked In", "In Kennel"].includes(summaryStatus) ? "" : record.readyForPickupAt || "",
     checkedOutAt: summaryStatus === "Checked Out" ? timestamp : record.checkedOutAt || "",
     cancelledAt: summaryStatus === "Cancelled" ? timestamp : record.cancelledAt || "",
+    cancelledBy: summaryStatus === "Cancelled" ? transitionActor.name : clearsDogLocation ? "" : record.cancelledBy || "",
+    cancelledByEmail: summaryStatus === "Cancelled" ? transitionActor.email : clearsDogLocation ? "" : record.cancelledByEmail || "",
+    cancelledByRole: summaryStatus === "Cancelled" ? transitionActor.role : clearsDogLocation ? "" : record.cancelledByRole || "",
+    cancelledSource: summaryStatus === "Cancelled" ? transitionActor.source : clearsDogLocation ? "" : record.cancelledSource || "",
     declineNote: declineNote || record.declineNote || null,
     declineReason: declineNote?.note || record.declineReason || "",
     declinedAt: declineNote?.createdAt || record.declinedAt || "",
@@ -364,17 +437,31 @@ function approveBoardingRecord(record = {}) {
   if (transitioned) return transitioned;
   if (currentStatus === "Approved") return record;
   const timestamp = new Date().toISOString();
-  const updatedStays = (record.stays || []).map((stay) => ({
-    ...stay,
-    status: !stay.status || stay.status === "Cancelled" || stay.status === "Pending" ? "Approved" : stay.status,
-    updatedAt: timestamp,
-  }));
+  const transitionActor = boardingTransitionActorPayload();
+  const updatedStays = (record.stays || []).map((stay) => {
+    const nextStayStatus = !stay.status || stay.status === "Cancelled" || stay.status === "Pending" ? "Approved" : stay.status;
+    const clearCancellation = nextStayStatus === "Approved";
+    return {
+      ...stay,
+      status: nextStayStatus,
+      updatedAt: timestamp,
+      cancelledAt: clearCancellation ? "" : stay.cancelledAt || "",
+      cancelledBy: clearCancellation ? "" : stay.cancelledBy || "",
+      cancelledByEmail: clearCancellation ? "" : stay.cancelledByEmail || "",
+      cancelledByRole: clearCancellation ? "" : stay.cancelledByRole || "",
+      cancelledSource: clearCancellation ? "" : stay.cancelledSource || "",
+    };
+  });
   return {
     ...record,
     boardingStatus: "Approved",
     approvedAt: record.approvedAt || timestamp,
     approvedBy: record.approvedBy || currentUser?.name || helperName?.value || "",
     cancelledAt: currentStatus === "Cancelled" ? "" : record.cancelledAt || "",
+    cancelledBy: currentStatus === "Cancelled" ? "" : record.cancelledBy || "",
+    cancelledByEmail: currentStatus === "Cancelled" ? "" : record.cancelledByEmail || "",
+    cancelledByRole: currentStatus === "Cancelled" ? "" : record.cancelledByRole || "",
+    cancelledSource: currentStatus === "Cancelled" ? "" : record.cancelledSource || "",
     stays: updatedStays,
     statusHistory: [
       ...(record.statusHistory || []),
@@ -382,7 +469,10 @@ function approveBoardingRecord(record = {}) {
         from: currentStatus,
         to: "Approved",
         date: timestamp,
-        by: currentUser?.name || helperName?.value || "",
+        by: transitionActor.name,
+        byEmail: transitionActor.email,
+        byRole: transitionActor.role,
+        source: transitionActor.source,
       },
     ],
     flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
@@ -1126,6 +1216,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
     \${options.showServiceTasks ? boardingStayServiceTaskListHtml(record, stay, { actions: options.serviceActions }) : ""}
     \${stay.bathPlan ? \`<p>\${escapeHtml(stay.bathPlan)}</p>\` : ""}
     \${stay.stayNotes ? \`<p>\${escapeHtml(stay.stayNotes)}</p>\` : ""}
+    \${boardingCancellationAuditHtml(record, stay, { customer: isCustomer })}
     \${boardingDeclineNoteHtml(record, stay)}
     \${invoiceSummary}
   </article>\`;
@@ -2718,10 +2809,11 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   const pricingWarning = arrayValue(pricingSnapshot?.pricingErrors).length
     ? \`<p class="service-warning-text">Pricing needs review: \${escapeHtml(arrayValue(pricingSnapshot.pricingErrors).join(" "))}</p>\`
     : "";
+  const cancellationAudit = status === "Cancelled" ? boardingCancellationAuditHtml(record, stay) : "";
   const approveAction = status === "Cancelled" ? \`<button type="button" class="secondary-button" data-action="approve-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Approve Request</button>\` : "";
   const actions = \`<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change</button>\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}\`;
   const familyChip = options.familyName ? \`<span class="status-chip boarding-family-chip">Same family: \${escapeHtml(options.familyName)}</span>\` : "";
-  return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${actions}</article>\`;
+  return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${cancellationAudit}\${actions}</article>\`;
 }
 
 function boardingFamilyGroupHtml(entries = [], options = {}) {
@@ -3347,7 +3439,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? \`<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="\${escapeHtml(displayRecord.id)}" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Update Owner</button>\`
         : "";
-      return \`<article class="record-card"><strong>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Remove Stay</button></div></article>\`;
+      return \`<article class="record-card"><strong>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Remove Stay</button></div></article>\`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -3425,6 +3517,7 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
   if (!targetStay) return null;
   const currentStatus = boardingStayDisplayStatus(record, targetStay);
   const timestamp = new Date().toISOString();
+  const transitionActor = boardingTransitionActorPayload(options);
   const transitioned = withBoardingStatusTransition(record, "Approved", options);
   if (!transitioned) return null;
   const updatedStays = (transitioned.stays || []).map((stay) => {
@@ -3437,6 +3530,10 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
       approvedAt: stay.approvedAt || timestamp,
       approvedBy: stay.approvedBy || currentUser?.name || helperName?.value || "",
       cancelledAt: "",
+      cancelledBy: "",
+      cancelledByEmail: "",
+      cancelledByRole: "",
+      cancelledSource: "",
       actualDropoffAt: "",
       actualPickupAt: "",
       readyForPickupAt: "",
@@ -3454,6 +3551,10 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
     approvedAt: record.approvedAt || timestamp,
     approvedBy: record.approvedBy || currentUser?.name || helperName?.value || "",
     cancelledAt: "",
+    cancelledBy: "",
+    cancelledByEmail: "",
+    cancelledByRole: "",
+    cancelledSource: "",
     kennelLocationId: summaryStatus === "In Kennel" ? transitioned.kennelLocationId || "" : "",
     kennelLocationName: summaryStatus === "In Kennel" ? transitioned.kennelLocationName || "" : "",
     kennelBuilding: summaryStatus === "In Kennel" ? transitioned.kennelBuilding || "" : "",
@@ -3465,8 +3566,12 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
         from: currentStatus,
         to: "Approved",
         stayId: options.stayId,
+        requestCode: boardingStayRequestCode(record, targetStay),
         date: timestamp,
-        by: currentUser?.name || helperName?.value || "",
+        by: transitionActor.name,
+        byEmail: transitionActor.email,
+        byRole: transitionActor.role,
+        source: transitionActor.source,
       },
     ],
     flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
