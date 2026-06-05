@@ -9817,6 +9817,26 @@ function initEvents() {
     if (stayId) openBoardingStayStatusMenu(record, { ...reference, stayId });
     else openBoardingDogToTab(record, "Boarding & Request");
   });
+  $("#boardingCalendarView")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    if (button.dataset.action === "boarding-calendar-month") {
+      const delta = Number(button.dataset.monthDelta || 0);
+      const currentMonth = boardingCalendarMonthKey(boardingCalendarMonth);
+      boardingCalendarMonth = addMonths(currentMonth + "-01", delta).slice(0, 7);
+      renderBoardingDogs();
+      return;
+    }
+    if (button.dataset.action === "boarding-calendar-today") {
+      boardingCalendarMonth = todayDate().slice(0, 7);
+      renderBoardingDogs();
+      return;
+    }
+    if (["open-calendar-dog", "open-calendar-stay"].includes(button.dataset.action)) {
+      const record = boardingDogRecordForDisplay(button.dataset.id);
+      if (record) openBoardingDogToTab(record, "Boarding & Request");
+    }
+  });
   $("#boardingOwnerAccountPanel")?.addEventListener("click", async (event) => {
     const button = event.target.closest('[data-action="link-boarding-owner"]');
     if (!button) return;

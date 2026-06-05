@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260605-mobile-review-open";
+import "./shared.js?v=20260605-boarding-calendar";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260605-customer-cancel-alert";
-import "./boarding.js?v=20260605-family-pricing-review";
+import "./boarding.js?v=20260605-boarding-calendar";
 import "./daily.js?v=20260603-linked-addons-alerts";
 import "./timesheet.js?v=20260604-open-timesheet";
 import "./settings.js?v=20260604-pricing-groups-private-media";

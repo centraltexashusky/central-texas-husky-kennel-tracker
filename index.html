@@ -939,9 +939,11 @@
           </div>
           <div class="view-toggle-row" id="boardingViewToggle" role="group" aria-label="View mode">
             <button type="button" class="view-toggle-button is-active" data-view="board" id="boardingBoardViewBtn">Board view</button>
+            <button type="button" class="view-toggle-button" data-view="calendar" id="boardingCalendarViewBtn">Calendar view</button>
             <button type="button" class="view-toggle-button" data-view="list" id="boardingListViewBtn">List view</button>
           </div>
           <div class="boarding-queue-grid" id="boardingQueueGroups" aria-label="Boarding queue groups"></div>
+          <div class="boarding-calendar-panel is-hidden" id="boardingCalendarView" aria-label="Monthly boarding calendar"></div>
           <div class="mobile-roster-list boarding-quick-list" id="boardingDogQuickCards" aria-label="Mobile boarding check-in and check-out actions"></div>
           <div class="table-settings-shell">
             <button type="button" class="icon-button table-settings-button" id="boardingDogTableSettingsButton" aria-label="Boarding table columns" aria-controls="boardingDogColumnManager" aria-expanded="false" title="Boarding table columns">
@@ -1307,6 +1309,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260605-mobile-review-open"></script>
+  <script type="module" src="js/main.js?v=20260605-boarding-calendar"></script>
 </body>
 </html>

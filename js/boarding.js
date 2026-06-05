@@ -3,6 +3,8 @@ const __snuggleStayModuleSource = `function statusChipHtml(label, className = ""
   return \`<span class="status-chip \${escapeHtml(className)}">\${escapeHtml(label)}</span>\`;
 }
 
+var boardingCalendarMonth = todayDate().slice(0, 7);
+
 function dogTypeBadgeHtml(type) {
   const labels = {
     ownedDog: "Our Dog",
@@ -1532,6 +1534,141 @@ function renderBoardingQueueGroups(records = []) {
     .join("");
 }
 
+function boardingCalendarMonthKey(value = boardingCalendarMonth) {
+  const clean = String(value || "").slice(0, 7);
+  return /^\\d{4}-\\d{2}$/.test(clean) ? clean : todayDate().slice(0, 7);
+}
+
+function boardingCalendarDays(monthKey = boardingCalendarMonth) {
+  const clean = boardingCalendarMonthKey(monthKey);
+  const parts = clean.split("-").map(Number);
+  const year = parts[0];
+  const month = parts[1];
+  const totalDays = new Date(year, month, 0).getDate();
+  return Array.from({ length: totalDays }, (_, index) => clean + "-" + String(index + 1).padStart(2, "0"));
+}
+
+function boardingCalendarMonthLabel(monthKey = boardingCalendarMonth) {
+  const clean = boardingCalendarMonthKey(monthKey);
+  const date = new Date(clean + "-01T12:00:00");
+  return Number.isNaN(date.getTime()) ? clean : date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function boardingCalendarStatusLabel(status = "") {
+  return status === "Ready For Pickup" ? "Ready Pickup" : status;
+}
+
+function boardingCalendarStayDates(stay = {}) {
+  const start = dateOnly(stay.dropoffTime);
+  const end = dateOnly(stay.pickupTime) || start;
+  if (!start || !end) return null;
+  return { start: start <= end ? start : end, end: end >= start ? end : start };
+}
+
+function boardingCalendarEntries(records = [], monthKey = boardingCalendarMonth) {
+  const days = boardingCalendarDays(monthKey);
+  const monthStart = days[0] || "";
+  const monthEnd = days[days.length - 1] || "";
+  if (!monthStart || !monthEnd) return [];
+  const entries = [];
+  records.forEach((record) => {
+    const displayRecord = boardingDogWithStayStatus(record || {});
+    const stays = arrayValue(displayRecord.stays).length ? arrayValue(displayRecord.stays) : [displayRecord].filter((item) => item.dropoffTime || item.pickupTime);
+    stays.forEach((stay) => {
+      const dates = boardingCalendarStayDates(stay);
+      if (!dates) return;
+      if (dates.end < monthStart || dates.start > monthEnd) return;
+      const visibleStart = dates.start < monthStart ? monthStart : dates.start;
+      const visibleEnd = dates.end > monthEnd ? monthEnd : dates.end;
+      entries.push({
+        record: displayRecord,
+        stay,
+        status: boardingStayDisplayStatus(displayRecord, stay),
+        start: dates.start,
+        end: dates.end,
+        visibleStart,
+        visibleEnd,
+      });
+    });
+  });
+  return entries.sort((a, b) => {
+    const startCompare = a.visibleStart.localeCompare(b.visibleStart);
+    if (startCompare) return startCompare;
+    return String(a.record?.dogName || "").localeCompare(String(b.record?.dogName || ""));
+  });
+}
+
+function boardingCalendarDogMeta(record = {}, stay = {}) {
+  const owner = record.ownerName || record.requestedByName || record.customerName || "";
+  const kennel = boardingKennelLocationLabel(record, stay);
+  return [owner, kennel].filter(Boolean).join(" | ");
+}
+
+function boardingCalendarDayHeadingHtml(day = "") {
+  const date = new Date(day + "T12:00:00");
+  const weekday = Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-US", { weekday: "short" });
+  const label = Number.isNaN(date.getTime()) ? day.slice(-2) : String(date.getDate());
+  return '<div class="boarding-calendar-day-heading"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(weekday) + '</span></div>';
+}
+
+function boardingCalendarStatusLegendHtml(entries = []) {
+  const counts = entries.reduce((acc, entry) => {
+    const status = entry.status || "Approved";
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+  const statuses = boardingLifecycleStatuses.filter((status) => counts[status]);
+  if (!statuses.length) return "";
+  return '<div class="boarding-calendar-status-flags" aria-label="Boarding status colors">' + statuses.map((status) => {
+    const count = counts[status] || 0;
+    return '<span class="boarding-calendar-status-flag ' + escapeHtml(statusClassForBoardingStatus(status)) + '"><span>' + escapeHtml(boardingCalendarStatusLabel(status)) + '</span><small>' + escapeHtml(String(count)) + '</small></span>';
+  }).join("") + '</div>';
+}
+
+function boardingCalendarEntryHtml(entry = {}, index = 0, days = []) {
+  const record = entry.record || {};
+  const stay = entry.stay || {};
+  const row = index + 2;
+  const dogName = record.dogName || "Dog";
+  const dogMeta = boardingCalendarDogMeta(record, stay);
+  const monthStart = days[0] || "";
+  const offset = Math.max(0, daysBetweenDates(monthStart, entry.visibleStart) || 0);
+  const inclusiveSpan = Math.max(1, daysBetweenDates(entry.visibleStart, addDays(entry.visibleEnd, 1)) || 1);
+  const span = Math.min(inclusiveSpan, days.length - offset);
+  const startColumn = 2 + offset;
+  const requestCode = stay.id ? boardingStayRequestCode(record, stay) : "";
+  const dueInfo = boardingStayServiceDueInfo(record, stay);
+  const statusClass = statusClassForBoardingStatus(entry.status);
+  const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
+  const title = dogName + " | " + formatDateTime(stay.dropoffTime) + " to " + formatDateTime(stay.pickupTime);
+  const barMeta = [boardingCalendarStatusLabel(entry.status), requestCode, dueInfo?.label || ""].filter(Boolean).join(" | ");
+  const dayCells = days.map((day, dayIndex) => '<span class="boarding-calendar-day-cell" style="grid-row: ' + row + '; grid-column: ' + (dayIndex + 2) + ';"></span>').join("");
+  return '<button type="button" class="boarding-calendar-dog-cell" data-action="open-calendar-dog" data-id="' + escapeHtml(record.id || "") + '" style="grid-row: ' + row + '; grid-column: 1;" title="' + escapeHtml(dogName) + '"><strong>' + escapeHtml(dogName) + '</strong><span>' + escapeHtml(dogMeta || "Boarding stay") + '</span></button>'
+    + dayCells
+    + '<button type="button" class="boarding-calendar-bar ' + escapeHtml(statusClass) + '" data-action="open-calendar-stay" data-id="' + escapeHtml(record.id || "") + '"' + stayAttrs + ' style="grid-row: ' + row + '; grid-column: ' + startColumn + ' / span ' + span + ';" title="' + escapeHtml(title) + '"><span>' + escapeHtml(dogName) + '</span><small>' + escapeHtml(barMeta) + '</small></button>';
+}
+
+function renderBoardingCalendar(records = []) {
+  const container = $("#boardingCalendarView");
+  if (!container) return;
+  boardingCalendarMonth = boardingCalendarMonthKey(boardingCalendarMonth);
+  const days = boardingCalendarDays(boardingCalendarMonth);
+  const entries = boardingCalendarEntries(records, boardingCalendarMonth);
+  const dogCount = new Set(entries.map((entry) => entry.record?.id || entry.record?.dogName || "")).size;
+  const dayHeadings = days.map(boardingCalendarDayHeadingHtml).join("");
+  const rows = entries.map((entry, index) => boardingCalendarEntryHtml(entry, index, days)).join("");
+  const emptyState = entries.length ? "" : '<article class="record-card compact-record-card boarding-calendar-empty"><strong>No boarding stays in ' + escapeHtml(boardingCalendarMonthLabel(boardingCalendarMonth)) + '</strong><p>No stays match the current month and filters.</p></article>';
+  const grid = entries.length
+    ? '<div class="boarding-calendar-scroll" tabindex="0"><div class="boarding-calendar-grid" style="--boarding-calendar-days: ' + days.length + '; --boarding-calendar-rows: ' + entries.length + ';"><div class="boarding-calendar-corner">Dog</div>' + dayHeadings + rows + '</div></div>'
+    : emptyState;
+  container.innerHTML = '<section class="boarding-calendar-card">'
+    + '<div class="boarding-calendar-header"><div><strong>Monthly Stay Timeline</strong><span>' + escapeHtml(entries.length + " stay" + (entries.length === 1 ? "" : "s") + " | " + dogCount + " dog" + (dogCount === 1 ? "" : "s")) + '</span></div>'
+    + '<div class="boarding-calendar-controls"><button type="button" class="icon-button boarding-calendar-icon-button" data-action="boarding-calendar-month" data-month-delta="-1" aria-label="Previous month">&lsaquo;</button><button type="button" class="secondary-button boarding-calendar-month-button" data-action="boarding-calendar-today">' + escapeHtml(boardingCalendarMonthLabel(boardingCalendarMonth)) + '</button><button type="button" class="icon-button boarding-calendar-icon-button" data-action="boarding-calendar-month" data-month-delta="1" aria-label="Next month">&rsaquo;</button></div></div>'
+    + grid
+    + boardingCalendarStatusLegendHtml(entries)
+    + '</section>';
+}
+
 function boardingDogForCustomerDog(dog = {}) {
   const ownerEmail = normalizeEmail(dog.ownerEmail || dog.customerEmail);
   const dogName = String(dog.dogName || "").trim().toLowerCase();
@@ -2498,10 +2635,10 @@ function boardingStayEntrySortTime(entry = {}) {
 }
 
 function handleBoardingViewToggle(view = "board") {
-  boardingViewMode = view === "list" ? "list" : "board";
-  $("#boardingBoardViewBtn")?.classList.toggle("is-active", boardingViewMode === "board");
-  $("#boardingListViewBtn")?.classList.toggle("is-active", boardingViewMode === "list");
+  boardingViewMode = ["calendar", "list"].includes(view) ? view : "board";
+  $$("#boardingViewToggle [data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === boardingViewMode));
   $("#boardingQueueGroups")?.classList.toggle("is-hidden", boardingViewMode !== "board");
+  $("#boardingCalendarView")?.classList.toggle("is-hidden", boardingViewMode !== "calendar");
   $("#boardingDogsPage .table-settings-shell")?.classList.toggle("is-hidden", boardingViewMode !== "list");
   $("#boardingDogQuickCards")?.classList.toggle("is-hidden", boardingViewMode !== "list");
 }
@@ -2518,6 +2655,7 @@ function renderBoardingDogs() {
     ? rosterRecords.filter((record) => vaccinationExpiresSoon(record, 30))
     : rosterRecords;
   const records = sortRecordsForTable("boardingDog", filteredRecords);
+  renderBoardingCalendar(records);
   const columns = activeColumns("boardingDog");
   $("#boardingDogTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="boardingDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
   $("#boardingDogTableBody").innerHTML = records.length
