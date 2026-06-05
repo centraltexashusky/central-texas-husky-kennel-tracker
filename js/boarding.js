@@ -2569,7 +2569,7 @@ function boardingFamilyMixedStatusHtml(entries = []) {
 
 function boardingFamilyGroupSavedTotal(entries = []) {
   const groupTotals = entries
-    .map((entry) => Number(entry.stay?.pricingSnapshot?.groupTotal ?? entry.record?.requestGroupTotal ?? entry.stay?.groupTotal ?? 0))
+    .map((entry) => Number(entry.record?.requestGroupTotal ?? entry.stay?.groupTotal ?? entry.stay?.pricingSnapshot?.groupTotal ?? 0))
     .filter((value) => Number.isFinite(value) && value > 0);
   if (groupTotals.length) return groupTotals[0];
   return entries.reduce((total, entry) => total + boardingStayInvoiceTotal(entry.record || {}, entry.stay || {}), 0);
