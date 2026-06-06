@@ -159,11 +159,10 @@ var defaultTaskTabMeta = [
   { id: "tuesday", label: "Tuesdays", system: true },
   { id: "monthly", label: "Monthly", system: true },
 ];
-var mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "timesheetPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
+var mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
 var mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 var mobileMoreMenuItems = [
-  { pageId: "boardingDogsPage", label: "Boarding Dogs", roles: ["helper", "admin"] },
-  { pageId: "ourDogsPage", label: "Our Dogs", roles: ["helper", "admin"] },
+  { pageId: "timesheetPage", label: "Timesheet", roles: ["helper", "admin"] },
   { pageId: "maintenancePage", label: "Maintenance", roles: ["helper", "admin"] },
   { pageId: "requestsPage", label: "Requests", roles: ["helper", "admin"] },
   { pageId: "financialsPage", label: "Financials", roles: ["admin"] },

@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260605-upload-image-optimization";
+import "./shared.js?v=20260605-staff-mobile-nav";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260605-customer-cancel-alert";
 import "./boarding.js?v=20260605-upload-image-optimization";
