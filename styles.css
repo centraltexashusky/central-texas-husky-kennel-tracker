@@ -3445,6 +3445,16 @@ textarea {
   width: 92px;
 }
 
+.quick-care-photo-frame {
+  display: grid;
+  height: 92px;
+  width: 92px;
+}
+
+.quick-care-photo-frame > .quick-care-dog-photo {
+  grid-area: 1 / 1;
+}
+
 .quick-care-dog-photo.is-clickable-photo {
   cursor: zoom-in;
 }
@@ -4876,6 +4886,12 @@ button.mobile-dog-photo-button {
   height: 100%;
   object-fit: cover;
   width: 100%;
+}
+
+.mobile-dog-photo-button [data-profile-photo-initials] {
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
 }
 
 .mobile-dog-photo-initials {

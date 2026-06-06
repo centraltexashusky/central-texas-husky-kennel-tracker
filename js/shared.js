@@ -1941,8 +1941,8 @@ async function durableDogPhoto(kind, existing, formData, photoInput, dogId) {
   if (formData.profilePhotoUrl) {
     return { profilePhotoUrl: formData.profilePhotoUrl, profilePhotoPath: formData.profilePhotoPath || existing.profilePhotoPath || "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
   }
-  if (existing.profilePhotoUrl) {
-    return { profilePhotoUrl: existing.profilePhotoUrl, profilePhotoPath: existing.profilePhotoPath || "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
+  if (existing.profilePhotoUrl || existing.profilePhotoPath || existing.profilePhotoData) {
+    return { profilePhotoUrl: existing.profilePhotoUrl || "", profilePhotoPath: existing.profilePhotoPath || "", profilePhotoData: existing.profilePhotoData || "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
   }
   return { profilePhotoUrl: "", profilePhotoPath: "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
 }
@@ -2063,11 +2063,22 @@ function setDogPhoto(kind, record) {
   const caption = $(elements.caption);
   const initials = $(elements.initials);
   const name = record[elements.nameKey] || record.showName || "";
-  const photo = record.profilePhotoUrl || record.profilePhotoData;
+  const photo = profilePhotoDirectSource(record);
+  const storagePath = profilePhotoStoragePath(record);
+  img.dataset.profilePhotoPath = storagePath || "";
+  img.dataset.storagePath = storagePath || "";
+  img.dataset.sourceRecordId = record.id || "";
+  img.dataset.sourceRecordType = record.type || (kind === "owned" ? "ownedDog" : kind === "boarding" ? "boardingDog" : kind === "customer" ? "customerDog" : "");
+  img.dataset.src = photo || "";
   if (photo) {
     img.src = photo;
     img.hidden = false;
     initials.hidden = true;
+  } else if (storagePath) {
+    img.removeAttribute("src");
+    img.hidden = true;
+    initials.hidden = false;
+    hydrateProfilePhotoElement(img);
   } else {
     img.removeAttribute("src");
     img.hidden = true;
@@ -2124,8 +2135,12 @@ function handleDogPhotoClick(kind) {
   const formEl = $(elements.form);
   const input = $(elements.input);
   const record = dogPhotoRecord(kind) || {};
-  const photo = record.profilePhotoUrl || record.profilePhotoData || selectedDogPhotos[kind]?.previewDataUrl || $(elements.img)?.src || "";
+  const photo = profilePhotoDirectSource(record) || selectedDogPhotos[kind]?.previewDataUrl || $(elements.img)?.src || "";
   const locked = formEl?.classList.contains("is-readonly");
+  if (locked && profilePhotoHasSource(record)) {
+    openDogProfilePhoto(record, kind === "owned" ? "ownedDog" : kind === "boarding" ? "boardingDog" : "customerDog");
+    return;
+  }
   if (locked && photo) {
     showMediaDialog(
       photo,
@@ -3549,6 +3564,57 @@ function mediaItemHasOpenableSource(item = {}) {
   return Boolean(item.url || item.dataUrl || item.storagePath || item.profilePhotoPath);
 }
 
+function profilePhotoDirectSource(record = {}) {
+  return record.profilePhotoUrl || record.profilePhotoData || "";
+}
+
+function profilePhotoStoragePath(record = {}) {
+  return record.profilePhotoPath || "";
+}
+
+function profilePhotoHasSource(record = {}) {
+  return Boolean(profilePhotoDirectSource(record) || profilePhotoStoragePath(record));
+}
+
+function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
+  const direct = profilePhotoDirectSource(record);
+  const storagePath = profilePhotoStoragePath(record);
+  const attrs = [];
+  if (direct) attrs.push('data-src="' + escapeHtml(direct) + '"');
+  if (storagePath) {
+    attrs.push('data-profile-photo-path="' + escapeHtml(storagePath) + '"');
+    attrs.push('data-storage-path="' + escapeHtml(storagePath) + '"');
+  }
+  if (record.id) attrs.push('data-source-record-id="' + escapeHtml(record.id) + '"');
+  attrs.push('data-source-record-type="' + escapeHtml(record.type || fallbackRecordType || "") + '"');
+  return attrs.length ? " " + attrs.join(" ") : "";
+}
+
+function hydrateProfilePhotoElement(element) {
+  if (!element) return;
+  const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
+  const img = element.matches("img") ? element : element.querySelector("img");
+  const initials = element.matches("[data-profile-photo-initials]") ? element : element.querySelector("[data-profile-photo-initials]");
+  const existingSource = element.dataset.src || img?.getAttribute("src") || "";
+  if (!storagePath || existingSource || localTestMode || !img) return;
+  const token = storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
+  element.dataset.profilePhotoToken = token;
+  signedMediaUrlForPath(storagePath, {
+    sourceRecordId: element.dataset.sourceRecordId || "",
+    sourceRecordType: element.dataset.sourceRecordType || "",
+  }).then((signedUrl) => {
+    if (!signedUrl || element.dataset.profilePhotoToken !== token) return;
+    img.src = signedUrl;
+    img.hidden = false;
+    element.dataset.src = signedUrl;
+    if (initials) initials.hidden = true;
+  }).catch((error) => console.warn("Profile photo signed URL failed", error));
+}
+
+function hydrateProfilePhotoElements(root = document) {
+  root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => hydrateProfilePhotoElement(element));
+}
+
 async function signedMediaUrlForPath(storagePath = "", context = {}) {
   const path = String(storagePath || "").trim();
   if (!path || !supabaseClient || localTestMode) return "";
@@ -3590,6 +3656,33 @@ async function openMediaFromButton(mediaButton) {
     }
   }
   showMediaDialog(src, mediaButton.dataset.mediaType, mediaButton.dataset.mediaName);
+}
+
+async function openDogProfilePhoto(record = {}, fallbackRecordType = "ownedDog") {
+  const directSource = profilePhotoDirectSource(record);
+  const storagePath = profilePhotoStoragePath(record);
+  const dogName = record.callName || record.showName || record.dogName || "Dog";
+  const sourceRecordType = record.type || fallbackRecordType || "";
+  const dialogContext = sourceRecordType === "ownedDog" && record.id ? { type: "ownedDogPhoto", id: record.id } : null;
+  if (!directSource && !storagePath) return false;
+  if (storagePath) {
+    try {
+      const signedUrl = await signedMediaUrlForPath(storagePath, {
+        sourceRecordId: record.id || "",
+        sourceRecordType,
+      });
+      showMediaDialog(signedUrl || directSource, "image/jpeg", dogName + " profile photo", dialogContext);
+      return true;
+    } catch (error) {
+      if (!directSource) {
+        showDetailDialog("Photo Not Available", "<p>This profile photo is stored privately, but Snuggle Stay could not create an access link right now.</p><p>" + escapeHtml(error.message || String(error)) + "</p>");
+        return false;
+      }
+      showToast("Using the saved photo link because private access could not be refreshed.");
+    }
+  }
+  showMediaDialog(directSource, "image/jpeg", dogName + " profile photo", dialogContext);
+  return true;
 }
 
 function mediaLinkHtml(record) {
@@ -3663,6 +3756,7 @@ function showDetailDialog(title, html, context = null, options = {}) {
   if (options.dialogClass) dialog?.classList.add(options.dialogClass);
   $("#detailDialogTitle").textContent = title;
   $("#detailDialogBody").innerHTML = html;
+  hydrateProfilePhotoElements($("#detailDialogBody"));
   const completeButton = $("#completeDetailTaskButton");
   const headerActionButton = $("#detailDialogHeaderAction");
   if (headerActionButton) {
@@ -4579,7 +4673,7 @@ function linkedCustomerDogForBoarding(record = {}) {
 function mergeCustomerDogDisplayGroup(records = []) {
   if (records.length <= 1) return records[0] || {};
   const primary = [...records].sort((a, b) => {
-    const photoDiff = Number(Boolean(b.profilePhotoUrl || b.profilePhotoData)) - Number(Boolean(a.profilePhotoUrl || a.profilePhotoData));
+    const photoDiff = Number(profilePhotoHasSource(b)) - Number(profilePhotoHasSource(a));
     if (photoDiff) return photoDiff;
     return itemSortTime(b) - itemSortTime(a);
   })[0] || {};
@@ -6593,9 +6687,10 @@ function dashboardExerciseCategory(dog) {
 function dashboardQuickCareSummaryHtml(dog, careType) {
   const heat = ownedDogHeatStatus(dog, $("#dashboardDate")?.value || todayDate());
   const latestExercise = careTypeIsExercise(careType) ? latestExerciseLogForDog(dog, careType) : null;
-  const photo = dog.profilePhotoUrl || dog.profilePhotoData || "";
-  const photoHtml = photo
-    ? \`<img class="quick-care-dog-photo is-clickable-photo" src="\${escapeHtml(photo)}" alt="\${escapeHtml(ownedDogDisplayName(dog))}" data-action="view-dog-photo" data-dog-id="\${escapeHtml(dog.id || "")}" data-src="\${escapeHtml(photo)}" data-media-name="\${escapeHtml(\`\${ownedDogDisplayName(dog)} profile photo\`)}" />\`
+  const photo = profilePhotoDirectSource(dog);
+  const hasPhoto = profilePhotoHasSource(dog);
+  const photoHtml = hasPhoto
+    ? '<span class="quick-care-photo-frame"' + profilePhotoAccessAttrs(dog, "ownedDog") + '><img class="quick-care-dog-photo is-clickable-photo"' + (photo ? ' src="' + escapeHtml(photo) + '"' : "") + ' alt="' + escapeHtml(ownedDogDisplayName(dog)) + '" data-action="view-dog-photo" data-dog-id="' + escapeHtml(dog.id || "") + '" data-media-name="' + escapeHtml(ownedDogDisplayName(dog) + " profile photo") + '"' + (photo ? "" : " hidden") + ' /><span class="quick-care-dog-photo quick-care-dog-initials" data-profile-photo-initials' + (photo ? " hidden" : "") + '>' + escapeHtml(avatarText(ownedDogDisplayName(dog))) + '</span></span>'
     : \`<div class="quick-care-dog-photo quick-care-dog-initials">\${escapeHtml(avatarText(ownedDogDisplayName(dog)))}</div>\`;
   const rowsByCareType = {
     Training: [
@@ -6973,7 +7068,7 @@ function dashboardImagePreviewHtml(src = "", alt = "") {
 
 function firstRecordImage(record = {}) {
   const media = arrayValue(record.mediaItems).find((item) => String(item.type || "").startsWith("image/") && (item.url || item.dataUrl));
-  return media?.url || media?.dataUrl || record.profilePhotoUrl || record.profilePhotoData || "";
+  return media?.url || media?.dataUrl || profilePhotoDirectSource(record);
 }
 
 function dashboardBoardingRecordForStay(record = {}, stay = {}) {
@@ -9229,12 +9324,17 @@ function initEvents() {
       return;
     }
     if (action.dataset.action === "view-dog-photo") {
-      showMediaDialog(
-        action.dataset.src,
-        "image/jpeg",
-        action.dataset.mediaName || "Dog profile photo",
-        action.dataset.dogId ? { type: "ownedDogPhoto", id: action.dataset.dogId } : null,
-      );
+      const dog = readRecords("ownedDog").find((record) => record.id === action.dataset.dogId && !record.removed);
+      if (dog && profilePhotoHasSource(dog)) {
+        openDogProfilePhoto(dog, "ownedDog");
+      } else {
+        showMediaDialog(
+          action.dataset.src,
+          "image/jpeg",
+          action.dataset.mediaName || "Dog profile photo",
+          action.dataset.dogId ? { type: "ownedDogPhoto", id: action.dataset.dogId } : null,
+        );
+      }
       return;
     }
     if (action.dataset.action === "edit-stay-popup") {

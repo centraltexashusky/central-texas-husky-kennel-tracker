@@ -622,9 +622,10 @@ function ownedDogCareTagsHtml(record = {}) {
 function ownedDogMobileCardHtml(record = {}) {
   const dog = normalizeOwnedDogCare(record);
   const name = ownedDogDisplayName(dog) || "Dog";
-  const photo = dog.profilePhotoUrl || dog.profilePhotoData || "";
-  const photoHtml = photo
-    ? \`<button type="button" class="mobile-dog-photo-button" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} photo"><img src="\${escapeHtml(photo)}" alt="\${escapeHtml(name)}" /></button>\`
+  const photo = profilePhotoDirectSource(dog);
+  const hasPhoto = profilePhotoHasSource(dog);
+  const photoHtml = hasPhoto
+    ? \`<button type="button" class="mobile-dog-photo-button" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs(dog, "ownedDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`
     : \`<button type="button" class="mobile-dog-photo-button mobile-dog-photo-initials" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} profile">\${escapeHtml(avatarText(name))}</button>\`;
   const heatAction = dog.sex === "Female" ? \`<button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Heat Note" data-id="\${escapeHtml(dog.id)}">Heat Note</button>\` : "";
   return \`
@@ -679,6 +680,7 @@ function renderOwnedDogMobileCards(records = []) {
   container.innerHTML = mobileRecords.length
     ? mobileRecords.map(ownedDogMobileCardHtml).join("")
     : \`<article class="record-card mobile-roster-card"><strong>No matching dogs</strong><p>Try a shorter name or switch the care filter back to All.</p></article>\`;
+  hydrateProfilePhotoElements(container);
 }
 
 function renderOwnedDogs() {
@@ -972,9 +974,8 @@ function handleOwnedDogRosterAction(button) {
   const record = readRecords("ownedDog").find((item) => item.id === button.dataset.id);
   if (!record) return;
   if (button.dataset.action === "view-owned-photo") {
-    const photo = record.profilePhotoUrl || record.profilePhotoData || "";
-    if (photo) {
-      showMediaDialog(photo, "image/jpeg", \`\${ownedDogDisplayName(record)} profile photo\`, { type: "ownedDogPhoto", id: record.id });
+    if (profilePhotoHasSource(record)) {
+      openDogProfilePhoto(record, "ownedDog");
     } else {
       openOwnedDogPhotoUploadPopup(normalizeOwnedDogCare(record));
     }

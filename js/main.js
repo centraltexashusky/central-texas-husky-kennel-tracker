@@ -1,9 +1,9 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260606-owned-dog-save-feedback";
+import "./shared.js?v=20260606-owned-dog-private-photo";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260605-customer-cancel-alert";
 import "./boarding.js?v=20260605-upload-image-optimization";
-import "./daily.js?v=20260606-owned-dog-save-feedback";
+import "./daily.js?v=20260606-owned-dog-private-photo";
 import "./timesheet.js?v=20260604-open-timesheet";
 import "./settings.js?v=20260604-pricing-groups-private-media";
 import "./notifications.js?v=20260605-customer-cancel-alert";
