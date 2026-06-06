@@ -3671,6 +3671,10 @@ async function openDogProfilePhoto(record = {}, fallbackRecordType = "ownedDog")
         sourceRecordId: record.id || "",
         sourceRecordType,
       });
+      if (!signedUrl && !directSource) {
+        showDetailDialog("Photo Not Available", "<p>This profile photo is stored privately, but Snuggle Stay could not create an access link right now.</p>");
+        return false;
+      }
       showMediaDialog(signedUrl || directSource, "image/jpeg", dogName + " profile photo", dialogContext);
       return true;
     } catch (error) {
@@ -10083,8 +10087,14 @@ function initEvents() {
   });
   $("#ownedDogMobileCards")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
-    if (!button) return;
-    handleOwnedDogRosterAction(button);
+    if (button) {
+      handleOwnedDogRosterAction(button);
+      return;
+    }
+    const card = event.target.closest(".mobile-roster-card[data-id]");
+    if (!card) return;
+    const record = readRecords("ownedDog").find((dog) => dog.id === card.dataset.id && !dog.removed);
+    if (record) openOwnedDogOverviewPopup(record);
   });
   $("#ownedDogTableBody").addEventListener("dblclick", (event) => {
     const row = event.target.closest("tr[data-id]");

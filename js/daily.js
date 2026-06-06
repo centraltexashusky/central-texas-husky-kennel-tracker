@@ -629,7 +629,7 @@ function ownedDogMobileCardHtml(record = {}) {
     : \`<button type="button" class="mobile-dog-photo-button mobile-dog-photo-initials" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} profile">\${escapeHtml(avatarText(name))}</button>\`;
   const heatAction = dog.sex === "Female" ? \`<button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Heat Note" data-id="\${escapeHtml(dog.id)}">Heat Note</button>\` : "";
   return \`
-    <article class="record-card mobile-roster-card \${ownedDogExerciseDue(dog) || ownedDogTrainingDue(dog) || ownedDogBathDue(dog) ? "has-care-due" : ""}">
+    <article class="record-card mobile-roster-card \${ownedDogExerciseDue(dog) || ownedDogTrainingDue(dog) || ownedDogBathDue(dog) ? "has-care-due" : ""}" data-id="\${escapeHtml(dog.id)}">
       <div class="mobile-roster-card-main">
         \${photoHtml}
         <strong>\${escapeHtml(name)}</strong>
@@ -637,6 +637,7 @@ function ownedDogMobileCardHtml(record = {}) {
         \${ownedDogCareTagsHtml(dog)}
       </div>
       <div class="quick-action-grid">
+        <button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(dog.id)}">View Profile</button>
         <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Treadmill" data-id="\${escapeHtml(dog.id)}">Treadmill</button>
         <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Scooter" data-id="\${escapeHtml(dog.id)}">Scooter</button>
         <button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Yard Run" data-id="\${escapeHtml(dog.id)}">Yard Run</button>
