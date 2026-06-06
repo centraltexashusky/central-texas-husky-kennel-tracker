@@ -1651,6 +1651,32 @@ button:focus-visible {
   min-height: 20px;
 }
 
+.form-submit-status {
+  align-self: center;
+  color: var(--muted);
+  flex: 1 1 220px;
+  font-size: 0.92rem;
+  font-weight: 900;
+  min-height: 22px;
+}
+
+.form-submit-status.is-saving {
+  color: #c7d2fe;
+}
+
+.form-submit-status.is-success {
+  color: #86efac;
+}
+
+.form-submit-status.is-error {
+  color: #fecaca;
+}
+
+button.is-loading {
+  cursor: wait;
+  opacity: 0.82;
+}
+
 .customer-form-step {
   border: 1px solid var(--line);
   border-radius: 8px;

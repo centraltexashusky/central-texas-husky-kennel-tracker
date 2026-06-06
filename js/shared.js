@@ -1897,14 +1897,18 @@ async function uploadFileToSupabase(file, folder) {
   const safeName = String(file.name || "upload.bin").replace(/[^a-zA-Z0-9._-]/g, "_");
   const safeFolder = String(folder || "uploads").replace(/[^a-zA-Z0-9/_-]/g, "-").replace(/^\\/+|\\/+$/g, "");
   const path = \`users/\${userId}/\${safeFolder}/\${Date.now()}-\${safeName}\`;
-  const { data, error } = await supabaseClient.storage.from(MEDIA_BUCKET).upload(path, file, {
-    upsert: false,
-    contentType: file.type || "application/octet-stream",
-  });
-  if (error) return { url: "", error: error.message, storagePath: "" };
-  if (MEDIA_UPLOADS_ARE_PRIVATE) return { url: "", error: "", storagePath: data.path };
-  const { data: urlData } = supabaseClient.storage.from(MEDIA_BUCKET).getPublicUrl(data.path);
-  return { url: urlData?.publicUrl || "", error: "", storagePath: data.path };
+  try {
+    const { data, error } = await supabaseClient.storage.from(MEDIA_BUCKET).upload(path, file, {
+      upsert: false,
+      contentType: file.type || "application/octet-stream",
+    });
+    if (error) return { url: "", error: error.message, storagePath: "" };
+    if (MEDIA_UPLOADS_ARE_PRIVATE) return { url: "", error: "", storagePath: data.path };
+    const { data: urlData } = supabaseClient.storage.from(MEDIA_BUCKET).getPublicUrl(data.path);
+    return { url: urlData?.publicUrl || "", error: "", storagePath: data.path };
+  } catch (error) {
+    return { url: "", error: friendlyNetworkError(error), storagePath: "" };
+  }
 }
 
 async function uploadDogPhotoToSupabase(file, dogId) {
@@ -2149,6 +2153,55 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add("is-visible");
   window.setTimeout(() => toast.classList.remove("is-visible"), 3400);
+}
+
+function friendlyNetworkError(error) {
+  const raw = String(error?.message || error || "").trim();
+  if (!raw) return "Network request failed. Check your connection and try again.";
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {
+    return "Network request failed. Check your connection, refresh the app, and try again.";
+  }
+  return raw;
+}
+
+function setButtonLoading(button, loading, loadingText = "Saving...") {
+  if (!button) return;
+  if (loading) {
+    if (!button.dataset.originalText) button.dataset.originalText = button.textContent || "";
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.setAttribute("aria-busy", "true");
+    button.textContent = loadingText;
+    return;
+  }
+  button.disabled = false;
+  button.classList.remove("is-loading");
+  button.removeAttribute("aria-busy");
+  if (button.dataset.originalText) {
+    button.textContent = button.dataset.originalText;
+    delete button.dataset.originalText;
+  }
+}
+
+function setOwnedDogSaveStatus(message = "", state = "") {
+  const status = $("#ownedDogSaveStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("is-error", state === "error");
+  status.classList.toggle("is-success", state === "success");
+  status.classList.toggle("is-saving", state === "saving");
+}
+
+function setOwnedDogSubmitting(formEl, submitting, message = "") {
+  const saveButton = $("#ownedDogSaveButton");
+  formEl.dataset.ownedDogSubmitting = submitting ? "true" : "";
+  formEl.setAttribute("aria-busy", submitting ? "true" : "false");
+  setButtonLoading(saveButton, submitting, "Saving...");
+  if (submitting || message) setOwnedDogSaveStatus(message, submitting ? "saving" : "");
+  ["deleteOwnedDogButton", "cancelOwnedDogEdit"].forEach((id) => {
+    const button = $("#" + id);
+    if (button) button.disabled = submitting;
+  });
 }
 
 // Extracted to js/auth.js: setHelper
@@ -9942,10 +9995,20 @@ function initEvents() {
   $("#ourDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
+    if (formEl.dataset.ownedDogSubmitting === "true") {
+      showToast("Dog save is already processing.");
+      return;
+    }
+    let record = null;
+    let syncError = null;
     try {
+      setOwnedDogSubmitting(formEl, true, "Saving dog...");
       const existing = activeOwnedDog() || {};
       const formData = formPayload(formEl);
-      if (!validateForm(formEl)) return;
+      if (!validateForm(formEl)) {
+        setOwnedDogSaveStatus("Fix the highlighted fields before saving.", "error");
+        return;
+      }
       const dogId = existing.id || formData.id || uid("ownedDog");
       const photo = await durableDogPhoto("owned", existing, formData, $("#ownedDogPhotoInput"), dogId);
       const isFemale = formData.sex === "Female";
@@ -9983,8 +10046,12 @@ function initEvents() {
         careNotesHistory: normalizedExisting.careNotesHistory || [],
         documents: normalizedExisting.documents || [],
       };
-      const record = upsertRecord("ownedDog", payload);
-      await sendPayload(record);
+      record = upsertRecord("ownedDog", payload);
+      try {
+        await sendPayload(record);
+      } catch (error) {
+        syncError = friendlyNetworkError(error);
+      }
       formEl.elements.id.value = record.id;
       setOwnedCareEntryVisibility(true);
       setDogPhoto("owned", record);
@@ -9996,13 +10063,24 @@ function initEvents() {
       selectedDogPhotos.owned = null;
       syncOwnedDogTabAvailability(record);
       setOwnedFormLocked(false);
-      if (photo.photoError) {
-        showDetailDialog("Dog Saved Without Photo", \`<p>\${escapeHtml(record.callName || record.showName || "Dog")} has been saved, but the profile photo could not be uploaded: \${escapeHtml(photo.photoError)}</p>\`);
+      const dogName = record.callName || record.showName || "Dog";
+      if (syncError) {
+        setOwnedDogSaveStatus("Saved on this device, but database sync failed.", "error");
+        showDetailDialog("Dog Saved Locally Only", \`<p>\${escapeHtml(dogName)} was saved on this device, but it did not sync to the database.</p><p><strong>Reason:</strong> \${escapeHtml(syncError)}</p><p>Keep this record open and tap Save Dog again after checking the connection or refreshing the app.</p>\`);
+      } else if (photo.photoError) {
+        setOwnedDogSaveStatus("Dog saved. Photo upload failed.", "error");
+        showDetailDialog("Dog Saved Without Photo", \`<p>\${escapeHtml(dogName)} has been saved, but the profile photo could not be uploaded: \${escapeHtml(photo.photoError)}</p>\`);
       } else {
-        showDetailDialog("Dog Saved", \`<p>\${escapeHtml(record.callName || record.showName || "Dog")} has been saved.</p>\`);
+        setOwnedDogSaveStatus("Dog saved successfully.", "success");
+        showDetailDialog("Dog Saved", \`<p>\${escapeHtml(dogName)} has been saved.</p>\`);
       }
     } catch (error) {
-      showDetailDialog("Dog Not Saved", \`<p>The dog record could not be saved: \${escapeHtml(error.message)}</p>\`);
+      const reason = friendlyNetworkError(error);
+      setOwnedDogSaveStatus("Dog was not saved.", "error");
+      showDetailDialog("Dog Not Saved", \`<p>The dog record could not be saved.</p><p><strong>Reason:</strong> \${escapeHtml(reason)}</p>\`);
+    } finally {
+      setOwnedDogSubmitting(formEl, false);
+      if (record) $("#ownedDogSaveButton").textContent = "Update";
     }
   });
   $("#addTreadmillLog").addEventListener("click", () => {

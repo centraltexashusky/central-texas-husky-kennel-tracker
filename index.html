@@ -911,7 +911,13 @@
               </div>
               <div id="ownedActivityHistory" class="record-grid"></div>
             </section>
-            <div class="button-row"><button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Update</button><button type="submit" id="ownedDogSaveButton">Update</button><button type="button" class="secondary-button danger-button" id="deleteOwnedDogButton" hidden>Delete Dog</button><button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button></div>
+            <div class="button-row owned-dog-submit-row">
+              <button type="button" class="secondary-button" id="editOwnedDogButton" hidden>Update</button>
+              <button type="submit" id="ownedDogSaveButton">Update</button>
+              <button type="button" class="secondary-button danger-button" id="deleteOwnedDogButton" hidden>Delete Dog</button>
+              <button type="button" class="secondary-button" id="cancelOwnedDogEdit">Cancel</button>
+              <span class="form-submit-status" id="ownedDogSaveStatus" role="status" aria-live="polite"></span>
+            </div>
           </form>
         </section>
       </section>
@@ -1310,6 +1316,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260605-staff-mobile-nav"></script>
+  <script type="module" src="js/main.js?v=20260606-owned-dog-save-feedback"></script>
 </body>
 </html>
