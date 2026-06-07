@@ -226,6 +226,7 @@ function customerDogFromBoardingDog(record = {}, email = currentUser?.email, opt
     rabiesGoodThreeYears: record.rabiesGoodThreeYears || linked.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(record, "rabies") || vaccineDurationIsThreeYears(linked, "rabies") ? "Yes" : ""),
     dhppGoodThreeYears: record.dhppGoodThreeYears || linked.dhppGoodThreeYears || (vaccineDurationIsThreeYears(record, "dhpp") || vaccineDurationIsThreeYears(linked, "dhpp") ? "Yes" : ""),
     profilePhotoUrl: boardingDogPhotoSource(record),
+    profilePhotoPath: profilePhotoStoragePath(record) || profilePhotoStoragePath(linked) || "",
     profilePhotoData: record.profilePhotoData || linked.profilePhotoData || "",
     vaccinationRecords: record.vaccinationRecords || linked.vaccinationRecords || [],
     vaccinationFiles: record.vaccinationFiles || linked.vaccinationFiles || "",
@@ -241,7 +242,8 @@ function customerDogsForCurrentUser() {
     .map((dog) => {
       const boarding = boardingDogForCustomerDog(dog);
       const boardingPhoto = boarding ? boardingDogPhotoSource(boarding) : "";
-      return boardingPhoto && !dog.profilePhotoUrl && !dog.profilePhotoData ? { ...dog, profilePhotoUrl: boardingPhoto } : dog;
+      const boardingPhotoPath = boarding ? profilePhotoStoragePath(boarding) : "";
+      return (boardingPhoto || boardingPhotoPath) && !profilePhotoHasSource(dog) ? { ...dog, profilePhotoUrl: boardingPhoto, profilePhotoPath: boardingPhotoPath } : dog;
     }), email);
   const seenCustomerIds = new Set(dogs.map((dog) => dog.id).filter(Boolean));
   const seenIds = new Set(dogs.flatMap((dog) => [dog.linkedBoardingDogId, dog.sourceBoardingDogId].map(boardingDogIdFromCustomerDogValue)).filter(Boolean));
@@ -267,8 +269,10 @@ function customerDogsForCurrentUser() {
 
 function customerDogPhotoHtml(dog = {}) {
   const name = dog.dogName || "Dog";
-  const photo = dog.profilePhotoUrl || dog.profilePhotoData || "";
-  if (photo) return \`<img class="customer-dog-photo" src="\${escapeHtml(photo)}" alt="\${escapeHtml(name)}" />\`;
+  const photo = profilePhotoDirectSource(dog);
+  if (profilePhotoHasSource(dog)) {
+    return \`<img class="customer-dog-photo"\${profilePhotoAccessAttrs(dog, dog.type || "customerDog")}\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span class="customer-dog-photo customer-dog-photo-initials" data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span>\`;
+  }
   return \`<span class="customer-dog-photo customer-dog-photo-initials">\${escapeHtml(avatarText(name))}</span>\`;
 }
 
@@ -937,6 +941,7 @@ function renderCustomerDogs() {
   $("#customerDogList").innerHTML = dogs.length
     ? dogs.map(customerDogSummaryCardHtml).join("")
     : inlineFirstDogFormOpen ? "" : customerDogWelcomeHtml();
+  hydrateProfilePhotoElements($("#customerDogList"));
   if ($("#customerBookingDogList")) {
     $("#customerBookingDogList").innerHTML = dogs.length
       ? dogs.map((dog) => \`<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="\${dog.id}" \${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>\${escapeHtml(dog.dogName)}</strong><span>\${escapeHtml(dog.breedDescription || "")}</span></label>\`).join("")

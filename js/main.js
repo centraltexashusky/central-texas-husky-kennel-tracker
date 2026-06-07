@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260606-owned-dog-private-photo-initials";
+import "./shared.js?v=20260607-profile-photo-signing";
 import "./auth.js?v=20260530-impersonation-guard";
-import "./customer.js?v=20260605-customer-cancel-alert";
-import "./boarding.js?v=20260605-upload-image-optimization";
+import "./customer.js?v=20260607-profile-photo-signing";
+import "./boarding.js?v=20260607-profile-photo-signing";
 import "./daily.js?v=20260606-owned-dog-profile-view-fix";
 import "./timesheet.js?v=20260604-open-timesheet";
 import "./settings.js?v=20260604-pricing-groups-private-media";

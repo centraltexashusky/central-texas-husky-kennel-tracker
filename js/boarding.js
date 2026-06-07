@@ -1928,14 +1928,22 @@ function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
 
 function boardingDogPhotoSource(record = {}) {
   const linkedDog = linkedCustomerDogForBoarding(record) || {};
-  return record.profilePhotoUrl || record.profilePhotoData || linkedDog.profilePhotoUrl || linkedDog.profilePhotoData || "";
+  return profilePhotoDirectSource(record) || profilePhotoDirectSource(linkedDog) || "";
+}
+
+function boardingDogPhotoRecord(record = {}) {
+  const linkedDog = linkedCustomerDogForBoarding(record) || {};
+  if (profilePhotoHasSource(record)) return record;
+  if (profilePhotoHasSource(linkedDog)) return linkedDog;
+  return {};
 }
 
 function boardingDogMobilePhotoHtml(record = {}) {
   const name = record.dogName || "Boarding dog";
-  const photo = boardingDogPhotoSource(record);
-  if (photo) {
-    return \`<button type="button" class="mobile-dog-photo-button" data-action="view-media" data-src="\${escapeHtml(photo)}" data-media-type="image/jpeg" data-media-name="\${escapeHtml(\`\${name} profile photo\`)}" aria-label="View \${escapeHtml(name)} photo"><img src="\${escapeHtml(photo)}" alt="\${escapeHtml(name)}" /></button>\`;
+  const photoRecord = boardingDogPhotoRecord(record);
+  const photo = profilePhotoDirectSource(photoRecord);
+  if (profilePhotoHasSource(photoRecord)) {
+    return \`<button type="button" class="mobile-dog-photo-button" data-action="view-media" data-src="\${escapeHtml(photo)}" data-media-type="image/jpeg" data-media-name="\${escapeHtml(\`\${name} profile photo\`)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs({ ...photoRecord, id: photoRecord.id || record.id, type: photoRecord.type || record.type || "boardingDog" }, "boardingDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`;
   }
   return \`<div class="mobile-dog-photo-button mobile-dog-photo-initials" aria-hidden="true">\${escapeHtml(avatarText(name))}</div>\`;
 }
@@ -2176,17 +2184,19 @@ function boardingCheckInServices(record = {}, addedServices = [], options = {}) 
 }
 
 function boardingCheckInPhotoHtml(record = {}) {
-  const photo = boardingDogPhotoSource(record);
+  const photoRecord = boardingDogPhotoRecord(record);
+  const photo = profilePhotoDirectSource(photoRecord);
+  const hasPhoto = profilePhotoHasSource(photoRecord);
   const name = record.dogName || "Boarding dog";
   return \`
     <label class="dog-profile-editor checkin-photo-editor" for="boardingCheckInPhotoInput">
-      <span class="dog-photo-picker" role="button" tabindex="0">
-        <img id="boardingCheckInPhotoPreview" src="\${escapeHtml(photo)}" alt="\${escapeHtml(name)}" \${photo ? "" : "hidden"} />
-        <span id="boardingCheckInPhotoInitials" \${photo ? "hidden" : ""}>\${escapeHtml(avatarText(name))}</span>
+      <span class="dog-photo-picker" role="button" tabindex="0"\${profilePhotoAccessAttrs({ ...photoRecord, id: photoRecord.id || record.id, type: photoRecord.type || record.type || "boardingDog" }, "boardingDog")}>
+        <img id="boardingCheckInPhotoPreview"\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}" \${photo ? "" : "hidden"} />
+        <span id="boardingCheckInPhotoInitials" data-profile-photo-initials \${photo ? "hidden" : ""}>\${escapeHtml(avatarText(name))}</span>
       </span>
       <span>
         <strong>\${escapeHtml(name)}</strong>
-        <small>\${photo ? "Tap to update the profile photo." : "Tap to upload or take a profile photo."}</small>
+        <small>\${hasPhoto ? "Tap to update the profile photo." : "Tap to upload or take a profile photo."}</small>
       </span>
       <input class="visually-hidden-file" id="boardingCheckInPhotoInput" type="file" name="profilePhoto" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" />
     </label>\`;
@@ -2378,6 +2388,7 @@ function renderBoardingQuickCards(records = []) {
   container.innerHTML = actionable.length
     ? actionable.map(boardingQuickCardHtml).join("")
     : \`<article class="record-card mobile-roster-card"><strong>No boarding actions</strong><p>No active check-ins or check-outs match this view.</p></article>\`;
+  hydrateProfilePhotoElements(container);
 }
 
 function boardingDogIdentityTokens(record = {}) {

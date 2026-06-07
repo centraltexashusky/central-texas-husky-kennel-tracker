@@ -3,6 +3,17 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const MEDIA_BUCKET = "kennel-media";
 const SIGNED_URL_SECONDS = 600;
+const ALLOWED_STORAGE_PREFIXES = [
+  "users/",
+  "dog-photos/",
+  "vaccination-records/",
+  "owned-dog-documents/",
+  "boarding-dog-documents/",
+  "care-notes/",
+  "requests/",
+  "maintenance/",
+  "boarding-customer-updates/",
+];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -78,11 +89,12 @@ async function callerIsStaff(adminClient: ReturnType<typeof createClient>, email
 
 function safeStoragePath(value: unknown) {
   const path = String(value || "").trim();
-  if (!path || path.includes("..") || path.startsWith("/") || !path.startsWith("users/")) return "";
+  if (!path || path.includes("..") || path.startsWith("/") || !ALLOWED_STORAGE_PREFIXES.some((prefix) => path.startsWith(prefix))) return "";
   return path;
 }
 
 function storageOwnerUserId(path: string) {
+  if (!path.startsWith("users/")) return "";
   return path.split("/")[1] || "";
 }
 

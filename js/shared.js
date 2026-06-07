@@ -3550,7 +3550,7 @@ function multilineHtml(value = "") {
 }
 
 function mediaAccessAttrs(item = {}, context = {}) {
-  const storagePath = item.storagePath || item.profilePhotoPath || "";
+  const storagePath = item.storagePath || item.profilePhotoPath || mediaStoragePathFromUrl(item.url) || "";
   const sourceRecordId = context.sourceRecordId || item.sourceRecordId || item.recordId || "";
   const sourceRecordType = context.sourceRecordType || item.sourceRecordType || item.recordType || "";
   const attrs = [];
@@ -3564,12 +3564,40 @@ function mediaItemHasOpenableSource(item = {}) {
   return Boolean(item.url || item.dataUrl || item.storagePath || item.profilePhotoPath);
 }
 
+function mediaStoragePathFromUrl(url = "") {
+  const value = String(url || "").trim();
+  if (!value || value.startsWith("data:")) return "";
+  const prefixes = [
+    \`/storage/v1/object/public/\${MEDIA_BUCKET}/\`,
+    \`/storage/v1/object/sign/\${MEDIA_BUCKET}/\`,
+  ];
+  const pathFromText = (text = "") => {
+    for (const prefix of prefixes) {
+      const index = text.indexOf(prefix);
+      if (index >= 0) {
+        return decodeURIComponent(text.slice(index + prefix.length).split("?")[0].split("#")[0]);
+      }
+    }
+    return "";
+  };
+  try {
+    const parsed = new URL(value, window.location.href);
+    return pathFromText(parsed.pathname);
+  } catch (_error) {
+    return pathFromText(value);
+  }
+}
+
 function profilePhotoDirectSource(record = {}) {
-  return record.profilePhotoUrl || record.profilePhotoData || "";
+  const dataSource = record.profilePhotoData || "";
+  if (dataSource) return dataSource;
+  const urlSource = record.profilePhotoUrl || "";
+  if (MEDIA_UPLOADS_ARE_PRIVATE && mediaStoragePathFromUrl(urlSource)) return "";
+  return urlSource;
 }
 
 function profilePhotoStoragePath(record = {}) {
-  return record.profilePhotoPath || "";
+  return record.profilePhotoPath || mediaStoragePathFromUrl(record.profilePhotoUrl) || "";
 }
 
 function profilePhotoHasSource(record = {}) {
@@ -3697,7 +3725,7 @@ function mediaLinkHtml(record) {
     links.push(\`<button type="button" class="media-preview-button" data-action="view-media" data-src="\${escapeHtml(record.mediaLink)}" data-media-type="external/link" data-media-name="Shared media">Open shared media</button>\`);
   }
   if (record.profilePhotoUrl || record.profilePhotoPath || record.storagePath) {
-    links.push(\`<button type="button" class="media-preview-button" data-action="view-media" data-src="\${escapeHtml(record.profilePhotoUrl || "")}" data-media-type="image/jpeg" data-media-name="Profile photo"\${mediaAccessAttrs({ profilePhotoPath: record.profilePhotoPath || record.storagePath || "" }, { sourceRecordId: record.id || "", sourceRecordType: record.type || "" })}>Open profile photo</button>\`);
+    links.push(\`<button type="button" class="media-preview-button" data-action="view-media" data-src="\${escapeHtml(profilePhotoDirectSource(record) || "")}" data-media-type="image/jpeg" data-media-name="Profile photo"\${mediaAccessAttrs({ profilePhotoPath: profilePhotoStoragePath(record) || record.storagePath || "", url: record.profilePhotoUrl || "" }, { sourceRecordId: record.id || "", sourceRecordType: record.type || "" })}>Open profile photo</button>\`);
   }
   if (record.mediaItems?.length) {
     const mediaNotes = record.mediaItems
@@ -4952,7 +4980,8 @@ function canonicalDogPayloadFromLegacy(dogId = "", sources = {}) {
     dhppGoodThreeYears: customerDog.dhppGoodThreeYears || boardingDog.dhppGoodThreeYears || "",
     bordetellaDate: customerDog.bordetellaDate || boardingDog.bordetellaDate || "",
     heartwormDate: customerDog.heartwormDate || boardingDog.heartwormDate || "",
-    profilePhotoUrl: customerDog.profilePhotoUrl || boardingDogPhotoSource(boardingDog) || "",
+    profilePhotoUrl: customerDog.profilePhotoUrl || profilePhotoDirectSource(boardingDog) || "",
+    profilePhotoPath: profilePhotoStoragePath(customerDog) || profilePhotoStoragePath(boardingDog) || "",
     profileStatus: customerDog.id || ownerAccount.id ? "claimed" : "unclaimed",
     source: customerDog.id ? (boardingDog.id ? "legacy_customer_and_boarding" : "legacy_customerDog") : "legacy_boardingDog",
     legacyCustomerDogIds: customerDogs.map((dog) => dog.id).filter(Boolean),
@@ -5259,15 +5288,17 @@ function openPaymentMethodPopup(record = {}, options = {}) {
 
 
 async function syncLinkedCustomerDogPhotoFromBoarding(record = {}) {
-  const photoUrl = record.profilePhotoUrl || "";
+  const photoUrl = profilePhotoDirectSource(record) || "";
+  const photoPath = profilePhotoStoragePath(record) || "";
   const photoData = record.profilePhotoData || "";
-  if (!record?.id || (!photoUrl && !photoData)) return null;
+  if (!record?.id || (!photoUrl && !photoPath && !photoData)) return null;
   const linked = linkedCustomerDogForBoarding(record);
   if (!linked?.id || linked.isSharedBoardingDog) return null;
-  if ((linked.profilePhotoUrl || "") === photoUrl && (linked.profilePhotoData || "") === photoData) return linked;
+  if ((linked.profilePhotoUrl || "") === photoUrl && (linked.profilePhotoPath || "") === photoPath && (linked.profilePhotoData || "") === photoData) return linked;
   const updated = upsertRecord("customerDog", {
     ...linked,
     profilePhotoUrl: photoUrl || linked.profilePhotoUrl || "",
+    profilePhotoPath: photoPath || linked.profilePhotoPath || "",
     profilePhotoData: photoData || linked.profilePhotoData || "",
     linkedBoardingDogId: record.id,
     updatedAt: new Date().toISOString(),
