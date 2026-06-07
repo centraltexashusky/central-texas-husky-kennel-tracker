@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260606-owned-dog-profile-view-fix";
+import "./shared.js?v=20260606-owned-dog-private-photo-initials";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260605-customer-cancel-alert";
 import "./boarding.js?v=20260605-upload-image-optimization";

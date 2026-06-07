@@ -2078,7 +2078,7 @@ function setDogPhoto(kind, record) {
     img.removeAttribute("src");
     img.hidden = true;
     initials.hidden = false;
-    hydrateProfilePhotoElement(img);
+    hydrateProfilePhotoElement(img, initials);
   } else {
     img.removeAttribute("src");
     img.hidden = true;
@@ -3590,11 +3590,13 @@ function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
   return attrs.length ? " " + attrs.join(" ") : "";
 }
 
-function hydrateProfilePhotoElement(element) {
+function hydrateProfilePhotoElement(element, relatedInitials = null) {
   if (!element) return;
   const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
   const img = element.matches("img") ? element : element.querySelector("img");
-  const initials = element.matches("[data-profile-photo-initials]") ? element : element.querySelector("[data-profile-photo-initials]");
+  const initials = relatedInitials
+    || (element.matches("[data-profile-photo-initials]") ? element : element.querySelector("[data-profile-photo-initials]"))
+    || (element.matches("img") ? element.parentElement?.querySelector("[data-profile-photo-initials], [id$='PhotoInitials']") : null);
   const existingSource = element.dataset.src || img?.getAttribute("src") || "";
   if (!storagePath || existingSource || localTestMode || !img) return;
   const token = storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
