@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260606-app-boot-loader-animated-dots" />
+    <link rel="stylesheet" href="styles.css?v=20260607-owned-health-due-history" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -819,9 +819,11 @@
                 <label>Care status<select name="careStatus"><option value="">Normal / no status</option><option>Special Care</option><option>Medical Watch</option><option>Recovery</option><option>Behavior Watch</option><option>Heat Watch</option></select></label>
                 <label>Food amount currently eating<input type="text" name="foodAmount" placeholder="Example: 2 cups AM, 2 cups PM" /></label>
                 <label>Last rabies vaccination<input type="date" name="rabiesDate" /></label>
-                <label>Next rabies vaccination<input type="date" name="nextRabiesDate" /></label>
-                <label id="ownedDhppLabel">Last DHPP vaccination <span id="ownedDhppWarning" class="vaccine-warning"></span><input type="date" name="dhppDate" id="ownedDhppDate" /></label>
-                <label>Next DHPP vaccination<input type="date" name="nextDhppDate" /></label>
+                <label id="ownedNextRabiesLabel">Next rabies vaccination <span id="ownedNextRabiesWarning" class="vaccine-warning"></span><input type="date" name="nextRabiesDate" id="ownedNextRabiesDate" /></label>
+                <label>Last DHPP vaccination<input type="date" name="dhppDate" id="ownedDhppDate" /></label>
+                <label id="ownedNextDhppLabel">Next DHPP vaccination <span id="ownedNextDhppWarning" class="vaccine-warning"></span><input type="date" name="nextDhppDate" id="ownedNextDhppDate" /></label>
+                <label>Last Bordetella vaccination<input type="date" name="bordetellaDate" id="ownedBordetellaDate" /></label>
+                <label id="ownedNextBordetellaLabel">Next Bordetella vaccination <span id="ownedNextBordetellaWarning" class="vaccine-warning"></span><input type="date" name="nextBordetellaDate" id="ownedNextBordetellaDate" /></label>
                 <label>Last heartworm medication<input type="date" name="heartwormDate" /></label>
               </div>
               <label>General notes<textarea name="notes" rows="3"></textarea></label>
@@ -1340,6 +1342,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script type="module" src="js/main.js?v=20260607-profile-photo-signing"></script>
+  <script type="module" src="js/main.js?v=20260607-owned-health-due-history"></script>
 </body>
 </html>

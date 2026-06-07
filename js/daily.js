@@ -56,11 +56,12 @@ function ownedDogCareSummary(record = {}, date = todayDate()) {
 }
 
 function ownedDogHasCareNote(record = {}) {
+  const manualCareHistory = arrayValue(record.careNotesHistory).some((log) => log.source !== "owned-profile-health-date");
   return Boolean(
     record.specialCare ||
       record.medicalCareNotes ||
       record.careStatus ||
-      arrayValue(record.careNotesHistory).length,
+      manualCareHistory,
   );
 }
 
@@ -616,7 +617,12 @@ function ownedDogCareTagsHtml(record = {}) {
   if (heat.inHeat) tags.push("In heat");
   else if (heat.expectedSoon || heat.overdue) tags.push("Heat watch");
   if (ownedDogHasCareNote(record)) tags.push("Special care");
-  return tags.length ? \`<div class="chip-row">\${tags.map((tag) => statusChipHtml(tag)).join("")}</div>\` : "";
+  const healthDueTags = ownedDogHealthDueItems(record);
+  const tagHtml = [
+    ...tags.map((tag) => statusChipHtml(tag)),
+    ...healthDueTags.map((item) => statusChipHtml(item.label, "health-due-chip " + item.className)),
+  ].join("");
+  return tagHtml ? \`<div class="chip-row">\${tagHtml}</div>\` : "";
 }
 
 function ownedDogMobileCardHtml(record = {}) {
@@ -713,11 +719,15 @@ function renderOwnedDogs() {
     ? records
         .map((record) => {
           const heat = ownedDogHeatStatus(record);
+          const healthDue = ownedDogHealthDueItems(record);
           const rowClass = [
-            ownedDogExerciseDue(record) || ownedDogTrainingDue(record) || ownedDogBathDue(record) ? "has-care-due" : "",
+            ownedDogExerciseDue(record) || ownedDogTrainingDue(record) || ownedDogBathDue(record) || healthDue.length ? "has-care-due" : "",
             heat.inHeat ? "is-in-heat" : "",
           ].filter(Boolean).join(" ");
-          return \`<tr data-id="\${record.id}" class="\${rowClass}">\${columns.map((column) => \`<td>\${escapeHtml(column.value(record))}</td>\`).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("ownedDog")}<button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(record.id)}">View</button><button type="button" class="secondary-button" data-action="edit-owned" data-id="\${escapeHtml(record.id)}">Edit</button><button type="button" class="secondary-button" data-action="log-owned-care" data-id="\${escapeHtml(record.id)}">Log Care</button></div></td></tr>\`;
+          return \`<tr data-id="\${record.id}" class="\${rowClass}">\${columns.map((column) => {
+            const cellValue = escapeHtml(column.value(record));
+            return \`<td>\${cellValue}\${column.key === "callName" ? ownedDogHealthDueChipsHtml(record) : ""}</td>\`;
+          }).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("ownedDog")}<button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(record.id)}">View</button><button type="button" class="secondary-button" data-action="edit-owned" data-id="\${escapeHtml(record.id)}">Edit</button><button type="button" class="secondary-button" data-action="log-owned-care" data-id="\${escapeHtml(record.id)}">Log Care</button></div></td></tr>\`;
         })
         .join("")
     : \`<tr><td colspan="\${(columns.length || 1) + 1}">No matching dogs. Use Add New Dog.</td></tr>\`;
@@ -925,8 +935,13 @@ function ownedDogOverviewPopupHtml(record = {}) {
     ["Call name", ownedDogDisplayName(dog)],
     ["Sex", dog.sex || ""],
     ["Feeding", dog.feedingPlan || dog.foodType || ""],
-    ["DHPP", dog.dhppDate || "Not recorded"],
-    ["Rabies", dog.rabiesDate || "Not recorded"],
+    ["Last DHPP", dog.dhppDate || "Not recorded"],
+    ["Next DHPP", dog.nextDhppDate || "Not scheduled"],
+    ["Last Rabies", dog.rabiesDate || "Not recorded"],
+    ["Next Rabies", dog.nextRabiesDate || "Not scheduled"],
+    ["Last Bordetella", dog.bordetellaDate || "Not recorded"],
+    ["Next Bordetella", dog.nextBordetellaDate || "Not scheduled"],
+    ["Last heartworm", dog.heartwormDate || "Not recorded"],
     ["Care status", ownedDogCareSummary(dog)],
     ["Special care", dog.specialCare || dog.medicalCareNotes || dog.behaviorNotes || ""],
     ["General note", dog.generalCareNotes || dog.notes || ""],

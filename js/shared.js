@@ -492,8 +492,13 @@ function normalizeOwnedDogCare(record = {}) {
   copy.trainingFrequencyDays = nonNegativeNumberFrom(copy.trainingFrequencyDays, careDefaults.trainingFrequencyDays);
   copy.bathIntervalDays = nonNegativeNumberFrom(copy.bathIntervalDays, careDefaults.bathIntervalDays);
   copy.heatCycleLengthDays = numberFrom(copy.heatCycleLengthDays, careDefaults.heatCycleLengthDays);
+  copy.rabiesDate = dateOnly(copy.rabiesDate);
+  copy.dhppDate = dateOnly(copy.dhppDate);
+  copy.bordetellaDate = dateOnly(copy.bordetellaDate);
+  copy.heartwormDate = dateOnly(copy.heartwormDate);
   copy.nextRabiesDate = dateOnly(copy.nextRabiesDate);
   copy.nextDhppDate = dateOnly(copy.nextDhppDate);
+  copy.nextBordetellaDate = dateOnly(copy.nextBordetellaDate);
   copy.lastExerciseDate = dateOnly(copy.lastExerciseDate) || latestLogDate(copy.exerciseLogs);
   copy.lastTrainingDate = dateOnly(copy.lastTrainingDate) || latestLogDate(copy.trainingLogs);
   copy.lastBath = dateOnly(copy.lastBath) || latestLogDate(copy.bathHistory);
@@ -6305,26 +6310,106 @@ function closeBoardingDogModal() {
 // Extracted to js/daily.js: updateOwnedDogConditionalFields
 
 
+var ownedHealthDueConfig = [
+  { field: "nextRabiesDate", label: "Rabies", labelId: "ownedNextRabiesLabel", warningId: "ownedNextRabiesWarning" },
+  { field: "nextDhppDate", label: "DHPP", labelId: "ownedNextDhppLabel", warningId: "ownedNextDhppWarning" },
+  { field: "nextBordetellaDate", label: "Bordetella", labelId: "ownedNextBordetellaLabel", warningId: "ownedNextBordetellaWarning" },
+];
+
+function ownedHealthDueText(label, days, compact = false) {
+  if (days === null) return "";
+  const absoluteDays = Math.abs(days);
+  const dayText = absoluteDays === 1 ? "day" : "days";
+  if (days < 0) return compact ? label + " overdue " + absoluteDays + "d" : "Overdue by " + absoluteDays + " " + dayText;
+  if (days === 0) return compact ? label + " due today" : "Due today";
+  return compact ? label + " due in " + days + "d" : "Due in " + days + " " + dayText;
+}
+
+function ownedDogHealthDueItems(record = {}, referenceDate = todayDate()) {
+  return ownedHealthDueConfig
+    .map((config) => {
+      const dueDate = dateOnly(record[config.field]);
+      if (!dueDate) return null;
+      const days = daysBetweenDates(referenceDate, dueDate);
+      if (days === null || days > 30) return null;
+      const className = days < 0 ? "is-red-warning" : "is-orange-warning";
+      return {
+        ...config,
+        dueDate,
+        days,
+        label: ownedHealthDueText(config.label, days, true),
+        className,
+      };
+    })
+    .filter(Boolean);
+}
+
+function ownedDogHealthDueChipsHtml(record = {}, referenceDate = todayDate()) {
+  const items = ownedDogHealthDueItems(record, referenceDate);
+  return items.length
+    ? '<div class="chip-row health-due-chip-row">' + items.map((item) => statusChipHtml(item.label, "health-due-chip " + item.className)).join("") + "</div>"
+    : "";
+}
+
+function updateOwnedHealthDueWarnings() {
+  const formEl = $("#ourDogForm");
+  ownedHealthDueConfig.forEach((config) => {
+    const input = formEl?.elements?.[config.field];
+    const warning = document.getElementById(config.warningId);
+    const label = document.getElementById(config.labelId);
+    const dueDate = dateOnly(input?.value);
+    const days = dueDate ? daysBetweenDates(todayDate(), dueDate) : null;
+    const showWarning = days !== null && days <= 30;
+    if (warning) warning.textContent = showWarning ? "! " + ownedHealthDueText(config.label, days, false) : "";
+    if (label) {
+      label.classList.toggle("is-orange-warning", showWarning && days >= 0);
+      label.classList.toggle("is-red-warning", showWarning && days < 0);
+    }
+  });
+}
+
 function updateDhppWarning() {
-  const value = $("#ownedDhppDate").value;
-  const warning = $("#ownedDhppWarning");
-  const label = $("#ownedDhppLabel");
-  warning.textContent = "";
-  label.classList.remove("is-orange-warning", "is-red-warning");
-  if (!value) return;
-  const monthsOld = (new Date() - new Date(\`\${value}T12:00:00\`)) / (1000 * 60 * 60 * 24 * 30.4375);
-  if (monthsOld >= 12) {
-    warning.textContent = "! Over 1 year";
-    label.classList.add("is-red-warning");
-  } else if (monthsOld >= 11) {
-    warning.textContent = "! 11 months old";
-    label.classList.add("is-orange-warning");
-  }
+  updateOwnedHealthDueWarnings();
 }
 
 function activeOwnedDog() {
   const id = $("#ourDogForm").elements.id.value;
   return readRecords("ownedDog").find((record) => record.id === id && !record.removed);
+}
+
+var ownedDogMedicalHistoryFields = [
+  { field: "rabiesDate", type: "Rabies Vaccination", label: "Rabies vaccination" },
+  { field: "dhppDate", type: "DHPP Vaccination", label: "DHPP vaccination" },
+  { field: "bordetellaDate", type: "Bordetella Vaccination", label: "Bordetella vaccination" },
+  { field: "heartwormDate", type: "Heartworm Medication", label: "Heartworm medication" },
+];
+
+function ownedDogMedicalHistoryEntryExists(history = [], field, type, date) {
+  return arrayValue(history).some((log) => dateOnly(log.date) === date && (log.sourceField === field || log.type === type));
+}
+
+function ownedDogMedicalHistoryEntriesFromProfileSave(existing = {}, formData = {}) {
+  const existingHistory = arrayValue(existing.careNotesHistory);
+  return ownedDogMedicalHistoryFields
+    .map((config) => {
+      const date = dateOnly(formData[config.field]);
+      if (!date || ownedDogMedicalHistoryEntryExists(existingHistory, config.field, config.type, date)) return null;
+      const previousDate = dateOnly(existing[config.field]);
+      const note = config.label + " recorded from Our Dogs profile" + (previousDate && previousDate !== date ? " (updated from " + previousDate + ")." : ".");
+      return {
+        id: uid("care-log"),
+        type: config.type,
+        date,
+        minutes: "",
+        note,
+        mediaItems: [],
+        completedBy: currentUser?.name || helperName?.value || "",
+        createdAt: new Date().toISOString(),
+        source: "owned-profile-health-date",
+        sourceField: config.field,
+      };
+    })
+    .filter(Boolean);
 }
 
 // Extracted to js/boarding.js: activeBoardingDog
@@ -6774,7 +6859,8 @@ function dashboardQuickCareSummaryHtml(dog, careType) {
     .filter(([, value]) => value)
     .map(([label, value]) => \`<div><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(value)}</strong></div>\`)
     .join("");
-  return \`<section class="quick-care-dog-summary">\${photoHtml}<div><h3>\${escapeHtml(ownedDogDisplayName(dog))}</h3><div class="quick-care-dog-facts">\${rows}</div></div></section>\`;
+  const healthDueHtml = ownedDogHealthDueChipsHtml(dog, $("#dashboardDate")?.value || todayDate());
+  return \`<section class="quick-care-dog-summary">\${photoHtml}<div><h3>\${escapeHtml(ownedDogDisplayName(dog))}</h3><div class="quick-care-dog-facts">\${rows}</div>\${healthDueHtml}</div></section>\`;
 }
 
 function dashboardQuickCareFormHtml(dog, careType) {
@@ -9217,7 +9303,15 @@ function initEvents() {
       const dog = readRecords("ownedDog").find((item) => item.id === vaccineUpdateForm.dataset.dogId && !item.removed);
       if (!dog) return;
       const data = formPayload(vaccineUpdateForm);
-      const updated = upsertRecord("ownedDog", { ...dog, dhppDate: data.dhppDate, rabiesDate: data.rabiesDate, updatedAt: new Date().toISOString() });
+      const normalizedDog = normalizeOwnedDogCare(dog);
+      const profileHealthLogs = ownedDogMedicalHistoryEntriesFromProfileSave(normalizedDog, data);
+      const updated = upsertRecord("ownedDog", {
+        ...dog,
+        dhppDate: dateOnly(data.dhppDate),
+        rabiesDate: dateOnly(data.rabiesDate),
+        careNotesHistory: [...profileHealthLogs, ...arrayValue(normalizedDog.careNotesHistory)],
+        updatedAt: new Date().toISOString(),
+      });
       await sendPayload(updated);
       renderOwnedDogs();
       renderDashboard();
@@ -10005,7 +10099,7 @@ function initEvents() {
   $("#ownedLastHeat").addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, numberFrom($("#ourDogForm").elements.heatCycleLengthDays?.value, careDefaults.heatCycleLengthDays))));
   $("#ourDogForm").elements.heatCycleLengthDays.addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, numberFrom($("#ourDogForm").elements.heatCycleLengthDays?.value, careDefaults.heatCycleLengthDays))));
   $("#ownedDogSex").addEventListener("change", syncOwnedDogTabAvailability);
-  $("#ownedDhppDate").addEventListener("change", updateDhppWarning);
+  ["ownedNextRabiesDate", "ownedNextDhppDate", "ownedNextBordetellaDate"].forEach((id) => document.getElementById(id)?.addEventListener("change", updateOwnedHealthDueWarnings));
   $("#ownedDogSearch").addEventListener("input", renderOwnedDogs);
   $("#ownedDogCareFilters").addEventListener("click", (event) => {
     const button = event.target.closest("[data-filter]");
@@ -10158,6 +10252,7 @@ function initEvents() {
       const normalizedExisting = normalizeOwnedDogCare(existing);
       const bathIntervalDays = nonNegativeNumberFrom(formData.bathIntervalDays, nonNegativeNumberFrom(normalizedExisting.bathIntervalDays, careDefaults.bathIntervalDays));
       const heatCycleLengthDays = numberFrom(formData.heatCycleLengthDays, normalizedExisting.heatCycleLengthDays || careDefaults.heatCycleLengthDays);
+      const profileHealthLogs = ownedDogMedicalHistoryEntriesFromProfileSave(normalizedExisting, formData);
       const payload = {
         ...existing,
         type: "ownedDog",
@@ -10186,7 +10281,7 @@ function initEvents() {
         trainingLogs: normalizedExisting.trainingLogs || [],
         bathHistory: normalizedExisting.bathHistory || [],
         heatHistory: isFemale ? normalizedExisting.heatHistory || [] : [],
-        careNotesHistory: normalizedExisting.careNotesHistory || [],
+        careNotesHistory: [...profileHealthLogs, ...(normalizedExisting.careNotesHistory || [])],
         documents: normalizedExisting.documents || [],
       };
       record = upsertRecord("ownedDog", payload);
