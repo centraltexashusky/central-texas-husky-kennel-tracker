@@ -5339,16 +5339,22 @@ var stayRequestServiceOptions = [
 
 
 function selectedStayRequestsFromForm(formEl) {
-  return [...formEl.querySelectorAll('input[name="stayRequests"]:checked')].map((input) => ({
-    id: input.dataset.serviceId || "",
-    serviceId: input.dataset.serviceId || "",
-    serviceName: input.dataset.serviceName || boardingServiceTaskDisplayName(input.value),
-    label: input.value,
-    quantity: 1,
-    unitPrice: Number(input.dataset.unitPrice || 0),
-    unit: input.dataset.unit || "",
-    source: "staff-admin",
-  }));
+  return [...formEl.querySelectorAll('input[name="stayRequests"]:checked')].map((input) => {
+    const quantityInput = input.closest(".service-option")?.querySelector(".service-quantity");
+    const rawQuantity = Number(quantityInput?.value || 1);
+    const quantity = Number.isFinite(rawQuantity) ? Math.max(1, Math.floor(rawQuantity)) : 1;
+    const serviceName = input.dataset.serviceName || boardingServiceTaskDisplayName(input.value);
+    return {
+      id: input.dataset.serviceId || "",
+      serviceId: input.dataset.serviceId || "",
+      serviceName,
+      label: \`\${serviceName}\${quantity > 1 ? \` x\${quantity}\` : ""} requested\`,
+      quantity,
+      unitPrice: Number(input.dataset.unitPrice || 0),
+      unit: input.dataset.unit || "",
+      source: "staff-admin",
+    };
+  });
 }
 
 // Extracted to js/boarding.js: boardingStayEstimatedTotal
@@ -9695,6 +9701,15 @@ function initEvents() {
     if (checkInServiceToggle) {
       const quantityInput = checkInServiceToggle.closest(".service-option")?.querySelector(".service-quantity");
       if (quantityInput) quantityInput.disabled = !checkInServiceToggle.checked;
+      return;
+    }
+    const stayRequestToggle = event.target.closest('#boardingStayPopupForm input[name="stayRequests"]');
+    if (stayRequestToggle) {
+      const quantityInput = stayRequestToggle.closest(".service-option")?.querySelector(".service-quantity");
+      if (quantityInput) {
+        quantityInput.disabled = !stayRequestToggle.checked;
+        if (stayRequestToggle.checked && !quantityInput.value) quantityInput.value = "1";
+      }
       return;
     }
     const kennelBuilding = event.target.closest("#kennelAssignmentBuilding");

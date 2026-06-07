@@ -2033,16 +2033,27 @@ function boardingStayRequestServiceCatalog(record = {}, stay = {}) {
     ].join("|")));
 }
 
+function stayRequestQuantityForService(service = {}, requests = [], user = currentUser) {
+  const request = arrayValue(requests).find((item) => stayRequestMatchesService(item, service, { user }));
+  return boardingServiceTaskQuantity(request || {});
+}
+
+function stayRequestQuantityForOption(option = {}, requests = []) {
+  const request = arrayValue(requests).find((item) => stayRequestMatchesOption(item, option));
+  return boardingServiceTaskQuantity(request || {});
+}
+
 function stayRequestServiceCheckboxHtml(service = {}, requests = [], user = currentUser, options = {}) {
   const checked = requests.some((request) => stayRequestMatchesService(request, service, { user }));
   const label = \`\${customerServiceDisplayName(service)} requested\`;
   const unitPrice = stayRequestServiceUnitPriceForUser(service, user);
   const price = unitPrice ? \` - \${money(unitPrice)}\${service.unit ? \` \${service.unit}\` : ""}\` : "";
+  const quantity = stayRequestQuantityForService(service, requests, user);
   const linkedNote = options.linkedParent
     ? \`<span class="stay-request-linked-note">Linked to \${escapeHtml(customerServiceDisplayName(options.linkedParent))}</span>\`
     : "";
-  const className = options.linked ? ' class="stay-request-linked-label"' : "";
-  return \`<label\${className}><input type="checkbox" name="stayRequests" value="\${escapeHtml(label)}" data-service-id="\${escapeHtml(service.id || "")}" data-service-name="\${escapeHtml(service.serviceName || "")}" data-unit-price="\${escapeHtml(unitPrice)}" data-unit="\${escapeHtml(service.unit || "")}" \${checked ? "checked" : ""} /> <span>\${escapeHtml(label)}\${escapeHtml(price)}\${linkedNote}</span></label>\`;
+  const className = \`service-option stay-request-service-option\${options.linked ? " stay-request-linked-label" : ""}\`;
+  return \`<label class="\${className}"><span class="service-option-label"><input type="checkbox" name="stayRequests" value="\${escapeHtml(label)}" data-service-id="\${escapeHtml(service.id || "")}" data-service-name="\${escapeHtml(service.serviceName || "")}" data-unit-price="\${escapeHtml(unitPrice)}" data-unit="\${escapeHtml(service.unit || "")}" \${checked ? "checked" : ""} /> <span class="service-option-copy"><span class="service-option-text">\${escapeHtml(label)}\${escapeHtml(price)}</span>\${linkedNote}</span></span><input class="service-quantity" type="number" name="stayRequestQuantity-\${escapeHtml(service.id || normalizedServiceLookupText(service.serviceName || label))}" min="1" step="1" value="\${escapeHtml(quantity || 1)}" \${checked ? "" : "disabled"} aria-label="\${escapeHtml(customerServiceDisplayName(service))} quantity" /></label>\`;
 }
 
 function stayRequestCheckboxesHtml(stay = {}, record = {}) {
@@ -2078,7 +2089,9 @@ function stayRequestCheckboxesHtml(stay = {}, record = {}) {
       const snapshot = stayRequestOptionSnapshot(option, { user });
       const checked = requests.some((request) => stayRequestMatchesOption(request, option));
       const price = snapshot.unitPrice ? \` - \${money(snapshot.unitPrice)}\${snapshot.unit ? \` \${snapshot.unit}\` : ""}\` : "";
-      return \`<label><input type="checkbox" name="stayRequests" value="\${escapeHtml(option.value)}" data-service-id="\${escapeHtml(snapshot.serviceId || "")}" data-service-name="\${escapeHtml(snapshot.serviceName || "")}" data-unit-price="\${escapeHtml(snapshot.unitPrice || 0)}" data-unit="\${escapeHtml(snapshot.unit || "")}" \${checked ? "checked" : ""} /> \${escapeHtml(option.value)}\${escapeHtml(price)}</label>\`;
+      const quantity = stayRequestQuantityForOption(option, requests);
+      const quantityKey = snapshot.serviceId || normalizedServiceLookupText(snapshot.serviceName || option.value);
+      return \`<label class="service-option stay-request-service-option"><span class="service-option-label"><input type="checkbox" name="stayRequests" value="\${escapeHtml(option.value)}" data-service-id="\${escapeHtml(snapshot.serviceId || "")}" data-service-name="\${escapeHtml(snapshot.serviceName || "")}" data-unit-price="\${escapeHtml(snapshot.unitPrice || 0)}" data-unit="\${escapeHtml(snapshot.unit || "")}" \${checked ? "checked" : ""} /> <span class="service-option-copy"><span class="service-option-text">\${escapeHtml(option.value)}\${escapeHtml(price)}</span></span></span><input class="service-quantity" type="number" name="stayRequestQuantity-\${escapeHtml(quantityKey)}" min="1" step="1" value="\${escapeHtml(quantity || 1)}" \${checked ? "" : "disabled"} aria-label="\${escapeHtml(snapshot.serviceName || option.value)} quantity" /></label>\`;
     })
     .join("");
 }
