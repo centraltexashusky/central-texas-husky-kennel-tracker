@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260607-stay-request-quantity";
+import "./shared.js?v=20260607-owner-update-actions";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260607-profile-photo-signing";
-import "./boarding.js?v=20260607-stay-request-quantity";
+import "./boarding.js?v=20260607-owner-update-actions";
 import "./daily.js?v=20260607-owned-health-due-history";
 import "./timesheet.js?v=20260604-open-timesheet";
 import "./settings.js?v=20260604-pricing-groups-private-media";

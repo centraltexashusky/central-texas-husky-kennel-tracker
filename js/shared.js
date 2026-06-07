@@ -10542,7 +10542,7 @@ function initEvents() {
       await saveBoardingFamilyGroupStatus(button.dataset.groupKey || "", nextStatus);
       return;
     }
-    if (["approve-boarding", "change-boarding", "cancel-boarding", "transition-boarding", "open-boarding-request-tab"].includes(action)) {
+    if (["approve-boarding", "change-boarding", "cancel-boarding", "transition-boarding", "open-boarding-request-tab", "open-owner-update-for-stay"].includes(action)) {
       event.stopPropagation();
       const record = boardingDogRecordForDisplay(button.dataset.id);
       const reference = boardingStayReferenceFromAction(button);
@@ -10565,6 +10565,9 @@ function initEvents() {
       }
       if (action === "open-boarding-request-tab") {
         openBoardingDogToTab(record, "Boarding & Request");
+      }
+      if (action === "open-owner-update-for-stay") {
+        openOwnerUpdateAlert(record.id, reference);
       }
       if (action === "cancel-boarding") {
         const updated = stayId
@@ -10626,6 +10629,10 @@ function initEvents() {
     if (button.dataset.action === "open-boarding-request-tab") {
       openBoardingDogToTab(record, "Boarding & Request");
     }
+    if (button.dataset.action === "open-owner-update-for-stay") {
+      openOwnerUpdateAlert(record.id, reference);
+      return;
+    }
     if (button.dataset.action === "cancel-boarding") {
       const updated = stayId
         ? await saveBoardingStayStatusTransition(record, stayId, "Cancelled", reference)
@@ -10656,6 +10663,10 @@ function initEvents() {
     }
     if (button.dataset.action === "inline-boarding-status") {
       await handleInlineBoardingStatusClick(button);
+      return;
+    }
+    if (button.dataset.action === "open-owner-update-for-stay") {
+      openOwnerUpdateAlert(record.id, boardingStayReferenceFromAction(button));
       return;
     }
     if (button.dataset.action === "open-mobile-stay-status-menu") {

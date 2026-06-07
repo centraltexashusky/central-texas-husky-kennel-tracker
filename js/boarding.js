@@ -305,12 +305,27 @@ function boardingTransitionActions(record = {}) {
     : "";
 }
 
+function boardingOwnerUpdateButtonHtml(record = {}, stay = {}, options = {}) {
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const targetStay = stay?.id ? boardingStayByReference(displayRecord, { stayId: stay.id, requestCode: stay.requestCode || "" }) || stay : ownerUpdateStayForRecord(displayRecord);
+  if (!ownerUpdateStayIsAvailable(displayRecord, targetStay)) return "";
+  const stayAttrs = boardingStayDataAttrs(displayRecord, targetStay);
+  const className = options.className || "secondary-button";
+  const label = options.label || "Update Owner";
+  return \`<button type="button" class="\${escapeHtml(className)}" data-action="open-owner-update-for-stay" data-id="\${escapeHtml(displayRecord.id || "")}" data-dog-id="\${escapeHtml(displayRecord.id || "")}"\${stayAttrs}>\${escapeHtml(label)}</button>\`;
+}
+
 function boardingStayTransitionActions(record = {}, stay = {}) {
   const currentStatus = boardingStayDisplayStatus(record, stay);
   const nextStatuses = boardingStatusTransitions[currentStatus] || [];
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
-  return nextStatuses.length
-    ? \`<div class="record-actions lifecycle-actions">\${nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding" data-next-status="\${escapeHtml(nextStatus)}" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${escapeHtml(stayTransitionLabel(currentStatus, nextStatus))}</button>\`).join("")}</div>\`
+  const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
+  const buttons = [
+    ownerUpdateButton,
+    ...nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding" data-next-status="\${escapeHtml(nextStatus)}" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${escapeHtml(stayTransitionLabel(currentStatus, nextStatus))}</button>\`),
+  ].filter(Boolean);
+  return buttons.length
+    ? \`<div class="record-actions lifecycle-actions">\${buttons.join("")}</div>\`
     : "";
 }
 
@@ -1840,6 +1855,8 @@ function boardingQuickActionButtons(record = {}) {
   if (status === "Ready For Pickup") {
     buttons.push(\`<button type="button" class="secondary-button" data-action="inline-boarding-status" data-next-status="Checked Out" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Check Out</button>\`);
   }
+  const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
+  if (ownerUpdateButton) buttons.push(ownerUpdateButton);
   if (status === "Checked Out") {
     buttons.push(\`<button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>View Record</button>\`);
   } else {
@@ -3757,9 +3774,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
   $("#boardingStayHistory").innerHTML = stays.length
     ? stays.map((stay) => {
       const requestCode = boardingStayRequestCode(displayRecord, stay);
-      const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
-        ? \`<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="\${escapeHtml(displayRecord.id)}" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Update Owner</button>\`
-        : "";
+      const ownerUpdateButton = boardingOwnerUpdateButtonHtml(displayRecord, stay);
       return \`<article class="record-card"><strong>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Remove Stay</button></div></article>\`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
@@ -3771,6 +3786,9 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const servicesText = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
   const serviceSummary = servicesText === "No service requests" ? "No service requested" : servicesText;
+  const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
+  const statusButtons = nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-next-status="\${escapeHtml(nextStatus)}">\${escapeHtml(stayTransitionLabel(status, nextStatus))}</button>\`);
+  const buttons = [ownerUpdateButton, ...statusButtons].filter(Boolean);
   return \`<section class="popup-record-section">
     <article class="record-card compact-record-card">
       <strong>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
@@ -3778,7 +3796,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
       <p><strong>Service request:</strong> \${escapeHtml(serviceSummary)}</p>
       <p>Status changes apply only to this boarding request/stay.</p>
     </article>
-    <div class="record-actions">\${nextStatuses.length ? nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-next-status="\${escapeHtml(nextStatus)}">\${escapeHtml(stayTransitionLabel(status, nextStatus))}</button>\`).join("") : "<p>No status changes are available for this stay.</p>"}</div>
+    <div class="record-actions">\${buttons.length ? buttons.join("") : "<p>No status changes are available for this stay.</p>"}</div>
   </section>\`;
 }
 
