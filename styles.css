@@ -181,10 +181,12 @@ iframe {
 
 .app-boot-loader {
   align-items: center;
+  align-content: center;
   background: linear-gradient(135deg, #071524 0%, #102a34 48%, #07121d 100%);
   color: var(--ink);
   display: none;
-  gap: 18px;
+  gap: 6px;
+  grid-auto-rows: max-content;
   inset: 0;
   justify-items: center;
   min-height: 100vh;
@@ -204,7 +206,14 @@ iframe {
   color: rgba(247, 251, 255, 0.88);
   font-size: 1.08rem;
   font-weight: 800;
+  line-height: 1.2;
   margin: 0;
+}
+
+.loading-dots {
+  display: inline-block;
+  min-width: 1.5em;
+  text-align: left;
 }
 
 body.is-auth-booting .app-boot-loader {
