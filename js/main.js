@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260607-owner-update-actions";
+import "./shared.js?v=20260607-owner-update-active-only";
 import "./auth.js?v=20260530-impersonation-guard";
 import "./customer.js?v=20260607-profile-photo-signing";
 import "./boarding.js?v=20260607-owner-update-actions";

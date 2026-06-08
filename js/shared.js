@@ -6651,10 +6651,11 @@ function dashboardMetrics() {
   const boardingBathDueRecords = [];
   const boardingServiceDue = [];
   const boardingServiceDueKeys = new Set();
-  let ownerUpdates = 0;
-  boardingDogs.forEach((dog) => {
-    if ((dog.flags || []).includes("Required update from owner")) ownerUpdates += 1;
-  });
+  const ownerUpdateDogs = boardingDogs.filter((dog) =>
+    (dog.flags || []).includes("Required update from owner")
+    && ownerUpdateStaysForRecord(dog).length
+  );
+  const ownerUpdates = ownerUpdateDogs.length;
   allBoardingDogs.forEach((dog) => {
     (dog.stays || []).forEach((stay) => {
       const status = boardingStayDisplayStatus(dog, stay);
@@ -6732,7 +6733,7 @@ function dashboardMetrics() {
     medicalCareDogs,
     ownerUpdates,
     vaccineIssues,
-    ownerUpdateDogs: boardingDogs.filter((dog) => (dog.flags || []).includes("Required update from owner")),
+    ownerUpdateDogs,
     vaccineIssueDogs: ownedDogs.filter(dogNeedsDhppVaccineReview),
     openRequestRecords: requests.filter((record) => !record.completed),
     urgentRequestRecords: requests.filter((record) => !record.completed && record.urgentNeeds),
