@@ -231,6 +231,7 @@ function setHelper(user, options = {}) {
     renderDailyTaskLists();
     fillCustomerDefaults();
     renderAllRecords();
+    scheduleProfilePhotoHydrationSweep(300);
   }
   if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(currentUser.role));
   startAutoSync();

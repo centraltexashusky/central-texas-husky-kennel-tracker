@@ -1,6 +1,6 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260608-efficiency-sync";
-import "./auth.js?v=20260608-efficiency-sync";
+import "./shared.js?v=20260609-photo-hydration";
+import "./auth.js?v=20260609-photo-hydration";
 import "./customer.js?v=20260608-efficiency-sync";
 import "./boarding.js?v=20260608-efficiency-sync";
 import "./daily.js?v=20260607-owned-health-due-history";

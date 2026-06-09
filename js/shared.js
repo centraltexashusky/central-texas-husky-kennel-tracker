@@ -114,6 +114,7 @@ var mediaZoomLevel = 1;
 var activeServiceInfoIcon = null;
 var serviceInfoTooltipEl = null;
 var signedMediaUrlCache = new Map();
+var profilePhotoHydrationTimers = new WeakMap();
 var customerProfileSyncInProgress = false;
 var authSessionSyncPromise = null;
 var authSessionSyncStartedAt = 0;
@@ -1033,7 +1034,10 @@ function initSupabaseClient() {
     }
     if (event === "SIGNED_IN" && session?.user) {
       if (Date.now() < suppressAuthSyncUntil) return;
-      syncAuthenticatedSupabaseUser(session.user, { switchAfterLogin: false }).catch((error) => {
+      scheduleProfilePhotoHydrationSweep(900);
+      syncAuthenticatedSupabaseUser(session.user, { switchAfterLogin: false }).then(() => {
+        scheduleProfilePhotoHydrationSweep(200);
+      }).catch((error) => {
         console.warn("Could not sync authenticated user profile.", error);
       });
     }
@@ -1369,6 +1373,7 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     setHelper(syncedUser, { switchAfterLogin: false, render: false });
     updateNavigationAccess();
     renderAllRecords();
+    scheduleProfilePhotoHydrationSweep(300);
     startAutoSync();
     if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(syncedUser.role));
     requirePasswordChangeIfNeeded();
@@ -3882,6 +3887,47 @@ function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
   return attrs.length ? " " + attrs.join(" ") : "";
 }
 
+function clearProfilePhotoHydrationTimer(element) {
+  const timer = profilePhotoHydrationTimers.get(element);
+  if (timer) window.clearTimeout(timer);
+  profilePhotoHydrationTimers.delete(element);
+}
+
+function scheduleProfilePhotoHydrationRetry(element, relatedInitials, token, error) {
+  if (!element || element.dataset.profilePhotoToken !== token) return;
+  const retries = Number(element.dataset.profilePhotoRetryCount || "0");
+  const delays = [900, 2500, 6000];
+  if (retries >= delays.length) {
+    if (error) console.warn("Profile photo signed URL failed after retry.", error);
+    return;
+  }
+  const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
+  const img = element.matches("img") ? element : element.querySelector("img");
+  element.dataset.profilePhotoRetryCount = String(retries + 1);
+  element.dataset.src = "";
+  if (storagePath) signedMediaUrlCache.delete(storagePath);
+  if (img && !img.dataset.directPhotoSource) {
+    img.removeAttribute("src");
+    img.hidden = true;
+  }
+  if (relatedInitials) relatedInitials.hidden = false;
+  clearProfilePhotoHydrationTimer(element);
+  const timer = window.setTimeout(() => {
+    profilePhotoHydrationTimers.delete(element);
+    hydrateProfilePhotoElement(element, relatedInitials);
+  }, delays[retries]);
+  profilePhotoHydrationTimers.set(element, timer);
+}
+
+function applyHydratedProfilePhoto(element, img, initials, signedUrl, token) {
+  if (!element || !img || !signedUrl || element.dataset.profilePhotoToken !== token) return;
+  clearProfilePhotoHydrationTimer(element);
+  element.dataset.src = signedUrl;
+  element.dataset.profilePhotoRetryCount = "0";
+  img.hidden = false;
+  if (initials) initials.hidden = true;
+}
+
 function hydrateProfilePhotoElement(element, relatedInitials = null) {
   if (!element) return;
   const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
@@ -3890,23 +3936,40 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
     || (element.matches("[data-profile-photo-initials]") ? element : element.querySelector("[data-profile-photo-initials]"))
     || (element.matches("img") ? element.parentElement?.querySelector("[data-profile-photo-initials], [id$='PhotoInitials']") : null);
   const existingSource = element.dataset.src || img?.getAttribute("src") || "";
-  if (!storagePath || existingSource || localTestMode || !img) return;
+  if (!storagePath || localTestMode || !img) return;
+  if (existingSource) {
+    const alreadyLoaded = !img.hidden && (!img.complete || img.naturalWidth > 0);
+    if (alreadyLoaded) return;
+    element.dataset.src = "";
+    img.removeAttribute("src");
+  }
   const token = storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
   element.dataset.profilePhotoToken = token;
   signedMediaUrlForPath(storagePath, {
     sourceRecordId: element.dataset.sourceRecordId || "",
     sourceRecordType: element.dataset.sourceRecordType || "",
   }).then((signedUrl) => {
-    if (!signedUrl || element.dataset.profilePhotoToken !== token) return;
+    if (element.dataset.profilePhotoToken !== token) return;
+    if (!signedUrl) {
+      scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Profile photo access returned an empty signed URL."));
+      return;
+    }
+    img.onload = () => applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
+    img.onerror = () => {
+      if (element.dataset.profilePhotoToken !== token) return;
+      scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Signed profile photo image failed to load."));
+    };
     img.src = signedUrl;
-    img.hidden = false;
-    element.dataset.src = signedUrl;
-    if (initials) initials.hidden = true;
-  }).catch((error) => console.warn("Profile photo signed URL failed", error));
+    if (img.complete && img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
+  }).catch((error) => scheduleProfilePhotoHydrationRetry(element, initials, token, error));
 }
 
 function hydrateProfilePhotoElements(root = document) {
   root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => hydrateProfilePhotoElement(element));
+}
+
+function scheduleProfilePhotoHydrationSweep(delay = 600) {
+  window.setTimeout(() => hydrateProfilePhotoElements(document), delay);
 }
 
 async function signedMediaUrlForPath(storagePath = "", context = {}) {
