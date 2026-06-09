@@ -3972,7 +3972,7 @@ function revealLoadedProfilePhotoElement(element, relatedInitials = null) {
   if (!element) return false;
   const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
   const img = element.matches("img") ? element : element.querySelector("img");
-  if (!storagePath || !img?.complete || img.naturalWidth <= 0) return false;
+  if (!storagePath || !img || img.naturalWidth <= 0) return false;
   const token = element.dataset.profilePhotoToken || profilePhotoHydrationToken(element, storagePath);
   element.dataset.profilePhotoToken = token;
   const signedUrl = element.dataset.src || img.currentSrc || img.src || "";
@@ -4005,7 +4005,7 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
       return;
     }
     const revealIfLoaded = () => {
-      if (img.complete && img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
+      if (img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
     };
     img.onload = () => applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
     img.onerror = () => {
