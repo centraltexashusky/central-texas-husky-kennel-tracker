@@ -310,9 +310,25 @@ function boardingOwnerUpdateButtonHtml(record = {}, stay = {}, options = {}) {
   const targetStay = stay?.id ? boardingStayByReference(displayRecord, { stayId: stay.id, requestCode: stay.requestCode || "" }) || stay : ownerUpdateStayForRecord(displayRecord);
   if (!ownerUpdateStayIsAvailable(displayRecord, targetStay)) return "";
   const stayAttrs = boardingStayDataAttrs(displayRecord, targetStay);
-  const className = options.className || "secondary-button";
   const label = options.label || "Update Owner";
-  return \`<button type="button" class="\${escapeHtml(className)}" data-action="open-owner-update-for-stay" data-id="\${escapeHtml(displayRecord.id || "")}" data-dog-id="\${escapeHtml(displayRecord.id || "")}"\${stayAttrs}>\${escapeHtml(label)}</button>\`;
+  const hasTodayUpdate = boardingOwnerUpdateLoggedToday(displayRecord, targetStay);
+  const statusClass = hasTodayUpdate ? "boarding-owner-update-current" : "boarding-owner-update-needed";
+  const statusLabel = hasTodayUpdate ? "Owner update sent today" : "No owner update sent today";
+  const className = [options.className || "secondary-button", statusClass].filter(Boolean).join(" ");
+  return \`<button type="button" class="\${escapeHtml(className)}" data-action="open-owner-update-for-stay" data-id="\${escapeHtml(displayRecord.id || "")}" data-dog-id="\${escapeHtml(displayRecord.id || "")}" title="\${escapeHtml(statusLabel)}" aria-label="\${escapeHtml(label + ": " + statusLabel)}"\${stayAttrs}>\${escapeHtml(label)}</button>\`;
+}
+
+function boardingOwnerUpdateLoggedToday(record = {}, stay = {}, date = todayDate()) {
+  if (!stay?.id) return false;
+  const requestCode = boardingStayRequestCode(record, stay);
+  return arrayValue(record.customerUpdates).some((update) => {
+    const updateDate = dateOnly(update.createdAt || update.submittedAt || update.updatedAt || update.savedAt);
+    if (updateDate !== date) return false;
+    if (update.stayId && update.stayId === stay.id) return true;
+    if (requestCode && update.requestCode === requestCode) return true;
+    if (stay.dropoffTime && stay.pickupTime && update.stayDropoffTime === stay.dropoffTime && update.stayPickupTime === stay.pickupTime) return true;
+    return false;
+  });
 }
 
 function boardingStayTransitionActions(record = {}, stay = {}, options = {}) {
@@ -3183,9 +3199,8 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   const cancellationAudit = status === "Cancelled" ? boardingCancellationAuditHtml(record, stay) : "";
   const approveAction = status === "Cancelled" ? \`<button type="button" class="secondary-button" data-action="approve-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Approve Request</button>\` : "";
   const updateOwnerAction = boardingOwnerUpdateButtonHtml(record, stay, { className: "secondary-button boarding-request-primary-button" });
-  const openDetailsAction = \`<button type="button" class="secondary-button boarding-request-primary-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Open Dog Detail</button>\`;
   const changeAction = \`<button type="button" class="secondary-button boarding-request-primary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change Request</button>\`;
-  const actions = \`<div class="record-actions boarding-request-primary-actions">\${updateOwnerAction}\${openDetailsAction}\${changeAction}\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay, { includeOwnerUpdate: false }) : boardingTransitionActions(record)}\`;
+  const actions = \`<div class="record-actions boarding-request-primary-actions">\${updateOwnerAction}\${changeAction}\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay, { includeOwnerUpdate: false }) : boardingTransitionActions(record)}\`;
   const familyChip = options.familyName ? \`<span class="status-chip boarding-family-chip">Same family: \${escapeHtml(options.familyName)}</span>\` : "";
   const rateRoleChip = boardingStayRateRoleChipHtml(stay, { familyName: options.familyName });
   return \`<article class="record-card clickable-card boarding-request-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request">
