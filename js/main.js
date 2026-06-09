@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260609-owner-update-submit-guard-v2";
+import "./shared.js?v=20260609-daily-task-fallback";
 import "./auth.js?v=20260609-photo-hydration";
 import "./customer.js?v=20260608-efficiency-sync";
 import "./boarding.js?v=20260609-owner-update-submit-guard-v2";

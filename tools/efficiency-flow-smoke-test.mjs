@@ -21,6 +21,8 @@ assert.equal(customerDogSelectionErrorMessage(4, 5), "Select up to 4 dogs for on
 assert.match(shared, /function dailyTaskCompletionFromRow/, "daily task completion row mapper is present");
 assert.match(shared, /function mergeDailyTaskCompletionRecords/, "daily task completion merge helper is present");
 assert.match(shared, /dailyTaskCompletionRecordsForDate\(date\)\.forEach/, "completedTasksForDate reads atomic completion rows");
+assert.match(shared, /function saveDailyTaskCompletionFallback/, "daily task completion fallback save helper is present");
+assert.doesNotMatch(shared, /Task sync setup is not finished/, "daily task completion does not block staff on a missing migration toast");
 const legacyCompletion = { shift: "morning", taskId: "feed", completedBy: "Legacy", completedAt: "2026-06-01T12:00:00Z" };
 const atomicCompletion = { shift: "morning", taskId: "feed", completedBy: "Atomic", completedAt: "2026-06-01T12:01:00Z", atomic: true };
 const byKey = new Map();

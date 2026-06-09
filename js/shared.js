@@ -2958,9 +2958,7 @@ async function saveStructuredCareLog(log) {
 
 async function completeDailyTaskRemote(completion = {}) {
   if (localTestMode || !supabaseClient) {
-    const completedTasks = [completion, ...completedTasksForDate(completion.date)];
-    await saveDailyWorkPayload(dailyWorkPayload(completion.date, { completedTasks }));
-    return { inserted: true, completion, local: true };
+    return saveDailyTaskCompletionFallback(completion, { local: true });
   }
   const params = {
     p_work_date: completion.date,
@@ -2972,10 +2970,9 @@ async function completeDailyTaskRemote(completion = {}) {
   };
   const { data, error } = await supabaseClient.rpc("complete_daily_task_atomic", params);
   if (error) {
-    const message = String(error.message || "");
-    if (/complete_daily_task_atomic|schema cache|function/i.test(message)) {
-      showToast("Task sync setup is not finished. Ask an admin to apply the Supabase migration.");
-      return { inserted: false, setupMissing: true };
+    if (dailyTaskAtomicCompletionSetupMissing(error)) {
+      console.warn("Daily task atomic completion setup is missing; saving through daily work record fallback.", error);
+      return saveDailyTaskCompletionFallback(completion, { setupMissing: true });
     }
     throw error;
   }
@@ -2991,6 +2988,17 @@ async function completeDailyTaskRemote(completion = {}) {
     completed_at: completion.completedAt,
   }], { replaceLocal: false })[0] || completion;
   return { inserted: row?.inserted !== false, completion: merged };
+}
+
+function dailyTaskAtomicCompletionSetupMissing(error) {
+  const message = String(error?.message || "");
+  return /complete_daily_task_atomic|schema cache|function/i.test(message) || remoteDailyTaskCompletionSetupMissing(error);
+}
+
+async function saveDailyTaskCompletionFallback(completion = {}, options = {}) {
+  const completedTasks = [completion, ...completedTasksForDate(completion.date)];
+  await saveDailyWorkPayload(dailyWorkPayload(completion.date, { completedTasks }));
+  return { inserted: true, completion, fallback: true, local: Boolean(options.local), setupMissing: Boolean(options.setupMissing) };
 }
 
 async function completeDailyTask(button) {
@@ -3025,7 +3033,6 @@ async function completeDailyTask(button) {
   button.setAttribute("aria-busy", "true");
   try {
     const result = await completeDailyTaskRemote(completion);
-    if (result.setupMissing) return;
     if (!result.inserted) {
       const completed = result.completion || completion;
       const when = completed.completedAt ? " at " + formatDateTime(completed.completedAt) : "";
