@@ -2216,6 +2216,23 @@ function setButtonLoading(button, loading, loadingText = "Saving...") {
   }
 }
 
+function setOwnerUpdateSubmitState(formEl, state = "", message = "") {
+  if (!formEl) return;
+  const saving = state === "saving";
+  formEl.dataset.ownerUpdateSubmitting = saving ? "true" : "";
+  formEl.setAttribute("aria-busy", saving ? "true" : "false");
+  const submitButton = formEl.querySelector("[data-owner-update-submit-button]") || formEl.querySelector('button[type="submit"]');
+  setButtonLoading(submitButton, saving, "Saving update...");
+  formEl.querySelectorAll("button").forEach((button) => {
+    if (button !== submitButton) button.disabled = saving;
+  });
+  const status = formEl.querySelector("[data-owner-update-submit-status]");
+  if (status) {
+    status.textContent = message;
+    status.className = ["form-submit-status owner-update-submit-status", state ? "is-" + state : ""].filter(Boolean).join(" ");
+  }
+}
+
 function setOwnedDogSaveStatus(message = "", state = "") {
   const status = $("#ownedDogSaveStatus");
   if (!status) return;
@@ -9629,18 +9646,39 @@ function initEvents() {
       return;
     }
     if (ownerUpdateForm) {
-      const record = boardingDogRecordForDisplay(ownerUpdateForm.dataset.id) || readRecords("boardingDog").find((item) => item.id === ownerUpdateForm.dataset.id);
-      if (!record) return;
-      const data = formPayload(ownerUpdateForm);
-      const reference = boardingStayReferenceFromAction(ownerUpdateForm);
-      const stay = ownerUpdateStayForRecord(record, reference);
-      const updated = await saveBoardingCustomerUpdateForStay(record, stay, {
-        note: data.dailyActivity,
-        input: ownerUpdateForm.elements.ownerUpdatePhoto,
-        clearOwnerUpdate: Boolean(ownerUpdateForm.elements.clearOwnerUpdate?.checked),
-        reference,
-      });
-      if (updated) showDetailDialog("Owner Update Saved", \`<p>The owner update for \${escapeHtml(updated.dogName || "this dog")} was saved to Stay ID: \${escapeHtml(stay.id ? boardingStayRequestCode(updated, stay) : "")}.</p>\`);
+      if (ownerUpdateForm.dataset.ownerUpdateSubmitting === "true") {
+        showToast("Owner update is already saving. Wait for confirmation.");
+        return;
+      }
+      setOwnerUpdateSubmitState(ownerUpdateForm, "saving", "Saving owner update. Please wait...");
+      showToast("Saving owner update...");
+      try {
+        const record = boardingDogRecordForDisplay(ownerUpdateForm.dataset.id) || readRecords("boardingDog").find((item) => item.id === ownerUpdateForm.dataset.id);
+        if (!record) {
+          setOwnerUpdateSubmitState(ownerUpdateForm, "error", "This boarding dog record could not be found.");
+          showToast("This boarding dog record could not be found.");
+          return;
+        }
+        const data = formPayload(ownerUpdateForm);
+        const reference = boardingStayReferenceFromAction(ownerUpdateForm);
+        const stay = ownerUpdateStayForRecord(record, reference);
+        const updated = await saveBoardingCustomerUpdateForStay(record, stay, {
+          note: data.dailyActivity,
+          input: ownerUpdateForm.elements.ownerUpdatePhoto,
+          clearOwnerUpdate: Boolean(ownerUpdateForm.elements.clearOwnerUpdate?.checked),
+          reference,
+        });
+        if (updated) {
+          setOwnerUpdateSubmitState(ownerUpdateForm, "success", "Owner update saved.");
+          showDetailDialog("Owner Update Saved", \`<p>The owner update for \${escapeHtml(updated.dogName || "this dog")} was saved to Stay ID: \${escapeHtml(stay.id ? boardingStayRequestCode(updated, stay) : "")}.</p>\`);
+        } else {
+          setOwnerUpdateSubmitState(ownerUpdateForm, "error", "Owner update was not saved. Add a note, photo, or video and try again.");
+        }
+      } catch (error) {
+        const message = "Owner update could not be saved: " + friendlyNetworkError(error);
+        setOwnerUpdateSubmitState(ownerUpdateForm, "error", message);
+        showToast(message);
+      }
       return;
     }
     if (vaccineUpdateForm) {
