@@ -315,11 +315,11 @@ function boardingOwnerUpdateButtonHtml(record = {}, stay = {}, options = {}) {
   return \`<button type="button" class="\${escapeHtml(className)}" data-action="open-owner-update-for-stay" data-id="\${escapeHtml(displayRecord.id || "")}" data-dog-id="\${escapeHtml(displayRecord.id || "")}"\${stayAttrs}>\${escapeHtml(label)}</button>\`;
 }
 
-function boardingStayTransitionActions(record = {}, stay = {}) {
+function boardingStayTransitionActions(record = {}, stay = {}, options = {}) {
   const currentStatus = boardingStayDisplayStatus(record, stay);
   const nextStatuses = boardingStatusTransitions[currentStatus] || [];
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
-  const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
+  const ownerUpdateButton = options.includeOwnerUpdate === false ? "" : boardingOwnerUpdateButtonHtml(record, stay);
   const buttons = [
     ownerUpdateButton,
     ...nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding" data-next-status="\${escapeHtml(nextStatus)}" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${escapeHtml(stayTransitionLabel(currentStatus, nextStatus))}</button>\`),
@@ -685,6 +685,23 @@ function boardingStayRequestDisplayText(value = {}, options = {}) {
 function boardingStayServicesText(stay = {}, options = {}) {
   const requests = arrayValue(stay.requests).map((request) => boardingStayRequestDisplayText(request, options)).filter(Boolean);
   return requests.length ? requests.join(", ") : "No service requests";
+}
+
+function boardingRequestServiceRowsHtml(record = {}, stay = {}) {
+  const tasks = boardingStayServiceTasks(record, stay);
+  if (!tasks.length) return \`<p class="boarding-request-empty-services">No service requests</p>\`;
+  return \`<div class="boarding-request-service-list" aria-label="Requested stay services">\${tasks.map((task) => {
+    const quantity = boardingServiceTaskQuantity(task);
+    const serviceName = task.serviceName || boardingServiceTaskDisplayName(task);
+    const unitPrice = Number(task.unitPrice || 0);
+    const unit = task.unit || "";
+    const priceMeta = unitPrice ? \`\${quantity} x \${money(unitPrice)}\${unit ? \` \${unit}\` : ""}\` : task.source === "check-in" ? "Added at check-in" : "Requested";
+    return \`<div class="boarding-request-service-row"><span class="boarding-request-service-quantity">\${escapeHtml(quantity)}</span><span class="boarding-request-service-copy"><strong>\${escapeHtml(serviceName)}</strong><small>\${escapeHtml(priceMeta)}</small></span></div>\`;
+  }).join("")}</div>\`;
+}
+
+function boardingRequestEstimatedTotalHtml(total = 0) {
+  return total ? \`<div class="boarding-request-total-row"><span>Est. Total</span><strong>\${money(total)}</strong></div>\` : "";
 }
 
 function boardingStayRequestTotal(requests = [], options = {}) {
@@ -3155,21 +3172,39 @@ function boardingFamilySharedGroupKey(entries = []) {
 function boardingRequestCardHtml(entry = {}, options = {}) {
   const record = entry.record || {};
   const stay = entry.stay || {};
-  const services = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
   const status = entry.status;
   const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const pricingSnapshot = options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay);
   const total = boardingStayInvoiceTotal(record, stay, pricingSnapshot ? { pricingSnapshot } : {});
+  const serviceRows = boardingRequestServiceRowsHtml(record, stay);
   const pricingWarning = arrayValue(pricingSnapshot?.pricingErrors).length
     ? \`<p class="service-warning-text">Pricing needs review: \${escapeHtml(arrayValue(pricingSnapshot.pricingErrors).join(" "))}</p>\`
     : "";
   const cancellationAudit = status === "Cancelled" ? boardingCancellationAuditHtml(record, stay) : "";
   const approveAction = status === "Cancelled" ? \`<button type="button" class="secondary-button" data-action="approve-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Approve Request</button>\` : "";
-  const openDetailsAction = \`<button type="button" class="secondary-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Open Dog Details</button>\`;
-  const actions = \`<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change</button>\${openDetailsAction}\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}\`;
+  const updateOwnerAction = boardingOwnerUpdateButtonHtml(record, stay, { className: "secondary-button boarding-request-primary-button" });
+  const openDetailsAction = \`<button type="button" class="secondary-button boarding-request-primary-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Open Dog Detail</button>\`;
+  const changeAction = \`<button type="button" class="secondary-button boarding-request-primary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change Request</button>\`;
+  const actions = \`<div class="record-actions boarding-request-primary-actions">\${updateOwnerAction}\${openDetailsAction}\${changeAction}\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay, { includeOwnerUpdate: false }) : boardingTransitionActions(record)}\`;
   const familyChip = options.familyName ? \`<span class="status-chip boarding-family-chip">Same family: \${escapeHtml(options.familyName)}</span>\` : "";
   const rateRoleChip = boardingStayRateRoleChipHtml(stay, { familyName: options.familyName });
-  return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><div class="boarding-request-card-main">\${boardingDogThumbnailHtml(record, { className: "boarding-request-photo", interactive: true })}<div class="boarding-request-card-content"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${rateRoleChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${cancellationAudit}\${boardingCancellationReasonHtml(record, stay)}</div></div>\${actions}</article>\`;
+  return \`<article class="record-card clickable-card boarding-request-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request">
+    <div class="boarding-request-card-main">
+      \${boardingDogThumbnailHtml(record, { className: "boarding-request-photo", interactive: true })}
+      <div class="boarding-request-card-content">
+        <strong class="boarding-request-dog-name">\${escapeHtml(record.dogName || "Dog")}</strong>
+        <div class="chip-row boarding-request-chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${rateRoleChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}</div>
+        <div class="chip-row boarding-request-chip-row boarding-request-status-row"><button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div>
+      </div>
+    </div>
+    <div class="boarding-request-date-row"><span>\${formatDateTime(stay.dropoffTime)}</span><span aria-hidden="true">-</span><span>\${formatDateTime(stay.pickupTime)}</span></div>
+    \${serviceRows}
+    \${pricingWarning}
+    \${boardingRequestEstimatedTotalHtml(total)}
+    \${cancellationAudit}
+    \${boardingCancellationReasonHtml(record, stay)}
+    \${actions}
+  </article>\`;
 }
 
 function boardingFamilyGroupHtml(entries = [], options = {}) {

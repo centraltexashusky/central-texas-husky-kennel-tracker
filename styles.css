@@ -4998,27 +4998,136 @@ button.boarding-dog-photo-thumb {
   width: 48px;
 }
 
+.boarding-request-card {
+  gap: 12px;
+}
+
 .boarding-request-card-main {
   align-items: start;
   display: grid;
   gap: 12px;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: 78px minmax(0, 1fr);
 }
 
 .boarding-request-card-content {
   display: grid;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 
+.boarding-request-dog-name {
+  font-size: 1.12rem;
+  line-height: 1.15;
+}
+
+.boarding-request-chip-row {
+  gap: 6px;
+}
+
+.boarding-request-status-row {
+  margin-top: 2px;
+}
+
 .boarding-request-photo {
-  height: 64px;
-  width: 64px;
+  height: 78px;
+  width: 78px;
 }
 
 .boarding-request-photo:hover {
   filter: brightness(1.06);
   transform: none;
+}
+
+.boarding-request-date-row {
+  align-items: center;
+  color: rgba(226, 242, 255, 0.82);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 1.02rem;
+  font-weight: 750;
+  gap: 6px;
+}
+
+.boarding-request-service-list {
+  display: grid;
+  gap: 0;
+}
+
+.boarding-request-service-row {
+  align-items: start;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr);
+  padding: 8px 0;
+}
+
+.boarding-request-service-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.boarding-request-service-quantity {
+  align-items: center;
+  background: rgba(125, 211, 252, 0.16);
+  border: 1px solid rgba(125, 211, 252, 0.42);
+  border-radius: 999px;
+  color: #e0f2fe;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 900;
+  justify-content: center;
+  min-height: 28px;
+  min-width: 28px;
+}
+
+.boarding-request-service-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.boarding-request-service-copy strong {
+  font-size: 0.98rem;
+  line-height: 1.25;
+}
+
+.boarding-request-service-copy small,
+.boarding-request-empty-services {
+  color: rgba(226, 242, 255, 0.64);
+  font-weight: 700;
+}
+
+.boarding-request-total-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.boarding-request-total-row span {
+  color: rgba(226, 242, 255, 0.72);
+  font-weight: 850;
+}
+
+.boarding-request-total-row strong {
+  font-size: 1.18rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.boarding-request-primary-actions,
+.boarding-request-card .lifecycle-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.boarding-request-primary-actions button,
+.boarding-request-card .lifecycle-actions button {
+  width: 100%;
 }
 
 .quick-action-grid {

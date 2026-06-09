@@ -2,7 +2,7 @@
 import "./shared.js?v=20260609-boarding-card-photos";
 import "./auth.js?v=20260609-photo-hydration";
 import "./customer.js?v=20260608-efficiency-sync";
-import "./boarding.js?v=20260609-boarding-card-photos";
+import "./boarding.js?v=20260609-request-card-layout";
 import "./daily.js?v=20260607-owned-health-due-history";
 import "./timesheet.js?v=20260608-efficiency-sync";
 import "./settings.js?v=20260604-pricing-groups-private-media";
