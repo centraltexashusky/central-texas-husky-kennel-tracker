@@ -1527,7 +1527,7 @@ function boardingQueueGroupHtml(title, records = []) {
         const stay = boardingQueueStayForGroup(title, record) || boardingPrimaryStay(record) || {};
         const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
         const kennel = boardingKennelLocationLabel(record, stay);
-        return \`<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="\${escapeHtml(record.id)}"\${stayAttrs}><span>\${escapeHtml(record.dogName || "Dog")}\${kennel ? \` <small class="kennel-tag">\${escapeHtml(kennel)}</small>\` : ""}</span><small>\${escapeHtml(boardingScheduleText(record, stay))}</small></button>\`;
+        return \`<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${boardingDogThumbnailHtml(record, { className: "boarding-queue-photo" })}<span class="boarding-queue-item-content"><span>\${escapeHtml(record.dogName || "Dog")}\${kennel ? \` <small class="kennel-tag">\${escapeHtml(kennel)}</small>\` : ""}</span><small>\${escapeHtml(boardingScheduleText(record, stay))}</small></span></button>\`;
       }).join("")
       : \`<p>No dogs in this group.</p>\`
   }\${overflowHtml}</article>\`;
@@ -1548,6 +1548,7 @@ function renderBoardingQueueGroups(records = []) {
     .filter(([title, groupRecords]) => alwaysShowLanes.has(title) || groupRecords.length > 0)
     .map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords))
     .join("");
+  hydrateProfilePhotoElements(container);
 }
 
 function boardingCalendarMonthKey(value = boardingCalendarMonth) {
@@ -1963,6 +1964,24 @@ function boardingDogMobilePhotoHtml(record = {}) {
     return \`<button type="button" class="mobile-dog-photo-button" data-action="view-media" data-src="\${escapeHtml(photo)}" data-media-type="image/jpeg" data-media-name="\${escapeHtml(\`\${name} profile photo\`)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs({ ...photoRecord, id: photoRecord.id || record.id, type: photoRecord.type || record.type || "boardingDog" }, "boardingDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`;
   }
   return \`<div class="mobile-dog-photo-button mobile-dog-photo-initials" aria-hidden="true">\${escapeHtml(avatarText(name))}</div>\`;
+}
+
+function boardingDogThumbnailHtml(record = {}, options = {}) {
+  const name = record.dogName || "Boarding dog";
+  const photoRecord = boardingDogPhotoRecord(record);
+  const photo = profilePhotoDirectSource(photoRecord);
+  const className = ["boarding-dog-photo-thumb", options.className || ""].filter(Boolean).join(" ");
+  const initials = \`<span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span>\`;
+  const image = \`<img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} />\`;
+  const recordWithFallback = { ...photoRecord, id: photoRecord.id || record.id, type: photoRecord.type || record.type || "boardingDog" };
+  const attrs = profilePhotoAccessAttrs(recordWithFallback, "boardingDog");
+  if (profilePhotoHasSource(photoRecord)) {
+    if (options.interactive) {
+      return \`<button type="button" class="\${escapeHtml(className)}" data-action="view-media" data-media-type="image/jpeg" data-media-name="\${escapeHtml(\`\${name} profile photo\`)}" aria-label="View \${escapeHtml(name)} photo"\${attrs}>\${image}\${initials}</button>\`;
+    }
+    return \`<span class="\${escapeHtml(className)}"\${attrs} aria-hidden="true">\${image}\${initials}</span>\`;
+  }
+  return \`<span class="\${escapeHtml(className)} boarding-dog-photo-thumb-initials" aria-hidden="true">\${escapeHtml(avatarText(name))}</span>\`;
 }
 
 function boardingQuickCardHtml(record = {}) {
@@ -3150,7 +3169,7 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   const actions = \`<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change</button>\${openDetailsAction}\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}\`;
   const familyChip = options.familyName ? \`<span class="status-chip boarding-family-chip">Same family: \${escapeHtml(options.familyName)}</span>\` : "";
   const rateRoleChip = boardingStayRateRoleChipHtml(stay, { familyName: options.familyName });
-  return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${rateRoleChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${cancellationAudit}\${boardingCancellationReasonHtml(record, stay)}\${actions}</article>\`;
+  return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><div class="boarding-request-card-main">\${boardingDogThumbnailHtml(record, { className: "boarding-request-photo", interactive: true })}<div class="boarding-request-card-content"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${rateRoleChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${cancellationAudit}\${boardingCancellationReasonHtml(record, stay)}</div></div>\${actions}</article>\`;
 }
 
 function boardingFamilyGroupHtml(entries = [], options = {}) {
@@ -3259,6 +3278,7 @@ function renderBoardingRequests() {
         .map((item) => (item.type === "family" ? boardingFamilyGroupHtml(item.entries, { groupKey: item.groupKey }) : boardingRequestCardHtml(item.entry)))
         .join("")
     : \`<p>No \${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>\`;
+  hydrateProfilePhotoElements(list);
 }
 
 function activeBoardingStay(record = {}, date = new Date()) {

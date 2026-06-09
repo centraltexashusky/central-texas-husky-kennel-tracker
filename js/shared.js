@@ -10895,6 +10895,7 @@ function initEvents() {
   $("#boardingRequestRecords").addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     const action = button?.dataset.action;
+    if (action === "view-media") return;
     if (["approve-boarding-group", "cancel-boarding-group"].includes(action)) {
       event.stopPropagation();
       const nextStatus = action === "cancel-boarding-group" ? "Cancelled" : "Approved";

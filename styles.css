@@ -2903,16 +2903,24 @@ textarea {
 }
 
 .boarding-queue-item {
+  align-items: center;
   background: var(--color-background-primary);
   border: 0.5px solid var(--color-border-tertiary);
   border-radius: 8px;
   box-shadow: none;
   color: var(--color-text-primary);
   display: grid;
-  gap: 2px;
-  min-height: 48px;
+  gap: 10px;
+  grid-template-columns: 48px minmax(0, 1fr);
+  min-height: 64px;
   padding: 8px 10px;
   text-align: left;
+}
+
+.boarding-queue-item-content {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .boarding-queue-item small {
@@ -4955,6 +4963,62 @@ button.mobile-dog-photo-button {
   color: #fff;
   font-size: 1.15rem;
   font-weight: 800;
+}
+
+.boarding-dog-photo-thumb {
+  align-items: center;
+  aspect-ratio: 1;
+  background: rgba(8, 17, 27, 0.46);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  color: #fff;
+  display: flex;
+  flex: 0 0 auto;
+  font-size: 0.92rem;
+  font-weight: 850;
+  justify-content: center;
+  overflow: hidden;
+}
+
+button.boarding-dog-photo-thumb {
+  box-shadow: none;
+  cursor: zoom-in;
+  min-height: 0;
+  padding: 0;
+}
+
+.boarding-dog-photo-thumb img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.boarding-queue-photo {
+  height: 48px;
+  width: 48px;
+}
+
+.boarding-request-card-main {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.boarding-request-card-content {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.boarding-request-photo {
+  height: 64px;
+  width: 64px;
+}
+
+.boarding-request-photo:hover {
+  filter: brightness(1.06);
+  transform: none;
 }
 
 .quick-action-grid {
