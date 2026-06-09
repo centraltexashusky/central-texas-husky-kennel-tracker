@@ -2978,13 +2978,27 @@ function boardingFamilySharedCrateReviewHtml(entries = []) {
   if (!ratePlan.isMemberPricing) return "";
   const snapshots = activeEntries.map((entry) => entry.stay?.pricingSnapshot || {});
   const hasSharedRole = snapshots.some((snapshot) => snapshot.sharedCrateRequested || snapshot.currentDogRole === "shared-crate-additional");
-  if (hasSharedRole) return "";
+  if (hasSharedRole) {
+    const grouped = new Map();
+    activeEntries.forEach((entry, index) => {
+      const snapshot = entry.stay?.pricingSnapshot || {};
+      const groupId = snapshot.crateGroupId || "crate-" + Math.floor(index / BOARDING_MAX_DOGS_PER_CRATE + 1);
+      if (!grouped.has(groupId)) grouped.set(groupId, []);
+      grouped.get(groupId).push(entry);
+    });
+    const groups = [...grouped.values()].map((group, index) => {
+      const dogs = group.map((entry) => entry.record?.dogName || "Dog").join(", ");
+      const label = group.length > 1 ? "shared crate pair" : "solo / additional crate";
+      return \`<li><strong>Crate \${index + 1}:</strong> \${escapeHtml(dogs)} <span>\${escapeHtml(label)}</span></li>\`;
+    }).join("");
+    return \`<article class="operation-availability-card is-warning"><strong>Shared-crate review</strong><p>Shared-crate pricing requested. Confirm kennel/crate assignment before approval.</p><ul class="compact-reason-list">\${groups}</ul></article>\`;
+  }
   const allPrimary = snapshots.every((snapshot) => !snapshot.currentDogRole || snapshot.currentDogRole === "primary");
   if (!allPrimary) return "";
   const message = ratePlan.sharedCrateRateConfig?.ok
     ? "Same-family group is billed as separate primary crates. Shared-crate pricing is not applied to this stay."
     : "Same-family group is billed as separate primary crates. No active shared-crate additional dog rate is configured in Services & Pricing, so a same-kennel discount cannot be calculated.";
-  return \`<article class="operation-availability-card is-warning"><strong>Pricing needs review</strong><p>\${escapeHtml(message)}</p></article>\`;
+  return \`<article class="operation-availability-card is-warning"><strong>Pricing needs review</strong><p>\${escapeHtml(message)}</p><p>If these dogs are sharing a crate, update the pricing snapshot and confirm kennel/crate assignment before approval.</p></article>\`;
 }
 
 function boardingFamilyPricingSnapshots(entries = []) {
@@ -3132,7 +3146,8 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
     : "";
   const cancellationAudit = status === "Cancelled" ? boardingCancellationAuditHtml(record, stay) : "";
   const approveAction = status === "Cancelled" ? \`<button type="button" class="secondary-button" data-action="approve-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Approve Request</button>\` : "";
-  const actions = \`<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change</button>\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}\`;
+  const openDetailsAction = \`<button type="button" class="secondary-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Open Dog Details</button>\`;
+  const actions = \`<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Change</button>\${openDetailsAction}\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}\`;
   const familyChip = options.familyName ? \`<span class="status-chip boarding-family-chip">Same family: \${escapeHtml(options.familyName)}</span>\` : "";
   const rateRoleChip = boardingStayRateRoleChipHtml(stay, { familyName: options.familyName });
   return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request"><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${dogTypeBadgeHtml("boardingDog")}\${familyChip}\${rateRoleChip}\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${pricingWarning}\${total ? \`<p><strong>Estimated total:</strong> \${money(total)}</p>\` : ""}\${cancellationAudit}\${boardingCancellationReasonHtml(record, stay)}\${actions}</article>\`;
@@ -3178,14 +3193,24 @@ function boardingRequestEntriesForGroupKey(groupKey = "") {
 }
 
 async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approved") {
+  if (supabaseClient && !localTestMode) await loadRemoteRecords({ render: false });
   const entries = boardingRequestEntriesForGroupKey(groupKey);
   if (!entries.length) {
     showToast("This family request group could not be found.");
     return [];
   }
   if (nextStatus === "Cancelled" && !window.confirm("Cancel every dog in this family request?")) return [];
+  const actionableEntries = entries.filter((entry) => {
+    if (nextStatus === "Approved") return ["Pending", "Cancelled"].includes(entry.status);
+    if (nextStatus === "Cancelled") return !["Cancelled", "Checked Out"].includes(entry.status);
+    return false;
+  });
+  if (!actionableEntries.length) {
+    showToast("This family request was already updated by another staff/admin.");
+    return [];
+  }
   const updated = [];
-  for (const entry of entries) {
+  for (const entry of actionableEntries) {
     const record = entry.record || {};
     const stay = entry.stay || {};
     const reference = stay.id ? { stayId: stay.id, requestCode: boardingStayRequestCode(record, stay) } : {};
@@ -3211,7 +3236,10 @@ async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approv
   renderBoardingRequests();
   renderCustomerRequests();
   renderDashboard();
-  showToast(\`Family request \${nextStatus === "Cancelled" ? "cancelled" : "approved"}.\`);
+  const partial = actionableEntries.length < entries.length;
+  showToast(partial
+    ? \`Updated \${updated.length} dog\${updated.length === 1 ? "" : "s"}; the rest were already changed by another staff/admin.\`
+    : \`Family request \${nextStatus === "Cancelled" ? "cancelled" : "approved"}.\`);
   return updated;
 }
 

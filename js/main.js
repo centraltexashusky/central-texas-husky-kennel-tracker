@@ -1,12 +1,12 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260607-owner-update-active-only";
-import "./auth.js?v=20260530-impersonation-guard";
-import "./customer.js?v=20260607-profile-photo-signing";
-import "./boarding.js?v=20260607-owner-update-actions";
+import "./shared.js?v=20260608-efficiency-sync";
+import "./auth.js?v=20260608-efficiency-sync";
+import "./customer.js?v=20260608-efficiency-sync";
+import "./boarding.js?v=20260608-efficiency-sync";
 import "./daily.js?v=20260607-owned-health-due-history";
-import "./timesheet.js?v=20260604-open-timesheet";
+import "./timesheet.js?v=20260608-efficiency-sync";
 import "./settings.js?v=20260604-pricing-groups-private-media";
-import "./notifications.js?v=20260605-customer-cancel-alert";
+import "./notifications.js?v=20260608-efficiency-sync";
 import "./search.js?v=20260530-v3-fix-pass";
 
 initializeApp().catch((error) => {

@@ -200,7 +200,7 @@ function renderTimesheet() {
 	  renderScheduleReviewTab();
 	}
 
-function saveTimeEntry(payload, options = {}) {
+async function saveTimeEntry(payload, options = {}) {
   const existing = payload.id ? readRecords("timesheet").find((record) => record.id === payload.id) : null;
   const clockInTime = localDateTimeToIso(payload.clockInTime);
   const clockOutTime = localDateTimeToIso(payload.clockOutTime);
@@ -217,8 +217,8 @@ function saveTimeEntry(payload, options = {}) {
     hours: hoursBetween(clockInTime, clockOutTime),
     note: payload.note || "",
   };
+  await sendPayload(record);
   upsertRecord("timesheet", record);
-  sendPayload(record).catch((error) => console.warn("Timesheet save failed", error));
   renderTimesheet();
   if (!options.silent) showToast("Time entry saved.");
   return record;

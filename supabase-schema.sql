@@ -1,6 +1,8 @@
 -- Central Texas Husky kennel tracker Supabase setup.
 -- Run this in Supabase SQL Editor after creating the project.
 
+create extension if not exists pgcrypto;
+
 create table if not exists public.kennel_records (
   id text primary key,
   type text not null,
@@ -215,6 +217,156 @@ using (
   or public.kennel_customer_can_write(type, payload)
 )
 with check (public.kennel_customer_can_write(type, payload));
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'kennel_records'
+    ) then
+    alter publication supabase_realtime add table public.kennel_records;
+  end if;
+end $$;
+
+create table if not exists public.daily_task_completions (
+  id uuid primary key default gen_random_uuid(),
+  work_date date not null,
+  shift text not null,
+  task_id text not null,
+  task_text text not null default '',
+  completed_by text not null default '',
+  completed_email text not null default '',
+  completed_user_id uuid,
+  completed_at timestamptz not null default now(),
+  inserted_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (work_date, shift, task_id)
+);
+
+create index if not exists daily_task_completions_work_date_idx on public.daily_task_completions (work_date desc);
+create index if not exists daily_task_completions_completed_at_idx on public.daily_task_completions (completed_at desc);
+create index if not exists daily_task_completions_completed_email_idx on public.daily_task_completions (completed_email);
+
+alter table public.daily_task_completions enable row level security;
+
+drop policy if exists "Kennel staff can read daily task completions" on public.daily_task_completions;
+drop policy if exists "Kennel staff can insert daily task completions" on public.daily_task_completions;
+
+create policy "Kennel staff can read daily task completions"
+on public.daily_task_completions
+for select
+to authenticated
+using (kennel_private.kennel_is_staff_member());
+
+create policy "Kennel staff can insert daily task completions"
+on public.daily_task_completions
+for insert
+to authenticated
+with check (kennel_private.kennel_is_staff_member());
+
+create or replace function public.complete_daily_task_atomic(
+  p_work_date date,
+  p_shift text,
+  p_task_id text,
+  p_task_text text default '',
+  p_completed_by text default '',
+  p_completed_email text default ''
+)
+returns table (
+  inserted boolean,
+  id uuid,
+  work_date date,
+  shift text,
+  task_id text,
+  task_text text,
+  completed_by text,
+  completed_email text,
+  completed_user_id uuid,
+  completed_at timestamptz,
+  inserted_at timestamptz,
+  updated_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_completion public.daily_task_completions%rowtype;
+  v_inserted boolean := false;
+begin
+  if not kennel_private.kennel_is_staff_member() then
+    raise exception 'Staff access required.' using errcode = '42501';
+  end if;
+
+  insert into public.daily_task_completions (
+    work_date,
+    shift,
+    task_id,
+    task_text,
+    completed_by,
+    completed_email,
+    completed_user_id
+  )
+  values (
+    p_work_date,
+    lower(trim(coalesce(p_shift, 'morning'))),
+    trim(coalesce(p_task_id, '')),
+    coalesce(nullif(trim(p_task_text), ''), trim(coalesce(p_task_id, ''))),
+    coalesce(nullif(trim(p_completed_by), ''), 'Staff'),
+    coalesce(nullif(lower(trim(p_completed_email)), ''), public.kennel_auth_email()),
+    auth.uid()
+  )
+  on conflict (work_date, shift, task_id) do nothing
+  returning * into v_completion;
+
+  if found then
+    v_inserted := true;
+  else
+    select *
+    into v_completion
+    from public.daily_task_completions existing
+    where existing.work_date = p_work_date
+      and existing.shift = lower(trim(coalesce(p_shift, 'morning')))
+      and existing.task_id = trim(coalesce(p_task_id, ''))
+    limit 1;
+  end if;
+
+  return query select
+    v_inserted,
+    v_completion.id,
+    v_completion.work_date,
+    v_completion.shift,
+    v_completion.task_id,
+    v_completion.task_text,
+    v_completion.completed_by,
+    v_completion.completed_email,
+    v_completion.completed_user_id,
+    v_completion.completed_at,
+    v_completion.inserted_at,
+    v_completion.updated_at;
+end;
+$$;
+
+revoke all on function public.complete_daily_task_atomic(date, text, text, text, text, text) from public;
+grant execute on function public.complete_daily_task_atomic(date, text, text, text, text, text) to authenticated;
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'daily_task_completions'
+    ) then
+    alter publication supabase_realtime add table public.daily_task_completions;
+  end if;
+end $$;
 
 -- Storage bucket for direct file uploads.
 -- If your Supabase project does not allow bucket creation from SQL, create this

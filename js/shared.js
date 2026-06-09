@@ -71,6 +71,10 @@ var syncNowButton = $("#syncNowButton");
 var headerUserName = $("#headerUserName");
 var headerLogoutButton = $("#headerLogoutButton");
 var syncIntervalId = null;
+var realtimeChannel = null;
+var realtimeRenderTimer = null;
+var realtimePendingTypes = new Set();
+var realtimeReconnectTimer = null;
 var remoteLoadInProgress = false;
 var lastRemoteRecordsSignature = null;
 var deferredRemoteRenderTimer = null;
@@ -299,6 +303,7 @@ var stateKeys = {
   timesheet: "cth-timesheet-records",
   service: "cth-service-records",
   dailyTask: "cth-dailyTask-records",
+  dailyTaskCompletion: "cth-dailyTaskCompletion-records",
   careLog: "cth-careLog-records",
   customerDog: "cth-customerDog-records",
   dog: "cth-dog-records",
@@ -338,6 +343,8 @@ var stateKeys = {
 };
 
 var BOARDING_MAX_DOGS_PER_CRATE = 2;
+var BOARDING_MAX_DOGS_PER_REQUEST = 4;
+var TASK_COMPLETION_LOOKBACK_DAYS = 120;
 
 var defaultServices = [
   { serviceName: "Companion Puppy Placement Template", category: "Puppy placement", basePrice: "", unit: "per puppy", depositAmount: "", defaultDuration: "", flags: ["Template", "Admin only"], pricingNotes: "Template only. Admin must enter a price and mark Active before this item can be used." },
@@ -1362,6 +1369,7 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     setHelper(syncedUser, { switchAfterLogin: false, render: false });
     updateNavigationAccess();
     renderAllRecords();
+    startAutoSync();
     if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(syncedUser.role));
     requirePasswordChangeIfNeeded();
     return syncedUser;
@@ -2228,9 +2236,27 @@ function setOwnedDogSubmitting(formEl, submitting, message = "") {
 
 
 function stopAutoSync() {
-  if (!syncIntervalId) return;
-  window.clearInterval(syncIntervalId);
-  syncIntervalId = null;
+  if (syncIntervalId) {
+    window.clearInterval(syncIntervalId);
+    syncIntervalId = null;
+  }
+  if (realtimeRenderTimer) {
+    window.clearTimeout(realtimeRenderTimer);
+    realtimeRenderTimer = null;
+  }
+  if (realtimeReconnectTimer) {
+    window.clearTimeout(realtimeReconnectTimer);
+    realtimeReconnectTimer = null;
+  }
+  realtimePendingTypes.clear();
+  if (realtimeChannel && supabaseClient?.removeChannel) {
+    const channel = realtimeChannel;
+    realtimeChannel = null;
+    const removeResult = supabaseClient.removeChannel(channel);
+    if (removeResult?.catch) removeResult.catch((error) => console.warn("Realtime channel cleanup failed.", error));
+    return;
+  }
+  realtimeChannel = null;
 }
 
 // Extracted to js/auth.js: clearLocalAppSession
@@ -2622,6 +2648,46 @@ function completedTasksForRecord(record = {}) {
   ];
 }
 
+function dailyTaskCompletionFromRow(row = {}) {
+  const workDate = dateOnly(row.work_date || row.workDate || row.date || "");
+  const shift = String(row.shift || "morning").trim() || "morning";
+  const taskId = String(row.task_id || row.taskId || "").trim();
+  const taskText = row.task_text || row.taskText || taskId;
+  const completedAt = row.completed_at || row.completedAt || row.inserted_at || row.insertedAt || row.updated_at || row.updatedAt || "";
+  return {
+    type: "dailyTaskCompletion",
+    id: String(row.id || taskKey(shift, taskId || taskText)),
+    workDate,
+    date: workDate,
+    shift,
+    taskId,
+    taskText,
+    shiftLabel: taskTabLabel(shift),
+    completedBy: row.completed_by || row.completedBy || "Staff",
+    completedEmail: row.completed_email || row.completedEmail || "",
+    completedUserId: row.completed_user_id || row.completedUserId || "",
+    completedAt,
+    insertedAt: row.inserted_at || row.insertedAt || completedAt,
+    updatedAt: row.updated_at || row.updatedAt || completedAt,
+    atomic: true,
+  };
+}
+
+function mergeDailyTaskCompletionRecords(rows = [], options = {}) {
+  const records = arrayValue(rows)
+    .map(dailyTaskCompletionFromRow)
+    .filter((record) => record.date && (record.taskId || record.taskText));
+  mergeRecords("dailyTaskCompletion", records, options);
+  return records;
+}
+
+function dailyTaskCompletionRecordsForDate(date = currentDailyDate()) {
+  const workDate = dateOnly(date);
+  return readRecords("dailyTaskCompletion")
+    .filter((record) => !record.removed && dateOnly(record.date || record.workDate) === workDate)
+    .map(dailyTaskCompletionFromRow);
+}
+
 function completedTasksForDate(date = currentDailyDate()) {
   const byKey = new Map();
   dailyTaskRecordsForDate(date).forEach((record) => {
@@ -2629,6 +2695,10 @@ function completedTasksForDate(date = currentDailyDate()) {
       const key = completion.taskId ? taskKey(completion.shift, completion.taskId) : \`\${completion.shift}:text:\${completion.taskText}\`;
       if (!byKey.has(key)) byKey.set(key, completion);
     });
+  });
+  dailyTaskCompletionRecordsForDate(date).forEach((completion) => {
+    const key = completion.taskId ? taskKey(completion.shift, completion.taskId) : completion.shift + ":text:" + completion.taskText;
+    byKey.set(key, completion);
   });
   return [...byKey.values()].sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0));
 }
@@ -2864,6 +2934,43 @@ async function saveStructuredCareLog(log) {
   return saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
 }
 
+async function completeDailyTaskRemote(completion = {}) {
+  if (localTestMode || !supabaseClient) {
+    const completedTasks = [completion, ...completedTasksForDate(completion.date)];
+    await saveDailyWorkPayload(dailyWorkPayload(completion.date, { completedTasks }));
+    return { inserted: true, completion, local: true };
+  }
+  const params = {
+    p_work_date: completion.date,
+    p_shift: completion.shift,
+    p_task_id: completion.taskId,
+    p_task_text: completion.taskText,
+    p_completed_by: completion.completedBy,
+    p_completed_email: completion.completedEmail,
+  };
+  const { data, error } = await supabaseClient.rpc("complete_daily_task_atomic", params);
+  if (error) {
+    const message = String(error.message || "");
+    if (/complete_daily_task_atomic|schema cache|function/i.test(message)) {
+      showToast("Task sync setup is not finished. Ask an admin to apply the Supabase migration.");
+      return { inserted: false, setupMissing: true };
+    }
+    throw error;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  const merged = mergeDailyTaskCompletionRecords([row || {
+    id: completion.id,
+    work_date: completion.date,
+    shift: completion.shift,
+    task_id: completion.taskId,
+    task_text: completion.taskText,
+    completed_by: completion.completedBy,
+    completed_email: completion.completedEmail,
+    completed_at: completion.completedAt,
+  }], { replaceLocal: false })[0] || completion;
+  return { inserted: row?.inserted !== false, completion: merged };
+}
+
 async function completeDailyTask(button) {
   if (!helperIsLoggedIn()) {
     showToast("Sign in first.");
@@ -2871,12 +2978,13 @@ async function completeDailyTask(button) {
   }
   const date = currentDailyDate();
   const shift = button.dataset.shift || "morning";
-  const taskId = button.dataset.id || "";
   const taskText = button.dataset.taskText || "";
+  const taskId = button.dataset.id || taskTemplateId(shift, taskText, 0);
   const completionIndex = dailyTaskCompletionIndex(date);
   if (completionIndex.has(taskKey(shift, taskId))) {
     const completed = completionIndex.get(taskKey(shift, taskId));
-    showToast(\`Already completed by \${completed.completedBy || "another staff member"}.\`);
+    const when = completed.completedAt ? " at " + formatDateTime(completed.completedAt) : "";
+    showToast("Already completed by " + (completed.completedBy || "another staff member") + when + ".");
     renderDailyTaskLists();
     return;
   }
@@ -2891,9 +2999,27 @@ async function completeDailyTask(button) {
     completedAt: new Date().toISOString(),
     date,
   };
-  const completedTasks = [completion, ...completedTasksForDate(date)];
-  await saveDailyWorkPayload(dailyWorkPayload(date, { completedTasks }));
-  showToast(\`\${taskText} marked done.\`);
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  try {
+    const result = await completeDailyTaskRemote(completion);
+    if (result.setupMissing) return;
+    if (!result.inserted) {
+      const completed = result.completion || completion;
+      const when = completed.completedAt ? " at " + formatDateTime(completed.completedAt) : "";
+      showToast("Already completed by " + (completed.completedBy || "another staff member") + when + ".");
+    } else {
+      showToast(taskText + " marked done.");
+    }
+    renderDailyTaskLists();
+    renderDashboard();
+  } catch (error) {
+    console.warn("Daily task completion failed.", error);
+    showToast("Task could not be completed: " + error.message);
+  } finally {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+  }
 }
 
 // Extracted to js/daily.js: removeDailyCareLog
@@ -3296,6 +3422,56 @@ function renderAllRecordsFromRemoteLoad() {
   renderAllRecords({ activeOnly: true });
 }
 
+function realtimeSourceIsCurrentUser(row = {}) {
+  const currentId = currentDbUserId();
+  const rowUserId = row.user_id || row.completed_user_id || "";
+  if (currentId && rowUserId && String(currentId) === String(rowUserId)) return true;
+  const source = row.payload || row;
+  const currentEmail = normalizeEmail(currentUser?.email || helperEmail?.value || "");
+  const rowEmail = normalizeEmail(row.helper_email || row.completed_email || source.helperEmail || source.completedEmail || source.ownerEmail || source.customerEmail || "");
+  return Boolean(currentEmail && rowEmail && currentEmail === rowEmail);
+}
+
+function renderAfterRealtimeTypes(types = []) {
+  const typeSet = new Set(arrayValue(types).filter(Boolean));
+  if (!typeSet.size) return;
+  const activePage = activePageId();
+  if (typeSet.has("dailyTask") || typeSet.has("dailyTaskCompletion") || typeSet.has("careLog")) {
+    renderDailyTaskLists();
+    renderDashboard();
+  }
+  if (typeSet.has("boardingDog") || typeSet.has("customerDog") || typeSet.has("service") || typeSet.has("kennelLocation") || typeSet.has("kennelBuilding")) {
+    renderBoardingDogs();
+    renderBoardingRequests();
+    renderCustomerRequests();
+    renderDashboard();
+  }
+  if (typeSet.has("timesheet") && (currentRole() === "admin" || activePage === "timesheetPage")) {
+    renderTimesheet();
+    updateTimeDisplays();
+  }
+  if (typeSet.has("request")) renderRequests();
+  if (typeSet.has("maintenance")) renderMaintenance();
+  if (typeSet.has("ownedDog") || typeSet.has("dogVaccination") || typeSet.has("dogInternalNote") || typeSet.has("dogActivityLog")) renderOwnedDogs();
+  if (typeSet.has("notificationLog")) renderNotifications();
+  if (activePage === "customerPage" && (typeSet.has("customerDog") || typeSet.has("boardingDog"))) renderCustomerDogs();
+  if (activePage === "customerUpdatesPage" && (typeSet.has("boardingDog") || typeSet.has("reservationCustomerUpdate"))) renderCustomerUpdates();
+  renderSharedRecords();
+}
+
+function scheduleRealtimeRender(types = []) {
+  arrayValue(types).forEach((type) => {
+    if (type) realtimePendingTypes.add(type);
+  });
+  if (realtimeRenderTimer) window.clearTimeout(realtimeRenderTimer);
+  realtimeRenderTimer = window.setTimeout(() => {
+    const pending = [...realtimePendingTypes];
+    realtimePendingTypes.clear();
+    realtimeRenderTimer = null;
+    renderAfterRealtimeTypes(pending);
+  }, 250);
+}
+
 async function fetchRemoteRecordRows() {
   const pageSize = 1000;
   const rows = [];
@@ -3311,6 +3487,37 @@ async function fetchRemoteRecordRows() {
     if (!data || data.length < pageSize) return rows;
     from += pageSize;
   }
+}
+
+async function fetchRemoteDailyTaskCompletionRows() {
+  const pageSize = 1000;
+  const rows = [];
+  let from = 0;
+  const sinceDate = addDays(todayDate(), -TASK_COMPLETION_LOOKBACK_DAYS);
+  while (true) {
+    const { data, error } = await supabaseClient
+      .from("daily_task_completions")
+      .select("*")
+      .gte("work_date", sinceDate)
+      .order("completed_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) return rows;
+    from += pageSize;
+  }
+}
+
+function remoteTaskCompletionSignature(rows = []) {
+  return rows
+    .map((row) => [row.id || "", row.work_date || "", row.shift || "", row.task_id || "", row.updated_at || row.completed_at || ""].join(":"))
+    .sort()
+    .join("|");
+}
+
+function remoteDailyTaskCompletionSetupMissing(error) {
+  const message = String(error?.message || "");
+  return /daily_task_completions|schema cache|relation .* does not exist|could not find/i.test(message);
 }
 
 async function loadRemoteRecords(options = {}) {
@@ -3332,7 +3539,18 @@ async function loadRemoteRecords(options = {}) {
   if (syncNowButton) syncNowButton.disabled = true;
   try {
     const data = await fetchRemoteRecordRows();
-    const nextSignature = remoteRecordsSignature(data || []);
+    let taskCompletionRows = [];
+    try {
+      taskCompletionRows = await fetchRemoteDailyTaskCompletionRows();
+      mergeDailyTaskCompletionRecords(taskCompletionRows, { replaceLocal: true });
+    } catch (completionError) {
+      if (remoteDailyTaskCompletionSetupMissing(completionError)) {
+        console.warn("Daily task completion sync is pending the Supabase migration.", completionError);
+      } else {
+        console.warn("Daily task completions could not load.", completionError);
+      }
+    }
+    const nextSignature = remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
     const remoteDataChanged = nextSignature !== lastRemoteRecordsSignature;
     lastRemoteRecordsSignature = nextSignature;
     if (!remoteDataChanged) {
@@ -3366,8 +3584,49 @@ async function loadRemoteRecords(options = {}) {
   }
 }
 
+function handleRealtimeKennelRecordChange(change = {}) {
+  const row = change.new || change.record || change.old || {};
+  const type = row.type || "";
+  if (!type) return;
+  if (recordTypes().includes(type) && row.payload) {
+    mergeRecords(type, [row.payload], { replaceLocal: false });
+  }
+  if (type === TASK_TEMPLATE_RECORD_TYPE && row.payload) applyRemoteTaskTemplate([row]);
+  if (!realtimeSourceIsCurrentUser(row)) scheduleRealtimeRender([type]);
+}
+
+function handleRealtimeTaskCompletionChange(change = {}) {
+  const row = change.new || change.record || change.old || {};
+  if (!row?.id) return;
+  mergeDailyTaskCompletionRecords([row], { replaceLocal: false });
+  if (!realtimeSourceIsCurrentUser(row)) scheduleRealtimeRender(["dailyTaskCompletion"]);
+}
+
+function scheduleRealtimeReconnect() {
+  if (realtimeReconnectTimer || localTestMode || !supabaseClient || !helperIsLoggedIn()) return;
+  realtimeReconnectTimer = window.setTimeout(() => {
+    realtimeReconnectTimer = null;
+    startAutoSync();
+  }, 5000);
+}
+
 function startAutoSync() {
   stopAutoSync();
+  if (localTestMode || !supabaseClient || !helperIsLoggedIn()) return;
+  const channelName = "kennel-records-" + (currentDbUserId() || normalizeEmail(currentUser?.email || helperEmail?.value || "staff")) + "-" + Date.now().toString(36);
+  realtimeChannel = supabaseClient
+    .channel(channelName)
+    .on("postgres_changes", { event: "*", schema: "public", table: "kennel_records" }, handleRealtimeKennelRecordChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "daily_task_completions" }, handleRealtimeTaskCompletionChange)
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") modeLabel.textContent = "Live sync active";
+      if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) scheduleRealtimeReconnect();
+    });
+  syncIntervalId = window.setInterval(() => {
+    if (!remoteLoadInProgress) {
+      loadRemoteRecords({ render: false }).catch((error) => console.warn("Background sync failed.", error));
+    }
+  }, 60000);
 }
 
 function payloadForSheet(payload) {
@@ -7940,16 +8199,26 @@ function existingCustomerBookingEntryForDog(dog = {}, estimate = {}, options = {
 // Extracted to js/customer.js: customerBookingStableId
 
 
+function customerDogSelectionErrorMessage(count = 0) {
+  if (count <= 0) return "Select at least one dog for the boarding request.";
+  if (count > BOARDING_MAX_DOGS_PER_REQUEST) return "Select up to 4 dogs for one boarding request. Please submit a second request for additional dogs.";
+  return "";
+}
+
 function validateCustomerDogSelection(options = {}) {
   const selected = selectedCustomerDogs();
   const error = $("#customerDogSelectionError");
   const section = $(".customer-dog-selection-step");
-  const valid = selected.length > 0;
+  const message = customerDogSelectionErrorMessage(selected.length);
+  const valid = !message;
+  if (error) error.textContent = message;
   if (error) error.hidden = valid;
+  const requestButton = $("#requestBoardingButton");
+  if (requestButton) requestButton.disabled = !customerDogsForCurrentUser().length || selected.length > BOARDING_MAX_DOGS_PER_REQUEST;
   section?.classList.toggle("is-invalid", !valid);
   if (!valid && options.focus !== false) {
     section?.scrollIntoView({ block: "center", behavior: "auto" });
-    showToast("Select at least one dog for the boarding request.");
+    showToast(message);
   }
   return valid;
 }
@@ -8152,6 +8421,11 @@ function updateCustomerEstimate() {
 }
 
 function showBookingConfirmDialog(estimate) {
+  const dogSelectionMessage = customerDogSelectionErrorMessage(uniqueCustomerBookingDogs(estimate.dogs || []).length);
+  if (dogSelectionMessage) {
+    showToast(dogSelectionMessage);
+    return;
+  }
   const pricingErrors = customerEstimateBlockingErrors(estimate);
   if (pricingErrors.length) {
     showDetailDialog("Request Needs Staff Pricing", customerEstimateErrorsHtml(estimate));
@@ -9359,19 +9633,23 @@ function initEvents() {
         showToast("Only today's time entry can be edited by the staff member. Admin can edit older entries.");
         return;
       }
-      const record = saveTimeEntry({
-        id: payload.manualTimeId,
-        helperName: payload.manualHelper || helperName.value || "Unknown staff",
-        helperEmail: payload.manualHelperEmail || existing?.helperEmail || helperEmail.value || currentUser?.email || "",
-        date: payload.manualDate,
-        clockInTime: payload.manualClockIn,
-        clockOutTime: payload.manualClockOut,
-        note: payload.manualNote,
-      }, { silent: true });
-      $("#detailDialog").close();
-      showToast(record.clockOutTime
-        ? \`Timesheet saved with \${Number(record.hours || 0).toFixed(2)} hours recorded.\`
-        : "Open clock-in saved. Add the clock-out time after the shift ends.");
+      try {
+        const record = await saveTimeEntry({
+          id: payload.manualTimeId,
+          helperName: payload.manualHelper || helperName.value || "Unknown staff",
+          helperEmail: payload.manualHelperEmail || existing?.helperEmail || helperEmail.value || currentUser?.email || "",
+          date: payload.manualDate,
+          clockInTime: payload.manualClockIn,
+          clockOutTime: payload.manualClockOut,
+          note: payload.manualNote,
+        }, { silent: true });
+        $("#detailDialog").close();
+        showToast(record.clockOutTime
+          ? \`Timesheet saved with \${Number(record.hours || 0).toFixed(2)} hours recorded.\`
+          : "Open clock-in saved. Add the clock-out time after the shift ends.");
+      } catch (error) {
+        console.warn("Timesheet edit save failed.", error);
+      }
     }
   });
   $("#detailDialogBody").addEventListener("click", async (event) => {
@@ -9975,60 +10253,77 @@ function initEvents() {
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  $("#clockInButton").addEventListener("click", () => {
+  $("#clockInButton").addEventListener("click", async (event) => {
     if (!helperIsLoggedIn()) {
       showToast("Sign in first.");
       return;
     }
-    if (!activeClockIn?.clockInTime) syncActiveClockInFromOpenRecord();
-    if (activeClockIn?.clockInTime) {
-      let openRecord = readRecords("timesheet").find((record) => record.id === activeClockIn.id);
-      if (!openRecord) openRecord = syncActiveClockInFromOpenRecord();
-      if (!openRecord) {
-        showToast("Clock-in record was not found. Clock in again.");
+    const clockButton = event.currentTarget;
+    clockButton.disabled = true;
+    clockButton.setAttribute("aria-busy", "true");
+    try {
+      if (!activeClockIn?.clockInTime) syncActiveClockInFromOpenRecord();
+      if (activeClockIn?.clockInTime) {
+        let openRecord = readRecords("timesheet").find((record) => record.id === activeClockIn.id);
+        if (!openRecord) openRecord = syncActiveClockInFromOpenRecord();
+        if (!openRecord) {
+          showToast("Clock-in record was not found. Clock in again.");
+          activeClockIn = "";
+          localStorage.removeItem("cth-active-clock-in");
+          updateTimeDisplays();
+          return;
+        }
+        const clockOutTime = new Date().toISOString();
+        const record = await saveTimeEntry({
+          id: openRecord.id,
+          helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown staff",
+          helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
+          clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
+          clockOutTime,
+          note: String(openRecord.note || "").startsWith("Open clock-in") ? String(openRecord.note || "").replace(/^Open clock-in\\s*\\|\\s*/, "") : openRecord.note,
+        }, { silent: true });
         activeClockIn = "";
         localStorage.removeItem("cth-active-clock-in");
         updateTimeDisplays();
+        showToast("Timesheet submitted with " + Number(record.hours || 0).toFixed(2) + " hours recorded.");
         return;
       }
-      const clockOutTime = new Date().toISOString();
-      const record = saveTimeEntry({
-        id: openRecord.id,
-        helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown staff",
-	        helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
-	        clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
-	        clockOutTime,
-	        note: String(openRecord.note || "").startsWith("Open clock-in") ? String(openRecord.note || "").replace(/^Open clock-in\\s*\\|\\s*/, "") : openRecord.note,
-	      }, { silent: true });
-      activeClockIn = "";
-      localStorage.removeItem("cth-active-clock-in");
+      const clockInTime = new Date().toISOString();
+      const matchingShift = currentShiftForStaff(helperEmail.value || currentUser.email, new Date());
+      const scheduleNote = matchingShift ? "Scheduled shift: " + formatShiftTime(matchingShift) : "Unscheduled clock-in";
+      const record = {
+        type: "timesheet",
+        id: uid("timesheet"),
+        submittedAt: clockInTime,
+        date: localDateFromStoredDateTime(clockInTime),
+        helperName: helperName.value || currentUser.name,
+        helperEmail: helperEmail.value || currentUser.email,
+        clockInTime,
+        clockOutTime: "",
+        hours: 0,
+        note: "Open clock-in | " + scheduleNote,
+        scheduleShiftId: matchingShift?.id || "",
+        scheduleException: matchingShift ? "" : "Unscheduled clock-in",
+      };
+      const localRecord = upsertRecord("timesheet", record);
+      activeClockIn = { id: localRecord.id, clockInTime, helperEmail: localRecord.helperEmail };
+      localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
+      try {
+        await sendPayload(localRecord);
+        showToast("Clock-in confirmed: " + formatDateTime(clockInTime) + ".");
+      } catch (error) {
+        console.warn("Clock-in save failed", error);
+        showToast("Clock-in is saved locally but did not sync. Try again before ending the shift.");
+      }
       updateTimeDisplays();
-      showToast(\`Timesheet submitted with \${Number(record.hours || 0).toFixed(2)} hours recorded.\`);
-      return;
+    } catch (error) {
+      console.warn("Clock action failed.", error);
+      showToast("Clock action failed: " + error.message);
+    } finally {
+      clockButton.disabled = false;
+      clockButton.removeAttribute("aria-busy");
     }
-	    const clockInTime = new Date().toISOString();
-	    const matchingShift = currentShiftForStaff(helperEmail.value || currentUser.email, new Date());
-	    const scheduleNote = matchingShift ? \`Scheduled shift: \${formatShiftTime(matchingShift)}\` : "Unscheduled clock-in";
-	    const record = upsertRecord("timesheet", {
-	      type: "timesheet",
-	      id: uid("timesheet"),
-	      submittedAt: clockInTime,
-	      date: localDateFromStoredDateTime(clockInTime),
-	      helperName: helperName.value || currentUser.name,
-	      helperEmail: helperEmail.value || currentUser.email,
-	      clockInTime,
-	      clockOutTime: "",
-	      hours: 0,
-	      note: \`Open clock-in | \${scheduleNote}\`,
-	      scheduleShiftId: matchingShift?.id || "",
-	      scheduleException: matchingShift ? "" : "Unscheduled clock-in",
-    });
-    activeClockIn = { id: record.id, clockInTime, helperEmail: record.helperEmail };
-    localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
-    sendPayload(record).catch((error) => console.warn("Clock-in save failed", error));
-    updateTimeDisplays();
-    showToast(\`Clock-in confirmed: \${formatDateTime(clockInTime)}.\`);
-	  });
+		  });
 	  $("#openTimesheetEditButton")?.addEventListener("click", () => openTimesheetEditPopup());
 	  $("#timesheetTabs")?.addEventListener("click", (event) => {
 	    const button = event.target.closest("[data-timesheet-tab]");
@@ -11509,6 +11804,7 @@ async function initializeApp() {
       if (!renderedDuringSessionRestore) renderAllRecords();
       switchPage(rememberedPageForRole(currentRole()));
       requirePasswordChangeIfNeeded();
+      startAutoSync();
     } else {
       switchPage("loginPage");
     }
@@ -11519,6 +11815,7 @@ async function initializeApp() {
       setHelper(cachedUser, { switchAfterLogin: false, render: false });
       renderAllRecords();
       switchPage(rememberedPageForRole(currentRole()));
+      startAutoSync();
       showToast("The app restored from saved login. Sync will retry when the connection is ready.");
     } else if (!helperIsLoggedIn()) {
       clearLocalAppSession({ switchToLogin: false });
@@ -11526,6 +11823,7 @@ async function initializeApp() {
     } else {
       renderAllRecords();
       switchPage(rememberedPageForRole(currentRole()));
+      startAutoSync();
     }
   } finally {
     appInitialized = true;

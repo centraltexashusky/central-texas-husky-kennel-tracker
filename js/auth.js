@@ -233,6 +233,7 @@ function setHelper(user, options = {}) {
     renderAllRecords();
   }
   if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(currentUser.role));
+  startAutoSync();
 }
 
 function clearLocalAppSession(options = {}) {

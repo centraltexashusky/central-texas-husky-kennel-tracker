@@ -1,5 +1,7 @@
 # Production Hardening Runbook
 
+TODO: Convert the current template-string/eval module loader into native ES modules after the operational sync fixes settle. Keep this as a focused future cleanup so performance profiling, syntax checking, and browser caching can work without the current eval wrapper.
+
 Use this runbook for the six remaining production items: database policies, Edge Function validation, duplicate boarding data cleanup, private media readiness, normalized data staging, and production smoke testing.
 
 ## 1. Apply Supabase SQL

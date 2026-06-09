@@ -948,7 +948,7 @@ function renderCustomerDogs() {
       : \`<article class="record-card compact-record-card"><strong>Add a dog before requesting boarding.</strong><p>Boarding requests need at least one dog profile first.</p><button type="button" class="secondary-button" data-action="customer-add-dog-cta">Add Dog</button></article>\`;
   }
   $("#customerBookingForm")?.classList.toggle("has-no-customer-dogs", !dogs.length);
-  $("#requestBoardingButton").disabled = !dogs.length;
+  $("#requestBoardingButton").disabled = !dogs.length || checkedIds.size > BOARDING_MAX_DOGS_PER_REQUEST;
   $("#customerRequestActions")?.toggleAttribute("hidden", !dogs.length);
   $("#customerNoDogRequestPrompt")?.toggleAttribute("hidden", dogs.length);
   renderCustomerStayProgramOptions();
@@ -1685,6 +1685,12 @@ async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
   if (customerBookingSubmitInProgress) return;
   if (!estimate?.dogs?.length) return;
+  const dogSelectionMessage = customerDogSelectionErrorMessage(uniqueCustomerBookingDogs(estimate.dogs || []).length);
+  if (dogSelectionMessage) {
+    showToast(dogSelectionMessage);
+    customerBookingSubmitInProgress = false;
+    return;
+  }
   const pricingErrors = customerEstimateBlockingErrors(estimate);
   if (pricingErrors.length) {
     showDetailDialog("Request Needs Staff Pricing", customerEstimateErrorsHtml(estimate));
@@ -1706,6 +1712,7 @@ async function submitPendingCustomerBooking() {
   const requestGroupId = editingRecord?.requestGroupId || editingRecord?.reservationGroupId || estimate.requestGroupId || estimate.submissionId || uid("requestGroup");
   const groupDogNames = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.dogName || "Dog");
   const groupDogIds = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.id || dog.sourceBoardingDogId || "").filter(Boolean);
+  const groupDogCount = groupDogNames.length;
   const groupSelectedServices = [...new Set(arrayValue(estimate.services).map((service) => service.serviceName || service.name || "").filter(Boolean))];
   let savedCount = 0;
   let skippedCount = 0;
@@ -1797,6 +1804,11 @@ async function submitPendingCustomerBooking() {
         requestGroupId,
         reservationGroupId: requestGroupId,
         familyReservationId: requestGroupId,
+        requestGroupDogIds: groupDogIds,
+        requestGroupDogNames: groupDogNames,
+        requestGroupDogCount: groupDogCount,
+        requestGroupTotal: estimate.total,
+        requestGroupStatus: editingRecord ? existingStay.status || normalizeBoardingStatus(editingRecord) : "pending_customer_request",
         dropoffTime: estimate.dropoffTime,
         pickupTime: estimate.pickupTime,
         scheduledDropoffTime: estimate.dropoffTime,
@@ -1847,6 +1859,7 @@ async function submitPendingCustomerBooking() {
         familyReservationId: requestGroupId,
         requestGroupDogIds: groupDogIds,
         requestGroupDogNames: groupDogNames,
+        requestGroupDogCount: groupDogCount,
         requestGroupServiceNames: groupSelectedServices,
         requestGroupTotal: estimate.total,
         requestGroupStatus: requestStatus,
