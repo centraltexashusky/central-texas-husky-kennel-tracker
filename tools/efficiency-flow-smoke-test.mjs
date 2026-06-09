@@ -29,6 +29,7 @@ assert.match(boarding, /const serviceRows = boardingRequestServiceRowsHtml\(reco
 const serviceRowsMatch = boarding.match(/function boardingRequestServiceRowsHtml\(record = \{\}, stay = \{\}\) \{([\s\S]*?)\n\}/);
 assert.ok(serviceRowsMatch, "boarding request service row helper body is readable");
 assert.doesNotMatch(serviceRowsMatch[1], /money\(/, "staff service rows do not expose per-service pricing");
+assert.match(serviceRowsMatch[1], /x requested/, "staff service rows include quantity-request wording");
 const legacyCompletion = { shift: "morning", taskId: "feed", completedBy: "Legacy", completedAt: "2026-06-01T12:00:00Z" };
 const atomicCompletion = { shift: "morning", taskId: "feed", completedBy: "Atomic", completedAt: "2026-06-01T12:01:00Z", atomic: true };
 const byKey = new Map();

@@ -706,11 +706,15 @@ function boardingStayServicesText(stay = {}, options = {}) {
 function boardingRequestServiceRowsHtml(record = {}, stay = {}) {
   const tasks = boardingStayServiceTasks(record, stay);
   if (!tasks.length) return \`<p class="boarding-request-empty-services">No service requests</p>\`;
-  return \`<div class="boarding-request-service-list" aria-label="Requested stay services">\${tasks.map((task) => {
+  return \`<div class="boarding-request-service-list" role="list" aria-label="Requested stay services">\${tasks.map((task) => {
     const quantity = boardingServiceTaskQuantity(task);
     const serviceName = task.serviceName || boardingServiceTaskDisplayName(task);
-    const requestMeta = task.source === "check-in" ? \`\${quantity} added at check-in\` : \`\${quantity} requested\`;
-    return \`<div class="boarding-request-service-row"><span class="boarding-request-service-quantity">\${escapeHtml(quantity)}</span><span class="boarding-request-service-copy"><strong>\${escapeHtml(serviceName)}</strong><small>\${escapeHtml(requestMeta)}</small></span></div>\`;
+    const requestMeta = task.source === "check-in" ? \`\${quantity} x added at check-in\` : \`\${quantity} x requested\`;
+    const rowLabel = \`\${quantity} x \${serviceName} \${task.source === "check-in" ? "added at check-in" : "requested"}\`;
+    return \`<div class="boarding-request-service-row" role="listitem" aria-label="\${escapeHtml(rowLabel)}">
+      <span class="boarding-request-service-quantity" aria-hidden="true">\${escapeHtml(quantity)}</span>
+      <span class="boarding-request-service-copy"><strong>\${escapeHtml(serviceName)}</strong><small>\${escapeHtml(requestMeta)}</small></span>
+    </div>\`;
   }).join("")}</div>\`;
 }
 
