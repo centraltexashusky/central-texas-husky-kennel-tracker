@@ -5098,6 +5098,15 @@ button.boarding-dog-photo-thumb {
   font-weight: 700;
 }
 
+.boarding-status-service-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.boarding-status-service-summary > strong {
+  color: rgba(246, 250, 255, 0.95);
+}
+
 .boarding-request-total-row {
   align-items: center;
   background: rgba(255, 255, 255, 0.07);

@@ -7,6 +7,7 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const read = (path) => readFileSync(join(root, path), "utf8");
 
 const shared = read("js/shared.js");
+const boarding = read("js/boarding.js");
 const notifications = read("js/notifications.js");
 const timesheet = read("js/timesheet.js");
 
@@ -23,6 +24,11 @@ assert.match(shared, /function mergeDailyTaskCompletionRecords/, "daily task com
 assert.match(shared, /dailyTaskCompletionRecordsForDate\(date\)\.forEach/, "completedTasksForDate reads atomic completion rows");
 assert.match(shared, /function saveDailyTaskCompletionFallback/, "daily task completion fallback save helper is present");
 assert.doesNotMatch(shared, /Task sync setup is not finished/, "daily task completion does not block staff on a missing migration toast");
+assert.match(boarding, /function boardingRequestServiceRowsHtml/, "boarding request service row helper is present");
+assert.match(boarding, /const serviceRows = boardingRequestServiceRowsHtml\(record, stay\)/, "stay status modal uses request-style service rows");
+const serviceRowsMatch = boarding.match(/function boardingRequestServiceRowsHtml\(record = \{\}, stay = \{\}\) \{([\s\S]*?)\n\}/);
+assert.ok(serviceRowsMatch, "boarding request service row helper body is readable");
+assert.doesNotMatch(serviceRowsMatch[1], /money\(/, "staff service rows do not expose per-service pricing");
 const legacyCompletion = { shift: "morning", taskId: "feed", completedBy: "Legacy", completedAt: "2026-06-01T12:00:00Z" };
 const atomicCompletion = { shift: "morning", taskId: "feed", completedBy: "Atomic", completedAt: "2026-06-01T12:01:00Z", atomic: true };
 const byKey = new Map();

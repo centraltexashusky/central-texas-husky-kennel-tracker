@@ -3948,8 +3948,12 @@ function applyHydratedProfilePhoto(element, img, initials, signedUrl, token) {
   clearProfilePhotoHydrationTimer(element);
   element.dataset.src = signedUrl;
   element.dataset.profilePhotoRetryCount = "0";
+  img.removeAttribute("hidden");
   img.hidden = false;
-  if (initials) initials.hidden = true;
+  if (initials) {
+    initials.hidden = true;
+    initials.setAttribute("hidden", "");
+  }
 }
 
 function hydrateProfilePhotoElement(element, relatedInitials = null) {
@@ -3961,14 +3965,17 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
     || (element.matches("img") ? element.parentElement?.querySelector("[data-profile-photo-initials], [id$='PhotoInitials']") : null);
   const existingSource = element.dataset.src || img?.getAttribute("src") || "";
   if (!storagePath || localTestMode || !img) return;
+  const token = storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
+  element.dataset.profilePhotoToken = token;
   if (existingSource) {
-    const alreadyLoaded = !img.hidden && (!img.complete || img.naturalWidth > 0);
-    if (alreadyLoaded) return;
+    if (img.complete && img.naturalWidth > 0) {
+      applyHydratedProfilePhoto(element, img, initials, existingSource, token);
+      return;
+    }
+    if (!img.hidden) return;
     element.dataset.src = "";
     img.removeAttribute("src");
   }
-  const token = storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
-  element.dataset.profilePhotoToken = token;
   signedMediaUrlForPath(storagePath, {
     sourceRecordId: element.dataset.sourceRecordId || "",
     sourceRecordType: element.dataset.sourceRecordType || "",
@@ -3978,13 +3985,18 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
       scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Profile photo access returned an empty signed URL."));
       return;
     }
+    const revealIfLoaded = () => {
+      if (img.complete && img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
+    };
     img.onload = () => applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
     img.onerror = () => {
       if (element.dataset.profilePhotoToken !== token) return;
       scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Signed profile photo image failed to load."));
     };
     img.src = signedUrl;
-    if (img.complete && img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
+    revealIfLoaded();
+    window.requestAnimationFrame?.(revealIfLoaded);
+    window.setTimeout(revealIfLoaded, 250);
   }).catch((error) => scheduleProfilePhotoHydrationRetry(element, initials, token, error));
 }
 

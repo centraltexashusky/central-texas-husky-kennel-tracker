@@ -709,10 +709,8 @@ function boardingRequestServiceRowsHtml(record = {}, stay = {}) {
   return \`<div class="boarding-request-service-list" aria-label="Requested stay services">\${tasks.map((task) => {
     const quantity = boardingServiceTaskQuantity(task);
     const serviceName = task.serviceName || boardingServiceTaskDisplayName(task);
-    const unitPrice = Number(task.unitPrice || 0);
-    const unit = task.unit || "";
-    const priceMeta = unitPrice ? \`\${quantity} x \${money(unitPrice)}\${unit ? \` \${unit}\` : ""}\` : task.source === "check-in" ? "Added at check-in" : "Requested";
-    return \`<div class="boarding-request-service-row"><span class="boarding-request-service-quantity">\${escapeHtml(quantity)}</span><span class="boarding-request-service-copy"><strong>\${escapeHtml(serviceName)}</strong><small>\${escapeHtml(priceMeta)}</small></span></div>\`;
+    const requestMeta = task.source === "check-in" ? \`\${quantity} added at check-in\` : \`\${quantity} requested\`;
+    return \`<div class="boarding-request-service-row"><span class="boarding-request-service-quantity">\${escapeHtml(quantity)}</span><span class="boarding-request-service-copy"><strong>\${escapeHtml(serviceName)}</strong><small>\${escapeHtml(requestMeta)}</small></span></div>\`;
   }).join("")}</div>\`;
 }
 
@@ -3696,7 +3694,7 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
   const flags = options.clearOwnerUpdate ? (displayRecord.flags || []).filter((flag) => flag !== "Required update from owner") : displayRecord.flags || [];
   const updated = upsertRecord("boardingDog", {
     ...displayRecord,
-    dailyActivity: note || displayRecord.dailyActivity || "",
+    dailyActivity: "",
     flags,
     customerUpdates: [update, ...(displayRecord.customerUpdates || []).filter((item) => item.id !== update.id)],
     latestCustomerUpdate: update,
@@ -3883,8 +3881,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const status = boardingStayDisplayStatus(record, stay);
   const nextStatuses = boardingStatusTransitions[status] || [];
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
-  const servicesText = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
-  const serviceSummary = servicesText === "No service requests" ? "No service requested" : servicesText;
+  const serviceRows = boardingRequestServiceRowsHtml(record, stay);
   const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
   const statusButtons = nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-next-status="\${escapeHtml(nextStatus)}">\${escapeHtml(stayTransitionLabel(status, nextStatus))}</button>\`);
   const buttons = [ownerUpdateButton, ...statusButtons].filter(Boolean);
@@ -3892,7 +3889,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
     <article class="record-card compact-record-card">
       <strong>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
       <div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}</div>
-      <p><strong>Service request:</strong> \${escapeHtml(serviceSummary)}</p>
+      <div class="boarding-status-service-summary"><strong>Service requests</strong>\${serviceRows}</div>
       <p>Status changes apply only to this boarding request/stay.</p>
     </article>
     <div class="record-actions">\${buttons.length ? buttons.join("") : "<p>No status changes are available for this stay.</p>"}</div>
