@@ -3943,6 +3943,18 @@ function scheduleProfilePhotoHydrationRetry(element, relatedInitials, token, err
   profilePhotoHydrationTimers.set(element, timer);
 }
 
+function profilePhotoHydrationToken(element, storagePath) {
+  return storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
+}
+
+function profilePhotoInitialsForElement(element, img = null, relatedInitials = null) {
+  return relatedInitials
+    || (element.matches("[data-profile-photo-initials]") ? element : element.querySelector("[data-profile-photo-initials]"))
+    || (element.matches("img") ? element.parentElement?.querySelector("[data-profile-photo-initials], [id$='PhotoInitials']") : null)
+    || img?.parentElement?.querySelector?.("[data-profile-photo-initials], [id$='PhotoInitials']")
+    || null;
+}
+
 function applyHydratedProfilePhoto(element, img, initials, signedUrl, token) {
   if (!element || !img || !signedUrl || element.dataset.profilePhotoToken !== token) return;
   clearProfilePhotoHydrationTimer(element);
@@ -3956,22 +3968,29 @@ function applyHydratedProfilePhoto(element, img, initials, signedUrl, token) {
   }
 }
 
+function revealLoadedProfilePhotoElement(element, relatedInitials = null) {
+  if (!element) return false;
+  const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
+  const img = element.matches("img") ? element : element.querySelector("img");
+  if (!storagePath || !img?.complete || img.naturalWidth <= 0) return false;
+  const token = element.dataset.profilePhotoToken || profilePhotoHydrationToken(element, storagePath);
+  element.dataset.profilePhotoToken = token;
+  const signedUrl = element.dataset.src || img.currentSrc || img.src || "";
+  applyHydratedProfilePhoto(element, img, profilePhotoInitialsForElement(element, img, relatedInitials), signedUrl, token);
+  return !img.hidden;
+}
+
 function hydrateProfilePhotoElement(element, relatedInitials = null) {
   if (!element) return;
   const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
   const img = element.matches("img") ? element : element.querySelector("img");
-  const initials = relatedInitials
-    || (element.matches("[data-profile-photo-initials]") ? element : element.querySelector("[data-profile-photo-initials]"))
-    || (element.matches("img") ? element.parentElement?.querySelector("[data-profile-photo-initials], [id$='PhotoInitials']") : null);
+  const initials = profilePhotoInitialsForElement(element, img, relatedInitials);
   const existingSource = element.dataset.src || img?.getAttribute("src") || "";
   if (!storagePath || localTestMode || !img) return;
-  const token = storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
+  const token = profilePhotoHydrationToken(element, storagePath);
   element.dataset.profilePhotoToken = token;
   if (existingSource) {
-    if (img.complete && img.naturalWidth > 0) {
-      applyHydratedProfilePhoto(element, img, initials, existingSource, token);
-      return;
-    }
+    if (revealLoadedProfilePhotoElement(element, initials)) return;
     if (!img.hidden) return;
     element.dataset.src = "";
     img.removeAttribute("src");
@@ -3997,11 +4016,16 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
     revealIfLoaded();
     window.requestAnimationFrame?.(revealIfLoaded);
     window.setTimeout(revealIfLoaded, 250);
+    window.setTimeout(revealIfLoaded, 900);
+    window.setTimeout(revealIfLoaded, 2500);
   }).catch((error) => scheduleProfilePhotoHydrationRetry(element, initials, token, error));
 }
 
 function hydrateProfilePhotoElements(root = document) {
   root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => hydrateProfilePhotoElement(element));
+  [300, 1200, 2800].forEach((delay) => {
+    window.setTimeout(() => root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => revealLoadedProfilePhotoElement(element)), delay);
+  });
 }
 
 function scheduleProfilePhotoHydrationSweep(delay = 600) {
