@@ -4015,15 +4015,13 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
     img.src = signedUrl;
     revealIfLoaded();
     window.requestAnimationFrame?.(revealIfLoaded);
-    window.setTimeout(revealIfLoaded, 250);
-    window.setTimeout(revealIfLoaded, 900);
-    window.setTimeout(revealIfLoaded, 2500);
+    [250, 900, 2500, 5000, 8000, 12000, 18000].forEach((delay) => window.setTimeout(revealIfLoaded, delay));
   }).catch((error) => scheduleProfilePhotoHydrationRetry(element, initials, token, error));
 }
 
 function hydrateProfilePhotoElements(root = document) {
   root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => hydrateProfilePhotoElement(element));
-  [300, 1200, 2800].forEach((delay) => {
+  [300, 1200, 2800, 5000, 8000, 12000, 18000].forEach((delay) => {
     window.setTimeout(() => root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => revealLoadedProfilePhotoElement(element)), delay);
   });
 }
