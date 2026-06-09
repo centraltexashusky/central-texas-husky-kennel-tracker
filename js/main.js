@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260609-owner-update-submit-guard";
+import "./shared.js?v=20260609-owner-update-submit-guard-v2";
 import "./auth.js?v=20260609-photo-hydration";
 import "./customer.js?v=20260608-efficiency-sync";
-import "./boarding.js?v=20260609-owner-update-state";
+import "./boarding.js?v=20260609-owner-update-submit-guard-v2";
 import "./daily.js?v=20260607-owned-health-due-history";
 import "./timesheet.js?v=20260608-efficiency-sync";
 import "./settings.js?v=20260604-pricing-groups-private-media";

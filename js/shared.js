@@ -9650,6 +9650,14 @@ function initEvents() {
         showToast("Owner update is already saving. Wait for confirmation.");
         return;
       }
+      const note = String(ownerUpdateForm.elements.dailyActivity?.value || "").trim();
+      const photoInput = ownerUpdateForm.elements.ownerUpdatePhoto;
+      const selectedFileCount = [...(photoInput?.files || [])].filter((file) => file?.name || file?.size).length;
+      if (!note && !selectedFileCount) {
+        setOwnerUpdateSubmitState(ownerUpdateForm, "error", "Add a note, photo, or video before saving.");
+        showToast("Add a note, photo, or video before saving a customer update.");
+        return;
+      }
       setOwnerUpdateSubmitState(ownerUpdateForm, "saving", "Saving owner update. Please wait...");
       showToast("Saving owner update...");
       try {
@@ -9663,8 +9671,8 @@ function initEvents() {
         const reference = boardingStayReferenceFromAction(ownerUpdateForm);
         const stay = ownerUpdateStayForRecord(record, reference);
         const updated = await saveBoardingCustomerUpdateForStay(record, stay, {
-          note: data.dailyActivity,
-          input: ownerUpdateForm.elements.ownerUpdatePhoto,
+          note: note || data.dailyActivity,
+          input: photoInput,
           clearOwnerUpdate: Boolean(ownerUpdateForm.elements.clearOwnerUpdate?.checked),
           reference,
         });

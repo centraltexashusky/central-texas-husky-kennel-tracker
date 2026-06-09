@@ -3648,6 +3648,7 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
   const targetStay = stay?.id ? stay : ownerUpdateStayForRecord(displayRecord, options.reference || {});
   const note = String(options.note || "").trim();
   const input = options.input || null;
+  const selectedFileCount = [...(input?.files || [])].filter((file) => file?.name || file?.size).length;
   if (!displayRecord?.id) {
     showToast("Save the boarding dog before adding customer updates.");
     return null;
@@ -3660,7 +3661,7 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
     showToast("Owner updates can only be sent for checked-in, in-kennel, or ready-for-pickup stays.");
     return null;
   }
-  if (!note && !input?.files?.length) {
+  if (!note && !selectedFileCount) {
     showToast("Add a note, photo, or video before saving a customer update.");
     return null;
   }
