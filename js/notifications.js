@@ -582,6 +582,7 @@ function notificationSavedTitleIsSpecific(title = "") {
 function notificationSavedMessageIsSpecific(message = "") {
   const normalized = String(message || "").trim().toLowerCase();
   if (!normalized) return false;
+  if (normalized.includes("needs review") && normalized.includes("open the related kennel record")) return false;
   return ![
     "notification",
     "snuggle stay alert",
@@ -612,6 +613,58 @@ function customerCancellationNotificationReason(notification = {}) {
   const source = notificationSourceSnapshot(notification);
   const latest = source.latestCustomerCancellation || {};
   return latest.reason || source.customerCancellationReason || source.cancellationReason || "";
+}
+
+function boardingRequestAlertCandidates() {
+  return readRecords("boardingDog")
+    .filter((record) => !record.removed && (record.customerRequest || arrayValue(record.stays).some((stay) => stay?.source === "customer-request")))
+    .flatMap((record) => {
+      const displayRecord = boardingDogRecordForDisplay(record.id) || boardingDogWithStayStatus(record);
+      const stays = arrayValue(displayRecord.stays).length ? arrayValue(displayRecord.stays) : [boardingPrimaryStay(displayRecord) || {}];
+      return stays
+        .filter((stay) => stay && typeof stay === "object")
+        .map((stay) => ({ record: displayRecord, stay }));
+    })
+    .filter(({ record, stay }) => {
+      const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
+      return ["Pending", "Approved"].includes(status);
+    });
+}
+
+function boardingRequestAlertTimeDelta(notification = {}, record = {}, stay = {}) {
+  const target = Date.parse(notification.submittedAt || notification.sentAt || notification.updatedAt || notification.createdAt || "");
+  if (!Number.isFinite(target)) return Number.POSITIVE_INFINITY;
+  const timestamps = [
+    record.submittedAt,
+    record.updatedAt,
+    stay.createdAt,
+    stay.updatedAt,
+  ]
+    .map((value) => Date.parse(value || ""))
+    .filter(Number.isFinite);
+  if (!timestamps.length) return Number.POSITIVE_INFINITY;
+  return Math.min(...timestamps.map((value) => Math.abs(value - target)));
+}
+
+function recoveredBoardingRequestNotification(notification = {}) {
+  if (notification.eventName || notification.sourceType || notification.sourceId) return null;
+  if (Object.keys(notificationSourceSnapshot(notification)).length) return null;
+  const candidates = boardingRequestAlertCandidates()
+    .map((entry) => ({ ...entry, delta: boardingRequestAlertTimeDelta(notification, entry.record, entry.stay) }))
+    .filter((entry) => entry.delta <= 5 * 60 * 1000)
+    .sort((a, b) => a.delta - b.delta);
+  return candidates[0] || null;
+}
+
+function boardingRequestAlertTitle(record = {}) {
+  return \`Boarding request needs approval: \${record.dogName || "Customer dog"}\`;
+}
+
+function boardingRequestAlertMessage(record = {}, stay = {}, eventName = "customerBoardingRequestCreated") {
+  const owner = record.ownerName || record.ownerEmail || record.customerEmail || "A customer";
+  const action = eventName === "customerBoardingRequestUpdated" ? "updated" : "submitted";
+  const schedule = stay?.id ? boardingScheduleText(record, stay) : boardingScheduleText(record);
+  return \`\${owner} \${action} a boarding request\${record.dogName ? \` for \${record.dogName}\` : ""}\${schedule ? \` for \${schedule}\` : ""}. Open this alert to approve or decline the request.\`;
 }
 
 function notificationSourceTypeLabel(sourceType = "") {
@@ -663,12 +716,15 @@ function notificationFallbackMessage(notification = {}, source = {}) {
 
 function notificationDisplayTitle(notification = {}) {
   const savedTitle = String(notification.title || "").trim();
-  if (notificationSavedTitleIsSpecific(savedTitle)) return savedTitle;
+  const recoveredRequest = recoveredBoardingRequestNotification(notification);
+  if (recoveredRequest) return boardingRequestAlertTitle(recoveredRequest.record);
   const source = notificationSourceSnapshot(notification);
   const dogName = source.dogName || source.latestCustomerUpdate?.dogName || "";
   const eventName = notification.eventName || "";
-  if (eventName === "customerBoardingRequestCreated") return \`New boarding request: \${dogName || "Customer dog"}\`;
-  if (eventName === "customerBoardingRequestUpdated") return \`Boarding request updated: \${dogName || "Customer dog"}\`;
+  if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
+    if (!/needs approval/i.test(savedTitle)) return boardingRequestAlertTitle(source);
+  }
+  if (notificationSavedTitleIsSpecific(savedTitle)) return savedTitle;
   if (eventName === "customerDogFileUploaded") return \`Customer file uploaded: \${dogName || "Customer dog"}\`;
   if (eventName === "careLogAdminAlertCreated") return \`Medical/behavior alert: \${source.dogName || "Our dog"}\`;
   if (eventName === "kennelRequestCreated") return \`New request: \${source.category || "Kennel request"}\`;
@@ -695,16 +751,17 @@ function notificationDisplayTitle(notification = {}) {
 
 function notificationDisplayMessage(notification = {}) {
   const savedMessage = String(notification.message || "").trim();
-  if (notificationSavedMessageIsSpecific(savedMessage)) return savedMessage;
+  const recoveredRequest = recoveredBoardingRequestNotification(notification);
+  if (recoveredRequest) return boardingRequestAlertMessage(recoveredRequest.record, recoveredRequest.stay, "customerBoardingRequestCreated");
   const source = notificationSourceSnapshot(notification);
   const eventName = notification.eventName || "";
   const dogName = source.dogName || source.latestCustomerUpdate?.dogName || "";
   const owner = source.ownerName || source.ownerEmail || source.customerEmail || "A customer";
   const stayId = notificationStayIdText(source);
-  if (eventName === "customerBoardingRequestCreated") {
-    return \`\${owner} submitted a boarding request\${dogName ? \` for \${dogName}\` : ""}\${boardingScheduleText(source) ? \` for \${boardingScheduleText(source)}\` : ""}.\`;
+  if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
+    if (!/approve|decline/i.test(savedMessage)) return boardingRequestAlertMessage(source, boardingPrimaryStay(source) || {}, eventName);
   }
-  if (eventName === "customerBoardingRequestUpdated") return \`\${owner} updated a boarding request\${dogName ? \` for \${dogName}\` : ""}.\`;
+  if (notificationSavedMessageIsSpecific(savedMessage)) return savedMessage;
   if (eventName === "customerApprovedStayCancelled") {
     const reason = source.latestCustomerCancellation?.reason || source.customerCancellationReason || "";
     return \`\${owner} cancelled an approved stay\${dogName ? \` for \${dogName}\` : ""}\${stayId ? \` (Stay ID: \${stayId})\` : ""}.\${reason ? \` Reason: \${reason}\` : ""}\`;
@@ -755,6 +812,7 @@ function notificationCategoryForEvent(eventName = "", recordOrNotification = {})
   const source = recordOrNotification.sourceSnapshot ? notificationSourceSnapshot(recordOrNotification) : recordOrNotification;
   const name = String(eventName || recordOrNotification.eventName || "").toLowerCase();
   const sourceType = String(recordOrNotification.sourceType || source.type || "").toLowerCase();
+  if (!name && recoveredBoardingRequestNotification(recordOrNotification)) return "Boarding";
   if (name.includes("boarding") || name.includes("stay") || sourceType === "boardingdog") return "Boarding";
   if (name.includes("carelog") || name.includes("medical") || sourceType === "carelog") return "Medical/Care";
   if (name.includes("maintenance") || sourceType === "maintenance") return "Maintenance";
@@ -767,7 +825,8 @@ function notificationCategoryForEvent(eventName = "", recordOrNotification = {})
 function notificationReasonForEvent(eventName = "", recordOrNotification = {}) {
   const source = recordOrNotification.sourceSnapshot ? notificationSourceSnapshot(recordOrNotification) : recordOrNotification;
   const name = eventName || recordOrNotification.eventName || "";
-  if (name === "customerBoardingRequestCreated") return "New boarding request";
+  if (!name && recoveredBoardingRequestNotification(recordOrNotification)) return "Boarding request needs approval";
+  if (name === "customerBoardingRequestCreated") return "Boarding request needs approval";
   if (name === "customerBoardingRequestUpdated") return "Boarding request updated";
   if (name === "customerApprovedStayCancelled") return "Approved stay cancelled";
   if (name === "customerDogFileUploaded") return "Customer file uploaded";
@@ -783,6 +842,7 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   const source = recordOrNotification.sourceSnapshot ? notificationSourceSnapshot(recordOrNotification) : recordOrNotification;
   const name = eventName || recordOrNotification.eventName || "";
   const sourceType = recordOrNotification.sourceType || source.type || "";
+  if (name === "customerBoardingRequestCreated" || name === "customerBoardingRequestUpdated" || recoveredBoardingRequestNotification(recordOrNotification)) return "Review Request";
   if (name === "customerApprovedStayCancelled" || sourceType === "boardingDog") return "Open Stay";
   if (sourceType === "maintenance" || name.includes("Maintenance")) return "Open Maintenance";
   if (sourceType === "request" || name.includes("Request")) return "Open Request";
@@ -832,15 +892,15 @@ function customerStayUpdateAudienceEmails(record = {}) {
 function notificationEventConfig(eventName = "", record = {}) {
   const configs = {
     customerBoardingRequestCreated: {
-      title: \`New boarding request: \${record.dogName || "Customer dog"}\`,
-      message: \`\${record.ownerName || record.ownerEmail || "A customer"} requested \${record.stayType || "boarding"}\${boardingScheduleText(record) ? \` for \${boardingScheduleText(record)}\` : ""}.\`,
+      title: boardingRequestAlertTitle(record),
+      message: boardingRequestAlertMessage(record, boardingPrimaryStay(record) || {}, "customerBoardingRequestCreated"),
       priority: "normal",
       channels: ["email", "inApp"],
       audienceRoles: ["admin"],
     },
     customerBoardingRequestUpdated: {
-      title: \`Boarding request updated: \${record.dogName || "Customer dog"}\`,
-      message: \`\${record.ownerName || record.ownerEmail || "A customer"} updated a boarding request.\`,
+      title: boardingRequestAlertTitle(record),
+      message: boardingRequestAlertMessage(record, boardingPrimaryStay(record) || {}, "customerBoardingRequestUpdated"),
       priority: "normal",
       channels: ["email", "inApp"],
       audienceRoles: ["admin"],
@@ -1123,6 +1183,75 @@ function openBoardingCustomerCancellationAlert(notification = {}) {
   return true;
 }
 
+function boardingRequestNotificationReference(notification = {}, recoveredRequest = null) {
+  const source = notificationSourceSnapshot(notification);
+  const actionTarget = notification.actionTarget || {};
+  const stay = recoveredRequest?.stay || boardingPrimaryStay(source) || {};
+  const recoveredRecord = recoveredRequest?.record || source;
+  return {
+    stayId: actionTarget.stayId || notification.stayId || source.stayId || stay.id || "",
+    requestCode: actionTarget.requestCode
+      || notification.requestCode
+      || source.requestCode
+      || stay.requestCode
+      || (stay.id ? boardingStayRequestCode(recoveredRecord, stay) : notificationStayIdText(source))
+      || "",
+  };
+}
+
+function boardingRequestAlertReviewHtml(record = {}, reference = {}) {
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayByReference(displayRecord, reference) || boardingPrimaryStay(displayRecord) || {};
+  const status = stay?.id ? boardingStayDisplayStatus(displayRecord, stay) : normalizeBoardingStatus(displayRecord);
+  const stayAttrs = stay?.id ? boardingStayDataAttrs(displayRecord, stay) : "";
+  const requestCode = stay?.id ? boardingStayRequestCode(displayRecord, stay) : notificationStayIdText(displayRecord);
+  const serviceRows = stay?.id ? boardingRequestServiceRowsHtml(displayRecord, stay) : "";
+  const pricingSnapshot = stay?.id ? boardingCurrentPricingSnapshotForStay(displayRecord, stay) : null;
+  const total = stay?.id ? boardingStayInvoiceTotal(displayRecord, stay, pricingSnapshot ? { pricingSnapshot } : {}) : displayRecord.estimatedTotal || "";
+  const statusMessage = status === "Pending"
+    ? "Review this customer request and either approve it or decline it with a customer-visible reason."
+    : \`This request is currently \${status}. No approval action is needed from this alert.\`;
+  const actions = status === "Pending"
+    ? \`<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(displayRecord.id || "")}"\${stayAttrs} data-next-status="Approved">Approve Request</button><button type="button" class="secondary-button danger-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(displayRecord.id || "")}"\${stayAttrs} data-next-status="Cancelled">Decline Request</button>\`
+    : "";
+  return \`<section class="popup-record-section boarding-request-alert-review">
+    <article class="record-card compact-record-card boarding-request-card">
+      <div class="boarding-request-card-main">
+        \${boardingDogThumbnailHtml(displayRecord, { className: "boarding-request-photo", interactive: false })}
+        <div class="boarding-request-card-content">
+          <strong class="boarding-request-dog-name">\${escapeHtml(displayRecord.dogName || "Boarding dog")}</strong>
+          <div class="chip-row boarding-request-chip-row">\${dogTypeBadgeHtml("boardingDog")}\${requestCode ? boardingStayRequestCodeChipHtml(displayRecord, stay) : ""}</div>
+          <div class="chip-row boarding-request-chip-row boarding-request-status-row">\${stay?.id ? boardingStayStatusChipHtml(displayRecord, stay) : boardingStatusChipHtml(displayRecord)}\${stay?.id ? boardingStayServiceFlagHtml(displayRecord, stay) : ""}</div>
+        </div>
+      </div>
+      <p>\${escapeHtml([displayRecord.ownerName, displayRecord.ownerPhone, displayRecord.ownerEmail].filter(Boolean).join(" | "))}</p>
+      <div class="boarding-request-date-row"><span>\${escapeHtml(formatDateTime(stay.dropoffTime))}</span><span aria-hidden="true">-</span><span>\${escapeHtml(formatDateTime(stay.pickupTime))}</span></div>
+      \${serviceRows}
+      \${total ? boardingRequestEstimatedTotalHtml(total) : ""}
+      <p>\${escapeHtml(statusMessage)}</p>
+      <div class="record-actions boarding-request-primary-actions">\${actions}<button type="button" class="secondary-button" data-action="close-dialog">Close</button></div>
+    </article>
+  </section>\`;
+}
+
+function openBoardingRequestNotification(notification = {}, recoveredRequest = null) {
+  const source = notificationSourceSnapshot(notification);
+  const sourceId = notification.sourceId || source.id || recoveredRequest?.record?.id || "";
+  const record = recoveredRequest?.record
+    || boardingDogRecordForDisplay(sourceId)
+    || readRecords("boardingDog").find((item) => item.id === sourceId && !item.removed);
+  if (!record) {
+    showDetailDialog(notificationDisplayTitle(notification), \`<p>\${escapeHtml(notificationDisplayMessage(notification))}</p>\`);
+    return false;
+  }
+  const reference = boardingRequestNotificationReference(notification, recoveredRequest);
+  switchPage("boardingDogsPage");
+  renderBoardingDogs();
+  renderBoardingRequests();
+  showDetailDialog("Review Boarding Request", boardingRequestAlertReviewHtml(record, reference), null);
+  return true;
+}
+
 async function openCustomerCancellationAlertById(id = "") {
   const notification = await markNotificationRead(id);
   if (!notification) return false;
@@ -1137,6 +1266,16 @@ async function openNotification(id = "") {
   $("#notificationPanel").hidden = true;
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;
+  const recoveredRequest = recoveredBoardingRequestNotification(notification);
+  if (
+    recoveredRequest
+    || (sourceType === "boardingDog" && ["customerBoardingRequestCreated", "customerBoardingRequestUpdated"].includes(notification.eventName))
+  ) {
+    if (openBoardingRequestNotification(notification, recoveredRequest)) {
+      renderDashboard();
+      return;
+    }
+  }
   if (sourceType === "boardingDog") {
     if (notification.eventName === "customerApprovedStayCancelled") {
       openBoardingCustomerCancellationAlert(notification);

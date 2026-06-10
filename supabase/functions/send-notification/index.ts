@@ -172,6 +172,106 @@ function firstStay(record: Record<string, unknown>) {
   return (stays[0] && typeof stays[0] === "object" ? stays[0] : {}) as Record<string, unknown>;
 }
 
+function notificationTextIsSpecific(value: unknown) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (["notification", "snuggle stay alert", "alert"].includes(normalized)) return false;
+  if (normalized.includes("needs review") && normalized.includes("open the related kennel record")) return false;
+  return true;
+}
+
+function stayRequestCode(record: Record<string, unknown>, stay: Record<string, unknown>) {
+  const existing = String(stay.requestCode || stay.requestId || stay.reservationId || record.requestCode || "").trim();
+  if (existing) return existing;
+  return String(stay.id || "").trim();
+}
+
+function stayScheduleText(stay: Record<string, unknown>) {
+  const dropoff = String(stay.dropoffTime || stay.requestedDropoffTime || "").trim();
+  const pickup = String(stay.pickupTime || stay.requestedPickupTime || "").trim();
+  if (dropoff && pickup) return `${dropoff} to ${pickup}`;
+  return dropoff || pickup || "";
+}
+
+function notificationFallbackFields(eventName: string, sourceRecord: Record<string, unknown>, notificationId = ""): Record<string, unknown> {
+  const stay = firstStay(sourceRecord);
+  const sourceType = String(sourceRecord.type || "").trim();
+  const sourceId = String(sourceRecord.id || "").trim();
+  const dogName = String(sourceRecord.dogName || "").trim();
+  const ownerName = String(sourceRecord.ownerName || sourceRecord.ownerEmail || sourceRecord.customerEmail || "A customer").trim();
+  const stayId = stayRequestCode(sourceRecord, stay);
+  if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
+    const action = eventName.endsWith("Updated") ? "updated" : "submitted";
+    const schedule = stayScheduleText(stay);
+    return {
+      id: notificationId,
+      type: "notificationLog",
+      eventName,
+      sourceType: "boardingDog",
+      sourceId,
+      sourceSnapshot: sourceRecord,
+      title: `Boarding request needs approval: ${dogName || "Customer dog"}`,
+      message: `${ownerName} ${action} a boarding request${dogName ? ` for ${dogName}` : ""}${schedule ? ` for ${schedule}` : ""}. Open this alert to approve or decline the request.`,
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+      alertCategory: "Boarding",
+      alertReason: eventName.endsWith("Updated") ? "Boarding request updated" : "Boarding request needs approval",
+      dogName,
+      ownerName,
+      stayId,
+      actionLabel: "Review Request",
+      actionTarget: {
+        eventName,
+        sourceType: "boardingDog",
+        sourceId,
+        stayId,
+        requestCode: stayId,
+      },
+      readBy: [],
+    };
+  }
+  return {
+    id: notificationId,
+    type: "notificationLog",
+    eventName,
+    sourceType,
+    sourceId,
+    sourceSnapshot: sourceRecord,
+  };
+}
+
+function hydrateNotificationPayload(
+  existingPayload: Record<string, unknown>,
+  eventName: string,
+  sourceRecord: Record<string, unknown>,
+  notificationId = "",
+) {
+  const fallback = notificationFallbackFields(eventName, sourceRecord, notificationId);
+  return {
+    ...fallback,
+    ...existingPayload,
+    id: notificationId,
+    type: "notificationLog",
+    eventName: String(existingPayload.eventName || fallback.eventName || eventName),
+    sourceType: String(existingPayload.sourceType || fallback.sourceType || ""),
+    sourceId: String(existingPayload.sourceId || fallback.sourceId || ""),
+    sourceSnapshot: existingPayload.sourceSnapshot && typeof existingPayload.sourceSnapshot === "object"
+      ? existingPayload.sourceSnapshot
+      : fallback.sourceSnapshot,
+    title: notificationTextIsSpecific(existingPayload.title) ? existingPayload.title : fallback.title,
+    message: notificationTextIsSpecific(existingPayload.message) ? existingPayload.message : fallback.message,
+    alertCategory: existingPayload.alertCategory || fallback.alertCategory,
+    alertReason: existingPayload.alertReason || fallback.alertReason,
+    actionLabel: existingPayload.actionLabel || fallback.actionLabel,
+    actionTarget: existingPayload.actionTarget || fallback.actionTarget,
+    dogName: existingPayload.dogName || fallback.dogName,
+    ownerName: existingPayload.ownerName || fallback.ownerName,
+    stayId: existingPayload.stayId || fallback.stayId,
+    readBy: Array.isArray(existingPayload.readBy) ? existingPayload.readBy : fallback.readBy,
+  };
+}
+
 async function notificationContent(adminClient: ReturnType<typeof createClient>, eventName: string, record: Record<string, unknown>, notification: Record<string, unknown> = {}) {
   const stay = firstStay(record);
   const audienceEmails = recordAudienceEmails(notification).length ? recordAudienceEmails(notification) : recordAudienceEmails(record);
@@ -480,7 +580,7 @@ Deno.serve(async (req) => {
 
   const { data: sourceRow, error: sourceError } = await adminClient
     .from("kennel_records")
-    .select("id,type,payload")
+    .select("id,type,payload,submitted_at,updated_at")
     .eq("id", recordId)
     .maybeSingle();
   if (sourceError) return json({ error: sourceError.message }, 500, req);
@@ -490,6 +590,8 @@ Deno.serve(async (req) => {
     ...(sourceRow.payload as Record<string, unknown>),
     id: sourceRow.id,
     type: sourceRow.type,
+    submittedAt: (sourceRow as Record<string, unknown>).submitted_at || (sourceRow.payload as Record<string, unknown>).submittedAt || "",
+    updatedAt: (sourceRow as Record<string, unknown>).updated_at || (sourceRow.payload as Record<string, unknown>).updatedAt || "",
   };
   const isStaff = await callerIsStaff(adminClient, user.email);
   if (!isStaff && !recordHasEmail(sourceRecord, user.email)) {
@@ -515,7 +617,7 @@ Deno.serve(async (req) => {
   const deliveryStatus = emailSkipped ? (content.sms && !smsSkipped ? "sms sent; email skipped" : "skipped") : "sent";
 
   if (body.notificationId) {
-    const existingPayload = notificationPayload;
+    const existingPayload = hydrateNotificationPayload(notificationPayload, eventName, sourceRecord, body.notificationId);
     const now = new Date().toISOString();
     await adminClient.from("kennel_records").upsert({
       id: body.notificationId,
