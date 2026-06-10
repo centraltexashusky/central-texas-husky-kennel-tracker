@@ -732,7 +732,7 @@ function boardingRequestStayLineTask(record = {}, stay = {}) {
 function boardingRequestServiceRowMeta(task = {}) {
   const quantity = boardingServiceTaskQuantity(task);
   if (task.source === "boarding-stay") {
-    const unit = String(task.unit || "night").replace(/^per\s+/i, "").trim() || "night";
+    const unit = String(task.unit || "night").replace(/^per\\s+/i, "").trim() || "night";
     const pluralUnit = quantity === 1 || /s$/i.test(unit) ? unit : \`\${unit}s\`;
     return {
       requestMeta: \`\${quantity} x \${pluralUnit}\`,
