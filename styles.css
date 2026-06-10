@@ -1778,6 +1778,20 @@ button.is-loading {
   margin-bottom: 12px;
 }
 
+.customer-request-mode-button.is-active {
+  background: var(--tint-blue-strong);
+  border: 1px solid rgba(125, 211, 252, 0.5);
+  box-shadow: 0 10px 24px rgba(10, 132, 255, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.customer-request-mode-button:not(.is-active) {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-specular);
+  color: var(--ink);
+}
+
 .request-timeline {
   display: flex;
   flex-wrap: wrap;

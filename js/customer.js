@@ -605,6 +605,18 @@ function customerRequestMode() {
   return $("#customerRequestMode")?.value === "service" ? "service" : "boarding";
 }
 
+function setCustomerRequestActionMode(mode = "boarding") {
+  const normalizedMode = mode === "service" ? "service" : "boarding";
+  const boardingButton = $("#openCustomerBoardingRequestButton");
+  const serviceButton = $("#openCustomerServiceRequestButton");
+  boardingButton?.classList.toggle("is-active", normalizedMode === "boarding");
+  boardingButton?.classList.toggle("secondary-button", normalizedMode !== "boarding");
+  boardingButton?.setAttribute("aria-pressed", normalizedMode === "boarding" ? "true" : "false");
+  serviceButton?.classList.toggle("is-active", normalizedMode === "service");
+  serviceButton?.classList.toggle("secondary-button", normalizedMode !== "service");
+  serviceButton?.setAttribute("aria-pressed", normalizedMode === "service" ? "true" : "false");
+}
+
 function customerBookingDateOrderError(formEl = $("#customerBookingForm")) {
   const mode = customerRequestMode();
   const dropoffField = formFieldByName(formEl, "dropoffTime");
@@ -1607,6 +1619,7 @@ function openCustomerBookingModal(mode = "boarding") {
   $("#customerBookingForm").hidden = true;
   resetCustomerBookingForm();
   $("#customerRequestMode").value = mode;
+  setCustomerRequestActionMode(mode);
   $("#customerBookingForm").hidden = false;
   $("#customerBookingForm").scrollTop = 0;
   $("#customerBookingFormTitle").textContent = mode === "service" ? "Request Service" : "Request Boarding";

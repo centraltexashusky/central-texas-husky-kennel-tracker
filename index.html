@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260610-service-scope-review" />
+    <link rel="stylesheet" href="styles.css?v=20260610-request-mode-toggle" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -327,10 +327,10 @@
 
       <section class="page-view" id="customerRequestsPage">
         <section class="form-section">
-          <div class="section-heading"><span>B</span><div><h2>Boarding Request</h2><p>Select dog(s), requested stay, and optional services.</p></div></div>
+          <div class="section-heading"><span>B</span><div><h2>Boarding & Service Request</h2><p>Select dog(s), requested stay, and optional services.</p></div></div>
           <div class="customer-request-actions" id="customerRequestActions">
-            <button type="button" id="openCustomerBoardingRequestButton">Request New Boarding Stay</button>
-            <button type="button" class="secondary-button" id="openCustomerServiceRequestButton">Request Service</button>
+            <button type="button" class="customer-request-mode-button is-active" id="openCustomerBoardingRequestButton">Request New Boarding Stay</button>
+            <button type="button" class="secondary-button customer-request-mode-button" id="openCustomerServiceRequestButton">Request Service</button>
           </div>
           <div class="inline-success-message" id="customerBookingInlineStatus" hidden></div>
           <div id="customerNoDogRequestPrompt" class="record-card compact-record-card" hidden>
@@ -1339,6 +1339,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260610-service-scope-review-v2"></script>
+  <script type="module" src="js/main.js?v=20260610-request-mode-toggle"></script>
 </body>
 </html>

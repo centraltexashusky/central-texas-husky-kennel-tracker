@@ -8648,6 +8648,7 @@ function resetCustomerBookingForm() {
   $("#editingCustomerRequestId").value = "";
   $("#editingCustomerStayId").value = "";
   $("#customerRequestMode").value = "boarding";
+  if (typeof setCustomerRequestActionMode === "function") setCustomerRequestActionMode("boarding");
   $("#customerBookingFormTitle").textContent = "Request Boarding";
   $("#customerBookingFormHelp").textContent = "Choose dog(s), requested time, and optional services.";
   setCustomerBookingTimeCopy("boarding");
