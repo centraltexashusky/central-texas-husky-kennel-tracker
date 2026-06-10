@@ -11071,7 +11071,10 @@ function initEvents() {
   });
   $("#boardingViewToggle")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-view]");
-    if (button) handleBoardingViewToggle(button.dataset.view);
+    if (button) {
+      handleBoardingViewToggle(button.dataset.view);
+      renderBoardingDogs();
+    }
   });
   $("#boardingQueueGroups")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");

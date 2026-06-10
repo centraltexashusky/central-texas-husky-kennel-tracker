@@ -2812,10 +2812,10 @@ function handleBoardingViewToggle(view = "board") {
 }
 
 function renderBoardingDogs() {
-  const query = $("#boardingDogSearch").value || "";
+  const searchInput = $("#boardingDogSearch");
+  const query = searchInput?.value || "";
   const allRecords = consolidatedBoardingDogRecords();
   renderBoardingRosterTabs(allRecords);
-  renderBoardingQueueGroups(allRecords);
   const hasSearchQuery = Boolean(query.trim());
   const matchingRecords = allRecords.filter((record) => boardingDogMatchesSearch(record, query));
   const rosterRecords = hasSearchQuery ? matchingRecords : matchingRecords.filter((record) => boardingDogMatchesRosterFilter(record));
@@ -2823,20 +2823,50 @@ function renderBoardingDogs() {
     ? rosterRecords.filter((record) => vaccinationExpiresSoon(record, 30))
     : rosterRecords;
   const records = sortRecordsForTable("boardingDog", filteredRecords);
-  renderBoardingCalendar(records);
-  const columns = activeColumns("boardingDog");
-  $("#boardingDogTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="boardingDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
-  $("#boardingDogTableBody").innerHTML = records.length
-    ? records
-        .map((record) => {
-          return \`<tr data-id="\${record.id}" data-source="\${escapeHtml(record.sourceType || record.type || "boardingDog")}">\${columns.map((column) => \`<td>\${boardingTableCellHtml(column, record)}</td>\`).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("boardingDog")}\${boardingStatusChipHtml(record)}\${boardingQuickActionButtons(record)}<button type="button" class="secondary-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}">Boarding & Request</button>\${boardingOwnerLinkButtonHtml(record)}<span class="inline-save-status" data-inline-status-message="\${escapeHtml(record.id)}" aria-live="polite"></span></div></td></tr>\`;
-        })
-        .join("")
-    : \`<tr><td colspan="\${(columns.length || 1) + 1}">\${hasSearchQuery ? "No boarding dog records match this search." : \`No \${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.\`}</td></tr>\`;
-  renderBoardingQuickCards(records);
-  renderColumnManager("boardingDog", "#boardingDogColumnManager");
+  const activeView = ["calendar", "list"].includes(boardingViewMode) ? boardingViewMode : "board";
+  const queueContainer = $("#boardingQueueGroups");
+  const calendarContainer = $("#boardingCalendarView");
+  const quickCardsContainer = $("#boardingDogQuickCards");
+  const tableHead = $("#boardingDogTableHead");
+  const tableBody = $("#boardingDogTableBody");
+  const columnManager = $("#boardingDogColumnManager");
+
+  if (activeView === "board") {
+    renderBoardingQueueGroups(allRecords);
+  } else if (queueContainer) {
+    queueContainer.innerHTML = "";
+  }
+
+  if (activeView === "calendar") {
+    renderBoardingCalendar(records);
+  } else if (calendarContainer) {
+    calendarContainer.innerHTML = "";
+  }
+
+  if (activeView === "list") {
+    const columns = activeColumns("boardingDog");
+    if (tableHead) tableHead.innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="boardingDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
+    if (tableBody) tableBody.innerHTML = records.length
+      ? records
+          .map((record) => {
+            return \`<tr data-id="\${record.id}" data-source="\${escapeHtml(record.sourceType || record.type || "boardingDog")}">\${columns.map((column) => \`<td>\${boardingTableCellHtml(column, record)}</td>\`).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("boardingDog")}\${boardingStatusChipHtml(record)}\${boardingQuickActionButtons(record)}<button type="button" class="secondary-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}">Boarding & Request</button>\${boardingOwnerLinkButtonHtml(record)}<span class="inline-save-status" data-inline-status-message="\${escapeHtml(record.id)}" aria-live="polite"></span></div></td></tr>\`;
+          })
+          .join("")
+      : \`<tr><td colspan="\${(columns.length || 1) + 1}">\${hasSearchQuery ? "No boarding dog records match this search." : \`No \${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.\`}</td></tr>\`;
+    renderBoardingQuickCards(records);
+    renderColumnManager("boardingDog", "#boardingDogColumnManager");
+  } else {
+    if (tableHead) tableHead.innerHTML = "";
+    if (tableBody) tableBody.innerHTML = "";
+    if (quickCardsContainer) quickCardsContainer.innerHTML = "";
+    if (columnManager) {
+      columnManager.innerHTML = "";
+      columnManager.hidden = true;
+    }
+  }
+
   renderCustomerDogUploadCards();
-  handleBoardingViewToggle(boardingViewMode);
+  handleBoardingViewToggle(activeView);
 }
 
 function boardingStayNeedsDuplicateStatusSync(record = {}, stay = {}, nextStatus = "", options = {}) {

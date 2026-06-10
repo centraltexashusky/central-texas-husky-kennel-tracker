@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260610-active-startup-render";
+import "./shared.js?v=20260610-board-active-view-render";
 import "./auth.js?v=20260610-active-startup-render";
 import "./customer.js?v=20260610-request-mode-toggle";
-import "./boarding.js?v=20260610-service-scope-review-v2";
+import "./boarding.js?v=20260610-board-active-view-render";
 import "./daily.js?v=20260607-owned-health-due-history";
 import "./timesheet.js?v=20260608-efficiency-sync";
 import "./settings.js?v=20260610-service-scope-review";
