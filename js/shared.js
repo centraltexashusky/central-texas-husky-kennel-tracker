@@ -83,6 +83,8 @@ var currentUser = null;
 var impersonationSession = null;
 var supabaseClient = null;
 var recordCache = {};
+var remoteLoadPromise = null;
+var dailyTaskCompletionSyncAvailable = true;
 var detailDialogContext = null;
 var pendingCustomerBooking = null;
 var customerBookingSubmitInProgress = false;
@@ -3562,63 +3564,69 @@ async function loadRemoteRecords(options = {}) {
     modeLabel.textContent = localTestMode ? "Local test mode" : "Local only";
     return;
   }
-  if (remoteLoadInProgress) {
+  if (remoteLoadPromise) {
     if (remoteLoadStartedAt && Date.now() - remoteLoadStartedAt > REMOTE_LOAD_STALE_MS) {
-      console.warn("Recovering stale remote record load.");
-      remoteLoadInProgress = false;
-      remoteLoadStartedAt = 0;
-    } else {
-      return;
+      console.warn("Remote record load is still running; skipping overlapping load.");
     }
+    return remoteLoadPromise;
   }
   remoteLoadInProgress = true;
   remoteLoadStartedAt = Date.now();
   if (syncNowButton) syncNowButton.disabled = true;
-  try {
-    const data = await fetchRemoteRecordRows();
-    let taskCompletionRows = [];
+  let loadPromise = null;
+  loadPromise = (async () => {
     try {
-      taskCompletionRows = await fetchRemoteDailyTaskCompletionRows();
-      mergeDailyTaskCompletionRecords(taskCompletionRows, { replaceLocal: true });
-    } catch (completionError) {
-      if (remoteDailyTaskCompletionSetupMissing(completionError)) {
-        console.warn("Daily task completion sync is pending the Supabase migration.", completionError);
-      } else {
-        console.warn("Daily task completions could not load.", completionError);
+      const data = await withTimeout(fetchRemoteRecordRows(), REMOTE_LOAD_STALE_MS, "Remote record load");
+      let taskCompletionRows = [];
+      if (dailyTaskCompletionSyncAvailable) {
+        try {
+          taskCompletionRows = await withTimeout(fetchRemoteDailyTaskCompletionRows(), 6000, "Daily task completion load");
+          mergeDailyTaskCompletionRecords(taskCompletionRows, { replaceLocal: true });
+        } catch (completionError) {
+          if (remoteDailyTaskCompletionSetupMissing(completionError)) {
+            dailyTaskCompletionSyncAvailable = false;
+            console.warn("Daily task completion sync is pending the Supabase migration.", completionError);
+          } else {
+            console.warn("Daily task completions could not load.", completionError);
+          }
+        }
       }
+      const nextSignature = remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
+      const remoteDataChanged = nextSignature !== lastRemoteRecordsSignature;
+      lastRemoteRecordsSignature = nextSignature;
+      if (!remoteDataChanged) {
+        modeLabel.textContent = "Synced";
+        return;
+      }
+      const grouped = Object.fromEntries(recordTypes().map((type) => [type, []]));
+      (data || []).forEach((row) => {
+        if (grouped[row.type]) grouped[row.type].push(row.payload);
+      });
+      const loadedRemoteTaskTemplate = applyRemoteTaskTemplate(data || []);
+      if (!loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
+      recordTypes().forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
+      if (currentUser) {
+        currentUser.role = roleForAccount(currentUser);
+        localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
+      }
+      if (options.syncCustomerAccessProfiles === true) await syncMissingCustomerAccessProfiles();
+      if (options.syncLegacyDogModel === true) await syncLegacyDogModelRecords();
+      if (options.render !== false) renderAllRecordsFromRemoteLoad();
+      updateNavigationAccess();
+      updateHeaderUser();
+    } catch (error) {
+      modeLabel.textContent = "Load failed";
+      showToast(\`Records could not load: \${error.message}\`);
+    } finally {
+      if (remoteLoadPromise === loadPromise) remoteLoadPromise = null;
+      remoteLoadInProgress = false;
+      remoteLoadStartedAt = 0;
+      lastRemoteLoadFinishedAt = Date.now();
+      if (syncNowButton) syncNowButton.disabled = false;
     }
-    const nextSignature = remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
-    const remoteDataChanged = nextSignature !== lastRemoteRecordsSignature;
-    lastRemoteRecordsSignature = nextSignature;
-    if (!remoteDataChanged) {
-      modeLabel.textContent = "Synced";
-      return;
-    }
-    const grouped = Object.fromEntries(recordTypes().map((type) => [type, []]));
-    (data || []).forEach((row) => {
-      if (grouped[row.type]) grouped[row.type].push(row.payload);
-    });
-    const loadedRemoteTaskTemplate = applyRemoteTaskTemplate(data || []);
-    if (!loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
-    recordTypes().forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
-    if (currentUser) {
-      currentUser.role = roleForAccount(currentUser);
-      localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
-    }
-    await syncMissingCustomerAccessProfiles();
-    await syncLegacyDogModelRecords();
-    if (options.render !== false) renderAllRecordsFromRemoteLoad();
-    updateNavigationAccess();
-    updateHeaderUser();
-  } catch (error) {
-    modeLabel.textContent = "Load failed";
-    showToast(\`Records could not load: \${error.message}\`);
-  } finally {
-    remoteLoadInProgress = false;
-    remoteLoadStartedAt = 0;
-    lastRemoteLoadFinishedAt = Date.now();
-    if (syncNowButton) syncNowButton.disabled = false;
-  }
+  })();
+  remoteLoadPromise = loadPromise;
+  return loadPromise;
 }
 
 function handleRealtimeKennelRecordChange(change = {}) {
@@ -3653,8 +3661,11 @@ function startAutoSync() {
   const channelName = "kennel-records-" + (currentDbUserId() || normalizeEmail(currentUser?.email || helperEmail?.value || "staff")) + "-" + Date.now().toString(36);
   realtimeChannel = supabaseClient
     .channel(channelName)
-    .on("postgres_changes", { event: "*", schema: "public", table: "kennel_records" }, handleRealtimeKennelRecordChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "daily_task_completions" }, handleRealtimeTaskCompletionChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "kennel_records" }, handleRealtimeKennelRecordChange);
+  if (dailyTaskCompletionSyncAvailable) {
+    realtimeChannel = realtimeChannel.on("postgres_changes", { event: "*", schema: "public", table: "daily_task_completions" }, handleRealtimeTaskCompletionChange);
+  }
+  realtimeChannel = realtimeChannel
     .subscribe((status) => {
       if (status === "SUBSCRIBED") modeLabel.textContent = "Live sync active";
       if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) scheduleRealtimeReconnect();

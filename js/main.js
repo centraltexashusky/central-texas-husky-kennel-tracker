@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260610-board-active-view-render";
+import "./shared.js?v=20260610-load-guard";
 import "./auth.js?v=20260610-active-startup-render";
 import "./customer.js?v=20260610-request-mode-toggle";
 import "./boarding.js?v=20260610-board-active-view-render";
