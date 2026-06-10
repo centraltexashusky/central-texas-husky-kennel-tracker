@@ -230,7 +230,7 @@ function setHelper(user, options = {}) {
   if (options.render !== false) {
     renderDailyTaskLists();
     fillCustomerDefaults();
-    renderAllRecords();
+    renderAllRecords({ activeOnly: true });
     scheduleProfilePhotoHydrationSweep(300);
   }
   if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(currentUser.role));

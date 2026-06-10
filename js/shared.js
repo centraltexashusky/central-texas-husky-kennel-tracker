@@ -1380,7 +1380,7 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     };
     setHelper(syncedUser, { switchAfterLogin: false, render: false });
     updateNavigationAccess();
-    renderAllRecords();
+    renderAllRecords({ activeOnly: true });
     scheduleProfilePhotoHydrationSweep(300);
     startAutoSync();
     if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(syncedUser.role));
@@ -12141,7 +12141,7 @@ function ensureAppShellVisible(reason = "") {
     document.body.classList.toggle("is-login-view", activeId === "loginPage" && !helperIsLoggedIn());
     syncMobileNavigationActive(activeId);
   }
-  if (wasBooting && helperIsLoggedIn()) renderAllRecords();
+  if (wasBooting && helperIsLoggedIn()) renderAllRecords({ activeOnly: true });
 }
 
 // Extracted to js/timesheet.js: scheduleAppResumeRecovery
@@ -12156,7 +12156,7 @@ async function resumeAppFromLifecycle(reason = "resume") {
   if (!helperIsLoggedIn()) {
     const restored = await restoreSupabaseSession();
     if (restored) {
-      renderAllRecords();
+      renderAllRecords({ activeOnly: true });
       ensureAppShellVisible(\`\${reason}:session-restored\`);
     }
     return;
@@ -12199,7 +12199,7 @@ async function initializeApp() {
     }
     updateNavigationAccess();
     if (helperIsLoggedIn()) {
-      if (!renderedDuringSessionRestore) renderAllRecords();
+      if (!renderedDuringSessionRestore) renderAllRecords({ activeOnly: true });
       switchPage(rememberedPageForRole(currentRole()));
       requirePasswordChangeIfNeeded();
       startAutoSync();
@@ -12211,7 +12211,7 @@ async function initializeApp() {
     const cachedUser = cachedSupabaseSessionUser();
     if (!helperIsLoggedIn() && cachedUser) {
       setHelper(cachedUser, { switchAfterLogin: false, render: false });
-      renderAllRecords();
+      renderAllRecords({ activeOnly: true });
       switchPage(rememberedPageForRole(currentRole()));
       startAutoSync();
       showToast("The app restored from saved login. Sync will retry when the connection is ready.");
@@ -12219,7 +12219,7 @@ async function initializeApp() {
       clearLocalAppSession({ switchToLogin: false });
       switchPage("loginPage");
     } else {
-      renderAllRecords();
+      renderAllRecords({ activeOnly: true });
       switchPage(rememberedPageForRole(currentRole()));
       startAutoSync();
     }
