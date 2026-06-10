@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260609-photo-owner-service-fix-v5";
+import "./shared.js?v=20260609-profile-photo-cache";
 import "./auth.js?v=20260609-photo-hydration";
 import "./customer.js?v=20260608-efficiency-sync";
 import "./boarding.js?v=20260609-photo-owner-service-fix-v5";

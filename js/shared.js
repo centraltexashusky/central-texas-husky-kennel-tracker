@@ -114,6 +114,8 @@ var mediaZoomLevel = 1;
 var activeServiceInfoIcon = null;
 var serviceInfoTooltipEl = null;
 var signedMediaUrlCache = new Map();
+var profilePhotoBlobUrlCache = new Map();
+var profilePhotoCacheWritePromises = new Map();
 var profilePhotoHydrationTimers = new WeakMap();
 var customerProfileSyncInProgress = false;
 var authSessionSyncPromise = null;
@@ -135,6 +137,10 @@ var lastAppResumeAt = 0;
 var showReadNotifications = false;
 var visibleReadNotificationCount = 4;
 var MAX_READ_NOTIFICATIONS = 10;
+var PROFILE_PHOTO_CACHE_NAME = "cth-profile-photo-cache-v1";
+var PROFILE_PHOTO_CACHE_META_KEY = "cth-profile-photo-cache-meta-v1";
+var PROFILE_PHOTO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+var PROFILE_PHOTO_CACHE_MAX_ITEMS = 160;
 
 var careDefaults = {
   exerciseFrequencyDays: 0,
@@ -3911,6 +3917,166 @@ function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
   return attrs.length ? " " + attrs.join(" ") : "";
 }
 
+function profilePhotoCacheSupported() {
+  return Boolean(globalThis.caches && globalThis.URL?.createObjectURL && !localTestMode);
+}
+
+function profilePhotoCacheViewerKey() {
+  return currentDbUserId?.() || currentUser?.email || currentUser?.name || "";
+}
+
+function profilePhotoCacheEntryKey(storagePath = "") {
+  const path = String(storagePath || "").trim();
+  const viewerKey = profilePhotoCacheViewerKey();
+  return path && viewerKey ? viewerKey + "|" + path : "";
+}
+
+function profilePhotoCacheRequestUrl(storagePath = "") {
+  const entryKey = profilePhotoCacheEntryKey(storagePath);
+  return entryKey ? window.location.origin + "/__cth-profile-photo-cache/" + encodeURIComponent(entryKey) : "";
+}
+
+function readProfilePhotoCacheMeta() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PROFILE_PHOTO_CACHE_META_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function writeProfilePhotoCacheMeta(meta = {}) {
+  try {
+    localStorage.setItem(PROFILE_PHOTO_CACHE_META_KEY, JSON.stringify(meta));
+  } catch (_error) {
+    // Cache metadata is an optimization only. Ignore quota/private-mode errors.
+  }
+}
+
+async function removeCachedProfilePhoto(storagePath = "") {
+  const requestUrl = profilePhotoCacheRequestUrl(storagePath);
+  const entryKey = profilePhotoCacheEntryKey(storagePath);
+  if (!requestUrl || !entryKey) return;
+  const existing = profilePhotoBlobUrlCache.get(entryKey);
+  if (existing?.url) URL.revokeObjectURL(existing.url);
+  profilePhotoBlobUrlCache.delete(entryKey);
+  const meta = readProfilePhotoCacheMeta();
+  if (meta[entryKey]) {
+    delete meta[entryKey];
+    writeProfilePhotoCacheMeta(meta);
+  }
+  if (!profilePhotoCacheSupported()) return;
+  try {
+    const cache = await caches.open(PROFILE_PHOTO_CACHE_NAME);
+    await cache.delete(requestUrl);
+  } catch (_error) {
+    // Browser-managed cache is best effort.
+  }
+}
+
+async function pruneProfilePhotoCache(meta = null, cache = null) {
+  if (!profilePhotoCacheSupported()) return;
+  const now = Date.now();
+  const currentMeta = meta || readProfilePhotoCacheMeta();
+  const entries = Object.entries(currentMeta)
+    .filter(([, item]) => item && typeof item === "object")
+    .sort((a, b) => Number(b[1].cachedAt || 0) - Number(a[1].cachedAt || 0));
+  const keep = new Set(entries.slice(0, PROFILE_PHOTO_CACHE_MAX_ITEMS).map(([key]) => key));
+  const activeCache = cache || await caches.open(PROFILE_PHOTO_CACHE_NAME);
+  let changed = false;
+  for (const [key, item] of entries) {
+    const cachedAt = Number(item.cachedAt || 0);
+    const stale = !cachedAt || now - cachedAt > PROFILE_PHOTO_CACHE_MAX_AGE_MS;
+    if (stale || !keep.has(key)) {
+      const existing = profilePhotoBlobUrlCache.get(key);
+      if (existing?.url) URL.revokeObjectURL(existing.url);
+      profilePhotoBlobUrlCache.delete(key);
+      delete currentMeta[key];
+      changed = true;
+      if (item.requestUrl) await activeCache.delete(item.requestUrl);
+    }
+  }
+  if (changed) writeProfilePhotoCacheMeta(currentMeta);
+}
+
+async function cachedProfilePhotoObjectUrlForPath(storagePath = "") {
+  const requestUrl = profilePhotoCacheRequestUrl(storagePath);
+  const entryKey = profilePhotoCacheEntryKey(storagePath);
+  if (!profilePhotoCacheSupported() || !requestUrl || !entryKey) return "";
+  const meta = readProfilePhotoCacheMeta();
+  const item = meta[entryKey];
+  const cachedAt = Number(item?.cachedAt || 0);
+  if (!cachedAt || Date.now() - cachedAt > PROFILE_PHOTO_CACHE_MAX_AGE_MS) {
+    await removeCachedProfilePhoto(storagePath);
+    return "";
+  }
+  const existing = profilePhotoBlobUrlCache.get(entryKey);
+  if (existing?.url && existing.cachedAt === cachedAt) return existing.url;
+  try {
+    const cache = await caches.open(PROFILE_PHOTO_CACHE_NAME);
+    const response = await cache.match(requestUrl);
+    if (!response?.ok) {
+      await removeCachedProfilePhoto(storagePath);
+      return "";
+    }
+    const blob = await response.blob();
+    if (!blob.size || (blob.type && !blob.type.startsWith("image/"))) {
+      await removeCachedProfilePhoto(storagePath);
+      return "";
+    }
+    if (existing?.url) URL.revokeObjectURL(existing.url);
+    const objectUrl = URL.createObjectURL(blob);
+    profilePhotoBlobUrlCache.set(entryKey, { url: objectUrl, cachedAt });
+    return objectUrl;
+  } catch (_error) {
+    return "";
+  }
+}
+
+async function cacheProfilePhotoFromSignedUrl(storagePath = "", signedUrl = "") {
+  const requestUrl = profilePhotoCacheRequestUrl(storagePath);
+  const entryKey = profilePhotoCacheEntryKey(storagePath);
+  if (!profilePhotoCacheSupported() || !requestUrl || !entryKey || !signedUrl || signedUrl.startsWith("blob:")) return;
+  if (profilePhotoCacheWritePromises.has(entryKey)) return profilePhotoCacheWritePromises.get(entryKey);
+  const writePromise = (async () => {
+    const response = await fetch(signedUrl, { cache: "force-cache", credentials: "omit", mode: "cors" });
+    if (!response.ok) return;
+    const blob = await response.blob();
+    if (!blob.size || (blob.type && !blob.type.startsWith("image/"))) return;
+    const cache = await caches.open(PROFILE_PHOTO_CACHE_NAME);
+    const cachedAt = Date.now();
+    await cache.put(requestUrl, new Response(blob, {
+      headers: {
+        "Cache-Control": "max-age=" + Math.round(PROFILE_PHOTO_CACHE_MAX_AGE_MS / 1000),
+        "Content-Type": blob.type || response.headers.get("Content-Type") || "image/jpeg",
+        "X-CTH-Cached-At": String(cachedAt),
+      },
+    }));
+    const meta = readProfilePhotoCacheMeta();
+    meta[entryKey] = {
+      requestUrl,
+      storagePath,
+      cachedAt,
+      contentType: blob.type || response.headers.get("Content-Type") || "image/jpeg",
+      size: blob.size || 0,
+    };
+    writeProfilePhotoCacheMeta(meta);
+    await pruneProfilePhotoCache(meta, cache);
+  })()
+    .catch((error) => console.warn("Profile photo cache write skipped.", error))
+    .finally(() => profilePhotoCacheWritePromises.delete(entryKey));
+  profilePhotoCacheWritePromises.set(entryKey, writePromise);
+  return writePromise;
+}
+
+async function profilePhotoDisplaySourceForPath(storagePath = "", context = {}) {
+  const cachedUrl = await cachedProfilePhotoObjectUrlForPath(storagePath);
+  if (cachedUrl) return { url: cachedUrl, cached: true };
+  const signedUrl = await signedMediaUrlForPath(storagePath, context);
+  if (signedUrl) cacheProfilePhotoFromSignedUrl(storagePath, signedUrl);
+  return { url: signedUrl, cached: false };
+}
+
 function clearProfilePhotoHydrationTimer(element) {
   const timer = profilePhotoHydrationTimers.get(element);
   if (timer) window.clearTimeout(timer);
@@ -3995,24 +4161,25 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
     element.dataset.src = "";
     img.removeAttribute("src");
   }
-  signedMediaUrlForPath(storagePath, {
+  profilePhotoDisplaySourceForPath(storagePath, {
     sourceRecordId: element.dataset.sourceRecordId || "",
     sourceRecordType: element.dataset.sourceRecordType || "",
-  }).then((signedUrl) => {
+  }).then(({ url: photoUrl, cached } = {}) => {
     if (element.dataset.profilePhotoToken !== token) return;
-    if (!signedUrl) {
+    if (!photoUrl) {
       scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Profile photo access returned an empty signed URL."));
       return;
     }
     const revealIfLoaded = () => {
-      if (img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
+      if (img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, photoUrl, token);
     };
-    img.onload = () => applyHydratedProfilePhoto(element, img, initials, signedUrl, token);
+    img.onload = () => applyHydratedProfilePhoto(element, img, initials, photoUrl, token);
     img.onerror = () => {
       if (element.dataset.profilePhotoToken !== token) return;
+      if (cached) removeCachedProfilePhoto(storagePath);
       scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Signed profile photo image failed to load."));
     };
-    img.src = signedUrl;
+    img.src = photoUrl;
     revealIfLoaded();
     window.requestAnimationFrame?.(revealIfLoaded);
     [250, 900, 2500, 5000, 8000, 12000, 18000].forEach((delay) => window.setTimeout(revealIfLoaded, delay));
@@ -4082,15 +4249,15 @@ async function openDogProfilePhoto(record = {}, fallbackRecordType = "ownedDog")
   if (!directSource && !storagePath) return false;
   if (storagePath) {
     try {
-      const signedUrl = await signedMediaUrlForPath(storagePath, {
+      const { url: photoUrl } = await profilePhotoDisplaySourceForPath(storagePath, {
         sourceRecordId: record.id || "",
         sourceRecordType,
       });
-      if (!signedUrl && !directSource) {
+      if (!photoUrl && !directSource) {
         showDetailDialog("Photo Not Available", "<p>This profile photo is stored privately, but Snuggle Stay could not create an access link right now.</p>");
         return false;
       }
-      showMediaDialog(signedUrl || directSource, "image/jpeg", dogName + " profile photo", dialogContext);
+      showMediaDialog(photoUrl || directSource, "image/jpeg", dogName + " profile photo", dialogContext);
       return true;
     } catch (error) {
       if (!directSource) {
