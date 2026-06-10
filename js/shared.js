@@ -4073,7 +4073,6 @@ async function profilePhotoDisplaySourceForPath(storagePath = "", context = {}) 
   const cachedUrl = await cachedProfilePhotoObjectUrlForPath(storagePath);
   if (cachedUrl) return { url: cachedUrl, cached: true };
   const signedUrl = await signedMediaUrlForPath(storagePath, context);
-  if (signedUrl) cacheProfilePhotoFromSignedUrl(storagePath, signedUrl);
   return { url: signedUrl, cached: false };
 }
 
@@ -4173,7 +4172,10 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
     const revealIfLoaded = () => {
       if (img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, photoUrl, token);
     };
-    img.onload = () => applyHydratedProfilePhoto(element, img, initials, photoUrl, token);
+    img.onload = () => {
+      applyHydratedProfilePhoto(element, img, initials, photoUrl, token);
+      if (!cached) cacheProfilePhotoFromSignedUrl(storagePath, photoUrl);
+    };
     img.onerror = () => {
       if (element.dataset.profilePhotoToken !== token) return;
       if (cached) removeCachedProfilePhoto(storagePath);
