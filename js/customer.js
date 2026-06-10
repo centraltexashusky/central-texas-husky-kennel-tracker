@@ -1228,7 +1228,7 @@ function renderCustomerRequests() {
           const cancellationAudit = status === "Cancelled" ? boardingCancellationAuditHtml(record, stay, { customer: true }) : "";
           const reasonHtml = status === "Cancelled" ? boardingCancellationReasonHtml(record, stay, { customer: true }) : "";
           const actions = canCustomerEdit || canCustomerCancel
-            ? \`<div class="record-actions">\${canCustomerEdit ? \`<button type="button" class="secondary-button" data-action="edit-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Update</button>\` : ""}\${canCustomerCancel ? \`<button type="button" class="secondary-button danger-button" data-action="cancel-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Cancel Request</button>\` : ""}</div>\`
+            ? \`<div class="record-actions">\${canCustomerEdit ? \`<button type="button" class="secondary-button" data-action="edit-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Edit Request</button>\` : ""}\${canCustomerCancel ? \`<button type="button" class="secondary-button danger-button" data-action="cancel-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Cancel Request</button>\` : ""}</div>\`
             : "";
           return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${estimate}\${cancellationAudit}\${reasonHtml}\${declineHtml}\${actions}</article>\`;
         })
@@ -1237,7 +1237,7 @@ function renderCustomerRequests() {
 }
 
 function customerCanEditStayRequestStatus(status = "") {
-  return normalizeBoardingStatus({ boardingStatus: status }) === "Pending";
+  return ["Pending", "Approved"].includes(normalizeBoardingStatus({ boardingStatus: status }));
 }
 
 function customerRequestEntries(statusFilter = "All") {
@@ -1795,9 +1795,24 @@ async function submitPendingCustomerBooking() {
         perDogBreakdown: estimate.boardingLines,
         pricingErrors: estimate.pricingErrors || [],
       });
+      const existingStatus = useExisting ? normalizeBoardingStatus(existingTarget) : "Pending";
+      const existingStayStatus = existingStay.id ? boardingStayDisplayStatus(existingTarget || {}, existingStay) : existingStatus;
+      const activeExistingStatus = ["Checked In", "In Kennel", "Ready For Pickup"].includes(existingStatus);
+      const requestReviewStatus = "pending_customer_request";
+      const requestStatus = activeExistingStatus ? existingStatus : requestReviewStatus;
+      const statusHistoryFrom = editingRecord ? existingStayStatus || existingStatus : existingStatus;
+      const statusHistoryTo = editingRecord ? requestReviewStatus : requestStatus;
+      const statusHistory = useExisting
+        ? [
+            ...(existingTarget.statusHistory || []),
+            ...(normalizeBoardingStatus({ boardingStatus: statusHistoryFrom, customerRequest: true }) !== normalizeBoardingStatus({ boardingStatus: statusHistoryTo, customerRequest: true })
+              ? [{ from: statusHistoryFrom, to: statusHistoryTo, date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }]
+              : []),
+          ]
+        : [{ from: "", to: requestReviewStatus, date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }];
       const stay = {
         id: editingRecord ? existingStay.id || editingStayId || uid("stay") : customerBookingStableId("stay", estimate, dog),
-        status: editingRecord ? existingStay.status || normalizeBoardingStatus(editingRecord) : "pending_customer_request",
+        status: requestReviewStatus,
         createdAt: editingRecord ? existingStay.createdAt || new Date().toISOString() : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         source: "customer-request",
@@ -1808,7 +1823,7 @@ async function submitPendingCustomerBooking() {
         requestGroupDogNames: groupDogNames,
         requestGroupDogCount: groupDogCount,
         requestGroupTotal: estimate.total,
-        requestGroupStatus: editingRecord ? existingStay.status || normalizeBoardingStatus(editingRecord) : "pending_customer_request",
+        requestGroupStatus: requestReviewStatus,
         dropoffTime: estimate.dropoffTime,
         pickupTime: estimate.pickupTime,
         scheduledDropoffTime: estimate.dropoffTime,
@@ -1837,15 +1852,6 @@ async function submitPendingCustomerBooking() {
       existingStays.unshift(stay);
       const ownerEmail = normalizeEmail(existingTarget?.ownerEmail || dog.ownerEmail || currentUser?.email);
       const secondaryOwnerEmail = normalizeEmail(existingTarget?.secondaryOwnerEmail || dog.secondaryOwnerEmail);
-      const existingStatus = useExisting ? normalizeBoardingStatus(existingTarget) : "Pending";
-      const activeExistingStatus = ["Checked In", "In Kennel", "Ready For Pickup"].includes(existingStatus);
-      const requestStatus = editingRecord ? existingStatus : activeExistingStatus ? existingStatus : "pending_customer_request";
-      const statusHistory = useExisting
-        ? [
-            ...(existingTarget.statusHistory || []),
-            ...(requestStatus !== existingStatus ? [{ from: existingStatus, to: requestStatus, date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }] : []),
-          ]
-        : [{ from: "", to: "pending_customer_request", date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }];
       const payload = {
         ...(useExisting ? existingTarget : {}),
         type: "boardingDog",
@@ -1862,7 +1868,7 @@ async function submitPendingCustomerBooking() {
         requestGroupDogCount: groupDogCount,
         requestGroupServiceNames: groupSelectedServices,
         requestGroupTotal: estimate.total,
-        requestGroupStatus: requestStatus,
+        requestGroupStatus: requestReviewStatus,
         dogName: dog.dogName,
         breedDescription: dog.breedDescription,
         dateOfBirth: dog.dateOfBirth || existingTarget?.dateOfBirth || "",
@@ -1904,6 +1910,8 @@ async function submitPendingCustomerBooking() {
         requestedServices: dogServices.map((service) => ({ id: service.id, serviceName: service.serviceName, quantity: Number(service.quantity || 1), unitPrice: Number(service.basePrice || 0), dogName: dog.dogName || "Dog" })),
         flags: ["Required update from owner"],
         stays: existingStays,
+        customerEditedAt: editingRecord ? new Date().toISOString() : existingTarget?.customerEditedAt || "",
+        customerEditedPreviousStatus: editingRecord ? statusHistoryFrom : existingTarget?.customerEditedPreviousStatus || "",
         cancelledAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.cancelledAt || "",
         checkedOutAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.checkedOutAt || "",
       };
