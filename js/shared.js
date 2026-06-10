@@ -117,14 +117,12 @@ var signedMediaUrlCache = new Map();
 var profilePhotoBlobUrlCache = new Map();
 var profilePhotoCacheWritePromises = new Map();
 var profilePhotoHydrationTimers = new WeakMap();
-var profilePhotoHydrationSweepTimers = new Map();
 var customerProfileSyncInProgress = false;
 var authSessionSyncPromise = null;
 var authSessionSyncStartedAt = 0;
 var suppressAuthSyncUntil = 0;
 var taskTemplateSyncTimer = null;
 var applyingRemoteTaskConfig = false;
-var responsiveUiSyncTimer = null;
 var REMOTE_RENDER_SCROLL_IDLE_MS = 1200;
 var REMOTE_LOAD_STALE_MS = 15000;
 var AUTH_BOOT_TIMEOUT_MS = 8000;
@@ -143,7 +141,6 @@ var PROFILE_PHOTO_CACHE_NAME = "cth-profile-photo-cache-v1";
 var PROFILE_PHOTO_CACHE_META_KEY = "cth-profile-photo-cache-meta-v1";
 var PROFILE_PHOTO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 var PROFILE_PHOTO_CACHE_MAX_ITEMS = 160;
-var PROFILE_PHOTO_HYDRATION_SWEEP_DELAYS = [300, 1200, 2800, 5000, 8000, 12000, 18000];
 var SIGNED_MEDIA_URL_STORAGE_KEY = "cth-signed-media-url-cache-v1";
 var SIGNED_MEDIA_URL_CACHE_MAX_ITEMS = 240;
 
@@ -4162,33 +4159,6 @@ function clearProfilePhotoHydrationTimer(element) {
   profilePhotoHydrationTimers.delete(element);
 }
 
-function scheduleProfilePhotoRevealChecks(element, revealIfLoaded, token) {
-  if (!element || typeof revealIfLoaded !== "function" || !token) return;
-  if (element.dataset.profilePhotoRevealToken === token) return;
-  element.dataset.profilePhotoRevealToken = token;
-  window.requestAnimationFrame?.(() => {
-    if (element.dataset.profilePhotoToken === token) revealIfLoaded();
-  });
-}
-
-function profilePhotoSweepKey(root = document, delay = 0, scope = "reveal") {
-  if (!root || root === document) return scope + ":document:" + delay;
-  if (!root.dataset) return scope + ":node:" + delay;
-  if (!root.dataset.profilePhotoSweepRootId) root.dataset.profilePhotoSweepRootId = uid("photo-root");
-  return scope + ":" + root.dataset.profilePhotoSweepRootId + ":" + delay;
-}
-
-function scheduleProfilePhotoHydrationRevealSweep(root = document, delay = 0) {
-  const sweepRoot = root || document;
-  const key = profilePhotoSweepKey(sweepRoot, delay, "reveal");
-  if (profilePhotoHydrationSweepTimers.has(key)) return;
-  const timer = window.setTimeout(() => {
-    profilePhotoHydrationSweepTimers.delete(key);
-    sweepRoot?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => revealLoadedProfilePhotoElement(element));
-  }, delay);
-  profilePhotoHydrationSweepTimers.set(key, timer);
-}
-
 function scheduleProfilePhotoHydrationRetry(element, relatedInitials, token, error) {
   if (!element || element.dataset.profilePhotoToken !== token) return;
   const retries = Number(element.dataset.profilePhotoRetryCount || "0");
@@ -4290,25 +4260,20 @@ function hydrateProfilePhotoElement(element, relatedInitials = null) {
     };
     img.src = photoUrl;
     revealIfLoaded();
-    scheduleProfilePhotoRevealChecks(element, revealIfLoaded, token);
+    window.requestAnimationFrame?.(revealIfLoaded);
+    [250, 900, 2500, 5000, 8000, 12000, 18000].forEach((delay) => window.setTimeout(revealIfLoaded, delay));
   }).catch((error) => scheduleProfilePhotoHydrationRetry(element, initials, token, error));
 }
 
 function hydrateProfilePhotoElements(root = document) {
-  const elements = Array.from(root?.querySelectorAll?.("[data-profile-photo-path]") || []);
-  if (!elements.length) return;
-  elements.forEach((element) => hydrateProfilePhotoElement(element));
-  PROFILE_PHOTO_HYDRATION_SWEEP_DELAYS.forEach((delay) => scheduleProfilePhotoHydrationRevealSweep(root, delay));
+  root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => hydrateProfilePhotoElement(element));
+  [300, 1200, 2800, 5000, 8000, 12000, 18000].forEach((delay) => {
+    window.setTimeout(() => root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => revealLoadedProfilePhotoElement(element)), delay);
+  });
 }
 
 function scheduleProfilePhotoHydrationSweep(delay = 600) {
-  const key = profilePhotoSweepKey(document, delay, "hydrate");
-  if (profilePhotoHydrationSweepTimers.has(key)) return;
-  const timer = window.setTimeout(() => {
-    profilePhotoHydrationSweepTimers.delete(key);
-    hydrateProfilePhotoElements(document);
-  }, delay);
-  profilePhotoHydrationSweepTimers.set(key, timer);
+  window.setTimeout(() => hydrateProfilePhotoElements(document), delay);
 }
 
 async function signedMediaUrlForPath(storagePath = "", context = {}) {
@@ -9402,26 +9367,16 @@ function exportCareLogs() {
   downloadCsv(\`care-logs-\${todayDate()}.csv\`, rows);
 }
 
-function runResponsiveUiSync() {
-  syncMobileReviewSections();
-  resetDailyTaskTabPointerDrag();
-  renderDailyTaskTabs();
-  setDailyTaskTab(dailyTaskTab);
-  positionServiceInfoTooltip();
-}
-
-function scheduleResponsiveUiSync() {
-  if (responsiveUiSyncTimer) window.clearTimeout(responsiveUiSyncTimer);
-  responsiveUiSyncTimer = window.setTimeout(() => {
-    responsiveUiSyncTimer = null;
-    runResponsiveUiSync();
-  }, 120);
-}
-
 function initEvents() {
   syncMobileReviewSections();
   $("#boardingRequestsDetails")?.addEventListener("toggle", rememberBoardingRequestsDetailsState);
-  window.addEventListener("resize", scheduleResponsiveUiSync);
+  window.addEventListener("resize", () => {
+    syncMobileReviewSections();
+    resetDailyTaskTabPointerDrag();
+    renderDailyTaskTabs();
+    setDailyTaskTab(dailyTaskTab);
+    positionServiceInfoTooltip();
+  });
   window.addEventListener("scroll", () => {
     lastUserScrollAt = Date.now();
     positionServiceInfoTooltip();
