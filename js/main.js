@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260609-profile-photo-cache-v3";
+import "./shared.js?v=20260610-performance-sweep";
 import "./auth.js?v=20260609-photo-hydration";
 import "./customer.js?v=20260610-request-mode-toggle";
 import "./boarding.js?v=20260610-service-scope-review-v2";
