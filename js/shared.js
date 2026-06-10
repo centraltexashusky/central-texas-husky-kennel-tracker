@@ -141,6 +141,8 @@ var PROFILE_PHOTO_CACHE_NAME = "cth-profile-photo-cache-v1";
 var PROFILE_PHOTO_CACHE_META_KEY = "cth-profile-photo-cache-meta-v1";
 var PROFILE_PHOTO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 var PROFILE_PHOTO_CACHE_MAX_ITEMS = 160;
+var SIGNED_MEDIA_URL_STORAGE_KEY = "cth-signed-media-url-cache-v1";
+var SIGNED_MEDIA_URL_CACHE_MAX_ITEMS = 240;
 
 var careDefaults = {
   exerciseFrequencyDays: 0,
@@ -3936,6 +3938,81 @@ function profilePhotoCacheRequestUrl(storagePath = "") {
   return entryKey ? window.location.origin + "/__cth-profile-photo-cache/" + encodeURIComponent(entryKey) : "";
 }
 
+function signedMediaUrlCacheEntryKey(storagePath = "") {
+  const path = String(storagePath || "").trim();
+  const viewerKey = profilePhotoCacheViewerKey();
+  return path && viewerKey ? viewerKey + "|" + path : path;
+}
+
+function readSignedMediaUrlStorageCache() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SIGNED_MEDIA_URL_STORAGE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function writeSignedMediaUrlStorageCache(cache = {}) {
+  try {
+    localStorage.setItem(SIGNED_MEDIA_URL_STORAGE_KEY, JSON.stringify(cache));
+  } catch (_error) {
+    // Signed URL persistence is a short-lived performance optimization only.
+  }
+}
+
+function pruneSignedMediaUrlStorageCache(cache = null) {
+  const now = Date.now();
+  const currentCache = cache || readSignedMediaUrlStorageCache();
+  const entries = Object.entries(currentCache)
+    .filter(([, item]) => item?.url && Number(item.expiresAt || 0) > now)
+    .sort((a, b) => Number(b[1].savedAt || 0) - Number(a[1].savedAt || 0));
+  const keep = new Set(entries.slice(0, SIGNED_MEDIA_URL_CACHE_MAX_ITEMS).map(([key]) => key));
+  let changed = false;
+  for (const key of Object.keys(currentCache)) {
+    if (!keep.has(key)) {
+      delete currentCache[key];
+      changed = true;
+    }
+  }
+  if (changed) writeSignedMediaUrlStorageCache(currentCache);
+  return currentCache;
+}
+
+function persistedSignedMediaUrlForPath(storagePath = "") {
+  const cacheKey = signedMediaUrlCacheEntryKey(storagePath);
+  if (!cacheKey) return "";
+  const stored = readSignedMediaUrlStorageCache()[cacheKey];
+  if (!stored?.url || Number(stored.expiresAt || 0) <= Date.now()) return "";
+  signedMediaUrlCache.set(cacheKey, { url: stored.url, expiresAt: Number(stored.expiresAt || 0) });
+  return stored.url;
+}
+
+function saveSignedMediaUrlForPath(storagePath = "", signedUrl = "", expiresAt = 0) {
+  const cacheKey = signedMediaUrlCacheEntryKey(storagePath);
+  if (!cacheKey || !signedUrl || !expiresAt) return;
+  signedMediaUrlCache.set(cacheKey, { url: signedUrl, expiresAt });
+  const storageCache = pruneSignedMediaUrlStorageCache();
+  storageCache[cacheKey] = {
+    url: signedUrl,
+    expiresAt,
+    savedAt: Date.now(),
+  };
+  writeSignedMediaUrlStorageCache(storageCache);
+}
+
+function clearSignedMediaUrlForPath(storagePath = "") {
+  const cacheKey = signedMediaUrlCacheEntryKey(storagePath);
+  if (!cacheKey) return;
+  signedMediaUrlCache.delete(cacheKey);
+  signedMediaUrlCache.delete(storagePath);
+  const storageCache = readSignedMediaUrlStorageCache();
+  if (storageCache[cacheKey]) {
+    delete storageCache[cacheKey];
+    writeSignedMediaUrlStorageCache(storageCache);
+  }
+}
+
 function readProfilePhotoCacheMeta() {
   try {
     const parsed = JSON.parse(localStorage.getItem(PROFILE_PHOTO_CACHE_META_KEY) || "{}");
@@ -4094,7 +4171,7 @@ function scheduleProfilePhotoHydrationRetry(element, relatedInitials, token, err
   const img = element.matches("img") ? element : element.querySelector("img");
   element.dataset.profilePhotoRetryCount = String(retries + 1);
   element.dataset.src = "";
-  if (storagePath) signedMediaUrlCache.delete(storagePath);
+  if (storagePath) clearSignedMediaUrlForPath(storagePath);
   if (img && !img.dataset.directPhotoSource) {
     img.removeAttribute("src");
     img.hidden = true;
@@ -4202,8 +4279,11 @@ function scheduleProfilePhotoHydrationSweep(delay = 600) {
 async function signedMediaUrlForPath(storagePath = "", context = {}) {
   const path = String(storagePath || "").trim();
   if (!path || !supabaseClient || localTestMode) return "";
-  const cached = signedMediaUrlCache.get(path);
+  const cacheKey = signedMediaUrlCacheEntryKey(path);
+  const cached = signedMediaUrlCache.get(cacheKey) || signedMediaUrlCache.get(path);
   if (cached && cached.expiresAt > Date.now()) return cached.url;
+  const persistedUrl = persistedSignedMediaUrlForPath(path);
+  if (persistedUrl) return persistedUrl;
   const { data, error } = await supabaseClient.functions.invoke("media-access", {
     body: {
       storagePath: path,
@@ -4214,10 +4294,7 @@ async function signedMediaUrlForPath(storagePath = "", context = {}) {
   if (error) throw error;
   const signedUrl = data?.signedUrl || "";
   if (signedUrl) {
-    signedMediaUrlCache.set(path, {
-      url: signedUrl,
-      expiresAt: Date.now() + Math.max(60, Number(data?.expiresIn || 600) - 30) * 1000,
-    });
+    saveSignedMediaUrlForPath(path, signedUrl, Date.now() + Math.max(60, Number(data?.expiresIn || 600) - 30) * 1000);
   }
   return signedUrl;
 }
