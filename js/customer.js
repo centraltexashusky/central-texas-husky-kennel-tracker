@@ -1394,13 +1394,21 @@ function customerDependencyIds(checkedIds = new Set()) {
   return new Set([...checkedIds, ...customerImplicitDependencyIds()]);
 }
 
+function customerServiceVisibleForCurrentUser(service = {}) {
+  return !service.removed
+    && serviceHasFlag(service, "Active")
+    && !serviceHasFlag(service, "Admin only")
+    && (service.category !== "Boarding" || serviceDependencyId(service))
+    && serviceMatchesCustomerPricingScope(service, currentUser);
+}
+
 function renderCustomerServiceOptions() {
   if (!$("#customerServiceOptions")) return;
   applyLegacyServiceDependencyMigration();
   applyLegacyBoardingProgramMigration();
   const formEl = $("#customerBookingForm");
   const dogs = selectedCustomerDogs();
-  const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && serviceMatchesCustomerPricingScope(service, currentUser));
+  const services = readRecords("service").filter(customerServiceVisibleForCurrentUser);
   const visibleServices = services.filter((service) => !serviceDependencyId(service));
   const groupedVisibleServices = visibleServices.reduce((groups, service) => {
     const category = String(service.category || "Other Services").trim() || "Other Services";
@@ -1440,7 +1448,8 @@ function renderCustomerServiceOptions() {
       ? \`\${visibleHtml}\${implicitHtml}\`
       : "<p>No customer services are active yet.</p>";
     const openAttr = selectedCount || dogs.length <= 2 || index === 0 ? "open" : "";
-    return \`<details class="customer-dog-service-menu" \${openAttr}><summary><span><strong>\${escapeHtml(dog.dogName || "Dog")}</strong><em>Click to view services for this dog</em></span><small>\${selectedCount} selected</small></summary><div class="customer-dog-service-menu-body">\${bodyHtml}</div></details>\`;
+    const selectedClass = selectedCount ? " has-selected-services" : "";
+    return \`<details class="customer-dog-service-menu\${selectedClass}" \${openAttr}><summary><span><strong>\${escapeHtml(dog.dogName || "Dog")}</strong><em>Click to view services for this dog</em></span><small>\${selectedCount} selected</small></summary><div class="customer-dog-service-menu-body">\${bodyHtml}</div></details>\`;
   }).join("");
   $("#customerServiceOptions").innerHTML = dogGroupsHtml;
 }
@@ -1624,7 +1633,7 @@ function customerEstimateDetails() {
     return [...selectedServiceIds]
       .map((id) => {
         const service = serviceCatalog.find((item) => item.id === id);
-        if (!service) return null;
+        if (!service || !customerServiceVisibleForCurrentUser(service)) return null;
         const quantity = Math.max(1, Number(formFieldByName(formEl, customerServiceQuantityFieldName(id, dog))?.value || 1));
         const pricingError = servicePriceError(service, customerServiceDisplayName(service));
         const unitPrice = pricingError ? 0 : servicePriceValue(service);

@@ -11644,7 +11644,7 @@ function initEvents() {
     const requiresServiceId = validDependency ? data.requiresServiceId : "";
     const dependentServiceType = requiresServiceId ? data.dependentServiceType || "optional-addon" : "";
     const flags = normalizedServiceFlags(checkedFrom(formEl, "serviceFlags"));
-    const pricingScope = normalizedPricingScope(data.pricingScope) || (flags.includes("Member Pricing") ? "member" : boardingRateType === "standard-boarding" ? "non-member" : "all");
+    const pricingScope = normalizedPricingScope(data.pricingScope) || (flags.includes("Member Pricing") ? "member" : "non-member");
     const boardingRateRole = boardingRateType === "standard-boarding" ? normalizedBoardingRateRole(data.boardingRateRole) || "primary" : "";
     const deposit = Number(data.depositAmount || 0);
     const basePrice = Number(data.basePrice || 0);

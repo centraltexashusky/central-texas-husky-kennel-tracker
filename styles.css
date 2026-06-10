@@ -2018,6 +2018,12 @@ button.is-loading {
   overflow: hidden;
 }
 
+.customer-dog-service-menu[open],
+.customer-dog-service-menu.has-selected-services {
+  border-color: rgba(245, 197, 91, 0.88);
+  box-shadow: 0 0 0 1px rgba(245, 197, 91, 0.2), 0 12px 26px rgba(245, 197, 91, 0.08);
+}
+
 .customer-dog-service-menu + .customer-dog-service-menu {
   margin-top: 10px;
 }

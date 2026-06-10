@@ -703,14 +703,63 @@ function boardingStayServicesText(stay = {}, options = {}) {
   return requests.length ? requests.join(", ") : "No service requests";
 }
 
+function boardingRequestStayLineTask(record = {}, stay = {}) {
+  const snapshot = stay.pricingSnapshot || {};
+  const boardingLine = arrayValue(snapshot.lineItems).find((line) => ["boarding", "boarding-program"].includes(line.type));
+  const quantity = Number(
+    boardingLine?.quantity
+    || stay.billingDays
+    || snapshot.billingDays
+    || boardingDays(stay.dropoffTime, stay.pickupTime)
+    || 0
+  );
+  if (!quantity) return null;
+  const stayProgram = stay.stayProgram || snapshot.stayProgram || null;
+  const serviceName = boardingLine?.label
+    || stayProgram?.serviceName
+    || stayProgram?.name
+    || stay.stayProgramName
+    || snapshot.stayProgramName
+    || boardingLineRoleLabel(snapshot.currentDogRole || snapshot.boardingRateRole || "");
+  return {
+    source: "boarding-stay",
+    serviceName: serviceName || "Boarding",
+    quantity,
+    unit: boardingLine?.unit || stayProgram?.unit || snapshot.unit || "night",
+  };
+}
+
+function boardingRequestServiceRowMeta(task = {}) {
+  const quantity = boardingServiceTaskQuantity(task);
+  if (task.source === "boarding-stay") {
+    const unit = String(task.unit || "night").replace(/^per\s+/i, "").trim() || "night";
+    const pluralUnit = quantity === 1 || /s$/i.test(unit) ? unit : \`\${unit}s\`;
+    return {
+      requestMeta: \`\${quantity} x \${pluralUnit}\`,
+      rowLabel: \`\${quantity} x \${task.serviceName || boardingServiceTaskDisplayName(task)} stay quantity\`,
+    };
+  }
+  const actionText = task.source === "check-in" ? "added at check-in" : "requested";
+  return {
+    requestMeta: \`\${quantity} x \${actionText}\`,
+    rowLabel: \`\${quantity} x \${task.serviceName || boardingServiceTaskDisplayName(task)} \${actionText}\`,
+  };
+}
+
 function boardingRequestServiceRowsHtml(record = {}, stay = {}) {
-  const tasks = boardingStayServiceTasks(record, stay);
+  const tasks = [boardingRequestStayLineTask(record, stay), ...boardingStayServiceTasks(record, stay)].filter(Boolean);
   if (!tasks.length) return \`<p class="boarding-request-empty-services">No service requests</p>\`;
   return \`<div class="boarding-request-service-list" role="list" aria-label="Requested stay services">\${tasks.map((task) => {
     const quantity = boardingServiceTaskQuantity(task);
     const serviceName = task.serviceName || boardingServiceTaskDisplayName(task);
-    const requestMeta = task.source === "check-in" ? \`\${quantity} x added at check-in\` : \`\${quantity} x requested\`;
-    const rowLabel = \`\${quantity} x \${serviceName} \${task.source === "check-in" ? "added at check-in" : "requested"}\`;
+    const requestedMeta = \`\${quantity} x requested\`;
+    const checkInMeta = \`\${quantity} x added at check-in\`;
+    const { requestMeta, rowLabel } = task.source === "boarding-stay"
+      ? boardingRequestServiceRowMeta(task)
+      : {
+          requestMeta: task.source === "check-in" ? checkInMeta : requestedMeta,
+          rowLabel: \`\${quantity} x \${serviceName} \${task.source === "check-in" ? "added at check-in" : "requested"}\`,
+        };
     return \`<div class="boarding-request-service-row" role="listitem" aria-label="\${escapeHtml(rowLabel)}">
       <span class="boarding-request-service-quantity" aria-hidden="true">\${escapeHtml(quantity)}</span>
       <span class="boarding-request-service-copy"><strong>\${escapeHtml(serviceName)}</strong><small>\${escapeHtml(requestMeta)}</small></span>

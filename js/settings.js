@@ -452,7 +452,7 @@ function servicePricingScope(service = {}) {
   const explicit = normalizedPricingScope(service.pricingScope || service.customerPricingScope || "");
   if (explicit) return explicit;
   if (serviceHasFlag(service, "Member Pricing")) return "member";
-  return serviceBoardingRateType(service) === "standard-boarding" ? "non-member" : "all";
+  return "non-member";
 }
 
 function normalizedBoardingRateRole(value = "") {
@@ -1603,7 +1603,7 @@ function openService(record = {}) {
   const formRecord = {
     ...record,
     boardingRateType: record.boardingRateType || "",
-    pricingScope: normalizedPricingScope(record.pricingScope) || (serviceHasFlag(record, "Member Pricing") ? "member" : serviceBoardingRateType(record) === "standard-boarding" ? "non-member" : "all"),
+    pricingScope: normalizedPricingScope(record.pricingScope) || servicePricingScope(record),
     boardingRateRole: normalizedBoardingRateRole(record.boardingRateRole) || "primary",
   };
   const panel = $("#serviceEditorPanel");
