@@ -125,6 +125,10 @@ var authSessionSyncStartedAt = 0;
 var suppressAuthSyncUntil = 0;
 var taskTemplateSyncTimer = null;
 var applyingRemoteTaskConfig = false;
+var DERIVED_DOG_MODEL_RECORD_TYPES = new Set([
+  "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote",
+  "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink",
+]);
 var REMOTE_RENDER_SCROLL_IDLE_MS = 1200;
 var REMOTE_LOAD_STALE_MS = 15000;
 var AUTH_BOOT_TIMEOUT_MS = 8000;
@@ -1063,6 +1067,10 @@ function recordTypes() {
     "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink",
     "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
   ];
+}
+
+function remoteRecordTypesForCurrentApp() {
+  return [...recordTypes().filter((type) => !DERIVED_DOG_MODEL_RECORD_TYPES.has(type)), TASK_TEMPLATE_RECORD_TYPE];
 }
 
 // === MODULE: SETTINGS ===
@@ -3515,10 +3523,12 @@ async function fetchRemoteRecordRows() {
   const pageSize = 1000;
   const rows = [];
   let from = 0;
+  const remoteTypes = remoteRecordTypesForCurrentApp();
   while (true) {
     const { data, error } = await supabaseClient
       .from("kennel_records")
-      .select("*")
+      .select("id,type,payload,helper_email,user_id,submitted_at,updated_at")
+      .in("type", remoteTypes)
       .order("updated_at", { ascending: false })
       .range(from, from + pageSize - 1);
     if (error) throw error;
@@ -3598,13 +3608,14 @@ async function loadRemoteRecords(options = {}) {
         modeLabel.textContent = "Synced";
         return;
       }
-      const grouped = Object.fromEntries(recordTypes().map((type) => [type, []]));
+      const remoteTypes = remoteRecordTypesForCurrentApp();
+      const grouped = Object.fromEntries(remoteTypes.map((type) => [type, []]));
       (data || []).forEach((row) => {
         if (grouped[row.type]) grouped[row.type].push(row.payload);
       });
       const loadedRemoteTaskTemplate = applyRemoteTaskTemplate(data || []);
       if (!loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
-      recordTypes().forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
+      remoteTypes.filter((type) => type !== TASK_TEMPLATE_RECORD_TYPE).forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
       if (currentUser) {
         currentUser.role = roleForAccount(currentUser);
         localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
