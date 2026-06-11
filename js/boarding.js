@@ -2724,7 +2724,19 @@ function boardingStayFreshnessTime(stay = {}) {
   return 0;
 }
 
+function boardingStayRevisionRank(stay = {}) {
+  const source = String(stay.source || "").trim().toLowerCase();
+  let rank = 0;
+  if (source.includes("staff") || source.includes("admin")) rank += 30;
+  if (arrayValue(stay.sourceStayIds).length || arrayValue(stay.duplicateStayIds).length) rank += 20;
+  if (arrayValue(stay.requests).some((request) => String(request?.source || "").toLowerCase().includes("staff"))) rank += 10;
+  return rank;
+}
+
 function boardingStayIsFresher(candidate = {}, candidateIndex = 0, current = {}, currentIndex = 0) {
+  const candidateRank = boardingStayRevisionRank(candidate);
+  const currentRank = boardingStayRevisionRank(current);
+  if (candidateRank !== currentRank) return candidateRank > currentRank;
   const candidateTime = boardingStayFreshnessTime(candidate);
   const currentTime = boardingStayFreshnessTime(current);
   if (candidateTime && currentTime && candidateTime !== currentTime) return candidateTime > currentTime;

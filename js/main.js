@@ -2,7 +2,7 @@
 import "./shared.js?v=20260611-service-only-edit-v1";
 import "./auth.js?v=20260610-page-scoped-sync-v2";
 import "./customer.js?v=20260611-service-dropoff-v1";
-import "./boarding.js?v=20260611-service-duplicate-v1";
+import "./boarding.js?v=20260611-service-duplicate-v2";
 import "./daily.js?v=20260607-owned-health-due-history";
 import "./timesheet.js?v=20260611-service-dropoff-v1";
 import "./settings.js?v=20260610-service-scope-review";
