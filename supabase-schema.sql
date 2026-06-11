@@ -513,11 +513,11 @@ end $$;
 -- manually in Storage as a private bucket named kennel-media, then run the
 -- policies below.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('kennel-media', 'kennel-media', false, 52428800, array['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']::text[])
+values ('kennel-media', 'kennel-media', false, 52428800, array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']::text[])
 on conflict (id) do update
 set public = false,
     file_size_limit = 52428800,
-    allowed_mime_types = array['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']::text[];
+    allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']::text[];
 
 drop policy if exists "Kennel app can read media" on storage.objects;
 drop policy if exists "Kennel app can upload media" on storage.objects;
