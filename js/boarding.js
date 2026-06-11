@@ -1397,7 +1397,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
   const requestCode = stay.id ? (isCustomer ? customerStayIdChipHtml(record, stay) : boardingStayRequestCodeChipHtml(record, stay)) : "";
   const invoiceSummary = options.hideInvoiceSummary ? "" : boardingStayInvoiceSummaryHtml(record, stay);
   return \`<article class="record-card \${options.compact ? "compact-record-card" : ""}">
-    <strong>\${escapeHtml(formatDateTime(stay.dropoffTime) || "Requested stay")}\${stay.pickupTime ? \` to \${escapeHtml(formatDateTime(stay.pickupTime))}\` : ""}</strong>
+    <strong>\${escapeHtml(stayScheduleRangeLabel(record, stay) || "Requested stay")}</strong>
     <div class="chip-row">\${requestCode}\${statusChip}\${boardingStayServiceFlagHtml(record, stay)}</div>
     <p>\${escapeHtml(boardingStayServicesText(stay, { customerFacing: isCustomer, user: boardingPricingUserForRecord(record), preferCatalogPricing: true }))}</p>
     \${options.showServiceTasks ? boardingStayServiceTaskListHtml(record, stay, { actions: options.serviceActions }) : ""}
@@ -1761,7 +1761,7 @@ function boardingCalendarEntryHtml(entry = {}, index = 0, days = []) {
   const dueInfo = boardingStayServiceDueInfo(record, stay);
   const statusClass = statusClassForBoardingStatus(entry.status);
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
-  const title = dogName + " | " + formatDateTime(stay.dropoffTime) + " to " + formatDateTime(stay.pickupTime);
+  const title = dogName + " | " + stayScheduleRangeLabel(record, stay);
   const barMeta = [boardingCalendarStatusLabel(entry.status), requestCode, dueInfo?.label || ""].filter(Boolean).join(" | ");
   const dayCells = days.map((day, dayIndex) => '<span class="boarding-calendar-day-cell" style="grid-row: ' + row + '; grid-column: ' + (dayIndex + 2) + ';"></span>').join("");
   return '<button type="button" class="boarding-calendar-dog-cell" data-action="open-calendar-dog" data-id="' + escapeHtml(record.id || "") + '" style="grid-row: ' + row + '; grid-column: 1;" title="' + escapeHtml(dogName) + '"><strong>' + escapeHtml(dogName) + '</strong><span>' + escapeHtml(dogMeta || "Boarding stay") + '</span></button>'
@@ -3309,7 +3309,7 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
         <div class="chip-row boarding-request-chip-row boarding-request-status-row"><button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}"\${stayAttr}>\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>\${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div>
       </div>
     </div>
-    <div class="boarding-request-date-row"><span>\${formatDateTime(stay.dropoffTime)}</span><span aria-hidden="true">-</span><span>\${formatDateTime(stay.pickupTime)}</span></div>
+    <div class="boarding-request-date-row"><span>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</span></div>
     \${serviceRows}
     \${pricingWarning}
     \${boardingRequestEstimatedTotalHtml(total)}
@@ -3337,7 +3337,7 @@ function boardingFamilyGroupHtml(entries = [], options = {}) {
       <div>
         <strong>\${escapeHtml(familyTitle)}</strong>
         <span>\${escapeHtml(dogNames.join(", "))}</span>
-        <p>\${formatDateTime(firstStay.dropoffTime)} to \${formatDateTime(firstStay.pickupTime)}</p>
+        <p>\${escapeHtml(stayScheduleRangeLabel(firstRecord, firstStay))}</p>
         \${groupTotal ? \`<p><strong>Group total:</strong> \${money(groupTotal)}</p>\` : ""}
       </div>
       <div class="chip-row"><span class="status-chip boarding-family-chip">\${entries.length} dogs</span><span class="status-chip">\${escapeHtml(statusSummary)}</span></div>
@@ -3491,7 +3491,7 @@ function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
   const stayCards = activeStays.length
     ? \`<section class="popup-record-section"><h3>Owner Updates by Stay</h3>\${activeStays.map((stay) => {
         const requestCode = boardingStayRequestCode(displayRecord, stay);
-        return \`<article class="record-card compact-record-card customer-update-stay-card"><strong>\${escapeHtml(displayRecord.dogName || "Boarding dog")}</strong><div class="chip-row">\${customerStayIdChipHtml(displayRecord, stay)}\${boardingStayStatusChipHtml(displayRecord, stay)}</div><p>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="\${escapeHtml(displayRecord.id || "")}" data-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(requestCode)}">Update Owner</button></div></article>\`;
+        return \`<article class="record-card compact-record-card customer-update-stay-card"><strong>\${escapeHtml(displayRecord.dogName || "Boarding dog")}</strong><div class="chip-row">\${customerStayIdChipHtml(displayRecord, stay)}\${boardingStayStatusChipHtml(displayRecord, stay)}</div><p>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="\${escapeHtml(displayRecord.id || "")}" data-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(requestCode)}">Update Owner</button></div></article>\`;
       }).join("")}</section>\`
     : \`<article class="record-card compact-record-card"><strong>No in-care stay available.</strong><p>Owner updates can be sent after a stay is checked in, in kennel, or ready for pickup.</p></article>\`;
   const updates = [...(displayRecord.customerUpdates || [])].sort((a, b) => new Date(b.createdAt || b.submittedAt || 0) - new Date(a.createdAt || a.submittedAt || 0));
@@ -3788,7 +3788,7 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
     requestCode,
     stayDropoffTime: targetStay.dropoffTime || "",
     stayPickupTime: targetStay.pickupTime || "",
-    stayLabel: targetStay.dropoffTime || targetStay.pickupTime ? \`\${formatDateTime(targetStay.dropoffTime)} to \${formatDateTime(targetStay.pickupTime)}\` : "",
+    stayLabel: targetStay.dropoffTime || targetStay.pickupTime ? stayScheduleRangeLabel(displayRecord, targetStay) : "",
     boardingDogId: displayRecord.id || "",
     dogName: displayRecord.dogName || "",
     note,
@@ -3977,7 +3977,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
     ? stays.map((stay) => {
       const requestCode = boardingStayRequestCode(displayRecord, stay);
       const ownerUpdateButton = boardingOwnerUpdateButtonHtml(displayRecord, stay);
-      return \`<article class="record-card"><strong>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Remove Stay</button></div></article>\`;
+      return \`<article class="record-card"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Remove Stay</button></div></article>\`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -3992,7 +3992,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const buttons = [ownerUpdateButton, ...statusButtons].filter(Boolean);
   return \`<section class="popup-record-section">
     <article class="record-card compact-record-card">
-      <strong>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
+      <strong>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</strong>
       <div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}</div>
       <div class="boarding-status-service-summary"><strong>Service requests</strong>\${serviceRows}</div>
       <p>Status changes apply only to this boarding request/stay.</p>
@@ -4166,7 +4166,7 @@ function boardingStayHistoryPopupHtml(record = {}, stay = {}) {
   return \`<section class="popup-record-section">
     <article class="record-card compact-record-card">
       <strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong>
-      <p>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</p>
+      <p>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</p>
       <div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusChipHtml(record, stay)}</div>
     </article>
     \${events.length ? events.map((event) => \`<article class="record-card compact-record-card"><strong>\${escapeHtml(event.label)}</strong><span>\${escapeHtml([formatDateTime(event.date), event.by || ""].filter(Boolean).join(" | "))}</span>\${event.note ? \`<p>\${escapeHtml(event.note)}</p>\` : ""}</article>\`).join("") : "<p>No lifecycle events recorded for this stay yet.</p>"}
@@ -4185,7 +4185,7 @@ function renderBoardingHistory(record = activeBoardingDog()) {
           const location = [stay.kennelBuilding || displayRecord.kennelBuilding, stay.kennelLocationName || displayRecord.kennelLocationName].filter(Boolean).join(" - ");
           const requestCode = boardingStayRequestCode(displayRecord, stay);
           return \`<article class="record-card clickable-card compact-record-card" data-action="view-boarding-stay-history" data-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(requestCode)}">
-            <strong>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
+            <strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong>
             <div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusChipHtml(displayRecord, stay)}</div>
             <p>\${escapeHtml(location || boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }) || "No location or service request saved")}</p>
             <span>\${events.length} lifecycle event\${events.length === 1 ? "" : "s"}</span>
@@ -4207,7 +4207,7 @@ function boardingStayRemoveConfirmHtml(record = {}, stay = {}) {
     <div class="tracker-form">
       <article class="record-card compact-record-card danger-confirm-card">
         <strong>Remove this boarding stay?</strong>
-        <p>\${escapeHtml(record.dogName || "Boarding dog")} | \${escapeHtml(boardingStayRequestCode(record, stay))} | \${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</p>
+        <p>\${escapeHtml(record.dogName || "Boarding dog")} | \${escapeHtml(boardingStayRequestCode(record, stay))} | \${escapeHtml(stayScheduleRangeLabel(record, stay))}</p>
         <p>This removes only this scheduled stay. The dog profile stays available.</p>
       </article>
       <div class="button-row">

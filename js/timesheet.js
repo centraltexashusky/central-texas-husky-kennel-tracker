@@ -23,6 +23,11 @@ async function addTaskToShift(shift = "", text = "") {
 function boardingScheduleText(record = {}, stayOverride = null) {
   const stay = stayOverride || boardingPrimaryStay(record) || {};
   const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
+  if (isServiceRequestStay(record, stay)) {
+    const requested = stay.dropoffTime ? \`Requested time \${formatDateTime(stay.dropoffTime)}\` : "";
+    const pieces = [requested].filter(Boolean);
+    return pieces.length ? pieces.join(" | ") : \`\${status} - no service time saved\`;
+  }
   const dropoff = stay.dropoffTime ? \`Drop-off \${formatDateTime(stay.dropoffTime)}\` : "";
   const pickup = stay.pickupTime ? \`Pick-up \${formatDateTime(stay.pickupTime)}\` : "";
   const kennel = status === "In Kennel" && (stay.kennelLocationName || record.kennelLocationName)
@@ -40,7 +45,7 @@ function boardingSchedulePopupHtml(record = {}) {
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? \`<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="\${escapeHtml(displayRecord.id)}" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Update Owner</button>\`
         : "";
-      return \`<article class="record-card"><strong>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="\${escapeHtml(displayRecord.id)}" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}</div></article>\`;
+      return \`<article class="record-card"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay, "open-stay-status-menu")}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay-popup" data-dog-id="\${escapeHtml(displayRecord.id)}" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}</div></article>\`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
   return \`\${boardingStayFormHtml(displayRecord)}<section class="popup-record-section"><h3>Boarding stays</h3>\${staysHtml}</section>\`;

@@ -333,7 +333,7 @@ function renderCustomerUpdates() {
   const grouped = updates.reduce((groups, update) => {
     const requestCode = update.requestCode || (update.stay?.id && update.dog ? boardingStayRequestCode(update.dog, update.stay) : "");
     const stayText = update.stayLabel || (update.stay?.dropoffTime || update.stay?.pickupTime
-      ? \`\${formatDateTime(update.stay.dropoffTime)} to \${formatDateTime(update.stay.pickupTime)}\`
+      ? stayScheduleRangeLabel(update.dog || {}, update.stay || {})
       : "Current stay");
     const key = \`\${update.dog?.dogName || update.dogName || "Dog"}|\${stayText}|\${requestCode || update.stayId || update.stay?.id || ""}\`;
     groups[key] = groups[key] || { dogName: update.dog?.dogName || update.dogName || "Dog", stayText, requestCode, updates: [] };
@@ -593,10 +593,10 @@ function customerBookingAvailabilityChecks(formEl = $("#customerBookingForm")) {
   const dropoffField = formFieldByName(formEl, "dropoffTime");
   const pickupField = formFieldByName(formEl, "pickupTime");
   const checks = [
-    { field: dropoffField, result: customerBookingAvailabilityForDateTime(dropoffField?.value || "", isServiceRequest ? "Ideal drop off time" : "Drop-off time") },
+    { field: dropoffField, result: customerBookingAvailabilityForDateTime(dropoffField?.value || "", "Drop-off time") },
   ];
-  if (pickupField?.value || !isServiceRequest) {
-    checks.push({ field: pickupField, result: customerBookingAvailabilityForDateTime(pickupField?.value || "", isServiceRequest ? "Alternative drop off time" : "Pick-up time") });
+  if (!isServiceRequest) {
+    checks.push({ field: pickupField, result: customerBookingAvailabilityForDateTime(pickupField?.value || "", "Pick-up time") });
   }
   return checks;
 }
@@ -626,8 +626,8 @@ function customerBookingDateOrderError(formEl = $("#customerBookingForm")) {
   if (dropoffField?.value && !dropoff) {
     return { field: dropoffField, message: "Requested drop-off time is not a valid date and time." };
   }
-  if (pickupField?.value && !pickup) {
-    return { field: pickupField, message: mode === "service" ? "Alternative drop off time is not a valid date and time." : "Pick-up time is not a valid date and time." };
+  if (mode === "boarding" && pickupField?.value && !pickup) {
+    return { field: pickupField, message: "Pick-up time is not a valid date and time." };
   }
   const editingExisting = Boolean($("#editingCustomerRequestId")?.value);
   if (!editingExisting && dropoff && dropoff.getTime() < Date.now() - 300000) {
@@ -669,10 +669,11 @@ function renderCustomerBookingAvailabilityMessages() {
 
 function customerBookingEstimateAvailabilityChecks(estimate = {}) {
   const isServiceRequest = Boolean(estimate.isServiceRequest);
-  return [
-    { result: customerBookingAvailabilityForDateTime(estimate.dropoffTime || "", isServiceRequest ? "Ideal drop off time" : "Drop-off time") },
-    { result: customerBookingAvailabilityForDateTime(estimate.pickupTime || "", isServiceRequest ? "Alternative drop off time" : "Pick-up time") },
-  ].filter((item) => item.result);
+  const checks = [
+    { result: customerBookingAvailabilityForDateTime(estimate.dropoffTime || "", "Drop-off time") },
+  ];
+  if (!isServiceRequest) checks.push({ result: customerBookingAvailabilityForDateTime(estimate.pickupTime || "", "Pick-up time") });
+  return checks.filter((item) => item.result);
 }
 
 function customerBookingEstimateAvailabilityValid(estimate = {}) {
@@ -814,11 +815,6 @@ function setCustomerBookingWizardStep(stepKey = "pets") {
 
 function validateCustomerBookingWizardStep() {
   const formEl = $("#customerBookingForm");
-  const dropoffField = formFieldByName(formEl, "dropoffTime");
-  const pickupField = formFieldByName(formEl, "pickupTime");
-  if ($("#customerRequestMode")?.value === "service" && dropoffField?.value && !pickupField?.value) {
-    pickupField.value = dropoffField.value;
-  }
   if (customerBookingWizardStep === "pets") {
     if (!validateCustomerDogSelection()) return false;
     const panel = document.querySelector('[data-customer-booking-step="pets"]');
@@ -1169,7 +1165,7 @@ function customerCancellationReasonFormHtml(record = {}, reference = {}) {
     <article class="record-card compact-record-card">
       <strong>\${escapeHtml(displayRecord.dogName || "Boarding dog")}</strong>
       <div class="chip-row">\${stay.id ? customerStayIdChipHtml(displayRecord, stay) : ""}\${stay.id ? customerRequestStayStatusChipHtml(displayRecord, stay) : customerRequestStatusChipHtml(displayRecord)}</div>
-      <p>\${escapeHtml(formatDateTime(stay.dropoffTime))} to \${escapeHtml(formatDateTime(stay.pickupTime))}</p>
+      <p>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</p>
     </article>
     <label>Reason for cancellation<textarea name="customerCancellationReason" rows="4" required placeholder="Tell us why you need to cancel this stay."></textarea></label>
     <div class="button-row"><button type="submit" class="danger-button">Cancel Stay</button><button type="button" class="secondary-button" data-action="close-dialog">Keep Stay</button></div>
@@ -1242,7 +1238,7 @@ function renderCustomerRequests() {
           const actions = canCustomerEdit || canCustomerCancel
             ? \`<div class="record-actions">\${canCustomerEdit ? \`<button type="button" class="secondary-button" data-action="edit-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Edit Request</button>\` : ""}\${canCustomerCancel ? \`<button type="button" class="secondary-button danger-button" data-action="cancel-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Cancel Request</button>\` : ""}</div>\`
             : "";
-          return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${formatDateTime(stay.dropoffTime)} to \${formatDateTime(stay.pickupTime)}</span><p>\${escapeHtml(services)}</p>\${estimate}\${cancellationAudit}\${reasonHtml}\${declineHtml}\${actions}</article>\`;
+          return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</span><p>\${escapeHtml(services)}</p>\${estimate}\${cancellationAudit}\${reasonHtml}\${declineHtml}\${actions}</article>\`;
         })
         .join("")
     : \`<p>No \${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>\`;
@@ -1698,7 +1694,7 @@ function customerEstimateDetails() {
     pricingErrors: [...new Set(pricingErrors)],
     total: pricingErrors.length ? 0 : boardingCost + serviceCost,
     dropoffTime: data.dropoffTime,
-    pickupTime: isServiceRequest ? data.pickupTime || data.dropoffTime : data.pickupTime,
+    pickupTime: isServiceRequest ? "" : data.pickupTime,
     requestNotes: data.requestNotes,
   };
 }

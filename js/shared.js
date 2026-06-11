@@ -793,6 +793,20 @@ function formatDateTime(value) {
   });
 }
 
+function isServiceRequestStay(record = {}, stay = {}) {
+  return String(stay.stayType || record.stayType || "").trim() === "Service Request";
+}
+
+function stayScheduleRangeLabel(record = {}, stay = {}) {
+  const dropoff = formatDateTime(stay.dropoffTime || record.dropoffTime);
+  const pickup = formatDateTime(stay.pickupTime || record.pickupTime);
+  if (isServiceRequestStay(record, stay)) {
+    return dropoff ? "Requested time: " + dropoff : "Requested time not scheduled";
+  }
+  if (dropoff && pickup) return dropoff + " to " + pickup;
+  return dropoff || pickup || "No stay time saved";
+}
+
 function dateTimeLocalValue(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -4071,14 +4085,29 @@ function setCustomerBookingTimeCopy(mode = "boarding") {
   const isServiceRequest = mode === "service";
   const dropoffField = formFieldByName(formEl, "dropoffTime");
   const pickupField = formFieldByName(formEl, "pickupTime");
-  setLabelText(dropoffField?.closest("label"), isServiceRequest ? "Ideal drop off time" : "Drop-off time");
-  setLabelText(pickupField?.closest("label"), isServiceRequest ? "Alternative drop off time" : "Pick-up time");
+  const pickupLabel = pickupField?.closest("label");
+  setLabelText(dropoffField?.closest("label"), isServiceRequest ? "Drop-off time" : "Drop-off time");
+  setLabelText(pickupLabel, "Pick-up time");
   setFieldRequired(dropoffField, true);
   setFieldRequired(pickupField, !isServiceRequest);
-  setFieldHelpText(dropoffField, isServiceRequest ? "Ideal requested drop-off date and time." : "Requested drop-off date and time.");
-  setFieldHelpText(pickupField, isServiceRequest ? "Optional alternate drop-off date and time." : "Requested pick-up date and time.");
+  if (pickupField) {
+    pickupField.disabled = isServiceRequest;
+    if (isServiceRequest) {
+      pickupField.value = "";
+      clearFieldError(pickupField);
+    }
+  }
+  if (pickupLabel) pickupLabel.hidden = isServiceRequest;
+  setFieldHelpText(dropoffField, isServiceRequest ? "Requested service drop-off date and time." : "Requested drop-off date and time.");
+  setFieldHelpText(pickupField, "Requested pick-up date and time.");
   const heading = formEl.querySelector(".customer-booking-time-box strong");
-  if (heading) heading.textContent = isServiceRequest ? "Requested drop off time" : "Boarding time";
+  if (heading) heading.textContent = isServiceRequest ? "Requested drop-off time" : "Boarding time";
+  const help = formEl.querySelector(".customer-booking-time-box p");
+  if (help) help.textContent = isServiceRequest
+    ? "Give us a time you would like to drop off your dog for the service."
+    : "Let us know what day and time you would like to request for the drop-off and pickup times.";
+  const dogSelectionHeading = formEl.querySelector(".customer-dog-selection-step strong");
+  if (dogSelectionHeading) dogSelectionHeading.textContent = isServiceRequest ? "Select one or more dogs for this service." : "Select one or more dogs for boarding.";
 }
 
 function fieldLabel(field) {
@@ -8936,7 +8965,8 @@ function existingCustomerBookingEntryForDog(dog = {}, estimate = {}, options = {
     if (!customerBookingDogMatchesRecord(dog, record)) return false;
     if (["Cancelled", "Checked Out"].includes(status)) return false;
     if (String(stay.dropoffTime || "") !== String(estimate.dropoffTime || "")) return false;
-    if (String(stay.pickupTime || "") !== String(estimate.pickupTime || "")) return false;
+    const stayPickup = isServiceRequestStay(record, stay) || estimate.isServiceRequest ? "" : stay.pickupTime || "";
+    if (String(stayPickup) !== String(estimate.pickupTime || "")) return false;
     return true;
   }) || null;
 }
@@ -8945,8 +8975,9 @@ function existingCustomerBookingEntryForDog(dog = {}, estimate = {}, options = {
 
 
 function customerDogSelectionErrorMessage(count = 0) {
-  if (count <= 0) return "Select at least one dog for the boarding request.";
-  if (count > BOARDING_MAX_DOGS_PER_REQUEST) return "Select up to 4 dogs for one boarding request. Please submit a second request for additional dogs.";
+  const isServiceRequest = $("#customerRequestMode")?.value === "service";
+  if (count <= 0) return isServiceRequest ? "Select at least one dog for the service request." : "Select at least one dog for the boarding request.";
+  if (count > BOARDING_MAX_DOGS_PER_REQUEST) return "Select up to 4 dogs for one request. Please submit a second request for additional dogs.";
   return "";
 }
 
@@ -9062,11 +9093,15 @@ function editCustomerRequest(record, stayId = "") {
     showToast("This stay is already active. Ask staff to change an active kennel stay.");
     return;
   }
+  const mode = isServiceRequestStay(displayRecord, stay) ? "service" : "boarding";
   $("#editingCustomerRequestId").value = displayRecord.id;
   $("#editingCustomerStayId").value = stay.id || "";
+  $("#customerRequestMode").value = mode;
+  if (typeof setCustomerRequestActionMode === "function") setCustomerRequestActionMode(mode);
+  setCustomerBookingTimeCopy(mode);
   const bookingForm = $("#customerBookingForm");
   formFieldByName(bookingForm, "dropoffTime").value = stay.dropoffTime?.slice(0, 16) || "";
-  formFieldByName(bookingForm, "pickupTime").value = stay.pickupTime?.slice(0, 16) || "";
+  formFieldByName(bookingForm, "pickupTime").value = mode === "service" ? "" : stay.pickupTime?.slice(0, 16) || "";
   formFieldByName(bookingForm, "requestNotes").value = stay.stayNotes || "";
   clearCustomerBookingTimeErrors(bookingForm);
   const dog = customerDogsForCurrentUser().find((item) => {
@@ -9111,7 +9146,7 @@ function editCustomerRequest(record, stayId = "") {
   applyServiceQuantities();
   $("#requestBoardingButton").textContent = "Review Updates";
   $("#customerBookingFormTitle").textContent = "Update Request";
-  $("#customerBookingFormHelp").textContent = "Update boarding time, requested services, or notes.";
+  $("#customerBookingFormHelp").textContent = mode === "service" ? "Update service time, requested services, or notes." : "Update boarding time, requested services, or notes.";
   renderCustomerBookingAvailabilityMessages();
   if (typeof setCustomerBookingWizardStep === "function") setCustomerBookingWizardStep("pets");
   updateCustomerEstimate();
@@ -12309,11 +12344,6 @@ function initEvents() {
       submitButton.textContent = "Reviewing…";
     }
     try {
-      const dropoffField = formFieldByName(event.currentTarget, "dropoffTime");
-      const pickupField = formFieldByName(event.currentTarget, "pickupTime");
-      if ($("#customerRequestMode")?.value === "service" && dropoffField?.value && !pickupField?.value) {
-        pickupField.value = dropoffField.value;
-      }
       if (!validateCustomerDogSelection()) return;
       if (!validateForm(event.currentTarget)) return;
       if (!validateCustomerBookingAvailability(event.currentTarget)) return;
