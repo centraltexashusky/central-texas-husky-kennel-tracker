@@ -10340,9 +10340,10 @@ function initEvents() {
       return;
     }
     if (stayPopupForm) {
+      const serviceOnly = stayPopupForm.elements.stayType?.value === "Service Request";
       const record = await saveBoardingStayFromForm(stayPopupForm);
       if (record) {
-        showDetailDialog("Boarding Request Saved", \`<p>The boarding request was saved for \${escapeHtml(record.dogName || "this dog")}.</p>\`);
+        showDetailDialog(serviceOnly ? "Service Request Saved" : "Boarding Request Saved", \`<p>The \${serviceOnly ? "service request" : "boarding request"} was saved for \${escapeHtml(record.dogName || "this dog")}.</p>\`);
       }
       return;
     }

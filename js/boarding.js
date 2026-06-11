@@ -720,6 +720,7 @@ function boardingStayServicesText(stay = {}, options = {}) {
 }
 
 function boardingRequestStayLineTask(record = {}, stay = {}) {
+  if (isServiceRequestStay(record, stay)) return null;
   const snapshot = stay.pricingSnapshot || {};
   const boardingLine = arrayValue(snapshot.lineItems).find((line) => ["boarding", "boarding-program"].includes(line.type));
   const quantity = Number(
@@ -1616,7 +1617,7 @@ function boardingQueueRecordMatchesGroup(title = "", record = {}) {
 
 function boardingServiceOnlyChipHtml(record = {}, stay = {}) {
   if (!isServiceRequestStay(record, stay)) return "";
-  return '<span class="boarding-service-only-chip">Service Only</span>';
+  return '<span class="boarding-service-only-chip">SERVICE ONLY</span>';
 }
 
 function boardingQueueGroupHtml(title, records = []) {
@@ -2290,6 +2291,7 @@ function updateBoardingStayLocationOptions(formEl) {
 }
 
 function boardingStayRateRoleFieldHtml(record = {}, stay = {}) {
+  if (isServiceRequestStay(record, stay)) return "";
   const ratePlan = boardingRatePlanForRecord(record);
   if (!ratePlan.isMemberPricing) return "";
   const role = boardingCurrentDogRoleForStay(stay, ratePlan);
@@ -2301,20 +2303,28 @@ function boardingStayRateRoleFieldHtml(record = {}, stay = {}) {
 
 function boardingStayFormHtml(record = {}, stay = {}) {
   const isEdit = Boolean(stay.id);
+  const serviceOnly = isServiceRequestStay(record, stay);
+  const primaryTimeLabel = serviceOnly ? "Requested service time" : "Drop-off time";
+  const primaryTimeHelp = serviceOnly ? '<small>Customer-requested time for the service.</small>' : "";
+  const completionTimeLabel = serviceOnly ? "Estimated completion / pick-up time" : "Pick-up time";
+  const completionTimeHelp = serviceOnly ? '<small>Shown to the customer after approval as the expected pick-up time after service.</small>' : "";
+  const notesPlaceholder = serviceOnly ? "Owner instructions or service notes" : "Owner instructions or pickup grooming notes";
+  const submitLabel = serviceOnly ? (isEdit ? "Update Service" : "Add Service") : (isEdit ? "Save Boarding Stay" : "Add Boarding Stay");
   return \`
     <form id="boardingStayPopupForm" class="tracker-form" data-dog-id="\${escapeHtml(record.id || "")}">
       <input type="hidden" name="stayId" value="\${escapeHtml(stay.id || "")}" />
-      \${isEdit ? \`<div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusChipHtml(record, stay)}</div>\` : ""}
+      \${serviceOnly ? '<input type="hidden" name="stayType" value="Service Request" />' : ""}
+      \${isEdit ? \`<div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusChipHtml(record, stay)}\${boardingServiceOnlyChipHtml(record, stay)}</div>\` : ""}
       <div class="field-grid">
-        <label>Drop-off time<input type="datetime-local" name="dropoffTime" required value="\${escapeHtml(stay.dropoffTime?.slice(0, 16) || "")}" /></label>
-        <label>Pick-up time<input type="datetime-local" name="pickupTime" required value="\${escapeHtml(stay.pickupTime?.slice(0, 16) || "")}" /></label>
+        <label>\${primaryTimeLabel}<input type="datetime-local" name="dropoffTime" required value="\${escapeHtml(stay.dropoffTime?.slice(0, 16) || "")}" />\${primaryTimeHelp}</label>
+        <label>\${completionTimeLabel}<input type="datetime-local" name="pickupTime" required value="\${escapeHtml(stay.pickupTime?.slice(0, 16) || "")}" />\${completionTimeHelp}</label>
         \${boardingStayRateRoleFieldHtml(record, stay)}
       </div>
-      \${boardingStayLocationFieldsHtml(stay)}
+      \${serviceOnly ? "" : boardingStayLocationFieldsHtml(stay)}
       <div class="checklist compact">\${stayRequestCheckboxesHtml(stay, record)}</div>
       \${boardingStayBillingAdjustmentFieldsHtml(stay)}
-      <label>Stay notes<textarea name="stayNotes" rows="3" placeholder="Owner instructions or pickup grooming notes">\${escapeHtml(stay.stayNotes || "")}</textarea></label>
-      <div class="button-row"><button type="submit">\${isEdit ? "Save Boarding Stay" : "Add Boarding Stay"}</button></div>
+      <label>Stay notes<textarea name="stayNotes" rows="3" placeholder="\${escapeHtml(notesPlaceholder)}">\${escapeHtml(stay.stayNotes || "")}</textarea></label>
+      <div class="button-row"><button type="submit">\${submitLabel}</button></div>
     </form>\`;
 }
 
@@ -2322,7 +2332,10 @@ function openBoardingStayPopup(record = activeBoardingDog(), stayId = "") {
   if (!record?.id) return;
   const displayRecord = boardingDogWithStayStatus(record);
   const stay = boardingStayByReference(displayRecord, stayId) || {};
-  showDetailDialog(\`\${displayRecord.dogName || "Boarding Dog"} Boarding Request\`, boardingStayFormHtml(displayRecord, stay));
+  const title = isServiceRequestStay(displayRecord, stay)
+    ? \`\${displayRecord.dogName || "Dog"} Service Request\`
+    : \`\${displayRecord.dogName || "Boarding Dog"} Boarding Request\`;
+  showDetailDialog(title, boardingStayFormHtml(displayRecord, stay));
 }
 
 function boardingFoodInstructions(record = {}) {
@@ -2445,12 +2458,15 @@ async function saveBoardingStayFromForm(formEl) {
     return null;
   }
   const payload = formPayload(formEl);
+  const isServiceRequestPayload = payload.stayType === "Service Request";
   const dropoffDate = parsedCustomerDateTime(payload.dropoffTime || "");
   const pickupDate = parsedCustomerDateTime(payload.pickupTime || "");
   if (!dropoffDate || !pickupDate || pickupDate <= dropoffDate) {
     const targetField = formFieldByName(formEl, !dropoffDate ? "dropoffTime" : "pickupTime");
-    if (targetField) setFieldError(targetField, !dropoffDate ? "Drop-off time is required." : "Pick-up time must be after drop-off time.");
-    showToast(!dropoffDate ? "Enter a valid drop-off time." : "Pick-up time must be after drop-off time.");
+    const missingTimeMessage = isServiceRequestPayload ? "Requested service time is required." : "Drop-off time is required.";
+    const orderingMessage = isServiceRequestPayload ? "Estimated completion time must be after the requested service time." : "Pick-up time must be after drop-off time.";
+    if (targetField) setFieldError(targetField, !dropoffDate ? missingTimeMessage : orderingMessage);
+    showToast(!dropoffDate ? "Enter a valid " + (isServiceRequestPayload ? "service" : "drop-off") + " time." : orderingMessage);
     return null;
   }
   const draftStayIdentity = {
@@ -2469,12 +2485,14 @@ async function saveBoardingStayFromForm(formEl) {
   const location = payload.kennelLocationId
     ? kennelLocations({ activeOnly: true }).find((item) => item.id === payload.kennelLocationId)
     : null;
-  const boardingRateRole = normalizedBoardingRateRole(payload.boardingRateRole || existingStay?.pricingSnapshot?.currentDogRole || "");
+  const stayType = payload.stayType || existingStay?.stayType || "Boarding";
+  const isServiceRequest = stayType === "Service Request";
+  const boardingRateRole = isServiceRequest ? "" : normalizedBoardingRateRole(payload.boardingRateRole || existingStay?.pricingSnapshot?.currentDogRole || "");
   const draftStay = {
     ...(existingStay || {}),
     dropoffTime: payload.dropoffTime,
     pickupTime: payload.pickupTime,
-    stayType: existingStay?.stayType || "Boarding",
+    stayType,
     requests: selectedRequests,
     invoiceAdjustments,
   };
@@ -2499,10 +2517,10 @@ async function saveBoardingStayFromForm(formEl) {
     invoiceEvents: [...arrayValue(existingStay?.invoiceEvents), ...adjustmentEvents],
     pricingSnapshot,
     estimatedTotal: pricingSnapshot.total,
-    kennelBuilding: location ? location.building : payload.kennelBuilding || "",
-    kennelLocationId: location ? location.id : "",
-    kennelLocationName: location ? location.name : "",
-    kennelAssignedAt: location ? existingStay?.kennelAssignedAt || timestamp : "",
+    kennelBuilding: isServiceRequest ? "" : location ? location.building : payload.kennelBuilding || "",
+    kennelLocationId: isServiceRequest ? "" : location ? location.id : "",
+    kennelLocationName: isServiceRequest ? "" : location ? location.name : "",
+    kennelAssignedAt: isServiceRequest ? "" : location ? existingStay?.kennelAssignedAt || timestamp : "",
   };
   stay.bathPlan = bathPlanForStay(stay);
   stay.requestCode = boardingStayRequestCode(dog, stay);
@@ -4002,7 +4020,11 @@ function renderBoardingStays(record = activeBoardingDog()) {
     ? stays.map((stay) => {
       const requestCode = boardingStayRequestCode(displayRecord, stay);
       const ownerUpdateButton = boardingOwnerUpdateButtonHtml(displayRecord, stay);
-      return \`<article class="record-card"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Edit Stay</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">Remove Stay</button></div></article>\`;
+      const serviceOnly = isServiceRequestStay(displayRecord, stay);
+      const articleClass = serviceOnly ? "record-card is-service-only-request" : "record-card";
+      const editLabel = serviceOnly ? "Edit Service" : "Edit Stay";
+      const removeLabel = serviceOnly ? "Remove Service" : "Remove Stay";
+      return \`<article class="\${articleClass}"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingServiceOnlyChipHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${editLabel}</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${removeLabel}</button></div></article>\`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -4020,7 +4042,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   return \`<section class="popup-record-section">
     <article class="record-card compact-record-card">
       <strong>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</strong>
-      <div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}</div>
+      <div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}\${boardingServiceOnlyChipHtml(record, stay)}</div>
       <div class="boarding-status-service-summary"><strong>Service requests</strong>\${serviceRows}</div>
       <p>\${escapeHtml(scopeText)}</p>
     </article>
