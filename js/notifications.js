@@ -741,6 +741,10 @@ function notificationDisplayTitle(notification = {}) {
   if (eventName === "urgentStaffAlertSent") return "Urgent staff alert";
   if (eventName === "urgentCustomerAlertSent") return "Urgent customer alert";
   if (eventName === "customerStayUpdateSent") return \`Stay update: \${dogName || "Customer dog"}\`;
+  if (eventName === "boardingCustomerRequestApproved") return \`Boarding/service request approved: \${dogName || "Customer dog"}\`;
+  if (eventName === "boardingCustomerRequestDeclined") return \`Boarding/service request declined: \${dogName || "Customer dog"}\`;
+  if (eventName === "boardingCustomerRequestCancelled") return \`Boarding/service request cancelled: \${dogName || "Customer dog"}\`;
+  if (eventName === "boardingCustomerRequestUpdatedByStaff") return \`Boarding/service request updated: \${dogName || "Customer dog"}\`;
   if (notification.sourceType === "boardingDog") return \`Boarding dog alert: \${notificationRecordDescriptor(notification, source) || dogName || "Dog"}\`;
   if (notification.sourceType === "request") return \`Request alert: \${source.category || "Kennel request"}\`;
   if (notification.sourceType === "maintenance") return \`Maintenance alert: \${source.location || "Kennel"}\`;
@@ -785,6 +789,10 @@ function notificationDisplayMessage(notification = {}) {
     const text = update.note || source.dailyActivity || "";
     return \`\${update.byName || "Kennel staff"} sent an update for \${dogName || "your dog"}\${stayId ? \` (Stay ID: \${stayId})\` : ""}.\${text ? \` \${text}\` : ""}\`;
   }
+  if (eventName === "boardingCustomerRequestApproved") return customerRequestStatusNotificationMessage(source, "approved");
+  if (eventName === "boardingCustomerRequestDeclined") return customerRequestStatusNotificationMessage(source, "declined", boardingDeclineNoteFor(source, boardingPrimaryStay(source) || {})?.note || "");
+  if (eventName === "boardingCustomerRequestCancelled") return customerRequestStatusNotificationMessage(source, "cancelled", boardingDeclineNoteFor(source, boardingPrimaryStay(source) || {})?.note || "");
+  if (eventName === "boardingCustomerRequestUpdatedByStaff") return customerRequestStatusNotificationMessage(source, "updated");
   if (notificationSavedMessageIsSpecific(source.message)) return source.message;
   if (notification.sourceType === "boardingDog") {
     const stayId = notificationStayIdText(source);
@@ -833,6 +841,10 @@ function notificationReasonForEvent(eventName = "", recordOrNotification = {}) {
   if (name === "customerBoardingRequestUpdated") return "Boarding request updated";
   if (name === "customerApprovedStayCancelled") return "Approved stay cancelled";
   if (name === "customerDogFileUploaded") return "Customer file uploaded";
+  if (name === "boardingCustomerRequestApproved") return "Request approved";
+  if (name === "boardingCustomerRequestDeclined") return "Request declined";
+  if (name === "boardingCustomerRequestCancelled") return "Request cancelled";
+  if (name === "boardingCustomerRequestUpdatedByStaff") return "Request updated";
   if (name === "careLogAdminAlertCreated") return "Medical/behavior note needs attention";
   if (name === "kennelRequestCreated" || name === "urgentKennelRequestCreated") return source.requestText || "Kennel request needs review";
   if (name === "maintenanceCreated" || name === "urgentMaintenanceCreated") return source.issue || "Maintenance item needs review";
@@ -846,6 +858,7 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   const name = eventName || recordOrNotification.eventName || "";
   const sourceType = recordOrNotification.sourceType || source.type || "";
   if (name === "customerBoardingRequestCreated" || name === "customerBoardingRequestUpdated" || recoveredBoardingRequestNotification(recordOrNotification)) return "Review Request";
+  if (name === "boardingCustomerRequestApproved" || name === "boardingCustomerRequestDeclined" || name === "boardingCustomerRequestCancelled" || name === "boardingCustomerRequestUpdatedByStaff") return "Open Request";
   if (name === "customerApprovedStayCancelled" || sourceType === "boardingDog") return "Open Stay";
   if (sourceType === "maintenance" || name.includes("Maintenance")) return "Open Maintenance";
   if (sourceType === "request" || name.includes("Request")) return "Open Request";
@@ -892,6 +905,21 @@ function customerStayUpdateAudienceEmails(record = {}) {
   );
 }
 
+function customerRequestStatusNotificationTitle(record = {}, statusLabel = "updated") {
+  return "Boarding/service request " + statusLabel + ": " + (record.dogName || "Customer dog");
+}
+
+function customerRequestStatusNotificationMessage(record = {}, statusLabel = "updated", detail = "") {
+  const stay = boardingPrimaryStay(record) || {};
+  const schedule = stay?.id ? stayScheduleRangeLabel(record, stay) : boardingScheduleText(record);
+  const stayId = notificationStayIdText(record);
+  let message = "Your boarding/service request" + (record.dogName ? " for " + record.dogName : "") + " has been " + statusLabel + ".";
+  if (schedule) message += " " + schedule + ".";
+  if (stayId) message += " Stay ID: " + stayId + ".";
+  if (detail) message += " " + detail;
+  return message;
+}
+
 function notificationEventConfig(eventName = "", record = {}) {
   const configs = {
     customerBoardingRequestCreated: {
@@ -907,6 +935,34 @@ function notificationEventConfig(eventName = "", record = {}) {
       priority: "normal",
       channels: ["email", "inApp"],
       audienceRoles: ["admin"],
+    },
+    boardingCustomerRequestApproved: {
+      title: customerRequestStatusNotificationTitle(record, "approved"),
+      message: customerRequestStatusNotificationMessage(record, "approved", "You will receive updates from the kennel team as the stay gets closer."),
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceEmails: customerStayUpdateAudienceEmails(record),
+    },
+    boardingCustomerRequestDeclined: {
+      title: customerRequestStatusNotificationTitle(record, "declined"),
+      message: customerRequestStatusNotificationMessage(record, "declined", boardingDeclineNoteFor(record, boardingPrimaryStay(record) || {})?.note || "Please contact us if you have questions."),
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceEmails: customerStayUpdateAudienceEmails(record),
+    },
+    boardingCustomerRequestCancelled: {
+      title: customerRequestStatusNotificationTitle(record, "cancelled"),
+      message: customerRequestStatusNotificationMessage(record, "cancelled", boardingDeclineNoteFor(record, boardingPrimaryStay(record) || {})?.note || "Please contact us if you have questions."),
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceEmails: customerStayUpdateAudienceEmails(record),
+    },
+    boardingCustomerRequestUpdatedByStaff: {
+      title: customerRequestStatusNotificationTitle(record, "updated"),
+      message: customerRequestStatusNotificationMessage(record, "updated", "Open your request to review the latest details."),
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceEmails: customerStayUpdateAudienceEmails(record),
     },
     customerApprovedStayCancelled: {
       title: \`Approved stay cancelled: \${record.dogName || "Customer dog"}\`,

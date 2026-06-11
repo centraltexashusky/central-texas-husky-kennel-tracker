@@ -224,6 +224,10 @@ var defaultOperationCloseTime = "21:00";
 var alertTypeDefinitions = [
   { key: "customerBoardingRequestCreated", label: "New customer boarding request", group: "Customer" },
   { key: "customerBoardingRequestUpdated", label: "Customer boarding request update", group: "Customer" },
+  { key: "boardingCustomerRequestApproved", label: "Customer request approved", group: "Customer" },
+  { key: "boardingCustomerRequestDeclined", label: "Customer request declined", group: "Customer" },
+  { key: "boardingCustomerRequestCancelled", label: "Customer request cancelled by staff", group: "Customer" },
+  { key: "boardingCustomerRequestUpdatedByStaff", label: "Customer request updated by staff", group: "Customer" },
   { key: "customerApprovedStayCancelled", label: "Customer cancelled approved stay", group: "Customer" },
   { key: "customerDogFileUploaded", label: "Customer uploaded dog file", group: "Customer" },
   { key: "customerStayUpdateSent", label: "Customer stay update sent", group: "Customer" },
@@ -9433,9 +9437,15 @@ async function notifyIfNeeded(record = {}, eventName = "") {
     });
     if (error) throw error;
     const emailSkipped = Boolean(data?.emailResult?.skipped);
+    const emailFailed = Boolean(data?.emailResult?.failed);
     const smsRequested = (config.channels || []).some((channel) => String(channel).toLowerCase() === "sms");
     const smsSkipped = Boolean(data?.smsResult?.skipped);
-    const deliveryStatus = emailSkipped ? (smsRequested && !smsSkipped ? "sms sent; email skipped" : "skipped") : "sent";
+    const smsFailed = Boolean(data?.smsResult?.failed);
+    const deliveryStatus = emailFailed
+      ? (smsRequested && !smsSkipped && !smsFailed ? "sms sent; email failed" : "failed")
+      : emailSkipped
+      ? (smsRequested && !smsSkipped && !smsFailed ? "sms sent; email skipped" : "skipped")
+      : "sent";
     const updated = upsertRecord("notificationLog", {
       ...notification,
       deliveryStatus,
@@ -11671,8 +11681,10 @@ function initEvents() {
         if (stayId) {
           await approveBoardingStay(record, stayId, reference);
         } else {
+          const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", {});
           const updated = upsertRecord("boardingDog", approveBoardingRecord(record));
           await sendPayload(updated);
+          if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
           renderBoardingDogs();
           renderBoardingRequests();
           renderCustomerRequests();
@@ -11689,10 +11701,12 @@ function initEvents() {
         openOwnerUpdateAlert(record.id, reference);
       }
       if (action === "cancel-boarding") {
+        const customerNotificationEvent = !stayId ? boardingCustomerRequestStatusEventName(record, "Cancelled", {}) : "";
         const updated = stayId
           ? await saveBoardingStayStatusTransition(record, stayId, "Cancelled", reference)
           : upsertRecord("boardingDog", withBoardingStatusTransition(record, "Cancelled") || record);
         if (!stayId) await sendPayload(updated);
+        if (!stayId && customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
         renderBoardingDogs();
         renderBoardingRequests();
         renderCustomerRequests();
@@ -11734,8 +11748,10 @@ function initEvents() {
       if (stayId) {
         await approveBoardingStay(record, stayId, reference);
       } else {
+        const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", {});
         const updated = upsertRecord("boardingDog", approveBoardingRecord(record));
         await sendPayload(updated);
+        if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
         renderBoardingDogs();
         renderBoardingRequests();
         showToast("Boarding request approved.");
@@ -11753,10 +11769,12 @@ function initEvents() {
       return;
     }
     if (button.dataset.action === "cancel-boarding") {
+      const customerNotificationEvent = !stayId ? boardingCustomerRequestStatusEventName(record, "Cancelled", {}) : "";
       const updated = stayId
         ? await saveBoardingStayStatusTransition(record, stayId, "Cancelled", reference)
         : upsertRecord("boardingDog", withBoardingStatusTransition(record, "Cancelled") || record);
       if (!stayId) await sendPayload(updated);
+      if (!stayId && customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
       renderBoardingDogs();
       renderBoardingRequests();
       renderCustomerRequests();

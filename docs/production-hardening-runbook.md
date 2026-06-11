@@ -37,14 +37,25 @@ SUPABASE_SERVICE_ROLE_KEY
 RESEND_API_KEY
 ALERT_FROM_EMAIL
 ADMIN_ALERT_EMAILS
+APP_PRODUCTION_URL=https://kennel.centraltexashusky.com
+```
+
+Optional urgent SMS secrets:
+
+```text
 TWILIO_ACCOUNT_SID
 TWILIO_AUTH_TOKEN
 TWILIO_FROM_NUMBER
 ADMIN_ALERT_PHONES
-APP_PRODUCTION_URL
 ```
 
-Only the first three are required for `media-access`. Email/SMS secrets are required for live notification delivery.
+Only the first three are required for `media-access`. Live boarding email delivery requires the Resend and alert email secrets above. SMS remains optional and only applies to urgent notifications.
+
+The boarding app must keep using `send-notification` for these emails; do not call the CRM lead notification endpoint from the boarding app. After changing this function, deploy it with:
+
+```bash
+supabase functions deploy send-notification
+```
 
 ## 3. Clean Duplicate Boarding Data
 
@@ -114,3 +125,8 @@ After deploy:
 5. Customer: open My Requests and confirm Stay ID labels appear as `Stay ID: ...`.
 6. Customer/staff: open an uploaded file and confirm the signed media link opens.
 7. Dashboard: confirm checked-out stays no longer appear as pickup reminders.
+8. Customer: submit a test boarding request and confirm an admin/staff email arrives from `send-notification`.
+9. Customer: confirm the customer receives the request confirmation email.
+10. Admin/staff: approve or decline the test request and confirm the customer receives the status email.
+11. Admin/staff: send a customer stay update and confirm the customer email arrives.
+12. Admin/staff: open the related `notificationLog` record and confirm `deliveryStatus`, `emailResult`, and `sentAt` are populated.

@@ -103,6 +103,22 @@ function stayTransitionLabel(currentStatus = "", nextStatus = "") {
   return transitionLabel(nextStatus);
 }
 
+function boardingCustomerRequestStatusEventName(record = {}, nextStatus = "", options = {}) {
+  if (!["Approved", "Cancelled"].includes(nextStatus)) return "";
+  if (currentRole() === "customer" || options.source === "customer" || options.role === "customer") return "";
+  const targetStay = (options.stayId || options.requestCode)
+    ? boardingStayByReference(record, options)
+    : boardingStatusTargetStay(record, nextStatus, options) || boardingPrimaryStay(record) || {};
+  const currentStatus = targetStay?.id ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
+  const customerRequested = Boolean(record.customerRequest || targetStay?.source === "customer-request" || targetStay?.requestGroupId || record.requestGroupId);
+  if (!customerRequested) return "";
+  if (nextStatus === "Approved" && ["Pending", "Cancelled"].includes(currentStatus)) return "boardingCustomerRequestApproved";
+  if (nextStatus === "Cancelled" && ["Pending", "Approved"].includes(currentStatus)) {
+    return currentStatus === "Pending" || normalizedBoardingDeclineNote(options.declineNote) ? "boardingCustomerRequestDeclined" : "boardingCustomerRequestCancelled";
+  }
+  return "";
+}
+
 function normalizedBoardingDeclineNote(note = "") {
   return String(note || "").trim();
 }
@@ -1598,6 +1614,11 @@ function boardingQueueRecordMatchesGroup(title = "", record = {}) {
   return false;
 }
 
+function boardingServiceOnlyChipHtml(record = {}, stay = {}) {
+  if (!isServiceRequestStay(record, stay)) return "";
+  return '<span class="boarding-service-only-chip">Service Only</span>';
+}
+
 function boardingQueueGroupHtml(title, records = []) {
   const PREVIEW_LIMIT = 6;
   const preview = records.slice(0, PREVIEW_LIMIT);
@@ -1611,7 +1632,9 @@ function boardingQueueGroupHtml(title, records = []) {
         const stay = boardingQueueStayForGroup(title, record) || boardingPrimaryStay(record) || {};
         const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
         const kennel = boardingKennelLocationLabel(record, stay);
-        return \`<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${boardingDogThumbnailHtml(record, { className: "boarding-queue-photo" })}<span class="boarding-queue-item-content"><span>\${escapeHtml(record.dogName || "Dog")}\${kennel ? \` <small class="kennel-tag">\${escapeHtml(kennel)}</small>\` : ""}</span><small>\${escapeHtml(boardingScheduleText(record, stay))}</small></span></button>\`;
+        const serviceOnly = isServiceRequestStay(record, stay);
+        const itemClass = serviceOnly ? "boarding-queue-item is-service-only" : "boarding-queue-item";
+        return \`<button type="button" class="\${itemClass}" data-action="open-queue-stay-status" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${boardingDogThumbnailHtml(record, { className: "boarding-queue-photo" })}<span class="boarding-queue-item-content"><span class="boarding-queue-item-title"><span>\${escapeHtml(record.dogName || "Dog")}\${kennel ? \` <small class="kennel-tag">\${escapeHtml(kennel)}</small>\` : ""}</span>\${boardingServiceOnlyChipHtml(record, stay)}</span><small>\${escapeHtml(boardingScheduleText(record, stay))}</small></span></button>\`;
       }).join("")
       : \`<p>No dogs in this group.</p>\`
   }\${overflowHtml}</article>\`;
@@ -2944,6 +2967,7 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
     openBoardingDeclineRequestPopup(record, nextStatus, options);
     return null;
   }
+  const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, nextStatus, options);
   const transitioned = withBoardingStatusTransition(record, nextStatus, options);
   if (!transitioned) {
     showToast("That boarding status transition is not allowed.");
@@ -2951,6 +2975,7 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   }
   const updated = upsertRecord("boardingDog", transitioned);
   await sendPayload(updated);
+  if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
   if (options.stayId) {
     await syncDuplicateBoardingStayStatusRecords(record, updated, boardingStayByReference(record, options) || boardingStayByReference(updated, options), nextStatus, options);
   }
@@ -3988,6 +4013,8 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const serviceRows = boardingRequestServiceRowsHtml(record, stay);
   const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
+  const serviceOnly = isServiceRequestStay(record, stay);
+  const scopeText = serviceOnly ? "Status changes apply only to this service request." : "Status changes apply only to this boarding request/stay.";
   const statusButtons = nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-next-status="\${escapeHtml(nextStatus)}">\${escapeHtml(stayTransitionLabel(status, nextStatus))}</button>\`);
   const buttons = [ownerUpdateButton, ...statusButtons].filter(Boolean);
   return \`<section class="popup-record-section">
@@ -3995,7 +4022,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
       <strong>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</strong>
       <div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}</div>
       <div class="boarding-status-service-summary"><strong>Service requests</strong>\${serviceRows}</div>
-      <p>Status changes apply only to this boarding request/stay.</p>
+      <p>\${escapeHtml(scopeText)}</p>
     </article>
     <div class="record-actions">\${buttons.length ? buttons.join("") : "<p>No status changes are available for this stay.</p>"}</div>
   </section>\`;
@@ -4008,7 +4035,8 @@ function openBoardingStayStatusMenu(record = activeBoardingDog(), stayId = "") {
     showToast("This boarding stay could not be opened.");
     return;
   }
-  showDetailDialog("Update Stay Status", boardingStayStatusMenuHtml(displayRecord, stay), null, {
+  const title = isServiceRequestStay(displayRecord, stay) ? "Update Service Status" : "Update Stay Status";
+  showDetailDialog(title, boardingStayStatusMenuHtml(displayRecord, stay), null, {
     headerAction: {
       label: "Edit Dog",
       action: "open-boarding-dog-editor",
@@ -4028,6 +4056,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
     openBoardingDeclineRequestPopup(record, nextStatus, options);
     return null;
   }
+  const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, nextStatus, options);
   const transitioned = withBoardingStatusTransition(record, nextStatus, options);
   if (!transitioned) {
     showToast("That stay status transition is not allowed.");
@@ -4035,6 +4064,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   }
   const updated = upsertRecord("boardingDog", transitioned);
   await sendPayload(updated);
+  if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
   await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay || boardingStayByReference(updated, options), nextStatus, options);
   await addAuditLog("Changed boarding stay status", "boardingDog", updated, \`\${updated.dogName || "Dog"} stay \${options.stayId}: \${nextStatus}\`);
   renderBoardingDogs();
@@ -4056,6 +4086,7 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
   const targetStay = boardingStayByReference(record, options);
   if (!targetStay) return null;
   const currentStatus = boardingStayDisplayStatus(record, targetStay);
+  const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", options);
   const timestamp = new Date().toISOString();
   const transitionActor = boardingTransitionActorPayload(options);
   const transitioned = withBoardingStatusTransition(record, "Approved", options);
@@ -4126,6 +4157,7 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
     flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
   });
   await sendPayload(updated);
+  if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
   await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay, "Approved", options);
   await addAuditLog("Approved boarding stay", "boardingDog", updated, \`\${updated.dogName || "Dog"} stay \${boardingStayRequestCode(updated, targetStay)}: Approved\`);
   renderBoardingDogs();

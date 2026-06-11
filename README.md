@@ -48,24 +48,27 @@ New record types used by this workflow:
 - `notificationLog`
 - `notificationPreference`
 
-The app creates in-app notifications for new boarding requests, urgent kennel requests, urgent maintenance, time-off review, and schedule publishing. Browser `mailto:` alerts are no longer the primary path; live email/SMS delivery is handled by the Supabase Edge Function at `supabase/functions/send-notification`.
+The app creates in-app notifications for new boarding requests, customer boarding/request updates, customer stay updates, urgent kennel requests, urgent maintenance, time-off review, and schedule publishing. Browser `mailto:` alerts are no longer the primary path; live email/SMS delivery is handled server-side by the Supabase Edge Function at `supabase/functions/send-notification`.
 
 Private file access is handled by the Supabase Edge Function at `supabase/functions/media-access`. The app stores each uploaded file's `storagePath` and can request a short-lived signed URL after confirming the logged-in user can access the source record.
 
 Recommended Supabase Function secrets:
 
 ```text
+SUPABASE_URL
+SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
 RESEND_API_KEY
 ALERT_FROM_EMAIL
 ADMIN_ALERT_EMAILS
+APP_PRODUCTION_URL=https://kennel.centraltexashusky.com
 TWILIO_ACCOUNT_SID
 TWILIO_AUTH_TOKEN
 TWILIO_FROM_NUMBER
 ADMIN_ALERT_PHONES
-APP_PRODUCTION_URL
 ```
 
-Email can go live with only `RESEND_API_KEY`, `ALERT_FROM_EMAIL`, and `ADMIN_ALERT_EMAILS`. SMS is optional and should stay limited to urgent alerts.
+Email can go live with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `ALERT_FROM_EMAIL`, `ADMIN_ALERT_EMAILS`, and `APP_PRODUCTION_URL`. SMS is optional and should stay limited to urgent alerts.
 
 ## Persistent Database
 

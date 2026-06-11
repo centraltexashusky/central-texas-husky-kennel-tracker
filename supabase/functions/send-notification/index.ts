@@ -193,6 +193,72 @@ function stayScheduleText(stay: Record<string, unknown>) {
   return dropoff || pickup || "";
 }
 
+function isServiceRequest(record: Record<string, unknown>, stay: Record<string, unknown>) {
+  return String(stay.stayType || record.stayType || "").trim() === "Service Request";
+}
+
+function requestTypeLabel(record: Record<string, unknown>, stay: Record<string, unknown>) {
+  return isServiceRequest(record, stay) ? "service request" : "boarding request";
+}
+
+function customerEmailsForRecord(record: Record<string, unknown>) {
+  return uniqueEmails([
+    record.ownerEmail,
+    record.customerEmail,
+    record.linkedOwnerEmail,
+    record.secondaryOwnerEmail,
+    record.requestedByEmail,
+  ]);
+}
+
+function requestServiceItems(record: Record<string, unknown>, stay: Record<string, unknown>) {
+  const stayRequests = Array.isArray(stay.requests) ? stay.requests : [];
+  const recordRequests = Array.isArray(record.requestedServices) ? record.requestedServices : [];
+  return stayRequests.length ? stayRequests : recordRequests;
+}
+
+function serviceLine(rawItem: unknown) {
+  if (!rawItem || typeof rawItem !== "object") return String(rawItem || "").trim();
+  const item = rawItem as Record<string, unknown>;
+  const name = String(item.serviceName || item.name || item.label || item.id || "Service").replace(/\s+requested$/i, "").trim();
+  const quantity = Number(item.quantity || item.count || 1);
+  const count = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+  return `${count} x ${name} requested`;
+}
+
+function requestServiceLines(record: Record<string, unknown>, stay: Record<string, unknown>) {
+  return requestServiceItems(record, stay)
+    .map(serviceLine)
+    .filter(Boolean);
+}
+
+function declineNoteText(record: Record<string, unknown>, stay: Record<string, unknown>) {
+  const declineNote = stay.declineNote && typeof stay.declineNote === "object" ? stay.declineNote as Record<string, unknown> : {};
+  return String(
+    declineNote.note
+      || stay.declineReason
+      || stay.customerDeclineNote
+      || record.declineReason
+      || record.customerDeclineNote
+      || "",
+  ).trim();
+}
+
+function latestCustomerCancellationReason(record: Record<string, unknown>, stay: Record<string, unknown>) {
+  const latest = record.latestCustomerCancellation && typeof record.latestCustomerCancellation === "object"
+    ? record.latestCustomerCancellation as Record<string, unknown>
+    : {};
+  return String(latest.reason || stay.customerCancellationReason || record.customerCancellationReason || "").trim();
+}
+
+function customerStatusLabel(eventName: string) {
+  if (eventName === "boardingCustomerRequestApproved") return "approved";
+  if (eventName === "boardingCustomerRequestDeclined") return "declined";
+  if (eventName === "boardingCustomerRequestCancelled") return "cancelled";
+  if (eventName === "boardingCustomerRequestUpdatedByStaff") return "updated";
+  return "updated";
+}
+
 function notificationFallbackFields(eventName: string, sourceRecord: Record<string, unknown>, notificationId = ""): Record<string, unknown> {
   const stay = firstStay(sourceRecord);
   const sourceType = String(sourceRecord.type || "").trim();
@@ -278,23 +344,104 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";
     const media = await recordMediaLines(adminClient, record);
+    const requestType = requestTypeLabel(record, stay);
+    const serviceLines = requestServiceLines(record, stay);
+    const adminTo = audienceEmails.length ? audienceEmails : adminEmails();
+    const customerTo = customerEmailsForRecord(record);
+    const schedule = stayScheduleText(stay);
+    const dogName = String(record.dogName || "Customer dog");
+    const adminBody = [
+      `A customer ${requestType} was ${action}.`,
+      "",
+      `Dog: ${dogName}`,
+      `Owner: ${record.ownerName || record.ownerEmail || ""}`,
+      `Email: ${record.ownerEmail || record.customerEmail || record.requestedByEmail || ""}`,
+      `Phone: ${record.ownerPhone || record.customerPhone || ""}`,
+      schedule ? `Requested time: ${schedule}` : "",
+      serviceLines.length ? "Requested services:" : "",
+      ...serviceLines.map((line) => `- ${line}`),
+      `Estimated total: ${record.estimatedTotal || stay.estimatedTotal || ""}`,
+      `Notes: ${stay.stayNotes || ""}`,
+      ...(media.length ? ["", "Media links:", ...media] : []),
+      "",
+      `Review request: ${appLink("#boardingDogsPage")}`,
+    ].filter(Boolean).join("\n");
+    const customerBody = [
+      `We received your ${requestType}${dogName ? ` for ${dogName}` : ""}.`,
+      "",
+      schedule ? `Requested time: ${schedule}` : "",
+      serviceLines.length ? "Requested services:" : "",
+      ...serviceLines.map((line) => `- ${line}`),
+      `Estimated total: ${record.estimatedTotal || stay.estimatedTotal || ""}`,
+      `Notes: ${stay.stayNotes || ""}`,
+      "",
+      "Our team will review the request and follow up after it is approved or if we need more details.",
+      `Open your requests: ${appLink("#customerRequestsPage")}`,
+    ].filter(Boolean).join("\n");
+    const emails = [
+      { audience: "admin", to: adminTo, subject: `${eventName.endsWith("Updated") ? "Updated" : "New"} ${requestType}: ${dogName}`, body: adminBody },
+      ...(customerTo.length
+        ? [{ audience: "customer", to: customerTo, subject: `We received your ${requestType}: ${dogName}`, body: customerBody }]
+        : []),
+    ];
     return {
-      subject: `${eventName.endsWith("Updated") ? "Updated" : "New"} boarding request: ${record.dogName || "Customer dog"}`,
+      emails,
+      subject: emails[0].subject,
+      body: emails[0].body,
+      priority: "normal",
+      to: adminTo,
+      sms: false,
+    };
+  }
+  if (eventName === "customerApprovedStayCancelled") {
+    const requestType = requestTypeLabel(record, stay);
+    const schedule = stayScheduleText(stay);
+    const reason = latestCustomerCancellationReason(record, stay);
+    return {
+      subject: `Approved ${requestType} cancelled: ${record.dogName || "Customer dog"}`,
       body: [
-        `A customer boarding request was ${action}.`,
+        `A customer cancelled an approved ${requestType}.`,
         "",
         `Dog: ${record.dogName || ""}`,
         `Owner: ${record.ownerName || record.ownerEmail || ""}`,
-        `Stay: ${stay.dropoffTime || ""} to ${stay.pickupTime || ""}`,
-        `Requested services: ${Array.isArray(record.requestedServices) ? record.requestedServices.map((item) => (typeof item === "object" ? (item as Record<string, unknown>).serviceName : item)).join(", ") : ""}`,
-        `Estimated total: ${record.estimatedTotal || ""}`,
-        `Notes: ${stay.stayNotes || ""}`,
-        ...(media.length ? ["", "Media links:", ...media] : []),
+        `Email: ${record.ownerEmail || record.customerEmail || record.requestedByEmail || ""}`,
+        `Phone: ${record.ownerPhone || record.customerPhone || ""}`,
+        schedule ? `Requested time: ${schedule}` : "",
+        reason ? `Customer reason: ${reason}` : "",
         "",
-        `Review request: ${appLink("#boardingDogsPage")}`,
-      ].join("\n"),
-      priority: "normal",
+        `Open stay: ${appLink("#boardingDogsPage")}`,
+      ].filter(Boolean).join("\n"),
+      priority: "review",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
+      sms: false,
+    };
+  }
+  if (
+    eventName === "boardingCustomerRequestApproved"
+    || eventName === "boardingCustomerRequestDeclined"
+    || eventName === "boardingCustomerRequestCancelled"
+    || eventName === "boardingCustomerRequestUpdatedByStaff"
+  ) {
+    const label = customerStatusLabel(eventName);
+    const requestType = requestTypeLabel(record, stay);
+    const serviceLines = requestServiceLines(record, stay);
+    const schedule = stayScheduleText(stay);
+    const reason = label === "declined" || label === "cancelled" ? declineNoteText(record, stay) : "";
+    return {
+      subject: `Your ${requestType} was ${label}: ${record.dogName || "Customer dog"}`,
+      body: [
+        `Your ${requestType}${record.dogName ? ` for ${record.dogName}` : ""} was ${label}.`,
+        "",
+        schedule ? `Requested time: ${schedule}` : "",
+        serviceLines.length ? "Requested services:" : "",
+        ...serviceLines.map((line) => `- ${line}`),
+        reason ? `Reason: ${reason}` : "",
+        `Estimated total: ${record.estimatedTotal || stay.estimatedTotal || ""}`,
+        "",
+        `Open your requests: ${appLink("#customerRequestsPage")}`,
+      ].filter(Boolean).join("\n"),
+      priority: label === "approved" ? "normal" : "review",
+      to: customerEmailsForRecord(record),
       sms: false,
     };
   }
@@ -517,16 +664,42 @@ async function sendEmail(to: string[], subject: string, body: string) {
   const apiKey = Deno.env.get("RESEND_API_KEY") || "";
   const from = Deno.env.get("ALERT_FROM_EMAIL") || "";
   if (!apiKey || !from || !to.length) return { skipped: true, reason: "Email provider secrets are missing." };
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ from, to, subject, text: body }),
-  });
-  if (!response.ok) throw new Error(`Resend failed: ${response.status} ${await response.text()}`);
-  return await response.json();
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from, to, subject, text: body }),
+    });
+    const text = await response.text();
+    let data: unknown = text;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (_error) {
+      data = text;
+    }
+    if (!response.ok) return { failed: true, status: response.status, reason: `Resend failed: ${text}` };
+    return { ok: true, status: response.status, data };
+  } catch (error) {
+    return { failed: true, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function emailResultStatus(result: unknown, key: "skipped" | "failed") {
+  const value = result && typeof result === "object" ? (result as Record<string, unknown>)[key] : false;
+  return Boolean(value);
+}
+
+function summarizeEmailResults(results: Record<string, unknown>[]) {
+  if (results.length === 1) return results[0].result || {};
+  return {
+    messages: results,
+    skipped: results.length > 0 && results.every((item) => emailResultStatus(item.result, "skipped")),
+    failed: results.some((item) => emailResultStatus(item.result, "failed")),
+    sentCount: results.filter((item) => !emailResultStatus(item.result, "skipped") && !emailResultStatus(item.result, "failed")).length,
+  };
 }
 
 async function sendSms(message: string) {
@@ -538,18 +711,32 @@ async function sendSms(message: string) {
   const results = [];
   for (const to of toNumbers) {
     const params = new URLSearchParams({ To: to, From: from, Body: message.slice(0, 300) });
-    const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: params,
-    });
-    if (!response.ok) throw new Error(`Twilio failed: ${response.status} ${await response.text()}`);
-    results.push(await response.json());
+    try {
+      const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: params,
+      });
+      const text = await response.text();
+      let data: unknown = text;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (_error) {
+        data = text;
+      }
+      results.push(response.ok ? { ok: true, to, data } : { failed: true, to, status: response.status, reason: `Twilio failed: ${text}` });
+    } catch (error) {
+      results.push({ failed: true, to, reason: error instanceof Error ? error.message : String(error) });
+    }
   }
-  return results;
+  return {
+    messages: results,
+    failed: results.some((item) => Boolean(item.failed)),
+    sentCount: results.filter((item) => !item.failed).length,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -597,8 +784,15 @@ Deno.serve(async (req) => {
   if (!isStaff && !recordHasEmail(sourceRecord, user.email)) {
     return json({ error: "Not authorized for this notification source." }, 403, req);
   }
-  if (eventName === "customerStayUpdateSent" && !isStaff) {
-    return json({ error: "Only staff can send customer stay update notifications." }, 403, req);
+  const staffOnlyCustomerEvents = new Set([
+    "customerStayUpdateSent",
+    "boardingCustomerRequestApproved",
+    "boardingCustomerRequestDeclined",
+    "boardingCustomerRequestCancelled",
+    "boardingCustomerRequestUpdatedByStaff",
+  ]);
+  if (staffOnlyCustomerEvents.has(eventName) && !isStaff) {
+    return json({ error: "Only staff can send this customer notification." }, 403, req);
   }
 
   let notificationPayload: Record<string, unknown> = {};
@@ -610,11 +804,33 @@ Deno.serve(async (req) => {
   const content = await notificationContent(adminClient, eventName, sourceRecord, notificationPayload);
   if (!content) return json({ error: "Unsupported notification event." }, 400, req);
 
-  const emailResult = await sendEmail(uniqueEmails(content.to), content.subject, content.body);
+  const emailMessages = Array.isArray((content as Record<string, unknown>).emails)
+    ? ((content as Record<string, unknown>).emails as Record<string, unknown>[])
+    : [{ audience: "default", to: content.to, subject: content.subject, body: content.body }];
+  const emailResults: Record<string, unknown>[] = [];
+  for (const message of emailMessages) {
+    const result = await sendEmail(
+      uniqueEmails(Array.isArray(message.to) ? message.to : [message.to]),
+      String(message.subject || content.subject || "Snuggle Stay alert"),
+      String(message.body || content.body || ""),
+    );
+    emailResults.push({
+      audience: message.audience || "default",
+      to: uniqueEmails(Array.isArray(message.to) ? message.to : [message.to]),
+      result,
+    });
+  }
+  const emailResult = summarizeEmailResults(emailResults);
   const smsResult = content.sms ? await sendSms(`${content.subject}: ${String(sourceRecord.dogName || sourceRecord.location || sourceRecord.category || "")}. ${appUrl()}`) : { skipped: true };
   const emailSkipped = Boolean((emailResult as Record<string, unknown>)?.skipped);
+  const emailFailed = Boolean((emailResult as Record<string, unknown>)?.failed);
   const smsSkipped = Boolean((smsResult as Record<string, unknown>)?.skipped);
-  const deliveryStatus = emailSkipped ? (content.sms && !smsSkipped ? "sms sent; email skipped" : "skipped") : "sent";
+  const smsFailed = Boolean((smsResult as Record<string, unknown>)?.failed);
+  const deliveryStatus = emailFailed
+    ? (content.sms && !smsSkipped && !smsFailed ? "sms sent; email failed" : "failed")
+    : emailSkipped
+    ? (content.sms && !smsSkipped && !smsFailed ? "sms sent; email skipped" : "skipped")
+    : "sent";
 
   if (body.notificationId) {
     const existingPayload = hydrateNotificationPayload(notificationPayload, eventName, sourceRecord, body.notificationId);
