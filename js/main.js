@@ -1,12 +1,12 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260610-page-scoped-sync-v2";
+import "./shared.js?v=20260611-admin-efficiency-v3";
 import "./auth.js?v=20260610-page-scoped-sync-v2";
 import "./customer.js?v=20260610-request-mode-toggle";
-import "./boarding.js?v=20260610-page-scoped-sync";
+import "./boarding.js?v=20260611-admin-efficiency-v3";
 import "./daily.js?v=20260607-owned-health-due-history";
-import "./timesheet.js?v=20260608-efficiency-sync";
+import "./timesheet.js?v=20260611-admin-efficiency-v3";
 import "./settings.js?v=20260610-service-scope-review";
-import "./notifications.js?v=20260609-boarding-request-alert";
+import "./notifications.js?v=20260611-admin-efficiency-v3";
 import "./search.js?v=20260530-v3-fix-pass";
 
 initializeApp().catch((error) => {

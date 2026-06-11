@@ -98,8 +98,54 @@ function storageOwnerUserId(path: string) {
   return path.split("/")[1] || "";
 }
 
-function payloadReferencesPath(payload: Record<string, unknown>, storagePath: string) {
-  return JSON.stringify(payload).includes(storagePath);
+function normalizeStoragePathReference(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const direct = safeStoragePath(text);
+  if (direct) return direct;
+
+  try {
+    const url = new URL(text);
+    const objectMarker = "/storage/v1/object/";
+    const signedMarker = "/storage/v1/object/sign/";
+    const marker = url.pathname.includes(signedMarker) ? signedMarker : objectMarker;
+    const markerIndex = url.pathname.indexOf(marker);
+    if (markerIndex < 0) return "";
+    const afterMarker = url.pathname.slice(markerIndex + marker.length);
+    const bucketPrefix = `${MEDIA_BUCKET}/`;
+    const withoutBucket = afterMarker.startsWith(bucketPrefix) ? afterMarker.slice(bucketPrefix.length) : afterMarker;
+    return safeStoragePath(decodeURIComponent(withoutBucket.split("?")[0] || ""));
+  } catch {
+    return "";
+  }
+}
+
+function payloadReferencesExactPath(value: unknown, storagePath: string, depth = 0): boolean {
+  if (!storagePath || depth > 8) return false;
+  if (typeof value === "string") return normalizeStoragePathReference(value) === storagePath;
+  if (Array.isArray(value)) return value.some((item) => payloadReferencesExactPath(item, storagePath, depth + 1));
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some((item) => payloadReferencesExactPath(item, storagePath, depth + 1));
+  }
+  return false;
+}
+
+function sourceRowIsTrustedMediaGrant(
+  row: { id?: string; type?: string; user_id?: string; payload?: unknown } | null | undefined,
+  user: { id: string; email?: string },
+  storagePath: string,
+  requestedType = "",
+) {
+  if (!row || !storagePath) return false;
+  if (requestedType && row.type !== requestedType) return false;
+
+  const rowUserId = String(row.user_id || "");
+  // Efficiency flow: do not let a customer-created row grant access to arbitrary non-owned media.
+  if (!rowUserId || rowUserId === user.id) return false;
+
+  const payload = (row.payload && typeof row.payload === "object" ? row.payload : {}) as Record<string, unknown>;
+  return payloadReferencesExactPath(payload, storagePath)
+    && (recordHasEmail(payload, user.email || "") || recordAudienceHasEmail(payload, user.email || ""));
 }
 
 Deno.serve(async (req) => {
@@ -131,19 +177,14 @@ Deno.serve(async (req) => {
   let allowed = isStaff || storageOwnerUserId(storagePath) === user.id;
 
   if (!allowed && body.recordId) {
-    const { data: sourceRow, error: sourceError } = await adminClient
+    // Efficiency flow: non-staff source-record authorization must go through the user client so RLS still applies.
+    const { data: sourceRow, error: sourceError } = await userClient
       .from("kennel_records")
-      .select("id,type,payload")
+      .select("id,type,user_id,payload")
       .eq("id", String(body.recordId))
       .maybeSingle();
     if (sourceError) return json({ error: sourceError.message }, 500);
-    const payload = (sourceRow?.payload && typeof sourceRow.payload === "object" ? sourceRow.payload : {}) as Record<string, unknown>;
-    allowed = Boolean(
-      sourceRow
-        && (!body.recordType || sourceRow.type === body.recordType)
-        && payloadReferencesPath(payload, storagePath)
-        && (recordHasEmail(payload, user.email) || recordAudienceHasEmail(payload, user.email)),
-    );
+    allowed = sourceRowIsTrustedMediaGrant(sourceRow, user, storagePath, body.recordType || "");
   }
 
   if (!allowed) return json({ error: "Not authorized for this file." }, 403);

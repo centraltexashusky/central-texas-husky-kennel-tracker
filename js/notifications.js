@@ -546,7 +546,10 @@ function notificationVisibleToCurrentUser(notification = {}) {
 }
 
 function notificationIsRead(notification = {}) {
-  return (notification.readBy || []).includes(currentUserNotificationKey());
+  const key = currentUserNotificationKey();
+  if (!key) return false;
+  if ((notification.readBy || []).includes(key)) return true;
+  return readRecords("notificationRead").some((item) => item.notificationId === notification.id && item.readerKey === key);
 }
 
 function notificationSourceSnapshot(notification = {}) {
@@ -1110,20 +1113,55 @@ function renderNotifications() {
 async function markNotificationRead(id = "") {
   const record = readRecords("notificationLog").find((item) => item.id === id);
   if (!record) return null;
-  const readBy = [...new Set([...(record.readBy || []), currentUserNotificationKey()].filter(Boolean))];
-  const updated = upsertRecord("notificationLog", { ...record, readBy });
-  await sendPayload(updated);
+  await saveNotificationReadReceipt(id);
   renderNotifications();
-  return updated;
+  return record;
 }
 
 async function markAllNotificationsRead() {
   const visible = readRecords("notificationLog").filter((item) => !item.removed && notificationVisibleToCurrentUser(item) && !notificationIsRead(item));
-  for (const item of visible) {
-    const readBy = [...new Set([...(item.readBy || []), currentUserNotificationKey()].filter(Boolean))];
-    await sendPayload(upsertRecord("notificationLog", { ...item, readBy }));
-  }
+  await Promise.allSettled(visible.map((item) => saveNotificationReadReceipt(item.id)));
   renderNotifications();
+}
+
+async function saveNotificationReadReceipt(id = "") {
+  const key = currentUserNotificationKey();
+  if (!id || !key) return null;
+
+  const fallbackReadByUpdate = async () => {
+    const record = readRecords("notificationLog").find((item) => item.id === id);
+    if (!record) return null;
+    const readBy = [...new Set([...(record.readBy || []), key].filter(Boolean))];
+    const updated = upsertRecord("notificationLog", { ...record, readBy });
+    await sendPayload(updated);
+    return updated;
+  };
+
+  if (localTestMode || !supabaseClient || !notificationReadSyncAvailable) return fallbackReadByUpdate();
+
+  const row = {
+    notification_id: id,
+    reader_key: key,
+    reader_email: normalizeEmail(currentUser?.email || helperEmail?.value || ""),
+  };
+
+  const { data, error } = await supabaseClient
+    .from("notification_reads")
+    .upsert(row, { onConflict: "notification_id,reader_key" })
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    const message = String(error.message || "");
+    if (/notification_reads|schema cache|relation .* does not exist/i.test(message)) {
+      notificationReadSyncAvailable = false;
+      return fallbackReadByUpdate();
+    }
+    throw error;
+  }
+
+  mergeNotificationReadRows([data || row], { replaceLocal: false });
+  return readRecords("notificationLog").find((item) => item.id === id) || null;
 }
 
 function openOperationalNotificationRecord(sourceType = "", sourceId = "") {

@@ -141,8 +141,8 @@ $$;
 
 create schema if not exists kennel_private;
 
-create or replace function kennel_private.kennel_is_staff_member()
-returns boolean
+create or replace function kennel_private.kennel_user_role()
+returns text
 language sql
 stable
 security definer
@@ -150,18 +150,43 @@ set search_path = public, pg_temp
 as $$
   -- Bootstrap admin access by inserting a settingsUser kennel_records row
   -- directly in Supabase Studio with payload.role = 'admin'.
-  select exists (
-      select 1
-      from public.kennel_records kr
-      where kr.type = 'settingsUser'
-        and lower(coalesce(kr.payload ->> 'email', '')) = public.kennel_auth_email()
-        and lower(coalesce(kr.payload ->> 'role', '')) in ('admin', 'helper', 'staff')
-        and lower(coalesce(kr.payload ->> 'removed', 'false')) <> 'true'
-    )
+  select coalesce((
+    select lower(coalesce(kr.payload ->> 'role', ''))
+    from public.kennel_records kr
+    where kr.type = 'settingsUser'
+      and lower(coalesce(kr.payload ->> 'email', '')) = public.kennel_auth_email()
+      and lower(coalesce(kr.payload ->> 'removed', 'false')) <> 'true'
+    order by kr.updated_at desc nulls last, kr.submitted_at desc nulls last
+    limit 1
+  ), '')
 $$;
 
+create or replace function kennel_private.kennel_is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select kennel_private.kennel_user_role() = 'admin'
+$$;
+
+create or replace function kennel_private.kennel_is_staff_member()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select kennel_private.kennel_user_role() in ('admin', 'helper', 'staff')
+$$;
+
+revoke all on function kennel_private.kennel_user_role() from public;
+revoke all on function kennel_private.kennel_is_admin() from public;
 revoke all on function kennel_private.kennel_is_staff_member() from public;
 grant usage on schema kennel_private to authenticated;
+grant execute on function kennel_private.kennel_user_role() to authenticated;
+grant execute on function kennel_private.kennel_is_admin() to authenticated;
 grant execute on function kennel_private.kennel_is_staff_member() to authenticated;
 
 create or replace function public.kennel_is_staff_member()
@@ -173,6 +198,42 @@ as $$
   select kennel_private.kennel_is_staff_member()
 $$;
 
+create or replace function public.kennel_is_admin()
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select kennel_private.kennel_is_admin()
+$$;
+
+create or replace function public.kennel_staff_can_write_type(record_type text)
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select record_type in (
+    'ownedDog',
+    'boardingDog',
+    'customerDog',
+    'request',
+    'maintenance',
+    'timesheet',
+    'dailyTask',
+    'careLog',
+    'calendarNote',
+    'dogVaccination',
+    'dogInternalNote',
+    'dogActivityLog',
+    'reservationCustomerUpdate',
+    'dogClaimRequest',
+    'legacyDogLink',
+    'notificationLog',
+    'timeOffRequest'
+  )
+$$;
+
 create or replace function public.kennel_customer_can_write(record_type text, payload jsonb)
 returns boolean
 language sql
@@ -180,7 +241,8 @@ stable
 set search_path = public, pg_temp
 as $$
   select case
-    when kennel_private.kennel_is_staff_member() then true
+    when kennel_private.kennel_is_admin() then true
+    when kennel_private.kennel_is_staff_member() then public.kennel_staff_can_write_type(record_type)
     when record_type = 'boardingDog' then public.kennel_customer_boarding_payload_is_request(payload)
     when record_type in ('customerDog', 'request', 'maintenance') then public.kennel_payload_has_email(payload)
     when record_type = 'settingsUser' then lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email()
@@ -206,7 +268,13 @@ create policy "Kennel authenticated insert records"
 on public.kennel_records
 for insert
 to authenticated
-with check (public.kennel_customer_can_write(type, payload));
+with check (
+  public.kennel_customer_can_write(type, payload)
+  and (
+    kennel_private.kennel_is_staff_member()
+    or user_id = auth.uid()
+  )
+);
 
 create policy "Kennel authenticated update records"
 on public.kennel_records
@@ -214,9 +282,17 @@ for update
 to authenticated
 using (
   kennel_private.kennel_is_staff_member()
-  or public.kennel_customer_can_write(type, payload)
+  or user_id = auth.uid()
+  or public.kennel_payload_has_email(payload)
+  or public.kennel_payload_audience_has_email(payload)
 )
-with check (public.kennel_customer_can_write(type, payload));
+with check (
+  public.kennel_customer_can_write(type, payload)
+  and (
+    kennel_private.kennel_is_staff_member()
+    or user_id = auth.uid()
+  )
+);
 
 do $$
 begin
@@ -365,6 +441,70 @@ begin
         and tablename = 'daily_task_completions'
     ) then
     alter publication supabase_realtime add table public.daily_task_completions;
+  end if;
+end $$;
+
+create table if not exists public.notification_reads (
+  id uuid primary key default gen_random_uuid(),
+  notification_id text not null,
+  reader_key text not null,
+  reader_email text not null default '',
+  read_at timestamptz not null default now(),
+  unique (notification_id, reader_key)
+);
+
+create index if not exists notification_reads_notification_idx on public.notification_reads (notification_id);
+create index if not exists notification_reads_reader_idx on public.notification_reads (reader_key);
+create index if not exists notification_reads_read_at_idx on public.notification_reads (read_at desc);
+
+alter table public.notification_reads enable row level security;
+
+drop policy if exists "Kennel notification reads select" on public.notification_reads;
+drop policy if exists "Kennel notification reads insert" on public.notification_reads;
+drop policy if exists "Kennel notification reads update" on public.notification_reads;
+
+create policy "Kennel notification reads select"
+on public.notification_reads
+for select
+to authenticated
+using (
+  kennel_private.kennel_is_staff_member()
+  or lower(reader_email) = public.kennel_auth_email()
+);
+
+create policy "Kennel notification reads insert"
+on public.notification_reads
+for insert
+to authenticated
+with check (
+  kennel_private.kennel_is_staff_member()
+  or lower(reader_email) = public.kennel_auth_email()
+);
+
+create policy "Kennel notification reads update"
+on public.notification_reads
+for update
+to authenticated
+using (
+  kennel_private.kennel_is_staff_member()
+  or lower(reader_email) = public.kennel_auth_email()
+)
+with check (
+  kennel_private.kennel_is_staff_member()
+  or lower(reader_email) = public.kennel_auth_email()
+);
+
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+    and not exists (
+      select 1
+      from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'notification_reads'
+    ) then
+    alter publication supabase_realtime add table public.notification_reads;
   end if;
 end $$;
 

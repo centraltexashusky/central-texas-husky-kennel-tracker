@@ -83,8 +83,17 @@ var currentUser = null;
 var impersonationSession = null;
 var supabaseClient = null;
 var recordCache = {};
+var recordRevision = {};
+var boardingDogConsolidationCache = { signature: "", result: [] };
 var remoteLoadPromise = null;
+var remoteLoadActiveTypes = new Set();
+var remoteLoadQueuedTypes = new Set();
+var remoteLoadQueuedRender = false;
+var remoteLoadQueuedPageId = "";
+var lastRemoteRecordsSignatureByRequest = new Map();
+var activePageRemoteLoadTimer = null;
 var dailyTaskCompletionSyncAvailable = true;
+var notificationReadSyncAvailable = true;
 var detailDialogContext = null;
 var pendingCustomerBooking = null;
 var customerBookingSubmitInProgress = false;
@@ -119,6 +128,13 @@ var signedMediaUrlCache = new Map();
 var profilePhotoBlobUrlCache = new Map();
 var profilePhotoCacheWritePromises = new Map();
 var profilePhotoHydrationTimers = new WeakMap();
+var PROFILE_PHOTO_HYDRATION_CONCURRENCY = 4;
+var PROFILE_PHOTO_FAILURE_TTL_MS = 120000;
+var profilePhotoHydrationObserver = null;
+var profilePhotoHydrationQueue = [];
+var profilePhotoHydrationQueued = new WeakSet();
+var profilePhotoHydrationActive = 0;
+var profilePhotoFailureCache = new Map();
 var customerProfileSyncInProgress = false;
 var authSessionSyncPromise = null;
 var authSessionSyncStartedAt = 0;
@@ -345,6 +361,7 @@ var stateKeys = {
   scheduleTemplate: "cth-scheduleTemplate-records",
   schedulePublish: "cth-schedulePublish-records",
   notificationLog: "cth-notificationLog-records",
+  notificationRead: "cth-notificationRead-records",
   notificationPreference: "cth-notificationPreference-records",
   taskConfig: "cth-daily-task-config",
   tableConfig: "cth-table-column-config",
@@ -854,12 +871,37 @@ function compactRecordsForStorage(records) {
   });
 }
 
+function invalidateBoardingDogConsolidationCache() {
+  boardingDogConsolidationCache = { signature: "", result: [] };
+}
+
+function recordRevisionSignatureFor(types = []) {
+  return types.map((type) => \`\${type}:\${recordRevision[type] || 0}\`).join("|");
+}
+
+function cloneConsolidatedBoardingDog(record = {}) {
+  return {
+    ...record,
+    sourceRecordIds: arrayValue(record.sourceRecordIds).slice(),
+    duplicateProfileIds: arrayValue(record.duplicateProfileIds).slice(),
+    stays: arrayValue(record.stays).map((stay) => ({ ...stay })),
+    statusHistory: arrayValue(record.statusHistory).map((item) => ({ ...item })),
+    documents: arrayValue(record.documents).map((item) => ({ ...item })),
+    vaccinationRecords: arrayValue(record.vaccinationRecords).map((item) => ({ ...item })),
+    customerUpdates: arrayValue(record.customerUpdates).map((item) => ({ ...item })),
+    requestedServices: arrayValue(record.requestedServices).map((item) => ({ ...item })),
+    flags: arrayValue(record.flags).slice(),
+  };
+}
+
 function writeRecords(type, records) {
   const compactedRecords = compactRecordsForStorage(records);
   try {
     const raw = JSON.stringify(compactedRecords);
     localStorage.setItem(stateKeys[type], raw);
     recordCache[type] = { raw, records: compactedRecords.map(cloneCachedRecord) };
+    recordRevision[type] = (recordRevision[type] || 0) + 1;
+    if (type === "boardingDog" || type === "customerDog") invalidateBoardingDogConsolidationCache();
     return compactedRecords;
   } catch (error) {
     showToast("This record could not be saved. Try a smaller file or remove large uploads.");
@@ -1383,6 +1425,24 @@ function withTimeout(promise, timeoutMs, label = "Operation") {
   return Promise.race([promise, timeout]).finally(() => {
     if (timer) window.clearTimeout(timer);
   });
+}
+
+function efficiencyPerfEnabled() {
+  try {
+    return localStorage.getItem("cth-debug-performance") === "true";
+  } catch {
+    return false;
+  }
+}
+
+function efficiencyPerfStart(label = "") {
+  return { label, startedAt: performance.now() };
+}
+
+function efficiencyPerfEnd(mark = {}) {
+  if (!mark.label || !efficiencyPerfEnabled()) return;
+  const elapsed = Math.round((performance.now() - mark.startedAt) * 10) / 10;
+  console.info(\`[efficiency] \${mark.label}: \${elapsed}ms\`);
 }
 
 // Extracted to js/auth.js: cachedSupabaseSessionUser
@@ -3533,26 +3593,45 @@ function renderAfterRealtimeTypes(types = []) {
   const typeSet = new Set(arrayValue(types).filter(Boolean));
   if (!typeSet.size) return;
   const activePage = activePageId();
-  if (typeSet.has("dailyTask") || typeSet.has("dailyTaskCompletion") || typeSet.has("careLog")) {
-    renderDailyTaskLists();
-    renderDashboard();
-  }
-  if (typeSet.has("boardingDog") || typeSet.has("customerDog") || typeSet.has("service") || typeSet.has("kennelLocation") || typeSet.has("kennelBuilding")) {
+  const hasAny = (items) => items.some((type) => typeSet.has(type));
+
+  const boardingChanged = hasAny(["boardingDog", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"]);
+  const dailyChanged = hasAny(["dailyTask", "dailyTaskCompletion", "careLog"]);
+  const ownedDogChanged = hasAny(["ownedDog", "careLog", "customerDog", "boardingDog", "dogVaccination", "dogInternalNote", "dogActivityLog"]);
+  const requestChanged = typeSet.has("request");
+  const maintenanceChanged = typeSet.has("maintenance");
+  const timesheetChanged = hasAny(["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"]);
+
+  // Efficiency flow: never render a hidden heavy page from realtime. Render only the visible work area plus shared UI.
+  if (activePage === "dashboardPage" && (boardingChanged || dailyChanged || requestChanged || maintenanceChanged || timesheetChanged)) renderDashboard();
+  if (activePage === "dailyPage" && dailyChanged) renderDailyTaskLists();
+  if (activePage === "ourDogsPage" && ownedDogChanged) renderOwnedDogs();
+  if (activePage === "boardingDogsPage" && boardingChanged) {
     renderBoardingDogs();
     renderBoardingRequests();
-    renderCustomerRequests();
-    renderDashboard();
   }
-  if (typeSet.has("timesheet") && (currentRole() === "admin" || activePage === "timesheetPage")) {
+  if (activePage === "requestsPage" && requestChanged) renderRequests();
+  if (activePage === "maintenancePage" && maintenanceChanged) renderMaintenance();
+  if (activePage === "timesheetPage" && timesheetChanged) {
     renderTimesheet();
     updateTimeDisplays();
   }
-  if (typeSet.has("request")) renderRequests();
-  if (typeSet.has("maintenance")) renderMaintenance();
-  if (typeSet.has("ownedDog") || typeSet.has("dogVaccination") || typeSet.has("dogInternalNote") || typeSet.has("dogActivityLog")) renderOwnedDogs();
-  if (typeSet.has("notificationLog")) renderNotifications();
-  if (activePage === "customerPage" && (typeSet.has("customerDog") || typeSet.has("boardingDog"))) renderCustomerDogs();
-  if (activePage === "customerUpdatesPage" && (typeSet.has("boardingDog") || typeSet.has("reservationCustomerUpdate"))) renderCustomerUpdates();
+  if (activePage === "servicesPage" && typeSet.has("service")) renderServices();
+  if (activePage === "financialsPage" && hasAny(["boardingDog", "service", "cfoNote"])) {
+    renderFinancials();
+    renderCfoNotes();
+  }
+  if (activePage === "settingsUsersPage" && typeSet.has("settingsUser")) renderSettingsUsers();
+  if (activePage === "settingsKennelLocationsPage" && hasAny(["kennelLocation", "kennelBuilding"])) renderKennelLocations();
+  if (activePage === "settingsHoursPage" && hasAny(["operationHours", "operationDateOverride"])) renderOperationHoursSettings();
+  if (activePage === "settingsAlertsPage" && hasAny(["notificationPreference", "notificationLog"])) renderSettingsAlerts();
+  if (activePage === "settingsAuditLogPage" && typeSet.has("auditLog")) renderAuditLog();
+  if (activePage === "customerPage" && hasAny(["customerDog", "boardingDog"])) renderCustomerDogs();
+  if (activePage === "customerRequestsPage" && boardingChanged) renderCustomerRequests();
+  if (activePage === "customerUpdatesPage" && hasAny(["boardingDog", "reservationCustomerUpdate"])) renderCustomerUpdates();
+  if (activePage === "customerFilesPage" && hasAny(["boardingDog", "customerDog"])) renderCustomerFiles();
+
+  if (typeSet.has("notificationLog") || typeSet.has("notificationRead")) renderNotifications();
   renderSharedRecords();
 }
 
@@ -3620,25 +3699,118 @@ function remoteDailyTaskCompletionSetupMissing(error) {
   return /daily_task_completions|schema cache|relation .* does not exist|could not find/i.test(message);
 }
 
+function normalizeNotificationReadRow(row = {}) {
+  return {
+    id: row.id || \`\${row.notification_id || row.notificationId || ""}:\${row.reader_key || row.readerKey || ""}\`,
+    notificationId: row.notification_id || row.notificationId || "",
+    readerKey: row.reader_key || row.readerKey || "",
+    readerEmail: row.reader_email || row.readerEmail || "",
+    readAt: row.read_at || row.readAt || new Date().toISOString(),
+  };
+}
+
+function mergeNotificationReadRows(rows = [], options = {}) {
+  const normalized = arrayValue(rows).map(normalizeNotificationReadRow).filter((row) => row.notificationId && row.readerKey);
+  mergeRecords("notificationRead", normalized, { replaceLocal: options.replaceLocal === true });
+  return normalized;
+}
+
+async function fetchRemoteNotificationReadRows() {
+  if (!notificationReadSyncAvailable || localTestMode || !supabaseClient) return [];
+  const since = addDays(todayDate(), -120);
+  const { data, error } = await supabaseClient
+    .from("notification_reads")
+    .select("*")
+    .gte("read_at", since)
+    .order("read_at", { ascending: false })
+    .limit(2000);
+
+  if (error) {
+    const message = String(error.message || "");
+    if (/notification_reads|schema cache|relation .* does not exist/i.test(message)) {
+      notificationReadSyncAvailable = false;
+      console.warn("Notification read sync is pending the Supabase migration.", error);
+      return [];
+    }
+    throw error;
+  }
+
+  return mergeNotificationReadRows(data || [], { replaceLocal: true });
+}
+
+function handleRealtimeNotificationReadChange(change = {}) {
+  const row = change.new || change.record || {};
+  if (!row) return;
+  mergeNotificationReadRows([row], { replaceLocal: false });
+  scheduleRealtimeRender(["notificationRead"]);
+}
+
+// Efficiency flow: overlapping remote loads keep the current promise and queue missing active-page types for the next pass.
+function remoteLoadRequestKey(types = []) {
+  return uniqueRemoteRecordTypes(types).slice().sort().join("|");
+}
+
+function queueRemoteRecordLoad(types = [], options = {}) {
+  uniqueRemoteRecordTypes(types).forEach((type) => remoteLoadQueuedTypes.add(type));
+  remoteLoadQueuedRender = remoteLoadQueuedRender || options.render !== false;
+  remoteLoadQueuedPageId = options.pageId || remoteLoadQueuedPageId || activePageId();
+}
+
+function flushQueuedRemoteRecordLoad() {
+  const queuedTypes = [...remoteLoadQueuedTypes];
+  const queuedRender = remoteLoadQueuedRender;
+  const queuedPageId = remoteLoadQueuedPageId;
+
+  remoteLoadQueuedTypes.clear();
+  remoteLoadQueuedRender = false;
+  remoteLoadQueuedPageId = "";
+
+  if (!queuedTypes.length || localTestMode || !supabaseClient) return;
+  window.setTimeout(() => {
+    loadRemoteRecords({
+      types: queuedTypes,
+      render: queuedRender,
+      pageId: queuedPageId || activePageId(),
+    }).catch((error) => console.warn("Queued remote page sync failed.", error));
+  }, 0);
+}
+
 async function loadRemoteRecords(options = {}) {
+  const mark = efficiencyPerfStart("loadRemoteRecords");
   if (localTestMode || !supabaseClient) {
     modeLabel.textContent = localTestMode ? "Local test mode" : "Local only";
+    efficiencyPerfEnd(mark);
     return;
   }
+
   const requestedRemoteTypes = uniqueRemoteRecordTypes(options.types || (options.pageId ? remoteRecordTypesForPage(options.pageId) : remoteRecordTypesForCurrentApp()));
+  if (!requestedRemoteTypes.length) {
+    efficiencyPerfEnd(mark);
+    return;
+  }
+
   if (remoteLoadPromise) {
-    if (remoteLoadStartedAt && Date.now() - remoteLoadStartedAt > REMOTE_LOAD_STALE_MS) {
-      console.warn("Remote record load is still running; skipping overlapping load.");
+    const missingTypes = requestedRemoteTypes.filter((type) => !remoteLoadActiveTypes.has(type));
+    if (missingTypes.length) {
+      queueRemoteRecordLoad(missingTypes, options);
+      if (remoteLoadStartedAt && Date.now() - remoteLoadStartedAt > REMOTE_LOAD_STALE_MS) {
+        console.warn("Remote record load is stale; queued missing active-page types for follow-up.", missingTypes);
+      }
     }
+    efficiencyPerfEnd(mark);
     return remoteLoadPromise;
   }
+
+  remoteLoadActiveTypes = new Set(requestedRemoteTypes);
   remoteLoadInProgress = true;
   remoteLoadStartedAt = Date.now();
   if (syncNowButton) syncNowButton.disabled = true;
+
   let loadPromise = null;
   loadPromise = (async () => {
     try {
       const data = await withTimeout(fetchRemoteRecordRows(requestedRemoteTypes), REMOTE_LOAD_STALE_MS, "Remote record load");
+
       let taskCompletionRows = [];
       if (dailyTaskCompletionSyncAvailable && requestedRemoteTypes.includes("dailyTask")) {
         try {
@@ -3653,18 +3825,32 @@ async function loadRemoteRecords(options = {}) {
           }
         }
       }
-      const nextSignature = requestedRemoteTypes.join(",") + "||" + remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
-      const remoteDataChanged = nextSignature !== lastRemoteRecordsSignature;
+
+      if (typeof fetchRemoteNotificationReadRows === "function" && requestedRemoteTypes.includes("notificationLog")) {
+        await fetchRemoteNotificationReadRows().catch((error) => {
+          console.warn("Notification read receipts could not load.", error);
+        });
+      }
+
+      const requestKey = remoteLoadRequestKey(requestedRemoteTypes);
+      const nextSignature = requestKey + "||" + remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
+      const previousSignature = lastRemoteRecordsSignatureByRequest.get(requestKey);
+      const remoteDataChanged = nextSignature !== previousSignature;
+      lastRemoteRecordsSignatureByRequest.set(requestKey, nextSignature);
       lastRemoteRecordsSignature = nextSignature;
+
       if (!remoteDataChanged) {
         modeLabel.textContent = "Synced";
+        if (options.render !== false) renderAllRecords({ activeOnly: true });
         return;
       }
+
       const remoteTypes = requestedRemoteTypes;
       const grouped = Object.fromEntries(remoteTypes.map((type) => [type, []]));
       (data || []).forEach((row) => {
         if (grouped[row.type]) grouped[row.type].push(row.payload);
       });
+
       const loadedRemoteTaskTemplate = applyRemoteTaskTemplate(data || []);
       if (!loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
       remoteTypes.filter((type) => type !== TASK_TEMPLATE_RECORD_TYPE).forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
@@ -3677,17 +3863,22 @@ async function loadRemoteRecords(options = {}) {
       if (options.render !== false) renderAllRecordsFromRemoteLoad();
       updateNavigationAccess();
       updateHeaderUser();
+      modeLabel.textContent = "Synced";
     } catch (error) {
       modeLabel.textContent = "Load failed";
       showToast(\`Records could not load: \${error.message}\`);
     } finally {
       if (remoteLoadPromise === loadPromise) remoteLoadPromise = null;
+      remoteLoadActiveTypes.clear();
       remoteLoadInProgress = false;
       remoteLoadStartedAt = 0;
       lastRemoteLoadFinishedAt = Date.now();
       if (syncNowButton) syncNowButton.disabled = false;
+      efficiencyPerfEnd(mark);
+      flushQueuedRemoteRecordLoad();
     }
   })();
+
   remoteLoadPromise = loadPromise;
   return loadPromise;
 }
@@ -3727,6 +3918,9 @@ function startAutoSync() {
     .on("postgres_changes", { event: "*", schema: "public", table: "kennel_records" }, handleRealtimeKennelRecordChange);
   if (dailyTaskCompletionSyncAvailable) {
     realtimeChannel = realtimeChannel.on("postgres_changes", { event: "*", schema: "public", table: "daily_task_completions" }, handleRealtimeTaskCompletionChange);
+  }
+  if (typeof handleRealtimeNotificationReadChange === "function") {
+    realtimeChannel = realtimeChannel.on("postgres_changes", { event: "*", schema: "public", table: "notification_reads" }, handleRealtimeNotificationReadChange);
   }
   realtimeChannel = realtimeChannel
     .subscribe((status) => {
@@ -4254,7 +4448,8 @@ function scheduleProfilePhotoHydrationRetry(element, relatedInitials, token, err
   clearProfilePhotoHydrationTimer(element);
   const timer = window.setTimeout(() => {
     profilePhotoHydrationTimers.delete(element);
-    hydrateProfilePhotoElement(element, relatedInitials);
+    if (storagePath) profilePhotoFailureCache.delete(storagePath);
+    queueProfilePhotoHydration(element);
   }, delays[retries]);
   profilePhotoHydrationTimers.set(element, timer);
 }
@@ -4296,54 +4491,129 @@ function revealLoadedProfilePhotoElement(element, relatedInitials = null) {
   return !img.hidden;
 }
 
-function hydrateProfilePhotoElement(element, relatedInitials = null) {
+// Efficiency flow: hydrate profile photos lazily with bounded concurrency instead of repeatedly scanning every image.
+function queueProfilePhotoHydration(element) {
+  if (!element || profilePhotoHydrationQueued.has(element)) return;
+  profilePhotoHydrationQueued.add(element);
+  profilePhotoHydrationQueue.push(element);
+  pumpProfilePhotoHydrationQueue();
+}
+
+function pumpProfilePhotoHydrationQueue() {
+  while (profilePhotoHydrationActive < PROFILE_PHOTO_HYDRATION_CONCURRENCY && profilePhotoHydrationQueue.length) {
+    const element = profilePhotoHydrationQueue.shift();
+    profilePhotoHydrationQueued.delete(element);
+    if (!element?.isConnected) continue;
+
+    profilePhotoHydrationActive += 1;
+    Promise.resolve(hydrateProfilePhotoElement(element))
+      .catch((error) => console.warn("Profile photo hydration failed.", error))
+      .finally(() => {
+        profilePhotoHydrationActive = Math.max(0, profilePhotoHydrationActive - 1);
+        pumpProfilePhotoHydrationQueue();
+      });
+  }
+}
+
+function ensureProfilePhotoHydrationObserver() {
+  if (profilePhotoHydrationObserver || !("IntersectionObserver" in window)) return profilePhotoHydrationObserver;
+  profilePhotoHydrationObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      profilePhotoHydrationObserver.unobserve(entry.target);
+      queueProfilePhotoHydration(entry.target);
+    });
+  }, { rootMargin: "240px 0px" });
+  return profilePhotoHydrationObserver;
+}
+
+async function hydrateProfilePhotoElement(element, relatedInitials = null) {
   if (!element) return;
   const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
   const img = element.matches("img") ? element : element.querySelector("img");
   const initials = profilePhotoInitialsForElement(element, img, relatedInitials);
   const existingSource = element.dataset.src || img?.getAttribute("src") || "";
   if (!storagePath || localTestMode || !img) return;
+
+  const failUntil = profilePhotoFailureCache.get(storagePath) || 0;
+  if (failUntil > Date.now()) return;
+
   const token = profilePhotoHydrationToken(element, storagePath);
   element.dataset.profilePhotoToken = token;
+
   if (existingSource) {
     if (revealLoadedProfilePhotoElement(element, initials)) return;
-    if (!img.hidden) return;
+    if (!img.complete && !img.hidden) return;
     element.dataset.src = "";
     img.removeAttribute("src");
+    img.hidden = true;
+    if (initials) initials.hidden = false;
   }
-  profilePhotoDisplaySourceForPath(storagePath, {
-    sourceRecordId: element.dataset.sourceRecordId || "",
-    sourceRecordType: element.dataset.sourceRecordType || "",
-  }).then(({ url: photoUrl, cached } = {}) => {
+
+  if (element.dataset.profilePhotoHydrating === "true") return;
+  element.dataset.profilePhotoHydrating = "true";
+
+  try {
+    const { url: photoUrl, cached } = await profilePhotoDisplaySourceForPath(storagePath, {
+      sourceRecordId: element.dataset.sourceRecordId || "",
+      sourceRecordType: element.dataset.sourceRecordType || "",
+    });
+
     if (element.dataset.profilePhotoToken !== token) return;
     if (!photoUrl) {
+      profilePhotoFailureCache.set(storagePath, Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
       scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Profile photo access returned an empty signed URL."));
       return;
     }
+
     const revealIfLoaded = () => {
       if (img.naturalWidth > 0) applyHydratedProfilePhoto(element, img, initials, photoUrl, token);
     };
+
     img.onload = () => {
+      profilePhotoFailureCache.delete(storagePath);
       applyHydratedProfilePhoto(element, img, initials, photoUrl, token);
       if (!cached) cacheProfilePhotoFromSignedUrl(storagePath, photoUrl);
     };
+
     img.onerror = () => {
       if (element.dataset.profilePhotoToken !== token) return;
+      profilePhotoFailureCache.set(storagePath, Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
       if (cached) removeCachedProfilePhoto(storagePath);
       scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Signed profile photo image failed to load."));
     };
+
     img.src = photoUrl;
     revealIfLoaded();
     window.requestAnimationFrame?.(revealIfLoaded);
-    [250, 900, 2500, 5000, 8000, 12000, 18000].forEach((delay) => window.setTimeout(revealIfLoaded, delay));
-  }).catch((error) => scheduleProfilePhotoHydrationRetry(element, initials, token, error));
+    window.setTimeout(revealIfLoaded, 1500);
+  } catch (error) {
+    profilePhotoFailureCache.set(storagePath, Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
+    scheduleProfilePhotoHydrationRetry(element, initials, token, error);
+  } finally {
+    delete element.dataset.profilePhotoHydrating;
+  }
 }
 
 function hydrateProfilePhotoElements(root = document) {
-  root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => hydrateProfilePhotoElement(element));
-  [300, 1200, 2800, 5000, 8000, 12000, 18000].forEach((delay) => {
-    window.setTimeout(() => root?.querySelectorAll?.("[data-profile-photo-path]").forEach((element) => revealLoadedProfilePhotoElement(element)), delay);
+  const mark = efficiencyPerfStart("hydrateProfilePhotoElements");
+  const elements = [...(root?.querySelectorAll?.("[data-profile-photo-path]") || [])];
+  if (!elements.length) {
+    efficiencyPerfEnd(mark);
+    return;
+  }
+
+  const observer = ensureProfilePhotoHydrationObserver();
+  elements.forEach((element) => {
+    if (revealLoadedProfilePhotoElement(element)) return;
+    if (observer) observer.observe(element);
+    else queueProfilePhotoHydration(element);
   });
+
+  window.setTimeout(() => {
+    elements.forEach((element) => revealLoadedProfilePhotoElement(element));
+  }, 1800);
+  efficiencyPerfEnd(mark);
 }
 
 function scheduleProfilePhotoHydrationSweep(delay = 600) {
@@ -6603,9 +6873,43 @@ function mergeBoardingProfileGroup(records = []) {
   return merged;
 }
 
-function consolidatedBoardingDogRecords(records = readRecords("boardingDog").filter((record) => !record.removed)) {
-  const { groups, ungrouped } = groupedBoardingDogProfiles(records);
-  return groups.map(mergeBoardingProfileGroup).concat(ungrouped).map(boardingDogWithCanonicalProfile).map(boardingDogWithStayStatus);
+function consolidatedBoardingDogRecords(records) {
+  const mark = efficiencyPerfStart("consolidatedBoardingDogRecords");
+  try {
+    const usingDefaultRecords = arguments.length === 0;
+    const sourceRecords = usingDefaultRecords ? readRecords("boardingDog").filter((record) => !record.removed) : arrayValue(records);
+
+    if (usingDefaultRecords) {
+      const signature = recordRevisionSignatureFor(["boardingDog", "customerDog"])
+        + \`|count:\${sourceRecords.length}\`
+        + \`|first:\${sourceRecords[0]?.id || ""}:\${sourceRecords[0]?.updatedAt || ""}\`;
+
+      if (boardingDogConsolidationCache.signature === signature) {
+        return boardingDogConsolidationCache.result.map(cloneConsolidatedBoardingDog);
+      }
+
+      const grouped = groupedBoardingDogProfiles(sourceRecords);
+      const consolidated = grouped.groups.map(mergeBoardingProfileGroup)
+        .concat(grouped.ungrouped)
+        .map(boardingDogWithCanonicalProfile)
+        .map(boardingDogWithStayStatus);
+
+      boardingDogConsolidationCache = {
+        signature,
+        result: consolidated.map(cloneConsolidatedBoardingDog),
+      };
+
+      return consolidated.map(cloneConsolidatedBoardingDog);
+    }
+
+    const grouped = groupedBoardingDogProfiles(sourceRecords);
+    return grouped.groups.map(mergeBoardingProfileGroup)
+      .concat(grouped.ungrouped)
+      .map(boardingDogWithCanonicalProfile)
+      .map(boardingDogWithStayStatus);
+  } finally {
+    efficiencyPerfEnd(mark);
+  }
 }
 
 // Extracted to js/boarding.js: boardingDogRecordForDisplay
@@ -10784,7 +11088,16 @@ function initEvents() {
         showToast("Clock-in confirmed: " + formatDateTime(clockInTime) + ".");
       } catch (error) {
         console.warn("Clock-in save failed", error);
-        showToast("Clock-in is saved locally but did not sync. Try again before ending the shift.");
+        const failedRecord = upsertRecord("timesheet", {
+          ...localRecord,
+          syncStatus: "failed",
+          syncError: error.message || "Sync failed",
+          updatedAt: new Date().toISOString(),
+        });
+        activeClockIn = { id: failedRecord.id, clockInTime, helperEmail: failedRecord.helperEmail };
+        localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
+        renderTimesheet();
+        showToast("Clock-in could not sync. Please retry before leaving this page.");
       }
       updateTimeDisplays();
     } catch (error) {
@@ -12164,6 +12477,18 @@ function initEvents() {
   });
 }
 
+function scheduleActivePageRemoteLoad(pageId = activePageId()) {
+  if (!helperIsLoggedIn() || pageId === "loginPage" || localTestMode || !supabaseClient) return;
+  if (activePageRemoteLoadTimer) window.clearTimeout(activePageRemoteLoadTimer);
+  // Efficiency flow: render from local cache first, then refresh only the active page's remote types.
+  activePageRemoteLoadTimer = window.setTimeout(() => {
+    activePageRemoteLoadTimer = null;
+    loadRemoteRecords({ render: true, pageId }).catch((error) => {
+      console.warn(\`Active page sync failed for \${pageId}.\`, error);
+    });
+  }, 80);
+}
+
 function switchPage(pageId) {
   pageId = normalizePageId(pageId);
   if (!pageAllowed(pageId)) {
@@ -12191,7 +12516,10 @@ function switchPage(pageId) {
   syncMobileNavigationActive(pageId);
   setMobileMoreOpen(false);
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
-  if (helperIsLoggedIn() && pageId !== "loginPage") renderActivePageRecords(pageId);
+  if (helperIsLoggedIn() && pageId !== "loginPage") {
+    renderActivePageRecords(pageId);
+    scheduleActivePageRemoteLoad(pageId);
+  }
   if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
   if (pageId === "ourDogsPage") window.setTimeout(() => $("#ownedDogSearch")?.focus(), 100);
   window.scrollTo({ top: 0, behavior: "smooth" });

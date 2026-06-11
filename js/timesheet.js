@@ -176,7 +176,10 @@ function renderTimesheet() {
   $("#timesheetRows").innerHTML = visibleRecords.length
     ? visibleRecords.map((record) => {
         const canEdit = isAdmin || canEditOwnToday(record);
-        return \`<tr><td>\${escapeHtml(record.date)}</td><td>\${escapeHtml(record.helperName)}</td><td>\${formatDateTime(record.clockInTime)}</td><td>\${formatDateTime(record.clockOutTime)}</td><td>\${Number(record.hours || 0).toFixed(2)}</td><td>\${escapeHtml(record.note || "")}</td><td>\${canEdit ? \`<button type="button" class="secondary-button" data-action="edit-time" data-id="\${escapeHtml(record.id)}">Edit</button>\` : ""}</td></tr>\`;
+        const syncWarning = record.syncStatus === "failed"
+          ? \`<div class="service-warning-text">Sync failed: \${escapeHtml(record.syncError || "Retry before leaving this page.")}</div>\`
+          : "";
+        return \`<tr><td>\${escapeHtml(record.date)}</td><td>\${escapeHtml(record.helperName)}</td><td>\${formatDateTime(record.clockInTime)}</td><td>\${formatDateTime(record.clockOutTime)}</td><td>\${Number(record.hours || 0).toFixed(2)}</td><td>\${escapeHtml(record.note || "")}\${syncWarning}</td><td>\${canEdit ? \`<button type="button" class="secondary-button" data-action="edit-time" data-id="\${escapeHtml(record.id)}">Edit</button>\` : ""}</td></tr>\`;
       }).join("")
     : \`<tr><td colspan="7">No time entries for this date range.</td></tr>\`;
 
@@ -216,6 +219,8 @@ async function saveTimeEntry(payload, options = {}) {
     clockOutTime,
     hours: hoursBetween(clockInTime, clockOutTime),
     note: payload.note || "",
+    syncStatus: "",
+    syncError: "",
   };
   await sendPayload(record);
   upsertRecord("timesheet", record);

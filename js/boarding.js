@@ -2812,61 +2812,77 @@ function handleBoardingViewToggle(view = "board") {
 }
 
 function renderBoardingDogs() {
-  const searchInput = $("#boardingDogSearch");
-  const query = searchInput?.value || "";
-  const allRecords = consolidatedBoardingDogRecords();
-  renderBoardingRosterTabs(allRecords);
-  const hasSearchQuery = Boolean(query.trim());
-  const matchingRecords = allRecords.filter((record) => boardingDogMatchesSearch(record, query));
-  const rosterRecords = hasSearchQuery ? matchingRecords : matchingRecords.filter((record) => boardingDogMatchesRosterFilter(record));
-  const filteredRecords = boardingDogPriorityFilter === "vaccines-expiring-soon"
-    ? rosterRecords.filter((record) => vaccinationExpiresSoon(record, 30))
-    : rosterRecords;
-  const records = sortRecordsForTable("boardingDog", filteredRecords);
-  const activeView = ["calendar", "list"].includes(boardingViewMode) ? boardingViewMode : "board";
-  const queueContainer = $("#boardingQueueGroups");
-  const calendarContainer = $("#boardingCalendarView");
-  const quickCardsContainer = $("#boardingDogQuickCards");
-  const tableHead = $("#boardingDogTableHead");
-  const tableBody = $("#boardingDogTableBody");
-  const columnManager = $("#boardingDogColumnManager");
+  const mark = efficiencyPerfStart("renderBoardingDogs");
+  try {
+    const searchInput = $("#boardingDogSearch");
+    const query = searchInput?.value || "";
+    const allRecords = consolidatedBoardingDogRecords();
+    renderBoardingRosterTabs(allRecords);
+    const activeView = ["calendar", "list"].includes(boardingViewMode) ? boardingViewMode : "board";
+    const queueContainer = $("#boardingQueueGroups");
+    const calendarContainer = $("#boardingCalendarView");
+    const quickCardsContainer = $("#boardingDogQuickCards");
+    const tableHead = $("#boardingDogTableHead");
+    const tableBody = $("#boardingDogTableBody");
+    const columnManager = $("#boardingDogColumnManager");
 
-  if (activeView === "board") {
-    renderBoardingQueueGroups(allRecords);
-  } else if (queueContainer) {
-    queueContainer.innerHTML = "";
-  }
-
-  if (activeView === "calendar") {
-    renderBoardingCalendar(records);
-  } else if (calendarContainer) {
-    calendarContainer.innerHTML = "";
-  }
-
-  if (activeView === "list") {
-    const columns = activeColumns("boardingDog");
-    if (tableHead) tableHead.innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="boardingDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
-    if (tableBody) tableBody.innerHTML = records.length
-      ? records
-          .map((record) => {
-            return \`<tr data-id="\${record.id}" data-source="\${escapeHtml(record.sourceType || record.type || "boardingDog")}">\${columns.map((column) => \`<td>\${boardingTableCellHtml(column, record)}</td>\`).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("boardingDog")}\${boardingStatusChipHtml(record)}\${boardingQuickActionButtons(record)}<button type="button" class="secondary-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}">Boarding & Request</button>\${boardingOwnerLinkButtonHtml(record)}<span class="inline-save-status" data-inline-status-message="\${escapeHtml(record.id)}" aria-live="polite"></span></div></td></tr>\`;
-          })
-          .join("")
-      : \`<tr><td colspan="\${(columns.length || 1) + 1}">\${hasSearchQuery ? "No boarding dog records match this search." : \`No \${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.\`}</td></tr>\`;
-    renderBoardingQuickCards(records);
-    renderColumnManager("boardingDog", "#boardingDogColumnManager");
-  } else {
-    if (tableHead) tableHead.innerHTML = "";
-    if (tableBody) tableBody.innerHTML = "";
-    if (quickCardsContainer) quickCardsContainer.innerHTML = "";
-    if (columnManager) {
-      columnManager.innerHTML = "";
-      columnManager.hidden = true;
+    if (activeView === "board") {
+      renderBoardingQueueGroups(allRecords);
+      if (calendarContainer) calendarContainer.innerHTML = "";
+      if (tableHead) tableHead.innerHTML = "";
+      if (tableBody) tableBody.innerHTML = "";
+      if (quickCardsContainer) quickCardsContainer.innerHTML = "";
+      if (columnManager) {
+        columnManager.innerHTML = "";
+        columnManager.hidden = true;
+      }
+      renderCustomerDogUploadCards();
+      handleBoardingViewToggle(activeView);
+      return;
     }
-  }
 
-  renderCustomerDogUploadCards();
-  handleBoardingViewToggle(activeView);
+    if (queueContainer) queueContainer.innerHTML = "";
+    const hasSearchQuery = Boolean(query.trim());
+    const matchingRecords = allRecords.filter((record) => boardingDogMatchesSearch(record, query));
+    const rosterRecords = hasSearchQuery ? matchingRecords : matchingRecords.filter((record) => boardingDogMatchesRosterFilter(record));
+    const filteredRecords = boardingDogPriorityFilter === "vaccines-expiring-soon"
+      ? rosterRecords.filter((record) => vaccinationExpiresSoon(record, 30))
+      : rosterRecords;
+    const records = sortRecordsForTable("boardingDog", filteredRecords);
+
+    if (activeView === "calendar") {
+      renderBoardingCalendar(records);
+    } else if (calendarContainer) {
+      calendarContainer.innerHTML = "";
+    }
+
+    if (activeView === "list") {
+      const columns = activeColumns("boardingDog");
+      if (tableHead) tableHead.innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="boardingDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
+      if (tableBody) tableBody.innerHTML = records.length
+        ? records
+            .map((record) => {
+              return \`<tr data-id="\${record.id}" data-source="\${escapeHtml(record.sourceType || record.type || "boardingDog")}">\${columns.map((column) => \`<td>\${boardingTableCellHtml(column, record)}</td>\`).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("boardingDog")}\${boardingStatusChipHtml(record)}\${boardingQuickActionButtons(record)}<button type="button" class="secondary-button" data-action="open-boarding-request-tab" data-id="\${escapeHtml(record.id)}">Boarding & Request</button>\${boardingOwnerLinkButtonHtml(record)}<span class="inline-save-status" data-inline-status-message="\${escapeHtml(record.id)}" aria-live="polite"></span></div></td></tr>\`;
+            })
+            .join("")
+        : \`<tr><td colspan="\${(columns.length || 1) + 1}">\${hasSearchQuery ? "No boarding dog records match this search." : \`No \${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.\`}</td></tr>\`;
+      renderBoardingQuickCards(records);
+      renderColumnManager("boardingDog", "#boardingDogColumnManager");
+    } else {
+      if (tableHead) tableHead.innerHTML = "";
+      if (tableBody) tableBody.innerHTML = "";
+      if (quickCardsContainer) quickCardsContainer.innerHTML = "";
+      if (columnManager) {
+        columnManager.innerHTML = "";
+        columnManager.hidden = true;
+      }
+    }
+
+    renderCustomerDogUploadCards();
+    handleBoardingViewToggle(activeView);
+  } finally {
+    efficiencyPerfEnd(mark);
+  }
 }
 
 function boardingStayNeedsDuplicateStatusSync(record = {}, stay = {}, nextStatus = "", options = {}) {
@@ -3343,6 +3359,7 @@ function boardingRequestEntriesForGroupKey(groupKey = "") {
 }
 
 async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approved") {
+  // TODO: Move group approve/cancel to a Supabase RPC transaction when boarding_request_groups is fully adopted.
   if (supabaseClient && !localTestMode) await loadRemoteRecords({ render: false, pageId: "boardingDogsPage" });
   const entries = boardingRequestEntriesForGroupKey(groupKey);
   if (!entries.length) {
@@ -3394,22 +3411,27 @@ async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approv
 }
 
 function renderBoardingRequests() {
+  const mark = efficiencyPerfStart("renderBoardingRequests");
   const list = $("#boardingRequestRecords");
-  if (!list) return;
-  const statusFilters = readBoardingRequestStatusFilter();
-  syncBoardingRequestFilterUi(statusFilters);
-  const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
-    .filter((record) => record.customerRequest)
-    .filter((record) => !record.removed));
-  const entries = uniqueBoardingStayEntries(boardingStayEntries(records))
-    .filter((entry) => !statusFilters.length || statusFilters.includes(entry.status))
-    .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
-  list.innerHTML = entries.length
-    ? boardingFamilyGroups(entries)
-        .map((item) => (item.type === "family" ? boardingFamilyGroupHtml(item.entries, { groupKey: item.groupKey }) : boardingRequestCardHtml(item.entry)))
-        .join("")
-    : \`<p>No \${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>\`;
-  hydrateProfilePhotoElements(list);
+  try {
+    if (!list) return;
+    const statusFilters = readBoardingRequestStatusFilter();
+    syncBoardingRequestFilterUi(statusFilters);
+    const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
+      .filter((record) => record.customerRequest)
+      .filter((record) => !record.removed));
+    const entries = uniqueBoardingStayEntries(boardingStayEntries(records))
+      .filter((entry) => !statusFilters.length || statusFilters.includes(entry.status))
+      .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
+    list.innerHTML = entries.length
+      ? boardingFamilyGroups(entries)
+          .map((item) => (item.type === "family" ? boardingFamilyGroupHtml(item.entries, { groupKey: item.groupKey }) : boardingRequestCardHtml(item.entry)))
+          .join("")
+      : \`<p>No \${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>\`;
+    hydrateProfilePhotoElements(list);
+  } finally {
+    efficiencyPerfEnd(mark);
+  }
 }
 
 function activeBoardingStay(record = {}, date = new Date()) {
