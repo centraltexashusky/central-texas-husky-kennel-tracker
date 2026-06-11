@@ -3343,7 +3343,7 @@ function boardingRequestEntriesForGroupKey(groupKey = "") {
 }
 
 async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approved") {
-  if (supabaseClient && !localTestMode) await loadRemoteRecords({ render: false });
+  if (supabaseClient && !localTestMode) await loadRemoteRecords({ render: false, pageId: "boardingDogsPage" });
   const entries = boardingRequestEntriesForGroupKey(groupKey);
   if (!entries.length) {
     showToast("This family request group could not be found.");

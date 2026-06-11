@@ -207,7 +207,12 @@ async function restoreSupabaseSession() {
   const shellUser = shellUserFromSupabaseSession(data.session.user);
   if (!shellUser) return false;
   setHelper(shellUser, { switchAfterLogin: false, render: false });
-  syncAuthenticatedSupabaseUser(data.session.user, { switchAfterLogin: false }).catch((syncError) => {
+  syncAuthenticatedSupabaseUser(data.session.user, {
+    switchAfterLogin: false,
+    awaitRemoteLoad: false,
+    deferProfileWrite: true,
+    initialPageId: rememberedPageForRole(shellUser.role),
+  }).catch((syncError) => {
     console.warn("Could not finish Supabase profile sync after shell restore.", syncError);
   });
   return true;

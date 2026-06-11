@@ -1049,7 +1049,12 @@ function initSupabaseClient() {
     if (event === "SIGNED_IN" && session?.user) {
       if (Date.now() < suppressAuthSyncUntil) return;
       scheduleProfilePhotoHydrationSweep(900);
-      syncAuthenticatedSupabaseUser(session.user, { switchAfterLogin: false }).then(() => {
+      syncAuthenticatedSupabaseUser(session.user, {
+        switchAfterLogin: false,
+        awaitRemoteLoad: false,
+        deferProfileWrite: true,
+        initialPageId: rememberedPageForRole(currentRole()),
+      }).then(() => {
         scheduleProfilePhotoHydrationSweep(200);
       }).catch((error) => {
         console.warn("Could not sync authenticated user profile.", error);
@@ -1069,8 +1074,39 @@ function recordTypes() {
   ];
 }
 
+function uniqueRemoteRecordTypes(types = []) {
+  const allowed = new Set([...recordTypes(), TASK_TEMPLATE_RECORD_TYPE]);
+  return [...new Set(arrayValue(types).filter((type) => allowed.has(type) && !DERIVED_DOG_MODEL_RECORD_TYPES.has(type)))];
+}
+
 function remoteRecordTypesForCurrentApp() {
-  return [...recordTypes().filter((type) => !DERIVED_DOG_MODEL_RECORD_TYPES.has(type)), TASK_TEMPLATE_RECORD_TYPE];
+  return uniqueRemoteRecordTypes([...recordTypes(), TASK_TEMPLATE_RECORD_TYPE]);
+}
+
+function remoteRecordTypesForPage(pageId = "") {
+  const coreTypes = ["settingsUser", "notificationLog", "notificationPreference", TASK_TEMPLATE_RECORD_TYPE];
+  const pageTypes = {
+    dashboardPage: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", "careLog", "calendarNote"],
+    dailyPage: ["dailyTask", "careLog", "ownedDog", "boardingDog", "calendarNote"],
+    ourDogsPage: ["ownedDog", "careLog", "customerDog", "boardingDog"],
+    boardingDogsPage: ["boardingDog", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    requestsPage: ["request"],
+    maintenancePage: ["maintenance"],
+    timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
+    servicesPage: ["service"],
+    financialsPage: ["boardingDog", "service", "cfoNote"],
+    settingsUsersPage: ["settingsUser"],
+    settingsKennelLocationsPage: ["kennelLocation", "kennelBuilding"],
+    settingsHoursPage: ["operationHours", "operationDateOverride"],
+    settingsAlertsPage: ["notificationPreference", "notificationLog"],
+    settingsAuditLogPage: ["auditLog"],
+    customerPage: ["customerDog", "boardingDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    customerRequestsPage: ["customerDog", "boardingDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    customerUpdatesPage: ["boardingDog", "customerDog"],
+    customerFilesPage: ["boardingDog", "customerDog"],
+  };
+  const normalizedPageId = normalizePageId(pageId || pageIdFromHash() || activePageId() || "");
+  return uniqueRemoteRecordTypes([...coreTypes, ...(pageTypes[normalizedPageId] || [])]);
 }
 
 // === MODULE: SETTINGS ===
@@ -1380,12 +1416,23 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
   if (authSessionSyncPromise) return authSessionSyncPromise;
   authSessionSyncStartedAt = Date.now();
   authSessionSyncPromise = (async () => {
-    await loadRemoteRecords({ render: false });
+    const initialPageId = normalizePageId(options.initialPageId || pageIdFromHash() || rememberedPageForRole(user.role));
+    const remoteLoad = loadRemoteRecords({ render: options.awaitRemoteLoad === false, pageId: initialPageId });
+    if (options.awaitRemoteLoad === false) {
+      remoteLoad.catch((error) => console.warn("Background profile sync records could not load.", error));
+    } else {
+      await remoteLoad;
+    }
     const refreshedUser = { ...user, role: roleForAccount(user) || user.role || "customer" };
-    const profile = await ensureAppUserProfile(refreshedUser);
+    let profile = savedUserFor(refreshedUser) || null;
+    if (options.deferProfileWrite === true) {
+      ensureAppUserProfile(refreshedUser).catch((error) => console.warn("Could not confirm restored user profile.", error));
+    } else {
+      profile = await ensureAppUserProfile(refreshedUser);
+    }
     const syncedUser = {
       ...refreshedUser,
-      role: profile?.role || roleForAccount(refreshedUser),
+      role: profile?.role || roleForAccount(refreshedUser) || refreshedUser.role || "customer",
       name: profile?.name || refreshedUser.name,
     };
     setHelper(syncedUser, { switchAfterLogin: false, render: false });
@@ -3519,11 +3566,12 @@ function scheduleRealtimeRender(types = []) {
   }, 250);
 }
 
-async function fetchRemoteRecordRows() {
+async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp()) {
   const pageSize = 1000;
   const rows = [];
   let from = 0;
-  const remoteTypes = remoteRecordTypesForCurrentApp();
+  const remoteTypes = uniqueRemoteRecordTypes(types);
+  if (!remoteTypes.length) return rows;
   while (true) {
     const { data, error } = await supabaseClient
       .from("kennel_records")
@@ -3574,6 +3622,7 @@ async function loadRemoteRecords(options = {}) {
     modeLabel.textContent = localTestMode ? "Local test mode" : "Local only";
     return;
   }
+  const requestedRemoteTypes = uniqueRemoteRecordTypes(options.types || (options.pageId ? remoteRecordTypesForPage(options.pageId) : remoteRecordTypesForCurrentApp()));
   if (remoteLoadPromise) {
     if (remoteLoadStartedAt && Date.now() - remoteLoadStartedAt > REMOTE_LOAD_STALE_MS) {
       console.warn("Remote record load is still running; skipping overlapping load.");
@@ -3586,9 +3635,9 @@ async function loadRemoteRecords(options = {}) {
   let loadPromise = null;
   loadPromise = (async () => {
     try {
-      const data = await withTimeout(fetchRemoteRecordRows(), REMOTE_LOAD_STALE_MS, "Remote record load");
+      const data = await withTimeout(fetchRemoteRecordRows(requestedRemoteTypes), REMOTE_LOAD_STALE_MS, "Remote record load");
       let taskCompletionRows = [];
-      if (dailyTaskCompletionSyncAvailable) {
+      if (dailyTaskCompletionSyncAvailable && requestedRemoteTypes.includes("dailyTask")) {
         try {
           taskCompletionRows = await withTimeout(fetchRemoteDailyTaskCompletionRows(), 6000, "Daily task completion load");
           mergeDailyTaskCompletionRecords(taskCompletionRows, { replaceLocal: true });
@@ -3601,14 +3650,14 @@ async function loadRemoteRecords(options = {}) {
           }
         }
       }
-      const nextSignature = remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
+      const nextSignature = requestedRemoteTypes.join(",") + "||" + remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
       const remoteDataChanged = nextSignature !== lastRemoteRecordsSignature;
       lastRemoteRecordsSignature = nextSignature;
       if (!remoteDataChanged) {
         modeLabel.textContent = "Synced";
         return;
       }
-      const remoteTypes = remoteRecordTypesForCurrentApp();
+      const remoteTypes = requestedRemoteTypes;
       const grouped = Object.fromEntries(remoteTypes.map((type) => [type, []]));
       (data || []).forEach((row) => {
         if (grouped[row.type]) grouped[row.type].push(row.payload);
@@ -3683,7 +3732,7 @@ function startAutoSync() {
     });
   syncIntervalId = window.setInterval(() => {
     if (!remoteLoadInProgress) {
-      loadRemoteRecords({ render: false }).catch((error) => console.warn("Background sync failed.", error));
+      loadRemoteRecords({ render: false, pageId: activePageId() }).catch((error) => console.warn("Background sync failed.", error));
     }
   }, 60000);
 }
@@ -12187,7 +12236,7 @@ async function resumeAppFromLifecycle(reason = "resume") {
     return;
   }
   if (supabaseClient && !localTestMode && !remoteLoadInProgress && now - lastRemoteLoadFinishedAt > APP_RESUME_REMOTE_REFRESH_MS) {
-    loadRemoteRecords({ render: true }).catch((error) => {
+    loadRemoteRecords({ render: true, pageId: activePageId() }).catch((error) => {
       console.warn("Resume sync failed.", error);
     });
   }
