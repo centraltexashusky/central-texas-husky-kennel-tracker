@@ -1053,6 +1053,7 @@ function initSupabaseClient() {
         switchAfterLogin: false,
         awaitRemoteLoad: false,
         deferProfileWrite: true,
+        render: false,
         initialPageId: rememberedPageForRole(currentRole()),
       }).then(() => {
         scheduleProfilePhotoHydrationSweep(200);
@@ -1437,8 +1438,10 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     };
     setHelper(syncedUser, { switchAfterLogin: false, render: false });
     updateNavigationAccess();
-    renderAllRecords({ activeOnly: true });
-    scheduleProfilePhotoHydrationSweep(300);
+    if (options.render !== false) {
+      renderAllRecords({ activeOnly: true });
+      scheduleProfilePhotoHydrationSweep(300);
+    }
     startAutoSync();
     if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(syncedUser.role));
     requirePasswordChangeIfNeeded();

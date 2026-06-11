@@ -1,6 +1,6 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260610-page-scoped-sync";
-import "./auth.js?v=20260610-page-scoped-sync";
+import "./shared.js?v=20260610-page-scoped-sync-v2";
+import "./auth.js?v=20260610-page-scoped-sync-v2";
 import "./customer.js?v=20260610-request-mode-toggle";
 import "./boarding.js?v=20260610-page-scoped-sync";
 import "./daily.js?v=20260607-owned-health-due-history";

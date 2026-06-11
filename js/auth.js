@@ -211,6 +211,7 @@ async function restoreSupabaseSession() {
     switchAfterLogin: false,
     awaitRemoteLoad: false,
     deferProfileWrite: true,
+    render: false,
     initialPageId: rememberedPageForRole(shellUser.role),
   }).catch((syncError) => {
     console.warn("Could not finish Supabase profile sync after shell restore.", syncError);
