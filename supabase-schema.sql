@@ -320,7 +320,7 @@ create table if not exists public.daily_task_completions (
   completed_at timestamptz not null default now(),
   inserted_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (work_date, shift, task_id)
+  constraint daily_task_completions_work_date_shift_task_id_key unique (work_date, shift, task_id)
 );
 
 create index if not exists daily_task_completions_work_date_idx on public.daily_task_completions (work_date desc);
@@ -396,7 +396,7 @@ begin
     coalesce(nullif(lower(trim(p_completed_email)), ''), public.kennel_auth_email()),
     auth.uid()
   )
-  on conflict (work_date, shift, task_id) do nothing
+  on conflict on constraint daily_task_completions_work_date_shift_task_id_key do nothing
   returning * into v_completion;
 
   if found then
