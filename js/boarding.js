@@ -2302,8 +2302,10 @@ function boardingStayRateRoleFieldHtml(record = {}, stay = {}) {
 }
 
 function boardingStayFormHtml(record = {}, stay = {}) {
-  const isEdit = Boolean(stay.id);
+  const explicitRequestCode = String(stay.requestCode || stay.requestId || stay.reservationId || "").trim();
+  const isEdit = Boolean(stay.id || explicitRequestCode);
   const serviceOnly = isServiceRequestStay(record, stay);
+  const requestCode = isEdit ? boardingStayRequestCode(record, stay) : "";
   const primaryTimeLabel = serviceOnly ? "Requested service time" : "Drop-off time";
   const primaryTimeHelp = serviceOnly ? '<small>Customer-requested time for the service.</small>' : "";
   const completionTimeLabel = serviceOnly ? "Estimated completion / pick-up time" : "Pick-up time";
@@ -2313,6 +2315,7 @@ function boardingStayFormHtml(record = {}, stay = {}) {
   return \`
     <form id="boardingStayPopupForm" class="tracker-form" data-dog-id="\${escapeHtml(record.id || "")}">
       <input type="hidden" name="stayId" value="\${escapeHtml(stay.id || "")}" />
+      \${requestCode ? \`<input type="hidden" name="requestCode" value="\${escapeHtml(requestCode)}" />\` : ""}
       \${serviceOnly ? '<input type="hidden" name="stayType" value="Service Request" />' : ""}
       \${isEdit ? \`<div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusChipHtml(record, stay)}\${boardingServiceOnlyChipHtml(record, stay)}</div>\` : ""}
       <div class="field-grid">
@@ -2473,9 +2476,10 @@ async function saveBoardingStayFromForm(formEl) {
     dropoffTime: payload.dropoffTime,
     pickupTime: payload.pickupTime,
     stayType: payload.stayType || "",
+    requestCode: payload.requestCode || "",
   };
-  const existingStay = boardingStayByReference(dog, payload.stayId)
-    || (!payload.stayId ? (dog.stays || []).find((item) => boardingStayMatchesIdentity(item, draftStayIdentity)) : null);
+  const existingStay = boardingStayByReference(dog, { stayId: payload.stayId || "", requestCode: payload.requestCode || "" })
+    || (!payload.stayId && !payload.requestCode ? (dog.stays || []).find((item) => boardingStayMatchesIdentity(item, draftStayIdentity)) : null);
   const timestamp = new Date().toISOString();
   const existingStayStatus = normalizeBoardingStatus({ boardingStatus: existingStay?.status || "" });
   const shouldAutoApproveStay = !existingStay || (!dog.customerRequest && existingStayStatus === "Pending");
@@ -2502,7 +2506,7 @@ async function saveBoardingStayFromForm(formEl) {
   });
   const stay = {
     ...existingStay,
-    id: payload.stayId || uid("stay"),
+    id: payload.stayId || existingStay?.id || uid("stay"),
     createdAt: existingStay?.createdAt || timestamp,
     updatedAt: timestamp,
     source: existingStay?.source || "staff-admin",
@@ -2523,7 +2527,7 @@ async function saveBoardingStayFromForm(formEl) {
     kennelAssignedAt: isServiceRequest ? "" : location ? existingStay?.kennelAssignedAt || timestamp : "",
   };
   stay.bathPlan = bathPlanForStay(stay);
-  stay.requestCode = boardingStayRequestCode(dog, stay);
+  stay.requestCode = payload.requestCode || boardingStayRequestCode(dog, stay);
   stay.serviceTasks = boardingStayServiceTasks(dog, stay);
   const stays = (dog.stays || []).filter((item) => !boardingStayMatchesIdentity(item, stay));
   stays.unshift(stay);
@@ -2682,7 +2686,7 @@ function boardingStaySourceIds(stay = {}) {
 }
 
 function boardingStayRequestCode(record = {}, stay = {}) {
-  const existing = String(stay.requestCode || stay.requestId || stay.reservationId || "").trim();
+  const existing = boardingStayExplicitRequestCode(stay);
   if (existing) return existing;
   const dateKey = (dateOnly(stay.dropoffTime) || dateOnly(stay.createdAt) || dateOnly(record.submittedAt) || "request").replaceAll("-", "");
   const sourceIds = boardingStaySourceIds(stay);
@@ -2698,6 +2702,62 @@ function boardingStayRequestCode(record = {}, stay = {}) {
     stay.createdAt || "",
   ].filter(Boolean).join("|");
   return \`BR-\${dateKey.toUpperCase()}-\${shortStableHash(seed || JSON.stringify(stay || record))}\`;
+}
+
+function boardingStayExplicitRequestCode(stay = {}) {
+  return String(stay.requestCode || stay.requestId || stay.reservationId || "").trim();
+}
+
+function boardingStayFreshnessTime(stay = {}) {
+  const values = [
+    stay.updatedAt,
+    stay.statusUpdatedAt,
+    stay.approvedAt,
+    stay.cancelledAt,
+    stay.createdAt,
+    stay.submittedAt,
+  ];
+  for (const value of values) {
+    const timestamp = Date.parse(value || "");
+    if (!Number.isNaN(timestamp)) return timestamp;
+  }
+  return 0;
+}
+
+function boardingStayIsFresher(candidate = {}, candidateIndex = 0, current = {}, currentIndex = 0) {
+  const candidateTime = boardingStayFreshnessTime(candidate);
+  const currentTime = boardingStayFreshnessTime(current);
+  if (candidateTime && currentTime && candidateTime !== currentTime) return candidateTime > currentTime;
+  if (candidateTime && !currentTime) return true;
+  if (!candidateTime && currentTime) return false;
+  return candidateIndex > currentIndex;
+}
+
+function boardingBestStayMatch(indexedStays = []) {
+  const winner = indexedStays.reduce((best, item) => {
+    if (!best) return item;
+    return boardingStayIsFresher(item.stay, item.index, best.stay, best.index) ? item : best;
+  }, null);
+  return winner?.stay || null;
+}
+
+function dedupeBoardingStaysByExplicitRequestCode(stays = []) {
+  const winners = new Map();
+  const unkeyed = [];
+  arrayValue(stays).forEach((stay, index) => {
+    const requestCode = boardingStayExplicitRequestCode(stay);
+    if (!requestCode) {
+      unkeyed.push({ stay, index });
+      return;
+    }
+    const current = winners.get(requestCode);
+    if (!current || boardingStayIsFresher(stay, index, current.stay, current.index)) {
+      winners.set(requestCode, { stay, index });
+    }
+  });
+  return [...unkeyed, ...winners.values()]
+    .sort((a, b) => a.index - b.index)
+    .map((item) => item.stay);
 }
 
 function boardingStayWithRequestCode(record = {}, stay = {}) {
@@ -2726,7 +2786,9 @@ function boardingStayByReference(record = {}, reference = {}) {
     if (exact) return exact;
   }
   if (requestCode) {
-    const exactCode = stays.find((stay) => boardingStayRequestCode(record, stay) === requestCode);
+    const exactCode = boardingBestStayMatch(stays
+      .map((stay, index) => ({ stay, index }))
+      .filter(({ stay }) => boardingStayRequestCode(record, stay) === requestCode));
     if (exactCode) return exactCode;
   }
   if (stayId) return boardingStayById(record, stayId);
@@ -2749,6 +2811,9 @@ function boardingStaySharesExplicitIdentity(stay = {}, targetStay = {}) {
 function boardingStayMatchesIdentity(stay = {}, targetStay = {}) {
   if (!stay || !targetStay) return false;
   if (boardingStaySharesExplicitIdentity(stay, targetStay)) return true;
+  const requestCode = boardingStayExplicitRequestCode(stay);
+  const targetRequestCode = boardingStayExplicitRequestCode(targetStay);
+  if (requestCode && targetRequestCode && requestCode === targetRequestCode) return true;
   const dropoff = String(stay.dropoffTime || "").trim();
   const targetDropoff = String(targetStay.dropoffTime || "").trim();
   const pickup = String(stay.pickupTime || "").trim();
@@ -2787,10 +2852,11 @@ function boardingStayMergeTime(record = {}, stay = {}) {
 
 function boardingDogWithMergedStays(record = {}) {
   if (!record) return {};
+  const stays = dedupeBoardingStaysByExplicitRequestCode(mergeBoardingStays([record], record));
   return {
     ...record,
     sourceRecordIds: record.sourceRecordIds?.length ? record.sourceRecordIds : [record.id].filter(Boolean),
-    stays: mergeBoardingStays([record], record),
+    stays,
   };
 }
 
@@ -2818,7 +2884,7 @@ function boardingStayEntryForRecord(record = {}, stay = {}) {
 function boardingStayEntries(records = []) {
   return records.flatMap((record) => {
     const displayRecord = boardingDogWithStayStatus(record || {});
-    const stays = displayRecord.stays?.length ? displayRecord.stays : [{}];
+    const stays = displayRecord.stays?.length ? dedupeBoardingStaysByExplicitRequestCode(displayRecord.stays) : [{}];
     return stays.map((stay) => boardingStayEntryForRecord(displayRecord, stay));
   });
 }
@@ -2831,7 +2897,8 @@ function boardingStayEntryKey(entry = {}) {
     || normalizedDogIdentityName(record);
   const timeKey = boardingStayMergeKeyForRecord(record, stay);
   const sourceKey = boardingStaySourceIds(stay).sort().join("|");
-  const stayKey = timeKey?.startsWith("time:") || timeKey?.startsWith("stay-window|") ? timeKey : sourceKey || entry.requestCode || timeKey;
+  const explicitRequestCode = boardingStayExplicitRequestCode(stay);
+  const stayKey = explicitRequestCode ? \`code:\${explicitRequestCode}\` : timeKey?.startsWith("time:") || timeKey?.startsWith("stay-window|") ? timeKey : sourceKey || entry.requestCode || timeKey;
   return [dogKey, stayKey].filter(Boolean).join("::");
 }
 
@@ -4015,7 +4082,7 @@ async function updateBoardingKennelLocation(locationId = "") {
 
 function renderBoardingStays(record = activeBoardingDog()) {
   const displayRecord = boardingDogWithStayStatus(record || {});
-  const stays = displayRecord?.stays || [];
+  const stays = dedupeBoardingStaysByExplicitRequestCode(displayRecord?.stays || []);
   $("#boardingStayHistory").innerHTML = stays.length
     ? stays.map((stay) => {
       const requestCode = boardingStayRequestCode(displayRecord, stay);
