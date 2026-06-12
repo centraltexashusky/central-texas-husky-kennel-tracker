@@ -821,9 +821,15 @@ function activeBoardingPricingServices() {
 function serviceIsSelectableBoardingRate(service = {}) {
   if (service.category !== "Boarding") return false;
   if (serviceIsStandardBoardingRate(service)) return true;
-  if (serviceBoardingRateType(service)) return false;
+  const rateType = serviceBoardingRateType(service);
+  if (rateType && rateType !== "boarding-program") return false;
   const unit = normalizedServiceLookupText(service.unit || "");
-  return /\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit);
+  if (!/\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit)) return false;
+  if (rateType === "boarding-program") {
+    const name = normalizedServiceLookupText(service.serviceName || service.name || "");
+    return name.includes("boarding");
+  }
+  return true;
 }
 
 function selectableBoardingPricingServices() {
@@ -953,6 +959,29 @@ function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
       if (priceDelta) return priceDelta;
       return String(a.serviceName || "").localeCompare(String(b.serviceName || ""));
     });
+}
+
+function boardingRateSelectionCurrentServiceId(stay = {}, services = []) {
+  const savedServiceId = stay.pricingSnapshot?.boardingRateServiceId || stay.stayProgramId || stay.pricingSnapshot?.stayProgramId || "";
+  if (savedServiceId && services.some((service) => service.id === savedServiceId)) return savedServiceId;
+  const snapshot = stay.pricingSnapshot || {};
+  const boardingLine = arrayValue(snapshot.lineItems).find((line) => ["boarding", "boarding-program"].includes(line.type)) || {};
+  const targetName = normalizedServiceLookupText(
+    snapshot.boardingRateServiceName
+    || snapshot.stayProgramName
+    || stay.stayProgramName
+    || boardingLine.label
+    || ""
+  );
+  const targetRate = Number(snapshot.currentDogRate || snapshot.baseRate || stay.stayProgramRate || boardingLine.unitPrice || 0);
+  const nameMatches = services.filter((service) => {
+    const serviceName = normalizedServiceLookupText(service.serviceName || service.name || "");
+    const priceMatches = !targetRate || servicePriceValue(service) === targetRate;
+    return targetName && serviceName === targetName && priceMatches;
+  });
+  if (nameMatches.length === 1) return nameMatches[0].id;
+  const priceMatches = services.filter((service) => targetRate > 0 && servicePriceValue(service) === targetRate);
+  return priceMatches.length === 1 ? priceMatches[0].id : "";
 }
 
 function boardingRateServiceForSelection(record = {}, stay = {}, serviceId = "", options = {}) {
@@ -2436,7 +2465,7 @@ function boardingStayRateServiceFieldHtml(record = {}, stay = {}) {
   const services = boardingRateSelectionServices(record, stay, { currentDogRole: role });
   const savedServiceId = stay.pricingSnapshot?.boardingRateServiceId || "";
   const defaultServiceId = role === "shared-crate-additional" ? ratePlan.sharedCrateRateConfig?.serviceId || "" : ratePlan.primaryRateConfig?.serviceId || "";
-  const selectedServiceId = savedServiceId || defaultServiceId;
+  const selectedServiceId = savedServiceId || defaultServiceId || boardingRateSelectionCurrentServiceId(stay, services);
   const optionsHtml = services.map((service) => {
     const price = servicePriceValue(service);
     const priceText = Number.isFinite(price) ? \` - \${money(price)} \${service.unit || "per night"}\` : "";
