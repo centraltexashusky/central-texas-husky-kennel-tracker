@@ -11693,7 +11693,11 @@ function initEvents() {
         }
       }
       if (action === "change-boarding") {
-        openBoardingDogToTab(record, "Boarding & Request");
+        if (stayId) {
+          openBoardingStayPopup(record, reference);
+        } else {
+          openBoardingDogToTab(record, "Boarding & Request");
+        }
       }
       if (action === "open-boarding-request-tab") {
         openBoardingDogToTab(record, "Boarding & Request");
