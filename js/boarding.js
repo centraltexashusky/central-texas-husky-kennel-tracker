@@ -844,8 +844,24 @@ function serviceIsOvernightBoardingRateAlternative(service = {}) {
   return /\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit);
 }
 
+function serviceRecordFlags(service = {}) {
+  const flags = service.flags;
+  if (Array.isArray(flags)) return flags;
+  if (typeof flags === "string") return flags.split(/[,|;]/);
+  if (flags && typeof flags === "object") return Object.values(flags);
+  return [];
+}
+
+function serviceRecordHasFlag(service = {}, flag = "") {
+  const target = String(flag || "").trim().toLowerCase();
+  return serviceRecordFlags(service).some((item) => {
+    const normalized = String(item || "").trim().toLowerCase();
+    return normalized === target || (target === "member pricing" && normalized === "alumni only");
+  });
+}
+
 function serviceRecordHasActiveFlag(service = {}) {
-  return arrayValue(service.flags).some((flag) => String(flag || "").trim().toLowerCase() === "active");
+  return serviceRecordHasFlag(service, "Active");
 }
 
 function selectableOvernightBoardingPricingServices() {
@@ -860,6 +876,18 @@ function customerPricingScopeForUser(user = currentUser) {
 
 function serviceMatchesPricingScopeForResolution(service = {}, scope = "non-member") {
   const serviceScope = servicePricingScope(service);
+  return serviceScope === "all" || serviceScope === scope;
+}
+
+function boardingRateServicePricingScope(service = {}) {
+  const explicit = normalizedPricingScope(service.pricingScope || service.customerPricingScope || "");
+  if (explicit) return explicit;
+  if (serviceRecordHasFlag(service, "Member Pricing")) return "member";
+  return servicePricingScope(service);
+}
+
+function boardingRateServiceMatchesPricingScope(service = {}, scope = "non-member") {
+  const serviceScope = boardingRateServicePricingScope(service);
   return serviceScope === "all" || serviceScope === scope;
 }
 
@@ -991,7 +1019,7 @@ function boardingRateSelectionSort(a = {}, b = {}) {
 function uniqueBoardingRateSelectionServices(services = []) {
   const seen = new Set();
   return services.filter((service) => {
-    const key = service.id || [service.serviceName || service.name || "", service.basePrice || "", service.unit || "", servicePricingScope(service)].join("|");
+    const key = service.id || [service.serviceName || service.name || "", service.basePrice || "", service.unit || "", boardingRateServicePricingScope(service)].join("|");
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1006,7 +1034,7 @@ function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
     ...selectableOvernightBoardingPricingServices(),
   ]);
   const roleMatches = selectable.filter((service) => boardingRateServiceRoleMatches(service, role));
-  const scopedMatches = roleMatches.filter((service) => serviceMatchesPricingScopeForResolution(service, scope));
+  const scopedMatches = roleMatches.filter((service) => boardingRateServiceMatchesPricingScope(service, scope));
   const currentServiceId = stay.pricingSnapshot?.boardingRateServiceId || stay.stayProgramId || stay.pricingSnapshot?.stayProgramId || "";
   const currentService = currentServiceId ? selectable.find((service) => service.id === currentServiceId) : null;
   const candidates = scopedMatches.length ? scopedMatches : roleMatches.length ? roleMatches : selectable;
@@ -2553,7 +2581,8 @@ function boardingStayRateServiceFieldHtml(record = {}, stay = {}) {
   const optionsHtml = services.map((service) => {
     const price = servicePriceValue(service);
     const priceText = Number.isFinite(price) ? \` - \${money(price)} \${service.unit || "per night"}\` : "";
-    const scopeText = servicePricingScope(service) === "member" ? "Member" : servicePricingScope(service) === "all" ? "All customers" : "Non-member";
+    const serviceScope = boardingRateServicePricingScope(service);
+    const scopeText = serviceScope === "member" ? "Member" : serviceScope === "all" ? "All customers" : "Non-member";
     return \`<option value="\${escapeHtml(service.id)}" \${service.id === selectedServiceId ? "selected" : ""}>\${escapeHtml(service.serviceName || "Boarding rate")}\${escapeHtml(priceText)} | \${escapeHtml(scopeText)}</option>\`;
   }).join("");
   const help = services.length
