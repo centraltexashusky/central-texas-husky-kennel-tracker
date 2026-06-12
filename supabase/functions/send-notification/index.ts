@@ -156,7 +156,6 @@ function formatEmailDateTimeText(value: unknown) {
 function formatEmailMoney(value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return "Not provided";
-  if (raw.startsWith("$")) return escapeHtml(raw);
   const numberValue = typeof value === "number" ? value : Number(raw.replace(/[$,]/g, ""));
   if (!Number.isFinite(numberValue)) return escapeHtml(raw);
   return new Intl.NumberFormat("en-US", {
@@ -164,6 +163,21 @@ function formatEmailMoney(value: unknown) {
     currency: "USD",
     maximumFractionDigits: Number.isInteger(numberValue) ? 0 : 2,
   }).format(numberValue);
+}
+
+function formatEmailScheduleText(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Not provided";
+  const isoDateTimePattern = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:?\d{2})?/g;
+  const formatted = raw.replace(isoDateTimePattern, (match) => formatEmailDateTimeText(match));
+  return escapeHtml(formatted);
+}
+
+function formatPremiumDetailValue(label: unknown, value: unknown) {
+  const labelText = String(label || "").toLowerCase();
+  if (/(total|amount|cost|price|fee|deposit|balance)/.test(labelText)) return formatEmailMoney(value);
+  if (/(time|date|drop|pick|stay|week|shift)/.test(labelText)) return formatEmailScheduleText(value);
+  return emailValue(value);
 }
 
 function arrayValue(value: unknown) {
@@ -741,33 +755,25 @@ function renderPremiumTextEmail(options: {
     : "A Snuggle Stay notification needs your attention.";
   const detailsHtml = parsed.details.length
     ? parsed.details.map((detail, index) => {
-        const isRight = index % 2 === 1;
-        const topPadding = index > 1 ? "18px" : "0";
-        const cellPadding = isRight
-          ? `${topPadding} 0 18px 18px`
-          : `${topPadding} 18px 18px 0`;
-        return `<td width="50%" valign="top" style="padding:${cellPadding};${isRight ? "border-left:1px solid #e3c88d;" : ""}border-bottom:1px dotted #d7b46a;">
-          <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;font-weight:700;">${emailValue(detail.label)}:</div>
-          <div style="margin-top:7px;font-size:17px;line-height:1.45;color:#111827;word-break:break-word;">${emailValue(detail.value)}</div>
-        </td>`;
-      }).reduce((rows, cell, index) => {
-        if (index % 2 === 0) rows.push(`<tr>${cell}`);
-        else rows[rows.length - 1] += `${cell}</tr>`;
-        return rows;
-      }, [] as string[])
-    : [];
-  if (detailsHtml.length && !detailsHtml[detailsHtml.length - 1].endsWith("</tr>")) {
-    detailsHtml[detailsHtml.length - 1] += `<td width="50%" style="padding:18px 0 18px 18px;border-left:1px solid #e3c88d;border-bottom:1px dotted #d7b46a;">&nbsp;</td></tr>`;
-  }
+        const isLast = index === parsed.details.length - 1;
+        const valueHtml = formatPremiumDetailValue(detail.label, detail.value);
+        return `<tr>
+          <td valign="top" style="padding:${index === 0 ? "0" : "14px"} 0 14px;${isLast ? "" : "border-bottom:1px dotted #d7b46a;"}">
+            <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:16px;line-height:1.25;font-weight:700;">${emailValue(detail.label)}:</div>
+            <div style="margin-top:6px;font-size:16px;line-height:1.45;color:#111827;overflow-wrap:break-word;word-break:normal;">${valueHtml}</div>
+          </td>
+        </tr>`;
+      }).join("")
+    : "";
 
   const detailCardHtml = parsed.details.length
     ? `<tr>
-        <td style="padding:0 34px 30px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:18px;box-shadow:0 10px 30px rgba(185,133,36,0.1);">
+        <td style="padding:0 22px 24px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:16px;box-shadow:0 10px 30px rgba(185,133,36,0.1);">
             <tr>
-              <td style="padding:24px;">
+              <td style="padding:18px 20px;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                  ${detailsHtml.join("")}
+                  ${detailsHtml}
                 </table>
               </td>
             </tr>
@@ -781,21 +787,21 @@ function renderPremiumTextEmail(options: {
       const service = serviceEmailDisplay(item);
       const isRequestedService = /\brequested\b/i.test(item) || /^\d+\s*x\s+/i.test(item);
       return `<tr>
-        <td width="54" valign="top" style="padding:10px 0;border-bottom:1px solid #ead9b4;">
-          <div style="width:34px;height:34px;border-radius:999px;background:#111111;color:#d7a83d;text-align:center;line-height:34px;font-weight:800;font-size:15px;">${isRequestedService ? emailValue(service.quantity) : "&bull;"}</div>
+        <td width="48" valign="top" style="padding:10px 0;border-bottom:1px solid #ead9b4;">
+          <div style="width:32px;height:32px;border-radius:999px;background:#111111;color:#d7a83d;text-align:center;line-height:32px;font-weight:800;font-size:14px;">${isRequestedService ? emailValue(service.quantity) : "&bull;"}</div>
         </td>
         <td valign="top" style="padding:10px 0;border-bottom:1px solid #ead9b4;">
-          <div style="font-size:16px;line-height:1.35;color:#111111;font-weight:800;">${isRequestedService ? emailValue(service.name) : emailValue(item)}</div>
-          <div style="margin-top:3px;font-size:13px;line-height:1.4;color:#766341;text-transform:uppercase;letter-spacing:1px;font-weight:700;">${isRequestedService ? emailValue(service.detail) : emailValue(list.title)}</div>
+          <div style="font-size:15px;line-height:1.35;color:#111111;font-weight:800;">${isRequestedService ? emailValue(service.name) : emailValue(item)}</div>
+          <div style="margin-top:3px;font-size:12px;line-height:1.4;color:#766341;text-transform:uppercase;letter-spacing:0.8px;font-weight:700;">${isRequestedService ? emailValue(service.detail) : emailValue(list.title)}</div>
         </td>
       </tr>`;
     }).join("");
     return `<tr>
-      <td style="padding:0 34px 30px;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:18px;">
+      <td style="padding:0 22px 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:16px;">
           <tr>
-            <td style="padding:20px 24px;">
-              <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:18px;font-weight:700;">${emailValue(list.title)}</div>
+            <td style="padding:18px 20px;">
+              <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;line-height:1.25;font-weight:700;">${emailValue(list.title)}</div>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
                 ${rows}
               </table>
@@ -816,24 +822,24 @@ function renderPremiumTextEmail(options: {
     <title>${escapeHtml(title)}</title>
   </head>
   <body style="margin:0;padding:0;background:#f6f1e8;font-family:Arial,Helvetica,sans-serif;color:#111827;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f1e8;padding:28px 12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f1e8;padding:16px 6px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:720px;background:#fffaf1;border-radius:24px;overflow:hidden;border:1px solid #d7b46a;box-shadow:0 20px 60px rgba(17,17,17,0.16);">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#fffaf1;border-radius:20px;overflow:hidden;border:1px solid #d7b46a;box-shadow:0 20px 60px rgba(17,17,17,0.16);">
             <tr>
-              <td style="background:#050505;padding:34px 34px 28px;border-bottom:5px solid ${accentColor};text-align:center;">
+              <td style="background:#050505;padding:22px 20px 20px;border-bottom:4px solid ${accentColor};text-align:center;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td align="center" style="padding-bottom:18px;">
-                      <img src="${escapeHtml(logoUrl)}" width="112" alt="Central Texas Husky trophy logo" style="display:block;width:112px;max-width:112px;height:auto;margin:0 auto;">
+                    <td align="center" style="padding-bottom:12px;">
+                      <img src="${escapeHtml(logoUrl)}" width="84" alt="Central Texas Husky trophy logo" style="display:block;width:84px;max-width:84px;height:auto;margin:0 auto;">
                     </td>
                   </tr>
                   <tr>
                     <td align="center">
-                      <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1.08;letter-spacing:4px;color:#fff8dd;text-transform:uppercase;font-weight:700;">
+                      <div style="font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.08;letter-spacing:2.5px;color:#fff8dd;text-transform:uppercase;font-weight:700;">
                         CENTRAL<br>TEXAS HUSKY
                       </div>
-                      <div style="margin-top:12px;color:#d2a13a;font-size:15px;letter-spacing:5px;text-transform:uppercase;font-weight:700;">
+                      <div style="margin-top:10px;color:#d2a13a;font-size:12px;line-height:1.4;letter-spacing:3px;text-transform:uppercase;font-weight:700;">
                         BOARDING &amp; SERVICES
                       </div>
                     </td>
@@ -842,26 +848,26 @@ function renderPremiumTextEmail(options: {
               </td>
             </tr>
             <tr>
-              <td align="center" style="padding:22px 34px 12px;">
-                <span style="display:inline-block;width:78px;border-top:1px solid #c6932f;vertical-align:middle;margin-right:18px;"></span>
-                <span style="display:inline-block;width:86px;height:86px;border-radius:999px;background:#080808;border:4px solid #d2a13a;box-shadow:0 10px 24px rgba(0,0,0,0.25);text-align:center;line-height:86px;color:#d2a13a;font-size:36px;vertical-align:middle;">&#9733;</span>
-                <span style="display:inline-block;width:78px;border-top:1px solid #c6932f;vertical-align:middle;margin-left:18px;"></span>
+              <td align="center" style="padding:16px 20px 8px;">
+                <span style="display:inline-block;width:46px;border-top:1px solid #c6932f;vertical-align:middle;margin-right:12px;"></span>
+                <span style="display:inline-block;width:62px;height:62px;border-radius:999px;background:#080808;border:3px solid #d2a13a;box-shadow:0 8px 18px rgba(0,0,0,0.22);text-align:center;line-height:62px;color:#d2a13a;font-size:28px;vertical-align:middle;">&#9733;</span>
+                <span style="display:inline-block;width:46px;border-top:1px solid #c6932f;vertical-align:middle;margin-left:12px;"></span>
               </td>
             </tr>
             <tr>
-              <td align="center" style="padding:0 34px 10px;">
-                <span style="display:inline-block;border:1px solid #dec58d;border-radius:999px;padding:8px 22px;color:#9a6815;text-transform:uppercase;letter-spacing:2px;font-size:13px;font-weight:800;background:#fffaf1;">
+              <td align="center" style="padding:0 20px 8px;">
+                <span style="display:inline-block;border:1px solid #dec58d;border-radius:999px;padding:7px 18px;color:#9a6815;text-transform:uppercase;letter-spacing:1.6px;font-size:12px;font-weight:800;background:#fffaf1;">
                   ${escapeHtml(audienceLabel)}
                 </span>
               </td>
             </tr>
             <tr>
-              <td style="padding:12px 34px 34px;text-align:center;">
-                <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:1.18;color:#111111;">
+              <td style="padding:10px 22px 26px;text-align:center;">
+                <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.2;color:#111111;">
                   ${escapeHtml(title)}
                 </h1>
-                <div style="margin:14px auto 20px;width:160px;border-top:1px solid #c6932f;"></div>
-                <p style="margin:0;font-size:17px;line-height:1.6;color:#344054;">
+                <div style="margin:12px auto 16px;width:128px;border-top:1px solid #c6932f;"></div>
+                <p style="margin:0;font-size:15px;line-height:1.55;color:#344054;">
                   ${introText}
                 </p>
               </td>
@@ -869,24 +875,24 @@ function renderPremiumTextEmail(options: {
             ${detailCardHtml}
             ${listsHtml}
             <tr>
-              <td align="center" style="padding:0 34px 34px;">
-                <a href="${escapeHtml(parsed.actionUrl)}" style="display:inline-block;background:#c9962f;background:linear-gradient(180deg,#f0c76c,#b98524);border:1px solid #8a5c14;border-radius:12px;color:#111111;text-decoration:none;font-size:18px;font-weight:800;padding:17px 62px;box-shadow:0 8px 18px rgba(185,133,36,0.22);">
+              <td align="center" style="padding:0 22px 28px;">
+                <a href="${escapeHtml(parsed.actionUrl)}" style="display:block;background:#c9962f;background:linear-gradient(180deg,#f0c76c,#b98524);border:1px solid #8a5c14;border-radius:12px;color:#111111;text-decoration:none;font-size:17px;font-weight:800;padding:15px 20px;box-shadow:0 8px 18px rgba(185,133,36,0.22);">
                   ${escapeHtml(ctaLabel)}
                 </a>
-                <p style="margin:24px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:17px;font-style:italic;color:#344054;">
+                <p style="margin:22px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:16px;font-style:italic;color:#344054;">
                   &mdash; Central Texas Husky Team &mdash;
                 </p>
               </td>
             </tr>
             <tr>
-              <td style="background:#050505;border-top:4px solid ${accentColor};padding:22px;text-align:center;">
-                <p style="margin:0;color:#d2a13a;font-size:12px;letter-spacing:2px;text-transform:uppercase;">
+              <td style="background:#050505;border-top:4px solid ${accentColor};padding:18px;text-align:center;">
+                <p style="margin:0;color:#d2a13a;font-size:11px;line-height:1.5;letter-spacing:1.8px;text-transform:uppercase;">
                   Central Texas Husky &middot; Boarding &amp; Services
                 </p>
               </td>
             </tr>
           </table>
-          <p style="max-width:720px;margin:14px auto 0;color:#8a7d67;font-size:12px;line-height:1.5;text-align:center;">
+          <p style="max-width:600px;margin:12px auto 0;color:#8a7d67;font-size:11px;line-height:1.5;text-align:center;">
             This is an automated notification from the Central Texas Husky boarding app.
           </p>
         </td>
