@@ -1085,7 +1085,30 @@ function boardingRateSelectionCurrentServiceId(stay = {}, services = []) {
 
 var boardingPricingCatalogLoadPromise = null;
 
+async function fetchBoardingPricingCatalogServices() {
+  if (!supabaseClient) return [];
+  const { data, error } = await supabaseClient
+    .from("kennel_records")
+    .select("id,type,payload,updated_at")
+    .eq("type", "service")
+    .order("updated_at", { ascending: false })
+    .limit(1000);
+  if (error) throw error;
+  return arrayValue(data)
+    .filter((row) => row.type === "service")
+    .map((row) => row.payload)
+    .filter((service) => service?.id);
+}
+
 async function refreshBoardingPricingCatalogRecords() {
+  const directServices = await fetchBoardingPricingCatalogServices();
+  if (directServices.length) {
+    setBoardingPricingCatalogOverrideRecords(directServices);
+    if (typeof mergeRecords === "function") {
+      mergeRecords("service", directServices, { replaceLocal: true });
+    }
+    return;
+  }
   if (typeof fetchRemoteRecordRows === "function" && typeof mergeRecords === "function") {
     const rows = await fetchRemoteRecordRows(["service"]);
     const services = arrayValue(rows).filter((row) => row.type === "service").map((row) => row.payload).filter(Boolean);
