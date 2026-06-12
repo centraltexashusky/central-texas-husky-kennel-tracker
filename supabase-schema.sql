@@ -189,6 +189,42 @@ grant execute on function kennel_private.kennel_user_role() to authenticated;
 grant execute on function kennel_private.kennel_is_admin() to authenticated;
 grant execute on function kennel_private.kennel_is_staff_member() to authenticated;
 
+create or replace function kennel_private.kennel_settings_user_self_write_allowed(payload jsonb)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  with incoming as (
+    select
+      lower(coalesce(payload ->> 'email', '')) as email,
+      lower(coalesce(payload ->> 'role', '')) as role,
+      coalesce(payload ->> 'id', '') as payload_id,
+      lower(coalesce(payload ->> 'removed', 'false')) as removed
+  )
+  select email <> ''
+    and email = public.kennel_auth_email()
+    and removed <> 'true'
+    and (
+      role in ('customer', 'member', 'customer | member')
+      or exists (
+        select 1
+        from public.kennel_records kr
+        where kr.type = 'settingsUser'
+          and lower(coalesce(kr.payload ->> 'email', '')) = incoming.email
+          and lower(coalesce(kr.payload ->> 'role', '')) = incoming.role
+          and lower(coalesce(kr.payload ->> 'role', '')) in ('admin', 'helper', 'staff')
+          and lower(coalesce(kr.payload ->> 'removed', 'false')) <> 'true'
+          and (incoming.payload_id = '' or kr.id = incoming.payload_id or coalesce(kr.payload ->> 'id', '') = incoming.payload_id)
+      )
+    )
+  from incoming
+$$;
+
+revoke all on function kennel_private.kennel_settings_user_self_write_allowed(jsonb) from public;
+grant execute on function kennel_private.kennel_settings_user_self_write_allowed(jsonb) to authenticated;
+
 create or replace function public.kennel_is_staff_member()
 returns boolean
 language sql
@@ -242,11 +278,10 @@ set search_path = public, pg_temp
 as $$
   select case
     when kennel_private.kennel_is_admin() then true
+    when record_type = 'settingsUser' then kennel_private.kennel_settings_user_self_write_allowed(payload)
     when kennel_private.kennel_is_staff_member() then public.kennel_staff_can_write_type(record_type)
     when record_type = 'boardingDog' then public.kennel_customer_boarding_payload_is_request(payload)
     when record_type in ('customerDog', 'request', 'maintenance') then public.kennel_payload_has_email(payload)
-    when record_type = 'settingsUser' then lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email()
-      and lower(coalesce(payload ->> 'role', '')) in ('customer', 'member', 'customer | member')
     when record_type = 'notificationLog' then public.kennel_payload_audience_has_email(payload)
     else false
   end
