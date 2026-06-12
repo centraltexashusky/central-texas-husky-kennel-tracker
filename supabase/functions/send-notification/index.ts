@@ -144,20 +144,42 @@ function formatEmailDateTime(value: unknown) {
 function formatEmailDateTimeText(value: unknown) {
   if (!value) return "Not provided";
   const text = String(value).trim();
+  const localIsoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d{1,6})?)?$/);
+  if (localIsoMatch) {
+    const [, year, month, day, hour, minute] = localIsoMatch;
+    const monthName = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ][Number(month) - 1] || month;
+    const hourNumber = Number(hour);
+    const hour12 = hourNumber % 12 || 12;
+    const period = hourNumber >= 12 ? "PM" : "AM";
+    return `${monthName} ${Number(day)}, ${year} at ${hour12}:${minute} ${period}`;
+  }
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return text;
   return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
+    dateStyle: "long",
     timeStyle: "short",
     timeZone: "America/Chicago",
   }).format(date);
 }
 
-function formatEmailMoney(value: unknown) {
+function formatEmailMoneyText(value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return "Not provided";
   const numberValue = typeof value === "number" ? value : Number(raw.replace(/[$,]/g, ""));
-  if (!Number.isFinite(numberValue)) return escapeHtml(raw);
+  if (!Number.isFinite(numberValue)) return raw;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -165,12 +187,19 @@ function formatEmailMoney(value: unknown) {
   }).format(numberValue);
 }
 
-function formatEmailScheduleText(value: unknown) {
+function formatEmailMoney(value: unknown) {
+  return escapeHtml(formatEmailMoneyText(value));
+}
+
+function formatEmailSchedulePlainText(value: unknown) {
   const raw = String(value ?? "").trim();
   if (!raw) return "Not provided";
   const isoDateTimePattern = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,6})?)?(?:Z|[+-]\d{2}:?\d{2})?/g;
-  const formatted = raw.replace(isoDateTimePattern, (match) => formatEmailDateTimeText(match));
-  return escapeHtml(formatted);
+  return raw.replace(isoDateTimePattern, (match) => formatEmailDateTimeText(match));
+}
+
+function formatEmailScheduleText(value: unknown) {
+  return escapeHtml(formatEmailSchedulePlainText(value));
 }
 
 function formatPremiumDetailValue(label: unknown, value: unknown) {
@@ -273,6 +302,11 @@ function stayScheduleText(stay: Record<string, unknown>) {
   const pickup = String(stay.pickupTime || stay.requestedPickupTime || "").trim();
   if (dropoff && pickup) return `${dropoff} to ${pickup}`;
   return dropoff || pickup || "";
+}
+
+function stayScheduleEmailText(stay: Record<string, unknown>) {
+  const schedule = stayScheduleText(stay);
+  return schedule ? formatEmailSchedulePlainText(schedule) : "";
 }
 
 function isServiceRequest(record: Record<string, unknown>, stay: Record<string, unknown>) {
@@ -848,22 +882,15 @@ function renderPremiumTextEmail(options: {
               </td>
             </tr>
             <tr>
-              <td align="center" style="padding:16px 20px 8px;">
-                <span style="display:inline-block;width:46px;border-top:1px solid #c6932f;vertical-align:middle;margin-right:12px;"></span>
-                <span style="display:inline-block;width:62px;height:62px;border-radius:999px;background:#080808;border:3px solid #d2a13a;box-shadow:0 8px 18px rgba(0,0,0,0.22);text-align:center;line-height:62px;color:#d2a13a;font-size:28px;vertical-align:middle;">&#9733;</span>
-                <span style="display:inline-block;width:46px;border-top:1px solid #c6932f;vertical-align:middle;margin-left:12px;"></span>
-              </td>
-            </tr>
-            <tr>
-              <td align="center" style="padding:0 20px 8px;">
+              <td align="center" style="padding:18px 20px 8px;">
                 <span style="display:inline-block;border:1px solid #dec58d;border-radius:999px;padding:7px 18px;color:#9a6815;text-transform:uppercase;letter-spacing:1.6px;font-size:12px;font-weight:800;background:#fffaf1;">
                   ${escapeHtml(audienceLabel)}
                 </span>
               </td>
             </tr>
             <tr>
-              <td style="padding:10px 22px 26px;text-align:center;">
-                <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:28px;line-height:1.2;color:#111111;">
+              <td style="padding:8px 22px 24px;text-align:center;">
+                <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:1.22;color:#111111;">
                   ${escapeHtml(title)}
                 </h1>
                 <div style="margin:12px auto 16px;width:128px;border-top:1px solid #c6932f;"></div>
@@ -999,7 +1026,8 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const serviceLines = requestServiceLines(record, stay);
     const adminTo = audienceEmails.length ? audienceEmails : adminEmails();
     const customerTo = customerEmailsForRecord(record);
-    const schedule = stayScheduleText(stay);
+    const customerSchedule = stayScheduleEmailText(stay);
+    const estimatedTotal = formatEmailMoneyText(record.estimatedTotal || stay.estimatedTotal || "");
     const dogName = String(record.dogName || "Customer dog");
     const adminRendered = renderAdminBoardingRequestEmail(record, stay, {
       action,
@@ -1015,10 +1043,10 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const customerBody = [
       `We received your ${requestType}${dogName ? ` for ${dogName}` : ""}.`,
       "",
-      schedule ? `Requested time: ${schedule}` : "",
+      customerSchedule ? `Requested time: ${customerSchedule}` : "",
       serviceLines.length ? "Requested services:" : "",
       ...serviceLines.map((line) => `- ${line}`),
-      `Estimated total: ${record.estimatedTotal || stay.estimatedTotal || ""}`,
+      `Estimated total: ${estimatedTotal}`,
       `Notes: ${stay.stayNotes || ""}`,
       "",
       "Our team will review the request and follow up after it is approved or if we need more details.",
@@ -1048,7 +1076,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
   }
   if (eventName === "customerApprovedStayCancelled") {
     const requestType = requestTypeLabel(record, stay);
-    const schedule = stayScheduleText(stay);
+    const schedule = stayScheduleEmailText(stay);
     const reason = latestCustomerCancellationReason(record, stay);
     return {
       subject: `Approved ${requestType} cancelled: ${record.dogName || "Customer dog"}`,
@@ -1078,8 +1106,9 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const label = customerStatusLabel(eventName);
     const requestType = requestTypeLabel(record, stay);
     const serviceLines = requestServiceLines(record, stay);
-    const schedule = stayScheduleText(stay);
+    const schedule = stayScheduleEmailText(stay);
     const reason = label === "declined" || label === "cancelled" ? declineNoteText(record, stay) : "";
+    const estimatedTotal = formatEmailMoneyText(record.estimatedTotal || stay.estimatedTotal || "");
     return {
       subject: `Your ${requestType} was ${label}: ${record.dogName || "Customer dog"}`,
       body: [
@@ -1089,7 +1118,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         serviceLines.length ? "Requested services:" : "",
         ...serviceLines.map((line) => `- ${line}`),
         reason ? `Reason: ${reason}` : "",
-        `Estimated total: ${record.estimatedTotal || stay.estimatedTotal || ""}`,
+        `Estimated total: ${estimatedTotal}`,
         "",
         `Open your requests: ${appLink("#customerRequestsPage")}`,
       ].filter(Boolean).join("\n"),

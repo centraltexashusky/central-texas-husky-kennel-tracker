@@ -6967,3 +6967,18 @@ body:not(.is-login-view) .operation-calendar-day.is-outside-month {
     grid-template-columns: 1fr;
   }
 }
+
+.boarding-queue-item.is-service-only:hover,
+.boarding-queue-item.is-service-only:focus-visible,
+.record-card.is-service-only-request:hover,
+.record-card.is-service-only-request:focus-within,
+.record-card.clickable-card.is-service-only-request:hover {
+  border-color: rgba(219, 176, 74, 0.95) !important;
+  box-shadow: var(--glass-shadow), var(--glass-specular), inset 0 0 0 1px rgba(219, 176, 74, 0.72) !important;
+}
+
+body:not(.is-login-view) .record-card.is-service-only-request:hover,
+body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
+  border-color: rgba(219, 176, 74, 0.95) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(219, 176, 74, 0.72) !important;
+}
