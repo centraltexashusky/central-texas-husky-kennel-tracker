@@ -836,6 +836,18 @@ function selectableBoardingPricingServices() {
   return activeAdminPricingRecords().filter(serviceIsSelectableBoardingRate);
 }
 
+function serviceIsOvernightBoardingRateAlternative(service = {}) {
+  if (service.category !== "Boarding") return false;
+  const name = normalizedServiceLookupText(service.serviceName || service.name || "");
+  if (!name.includes("overnight") || !name.includes("boarding")) return false;
+  const unit = normalizedServiceLookupText(service.unit || "");
+  return /\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit);
+}
+
+function selectableOvernightBoardingPricingServices() {
+  return activeAdminPricingRecords().filter(serviceIsOvernightBoardingRateAlternative);
+}
+
 function customerPricingScopeForUser(user = currentUser) {
   return isMemberUser(user) ? "member" : "non-member";
 }
@@ -983,7 +995,10 @@ function uniqueBoardingRateSelectionServices(services = []) {
 function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
   const scope = boardingRateSelectionScope(record, stay, options);
   const role = boardingRateSelectionRole(options.currentDogRole || stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.boardingRateRole || "");
-  const selectable = selectableBoardingPricingServices();
+  const selectable = uniqueBoardingRateSelectionServices([
+    ...selectableBoardingPricingServices(),
+    ...selectableOvernightBoardingPricingServices(),
+  ]);
   const explicitRoleMatches = selectable.filter((service) => boardingRateServiceExplicitRole(service) && normalizedBoardingRateRole(boardingRateServiceExplicitRole(service)) === role);
   const roleMatches = explicitRoleMatches.length ? explicitRoleMatches : selectable.filter((service) => boardingRateServiceRoleMatches(service, role));
   const scopedMatches = roleMatches.filter((service) => serviceMatchesPricingScopeForResolution(service, scope));
