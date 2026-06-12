@@ -1005,8 +1005,7 @@ function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
     ...selectableBoardingPricingServices(),
     ...selectableOvernightBoardingPricingServices(),
   ]);
-  const explicitRoleMatches = selectable.filter((service) => boardingRateServiceExplicitRole(service) && normalizedBoardingRateRole(boardingRateServiceExplicitRole(service)) === role);
-  const roleMatches = explicitRoleMatches.length ? explicitRoleMatches : selectable.filter((service) => boardingRateServiceRoleMatches(service, role));
+  const roleMatches = selectable.filter((service) => boardingRateServiceRoleMatches(service, role));
   const scopedMatches = roleMatches.filter((service) => serviceMatchesPricingScopeForResolution(service, scope));
   const currentServiceId = stay.pricingSnapshot?.boardingRateServiceId || stay.stayProgramId || stay.pricingSnapshot?.stayProgramId || "";
   const currentService = currentServiceId ? selectable.find((service) => service.id === currentServiceId) : null;
