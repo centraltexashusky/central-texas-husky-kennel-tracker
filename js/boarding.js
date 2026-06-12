@@ -836,18 +836,33 @@ function activeBoardingPricingServices() {
   return activeAdminPricingRecords().filter((service) => service.category === "Boarding" && serviceIsStandardBoardingRate(service));
 }
 
+function serviceCategoryIsBoarding(service = {}) {
+  return normalizedServiceLookupText(service.category || "") === "boarding";
+}
+
+function serviceUnitIsStayRate(service = {}) {
+  const unit = normalizedServiceLookupText(service.unit || "");
+  return /\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit);
+}
+
+function serviceLooksLikeBoardingStayRate(service = {}) {
+  if (!serviceCategoryIsBoarding(service)) return false;
+  if (!serviceUnitIsStayRate(service)) return false;
+  const name = normalizedServiceLookupText(service.serviceName || service.name || "");
+  const rateType = serviceBoardingRateType(service);
+  return serviceIsStandardBoardingRate(service)
+    || rateType === "boarding-program"
+    || service.includesBoardingAccommodation === true
+    || service.replacesStandardBoarding === true
+    || name.includes("boarding");
+}
+
 function serviceIsSelectableBoardingRate(service = {}) {
-  if (service.category !== "Boarding") return false;
+  if (!serviceCategoryIsBoarding(service)) return false;
   if (serviceIsStandardBoardingRate(service)) return true;
   const rateType = serviceBoardingRateType(service);
   if (rateType && rateType !== "boarding-program") return false;
-  const unit = normalizedServiceLookupText(service.unit || "");
-  if (!/\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit)) return false;
-  if (rateType === "boarding-program") {
-    const name = normalizedServiceLookupText(service.serviceName || service.name || "");
-    return name.includes("boarding");
-  }
-  return true;
+  return serviceLooksLikeBoardingStayRate(service);
 }
 
 function selectableBoardingPricingServices() {
@@ -855,11 +870,10 @@ function selectableBoardingPricingServices() {
 }
 
 function serviceIsOvernightBoardingRateAlternative(service = {}) {
-  if (service.category !== "Boarding") return false;
+  if (!serviceCategoryIsBoarding(service)) return false;
   const name = normalizedServiceLookupText(service.serviceName || service.name || "");
   if (!name.includes("overnight") || !name.includes("boarding")) return false;
-  const unit = normalizedServiceLookupText(service.unit || "");
-  return /\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit);
+  return serviceUnitIsStayRate(service);
 }
 
 function serviceRecordFlags(service = {}) {
@@ -1023,7 +1037,12 @@ function boardingRateServiceExplicitRole(service = {}) {
 
 function boardingRateServiceRoleMatches(service = {}, role = "primary") {
   const explicitRole = boardingRateServiceExplicitRole(service);
-  return !explicitRole || normalizedBoardingRateRole(explicitRole) === role;
+  if (!explicitRole) return true;
+  const normalizedRole = normalizedBoardingRateRole(explicitRole);
+  if (serviceBoardingRateType(service) === "boarding-program") {
+    return normalizedRole !== "shared-crate-additional";
+  }
+  return normalizedRole === role;
 }
 
 function boardingRateSelectionSort(a = {}, b = {}) {
@@ -1048,6 +1067,7 @@ function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
   const selectable = uniqueBoardingRateSelectionServices([
     ...selectableBoardingPricingServices(),
     ...selectableOvernightBoardingPricingServices(),
+    ...activeBoardingPricingRecordsForSelection().filter(serviceLooksLikeBoardingStayRate),
   ]);
   const roleMatches = selectable.filter((service) => boardingRateServiceRoleMatches(service, role));
   const scopedMatches = roleMatches.filter((service) => boardingRateServiceMatchesPricingScope(service, scope));
