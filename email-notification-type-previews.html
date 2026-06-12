@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Central Texas Husky Email Notification Type Previews</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --black: #050505;
+      --ink: #111111;
+      --paper: #fffaf1;
+      --page: #f4efe6;
+      --gold: #c8962e;
+      --gold-dark: #8a5c14;
+      --gold-soft: #ead7ac;
+      --muted: #5d6673;
+      --line: #d8bc78;
+      --danger: #a94444;
+      --success: #2c7a4b;
+      --blue: #286ecb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 28px;
+      background: var(--page);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .preview-index {
+      max-width: 1240px;
+      margin: 0 auto 24px;
+      color: #4f4638;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .preview-index h1 {
+      margin: 0 0 8px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+      gap: 28px;
+      align-items: start;
+    }
+
+    .email-frame {
+      width: 720px;
+      max-width: 100%;
+      margin: 0 auto;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 18px 54px rgba(17, 17, 17, 0.16);
+    }
+
+    .email-hero {
+      position: relative;
+      min-height: 228px;
+      padding: 34px 34px 30px;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(231, 192, 98, 0.14), transparent 26%),
+        linear-gradient(135deg, #050505 0%, #111111 56%, #050505 100%);
+      border-bottom: 5px solid var(--gold-dark);
+      text-align: center;
+    }
+
+    .brand-lockup {
+      display: grid;
+      grid-template-columns: 132px 1fr;
+      gap: 22px;
+      align-items: center;
+      max-width: 610px;
+      margin: 0 auto;
+      text-align: left;
+    }
+
+    .brand-lockup img {
+      width: 122px;
+      height: 122px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .brand-name {
+      color: #fff8dd;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 42px;
+      line-height: 1.08;
+      letter-spacing: 5px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .brand-subtitle {
+      margin-top: 12px;
+      color: #d2a13a;
+      font-size: 15px;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .crest {
+      position: relative;
+      width: 88px;
+      height: 88px;
+      margin: 22px auto 22px;
+      border-radius: 999px;
+      background: #080808;
+      border: 4px solid var(--gold);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
+      color: var(--gold);
+      display: grid;
+      place-items: center;
+      font-size: 42px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-weight: 700;
+    }
+
+    .crest::before,
+    .crest::after {
+      content: "";
+      position: absolute;
+      width: 78px;
+      height: 1px;
+      background: var(--gold);
+      top: 50%;
+    }
+
+    .crest::before {
+      right: calc(50% + 58px);
+    }
+
+    .crest::after {
+      left: calc(50% + 58px);
+    }
+
+    .email-body {
+      padding: 0 34px 34px;
+      text-align: center;
+    }
+
+    .audience {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 7px 13px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--gold-dark);
+      background: #fff4dc;
+      font-size: 12px;
+      line-height: 1;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .audience.urgent {
+      color: #8e2020;
+      border-color: #c56868;
+      background: #fff1ee;
+    }
+
+    h2 {
+      margin: 0;
+      color: var(--ink);
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 36px;
+      line-height: 1.16;
+      letter-spacing: 0;
+    }
+
+    .divider {
+      width: 164px;
+      height: 1px;
+      margin: 14px auto 20px;
+      background: var(--gold);
+    }
+
+    .intro {
+      max-width: 560px;
+      margin: 0 auto 26px;
+      color: #344054;
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    .detail-card {
+      margin: 0 0 22px;
+      padding: 22px 24px;
+      background: #fffaf1;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(185, 133, 36, 0.1);
+      text-align: left;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+    }
+
+    .detail-item {
+      padding: 14px 16px;
+      border-bottom: 1px dotted var(--line);
+    }
+
+    .detail-item:nth-child(2n) {
+      border-left: 1px solid #e3c88d;
+    }
+
+    .detail-item:nth-last-child(-n + 2) {
+      border-bottom: 0;
+    }
+
+    .label {
+      color: #9a6815;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .value {
+      margin-top: 7px;
+      color: #111827;
+      font-size: 16px;
+      line-height: 1.45;
+    }
+
+    .service-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .service-row {
+      display: grid;
+      grid-template-columns: 42px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--gold-soft);
+    }
+
+    .service-row:last-child {
+      border-bottom: 0;
+    }
+
+    .count {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: #111111;
+      color: var(--gold);
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 15px;
+    }
+
+    .service-title {
+      color: #111111;
+      font-size: 16px;
+      line-height: 1.3;
+      font-weight: 800;
+    }
+
+    .service-note {
+      margin-top: 3px;
+      color: #766341;
+      font-size: 13px;
+      line-height: 1.4;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .highlight {
+      margin-top: 16px;
+      padding: 16px 18px;
+      border-radius: 13px;
+      background: #111111;
+      color: #fff8dd;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      font-weight: 900;
+    }
+
+    .highlight strong {
+      font-size: 23px;
+    }
+
+    .message-box {
+      margin-top: 16px;
+      padding: 16px 18px;
+      border-radius: 14px;
+      background: #fff4dc;
+      color: #344054;
+      border: 1px solid #dfc181;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .cta {
+      display: inline-block;
+      margin-top: 5px;
+      padding: 17px 58px;
+      border-radius: 12px;
+      border: 1px solid var(--gold-dark);
+      color: #111111;
+      text-decoration: none;
+      background: linear-gradient(180deg, #f0c76c, #b98524);
+      box-shadow: 0 8px 18px rgba(185, 133, 36, 0.22);
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .signature {
+      margin: 22px 0 0;
+      color: #344054;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 17px;
+      font-style: italic;
+    }
+
+    .email-footer {
+      padding: 22px;
+      background: #050505;
+      border-top: 4px solid var(--gold-dark);
+      color: var(--gold);
+      text-align: center;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    @media (max-width: 680px) {
+      body {
+        padding: 14px;
+      }
+
+      .brand-lockup {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+
+      .brand-lockup img {
+        margin: 0 auto;
+      }
+
+      .brand-name {
+        font-size: 32px;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-item:nth-child(2n) {
+        border-left: 0;
+      }
+
+      .detail-item:nth-last-child(2) {
+        border-bottom: 1px dotted var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-index">
+    <h1>Email Notification Type Previews</h1>
+    <p>These are static mockups for review only. They are not wired into the app or deployed.</p>
+  </div>
+  <main class="preview-grid" id="previewGrid"></main>
+
+  <template id="emailTemplate">
+    <section class="email-frame">
+      <div class="email-hero">
+        <div class="brand-lockup">
+          <img src="images/arkinlight-trophy-logo-email.png" alt="Central Texas Husky logo" />
+          <div>
+            <div class="brand-name">Central<br />Texas Husky</div>
+            <div class="brand-subtitle">Boarding &amp; Services</div>
+          </div>
+        </div>
+      </div>
+      <div class="crest">★</div>
+      <div class="email-body">
+        <div class="audience"></div>
+        <h2></h2>
+        <div class="divider"></div>
+        <p class="intro"></p>
+        <div class="detail-card">
+          <div class="detail-grid"></div>
+          <div class="service-list"></div>
+          <div class="message-box"></div>
+          <div class="highlight"></div>
+        </div>
+        <a class="cta" href="#"></a>
+        <p class="signature">Central Texas Husky Team</p>
+      </div>
+      <div class="email-footer">Central Texas Husky &middot; Snuggle Stay</div>
+    </section>
+  </template>
+
+  <script>
+    const previews = [
+      {
+        id: "customerBoardingRequestCreated",
+        audience: "Staff/Admin",
+        title: "Boarding Request Received",
+        intro: "A new boarding request needs review and approval.",
+        details: [["Customer", "Heather Owens"], ["Dog", "Skye-Blue"], ["Drop-off", "Jun 21, 10:00 AM"], ["Pick-up", "Jul 1, 10:00 AM"], ["Phone", "(210) 347-6283"], ["Email", "owner@example.com"]],
+        services: [["1", "Full Premium Bath", "Requested service"], ["1", "Bootcamp Training", "Boarding add-on"]],
+        highlight: ["Estimated total", "$1,600"],
+        cta: "Review Request",
+      },
+      {
+        id: "customerBoardingRequestUpdated",
+        audience: "Staff/Admin",
+        title: "Boarding Request Updated",
+        intro: "A customer changed an existing request. Approval should return to pending until reviewed.",
+        details: [["Customer", "Kim Murphy"], ["Dogs", "Daphnis, Chloe"], ["Updated drop-off", "Jun 23, 4:00 PM"], ["Updated pick-up", "Jul 1, 11:00 AM"], ["Stay ID", "BR-20260623-ETE1U"], ["Status", "Pending review"]],
+        services: [["2", "Full Premium Bath", "Updated quantity"]],
+        message: "Customer note: Please confirm both dogs can share a crate.",
+        highlight: ["Revised total", "$460"],
+        cta: "Review Changes",
+      },
+      {
+        id: "boardingCustomerRequestApproved",
+        audience: "Customer",
+        title: "Request Approved",
+        intro: "Your boarding or service request has been approved.",
+        details: [["Dog", "Mango"], ["Request", "Service only"], ["Drop-off", "Jun 13, 9:00 AM"], ["Estimated pickup", "Jun 13, 2:00 PM"], ["Status", "Approved"], ["Stay ID", "BR-20260613-PUSSM"]],
+        services: [["1", "Full Premium Bath", "Approved service"]],
+        highlight: ["Estimated total", "$100"],
+        cta: "Open My Request",
+      },
+      {
+        id: "boardingCustomerRequestDeclined",
+        audience: "Customer",
+        title: "Request Declined",
+        intro: "We reviewed your request and cannot approve it as submitted.",
+        details: [["Dog", "Mango"], ["Request", "Boarding stay"], ["Requested drop-off", "Jun 27, 12:00 PM"], ["Requested pick-up", "Jul 6, 4:00 PM"], ["Status", "Declined"], ["Reason", "No kennel availability for the requested dates."]],
+        cta: "Edit Request",
+      },
+      {
+        id: "boardingCustomerRequestCancelled",
+        audience: "Customer",
+        title: "Request Cancelled",
+        intro: "Your request was cancelled by the Central Texas Husky team.",
+        details: [["Dog", "Kaito"], ["Request", "Boarding stay"], ["Original drop-off", "Aug 10, 12:00 PM"], ["Original pick-up", "Aug 24, 12:00 PM"], ["Cancelled by", "Staff"], ["Reason", "Owner requested cancellation by phone."]],
+        cta: "View Request",
+      },
+      {
+        id: "boardingCustomerRequestUpdatedByStaff",
+        audience: "Customer",
+        title: "Request Updated",
+        intro: "The team updated your stay or service details. Please review the updated schedule.",
+        details: [["Dog", "Mango"], ["Request", "Service only"], ["Updated drop-off", "Jun 13, 9:00 AM"], ["Estimated pickup", "Jun 13, 2:00 PM"], ["Updated by", "Central Texas Husky"], ["Status", "Approved"]],
+        services: [["1", "Full Premium Bath", "Confirmed service"]],
+        cta: "Review Update",
+      },
+      {
+        id: "customerApprovedStayCancelled",
+        audience: "Staff/Admin",
+        title: "Approved Stay Cancelled",
+        intro: "A customer cancelled an already approved stay. Review the cancellation reason.",
+        details: [["Customer", "Elena Levy"], ["Dog", "Storm"], ["Drop-off", "Jun 29, 12:00 PM"], ["Pick-up", "Jul 7, 2:00 PM"], ["Status", "Cancelled"], ["Customer reason", "Schedule changed after surgery."]],
+        cta: "Open Stay",
+      },
+      {
+        id: "customerDogFileUploaded",
+        audience: "Staff/Admin",
+        title: "Customer File Uploaded",
+        intro: "A customer uploaded a profile file or vaccination document.",
+        details: [["Customer", "Jim Dierkes"], ["Dog", "Zeus"], ["File", "rabies-vaccine.pdf"], ["Uploaded", "Jun 12, 9:14 AM"], ["Type", "Vaccination record"], ["Needs review", "Yes"]],
+        cta: "Review File",
+      },
+      {
+        id: "customerStayUpdateSent",
+        audience: "Customer",
+        title: "Stay Update",
+        intro: "A new update was posted for your dog.",
+        details: [["Dog", "Asher Groover"], ["Stay ID", "BR-20260607-RMSLT"], ["Posted", "Jun 12, 1:35 PM"], ["From", "Central Texas Husky"], ["Status", "In Kennel"], ["Media", "2 photos attached"]],
+        message: "Asher had a great morning and finished treadmill exercise.",
+        cta: "View Update",
+      },
+      {
+        id: "careLogAdminAlertCreated",
+        audience: "Staff/Admin",
+        title: "Medical/Behavior Alert",
+        intro: "A care note was flagged for admin attention.",
+        details: [["Dog", "Tornade"], ["Care type", "Medical/Behavior Note"], ["Logged by", "Evening staff"], ["Date", "Jun 12"], ["Priority", "Review"], ["Note", "Small lump noticed on right side."]],
+        cta: "Open Care Note",
+      },
+      {
+        id: "kennelRequestCreated",
+        audience: "Staff/Admin",
+        title: "New Staff Request",
+        intro: "A staff request was submitted and needs review.",
+        details: [["Requested by", "Yuko Arana"], ["Category", "Supplies"], ["Request", "Restock disinfectant wipes"], ["Reason", "Running low in Shed 10"], ["Submitted", "Jun 12, 6:28 PM"], ["Priority", "Normal"]],
+        cta: "Review Request",
+      },
+      {
+        id: "maintenanceCreated",
+        audience: "Staff/Admin",
+        title: "New Maintenance Item",
+        intro: "A maintenance issue was reported from the kennel.",
+        details: [["Reported by", "Morning staff"], ["Location", "Shed 11"], ["Issue", "Latch is sticking"], ["Suggested action", "Inspect and replace latch"], ["Files", "1 photo"], ["Priority", "Normal"]],
+        cta: "Open Maintenance",
+      },
+      {
+        id: "urgentKennelRequestCreated",
+        audience: "Urgent Staff/Admin",
+        urgent: true,
+        title: "Urgent Kennel Request",
+        intro: "An urgent staff request needs immediate attention.",
+        details: [["Requested by", "Evening staff"], ["Category", "Medication"], ["Request", "Confirm dosage before evening meal"], ["Dog", "Arrow"], ["Priority", "Urgent"], ["SMS", "Also sent"]],
+        cta: "Open Urgent Request",
+      },
+      {
+        id: "urgentMaintenanceCreated",
+        audience: "Urgent Staff/Admin",
+        urgent: true,
+        title: "Urgent Maintenance",
+        intro: "An urgent maintenance issue was submitted.",
+        details: [["Reported by", "Evening staff"], ["Location", "Mansion"], ["Issue", "Water leak near kennel line"], ["Suggested action", "Shut valve and inspect"], ["Priority", "Urgent"], ["SMS", "Also sent"]],
+        cta: "Open Maintenance",
+      },
+      {
+        id: "timeOffRequested",
+        audience: "Admin",
+        title: "Time Off Request",
+        intro: "A staff time off request needs review.",
+        details: [["Staff", "Yuko Arana"], ["Dates", "Jun 18 to Jun 20"], ["Reason", "Family event"], ["Coverage", "Needed"], ["Submitted", "Jun 12, 6:28 PM"], ["Status", "Pending"]],
+        cta: "Review Time Off",
+      },
+      {
+        id: "timeOffReviewed",
+        audience: "Staff",
+        title: "Time Off Reviewed",
+        intro: "Your time off request was reviewed.",
+        details: [["Status", "Approved"], ["Dates", "Jun 18 to Jun 20"], ["Reviewed by", "Admin"], ["Note", "Coverage confirmed."], ["Published schedule", "Updated"], ["Next step", "Check schedule tab"]],
+        cta: "Open Schedule",
+      },
+      {
+        id: "schedulePublished",
+        audience: "Staff",
+        title: "Schedule Published",
+        intro: "The kennel schedule has been published for the week.",
+        details: [["Week", "Jun 15 to Jun 21"], ["Staff", "Yuko Arana"], ["Shift", "Morning"], ["Start", "8:00 AM"], ["End", "12:00 PM"], ["Location", "Kennel Ops"]],
+        cta: "View Schedule",
+      },
+      {
+        id: "scheduleChangedAfterPublish",
+        audience: "Staff",
+        title: "Schedule Changed",
+        intro: "A published schedule changed after it was released.",
+        details: [["Date", "Jun 17"], ["Staff", "Yuko Arana"], ["Previous shift", "Morning"], ["New shift", "Evening"], ["Changed by", "Admin"], ["Review needed", "Yes"]],
+        cta: "Review Change",
+      },
+      {
+        id: "urgentStaffAlertSent",
+        audience: "Urgent Staff",
+        urgent: true,
+        title: "Urgent Staff Alert",
+        intro: "An urgent staff broadcast was sent from Snuggle Stay.",
+        details: [["Sent by", "Admin"], ["Audience", "Staff"], ["Channel", "Email and SMS"], ["Priority", "Urgent"], ["Time", "Jun 12, 6:28 PM"], ["Action", "Respond in app"]],
+        message: "Please check kennel gate status before leaving the property.",
+        cta: "Open Snuggle Stay",
+      },
+      {
+        id: "urgentCustomerAlertSent",
+        audience: "Customer",
+        urgent: true,
+        title: "Urgent Customer Alert",
+        intro: "An urgent customer message was sent from Central Texas Husky.",
+        details: [["Audience", "Selected customers"], ["Related dog", "Mango"], ["Channel", "Email"], ["Priority", "Urgent"], ["Sent by", "Admin"], ["Time", "Jun 12, 6:28 PM"]],
+        message: "Please call us before pickup so we can coordinate timing.",
+        cta: "Open Snuggle Stay",
+      },
+    ];
+
+    const template = document.getElementById("emailTemplate");
+    const grid = document.getElementById("previewGrid");
+
+    function detailMarkup(items) {
+      return items.map(([label, value]) => `
+        <div class="detail-item">
+          <div class="label">${label}</div>
+          <div class="value">${value}</div>
+        </div>
+      `).join("");
+    }
+
+    function serviceMarkup(items = []) {
+      return items.map(([count, title, note]) => `
+        <div class="service-row">
+          <div class="count">${count}</div>
+          <div>
+            <div class="service-title">${title}</div>
+            <div class="service-note">${note}</div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    for (const item of previews) {
+      const node = template.content.firstElementChild.cloneNode(true);
+      node.dataset.previewId = item.id;
+      node.querySelector(".audience").textContent = item.audience;
+      if (item.urgent) node.querySelector(".audience").classList.add("urgent");
+      node.querySelector("h2").textContent = item.title;
+      node.querySelector(".intro").textContent = item.intro;
+      node.querySelector(".detail-grid").innerHTML = detailMarkup(item.details);
+      node.querySelector(".service-list").innerHTML = serviceMarkup(item.services);
+      node.querySelector(".message-box").textContent = item.message || "";
+      node.querySelector(".message-box").hidden = !item.message;
+      node.querySelector(".highlight").innerHTML = item.highlight ? `<span>${item.highlight[0]}</span><strong>${item.highlight[1]}</strong>` : "";
+      node.querySelector(".highlight").hidden = !item.highlight;
+      node.querySelector(".cta").textContent = item.cta;
+      grid.appendChild(node);
+    }
+  </script>
+</body>
+</html>
