@@ -15,6 +15,8 @@ function getCorsHeaders(req: Request): Record<string, string> {
 }
 
 type NotifyBody = {
+  type?: string;
+  audience?: string;
   eventName?: string;
   recordId?: string;
   notificationId?: string;
@@ -38,6 +40,15 @@ function splitEnv(name: string) {
 
 function normalizeEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function uniqueEmails(values: unknown[]) {
@@ -96,6 +107,63 @@ function appUrl() {
 function appLink(hash = "") {
   const base = appUrl().replace(/#.*$/, "").replace(/\/?$/, "/");
   return hash ? `${base}${hash.startsWith("#") ? hash : `#${hash}`}` : base;
+}
+
+function absoluteAppUrl(path = "/") {
+  const base = appUrl().replace(/#.*$/, "").replace(/\/$/, "");
+  const cleanPath = path.startsWith("/") || path.startsWith("#") ? path : `/${path}`;
+  return `${base}${cleanPath}`;
+}
+
+function emailLogoUrl() {
+  return Deno.env.get("LOGO_URL") || absoluteAppUrl("/images/arkinlight-trophy-logo-email.png");
+}
+
+function emailValue(value: unknown, fallback = "Not provided") {
+  const text = String(value ?? "").trim();
+  return text ? escapeHtml(text) : fallback;
+}
+
+function emailTextValue(value: unknown, fallback = "Not provided") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function formatEmailDateTime(value: unknown) {
+  if (!value) return "Not provided";
+  const text = String(value).trim();
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return escapeHtml(text);
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/Chicago",
+  }).format(date);
+}
+
+function formatEmailDateTimeText(value: unknown) {
+  if (!value) return "Not provided";
+  const text = String(value).trim();
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "America/Chicago",
+  }).format(date);
+}
+
+function formatEmailMoney(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "Not provided";
+  if (raw.startsWith("$")) return escapeHtml(raw);
+  const numberValue = typeof value === "number" ? value : Number(raw.replace(/[$,]/g, ""));
+  if (!Number.isFinite(numberValue)) return escapeHtml(raw);
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: Number.isInteger(numberValue) ? 0 : 2,
+  }).format(numberValue);
 }
 
 function arrayValue(value: unknown) {
@@ -259,6 +327,317 @@ function customerStatusLabel(eventName: string) {
   return "updated";
 }
 
+function serviceEmailDisplay(line: string) {
+  const match = line.match(/^(\d+)\s*x\s*(.*?)\s*requested$/i);
+  if (!match) return { quantity: "1", name: line.replace(/\s+requested$/i, "").trim(), detail: "Requested service" };
+  return {
+    quantity: match[1],
+    name: match[2].trim(),
+    detail: `${match[1]} x requested`,
+  };
+}
+
+function getBoardingEmailDetails(record: Record<string, unknown>, stay: Record<string, unknown>) {
+  const customer =
+    record.ownerName
+    || record.customerName
+    || record.requestedBy
+    || record.ownerEmail
+    || record.customerEmail
+    || "Customer";
+  const email =
+    record.ownerEmail
+    || record.customerEmail
+    || record.requestedByEmail
+    || record.linkedOwnerEmail
+    || "";
+  const phone =
+    record.ownerPhone
+    || record.customerPhone
+    || record.phone
+    || "";
+  const dogList = Array.isArray(record.dogNames)
+    ? record.dogNames.join(", ")
+    : record.dogNames || record.dogs || record.dogName || stay.dogName || "";
+  const dropOff =
+    stay.dropoffTime
+    || stay.requestedDropoffTime
+    || stay.dropOff
+    || stay.dropOffDate
+    || record.dropOff
+    || record.dropOffDate
+    || record.startDate
+    || "";
+  const pickUp =
+    stay.pickupTime
+    || stay.requestedPickupTime
+    || stay.pickUp
+    || stay.pickUpDate
+    || record.pickUp
+    || record.pickUpDate
+    || record.endDate
+    || "";
+  const notes =
+    stay.stayNotes
+    || stay.notes
+    || stay.message
+    || record.notes
+    || record.message
+    || record.specialInstructions
+    || "";
+  const requestId = stayRequestCode(record, stay);
+  return {
+    customer,
+    dashboardUrl: appLink("#boardingDogsPage"),
+    dogs: dogList,
+    dropOff,
+    email,
+    notes,
+    phone,
+    pickUp,
+    requestId,
+    total: record.estimatedTotal || stay.estimatedTotal || "",
+  };
+}
+
+function renderAdminBoardingRequestEmail(
+  record: Record<string, unknown>,
+  stay: Record<string, unknown>,
+  options: {
+    action?: string;
+    requestType?: string;
+    serviceLines?: string[];
+    mediaLines?: string[];
+  } = {},
+) {
+  const details = getBoardingEmailDetails(record, stay);
+  const logoUrl = emailLogoUrl();
+  const serviceLines = options.serviceLines?.length ? options.serviceLines : requestServiceLines(record, stay);
+  const mediaLines = options.mediaLines || [];
+  const requestType = options.requestType || requestTypeLabel(record, stay);
+  const isServiceOnly = requestType.toLowerCase().includes("service");
+  const action = String(options.action || "submitted").toLowerCase();
+  const requestTitle = isServiceOnly ? "Service Request" : "Boarding Request";
+  const title = action === "updated" ? `${requestTitle} Updated` : `${requestTitle} Received`;
+  const intro = action === "updated"
+    ? `A ${requestType} has been updated and needs review.`
+    : `A new ${requestType} has been submitted.`;
+  const subjectCustomer = String(details.customer || "New Customer").trim();
+  const serviceHtml = serviceLines.length
+    ? serviceLines.map((line) => {
+        const service = serviceEmailDisplay(line);
+        return `<tr>
+          <td width="54" valign="top" style="padding:10px 0;border-bottom:1px solid #ead9b4;">
+            <div style="width:34px;height:34px;border-radius:999px;background:#111111;color:#d7a83d;text-align:center;line-height:34px;font-weight:800;font-size:15px;">${escapeHtml(service.quantity)}</div>
+          </td>
+          <td valign="top" style="padding:10px 0;border-bottom:1px solid #ead9b4;">
+            <div style="font-size:16px;line-height:1.35;color:#111111;font-weight:800;">${emailValue(service.name)}</div>
+            <div style="margin-top:3px;font-size:13px;line-height:1.4;color:#766341;text-transform:uppercase;letter-spacing:1px;font-weight:700;">${emailValue(service.detail)}</div>
+          </td>
+        </tr>`;
+      }).join("")
+    : `<tr><td style="padding:10px 0;color:#5d6673;font-size:15px;">No requested services listed.</td></tr>`;
+  const mediaHtml = mediaLines.length
+    ? `<tr>
+        <td style="padding:0 34px 30px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:18px;">
+            <tr>
+              <td style="padding:20px 24px;">
+                <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:18px;font-weight:700;">Media links</div>
+                <div style="margin-top:10px;color:#344054;font-size:14px;line-height:1.55;">${mediaLines.map((line) => emailValue(line)).join("<br>")}</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>`
+    : "";
+  const notesHtml = String(details.notes || "").trim()
+    ? `<div style="margin-top:22px;padding-top:18px;border-top:1px dotted #d7b46a;text-align:left;">
+        <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;font-weight:700;">Notes:</div>
+        <div style="margin-top:7px;font-size:15px;line-height:1.55;color:#344054;">${emailValue(details.notes)}</div>
+      </div>`
+    : "";
+
+  const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${escapeHtml(title)}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f6f1e8;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f1e8;padding:28px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:720px;background:#fffaf1;border-radius:24px;overflow:hidden;border:1px solid #d7b46a;box-shadow:0 20px 60px rgba(17,17,17,0.16);">
+            <tr>
+              <td style="background:#050505;padding:34px 34px 28px;border-bottom:5px solid #b98524;text-align:center;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding-bottom:18px;">
+                      <img src="${escapeHtml(logoUrl)}" width="112" alt="Central Texas Husky trophy logo" style="display:block;width:112px;max-width:112px;height:auto;margin:0 auto;">
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="center">
+                      <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1.08;letter-spacing:4px;color:#fff8dd;text-transform:uppercase;font-weight:700;">
+                        CENTRAL<br>TEXAS HUSKY
+                      </div>
+                      <div style="margin-top:12px;color:#d2a13a;font-size:15px;letter-spacing:5px;text-transform:uppercase;font-weight:700;">
+                        BOARDING &amp; SERVICES
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="center" style="padding:0 34px;">
+                <div style="width:86px;height:86px;margin:-43px auto 22px;border-radius:999px;background:#080808;border:4px solid #d2a13a;box-shadow:0 10px 24px rgba(0,0,0,0.25);display:inline-block;text-align:center;line-height:86px;color:#d2a13a;font-size:36px;">
+                  &#9733;
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:0 34px 34px;text-align:center;">
+                <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:36px;line-height:1.18;color:#111111;">
+                  ${escapeHtml(title)}
+                </h1>
+                <div style="margin:14px auto 20px;width:160px;border-top:1px solid #c6932f;"></div>
+                <p style="margin:0 0 8px;font-size:18px;line-height:1.5;color:#111827;">
+                  Hi Central Texas Husky Team,
+                </p>
+                <p style="margin:0;font-size:17px;line-height:1.6;color:#344054;">
+                  ${escapeHtml(intro)}
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:0 34px 30px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:18px;box-shadow:0 10px 30px rgba(185,133,36,0.1);">
+                  <tr>
+                    <td style="padding:24px;">
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td width="50%" valign="top" style="padding:0 18px 18px 0;border-bottom:1px dotted #d7b46a;">
+                            <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;font-weight:700;">Customer:</div>
+                            <div style="margin-top:7px;font-size:17px;line-height:1.45;color:#111827;">${emailValue(details.customer)}</div>
+                          </td>
+                          <td width="50%" valign="top" style="padding:0 0 18px 18px;border-left:1px solid #e3c88d;border-bottom:1px dotted #d7b46a;">
+                            <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;font-weight:700;">Email:</div>
+                            <div style="margin-top:7px;font-size:17px;line-height:1.45;color:#111827;">${emailValue(details.email)}</div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td width="50%" valign="top" style="padding:18px 18px 18px 0;border-bottom:1px dotted #d7b46a;">
+                            <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;font-weight:700;">Phone:</div>
+                            <div style="margin-top:7px;font-size:17px;line-height:1.45;color:#111827;">${emailValue(details.phone)}</div>
+                          </td>
+                          <td width="50%" valign="top" style="padding:18px 0 18px 18px;border-left:1px solid #e3c88d;border-bottom:1px dotted #d7b46a;">
+                            <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;font-weight:700;">Dogs:</div>
+                            <div style="margin-top:7px;font-size:17px;line-height:1.45;color:#111827;">${emailValue(details.dogs)}</div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td width="50%" valign="top" style="padding:18px 18px 0 0;">
+                            <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;font-weight:700;">Drop-off:</div>
+                            <div style="margin-top:7px;font-size:17px;line-height:1.45;color:#111827;">${formatEmailDateTime(details.dropOff)}</div>
+                          </td>
+                          <td width="50%" valign="top" style="padding:18px 0 0 18px;border-left:1px solid #e3c88d;">
+                            <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;font-weight:700;">Pick-up:</div>
+                            <div style="margin-top:7px;font-size:17px;line-height:1.45;color:#111827;">${formatEmailDateTime(details.pickUp)}</div>
+                          </td>
+                        </tr>
+                      </table>
+                      ${notesHtml}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="padding:0 34px 30px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:18px;">
+                  <tr>
+                    <td style="padding:20px 24px;">
+                      <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:18px;font-weight:700;">Requested services</div>
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;">
+                        ${serviceHtml}
+                      </table>
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:#111111;border-radius:12px;">
+                        <tr>
+                          <td style="padding:16px 18px;color:#fff8dd;font-weight:800;font-size:16px;">Estimated total</td>
+                          <td align="right" style="padding:16px 18px;color:#fff8dd;font-weight:900;font-size:24px;">${formatEmailMoney(details.total)}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            ${mediaHtml}
+
+            <tr>
+              <td align="center" style="padding:0 34px 34px;">
+                <a href="${escapeHtml(details.dashboardUrl)}" style="display:inline-block;background:#c9962f;background:linear-gradient(180deg,#f0c76c,#b98524);border:1px solid #8a5c14;border-radius:12px;color:#111111;text-decoration:none;font-size:18px;font-weight:800;padding:17px 62px;box-shadow:0 8px 18px rgba(185,133,36,0.22);">
+                  View Request
+                </a>
+                <p style="margin:24px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:17px;font-style:italic;color:#344054;">
+                  &mdash; Central Texas Husky Team &mdash;
+                </p>
+              </td>
+            </tr>
+
+            <tr>
+              <td style="background:#050505;border-top:4px solid #b98524;padding:22px;text-align:center;">
+                <p style="margin:0;color:#d2a13a;font-size:12px;letter-spacing:2px;text-transform:uppercase;">
+                  Central Texas Husky &middot; Boarding &amp; Services
+                </p>
+              </td>
+            </tr>
+          </table>
+
+          <p style="max-width:720px;margin:14px auto 0;color:#8a7d67;font-size:12px;line-height:1.5;text-align:center;">
+            This is an automated staff notification from the Central Texas Husky boarding app.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  const text = [
+    title,
+    "",
+    `Customer: ${emailTextValue(details.customer)}`,
+    `Email: ${emailTextValue(details.email)}`,
+    `Phone: ${emailTextValue(details.phone)}`,
+    `Dogs: ${emailTextValue(details.dogs)}`,
+    `Drop-off: ${formatEmailDateTimeText(details.dropOff)}`,
+    `Pick-up: ${formatEmailDateTimeText(details.pickUp)}`,
+    serviceLines.length ? "Requested services:" : "",
+    ...serviceLines.map((line) => `- ${line}`),
+    `Estimated total: ${emailTextValue(details.total)}`,
+    details.notes ? `Notes: ${String(details.notes)}` : "",
+    ...(mediaLines.length ? ["", "Media links:", ...mediaLines] : []),
+    "",
+    `View Request: ${details.dashboardUrl}`,
+  ].filter(Boolean).join("\n");
+
+  return {
+    html,
+    logoUrl,
+    subject: `${action === "updated" ? "Updated" : "New"} ${requestType} from ${subjectCustomer}`,
+    template: "admin_boarding_request_premium",
+    text,
+  };
+}
+
 function notificationFallbackFields(eventName: string, sourceRecord: Record<string, unknown>, notificationId = ""): Record<string, unknown> {
   const stay = firstStay(sourceRecord);
   const sourceType = String(sourceRecord.type || "").trim();
@@ -350,22 +729,17 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const customerTo = customerEmailsForRecord(record);
     const schedule = stayScheduleText(stay);
     const dogName = String(record.dogName || "Customer dog");
-    const adminBody = [
-      `A customer ${requestType} was ${action}.`,
-      "",
-      `Dog: ${dogName}`,
-      `Owner: ${record.ownerName || record.ownerEmail || ""}`,
-      `Email: ${record.ownerEmail || record.customerEmail || record.requestedByEmail || ""}`,
-      `Phone: ${record.ownerPhone || record.customerPhone || ""}`,
-      schedule ? `Requested time: ${schedule}` : "",
-      serviceLines.length ? "Requested services:" : "",
-      ...serviceLines.map((line) => `- ${line}`),
-      `Estimated total: ${record.estimatedTotal || stay.estimatedTotal || ""}`,
-      `Notes: ${stay.stayNotes || ""}`,
-      ...(media.length ? ["", "Media links:", ...media] : []),
-      "",
-      `Review request: ${appLink("#boardingDogsPage")}`,
-    ].filter(Boolean).join("\n");
+    const adminRendered = renderAdminBoardingRequestEmail(record, stay, {
+      action,
+      requestType,
+      serviceLines,
+      mediaLines: media,
+    });
+    console.log("admin_boarding_email_template_rendered", {
+      template: adminRendered.template,
+      hasLogoUrl: Boolean(adminRendered.logoUrl),
+      recipientCount: adminTo.length,
+    });
     const customerBody = [
       `We received your ${requestType}${dogName ? ` for ${dogName}` : ""}.`,
       "",
@@ -379,7 +753,14 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       `Open your requests: ${appLink("#customerRequestsPage")}`,
     ].filter(Boolean).join("\n");
     const emails = [
-      { audience: "admin", to: adminTo, subject: `${eventName.endsWith("Updated") ? "Updated" : "New"} ${requestType}: ${dogName}`, body: adminBody },
+      {
+        audience: "admin",
+        to: adminTo,
+        subject: adminRendered.subject,
+        body: adminRendered.text,
+        html: adminRendered.html,
+        template: adminRendered.template,
+      },
       ...(customerTo.length
         ? [{ audience: "customer", to: customerTo, subject: `We received your ${requestType}: ${dogName}`, body: customerBody }]
         : []),
@@ -660,18 +1041,27 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
   return null;
 }
 
-async function sendEmail(to: string[], subject: string, body: string) {
+type EmailSendOptions = {
+  html?: string;
+  replyTo?: string;
+  template?: string;
+};
+
+async function sendEmail(to: string[], subject: string, body: string, options: EmailSendOptions = {}) {
   const apiKey = Deno.env.get("RESEND_API_KEY") || "";
   const from = Deno.env.get("ALERT_FROM_EMAIL") || "";
   if (!apiKey || !from || !to.length) return { skipped: true, reason: "Email provider secrets are missing." };
   try {
+    const payload: Record<string, unknown> = { from, to, subject, text: body };
+    if (options.html) payload.html = options.html;
+    if (options.replyTo) payload.reply_to = options.replyTo;
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from, to, subject, text: body }),
+      body: JSON.stringify(payload),
     });
     const text = await response.text();
     let data: unknown = text;
@@ -680,7 +1070,15 @@ async function sendEmail(to: string[], subject: string, body: string) {
     } catch (_error) {
       data = text;
     }
-    if (!response.ok) return { failed: true, status: response.status, reason: `Resend failed: ${text}` };
+    if (!response.ok) {
+      console.error("email_provider_failed", {
+        provider: "resend",
+        status: response.status,
+        template: options.template || "plain_text",
+        reason: text.slice(0, 1000),
+      });
+      return { failed: true, status: response.status, reason: `Resend failed: ${text}` };
+    }
     return { ok: true, status: response.status, data };
   } catch (error) {
     return { failed: true, reason: error instanceof Error ? error.message : String(error) };
@@ -756,14 +1154,57 @@ Deno.serve(async (req) => {
   const { data: { user }, error: userError } = await userClient.auth.getUser();
   if (userError || !user?.email) return json({ error: "Login required." }, 401, req);
 
-  const body = await req.json().catch(() => ({})) as NotifyBody;
-  const eventName = String(body.eventName || "");
-  const recordId = String(body.recordId || "");
-  if (!eventName || !recordId) return json({ error: "eventName and recordId are required." }, 400, req);
-
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  const body = await req.json().catch(() => ({})) as NotifyBody;
+  const isStaff = await callerIsStaff(adminClient, user.email);
+
+  if (String(body.type || "") === "template_test" && String(body.audience || "") === "admin") {
+    if (!isStaff) return json({ error: "Only staff can send this template test." }, 403, req);
+    const sampleRecord: Record<string, unknown> = {
+      id: "template-test",
+      type: "boardingDog",
+      dogName: "Luna",
+      ownerName: "John Smith",
+      ownerEmail: "john.smith@email.com",
+      ownerPhone: "(512) 555-1234",
+      estimatedTotal: 100,
+    };
+    const sampleStay: Record<string, unknown> = {
+      id: "template-test",
+      requestCode: "template-test",
+      requestedDropoffTime: "2025-06-20T10:00:00-05:00",
+      requestedPickupTime: "2025-06-24T10:00:00-05:00",
+      stayNotes: "Looking forward to boarding Luna!",
+      requests: [{ serviceName: "Full Premium Bath", quantity: 1 }],
+    };
+    const rendered = renderAdminBoardingRequestEmail(sampleRecord, sampleStay, {
+      action: "submitted",
+      requestType: "boarding request",
+      serviceLines: ["1 x Full Premium Bath requested"],
+    });
+    const to = adminEmails();
+    console.log("admin_boarding_email_template_rendered", {
+      template: rendered.template,
+      hasLogoUrl: Boolean(rendered.logoUrl),
+      recipientCount: to.length,
+    });
+    const providerStatus = await sendEmail(to, rendered.subject, rendered.text, {
+      html: rendered.html,
+      template: rendered.template,
+    });
+    const providerResult = providerStatus as Record<string, unknown>;
+    return json({
+      ok: !Boolean(providerResult.failed) && !Boolean(providerResult.skipped),
+      template: rendered.template,
+      providerStatus,
+    }, 200, req);
+  }
+
+  const eventName = String(body.eventName || "");
+  const recordId = String(body.recordId || "");
+  if (!eventName || !recordId) return json({ error: "eventName and recordId are required." }, 400, req);
 
   const { data: sourceRow, error: sourceError } = await adminClient
     .from("kennel_records")
@@ -780,7 +1221,6 @@ Deno.serve(async (req) => {
     submittedAt: (sourceRow as Record<string, unknown>).submitted_at || (sourceRow.payload as Record<string, unknown>).submittedAt || "",
     updatedAt: (sourceRow as Record<string, unknown>).updated_at || (sourceRow.payload as Record<string, unknown>).updatedAt || "",
   };
-  const isStaff = await callerIsStaff(adminClient, user.email);
   if (!isStaff && !recordHasEmail(sourceRecord, user.email)) {
     return json({ error: "Not authorized for this notification source." }, 403, req);
   }
@@ -809,10 +1249,16 @@ Deno.serve(async (req) => {
     : [{ audience: "default", to: content.to, subject: content.subject, body: content.body }];
   const emailResults: Record<string, unknown>[] = [];
   for (const message of emailMessages) {
+    const messageHtml = typeof message.html === "string" ? message.html : undefined;
+    const messageTemplate = typeof message.template === "string" ? message.template : undefined;
     const result = await sendEmail(
       uniqueEmails(Array.isArray(message.to) ? message.to : [message.to]),
       String(message.subject || content.subject || "Snuggle Stay alert"),
       String(message.body || content.body || ""),
+      {
+        html: messageHtml,
+        template: messageTemplate,
+      },
     );
     emailResults.push({
       audience: message.audience || "default",

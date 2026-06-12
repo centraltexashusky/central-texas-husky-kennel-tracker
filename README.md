@@ -62,13 +62,23 @@ RESEND_API_KEY
 ALERT_FROM_EMAIL
 ADMIN_ALERT_EMAILS
 APP_PRODUCTION_URL=https://kennel.centraltexashusky.com
+LOGO_URL
 TWILIO_ACCOUNT_SID
 TWILIO_AUTH_TOKEN
 TWILIO_FROM_NUMBER
 ADMIN_ALERT_PHONES
 ```
 
-Email can go live with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `ALERT_FROM_EMAIL`, `ADMIN_ALERT_EMAILS`, and `APP_PRODUCTION_URL`. SMS is optional and should stay limited to urgent alerts.
+Email can go live with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `ALERT_FROM_EMAIL`, `ADMIN_ALERT_EMAILS`, and `APP_PRODUCTION_URL`. `LOGO_URL` is optional; when it is not set, staff/admin boarding request emails use `https://kennel.centraltexashusky.com/images/arkinlight-trophy-logo-email.png`. SMS is optional and should stay limited to urgent alerts.
+
+Admin boarding request emails use the `admin_boarding_request_premium` template in `supabase/functions/send-notification`. To test the template without creating a fake boarding record, send this authenticated staff/admin request to the deployed function:
+
+```json
+{
+  "type": "template_test",
+  "audience": "admin"
+}
+```
 
 ## Persistent Database
 
