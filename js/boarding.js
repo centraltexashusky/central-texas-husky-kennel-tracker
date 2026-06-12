@@ -947,18 +947,53 @@ function boardingRateSelectionRole(role = "") {
   return normalizedBoardingRateRole(role) === "shared-crate-additional" ? "shared-crate-additional" : "primary";
 }
 
-function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
+function boardingRateSelectionScope(record = {}, stay = {}, options = {}) {
   const pricingUser = boardingPricingUserForRecord(record, options);
-  const scope = options.pricingScope || customerPricingScopeForUser(pricingUser);
+  return options.pricingScope
+    || stay.pricingSnapshot?.customerPricingScope
+    || stay.pricingSnapshot?.pricingScope
+    || customerPricingScopeForUser(pricingUser);
+}
+
+function boardingRateServiceExplicitRole(service = {}) {
+  return String(service.boardingRateRole || "").trim();
+}
+
+function boardingRateServiceRoleMatches(service = {}, role = "primary") {
+  const explicitRole = boardingRateServiceExplicitRole(service);
+  return !explicitRole || normalizedBoardingRateRole(explicitRole) === role;
+}
+
+function boardingRateSelectionSort(a = {}, b = {}) {
+  const priceDelta = servicePriceValue(a) - servicePriceValue(b);
+  if (priceDelta) return priceDelta;
+  return String(a.serviceName || "").localeCompare(String(b.serviceName || ""));
+}
+
+function uniqueBoardingRateSelectionServices(services = []) {
+  const seen = new Set();
+  return services.filter((service) => {
+    const key = service.id || [service.serviceName || service.name || "", service.basePrice || "", service.unit || "", servicePricingScope(service)].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
+  const scope = boardingRateSelectionScope(record, stay, options);
   const role = boardingRateSelectionRole(options.currentDogRole || stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.boardingRateRole || "");
-  return selectableBoardingPricingServices()
-    .filter((service) => normalizedBoardingRateRole(service.boardingRateRole || "primary") === role)
-    .filter((service) => serviceMatchesPricingScopeForResolution(service, scope))
-    .sort((a, b) => {
-      const priceDelta = servicePriceValue(a) - servicePriceValue(b);
-      if (priceDelta) return priceDelta;
-      return String(a.serviceName || "").localeCompare(String(b.serviceName || ""));
-    });
+  const selectable = selectableBoardingPricingServices();
+  const explicitRoleMatches = selectable.filter((service) => boardingRateServiceExplicitRole(service) && normalizedBoardingRateRole(boardingRateServiceExplicitRole(service)) === role);
+  const roleMatches = explicitRoleMatches.length ? explicitRoleMatches : selectable.filter((service) => boardingRateServiceRoleMatches(service, role));
+  const scopedMatches = roleMatches.filter((service) => serviceMatchesPricingScopeForResolution(service, scope));
+  const currentServiceId = stay.pricingSnapshot?.boardingRateServiceId || stay.stayProgramId || stay.pricingSnapshot?.stayProgramId || "";
+  const currentService = currentServiceId ? selectable.find((service) => service.id === currentServiceId) : null;
+  const candidates = scopedMatches.length ? scopedMatches : roleMatches.length ? roleMatches : selectable;
+  return uniqueBoardingRateSelectionServices([
+    ...(currentService ? [currentService] : []),
+    ...candidates,
+  ]).sort(boardingRateSelectionSort);
 }
 
 function boardingRateSelectionCurrentServiceId(stay = {}, services = []) {
@@ -2465,7 +2500,8 @@ function boardingStayRateServiceFieldHtml(record = {}, stay = {}) {
   const services = boardingRateSelectionServices(record, stay, { currentDogRole: role });
   const savedServiceId = stay.pricingSnapshot?.boardingRateServiceId || "";
   const defaultServiceId = role === "shared-crate-additional" ? ratePlan.sharedCrateRateConfig?.serviceId || "" : ratePlan.primaryRateConfig?.serviceId || "";
-  const selectedServiceId = savedServiceId || defaultServiceId || boardingRateSelectionCurrentServiceId(stay, services);
+  const currentServiceId = boardingRateSelectionCurrentServiceId(stay, services);
+  const selectedServiceId = [savedServiceId, currentServiceId, defaultServiceId].find((serviceId) => serviceId && services.some((service) => service.id === serviceId)) || "";
   const optionsHtml = services.map((service) => {
     const price = servicePriceValue(service);
     const priceText = Number.isFinite(price) ? \` - \${money(price)} \${service.unit || "per night"}\` : "";
