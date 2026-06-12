@@ -9273,13 +9273,14 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   const stay = entry.stay || {};
   const services = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
   const status = entry.status;
+  const serviceOnly = isServiceRequestStay(record, stay);
   const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const pricingSnapshot = options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay);
   const total = boardingStayInvoiceTotal(record, stay, pricingSnapshot ? { pricingSnapshot } : {});
   const approveAction = status === "Cancelled" ? `<button type="button" class="secondary-button" data-action="approve-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>Approve Request</button>` : "";
   const actions = `<div class="record-actions"><button type="button" class="secondary-button" data-action="change-boarding" data-id="${escapeHtml(record.id)}"${stayAttr}>Change</button>${approveAction}</div>${stay.id ? boardingStayTransitionActions(record, stay) : boardingTransitionActions(record)}`;
   const familyChip = options.familyName ? `<span class="status-chip boarding-family-chip">Same family: ${escapeHtml(options.familyName)}</span>` : "";
-  return `<article class="record-card clickable-card ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-id="${escapeHtml(record.id)}"${stayAttr} data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${familyChip}${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}"${stayAttr}>${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : ""}${actions}</article>`;
+  return `<article class="record-card clickable-card ${serviceOnly ? "is-service-only-request" : ""} ${statusClassForRequest(status)} ${statusClassForBoardingStatus(status)}" data-id="${escapeHtml(record.id)}"${stayAttr} data-action="view-boarding-request"><strong>${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">${dogTypeBadgeHtml("boardingDog")}${familyChip}${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}<button type="button" class="status-chip-button" data-action="open-boarding-request-tab" data-id="${escapeHtml(record.id)}"${stayAttr}>${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</button>${stay.id ? boardingStayServiceFlagHtml(record, stay) : ""}</div><span>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</span><p>${escapeHtml(services)}</p>${total ? `<p><strong>Estimated total:</strong> ${money(total)}</p>` : ""}${actions}</article>`;
 }
 
 function boardingFamilyGroupHtml(entries = []) {
@@ -10330,7 +10331,8 @@ function renderBoardingStays(record = activeBoardingDog()) {
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? `<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button>`
         : "";
-      return `<article class="record-card"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay)}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>${boardingStayInvoiceSummaryHtml(displayRecord, stay)}${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Remove Stay</button></div></article>`;
+      const serviceOnly = isServiceRequestStay(displayRecord, stay);
+      return `<article class="record-card ${serviceOnly ? "is-service-only-request" : ""}"><strong>${formatDateTime(stay.dropoffTime)} to ${formatDateTime(stay.pickupTime)}</strong><div class="chip-row">${boardingStayRequestCodeChipHtml(displayRecord, stay)}${boardingStayStatusButtonHtml(displayRecord, stay)}${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>${boardingStayInvoiceSummaryHtml(displayRecord, stay)}${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>${escapeHtml(stay.bathPlan || "")}</p><p>${escapeHtml(stay.stayNotes || "")}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Edit Stay</button>${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Remove Stay</button></div></article>`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -10341,8 +10343,9 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const servicesText = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(record), preferCatalogPricing: true });
   const serviceSummary = servicesText === "No service requests" ? "No service requested" : servicesText;
+  const serviceOnly = isServiceRequestStay(record, stay);
   return `<section class="popup-record-section">
-    <article class="record-card compact-record-card">
+    <article class="record-card compact-record-card ${serviceOnly ? "is-service-only-request" : ""}">
       <strong>${escapeHtml(formatDateTime(stay.dropoffTime))} to ${escapeHtml(formatDateTime(stay.pickupTime))}</strong>
       <div class="chip-row">${boardingStayRequestCodeChipHtml(record, stay)}${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}</div>
       <p><strong>Service request:</strong> ${escapeHtml(serviceSummary)}</p>

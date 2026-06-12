@@ -3408,6 +3408,7 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   const record = entry.record || {};
   const stay = entry.stay || {};
   const status = entry.status;
+  const serviceOnly = isServiceRequestStay(record, stay);
   const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const pricingSnapshot = options.pricingSnapshot || boardingCurrentPricingSnapshotForStay(record, stay);
   const total = boardingStayInvoiceTotal(record, stay, pricingSnapshot ? { pricingSnapshot } : {});
@@ -3422,7 +3423,7 @@ function boardingRequestCardHtml(entry = {}, options = {}) {
   const actions = \`<div class="record-actions boarding-request-primary-actions">\${updateOwnerAction}\${changeAction}\${approveAction}</div>\${stay.id ? boardingStayTransitionActions(record, stay, { includeOwnerUpdate: false }) : boardingTransitionActions(record)}\`;
   const familyChip = options.familyName ? \`<span class="status-chip boarding-family-chip">Same family: \${escapeHtml(options.familyName)}</span>\` : "";
   const rateRoleChip = boardingStayRateRoleChipHtml(stay, { familyName: options.familyName });
-  return \`<article class="record-card clickable-card boarding-request-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request">
+  return \`<article class="record-card clickable-card boarding-request-card \${serviceOnly ? "is-service-only-request" : ""} \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-id="\${escapeHtml(record.id)}"\${stayAttr} data-action="view-boarding-request">
     <div class="boarding-request-card-main">
       \${boardingDogThumbnailHtml(record, { className: "boarding-request-photo", interactive: true })}
       <div class="boarding-request-card-content">
@@ -4119,7 +4120,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const statusButtons = nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-next-status="\${escapeHtml(nextStatus)}">\${escapeHtml(stayTransitionLabel(status, nextStatus))}</button>\`);
   const buttons = [ownerUpdateButton, ...statusButtons].filter(Boolean);
   return \`<section class="popup-record-section">
-    <article class="record-card compact-record-card">
+    <article class="record-card compact-record-card \${serviceOnly ? "is-service-only-request" : ""}">
       <strong>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</strong>
       <div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusButtonHtml(record, stay, "open-stay-status-menu")}\${boardingServiceOnlyChipHtml(record, stay)}</div>
       <div class="boarding-status-service-summary"><strong>Service requests</strong>\${serviceRows}</div>
