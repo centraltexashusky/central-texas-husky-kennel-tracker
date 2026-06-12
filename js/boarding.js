@@ -703,6 +703,24 @@ function activeAdminPricingRecords() {
   return readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active"));
 }
 
+var boardingPricingCatalogOverrideRecords = [];
+
+function setBoardingPricingCatalogOverrideRecords(services = []) {
+  boardingPricingCatalogOverrideRecords = arrayValue(services).filter((service) => service?.id);
+}
+
+function boardingPricingCatalogRecordsForSelection() {
+  return uniqueBoardingRateSelectionServices([
+    ...readRecords("service"),
+    ...boardingPricingCatalogOverrideRecords,
+  ]);
+}
+
+function activeBoardingPricingRecordsForSelection() {
+  return boardingPricingCatalogRecordsForSelection()
+    .filter((service) => !service.removed && serviceRecordHasActiveFlag(service));
+}
+
 function stayRequestServiceUnitPriceForUser(serviceOrRequest = {}, user = currentUser) {
   const error = servicePriceError(serviceOrRequest, serviceOrRequest?.serviceName || serviceOrRequest?.name || "Service");
   if (error) return 0;
@@ -833,7 +851,7 @@ function serviceIsSelectableBoardingRate(service = {}) {
 }
 
 function selectableBoardingPricingServices() {
-  return activeAdminPricingRecords().filter(serviceIsSelectableBoardingRate);
+  return activeBoardingPricingRecordsForSelection().filter(serviceIsSelectableBoardingRate);
 }
 
 function serviceIsOvernightBoardingRateAlternative(service = {}) {
@@ -865,9 +883,7 @@ function serviceRecordHasActiveFlag(service = {}) {
 }
 
 function selectableOvernightBoardingPricingServices() {
-  return readRecords("service")
-    .filter((service) => !service.removed && serviceRecordHasActiveFlag(service))
-    .filter(serviceIsOvernightBoardingRateAlternative);
+  return activeBoardingPricingRecordsForSelection().filter(serviceIsOvernightBoardingRateAlternative);
 }
 
 function customerPricingScopeForUser(user = currentUser) {
@@ -1073,11 +1089,13 @@ async function refreshBoardingPricingCatalogRecords() {
   if (typeof fetchRemoteRecordRows === "function" && typeof mergeRecords === "function") {
     const rows = await fetchRemoteRecordRows(["service"]);
     const services = arrayValue(rows).filter((row) => row.type === "service").map((row) => row.payload).filter(Boolean);
+    setBoardingPricingCatalogOverrideRecords(services);
     mergeRecords("service", services, { replaceLocal: true });
     return;
   }
   if (typeof loadRemoteRecords === "function") {
     await loadRemoteRecords({ render: false, types: ["service"] });
+    setBoardingPricingCatalogOverrideRecords(readRecords("service"));
   }
 }
 
@@ -1860,7 +1878,11 @@ function boardingQueueStayMatchesGroup(title = "", record = {}, stay = {}) {
   if (title === "Pending Approval") return status === "Pending";
   if (title === "Today Drop-offs") return sameDateValue(stay.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
   if (title === "Tomorrow Arrivals") return sameDateValue(stay.dropoffTime, tomorrow) && status === "Approved";
-  if (title === "In Kennel") return status === "In Kennel" && Boolean(activeBoardingStay({ ...record, stays: [stay] }));
+  if (title === "In Kennel") {
+    if (status !== "In Kennel" || stayHasActualPickupEvidence(stay)) return false;
+    const pickup = new Date(stay.pickupTime);
+    return Number.isNaN(pickup.getTime()) || pickup >= new Date();
+  }
   if (title === "Today Pickups") return sameDateValue(stay.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
   return false;
 }
