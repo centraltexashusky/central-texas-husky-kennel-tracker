@@ -1041,10 +1041,22 @@ function boardingRateSelectionCurrentServiceId(stay = {}, services = []) {
 
 var boardingPricingCatalogLoadPromise = null;
 
+async function refreshBoardingPricingCatalogRecords() {
+  if (typeof fetchRemoteRecordRows === "function" && typeof mergeRecords === "function") {
+    const rows = await fetchRemoteRecordRows(["service"]);
+    const services = arrayValue(rows).filter((row) => row.type === "service").map((row) => row.payload).filter(Boolean);
+    mergeRecords("service", services, { replaceLocal: true });
+    return;
+  }
+  if (typeof loadRemoteRecords === "function") {
+    await loadRemoteRecords({ render: false, types: ["service"] });
+  }
+}
+
 async function ensureBoardingPricingCatalogLoaded() {
-  if (localTestMode || !supabaseClient || typeof loadRemoteRecords !== "function") return;
+  if (localTestMode || !supabaseClient) return;
   if (!boardingPricingCatalogLoadPromise) {
-    boardingPricingCatalogLoadPromise = loadRemoteRecords({ render: false, types: ["service"] })
+    boardingPricingCatalogLoadPromise = refreshBoardingPricingCatalogRecords()
       .catch((error) => {
         console.warn("Boarding pricing catalog could not refresh before opening stay editor.", error);
       })
