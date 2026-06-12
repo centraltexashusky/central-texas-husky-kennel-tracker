@@ -844,8 +844,14 @@ function serviceIsOvernightBoardingRateAlternative(service = {}) {
   return /\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit);
 }
 
+function serviceRecordHasActiveFlag(service = {}) {
+  return arrayValue(service.flags).some((flag) => String(flag || "").trim().toLowerCase() === "active");
+}
+
 function selectableOvernightBoardingPricingServices() {
-  return activeAdminPricingRecords().filter(serviceIsOvernightBoardingRateAlternative);
+  return readRecords("service")
+    .filter((service) => !service.removed && serviceRecordHasActiveFlag(service))
+    .filter(serviceIsOvernightBoardingRateAlternative);
 }
 
 function customerPricingScopeForUser(user = currentUser) {
