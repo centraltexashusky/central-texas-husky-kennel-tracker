@@ -1040,6 +1040,22 @@ function boardingRateSelectionCurrentServiceId(stay = {}, services = []) {
   return priceMatches.length === 1 ? priceMatches[0].id : "";
 }
 
+var boardingPricingCatalogLoadPromise = null;
+
+async function ensureBoardingPricingCatalogLoaded() {
+  if (localTestMode || !supabaseClient || typeof loadRemoteRecords !== "function") return;
+  if (!boardingPricingCatalogLoadPromise) {
+    boardingPricingCatalogLoadPromise = loadRemoteRecords({ render: false, types: ["service"] })
+      .catch((error) => {
+        console.warn("Boarding pricing catalog could not refresh before opening stay editor.", error);
+      })
+      .finally(() => {
+        boardingPricingCatalogLoadPromise = null;
+      });
+  }
+  await boardingPricingCatalogLoadPromise;
+}
+
 function boardingRateServiceForSelection(record = {}, stay = {}, serviceId = "", options = {}) {
   const selectedId = String(serviceId || "").trim();
   if (!selectedId) return null;
@@ -2566,10 +2582,11 @@ function boardingStayFormHtml(record = {}, stay = {}) {
     </form>\`;
 }
 
-function openBoardingStayPopup(record = activeBoardingDog(), stayId = "") {
+async function openBoardingStayPopup(record = activeBoardingDog(), stayId = "") {
   if (!record?.id) return;
   const displayRecord = boardingDogWithStayStatus(record);
   const stay = boardingStayByReference(displayRecord, stayId) || {};
+  if (!isServiceRequestStay(displayRecord, stay)) await ensureBoardingPricingCatalogLoaded();
   const title = isServiceRequestStay(displayRecord, stay)
     ? \`\${displayRecord.dogName || "Dog"} Service Request\`
     : \`\${displayRecord.dogName || "Boarding Dog"} Boarding Request\`;
