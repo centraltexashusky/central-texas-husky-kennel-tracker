@@ -818,6 +818,18 @@ function activeBoardingPricingServices() {
   return activeAdminPricingRecords().filter((service) => service.category === "Boarding" && serviceIsStandardBoardingRate(service));
 }
 
+function serviceIsSelectableBoardingRate(service = {}) {
+  if (service.category !== "Boarding") return false;
+  if (serviceIsStandardBoardingRate(service)) return true;
+  if (serviceBoardingRateType(service)) return false;
+  const unit = normalizedServiceLookupText(service.unit || "");
+  return /\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit);
+}
+
+function selectableBoardingPricingServices() {
+  return activeAdminPricingRecords().filter(serviceIsSelectableBoardingRate);
+}
+
 function customerPricingScopeForUser(user = currentUser) {
   return isMemberUser(user) ? "member" : "non-member";
 }
@@ -933,7 +945,7 @@ function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
   const pricingUser = boardingPricingUserForRecord(record, options);
   const scope = options.pricingScope || customerPricingScopeForUser(pricingUser);
   const role = boardingRateSelectionRole(options.currentDogRole || stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.boardingRateRole || "");
-  return activeBoardingPricingServices()
+  return selectableBoardingPricingServices()
     .filter((service) => normalizedBoardingRateRole(service.boardingRateRole || "primary") === role)
     .filter((service) => serviceMatchesPricingScopeForResolution(service, scope))
     .sort((a, b) => {
