@@ -711,8 +711,8 @@ function setBoardingPricingCatalogOverrideRecords(services = []) {
 
 function boardingPricingCatalogRecordsForSelection() {
   return uniqueBoardingRateSelectionServices([
-    ...readRecords("service"),
     ...boardingPricingCatalogOverrideRecords,
+    ...readRecords("service"),
   ]);
 }
 
@@ -1125,7 +1125,7 @@ async function fetchBoardingPricingCatalogServices() {
 }
 
 async function refreshBoardingPricingCatalogRecords() {
-  const serviceSources = [...readRecords("service")];
+  const serviceSources = [];
   try {
     serviceSources.push(...await fetchBoardingPricingCatalogServices());
   } catch (error) {
@@ -1150,6 +1150,7 @@ async function refreshBoardingPricingCatalogRecords() {
     serviceSources.push(...readRecords("service"));
   }
 
+  serviceSources.push(...readRecords("service"));
   const services = uniqueBoardingRateSelectionServices(serviceSources.filter((service) => service?.id));
   if (services.length) {
     setBoardingPricingCatalogOverrideRecords(services);
