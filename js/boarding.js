@@ -833,7 +833,7 @@ function boardingStayRequestTotal(requests = [], options = {}) {
 }
 
 function activeBoardingPricingServices() {
-  return activeAdminPricingRecords().filter((service) => service.category === "Boarding" && serviceIsStandardBoardingRate(service));
+  return activeAdminPricingRecords().filter((service) => serviceCategoryIsBoarding(service) && serviceIsStandardBoardingRate(service));
 }
 
 function serviceCategoryIsBoarding(service = {}) {
@@ -1116,29 +1116,46 @@ async function fetchBoardingPricingCatalogServices() {
   if (error) throw error;
   return arrayValue(data)
     .filter((row) => row.type === "service")
-    .map((row) => row.payload)
+    .map((row) => ({
+      ...(row.payload || {}),
+      id: row.payload?.id || row.id,
+      updatedAt: row.payload?.updatedAt || row.updated_at || "",
+    }))
     .filter((service) => service?.id);
 }
 
 async function refreshBoardingPricingCatalogRecords() {
-  const directServices = await fetchBoardingPricingCatalogServices();
-  if (directServices.length) {
-    setBoardingPricingCatalogOverrideRecords(directServices);
-    if (typeof mergeRecords === "function") {
-      mergeRecords("service", directServices, { replaceLocal: true });
-    }
-    return;
+  const serviceSources = [...readRecords("service")];
+  try {
+    serviceSources.push(...await fetchBoardingPricingCatalogServices());
+  } catch (error) {
+    console.warn("Direct boarding pricing catalog fetch failed.", error);
   }
+
   if (typeof fetchRemoteRecordRows === "function" && typeof mergeRecords === "function") {
-    const rows = await fetchRemoteRecordRows(["service"]);
-    const services = arrayValue(rows).filter((row) => row.type === "service").map((row) => row.payload).filter(Boolean);
-    setBoardingPricingCatalogOverrideRecords(services);
-    mergeRecords("service", services, { replaceLocal: true });
-    return;
+    try {
+      const rows = await fetchRemoteRecordRows(["service"]);
+      serviceSources.push(...arrayValue(rows).filter((row) => row.type === "service").map((row) => ({
+        ...(row.payload || {}),
+        id: row.payload?.id || row.id,
+        updatedAt: row.payload?.updatedAt || row.updated_at || "",
+      })).filter((service) => service?.id));
+    } catch (error) {
+      console.warn("Remote boarding pricing catalog fetch failed.", error);
+    }
   }
+
   if (typeof loadRemoteRecords === "function") {
     await loadRemoteRecords({ render: false, types: ["service"] });
-    setBoardingPricingCatalogOverrideRecords(readRecords("service"));
+    serviceSources.push(...readRecords("service"));
+  }
+
+  const services = uniqueBoardingRateSelectionServices(serviceSources.filter((service) => service?.id));
+  if (services.length) {
+    setBoardingPricingCatalogOverrideRecords(services);
+    if (typeof mergeRecords === "function") {
+      mergeRecords("service", services, { replaceLocal: true });
+    }
   }
 }
 
