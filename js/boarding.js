@@ -709,6 +709,15 @@ function setBoardingPricingCatalogOverrideRecords(services = []) {
   boardingPricingCatalogOverrideRecords = arrayValue(services).map(boardingPricingCatalogServiceRecord).filter((service) => service?.id);
 }
 
+function applyBoardingPricingCatalogMigrations(options = {}) {
+  try {
+    if (typeof applyLegacyServiceDependencyMigration === "function") applyLegacyServiceDependencyMigration(options);
+    if (typeof applyLegacyBoardingProgramMigration === "function") applyLegacyBoardingProgramMigration(options);
+  } catch (error) {
+    console.warn("Boarding pricing catalog normalization failed.", error);
+  }
+}
+
 function boardingPricingCatalogServiceRecord(service = {}) {
   if (!service?.id) return service;
   const flags = serviceRecordFlags(service);
@@ -798,9 +807,10 @@ function boardingStayProgramServiceFallbackRecords() {
 }
 
 function boardingPricingCatalogRecordsForSelection() {
+  const liveServices = readRecords("service").map(boardingPricingCatalogServiceRecord).filter((service) => service?.id);
   return uniqueBoardingRateSelectionServices([
+    ...liveServices,
     ...boardingPricingCatalogOverrideRecords,
-    ...readRecords("service"),
     ...boardingStayProgramServiceFallbackRecords(),
   ].map(boardingPricingCatalogServiceRecord));
 }
@@ -1234,13 +1244,18 @@ async function refreshBoardingPricingCatalogRecords() {
     }
   }
 
-  if (typeof loadRemoteRecords === "function") {
-    await loadRemoteRecords({ render: false, types: ["service"] });
-    serviceSources.push(...readRecords("service"));
+  if (serviceSources.length && typeof mergeRecords === "function") {
+    const remoteServices = uniqueBoardingRateSelectionServices(serviceSources.map(boardingPricingCatalogServiceRecord).filter((service) => service?.id));
+    mergeRecords("service", remoteServices, { replaceLocal: true });
   }
 
-  serviceSources.push(...readRecords("service"));
-  const services = uniqueBoardingRateSelectionServices(serviceSources.filter((service) => service?.id));
+  if (typeof loadRemoteRecords === "function") {
+    await loadRemoteRecords({ render: false, types: ["service"] });
+  }
+
+  applyBoardingPricingCatalogMigrations({ syncRemote: false });
+
+  const services = uniqueBoardingRateSelectionServices(readRecords("service").map(boardingPricingCatalogServiceRecord).filter((service) => service?.id));
   if (services.length) {
     setBoardingPricingCatalogOverrideRecords(services);
     if (typeof mergeRecords === "function") {
