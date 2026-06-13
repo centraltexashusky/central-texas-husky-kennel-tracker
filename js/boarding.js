@@ -709,10 +709,61 @@ function setBoardingPricingCatalogOverrideRecords(services = []) {
   boardingPricingCatalogOverrideRecords = arrayValue(services).filter((service) => service?.id);
 }
 
+function boardingStayProgramServiceFromValue(program = {}, fallback = {}) {
+  const serviceId = program.serviceId || program.id || fallback.stayProgramId || fallback.id || "";
+  const serviceName = program.serviceName || program.name || fallback.stayProgramName || fallback.label || "";
+  const rate = Number(program.rate ?? program.basePrice ?? fallback.rate ?? fallback.unitPrice ?? 0);
+  if (!serviceId || !serviceName || !rate) return null;
+  return {
+    id: serviceId,
+    serviceName,
+    category: "Boarding",
+    unit: program.unit || fallback.unit || "per night",
+    basePrice: rate,
+    boardingRateType: "boarding-program",
+    boardingRateRole: "",
+    pricingScope: program.pricingScope || fallback.pricingScope || fallback.customerPricingScope || (program.isMemberPricing ? "member" : ""),
+    includesBoardingAccommodation: true,
+    replacesStandardBoarding: true,
+    flags: program.isMemberPricing ? ["Active", "Member Pricing"] : ["Active"],
+  };
+}
+
+function boardingStayProgramServiceFallbackRecords() {
+  const services = [];
+  readRecords("boardingDog").forEach((record) => {
+    arrayValue(record.stays).forEach((stay) => {
+      const snapshot = stay.pricingSnapshot || {};
+      [
+        boardingStayProgramServiceFromValue(stay.stayProgram, stay),
+        boardingStayProgramServiceFromValue(snapshot.stayProgram, snapshot),
+        boardingStayProgramServiceFromValue({
+          id: stay.stayProgramId || snapshot.stayProgramId,
+          serviceName: stay.stayProgramName || snapshot.stayProgramName,
+          rate: stay.stayProgramRate || snapshot.stayProgramRate || snapshot.currentDogRate,
+          unit: snapshot.unit,
+          pricingScope: snapshot.customerPricingScope || snapshot.pricingScope,
+          isMemberPricing: snapshot.isMemberPricing,
+        }),
+        ...arrayValue(snapshot.perDogBreakdown).map((line) => boardingStayProgramServiceFromValue({
+          id: line.stayProgramId,
+          serviceName: line.stayProgramName,
+          rate: line.rate,
+          unit: snapshot.unit,
+          pricingScope: line.pricingScope || snapshot.customerPricingScope,
+          isMemberPricing: snapshot.isMemberPricing,
+        })),
+      ].filter(Boolean).forEach((service) => services.push(service));
+    });
+  });
+  return services;
+}
+
 function boardingPricingCatalogRecordsForSelection() {
   return uniqueBoardingRateSelectionServices([
     ...boardingPricingCatalogOverrideRecords,
     ...readRecords("service"),
+    ...boardingStayProgramServiceFallbackRecords(),
   ]);
 }
 
@@ -1195,6 +1246,26 @@ function boardingRateConfigFromService(service = {}, role = "primary", scope = "
     pricingScope: servicePricingScope(service),
     customerPricingScope: scope,
     role,
+  };
+}
+
+function boardingStayProgramSnapshotFromService(service = null) {
+  if (!service?.id || serviceBoardingRateType(service) !== "boarding-program") return null;
+  if (typeof customerStayProgramSnapshot === "function") return customerStayProgramSnapshot(service);
+  const priceError = servicePriceError(service, service.serviceName || "Boarding program");
+  const rate = priceError ? 0 : servicePriceValue(service);
+  return {
+    id: service.id,
+    serviceId: service.id,
+    serviceName: service.serviceName || "Boarding program",
+    name: service.serviceName || "Boarding program",
+    rate,
+    unit: service.unit || "per night",
+    isMemberPricing: serviceHasFlag(service, "Member Pricing"),
+    includesBoardingAccommodation: true,
+    replacesStandardBoarding: true,
+    pricingScope: servicePricingScope(service),
+    pricingError: priceError,
   };
 }
 
@@ -2873,6 +2944,11 @@ async function saveBoardingStayFromForm(formEl) {
   const selectedBoardingRateService = isServiceRequest ? null : boardingRateServiceForSelection(dog, existingStay || {}, payload.boardingRateServiceId || "", {
     currentDogRole: boardingRateRole || existingStay?.pricingSnapshot?.currentDogRole || "",
   });
+  const selectedStayProgram = boardingStayProgramSnapshotFromService(selectedBoardingRateService);
+  const selectedStandardBoardingRateService = selectedStayProgram ? null : selectedBoardingRateService;
+  const effectiveStayProgram = isServiceRequest
+    ? null
+    : selectedStayProgram || (!payload.boardingRateServiceId ? existingStay?.stayProgram || existingStay?.pricingSnapshot?.stayProgram || null : null);
   const draftStay = {
     ...(existingStay || {}),
     dropoffTime: payload.dropoffTime,
@@ -2880,12 +2956,17 @@ async function saveBoardingStayFromForm(formEl) {
     stayType,
     requests: selectedRequests,
     invoiceAdjustments,
+    stayProgram: effectiveStayProgram,
+    stayProgramId: effectiveStayProgram?.id || effectiveStayProgram?.serviceId || "",
+    stayProgramName: effectiveStayProgram?.serviceName || effectiveStayProgram?.name || "",
+    stayProgramRate: effectiveStayProgram?.rate || effectiveStayProgram?.basePrice || 0,
   };
   const pricingSnapshot = boardingPricingSnapshotForStay(dog, draftStay, {
     currentDogRole: boardingRateRole,
     sharedCrateRequested: boardingRateRole === "shared-crate-additional",
-    boardingRateService: selectedBoardingRateService,
-    boardingRateServiceId: selectedBoardingRateService?.id || payload.boardingRateServiceId || "",
+    stayProgram: effectiveStayProgram,
+    boardingRateService: selectedStandardBoardingRateService,
+    boardingRateServiceId: selectedStandardBoardingRateService?.id || (!effectiveStayProgram ? payload.boardingRateServiceId || "" : ""),
   });
   const stay = {
     ...existingStay,
@@ -2900,6 +2981,10 @@ async function saveBoardingStayFromForm(formEl) {
     billingDays: pricingSnapshot.billingDays,
     requests: selectedRequests,
     stayNotes: payload.stayNotes,
+    stayProgram: effectiveStayProgram,
+    stayProgramId: effectiveStayProgram?.id || effectiveStayProgram?.serviceId || "",
+    stayProgramName: effectiveStayProgram?.serviceName || effectiveStayProgram?.name || "",
+    stayProgramRate: effectiveStayProgram?.rate || effectiveStayProgram?.basePrice || 0,
     invoiceAdjustments,
     invoiceEvents: [...arrayValue(existingStay?.invoiceEvents), ...adjustmentEvents],
     pricingSnapshot,
