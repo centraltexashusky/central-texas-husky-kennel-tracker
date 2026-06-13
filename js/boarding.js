@@ -710,6 +710,8 @@ function setBoardingPricingCatalogOverrideRecords(services = []) {
 }
 
 function boardingStayProgramServiceFromValue(program = {}, fallback = {}) {
+  program = program || {};
+  fallback = fallback || {};
   const serviceId = program.serviceId || program.id || fallback.stayProgramId || fallback.id || "";
   const serviceName = program.serviceName || program.name || fallback.stayProgramName || fallback.label || "";
   const rate = Number(program.rate ?? program.basePrice ?? fallback.rate ?? fallback.unitPrice ?? 0);
