@@ -706,7 +706,43 @@ function activeAdminPricingRecords() {
 var boardingPricingCatalogOverrideRecords = [];
 
 function setBoardingPricingCatalogOverrideRecords(services = []) {
-  boardingPricingCatalogOverrideRecords = arrayValue(services).filter((service) => service?.id);
+  boardingPricingCatalogOverrideRecords = arrayValue(services).map(boardingPricingCatalogServiceRecord).filter((service) => service?.id);
+}
+
+function boardingPricingCatalogServiceRecord(service = {}) {
+  if (!service?.id) return service;
+  const flags = serviceRecordFlags(service);
+  const normalizedFlags = [...new Set(flags.map((flag) => String(flag || "").trim()).filter(Boolean))];
+  const status = String(service.status || service.activeStatus || "").trim().toLowerCase();
+  const inactiveSignal = service.removed === true
+    || service.archived === true
+    || service.hidden === true
+    || service.active === false
+    || service.enabled === false
+    || service.isActive === false
+    || ["inactive", "disabled", "archived", "removed", "hidden"].includes(status);
+  const activeSignal = service.active === true
+    || service.enabled === true
+    || service.isActive === true
+    || ["active", "enabled", "available", "on"].includes(status);
+  const rateType = normalizedBoardingRateType(service.boardingRateType || service.stayRateBehavior || service.boardingProgramType || "");
+  const includesBoarding = service.includesBoardingAccommodation === true || service.replacesStandardBoarding === true;
+  const name = normalizedServiceLookupText(service.serviceName || service.name || "");
+  const unit = service.unit || (rateType ? "per night" : "");
+  const looksLikeBoardingRate = rateType || includesBoarding || (name.includes("boarding") && serviceUnitIsStayRate({ ...service, unit }));
+  if (!inactiveSignal && looksLikeBoardingRate && !normalizedFlags.some((flag) => flag.toLowerCase() === "active") && (activeSignal || !normalizedFlags.length)) {
+    normalizedFlags.push("Active");
+  }
+  return {
+    ...service,
+    category: service.category || (looksLikeBoardingRate ? "Boarding" : ""),
+    basePrice: service.basePrice ?? service.unitPrice ?? service.rate ?? service.price ?? "",
+    unit,
+    boardingRateType: rateType || service.boardingRateType || "",
+    includesBoardingAccommodation: service.includesBoardingAccommodation === true || rateType === "boarding-program",
+    replacesStandardBoarding: service.replacesStandardBoarding === true || rateType === "boarding-program",
+    flags: normalizedFlags,
+  };
 }
 
 function boardingStayProgramServiceFromValue(program = {}, fallback = {}) {
@@ -766,7 +802,7 @@ function boardingPricingCatalogRecordsForSelection() {
     ...boardingPricingCatalogOverrideRecords,
     ...readRecords("service"),
     ...boardingStayProgramServiceFallbackRecords(),
-  ]);
+  ].map(boardingPricingCatalogServiceRecord));
 }
 
 function activeBoardingPricingRecordsForSelection() {
