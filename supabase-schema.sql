@@ -270,6 +270,71 @@ as $$
   )
 $$;
 
+create or replace function public.kennel_payload_staff_email(payload jsonb)
+returns text
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select lower(coalesce(
+    payload ->> 'staffEmail',
+    payload ->> 'helperEmail',
+    payload ->> 'email',
+    payload ->> 'ownerEmail',
+    payload ->> 'customerEmail',
+    ''
+  ))
+$$;
+
+create or replace function public.kennel_staff_record_belongs_to_auth(payload jsonb)
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select public.kennel_payload_staff_email(payload) <> ''
+    and public.kennel_payload_staff_email(payload) = public.kennel_auth_email()
+$$;
+
+create or replace function public.kennel_private_staff_record_type(record_type text)
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select record_type in ('timesheet', 'staffSchedule', 'timeOffRequest')
+$$;
+
+create or replace function public.kennel_staff_can_read_record(record_type text, payload jsonb)
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select case
+    when kennel_private.kennel_is_admin() then true
+    when not kennel_private.kennel_is_staff_member() then false
+    when public.kennel_private_staff_record_type(record_type) then public.kennel_staff_record_belongs_to_auth(payload)
+    else true
+  end
+$$;
+
+create or replace function public.kennel_staff_can_write_record(record_type text, payload jsonb)
+returns boolean
+language sql
+stable
+set search_path = public, pg_temp
+as $$
+  select case
+    when kennel_private.kennel_is_admin() then true
+    when not kennel_private.kennel_is_staff_member() then false
+    when record_type = 'timesheet' then public.kennel_staff_record_belongs_to_auth(payload)
+    when record_type = 'timeOffRequest' then public.kennel_staff_record_belongs_to_auth(payload)
+    when record_type = 'staffSchedule' then false
+    else public.kennel_staff_can_write_type(record_type)
+  end
+$$;
+
 create or replace function public.kennel_customer_can_write(record_type text, payload jsonb)
 returns boolean
 language sql
@@ -279,7 +344,7 @@ as $$
   select case
     when kennel_private.kennel_is_admin() then true
     when record_type = 'settingsUser' then kennel_private.kennel_settings_user_self_write_allowed(payload)
-    when kennel_private.kennel_is_staff_member() then public.kennel_staff_can_write_type(record_type)
+    when kennel_private.kennel_is_staff_member() then public.kennel_staff_can_write_record(record_type, payload)
     when record_type = 'boardingDog' then public.kennel_customer_boarding_payload_is_request(payload)
     when record_type in ('customerDog', 'request', 'maintenance') then public.kennel_payload_has_email(payload)
     when record_type = 'notificationLog' then public.kennel_payload_audience_has_email(payload)
@@ -292,7 +357,7 @@ on public.kennel_records
 for select
 to authenticated
 using (
-  kennel_private.kennel_is_staff_member()
+  public.kennel_staff_can_read_record(type, payload)
   or public.kennel_payload_has_email(payload)
   or public.kennel_payload_audience_has_email(payload)
   or (type = 'settingsUser' and lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email())
@@ -316,7 +381,11 @@ on public.kennel_records
 for update
 to authenticated
 using (
-  kennel_private.kennel_is_staff_member()
+  kennel_private.kennel_is_admin()
+  or (
+    kennel_private.kennel_is_staff_member()
+    and public.kennel_staff_can_read_record(type, payload)
+  )
   or user_id = auth.uid()
   or public.kennel_payload_has_email(payload)
   or public.kennel_payload_audience_has_email(payload)

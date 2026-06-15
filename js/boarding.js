@@ -119,6 +119,35 @@ function boardingCustomerRequestStatusEventName(record = {}, nextStatus = "", op
   return "";
 }
 
+function serviceRequestReadyForPickupEventName(record = {}, nextStatus = "", options = {}) {
+  if (nextStatus !== "Ready For Pickup") return "";
+  if (currentRole() === "customer" || options.source === "customer" || options.role === "customer") return "";
+  const targetStay = (options.stayId || options.requestCode)
+    ? boardingStayByReference(record, options)
+    : boardingStatusTargetStay(record, nextStatus, options) || boardingPrimaryStay(record) || {};
+  if (!isServiceRequestStay(record, targetStay)) return "";
+  const currentStatus = targetStay?.id ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
+  return currentStatus === "Ready For Pickup" ? "" : "serviceRequestReadyForPickup";
+}
+
+function serviceRequestReadyForPickupNotificationRecord(record = {}, options = {}) {
+  const targetStay = (options.stayId || options.requestCode)
+    ? boardingStayByReference(record, options)
+    : boardingStatusTargetStay(record, "Ready For Pickup", options) || boardingPrimaryStay(record) || {};
+  if (!isServiceRequestStay(record, targetStay)) return record;
+  const requestCode = targetStay.id ? boardingStayRequestCode(record, targetStay) : record.requestCode || "";
+  return {
+    ...record,
+    latestServiceReadyForPickup: {
+      dogName: record.dogName || "",
+      requestCode,
+      stayId: targetStay.id || "",
+      requestedTime: targetStay.dropoffTime || targetStay.requestedDropoffTime || "",
+      readyAt: new Date().toISOString(),
+    },
+  };
+}
+
 function normalizedBoardingDeclineNote(note = "") {
   return String(note || "").trim();
 }
@@ -806,13 +835,24 @@ function boardingStayProgramServiceFallbackRecords() {
   return services;
 }
 
-function boardingPricingCatalogRecordsForSelection() {
+function liveBoardingPricingCatalogRecordsForSelection() {
   const liveServices = readRecords("service").map(boardingPricingCatalogServiceRecord).filter((service) => service?.id);
   return uniqueBoardingRateSelectionServices([
     ...liveServices,
     ...boardingPricingCatalogOverrideRecords,
+  ].map(boardingPricingCatalogServiceRecord));
+}
+
+function boardingPricingCatalogRecordsForSelection() {
+  return uniqueBoardingRateSelectionServices([
+    ...liveBoardingPricingCatalogRecordsForSelection(),
     ...boardingStayProgramServiceFallbackRecords(),
   ].map(boardingPricingCatalogServiceRecord));
+}
+
+function activeLiveBoardingPricingRecordsForSelection() {
+  return liveBoardingPricingCatalogRecordsForSelection()
+    .filter((service) => !service.removed && serviceRecordHasActiveFlag(service));
 }
 
 function activeBoardingPricingRecordsForSelection() {
@@ -940,8 +980,8 @@ function serviceCategoryIsBoarding(service = {}) {
 }
 
 function serviceUnitIsStayRate(service = {}) {
-  const unit = normalizedServiceLookupText(service.unit || "");
-  return /\bnight\b|\bnights\b|\bday\b|\bdays\b/.test(unit);
+  const unitTokens = normalizedServiceLookupText(service.unit || "").split(" ").filter(Boolean);
+  return ["night", "nights", "day", "days"].some((token) => unitTokens.includes(token));
 }
 
 function serviceLooksLikeBoardingStayRate(service = {}) {
@@ -1123,11 +1163,15 @@ function boardingRateSelectionRole(role = "") {
 }
 
 function boardingRateSelectionScope(record = {}, stay = {}, options = {}) {
+  const explicitScope = normalizedPricingScope(options.pricingScope || "");
+  if (explicitScope) return explicitScope;
+  const ratePlan = options.ratePlan || boardingRatePlanForRecord(record);
+  const ratePlanScope = normalizedPricingScope(ratePlan.customerPricingScope || "");
+  if (ratePlanScope) return ratePlanScope;
   const pricingUser = boardingPricingUserForRecord(record, options);
-  return options.pricingScope
-    || stay.pricingSnapshot?.customerPricingScope
-    || stay.pricingSnapshot?.pricingScope
-    || customerPricingScopeForUser(pricingUser);
+  const userScope = pricingUser ? customerPricingScopeForUser(pricingUser) : "";
+  if (userScope) return userScope;
+  return normalizedPricingScope(stay.pricingSnapshot?.customerPricingScope || stay.pricingSnapshot?.pricingScope || "") || "non-member";
 }
 
 function boardingRateServiceExplicitRole(service = {}) {
@@ -1142,6 +1186,25 @@ function boardingRateServiceRoleMatches(service = {}, role = "primary") {
     return normalizedRole !== "shared-crate-additional";
   }
   return normalizedRole === role;
+}
+
+function serviceHasBoardingRateSelectionMetadata(service = {}) {
+  return Boolean(
+    serviceBoardingRateType(service)
+    || normalizedPricingScope(service.pricingScope || service.customerPricingScope || "")
+    || boardingRateServiceExplicitRole(service)
+    || service.includesBoardingAccommodation === true
+    || service.replacesStandardBoarding === true
+  );
+}
+
+function serviceIsBoardingRateSelectorCandidate(service = {}) {
+  if (!service?.id || !serviceCategoryIsBoarding(service) || !serviceUnitIsStayRate(service)) return false;
+  const rateType = serviceBoardingRateType(service);
+  if (rateType && !["standard-boarding", "boarding-program"].includes(rateType)) return false;
+  return serviceHasBoardingRateSelectionMetadata(service)
+    || serviceIsSelectableBoardingRate(service)
+    || serviceIsOvernightBoardingRateAlternative(service);
 }
 
 function boardingRateSelectionSort(a = {}, b = {}) {
@@ -1160,38 +1223,83 @@ function uniqueBoardingRateSelectionServices(services = []) {
   });
 }
 
+function boardingStayHasProgramPricingSignal(stay = {}) {
+  const snapshot = stay.pricingSnapshot || {};
+  return Boolean(
+    stay.stayProgramId
+    || snapshot.stayProgramId
+    || stay.stayProgramName
+    || snapshot.stayProgramName
+    || stay.stayProgramRate
+    || snapshot.stayProgramRate
+    || stay.stayProgram
+    || snapshot.stayProgram
+    || snapshot.replacesStandardBoarding === true
+    || arrayValue(snapshot.lineItems).some((line) => line.type === "boarding-program")
+  );
+}
+
 function boardingRateSelectionServices(record = {}, stay = {}, options = {}) {
   const scope = boardingRateSelectionScope(record, stay, options);
   const role = boardingRateSelectionRole(options.currentDogRole || stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.boardingRateRole || "");
-  const selectable = uniqueBoardingRateSelectionServices([
-    ...selectableBoardingPricingServices(),
-    ...selectableOvernightBoardingPricingServices(),
-    ...activeBoardingPricingRecordsForSelection().filter(serviceLooksLikeBoardingStayRate),
-  ]);
+  const liveSelectable = uniqueBoardingRateSelectionServices(
+    activeLiveBoardingPricingRecordsForSelection().filter(serviceIsBoardingRateSelectorCandidate)
+  );
+  const fallbackSelectable = uniqueBoardingRateSelectionServices(
+    activeBoardingPricingRecordsForSelection().filter(serviceIsBoardingRateSelectorCandidate)
+  );
+  const selectable = liveSelectable.length ? liveSelectable : fallbackSelectable;
   const roleMatches = selectable.filter((service) => boardingRateServiceRoleMatches(service, role));
   const scopedMatches = roleMatches.filter((service) => boardingRateServiceMatchesPricingScope(service, scope));
-  const currentServiceId = stay.pricingSnapshot?.boardingRateServiceId || stay.stayProgramId || stay.pricingSnapshot?.stayProgramId || "";
+  const currentServiceId = boardingRateSelectionCurrentServiceId(stay, selectable);
   const currentService = currentServiceId ? selectable.find((service) => service.id === currentServiceId) : null;
-  const candidates = scopedMatches.length ? scopedMatches : roleMatches.length ? roleMatches : selectable;
+  const currentServiceMatchesContext = currentService
+    && boardingRateServiceRoleMatches(currentService, role)
+    && boardingRateServiceMatchesPricingScope(currentService, scope);
+  const candidates = scopedMatches.length
+    ? scopedMatches
+    : liveSelectable.length
+      ? []
+      : roleMatches.length ? roleMatches : selectable;
   return uniqueBoardingRateSelectionServices([
-    ...(currentService ? [currentService] : []),
+    ...(currentServiceMatchesContext ? [currentService] : []),
     ...candidates,
   ]).sort(boardingRateSelectionSort);
 }
 
 function boardingRateSelectionCurrentServiceId(stay = {}, services = []) {
-  const savedServiceId = stay.pricingSnapshot?.boardingRateServiceId || stay.stayProgramId || stay.pricingSnapshot?.stayProgramId || "";
-  if (savedServiceId && services.some((service) => service.id === savedServiceId)) return savedServiceId;
   const snapshot = stay.pricingSnapshot || {};
+  const hasProgramSignal = boardingStayHasProgramPricingSignal(stay);
+  const savedServiceId = stay.stayProgramId
+    || snapshot.stayProgramId
+    || (!hasProgramSignal ? snapshot.boardingRateServiceId || "" : "");
+  if (savedServiceId && services.some((service) => service.id === savedServiceId)) return savedServiceId;
   const boardingLine = arrayValue(snapshot.lineItems).find((line) => ["boarding", "boarding-program"].includes(line.type)) || {};
-  const targetName = normalizedServiceLookupText(
-    snapshot.boardingRateServiceName
-    || snapshot.stayProgramName
-    || stay.stayProgramName
-    || boardingLine.label
-    || ""
-  );
-  const targetRate = Number(snapshot.currentDogRate || snapshot.baseRate || stay.stayProgramRate || boardingLine.unitPrice || 0);
+  const stayProgram = stay.stayProgram || snapshot.stayProgram || {};
+  const targetName = normalizedServiceLookupText(hasProgramSignal
+    ? stayProgram.serviceName
+      || stayProgram.name
+      || stay.stayProgramName
+      || snapshot.stayProgramName
+      || boardingLine.stayProgramName
+      || (boardingLine.type === "boarding-program" ? boardingLine.label : "")
+      || snapshot.boardingRateServiceName
+      || ""
+    : snapshot.boardingRateServiceName
+      || snapshot.stayProgramName
+      || stay.stayProgramName
+      || boardingLine.label
+      || "");
+  const targetRate = Number(hasProgramSignal
+    ? stayProgram.rate
+      ?? stayProgram.basePrice
+      ?? stay.stayProgramRate
+      ?? snapshot.stayProgramRate
+      ?? boardingLine.unitPrice
+      ?? snapshot.currentDogRate
+      ?? snapshot.baseRate
+      ?? 0
+    : snapshot.currentDogRate || snapshot.baseRate || stay.stayProgramRate || boardingLine.unitPrice || 0);
   const nameMatches = services.filter((service) => {
     const serviceName = normalizedServiceLookupText(service.serviceName || service.name || "");
     const priceMatches = !targetRate || servicePriceValue(service) === targetRate;
@@ -2780,8 +2888,14 @@ function boardingStayRateServiceFieldHtml(record = {}, stay = {}) {
   if (isServiceRequestStay(record, stay)) return "";
   const ratePlan = boardingRatePlanForRecord(record);
   const role = boardingCurrentDogRoleForStay(stay, ratePlan);
-  const services = boardingRateSelectionServices(record, stay, { currentDogRole: role });
-  const savedServiceId = stay.pricingSnapshot?.boardingRateServiceId || "";
+  const services = boardingRateSelectionServices(record, stay, {
+    currentDogRole: role,
+    ratePlan,
+    pricingScope: ratePlan.customerPricingScope,
+  });
+  const savedServiceId = stay.stayProgramId
+    || stay.pricingSnapshot?.stayProgramId
+    || (!boardingStayHasProgramPricingSignal(stay) ? stay.pricingSnapshot?.boardingRateServiceId || "" : "");
   const defaultServiceId = role === "shared-crate-additional" ? ratePlan.sharedCrateRateConfig?.serviceId || "" : ratePlan.primaryRateConfig?.serviceId || "";
   const currentServiceId = boardingRateSelectionCurrentServiceId(stay, services);
   const selectedServiceId = [savedServiceId, currentServiceId, defaultServiceId].find((serviceId) => serviceId && services.some((service) => service.id === serviceId)) || "";
@@ -3586,6 +3700,7 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
     return null;
   }
   const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, nextStatus, options);
+  const serviceReadyNotificationEvent = serviceRequestReadyForPickupEventName(record, nextStatus, options);
   const transitioned = withBoardingStatusTransition(record, nextStatus, options);
   if (!transitioned) {
     showToast("That boarding status transition is not allowed.");
@@ -3594,6 +3709,9 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   const updated = upsertRecord("boardingDog", transitioned);
   await sendPayload(updated);
   if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
+  if (serviceReadyNotificationEvent) {
+    await notifyIfNeeded(serviceRequestReadyForPickupNotificationRecord(updated, options), serviceReadyNotificationEvent);
+  }
   if (options.stayId) {
     await syncDuplicateBoardingStayStatusRecords(record, updated, boardingStayByReference(record, options) || boardingStayByReference(updated, options), nextStatus, options);
   }
@@ -4057,6 +4175,14 @@ async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approv
 function renderBoardingRequests() {
   const mark = efficiencyPerfStart("renderBoardingRequests");
   const list = $("#boardingRequestRecords");
+  const section = $("#boardingRequestsSection");
+  const isAdmin = currentRole() === "admin";
+  if (section) section.hidden = !isAdmin;
+  if (!isAdmin) {
+    if (list) list.innerHTML = "";
+    efficiencyPerfEnd(mark);
+    return;
+  }
   try {
     if (!list) return;
     const statusFilters = readBoardingRequestStatusFilter();
@@ -4680,6 +4806,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
     return null;
   }
   const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, nextStatus, options);
+  const serviceReadyNotificationEvent = serviceRequestReadyForPickupEventName(record, nextStatus, options);
   const transitioned = withBoardingStatusTransition(record, nextStatus, options);
   if (!transitioned) {
     showToast("That stay status transition is not allowed.");
@@ -4688,6 +4815,9 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   const updated = upsertRecord("boardingDog", transitioned);
   await sendPayload(updated);
   if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
+  if (serviceReadyNotificationEvent) {
+    await notifyIfNeeded(serviceRequestReadyForPickupNotificationRecord(updated, options), serviceReadyNotificationEvent);
+  }
   await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay || boardingStayByReference(updated, options), nextStatus, options);
   await addAuditLog("Changed boarding stay status", "boardingDog", updated, \`\${updated.dogName || "Dog"} stay \${options.stayId}: \${nextStatus}\`);
   renderBoardingDogs();

@@ -184,7 +184,9 @@ function renderTimesheet() {
         const syncWarning = record.syncStatus === "failed"
           ? \`<div class="service-warning-text">Sync failed: \${escapeHtml(record.syncError || "Retry before leaving this page.")}</div>\`
           : "";
-        return \`<tr><td>\${escapeHtml(record.date)}</td><td>\${escapeHtml(record.helperName)}</td><td>\${formatDateTime(record.clockInTime)}</td><td>\${formatDateTime(record.clockOutTime)}</td><td>\${Number(record.hours || 0).toFixed(2)}</td><td>\${escapeHtml(record.note || "")}\${syncWarning}</td><td>\${canEdit ? \`<button type="button" class="secondary-button" data-action="edit-time" data-id="\${escapeHtml(record.id)}">Edit</button>\` : ""}</td></tr>\`;
+        const exceptionSummary = timesheetExceptionSummary(record);
+        const exceptionHtml = exceptionSummary ? \`<div class="service-warning-text">\${escapeHtml(exceptionSummary)}</div>\` : "";
+        return \`<tr><td>\${escapeHtml(record.date)}</td><td>\${escapeHtml(record.helperName)}</td><td>\${formatDateTime(record.clockInTime)}</td><td>\${formatDateTime(record.clockOutTime)}</td><td>\${Number(record.hours || 0).toFixed(2)}</td><td>\${escapeHtml(record.note || "")}\${syncWarning}\${exceptionHtml}</td><td>\${canEdit ? \`<button type="button" class="secondary-button" data-action="edit-time" data-id="\${escapeHtml(record.id)}">Edit</button>\` : ""}</td></tr>\`;
       }).join("")
     : \`<tr><td colspan="7">No time entries for this date range.</td></tr>\`;
 
@@ -210,6 +212,18 @@ function renderTimesheet() {
 
 async function saveTimeEntry(payload, options = {}) {
   const existing = payload.id ? readRecords("timesheet").find((record) => record.id === payload.id) : null;
+  if (existing && currentRole() !== "admin" && !timesheetBelongsToCurrentUser(existing)) {
+    showToast("You can only edit your own timesheet records.");
+    throw new Error("Not authorized to edit another staff member's timesheet.");
+  }
+  if (currentRole() !== "admin") {
+    const targetEmail = normalizeEmail(payload.helperEmail || existing?.helperEmail || helperEmail.value || currentUser?.email || "");
+    const ownEmail = normalizeEmail(currentUser?.email || helperEmail.value || "");
+    if (targetEmail && ownEmail && targetEmail !== ownEmail) {
+      showToast("You can only save your own clock records.");
+      throw new Error("Not authorized to save another staff member's timesheet.");
+    }
+  }
   const clockInTime = localDateTimeToIso(payload.clockInTime);
   const clockOutTime = localDateTimeToIso(payload.clockOutTime);
   const record = {
@@ -224,6 +238,14 @@ async function saveTimeEntry(payload, options = {}) {
     clockOutTime,
     hours: hoursBetween(clockInTime, clockOutTime),
     note: payload.note || "",
+    scheduleShiftId: payload.scheduleShiftId || existing?.scheduleShiftId || "",
+    scheduleException: payload.scheduleException || existing?.scheduleException || "",
+    clockInException: payload.clockInException || existing?.clockInException || "",
+    clockInVarianceMinutes: Number(payload.clockInVarianceMinutes ?? existing?.clockInVarianceMinutes ?? 0),
+    clockInExceptionReason: payload.clockInExceptionReason || existing?.clockInExceptionReason || "",
+    clockOutException: payload.clockOutException || existing?.clockOutException || "",
+    clockOutVarianceMinutes: Number(payload.clockOutVarianceMinutes ?? existing?.clockOutVarianceMinutes ?? 0),
+    clockOutExceptionReason: payload.clockOutExceptionReason || existing?.clockOutExceptionReason || "",
     syncStatus: "",
     syncError: "",
   };
@@ -346,19 +368,28 @@ function scheduleWeekDates(value = scheduleWeekDate) {
   return Array.from({ length: 7 }, (_, index) => addDays(start, index));
 }
 
+function timesheetTabAllowed(tab = "clock") {
+  return tab !== "review" || currentRole() === "admin";
+}
+
 function setTimesheetTab(tab = "clock") {
-  timesheetTab = ["clock", "schedule", "timeOff", "holidays", "review"].includes(tab) ? tab : "clock";
+  const requestedTab = ["clock", "schedule", "timeOff", "holidays", "review"].includes(tab) ? tab : "clock";
+  timesheetTab = timesheetTabAllowed(requestedTab) ? requestedTab : "clock";
   renderTimesheet();
 }
 
 function renderTimesheetTabs() {
+  if (!timesheetTabAllowed(timesheetTab)) timesheetTab = "clock";
   $$("#timesheetTabs [data-timesheet-tab]").forEach((button) => {
-    const active = button.dataset.timesheetTab === timesheetTab;
+    const allowed = timesheetTabAllowed(button.dataset.timesheetTab);
+    button.hidden = !allowed;
+    button.disabled = !allowed;
+    const active = allowed && button.dataset.timesheetTab === timesheetTab;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-selected", active ? "true" : "false");
   });
   $$("[data-timesheet-panel]").forEach((panel) => {
-    panel.hidden = panel.dataset.timesheetPanel !== timesheetTab;
+    panel.hidden = !timesheetTabAllowed(panel.dataset.timesheetPanel) || panel.dataset.timesheetPanel !== timesheetTab;
   });
 }
 
@@ -427,6 +458,136 @@ function scheduleWarningsForShift(shift = {}) {
   return warnings;
 }
 
+function staffScheduleAdminRequired() {
+  if (currentRole() === "admin") return true;
+  showToast("Admin access required to edit the schedule.");
+  return false;
+}
+
+function scheduleWeekEndString(start = scheduleWeekStartString()) {
+  return addDays(start, 7);
+}
+
+function allScheduleStaffChoices() {
+  return timesheetStaffChoices()
+    .filter((staff) => staff.email || staff.name)
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+}
+
+function selectedStaffKeysFromForm(formEl, name = "staffKeys") {
+  return [...(formEl?.querySelectorAll?.('input[name="' + name + '"]:checked') || [])]
+    .map((input) => input.value)
+    .filter(Boolean);
+}
+
+function selectedDatesFromForm(formEl, name = "dates") {
+  return [...(formEl?.querySelectorAll?.('input[name="' + name + '"]:checked') || [])]
+    .map((input) => input.value)
+    .filter(Boolean);
+}
+
+function staffFromOptionValue(value = "") {
+  return allScheduleStaffChoices().find((staff) => timesheetStaffOptionValue(staff) === value)
+    || { name: value, email: value };
+}
+
+function scheduleShiftRecordFromParts(parts = {}) {
+  const now = new Date().toISOString();
+  const weekStartValue = scheduleWeekStartString(parts.date || scheduleWeekStartString());
+  const publishedWeek = weekIsPublished(weekStartValue);
+  return {
+    type: "staffSchedule",
+    id: parts.id || uid("staffSchedule"),
+    submittedAt: parts.submittedAt || now,
+    staffName: parts.staffName || "Staff",
+    staffEmail: parts.staffEmail || "",
+    date: parts.date,
+    startTime: parts.startTime || "09:00",
+    endTime: parts.endTime || "12:00",
+    role: parts.role || "Kennel Care",
+    location: parts.location || "",
+    notes: parts.notes || "",
+    status: publishedWeek ? "Published" : "Draft",
+    weekStart: weekStartValue,
+    publishedAt: publishedWeek ? now : "",
+    changedAfterPublish: publishedWeek,
+  };
+}
+
+function scheduleConflictReportForShift(shift = {}) {
+  const shiftEmail = normalizeEmail(shift.staffEmail);
+  const warnings = scheduleWarningsForShift(shift).filter((warning) => shiftEmail || !String(warning).startsWith("Overlaps "));
+  const blocking = shiftEmail ? readRecords("staffSchedule")
+    .filter((record) => !record.removed && record.status !== "Cancelled")
+    .filter((record) => record.id !== shift.id)
+    .filter((record) => normalizeEmail(record.staffEmail) === shiftEmail)
+    .filter((record) => shiftOverlaps(record, shift))
+    .map((record) => "Overlaps existing " + formatShiftTime(record) + " on " + record.date + ".") : [];
+
+  return {
+    blocking: [...new Set(blocking)],
+    warnings: warnings.filter((warning) => !String(warning).startsWith("Overlaps ")),
+  };
+}
+
+function schedulePreviewHtml(records = [], options = {}) {
+  const reports = records.map((record) => ({ record, report: scheduleConflictReportForShift(record) }));
+  const blockingCount = reports.reduce((sum, item) => sum + item.report.blocking.length, 0);
+  const warningCount = reports.reduce((sum, item) => sum + item.report.warnings.length, 0);
+  const rows = reports.length
+    ? reports.map(({ record, report }) => {
+      const issueHtml = [
+        ...report.blocking.map((item) => '<li><strong>Blocking:</strong> ' + escapeHtml(item) + '</li>'),
+        ...report.warnings.map((item) => '<li>' + escapeHtml(item) + '</li>'),
+      ].join("");
+      return '<tr>' +
+        '<td>' + escapeHtml(record.date) + '</td>' +
+        '<td>' + escapeHtml(record.staffName || "Staff") + '</td>' +
+        '<td>' + escapeHtml(formatShiftTime(record)) + '</td>' +
+        '<td>' + escapeHtml([record.role, record.location].filter(Boolean).join(" | ")) + '</td>' +
+        '<td>' + (issueHtml ? '<ul class="schedule-warning-list">' + issueHtml + '</ul>' : "OK") + '</td>' +
+      '</tr>';
+    }).join("")
+    : '<tr><td colspan="5">No shifts to preview.</td></tr>';
+
+  return '<section class="timesheet-popup-summary">' +
+    '<div class="timesheet-popup-meta"><span>Shifts</span><strong>' + records.length + '</strong></div>' +
+    '<div class="timesheet-popup-meta"><span>Blocking conflicts</span><strong>' + blockingCount + '</strong></div>' +
+    '<div class="timesheet-popup-meta"><span>Warnings</span><strong>' + warningCount + '</strong></div>' +
+  '</section>' +
+  '<div class="table-wrap timesheet-popup-table">' +
+    '<table class="data-table">' +
+      '<thead><tr><th>Date</th><th>Staff</th><th>Time</th><th>Role / Location</th><th>Warnings</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table>' +
+  '</div>' +
+  (blockingCount && !options.allowBlocking ? '<p class="service-warning-text">Resolve blocking conflicts before saving.</p>' : "");
+}
+
+function encodedScheduleRecordsInput(records = []) {
+  return '<input type="hidden" name="recordsJson" value="' + escapeHtml(JSON.stringify(records)) + '" />';
+}
+
+async function saveScheduleRecordsBatch(records = [], options = {}) {
+  if (!staffScheduleAdminRequired()) return null;
+  const validRecords = arrayValue(records).filter((record) => record?.id && record?.type === "staffSchedule");
+  if (!validRecords.length) {
+    showToast("No shifts to save.");
+    return null;
+  }
+
+  const blocking = validRecords.flatMap((record) => scheduleConflictReportForShift(record).blocking);
+  if (blocking.length && !options.allowBlocking) {
+    showToast("Resolve overlapping shifts before saving.");
+    return null;
+  }
+
+  // Timesheet efficiency: batch schedule writes keep bulk tools from issuing one remote save per generated shift.
+  await sendPayloadBatch(validRecords);
+  renderTimesheet();
+  return validRecords;
+}
+
 function renderScheduleTab() {
   const grid = $("#scheduleWeekGrid");
   const summary = $("#scheduleSummaryGrid");
@@ -436,6 +597,7 @@ function renderScheduleTab() {
   const holidays = holidaysForRange(start, addDays(start, 7));
   const totalHours = shifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
   const published = weekIsPublished(start);
+  const isAdmin = currentRole() === "admin";
   summary.innerHTML = [
     ["Week", dateRangeText(start, addDays(start, 6)), published ? "Published" : "Draft"],
     ["Scheduled hours", totalHours.toFixed(2), "Across visible staff"],
@@ -450,12 +612,29 @@ function renderScheduleTab() {
       \${holiday ? \`<div class="status-chip">\${escapeHtml(holiday.name || "Holiday")}</div>\` : ""}
       \${dayShifts.length ? dayShifts.map((shift) => {
         const warnings = scheduleWarningsForShift(shift);
-        return \`<button type="button" class="schedule-shift-card \${warnings.length ? "is-warning" : ""}" data-action="edit-shift" data-id="\${escapeHtml(shift.id)}"><strong>\${escapeHtml(shift.staffName || "Staff")}</strong><span>\${escapeHtml(formatShiftTime(shift))}</span><span>\${escapeHtml([shift.role, shift.location, shift.status].filter(Boolean).join(" | "))}</span></button>\`;
+        return \`<article class="schedule-shift-card \${warnings.length ? "is-warning" : ""}">
+          <button type="button" class="schedule-shift-main" data-action="edit-shift" data-id="\${escapeHtml(shift.id)}">
+            <strong>\${escapeHtml(shift.staffName || "Staff")}</strong>
+            <span>\${escapeHtml(formatShiftTime(shift))}</span>
+            <span>\${escapeHtml([shift.role, shift.location, shift.status].filter(Boolean).join(" | "))}</span>
+          </button>
+          \${isAdmin ? \`<div class="record-actions">
+            <button type="button" class="secondary-button" data-action="duplicate-shift" data-id="\${escapeHtml(shift.id)}">Duplicate</button>
+            <button type="button" class="secondary-button" data-action="copy-shift-days" data-id="\${escapeHtml(shift.id)}">Copy to Days</button>
+          </div>\` : ""}
+        </article>\`;
       }).join("") : \`<p>No shifts scheduled.</p>\`}
     </article>\`;
   }).join("");
-  const isAdmin = currentRole() === "admin";
-  ["#openScheduleShiftButton", "#publishScheduleButton", "#copyLastWeekScheduleButton", "#openHolidayButton"].forEach((selector) => {
+  [
+    "#openScheduleShiftButton",
+    "#openBulkScheduleButton",
+    "#copyScheduleDayButton",
+    "#openScheduleTemplatesButton",
+    "#publishScheduleButton",
+    "#copyLastWeekScheduleButton",
+    "#openHolidayButton"
+  ].forEach((selector) => {
     const el = $(selector);
     if (el) el.hidden = !isAdmin;
   });
@@ -489,6 +668,11 @@ function renderScheduleReviewTab() {
   const summary = $("#scheduleReviewSummary");
   const list = $("#scheduleReviewIssues");
   if (!summary || !list) return;
+  if (currentRole() !== "admin") {
+    summary.innerHTML = "";
+    list.innerHTML = "";
+    return;
+  }
   const start = scheduleWeekStartString();
   const shifts = staffScheduleRecordsForWeek(start);
   const timesheets = readRecords("timesheet").filter((record) => !record.removed && record.date >= start && record.date < addDays(start, 7));
@@ -527,11 +711,94 @@ function scheduleShiftFormHtml(record = {}) {
   </form>\`;
 }
 
-function openScheduleShiftPopup(record = {}) {
-  if (currentRole() !== "admin") {
-    showToast("Admin access required to edit the schedule.");
-    return;
+function bulkScheduleFormHtml() {
+  const start = scheduleWeekStartString();
+  const staffOptions = allScheduleStaffChoices().map((staff) => {
+    const value = timesheetStaffOptionValue(staff);
+    return '<label class="inline-check"><input type="checkbox" name="staffKeys" value="' + escapeHtml(value) + '" /> ' + escapeHtml(staff.name || staff.email || "Staff") + '</label>';
+  }).join("");
+
+  const dayOptions = scheduleWeekDates(start).map((date) => {
+    const label = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return '<label class="inline-check"><input type="checkbox" name="dates" value="' + escapeHtml(date) + '" /> ' + escapeHtml(label) + '</label>';
+  }).join("");
+
+  return '<form id="bulkScheduleForm" class="tracker-form">' +
+    '<p>Create the same shift for multiple staff and multiple days, then preview conflicts before saving.</p>' +
+    '<div class="field-grid">' +
+      '<fieldset><legend>Staff</legend>' + (staffOptions || "<p>No staff users found.</p>") + '</fieldset>' +
+      '<fieldset><legend>Days</legend>' + dayOptions + '</fieldset>' +
+      '<label>Start time<input type="time" name="startTime" value="09:00" required /></label>' +
+      '<label>End time<input type="time" name="endTime" value="12:00" required /></label>' +
+      '<label>Role<input type="text" name="role" value="Kennel Care" /></label>' +
+      '<label>Location<input type="text" name="location" placeholder="Shed, Mansion, both" /></label>' +
+    '</div>' +
+    '<label>Shift note<textarea name="notes" rows="3"></textarea></label>' +
+    '<label class="inline-check"><input type="checkbox" name="skipTimeOff" checked /> Skip staff with approved time off</label>' +
+    '<div class="button-row">' +
+      '<button type="submit">Preview Shifts</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+    '</div>' +
+  '</form>';
+}
+
+function openBulkSchedulePopup() {
+  if (!staffScheduleAdminRequired()) return;
+  showDetailDialog("Bulk Add Shifts", bulkScheduleFormHtml());
+}
+
+function bulkScheduleRecordsFromForm(formEl) {
+  const data = formPayload(formEl);
+  const staffKeys = selectedStaffKeysFromForm(formEl);
+  const dates = selectedDatesFromForm(formEl);
+  const skipTimeOff = Boolean(formEl.elements.skipTimeOff?.checked);
+  const records = [];
+
+  staffKeys.forEach((staffKey) => {
+    const staff = staffFromOptionValue(staffKey);
+    dates.forEach((date) => {
+      if (skipTimeOff && staffTimeOffForDate(staff.email, date).some((request) => request.status === "Approved")) return;
+      records.push(scheduleShiftRecordFromParts({
+        staffName: staff.name,
+        staffEmail: staff.email,
+        date,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        role: data.role,
+        location: data.location,
+        notes: data.notes,
+      }));
+    });
+  });
+
+  return records;
+}
+
+function bulkSchedulePreviewFormHtml(records = []) {
+  const hasBlocking = records.some((record) => scheduleConflictReportForShift(record).blocking.length);
+  return '<form id="bulkScheduleConfirmForm" class="tracker-form">' +
+    encodedScheduleRecordsInput(records) +
+    schedulePreviewHtml(records) +
+    '<div class="button-row">' +
+      '<button type="submit"' + (hasBlocking ? " disabled" : "") + '>Save ' + records.length + ' Shift' + (records.length === 1 ? "" : "s") + '</button>' +
+      '<button type="button" class="secondary-button" data-action="open-bulk-schedule">Back</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+    '</div>' +
+  '</form>';
+}
+
+async function saveBulkScheduleConfirmForm(formEl) {
+  const records = JSON.parse(formEl.elements.recordsJson.value || "[]");
+  const saved = await saveScheduleRecordsBatch(records);
+  if (saved) {
+    $("#detailDialog").close();
+    showToast(saved.length + ' shift' + (saved.length === 1 ? "" : "s") + " saved.");
   }
+  return saved;
+}
+
+function openScheduleShiftPopup(record = {}) {
+  if (!staffScheduleAdminRequired()) return;
   showDetailDialog(record.id ? "Edit Shift" : "Add Shift", scheduleShiftFormHtml(record));
 }
 
@@ -686,9 +953,9 @@ async function publishScheduleWeek() {
   const start = scheduleWeekStartString();
   const shifts = readRecords("staffSchedule").filter((record) => !record.removed && record.status !== "Cancelled" && record.date >= start && record.date < addDays(start, 7));
   const now = new Date().toISOString();
-  for (const shift of shifts) {
-    await sendPayload(upsertRecord("staffSchedule", { ...shift, status: "Published", publishedAt: now, changedAfterPublish: false, weekStart: start }));
-  }
+  const publishedShifts = shifts.map((shift) => ({ ...shift, status: "Published", publishedAt: now, changedAfterPublish: false, weekStart: start }));
+  // Timesheet efficiency: publish the week's shift-status updates in one save, then keep the publish notification event separate.
+  await sendPayloadBatch(publishedShifts);
   const publishRecord = await saveAndNotify({
     type: "schedulePublish",
     id: \`schedulePublish-\${start}\`,
@@ -704,18 +971,275 @@ async function publishScheduleWeek() {
   return publishRecord;
 }
 
-async function copyLastWeekSchedule() {
-  if (currentRole() !== "admin") return;
-  const start = scheduleWeekStartString();
+function copiedLastWeekScheduleRecords(start = scheduleWeekStartString()) {
   const previousStart = addDays(start, -7);
   const previous = readRecords("staffSchedule").filter((record) => !record.removed && record.status !== "Cancelled" && record.date >= previousStart && record.date < start);
-  for (const shift of previous) {
-    const copiedDate = addDays(shift.date, 7);
-    const copy = { ...shift, id: uid("staffSchedule"), submittedAt: new Date().toISOString(), date: copiedDate, weekStart: start, status: "Draft", publishedAt: "", changedAfterPublish: false };
-    await sendPayload(upsertRecord("staffSchedule", copy));
+
+  return previous.map((shift) => scheduleShiftRecordFromParts({
+    ...shift,
+    id: uid("staffSchedule"),
+    submittedAt: new Date().toISOString(),
+    date: addDays(shift.date, 7),
+    weekStart: start,
+    status: "Draft",
+    publishedAt: "",
+    changedAfterPublish: false,
+  }));
+}
+
+function copyLastWeekPreviewFormHtml(records = copiedLastWeekScheduleRecords()) {
+  const hasBlocking = records.some((record) => scheduleConflictReportForShift(record).blocking.length);
+  return '<form id="copyLastWeekConfirmForm" class="tracker-form">' +
+    encodedScheduleRecordsInput(records) +
+    schedulePreviewHtml(records) +
+    '<div class="button-row">' +
+      '<button type="submit"' + (hasBlocking ? " disabled" : "") + '>Copy ' + records.length + ' Shift' + (records.length === 1 ? "" : "s") + '</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+    '</div>' +
+  '</form>';
+}
+
+function copyLastWeekSchedule() {
+  if (!staffScheduleAdminRequired()) return;
+  const records = copiedLastWeekScheduleRecords();
+  showDetailDialog("Preview Copy Last Week", copyLastWeekPreviewFormHtml(records));
+}
+
+async function saveCopyLastWeekConfirmForm(formEl) {
+  const records = JSON.parse(formEl.elements.recordsJson.value || "[]");
+  const saved = await saveScheduleRecordsBatch(records);
+  if (saved) {
+    $("#detailDialog").close();
+    showToast(saved.length + ' shift' + (saved.length === 1 ? "" : "s") + " copied from last week.");
   }
-  renderTimesheet();
-  showToast(\`\${previous.length} shift\${previous.length === 1 ? "" : "s"} copied from last week.\`);
+  return saved;
+}
+
+function duplicateScheduleShift(id = "") {
+  if (!staffScheduleAdminRequired()) return;
+  const shift = readRecords("staffSchedule").find((record) => record.id === id && !record.removed);
+  if (!shift) return;
+  openScheduleShiftPopup({
+    ...shift,
+    id: "",
+    submittedAt: "",
+    status: "Draft",
+    publishedAt: "",
+    changedAfterPublish: false,
+    notes: shift.notes ? shift.notes + "\\nDuplicated from " + shift.date + "." : "Duplicated from " + shift.date + ".",
+  });
+}
+
+function copyShiftToDaysFormHtml(shift = {}) {
+  const start = scheduleWeekStartString(shift.date || scheduleWeekStartString());
+  const dayOptions = scheduleWeekDates(start)
+    .filter((date) => date !== shift.date)
+    .map((date) => {
+      const label = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+      return '<label class="inline-check"><input type="checkbox" name="dates" value="' + escapeHtml(date) + '" /> ' + escapeHtml(label) + '</label>';
+    }).join("");
+
+  return '<form id="copyShiftDaysForm" class="tracker-form" data-id="' + escapeHtml(shift.id || "") + '">' +
+    '<p>Copy ' + escapeHtml(shift.staffName || "this staff member") + ' ' + escapeHtml(formatShiftTime(shift)) + ' to selected days.</p>' +
+    '<fieldset><legend>Copy to days</legend>' + dayOptions + '</fieldset>' +
+    '<div class="button-row">' +
+      '<button type="submit">Preview Copies</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+    '</div>' +
+  '</form>';
+}
+
+function openCopyShiftToDaysPopup(id = "") {
+  if (!staffScheduleAdminRequired()) return;
+  const shift = readRecords("staffSchedule").find((record) => record.id === id && !record.removed);
+  if (!shift) return;
+  showDetailDialog("Copy Shift to Days", copyShiftToDaysFormHtml(shift));
+}
+
+function copyShiftDaysRecordsFromForm(formEl) {
+  const shift = readRecords("staffSchedule").find((record) => record.id === formEl.dataset.id && !record.removed);
+  if (!shift) return [];
+  return selectedDatesFromForm(formEl).map((date) => scheduleShiftRecordFromParts({
+    ...shift,
+    id: uid("staffSchedule"),
+    submittedAt: new Date().toISOString(),
+    date,
+    status: "Draft",
+    publishedAt: "",
+    changedAfterPublish: false,
+  }));
+}
+
+function copyDayScheduleFormHtml(sourceDate = scheduleWeekStartString()) {
+  const start = scheduleWeekStartString(sourceDate);
+  const sourceOptions = scheduleWeekDates(start).map((date) => {
+    const label = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return '<option value="' + escapeHtml(date) + '"' + (date === sourceDate ? " selected" : "") + '>' + escapeHtml(label) + '</option>';
+  }).join("");
+
+  const destinationOptions = scheduleWeekDates(start)
+    .filter((date) => date !== sourceDate)
+    .map((date) => {
+      const label = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+      return '<label class="inline-check"><input type="checkbox" name="dates" value="' + escapeHtml(date) + '" /> ' + escapeHtml(label) + '</label>';
+    }).join("");
+
+  return '<form id="copyDayScheduleForm" class="tracker-form">' +
+    '<label>Copy from day<select name="sourceDate">' + sourceOptions + '</select></label>' +
+    '<fieldset><legend>Copy to days</legend>' + destinationOptions + '</fieldset>' +
+    '<div class="button-row">' +
+      '<button type="submit">Preview Copy Day</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+    '</div>' +
+  '</form>';
+}
+
+function openCopyDaySchedulePopup() {
+  if (!staffScheduleAdminRequired()) return;
+  showDetailDialog("Copy Day Schedule", copyDayScheduleFormHtml());
+}
+
+function copyDayScheduleRecordsFromForm(formEl) {
+  const sourceDate = formEl.elements.sourceDate.value;
+  const sourceShifts = staffScheduleRecords({ excludeCancelled: true }).filter((shift) => shift.date === sourceDate);
+  return selectedDatesFromForm(formEl).flatMap((date) => sourceShifts.map((shift) => scheduleShiftRecordFromParts({
+    ...shift,
+    id: uid("staffSchedule"),
+    submittedAt: new Date().toISOString(),
+    date,
+    status: "Draft",
+    publishedAt: "",
+    changedAfterPublish: false,
+  })));
+}
+
+function scheduleCopyPreviewFormHtml(records = [], formId = "scheduleCopyConfirmForm") {
+  const hasBlocking = records.some((record) => scheduleConflictReportForShift(record).blocking.length);
+  return '<form id="' + escapeHtml(formId) + '" class="tracker-form">' +
+    encodedScheduleRecordsInput(records) +
+    schedulePreviewHtml(records) +
+    '<div class="button-row">' +
+      '<button type="submit"' + (hasBlocking ? " disabled" : "") + '>Save ' + records.length + ' Shift' + (records.length === 1 ? "" : "s") + '</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+    '</div>' +
+  '</form>';
+}
+
+async function saveScheduleCopyConfirmForm(formEl) {
+  const records = JSON.parse(formEl.elements.recordsJson.value || "[]");
+  const saved = await saveScheduleRecordsBatch(records);
+  if (saved) {
+    $("#detailDialog").close();
+    showToast(saved.length + ' shift' + (saved.length === 1 ? "" : "s") + " copied.");
+  }
+  return saved;
+}
+
+function scheduleTemplates() {
+  return readRecords("scheduleTemplate")
+    .filter((record) => !record.removed)
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+}
+
+function currentWeekTemplateShifts(includeStaffAssignments = true) {
+  const start = scheduleWeekStartString();
+  return staffScheduleRecordsForWeek(start).map((shift) => ({
+    dayOffset: Math.max(0, scheduleWeekDates(start).indexOf(shift.date)),
+    staffName: includeStaffAssignments ? shift.staffName || "" : "",
+    staffEmail: includeStaffAssignments ? shift.staffEmail || "" : "",
+    startTime: shift.startTime || "09:00",
+    endTime: shift.endTime || "12:00",
+    role: shift.role || "Kennel Care",
+    location: shift.location || "",
+    notes: shift.notes || "",
+  }));
+}
+
+function scheduleTemplatesPopupHtml() {
+  const templates = scheduleTemplates();
+  const rows = templates.length
+    ? templates.map((template) => '<article class="record-card compact-record-card">' +
+      '<strong>' + escapeHtml(template.name || "Schedule Template") + '</strong>' +
+      '<span>' + Number(template.shifts?.length || 0) + ' shift block' + (Number(template.shifts?.length || 0) === 1 ? "" : "s") + '</span>' +
+      '<div class="record-actions">' +
+        '<button type="button" class="secondary-button" data-action="apply-schedule-template" data-id="' + escapeHtml(template.id) + '">Apply to This Week</button>' +
+        '<button type="button" class="secondary-button danger-button" data-action="delete-schedule-template" data-id="' + escapeHtml(template.id) + '">Delete</button>' +
+      '</div>' +
+    '</article>').join("")
+    : "<p>No schedule templates saved yet.</p>";
+
+  return '<section class="popup-record-section">' +
+    '<h3>Saved Templates</h3>' +
+    rows +
+  '</section>' +
+  '<form id="scheduleTemplateForm" class="tracker-form">' +
+    '<h3>Save Current Week as Template</h3>' +
+    '<label>Template name<input type="text" name="name" required placeholder="Normal Week" /></label>' +
+    '<label class="inline-check"><input type="checkbox" name="includeStaffAssignments" checked /> Include staff assignments</label>' +
+    '<div class="button-row">' +
+      '<button type="submit">Save Template</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Close</button>' +
+    '</div>' +
+  '</form>';
+}
+
+function openScheduleTemplatesPopup() {
+  if (!staffScheduleAdminRequired()) return;
+  showDetailDialog("Schedule Templates", scheduleTemplatesPopupHtml());
+}
+
+async function saveScheduleTemplateFromForm(formEl) {
+  if (!validateForm(formEl)) return null;
+  const data = formPayload(formEl);
+  const includeStaffAssignments = Boolean(formEl.elements.includeStaffAssignments?.checked);
+  const record = {
+    type: "scheduleTemplate",
+    id: uid("scheduleTemplate"),
+    submittedAt: new Date().toISOString(),
+    name: data.name,
+    createdAt: new Date().toISOString(),
+    createdBy: currentUser?.name || helperName.value || "Admin",
+    includeStaffAssignments,
+    shifts: currentWeekTemplateShifts(includeStaffAssignments),
+  };
+
+  // Timesheet efficiency: templates store reusable shift blocks without rewriting existing staffSchedule records.
+  await sendPayload(record);
+  upsertRecord("scheduleTemplate", record);
+  openScheduleTemplatesPopup();
+  showToast("Schedule template saved.");
+  return record;
+}
+
+function scheduleTemplateApplyRecords(template = {}, start = scheduleWeekStartString()) {
+  return arrayValue(template.shifts).map((shift) => scheduleShiftRecordFromParts({
+    staffName: shift.staffName || "Unassigned",
+    staffEmail: shift.staffEmail || "",
+    date: addDays(start, Number(shift.dayOffset || 0)),
+    startTime: shift.startTime,
+    endTime: shift.endTime,
+    role: shift.role,
+    location: shift.location,
+    notes: shift.notes,
+  }));
+}
+
+function openApplyScheduleTemplatePreview(id = "") {
+  if (!staffScheduleAdminRequired()) return;
+  const template = scheduleTemplates().find((item) => item.id === id);
+  if (!template) return;
+  const records = scheduleTemplateApplyRecords(template);
+  showDetailDialog("Apply Template: " + (template.name || "Schedule Template"), scheduleCopyPreviewFormHtml(records, "applyScheduleTemplateConfirmForm"));
+}
+
+async function deleteScheduleTemplate(id = "") {
+  if (!staffScheduleAdminRequired()) return null;
+  const removed = await markRecordRemoved("scheduleTemplate", id);
+  if (removed) {
+    openScheduleTemplatesPopup();
+    showToast("Schedule template deleted.");
+  }
+  return removed;
 }
 
 function currentShiftForStaff(staffEmailValue = "", atDate = new Date()) {
@@ -724,6 +1248,105 @@ function currentShiftForStaff(staffEmailValue = "", atDate = new Date()) {
   return readRecords("staffSchedule")
     .filter((shift) => !shift.removed && shift.status !== "Cancelled" && normalizeEmail(shift.staffEmail) === normalizeEmail(staffEmailValue) && shift.date === date)
     .find((shift) => minutes >= timeToMinutes(shift.startTime) - 30 && minutes <= timeToMinutes(shift.endTime) + 30) || null;
+}
+
+var CLOCK_EXCEPTION_GRACE_MINUTES = 7;
+
+function scheduleDateTime(date = "", time = "") {
+  if (!date || !time) return null;
+  const value = new Date(date + "T" + time);
+  return Number.isFinite(value.getTime()) ? value : null;
+}
+
+function minutesBetweenDates(a, b) {
+  const aTime = a instanceof Date ? a.getTime() : new Date(a).getTime();
+  const bTime = b instanceof Date ? b.getTime() : new Date(b).getTime();
+  if (!Number.isFinite(aTime) || !Number.isFinite(bTime)) return 0;
+  return Math.round((aTime - bTime) / 60000);
+}
+
+function nearestShiftForStaff(staffEmailValue = "", atDate = new Date()) {
+  const date = dateTimeLocalValue(atDate).slice(0, 10);
+  const normalized = normalizeEmail(staffEmailValue);
+  const shifts = readRecords("staffSchedule")
+    .filter((shift) => !shift.removed && shift.status !== "Cancelled")
+    .filter((shift) => normalizeEmail(shift.staffEmail) === normalized && shift.date === date);
+
+  return shifts
+    .map((shift) => {
+      const distances = [scheduleDateTime(shift.date, shift.startTime), scheduleDateTime(shift.date, shift.endTime)]
+        .filter(Boolean)
+        .map((value) => Math.abs(minutesBetweenDates(atDate, value)));
+      return { shift, distance: distances.length ? Math.min(...distances) : Number.MAX_SAFE_INTEGER };
+    })
+    .sort((a, b) => a.distance - b.distance)[0]?.shift || null;
+}
+
+function clockInExceptionForShift(shift = null, atDate = new Date()) {
+  if (!shift) return { type: "Unscheduled clock-in", varianceMinutes: 0, requiresReason: true };
+  const start = scheduleDateTime(shift.date, shift.startTime);
+  const varianceMinutes = minutesBetweenDates(atDate, start);
+  if (varianceMinutes <= -CLOCK_EXCEPTION_GRACE_MINUTES) {
+    return { type: "Early clock-in", varianceMinutes, requiresReason: false };
+  }
+  if (varianceMinutes >= CLOCK_EXCEPTION_GRACE_MINUTES) {
+    return { type: "Late clock-in", varianceMinutes, requiresReason: false };
+  }
+  return { type: "", varianceMinutes, requiresReason: false };
+}
+
+function clockOutExceptionForShift(shift = null, atDate = new Date()) {
+  if (!shift) return { type: "Unscheduled clock-out", varianceMinutes: 0, requiresReason: false };
+  const end = scheduleDateTime(shift.date, shift.endTime);
+  const varianceMinutes = minutesBetweenDates(atDate, end);
+  if (varianceMinutes <= -CLOCK_EXCEPTION_GRACE_MINUTES) {
+    return { type: "Early clock-out", varianceMinutes, requiresReason: false };
+  }
+  if (varianceMinutes >= CLOCK_EXCEPTION_GRACE_MINUTES) {
+    return { type: "Late clock-out", varianceMinutes, requiresReason: false };
+  }
+  return { type: "", varianceMinutes, requiresReason: false };
+}
+
+function clockExceptionFormHtml(context = {}) {
+  const shift = context.shift || {};
+  const isClockOut = context.mode === "out";
+  const exception = context.exception || {};
+  const title = exception.type || (isClockOut ? "Clock-out" : "Clock-in");
+  const reasonRequired = exception.requiresReason ? "required" : "";
+  const shiftText = shift.id
+    ? (shift.staffName || "Staff") + " | " + shift.date + " | " + formatShiftTime(shift) + " | " + [shift.role, shift.location].filter(Boolean).join(" | ")
+    : "No scheduled shift found.";
+
+  return '<form id="clockExceptionForm" class="tracker-form" ' +
+    'data-mode="' + escapeHtml(context.mode || "in") + '" ' +
+    'data-record-id="' + escapeHtml(context.recordId || "") + '" ' +
+    'data-shift-id="' + escapeHtml(shift.id || "") + '" ' +
+    'data-exception-type="' + escapeHtml(exception.type || "") + '" ' +
+    'data-variance-minutes="' + escapeHtml(String(exception.varianceMinutes || 0)) + '">' +
+    '<p><strong>' + escapeHtml(title) + '</strong></p>' +
+    '<p>' + escapeHtml(shiftText) + '</p>' +
+    (exception.type ? '<p class="service-warning-text">' + escapeHtml(exception.type + (exception.varianceMinutes ? " (" + exception.varianceMinutes + " minutes)" : "")) + '</p>' : "") +
+    '<label>Reason ' + (reasonRequired ? "<small>Required</small>" : "<small>Optional</small>") +
+      '<textarea name="reason" rows="3" ' + reasonRequired + ' placeholder="Reason for unscheduled, early, or late clock action"></textarea>' +
+    '</label>' +
+    '<div class="button-row">' +
+      '<button type="submit">' + (isClockOut ? "Confirm Clock Out" : "Confirm Clock In") + '</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+    '</div>' +
+  '</form>';
+}
+
+function openClockExceptionPopup(context = {}) {
+  showDetailDialog(context.mode === "out" ? "Confirm Clock Out" : "Confirm Clock In", clockExceptionFormHtml(context));
+}
+
+function timesheetExceptionSummary(record = {}) {
+  return [
+    record.clockInException,
+    record.clockOutException,
+    record.scheduleException,
+  ].filter(Boolean).join(" | ");
 }
 
 function timesheetStaffTotalsHtml(records = []) {

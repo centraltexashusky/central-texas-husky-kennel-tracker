@@ -3869,11 +3869,23 @@ button:disabled {
   border: 1px solid var(--line);
   border-left: 4px solid var(--teal);
   border-radius: 8px;
-  cursor: pointer;
   display: grid;
   gap: 3px;
   padding: 9px 10px;
   text-align: left;
+}
+
+.schedule-shift-main {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 3px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
 }
 
 .schedule-shift-card.is-warning {

@@ -100,6 +100,48 @@ function recordAudienceEmails(record: Record<string, unknown>) {
     : [];
 }
 
+function normalizedStaffRole(value: unknown) {
+  const role = String(value || "").trim().toLowerCase();
+  return role === "staff" ? "helper" : role;
+}
+
+function recordIsRemoved(record: Record<string, unknown>) {
+  return record.removed === true || String(record.removed || "").trim().toLowerCase() === "true";
+}
+
+async function settingsUserEmailsByRoles(adminClient: ReturnType<typeof createClient>, roles: string[]) {
+  const roleSet = new Set(roles.map(normalizedStaffRole).filter(Boolean));
+  if (!roleSet.size) return [];
+  const { data, error } = await adminClient
+    .from("kennel_records")
+    .select("payload")
+    .eq("type", "settingsUser");
+  if (error) {
+    console.warn("Could not resolve settings users for notification audience.", error.message);
+    return [];
+  }
+  return uniqueEmails(
+    (data || [])
+      .map((row) => row.payload && typeof row.payload === "object" ? row.payload as Record<string, unknown> : {})
+      .filter((payload) => !recordIsRemoved(payload) && roleSet.has(normalizedStaffRole(payload.role)))
+      .map((payload) => payload.email),
+  );
+}
+
+async function notificationAudienceEmails(
+  adminClient: ReturnType<typeof createClient>,
+  eventName: string,
+  record: Record<string, unknown>,
+  notification: Record<string, unknown> = {},
+) {
+  const audienceEmails = recordAudienceEmails(notification).length ? recordAudienceEmails(notification) : recordAudienceEmails(record);
+  if (eventName !== "schedulePublished") return audienceEmails;
+  return uniqueEmails([
+    ...audienceEmails,
+    ...(await settingsUserEmailsByRoles(adminClient, ["helper", "admin"])),
+  ]);
+}
+
 function appUrl() {
   return Deno.env.get("APP_PRODUCTION_URL") || "https://kennel.centraltexashusky.com/";
 }
@@ -295,6 +337,55 @@ function stayRequestCode(record: Record<string, unknown>, stay: Record<string, u
   const existing = String(stay.requestCode || stay.requestId || stay.reservationId || record.requestCode || "").trim();
   if (existing) return existing;
   return String(stay.id || "").trim();
+}
+
+function notificationSourceSnapshot(notification: Record<string, unknown>) {
+  return notification.sourceSnapshot && typeof notification.sourceSnapshot === "object"
+    ? notification.sourceSnapshot as Record<string, unknown>
+    : {};
+}
+
+function notificationActionTarget(notification: Record<string, unknown>) {
+  return notification.actionTarget && typeof notification.actionTarget === "object"
+    ? notification.actionTarget as Record<string, unknown>
+    : {};
+}
+
+function notificationTargetStayId(notification: Record<string, unknown>) {
+  const source = notificationSourceSnapshot(notification);
+  const actionTarget = notificationActionTarget(notification);
+  const ready = source.latestServiceReadyForPickup && typeof source.latestServiceReadyForPickup === "object"
+    ? source.latestServiceReadyForPickup as Record<string, unknown>
+    : {};
+  return String(
+    notification.stayId
+    || notification.requestCode
+    || actionTarget.stayId
+    || actionTarget.requestCode
+    || ready.requestCode
+    || ready.stayId
+    || "",
+  ).trim();
+}
+
+function stayMatchesTargetId(record: Record<string, unknown>, stay: Record<string, unknown>, targetId: string) {
+  if (!targetId) return false;
+  return [stay.id, stay.requestCode, stay.requestId, stay.reservationId, stayRequestCode(record, stay)]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean)
+    .includes(targetId);
+}
+
+function notificationTargetStay(record: Record<string, unknown>, notification: Record<string, unknown> = {}) {
+  const targetId = notificationTargetStayId(notification);
+  const source = notificationSourceSnapshot(notification);
+  const records = [source, record].filter((item) => Object.keys(item).length);
+  for (const candidateRecord of records) {
+    const match = arrayValue(candidateRecord.stays)
+      .find((stay) => stay && typeof stay === "object" && stayMatchesTargetId(candidateRecord, stay as Record<string, unknown>, targetId));
+    if (match && typeof match === "object") return match as Record<string, unknown>;
+  }
+  return firstStay(record);
 }
 
 function stayScheduleText(stay: Record<string, unknown>) {
@@ -944,6 +1035,35 @@ function notificationFallbackFields(eventName: string, sourceRecord: Record<stri
   const dogName = String(sourceRecord.dogName || "").trim();
   const ownerName = String(sourceRecord.ownerName || sourceRecord.ownerEmail || sourceRecord.customerEmail || "A customer").trim();
   const stayId = stayRequestCode(sourceRecord, stay);
+  if (eventName === "serviceRequestReadyForPickup") {
+    return {
+      id: notificationId,
+      type: "notificationLog",
+      eventName,
+      sourceType: "boardingDog",
+      sourceId,
+      sourceSnapshot: sourceRecord,
+      title: `Ready for pickup: ${dogName || "Customer dog"}`,
+      message: `${dogName || "Your dog"} is ready for pickup${stayId ? ` (Stay ID: ${stayId})` : ""}.`,
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceEmails: customerEmailsForRecord(sourceRecord),
+      alertCategory: "Boarding",
+      alertReason: "Service request ready for pickup",
+      dogName,
+      ownerName,
+      stayId,
+      actionLabel: "Open Request",
+      actionTarget: {
+        eventName,
+        sourceType: "boardingDog",
+        sourceId,
+        stayId,
+        requestCode: stayId,
+      },
+      readBy: [],
+    };
+  }
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";
     const schedule = stayScheduleText(stay);
@@ -1017,8 +1137,8 @@ function hydrateNotificationPayload(
 }
 
 async function notificationContent(adminClient: ReturnType<typeof createClient>, eventName: string, record: Record<string, unknown>, notification: Record<string, unknown> = {}) {
-  const stay = firstStay(record);
-  const audienceEmails = recordAudienceEmails(notification).length ? recordAudienceEmails(notification) : recordAudienceEmails(record);
+  const stay = notificationTargetStay(record, notification);
+  const audienceEmails = await notificationAudienceEmails(adminClient, eventName, record, notification);
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";
     const media = await recordMediaLines(adminClient, record);
@@ -1124,6 +1244,28 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       ].filter(Boolean).join("\n"),
       priority: label === "approved" ? "normal" : "review",
       to: customerEmailsForRecord(record),
+      sms: false,
+    };
+  }
+  if (eventName === "serviceRequestReadyForPickup") {
+    const requestCode = stayRequestCode(record, stay);
+    const serviceLines = requestServiceLines(record, stay);
+    const schedule = stayScheduleEmailText(stay);
+    return {
+      subject: `${record.dogName || "Your dog"} is ready for pickup`,
+      body: [
+        `Good news, ${record.dogName || "your dog"} is ready for pickup.`,
+        "",
+        requestCode ? `Stay ID: ${requestCode}` : "",
+        schedule ? `Requested time: ${schedule}` : "",
+        serviceLines.length ? "Services:" : "",
+        ...serviceLines.map((line) => `- ${line}`),
+        "",
+        "Please come by when you are ready. Reply or contact Central Texas Husky if you need to coordinate pickup details.",
+        `Open your requests: ${appLink("#customerRequestsPage")}`,
+      ].filter(Boolean).join("\n"),
+      priority: "normal",
+      to: customerStayAudienceEmails(record, notification),
       sms: false,
     };
   }
@@ -1531,6 +1673,7 @@ Deno.serve(async (req) => {
     "boardingCustomerRequestDeclined",
     "boardingCustomerRequestCancelled",
     "boardingCustomerRequestUpdatedByStaff",
+    "serviceRequestReadyForPickup",
   ]);
   if (staffOnlyCustomerEvents.has(eventName) && !isStaff) {
     return json({ error: "Only staff can send this customer notification." }, 403, req);

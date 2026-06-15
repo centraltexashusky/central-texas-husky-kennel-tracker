@@ -9,7 +9,7 @@ function uniqueEmails(...values) {
 
 function getAdminEmails() {
   return readRecords("settingsUser")
-    .filter((user) => !user.removed && settingsUserDisplayRole(user) === "admin" && user.email)
+    .filter((user) => !user.removed && user.role === "admin" && user.email)
     .map((user) => user.email.trim().toLowerCase());
 }
 
@@ -276,6 +276,12 @@ function alertManagedUsers() {
 
 function customerAlertUsers() {
   return settingsUsers().filter((user) => user.role === "customer");
+}
+
+function schedulePublishedAudienceEmails() {
+  return settingsUsers()
+    .filter((user) => !user.removed && ["admin", "helper"].includes(user.role) && user.email)
+    .map((user) => user.email);
 }
 
 function notificationPreferences() {
@@ -598,6 +604,7 @@ function notificationStayIdText(source = {}) {
   const stay = boardingPrimaryStay(source) || {};
   return source.latestCustomerCancellation?.requestCode
     || source.latestCustomerUpdate?.requestCode
+    || source.latestServiceReadyForPickup?.requestCode
     || source.requestCode
     || stay.requestCode
     || (stay.id ? boardingStayRequestCode(source, stay) : "");
@@ -793,6 +800,10 @@ function notificationDisplayMessage(notification = {}) {
   if (eventName === "boardingCustomerRequestDeclined") return customerRequestStatusNotificationMessage(source, "declined", boardingDeclineNoteFor(source, boardingPrimaryStay(source) || {})?.note || "");
   if (eventName === "boardingCustomerRequestCancelled") return customerRequestStatusNotificationMessage(source, "cancelled", boardingDeclineNoteFor(source, boardingPrimaryStay(source) || {})?.note || "");
   if (eventName === "boardingCustomerRequestUpdatedByStaff") return customerRequestStatusNotificationMessage(source, "updated");
+  if (eventName === "serviceRequestReadyForPickup") {
+    const ready = source.latestServiceReadyForPickup || {};
+    return \`\${dogName || ready.dogName || "Your dog"} is ready for pickup\${stayId ? \` (Stay ID: \${stayId})\` : ""}.\`;
+  }
   if (notificationSavedMessageIsSpecific(source.message)) return source.message;
   if (notification.sourceType === "boardingDog") {
     const stayId = notificationStayIdText(source);
@@ -845,6 +856,7 @@ function notificationReasonForEvent(eventName = "", recordOrNotification = {}) {
   if (name === "boardingCustomerRequestDeclined") return "Request declined";
   if (name === "boardingCustomerRequestCancelled") return "Request cancelled";
   if (name === "boardingCustomerRequestUpdatedByStaff") return "Request updated";
+  if (name === "serviceRequestReadyForPickup") return "Service request ready for pickup";
   if (name === "careLogAdminAlertCreated") return "Medical/behavior note needs attention";
   if (name === "kennelRequestCreated" || name === "urgentKennelRequestCreated") return source.requestText || "Kennel request needs review";
   if (name === "maintenanceCreated" || name === "urgentMaintenanceCreated") return source.issue || "Maintenance item needs review";
@@ -859,6 +871,7 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   const sourceType = recordOrNotification.sourceType || source.type || "";
   if (name === "customerBoardingRequestCreated" || name === "customerBoardingRequestUpdated" || recoveredBoardingRequestNotification(recordOrNotification)) return "Review Request";
   if (name === "boardingCustomerRequestApproved" || name === "boardingCustomerRequestDeclined" || name === "boardingCustomerRequestCancelled" || name === "boardingCustomerRequestUpdatedByStaff") return "Open Request";
+  if (name === "serviceRequestReadyForPickup") return "Open Request";
   if (name === "customerApprovedStayCancelled" || sourceType === "boardingDog") return "Open Stay";
   if (sourceType === "maintenance" || name.includes("Maintenance")) return "Open Maintenance";
   if (sourceType === "request" || name.includes("Request")) return "Open Request";
@@ -920,6 +933,17 @@ function customerRequestStatusNotificationMessage(record = {}, statusLabel = "up
   return message;
 }
 
+function serviceRequestReadyForPickupNotificationMessage(record = {}) {
+  const stayId = notificationStayIdText(record);
+  const ready = record.latestServiceReadyForPickup || {};
+  const requestedTime = ready.requestedTime ? formatDateTime(ready.requestedTime) : "";
+  return [
+    \`\${record.dogName || ready.dogName || "Your dog"} is ready for pickup.\`,
+    stayId ? \`Stay ID: \${stayId}.\` : "",
+    requestedTime ? \`Requested time: \${requestedTime}.\` : "",
+  ].filter(Boolean).join(" ");
+}
+
 function notificationEventConfig(eventName = "", record = {}) {
   const configs = {
     customerBoardingRequestCreated: {
@@ -960,6 +984,13 @@ function notificationEventConfig(eventName = "", record = {}) {
     boardingCustomerRequestUpdatedByStaff: {
       title: customerRequestStatusNotificationTitle(record, "updated"),
       message: customerRequestStatusNotificationMessage(record, "updated", "Open your request to review the latest details."),
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceEmails: customerStayUpdateAudienceEmails(record),
+    },
+    serviceRequestReadyForPickup: {
+      title: \`Ready for pickup: \${record.dogName || record.latestServiceReadyForPickup?.dogName || "Customer dog"}\`,
+      message: serviceRequestReadyForPickupNotificationMessage(record),
       priority: "normal",
       channels: ["email", "inApp"],
       audienceEmails: customerStayUpdateAudienceEmails(record),
@@ -1033,6 +1064,7 @@ function notificationEventConfig(eventName = "", record = {}) {
       priority: "normal",
       channels: ["email", "inApp"],
       audienceRoles: ["helper", "admin"],
+      audienceEmails: schedulePublishedAudienceEmails(),
     },
     scheduleChangedAfterPublish: {
       title: \`Schedule changed: \${record.staffName || "Staff"}\`,

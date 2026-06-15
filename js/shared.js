@@ -254,6 +254,8 @@ var adminDefaultAlertTypes = new Set([
   "urgentKennelRequestCreated",
   "urgentMaintenanceCreated",
   "timeOffRequested",
+  "schedulePublished",
+  "scheduleChangedAfterPublish",
   "urgentStaffAlertSent",
   "urgentCustomerAlertSent",
 ]);
@@ -3565,6 +3567,42 @@ async function sendPayload(payload) {
   } catch (error) {
     modeLabel.textContent = "Save failed";
     showToast(\`Save failed: \${error.message}\`);
+    throw error;
+  }
+}
+
+async function sendPayloadBatch(payloads = [], options = {}) {
+  const records = arrayValue(payloads).filter((payload) => payload?.id && payload?.type);
+  if (!records.length) return { ok: true, count: 0 };
+
+  if (localTestMode || !supabaseClient) {
+    records.forEach((record) => upsertRecord(record.type, record));
+    modeLabel.textContent = localTestMode ? "Local batch saved" : "Local batch saved";
+    return { ok: true, local: true, count: records.length };
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const rows = records.map((payload) => ({
+      id: payload.id,
+      type: payload.type,
+      payload: payloadForSheet({ ...payload, updatedAt: payload.updatedAt || now }),
+      helper_email: payload.helperEmail || payload.staffEmail || currentUser?.email || "",
+      user_id: currentDbUserId(),
+      submitted_at: payload.submittedAt || now,
+      updated_at: payload.updatedAt || now,
+    }));
+
+    // Timesheet efficiency: one Supabase upsert keeps bulk scheduling fast and avoids one network round trip per shift.
+    const { error } = await supabaseClient.from("kennel_records").upsert(rows);
+    if (error) throw error;
+
+    records.forEach((record) => upsertRecord(record.type, record));
+    modeLabel.textContent = "Batch saved";
+    return { ok: true, count: records.length };
+  } catch (error) {
+    modeLabel.textContent = "Batch save failed";
+    showToast(\`Batch save failed: \${error.message}\`);
     throw error;
   }
 }
@@ -8026,6 +8064,20 @@ async function submitDashboardQuickCare(formEl) {
 // Extracted to js/notifications.js: openDashboardAlertPopup
 
 
+var staffHiddenDashboardCardKeys = new Set([
+  "needsAction",
+  "exerciseDue",
+  "trainingDue",
+  "baths",
+  "careNotes",
+  "requests",
+  "maintenance",
+]);
+
+function dashboardCardVisibleToCurrentRole(key = "") {
+  return currentRole() === "admin" || !staffHiddenDashboardCardKeys.has(key);
+}
+
 function renderDashboard() {
   if (!$("#dashboardCards")) return;
   $("#dashboardDate").value ||= todayDate();
@@ -8057,7 +8109,7 @@ function renderDashboard() {
     ["ownerUpdates", "Owner updates needed", metrics.ownerUpdates, "Boarding records flagged for owner update."],
     ["requests", "Open requests", metrics.openRequests, "Active supply/process requests."],
     ["maintenance", "Open maintenance", metrics.openMaintenance, \`\${metrics.urgentMaintenance} urgent.\`],
-  ];
+  ].filter(([key]) => dashboardCardVisibleToCurrentRole(key));
   $("#dashboardCards").innerHTML = cards.map(([key, label, value, note]) => \`<article class="dashboard-card clickable-card" data-action="dashboard-detail" data-key="\${key}"><span>\${label}</span><strong>\${value}</strong><p>\${note}</p></article>\`).join("");
   renderDashboardReminders(metrics);
   const alerts = dashboardAlertsForMetrics(metrics);
@@ -8076,6 +8128,12 @@ function renderDashboard() {
 function renderDashboardReminders(metrics = dashboardMetrics()) {
   const panel = $("#dashboardReminderPanel");
   if (!panel) return;
+  if (currentRole() !== "admin") {
+    panel.hidden = true;
+    panel.innerHTML = "";
+    return;
+  }
+  panel.hidden = false;
   const selectedDate = $("#dashboardDate")?.value || todayDate();
   const reminders = [];
   metrics.vaccineIssueDogs.slice(0, 5).forEach((dog) => reminders.push({ label: "Vaccine", text: \`\${ownedDogDisplayName(dog)} needs vaccine date review.\` }));
@@ -9919,7 +9977,9 @@ function initEvents() {
   });
   $("#dashboardCards").addEventListener("click", (event) => {
     const card = event.target.closest('[data-action="dashboard-detail"]');
-    if (card) showDashboardDetail(card.dataset.key);
+    if (!card) return;
+    if (!dashboardCardVisibleToCurrentRole(card.dataset.key)) return;
+    showDashboardDetail(card.dataset.key);
   });
   $("#dashboardTimeline").addEventListener("click", (event) => {
     const removeButton = event.target.closest('[data-action="remove-timeline-record"]');
@@ -10209,6 +10269,15 @@ function initEvents() {
     const kennelAssignmentForm = event.target.closest("#kennelAssignmentForm");
     const timesheetEditForm = event.target.closest("#timesheetEditForm");
     const scheduleShiftForm = event.target.closest("#scheduleShiftForm");
+    const bulkScheduleForm = event.target.closest("#bulkScheduleForm");
+    const bulkScheduleConfirmForm = event.target.closest("#bulkScheduleConfirmForm");
+    const copyLastWeekConfirmForm = event.target.closest("#copyLastWeekConfirmForm");
+    const copyShiftDaysForm = event.target.closest("#copyShiftDaysForm");
+    const copyDayScheduleForm = event.target.closest("#copyDayScheduleForm");
+    const scheduleCopyConfirmForm = event.target.closest("#scheduleCopyConfirmForm");
+    const applyScheduleTemplateConfirmForm = event.target.closest("#applyScheduleTemplateConfirmForm");
+    const scheduleTemplateForm = event.target.closest("#scheduleTemplateForm");
+    const clockExceptionForm = event.target.closest("#clockExceptionForm");
     const timeOffRequestForm = event.target.closest("#timeOffRequestForm");
     const holidayForm = event.target.closest("#holidayForm");
     const operationDateOverrideForm = event.target.closest("#operationDateOverrideForm");
@@ -10223,7 +10292,8 @@ function initEvents() {
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
     const boardingRequestFilterForm = event.target.closest("#boardingRequestFilterForm");
     const customerCancellationReasonForm = event.target.closest("#customerCancellationReasonForm");
-    if (!quickCareForm && !stayPopupForm && !settingsPopupForm && !ownerUpdateForm && !vaccineUpdateForm && !careLogEditForm && !kennelAssignmentForm && !timesheetEditForm && !scheduleShiftForm && !timeOffRequestForm && !holidayForm && !operationDateOverrideForm && !taskTabForm && !kennelBuildingTabForm && !ownedDogPhotoUploadForm && !boardingCheckInForm && !boardingCheckInServiceForm && !boardingDeclineRequestForm && !paymentMethodForm && !urgentAlertForm && !alertPreferenceForm && !boardingRequestFilterForm && !customerCancellationReasonForm) return;
+    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, holidayForm, operationDateOverrideForm, taskTabForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
+    if (!handledDetailForms.some(Boolean)) return;
     event.preventDefault();
     if (customerCancellationReasonForm) {
       if (!validateForm(customerCancellationReasonForm)) return;
@@ -10289,6 +10359,42 @@ function initEvents() {
     }
     if (quickCareForm) {
       await submitDashboardQuickCare(quickCareForm);
+      return;
+    }
+    if (bulkScheduleForm) {
+      if (!validateForm(bulkScheduleForm)) return;
+      const records = bulkScheduleRecordsFromForm(bulkScheduleForm);
+      showDetailDialog("Preview Bulk Shifts", bulkSchedulePreviewFormHtml(records));
+      return;
+    }
+    if (bulkScheduleConfirmForm) {
+      await saveBulkScheduleConfirmForm(bulkScheduleConfirmForm);
+      return;
+    }
+    if (copyLastWeekConfirmForm) {
+      await saveCopyLastWeekConfirmForm(copyLastWeekConfirmForm);
+      return;
+    }
+    if (copyShiftDaysForm) {
+      const records = copyShiftDaysRecordsFromForm(copyShiftDaysForm);
+      showDetailDialog("Preview Shift Copies", scheduleCopyPreviewFormHtml(records));
+      return;
+    }
+    if (copyDayScheduleForm) {
+      const records = copyDayScheduleRecordsFromForm(copyDayScheduleForm);
+      showDetailDialog("Preview Day Copy", scheduleCopyPreviewFormHtml(records));
+      return;
+    }
+    if (scheduleCopyConfirmForm || applyScheduleTemplateConfirmForm) {
+      await saveScheduleCopyConfirmForm(scheduleCopyConfirmForm || applyScheduleTemplateConfirmForm);
+      return;
+    }
+    if (scheduleTemplateForm) {
+      await saveScheduleTemplateFromForm(scheduleTemplateForm);
+      return;
+    }
+    if (clockExceptionForm) {
+      await submitClockExceptionForm(clockExceptionForm);
       return;
     }
     if (scheduleShiftForm) {
@@ -10498,6 +10604,21 @@ function initEvents() {
     }
     const action = event.target.closest("[data-action]");
     if (!action) return;
+    if (action.dataset.action === "open-bulk-schedule") {
+      event.preventDefault();
+      openBulkSchedulePopup();
+      return;
+    }
+    if (action.dataset.action === "apply-schedule-template") {
+      event.preventDefault();
+      openApplyScheduleTemplatePreview(action.dataset.id);
+      return;
+    }
+    if (action.dataset.action === "delete-schedule-template") {
+      event.preventDefault();
+      await deleteScheduleTemplate(action.dataset.id);
+      return;
+    }
     if (action.dataset.action === "open-dashboard-alert-popup") {
       openDashboardAlertPopup(action.dataset.alertFilter || "All");
       return;
@@ -11074,6 +11195,137 @@ function initEvents() {
     form.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
+  async function startClockInWithContext(context = {}) {
+    const clockInTime = context.clockInTime || new Date().toISOString();
+    const shift = context.shift || null;
+    const exception = context.exception || { type: "", varianceMinutes: 0 };
+    const reason = String(context.reason || "").trim();
+
+    if (exception.requiresReason && !reason) {
+      showToast("Reason is required for an unscheduled clock-in.");
+      return null;
+    }
+
+    const noteParts = ["Open clock-in"];
+    if (shift) noteParts.push("Scheduled shift: " + formatShiftTime(shift));
+    if (exception.type) noteParts.push(exception.type);
+    if (reason) noteParts.push("Reason: " + reason);
+
+    const record = {
+      type: "timesheet",
+      id: uid("timesheet"),
+      submittedAt: clockInTime,
+      date: localDateFromStoredDateTime(clockInTime),
+      helperName: helperName.value || currentUser.name,
+      helperEmail: helperEmail.value || currentUser.email,
+      clockInTime,
+      clockOutTime: "",
+      hours: 0,
+      note: noteParts.join(" | "),
+      scheduleShiftId: shift?.id || "",
+      scheduleException: shift ? "" : "Unscheduled clock-in",
+      clockInException: exception.type || "",
+      clockInVarianceMinutes: exception.varianceMinutes || 0,
+      clockInExceptionReason: reason,
+      syncStatus: "",
+      syncError: "",
+    };
+
+    const localRecord = upsertRecord("timesheet", record);
+    activeClockIn = { id: localRecord.id, clockInTime, helperEmail: localRecord.helperEmail };
+    localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
+
+    try {
+      await sendPayload(localRecord);
+      renderTimesheet();
+      updateTimeDisplays();
+      const shiftText = shift ? " for " + formatShiftTime(shift) : "";
+      showToast("Clock-in confirmed" + shiftText + ": " + formatDateTime(clockInTime) + ".");
+      return localRecord;
+    } catch (error) {
+      console.warn("Clock-in save failed", error);
+      const failedRecord = upsertRecord("timesheet", {
+        ...localRecord,
+        syncStatus: "failed",
+        syncError: error.message || "Sync failed",
+        updatedAt: new Date().toISOString(),
+      });
+      activeClockIn = { id: failedRecord.id, clockInTime, helperEmail: failedRecord.helperEmail };
+      localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
+      renderTimesheet();
+      updateTimeDisplays();
+      showToast("Clock-in could not sync. Please retry before leaving this page.");
+      return failedRecord;
+    }
+  }
+
+  async function completeClockOutWithContext(openRecord = {}, context = {}) {
+    const clockOutTime = context.clockOutTime || new Date().toISOString();
+    const shift = context.shift || readRecords("staffSchedule").find((item) => item.id === openRecord.scheduleShiftId);
+    const exception = context.exception || clockOutExceptionForShift(shift, new Date(clockOutTime));
+    const reason = String(context.reason || "").trim();
+
+    const existingNote = String(openRecord.note || "").replace(/^Open clock-in\s*\|\s*/, "");
+    const noteParts = [existingNote];
+    if (exception.type) noteParts.push(exception.type);
+    if (reason) noteParts.push("Clock-out reason: " + reason);
+
+    const record = await saveTimeEntry({
+      id: openRecord.id,
+      helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown staff",
+      helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
+      clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
+      clockOutTime,
+      note: noteParts.filter(Boolean).join(" | "),
+      scheduleShiftId: openRecord.scheduleShiftId || shift?.id || "",
+      scheduleException: openRecord.scheduleException || "",
+      clockInException: openRecord.clockInException || "",
+      clockInVarianceMinutes: openRecord.clockInVarianceMinutes || 0,
+      clockInExceptionReason: openRecord.clockInExceptionReason || "",
+      clockOutException: exception.type || "",
+      clockOutVarianceMinutes: exception.varianceMinutes || 0,
+      clockOutExceptionReason: reason,
+    }, { silent: true });
+
+    activeClockIn = "";
+    localStorage.removeItem("cth-active-clock-in");
+    updateTimeDisplays();
+    const shiftText = shift ? " for " + formatShiftTime(shift) : "";
+    showToast("Timesheet submitted" + shiftText + " with " + Number(record.hours || 0).toFixed(2) + " hours recorded.");
+    return record;
+  }
+
+  async function submitClockExceptionForm(formEl) {
+    const mode = formEl.dataset.mode || "in";
+    const reason = String(formEl.elements.reason?.value || "").trim();
+    const shift = readRecords("staffSchedule").find((item) => item.id === formEl.dataset.shiftId);
+    const exception = {
+      type: formEl.dataset.exceptionType || "",
+      varianceMinutes: Number(formEl.dataset.varianceMinutes || 0),
+      requiresReason: Boolean(formEl.elements.reason?.required),
+    };
+
+    if (exception.requiresReason && !reason) {
+      showToast("Reason is required.");
+      return null;
+    }
+
+    if (mode === "out") {
+      const openRecord = readRecords("timesheet").find((record) => record.id === formEl.dataset.recordId);
+      if (!openRecord) {
+        showToast("Open clock-in record was not found.");
+        return null;
+      }
+      const saved = await completeClockOutWithContext(openRecord, { shift, exception, reason });
+      if (saved) $("#detailDialog").close();
+      return saved;
+    }
+
+    const saved = await startClockInWithContext({ shift, exception, reason });
+    if (saved) $("#detailDialog").close();
+    return saved;
+  }
+
   $("#clockInButton").addEventListener("click", async (event) => {
     if (!helperIsLoggedIn()) {
       showToast("Sign in first.");
@@ -11084,9 +11336,11 @@ function initEvents() {
     clockButton.setAttribute("aria-busy", "true");
     try {
       if (!activeClockIn?.clockInTime) syncActiveClockInFromOpenRecord();
+
       if (activeClockIn?.clockInTime) {
         let openRecord = readRecords("timesheet").find((record) => record.id === activeClockIn.id);
         if (!openRecord) openRecord = syncActiveClockInFromOpenRecord();
+
         if (!openRecord) {
           showToast("Clock-in record was not found. Clock in again.");
           activeClockIn = "";
@@ -11094,58 +11348,31 @@ function initEvents() {
           updateTimeDisplays();
           return;
         }
-        const clockOutTime = new Date().toISOString();
-        const record = await saveTimeEntry({
-          id: openRecord.id,
-          helperName: openRecord.helperName || helperName.value || currentUser?.name || "Unknown staff",
-          helperEmail: openRecord.helperEmail || helperEmail.value || currentUser?.email || "",
-          clockInTime: openRecord.clockInTime || activeClockIn.clockInTime,
-          clockOutTime,
-          note: String(openRecord.note || "").startsWith("Open clock-in") ? String(openRecord.note || "").replace(/^Open clock-in\\s*\\|\\s*/, "") : openRecord.note,
-        }, { silent: true });
-        activeClockIn = "";
-        localStorage.removeItem("cth-active-clock-in");
-        updateTimeDisplays();
-        showToast("Timesheet submitted with " + Number(record.hours || 0).toFixed(2) + " hours recorded.");
+
+        const shift = readRecords("staffSchedule").find((item) => item.id === openRecord.scheduleShiftId)
+          || nearestShiftForStaff(openRecord.helperEmail || helperEmail.value || currentUser.email, new Date());
+        const exception = clockOutExceptionForShift(shift, new Date());
+
+        if (exception.type) {
+          openClockExceptionPopup({ mode: "out", recordId: openRecord.id, shift, exception });
+          return;
+        }
+
+        await completeClockOutWithContext(openRecord, { shift, exception });
         return;
       }
-      const clockInTime = new Date().toISOString();
-      const matchingShift = currentShiftForStaff(helperEmail.value || currentUser.email, new Date());
-      const scheduleNote = matchingShift ? "Scheduled shift: " + formatShiftTime(matchingShift) : "Unscheduled clock-in";
-      const record = {
-        type: "timesheet",
-        id: uid("timesheet"),
-        submittedAt: clockInTime,
-        date: localDateFromStoredDateTime(clockInTime),
-        helperName: helperName.value || currentUser.name,
-        helperEmail: helperEmail.value || currentUser.email,
-        clockInTime,
-        clockOutTime: "",
-        hours: 0,
-        note: "Open clock-in | " + scheduleNote,
-        scheduleShiftId: matchingShift?.id || "",
-        scheduleException: matchingShift ? "" : "Unscheduled clock-in",
-      };
-      const localRecord = upsertRecord("timesheet", record);
-      activeClockIn = { id: localRecord.id, clockInTime, helperEmail: localRecord.helperEmail };
-      localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
-      try {
-        await sendPayload(localRecord);
-        showToast("Clock-in confirmed: " + formatDateTime(clockInTime) + ".");
-      } catch (error) {
-        console.warn("Clock-in save failed", error);
-        const failedRecord = upsertRecord("timesheet", {
-          ...localRecord,
-          syncStatus: "failed",
-          syncError: error.message || "Sync failed",
-          updatedAt: new Date().toISOString(),
-        });
-        activeClockIn = { id: failedRecord.id, clockInTime, helperEmail: failedRecord.helperEmail };
-        localStorage.setItem("cth-active-clock-in", JSON.stringify(activeClockIn));
-        renderTimesheet();
-        showToast("Clock-in could not sync. Please retry before leaving this page.");
+
+      const now = new Date();
+      const matchingShift = currentShiftForStaff(helperEmail.value || currentUser.email, now);
+      const nearestShift = matchingShift || nearestShiftForStaff(helperEmail.value || currentUser.email, now);
+      const exception = clockInExceptionForShift(matchingShift || nearestShift, now);
+
+      if (exception.type) {
+        openClockExceptionPopup({ mode: "in", shift: matchingShift || nearestShift, exception });
+        return;
       }
-      updateTimeDisplays();
+
+      await startClockInWithContext({ shift: matchingShift || nearestShift, exception });
     } catch (error) {
       console.warn("Clock action failed.", error);
       showToast("Clock action failed: " + error.message);
@@ -11178,6 +11405,14 @@ function initEvents() {
 	        renderTimesheet();
 	        return;
 	      }
+	      if (action.dataset.action === "duplicate-shift") {
+	        duplicateScheduleShift(action.dataset.id);
+	        return;
+	      }
+	      if (action.dataset.action === "copy-shift-days") {
+	        openCopyShiftToDaysPopup(action.dataset.id);
+	        return;
+	      }
 	      if (action.dataset.action === "edit-shift") {
 	        const record = readRecords("staffSchedule").find((item) => item.id === action.dataset.id && !item.removed);
 	        if (record) openScheduleShiftPopup(record);
@@ -11196,6 +11431,9 @@ function initEvents() {
 	    }
 	  });
 	  $("#openScheduleShiftButton")?.addEventListener("click", () => openScheduleShiftPopup());
+	  $("#openBulkScheduleButton")?.addEventListener("click", openBulkSchedulePopup);
+	  $("#copyScheduleDayButton")?.addEventListener("click", openCopyDaySchedulePopup);
+	  $("#openScheduleTemplatesButton")?.addEventListener("click", openScheduleTemplatesPopup);
 	  $("#copyLastWeekScheduleButton")?.addEventListener("click", copyLastWeekSchedule);
 	  $("#publishScheduleButton")?.addEventListener("click", async () => {
 	    const published = await publishScheduleWeek();

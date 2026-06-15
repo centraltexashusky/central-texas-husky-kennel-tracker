@@ -692,6 +692,9 @@ function renderOwnedDogMobileCards(records = []) {
 
 function renderOwnedDogs() {
   const query = $("#ownedDogSearch").value || "";
+  const isAdmin = currentRole() === "admin";
+  const addButton = $("#addOwnedDogButton");
+  if (addButton) addButton.hidden = !isAdmin;
   const allDogs = readRecords("ownedDog").filter((record) => !record.removed);
   const records = sortRecordsForTable("ownedDog", allDogs.filter((record) => matches(record, query) && ownedDogMatchesCareFilter(record)));
   const columns = activeColumns("ownedDog");
@@ -776,6 +779,10 @@ function syncOwnedDogTabAvailability(record = activeOwnedDog() || {}) {
 }
 
 function openOwnedDog(record = {}) {
+  if (!record?.id && currentRole() !== "admin") {
+    showToast("Admin access required to add a new dog.");
+    return;
+  }
   const ownedDogDetail = $("#ownedDogDetail");
   if (ownedDogDetail.parentElement !== document.body) {
     document.body.appendChild(ownedDogDetail);

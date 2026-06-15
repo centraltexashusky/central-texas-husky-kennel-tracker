@@ -1,5 +1,5 @@
 {
   "scripts": {
-    "test": "node tools/efficiency-flow-smoke-test.mjs && node tools/efficiency-regression-static-check.mjs"
+    "test": "node tools/efficiency-flow-smoke-test.mjs && node tools/efficiency-regression-static-check.mjs && node tools/timesheet-efficiency-static-check.mjs"
   }
 }
