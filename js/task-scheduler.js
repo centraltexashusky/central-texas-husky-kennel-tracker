@@ -4,6 +4,9 @@ var taskSchedulerView = localStorage.getItem("cth-task-scheduler-view") || "week
 var taskSchedulerAnchorDate = todayDate();
 var taskSchedulerSelectedTaskId = "";
 var taskSchedulerDragTaskId = "";
+var taskSchedulerPanelMode = "new";
+var taskSchedulerEditingTaskId = "";
+var taskSchedulerPanelOpen = window.innerWidth >= 901;
 
 var TASK_SCHEDULER_TYPES = [
   { key: "Bath", label: "Bath", className: "is-bath" },
@@ -26,6 +29,64 @@ function scheduledCareTasks() {
 
 function scheduledCareTaskTypeMeta(type = "") {
   return TASK_SCHEDULER_TYPES.find((item) => item.key === type) || TASK_SCHEDULER_TYPES[TASK_SCHEDULER_TYPES.length - 1];
+}
+
+function taskSchedulerIsDesktop() {
+  return window.innerWidth >= 901;
+}
+
+function setTaskSchedulerPanel(mode = "new", id = "", open = true) {
+  taskSchedulerPanelMode = mode;
+  taskSchedulerEditingTaskId = mode === "edit" ? id : "";
+  if (mode === "detail") taskSchedulerSelectedTaskId = id || taskSchedulerSelectedTaskId;
+  taskSchedulerPanelOpen = open || taskSchedulerIsDesktop();
+}
+
+function closeTaskSchedulerPanel() {
+  taskSchedulerPanelOpen = false;
+  taskSchedulerEditingTaskId = "";
+  if (!taskSchedulerSelectedTaskId) taskSchedulerPanelMode = "new";
+  renderTaskScheduler();
+}
+
+function taskSchedulerDateLabel(date = "") {
+  if (!date) return "";
+  return new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function taskSchedulerLongDateLabel(date = "") {
+  if (!date) return "";
+  return new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+}
+
+function taskSchedulerFormatClock(date) {
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function taskSchedulerTimeRange(task = {}) {
+  const start = task.startTime || "";
+  const duration = Number(task.durationMinutes || 0);
+  if (!start) return "";
+  const source = new Date((task.date || todayDate()) + "T" + start);
+  if (Number.isNaN(source.getTime())) return start;
+  if (!duration) return taskSchedulerFormatClock(source);
+  const end = new Date(source.getTime() + duration * 60000);
+  return taskSchedulerFormatClock(source) + " - " + taskSchedulerFormatClock(end);
+}
+
+function taskSchedulerDogAvatarHtml(task = {}, className = "task-scheduler-avatar") {
+  const dog = taskSchedulerDogForTask(task) || {};
+  const name = task.dogName || dog.dogName || dog.callName || dog.showName || "Dog";
+  const photo = typeof profilePhotoDirectSource === "function" ? profilePhotoDirectSource(dog) : (dog.profilePhotoData || dog.profilePhotoUrl || "");
+  if (photo) return '<span class="' + escapeHtml(className) + '"><img src="' + escapeHtml(photo) + '" alt="' + escapeHtml(name) + '" /></span>';
+  return '<span class="' + escapeHtml(className) + '">' + escapeHtml(avatarText(name)) + "</span>";
+}
+
+function taskSchedulerPanelHeaderHtml(title = "New Task", subtitle = "Schedule a task and link it to a dog's care log.") {
+  return '<div class="task-scheduler-panel-header">' +
+    '<div><h3>' + escapeHtml(title) + '</h3><p>' + escapeHtml(subtitle) + '</p></div>' +
+    '<button type="button" class="secondary-button task-scheduler-panel-close" data-action="close-task-scheduler-panel" aria-label="Close task panel">×</button>' +
+  '</div>';
 }
 
 function taskSchedulerWeekStart(date = taskSchedulerAnchorDate) {
@@ -112,34 +173,35 @@ function scheduledCareTaskFormHtml(task = {}) {
     '<option value="' + escapeHtml(item.key) + '"' + (item.key === task.activityType ? " selected" : "") + ">" + escapeHtml(item.label) + "</option>"
   ).join("");
 
-  return '<form id="scheduledCareTaskForm" class="tracker-form" data-id="' + escapeHtml(task.id || "") + '">' +
+  return '<form id="scheduledCareTaskForm" class="tracker-form task-scheduler-panel-form" data-id="' + escapeHtml(task.id || "") + '">' +
+    '<h4>Dog Type</h4>' +
     '<div class="segmented-control task-dog-type-toggle" role="group" aria-label="Scheduled task dog type">' +
       '<label><input type="radio" name="dogType" value="ownedDog" ' + (dogType === "ownedDog" ? "checked" : "") + " /> Our Dog</label>" +
       '<label><input type="radio" name="dogType" value="boardingDog" ' + (dogType === "boardingDog" ? "checked" : "") + " /> Boarding Dog</label>" +
     "</div>" +
-    '<div class="field-grid">' +
-      '<label>Our Dog<select name="ownedDogId" data-task-owned-dog-select>' + taskSchedulerOwnedDogOptions(dogType === "ownedDog" ? task.dogId : "") + "</select></label>" +
-      '<label>Boarding Dog<select name="boardingDogId" data-task-boarding-dog-select>' + taskSchedulerBoardingDogOptions(dogType === "boardingDog" ? task.dogId : "") + "</select></label>" +
-      '<label>Activity<select name="activityType" required>' + typeOptions + "</select></label>" +
-      '<label>Date<input type="date" name="date" value="' + escapeHtml(task.date || taskSchedulerAnchorDate || todayDate()) + '" required /></label>' +
-      '<label>Start time<input type="time" name="startTime" value="' + escapeHtml(task.startTime || "09:00") + '" required /></label>' +
-      '<label>Duration minutes<input type="number" name="durationMinutes" min="5" step="5" value="' + escapeHtml(task.durationMinutes || 45) + '" /></label>' +
-      '<label>Assigned to<input type="text" name="assignedToName" value="' + escapeHtml(task.assignedToName || "") + '" placeholder="Staff name or shift" /></label>' +
-    "</div>" +
-    '<label data-task-boarding-service-row>Boarding service<select name="boardingServiceRef" data-task-boarding-service-select>' + boardingServiceOptionsForScheduler(dogType === "boardingDog" ? task.dogId : "", task.boardingServiceRef || "") + "</select></label>" +
-    '<label>Notes<textarea name="notes" rows="4" placeholder="Shampoo, treadmill notes, special handling, etc.">' + escapeHtml(task.notes || "") + "</textarea></label>" +
-    '<div class="button-row">' +
+    '<p class="task-scheduler-panel-note">Select a boarding dog to load booked services.</p>' +
+    '<label class="task-scheduler-form-row" data-task-owned-dog-row><span>Our Dog</span><select name="ownedDogId" data-task-owned-dog-select>' + taskSchedulerOwnedDogOptions(dogType === "ownedDog" ? task.dogId : "") + "</select></label>" +
+    '<label class="task-scheduler-form-row" data-task-boarding-dog-row><span>Boarding Dog</span><select name="boardingDogId" data-task-boarding-dog-select>' + taskSchedulerBoardingDogOptions(dogType === "boardingDog" ? task.dogId : "") + "</select></label>" +
+    '<label class="task-scheduler-form-row" data-task-boarding-service-row><span>Service from Boarding</span><select name="boardingServiceRef" data-task-boarding-service-select>' + boardingServiceOptionsForScheduler(dogType === "boardingDog" ? task.dogId : "", task.boardingServiceRef || "") + "</select></label>" +
+    '<label class="task-scheduler-form-row"><span>Activity</span><select name="activityType" required>' + typeOptions + "</select></label>" +
+    '<label class="task-scheduler-form-row"><span>Date</span><input type="date" name="date" value="' + escapeHtml(task.date || taskSchedulerAnchorDate || todayDate()) + '" required /></label>' +
+    '<label class="task-scheduler-form-row"><span>Time</span><input type="time" name="startTime" value="' + escapeHtml(task.startTime || "09:00") + '" required /></label>' +
+    '<label class="task-scheduler-form-row"><span>Duration</span><input type="number" name="durationMinutes" min="5" step="5" value="' + escapeHtml(task.durationMinutes || 45) + '" /></label>' +
+    '<label class="task-scheduler-form-row"><span>Assigned to</span><input type="text" name="assignedToName" value="' + escapeHtml(task.assignedToName || "") + '" placeholder="Morning Staff" /></label>' +
+    '<label class="task-scheduler-form-row task-scheduler-notes-row"><span>Notes</span><textarea name="notes" rows="3" placeholder="Use hypoallergenic shampoo">' + escapeHtml(task.notes || "") + "</textarea></label>" +
+    '<div class="task-scheduler-form-actions">' +
       '<button type="submit">Save Task</button>' +
       (task.id ? '<button type="button" class="secondary-button danger-button" data-action="remove-scheduled-care-task" data-id="' + escapeHtml(task.id) + '">Delete</button>' : "") +
-      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+      '<button type="button" class="secondary-button" data-action="close-task-scheduler-panel">Cancel</button>' +
     "</div>" +
   "</form>";
 }
 
 function openScheduledCareTaskPopup(id = "") {
   const task = scheduledCareTasks().find((item) => item.id === id) || {};
-  showDetailDialog(id ? "Edit Scheduled Task" : "New Scheduled Task", scheduledCareTaskFormHtml(task));
-  syncScheduledCareTaskFormVisibility();
+  setTaskSchedulerPanel(id ? "edit" : "new", id, true);
+  if (task.id) taskSchedulerSelectedTaskId = task.id;
+  renderTaskScheduler();
 }
 
 function syncScheduledCareTaskFormVisibility() {
@@ -152,9 +214,11 @@ function syncScheduledCareTaskFormVisibility() {
   const boardingLabel = boardingSelect?.closest("label");
   const serviceRow = formEl.querySelector("[data-task-boarding-service-row]");
   const serviceSelect = formEl.querySelector("[data-task-boarding-service-select]");
+  const panelNote = formEl.querySelector(".task-scheduler-panel-note");
   if (ownedLabel) ownedLabel.hidden = dogType !== "ownedDog";
   if (boardingLabel) boardingLabel.hidden = dogType !== "boardingDog";
   if (serviceRow) serviceRow.hidden = dogType !== "boardingDog";
+  if (panelNote) panelNote.hidden = dogType !== "boardingDog";
   if (dogType === "boardingDog" && serviceSelect && boardingSelect && serviceSelect.dataset.loadedDogId !== boardingSelect.value) {
     serviceSelect.innerHTML = boardingServiceOptionsForScheduler(boardingSelect.value, serviceSelect.value || "");
     serviceSelect.dataset.loadedDogId = boardingSelect.value;
@@ -213,8 +277,9 @@ async function saveScheduledCareTaskFromForm(formEl) {
     const record = upsertRecord("scheduledCareTask", { ...existing, ...draft });
     await sendPayload(record);
     taskSchedulerSelectedTaskId = record.id;
+    setTaskSchedulerPanel("detail", record.id, true);
     renderTaskScheduler();
-    showDetailDialog("Task Saved", "<p>The task was saved to Task Scheduling.</p>");
+    showToast("Task saved.");
     return record;
   } catch (error) {
     showToast(error.message || "Task could not be saved.");
@@ -226,8 +291,9 @@ function scheduledCareTaskCardHtml(task = {}) {
   const meta = scheduledCareTaskTypeMeta(task.activityType);
   const statusClass = task.status === "Completed" ? " is-completed" : "";
   return '<button type="button" draggable="true" class="task-scheduler-card ' + escapeHtml(meta.className) + statusClass + '" data-action="open-scheduled-care-task" data-id="' + escapeHtml(task.id) + '">' +
-    '<strong>' + escapeHtml(task.title || task.activityType || "Task") + "</strong>" +
-    '<span>' + escapeHtml([task.dogName || "Dog", task.startTime || ""].filter(Boolean).join(" | ")) + "</span>" +
+    taskSchedulerDogAvatarHtml(task) +
+    '<span class="task-scheduler-card-copy"><strong>' + escapeHtml(task.title || task.activityType || "Task") + "</strong>" +
+    '<span>' + escapeHtml([task.dogName || "Dog", taskSchedulerTimeRange(task)].filter(Boolean).join(" | ")) + "</span></span>" +
   "</button>";
 }
 
@@ -246,18 +312,29 @@ function taskSchedulerWeekHours(dates = taskSchedulerWeekDates(taskSchedulerAnch
   return [...hours].filter((hour) => hour >= 0 && hour <= 23).sort((a, b) => a - b);
 }
 
+function taskSchedulerMobileWeekStripHtml(dates = taskSchedulerWeekDates(taskSchedulerAnchorDate)) {
+  return '<div class="task-scheduler-mobile-week-strip">' + dates.map((date) => {
+    const source = new Date(date + "T12:00:00");
+    const active = date === taskSchedulerAnchorDate || date === todayDate();
+    return '<button type="button" data-action="task-scheduler-jump-date" data-date="' + escapeHtml(date) + '" class="' + (active ? "is-active" : "") + '">' +
+      '<span>' + escapeHtml(source.toLocaleDateString("en-US", { weekday: "short" })) + '</span>' +
+      '<strong>' + escapeHtml(String(source.getDate())) + '</strong>' +
+    '</button>';
+  }).join("") + '</div>';
+}
+
 function taskSchedulerWeekHtml() {
   const dates = taskSchedulerWeekDates(taskSchedulerAnchorDate);
   const hours = taskSchedulerWeekHours(dates);
-  return '<div class="task-scheduler-week-grid">' +
+  return taskSchedulerMobileWeekStripHtml(dates) + '<div class="task-scheduler-week-grid">' +
     '<div class="task-scheduler-week-header task-scheduler-time-label">Time</div>' +
-    dates.map((date) => '<div class="task-scheduler-week-header">' + escapeHtml(new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })) + "</div>").join("") +
+    dates.map((date) => '<div class="task-scheduler-week-header ' + (date === todayDate() ? "is-today" : "") + '">' + '<strong>' + escapeHtml(new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })) + '</strong><span>' + escapeHtml(new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })) + "</span></div>").join("") +
     hours.map((hour) => {
       const time = String(hour).padStart(2, "0") + ":00";
       return '<div class="task-scheduler-time-label">' + escapeHtml(hourLabel(hour)) + "</div>" +
         dates.map((date) => {
           const tasks = tasksForSchedulerDate(date).filter((task) => taskSchedulerHourFromTime(task.startTime) === hour);
-          return '<div class="task-scheduler-slot" data-task-drop-date="' + escapeHtml(date) + '" data-task-drop-time="' + escapeHtml(time) + '">' +
+          return '<div class="task-scheduler-slot ' + (date === todayDate() ? "is-today" : "") + '" data-task-drop-date="' + escapeHtml(date) + '" data-task-drop-time="' + escapeHtml(time) + '">' +
             tasks.map(scheduledCareTaskCardHtml).join("") +
           "</div>";
         }).join("");
@@ -293,11 +370,12 @@ function renderTaskSchedulerMiniCalendar() {
   const el = $("#taskSchedulerMiniCalendar");
   if (!el) return;
   const dates = taskSchedulerMonthDates(taskSchedulerAnchorDate);
-  el.innerHTML = '<strong>' + escapeHtml(new Date(taskSchedulerAnchorDate + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" })) + '</strong>' +
+  el.innerHTML = '<div class="task-scheduler-mini-header"><button type="button" class="secondary-button" data-action="task-scheduler-mini-prev" aria-label="Previous month">‹</button><strong>' + escapeHtml(new Date(taskSchedulerAnchorDate + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" })) + '</strong><button type="button" class="secondary-button" data-action="task-scheduler-mini-next" aria-label="Next month">›</button></div>' +
+    '<div class="task-scheduler-mini-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>' +
     '<div class="task-scheduler-mini-grid">' +
     dates.map((date) => {
       const count = tasksForSchedulerDate(date).length;
-      return '<button type="button" data-action="task-scheduler-jump-date" data-date="' + escapeHtml(date) + '" class="' + (date === todayDate() ? "is-today" : "") + '">' +
+      return '<button type="button" data-action="task-scheduler-jump-date" data-date="' + escapeHtml(date) + '" class="' + (date === todayDate() ? "is-today" : "") + (date === taskSchedulerAnchorDate ? " is-selected" : "") + '">' +
         escapeHtml(String(new Date(date + "T12:00:00").getDate())) +
         (count ? '<small>' + count + "</small>" : "") +
       "</button>";
@@ -309,31 +387,52 @@ function renderTaskSchedulerLegend() {
   const el = $("#taskSchedulerLegend");
   if (!el) return;
   el.innerHTML = '<h3>Task Types</h3>' + TASK_SCHEDULER_TYPES.map((type) =>
-    '<span class="task-scheduler-legend-item ' + escapeHtml(type.className) + '">' + escapeHtml(type.label) + "</span>"
+    '<span class="task-scheduler-legend-item ' + escapeHtml(type.className) + '"><i></i>' + escapeHtml(type.label) + "</span>"
   ).join("");
+}
+
+function taskSchedulerDetailPanelHtml(task = {}) {
+  const completed = task.status === "Completed";
+  return taskSchedulerPanelHeaderHtml(task.title || task.activityType || "Task Details", completed ? "Completed task and care-log details." : "Review, edit, or complete this scheduled care task.") +
+    '<article class="task-scheduler-detail-card">' +
+      '<div class="task-scheduler-detail-hero">' +
+        taskSchedulerDogAvatarHtml(task, "task-scheduler-avatar is-large") +
+        '<div><h4>' + escapeHtml(task.dogName || "Dog") + '</h4><p>' + escapeHtml(task.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog") + '</p></div>' +
+      '</div>' +
+      '<div class="task-scheduler-detail-row"><span>Date</span><strong>' + escapeHtml(taskSchedulerLongDateLabel(task.date)) + '</strong></div>' +
+      '<div class="task-scheduler-detail-row"><span>Time</span><strong>' + escapeHtml(taskSchedulerTimeRange(task) || task.startTime || "") + '</strong></div>' +
+      '<div class="task-scheduler-detail-row"><span>Assigned to</span><strong>' + escapeHtml(task.assignedToName || "Unassigned") + '</strong></div>' +
+      '<div class="task-scheduler-detail-row"><span>Category</span><strong>' + escapeHtml(task.activityType || "Care") + '</strong></div>' +
+      (task.notes ? '<div class="task-scheduler-detail-row is-notes"><span>Notes</span><p>' + escapeHtml(task.notes) + '</p></div>' : "") +
+      '<section class="task-scheduler-status-card ' + (completed ? "is-complete" : "") + '"><strong>Status</strong><p>' + escapeHtml(completed ? "Completed" : task.status || "Scheduled") + '</p>' + (completed ? '<span>Completed by ' + escapeHtml(task.completedBy || "Staff") + (task.completedAt ? " at " + escapeHtml(formatDateTime(task.completedAt)) : "") + '</span>' : '<span>Completing this task logs it to the dog care history.</span>') + '</section>' +
+      (completed ? '<section class="task-scheduler-care-log-card"><strong>Care Log</strong><p>This task has been logged to ' + escapeHtml(task.dogName || "this dog") + "'s care log.</p><button type='button' class='secondary-button' data-action='open-scheduled-care-log' data-id='" + escapeHtml(task.id) + "'>View Care Log</button></section>" : "") +
+      '<div class="task-scheduler-form-actions">' +
+        (completed ? "" : '<button type="button" data-action="complete-scheduled-care-task" data-id="' + escapeHtml(task.id) + '">Complete & Log to Care Log</button>') +
+        '<button type="button" class="secondary-button" data-action="edit-scheduled-care-task" data-id="' + escapeHtml(task.id) + '">Edit</button>' +
+        '<button type="button" class="secondary-button danger-button" data-action="remove-scheduled-care-task" data-id="' + escapeHtml(task.id) + '">Delete Task</button>' +
+      "</div>" +
+    "</article>";
 }
 
 function renderTaskSchedulerDetail(task = null) {
   const panel = $("#taskSchedulerDetailPanel");
   if (!panel) return;
-  if (!task) {
-    panel.innerHTML = "<p>Select a task to see details.</p>";
-    return;
+  const mode = taskSchedulerPanelMode;
+  let content = "";
+  if (mode === "edit") {
+    const editTask = scheduledCareTasks().find((item) => item.id === taskSchedulerEditingTaskId) || task || {};
+    content = taskSchedulerPanelHeaderHtml(editTask.id ? "Edit Task" : "New Task", "Schedule a task and link it to a dog's care log.") + scheduledCareTaskFormHtml(editTask);
+  } else if (mode === "detail" && task?.id) {
+    content = taskSchedulerDetailPanelHtml(task);
+  } else {
+    content = taskSchedulerPanelHeaderHtml("New Task", "Schedule a task and link it to a dog's care log.") + scheduledCareTaskFormHtml({});
   }
-  panel.innerHTML = '<article class="task-scheduler-detail-card">' +
-    '<h3>' + escapeHtml(task.title || "Scheduled Task") + "</h3>" +
-    '<p><strong>Dog:</strong> ' + escapeHtml(task.dogName || "Dog") + "</p>" +
-    '<p><strong>Type:</strong> ' + escapeHtml(task.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog") + "</p>" +
-    '<p><strong>Date:</strong> ' + escapeHtml(task.date || "") + "</p>" +
-    '<p><strong>Time:</strong> ' + escapeHtml(task.startTime || "") + " for " + escapeHtml(String(task.durationMinutes || 0)) + " min</p>" +
-    '<p><strong>Status:</strong> ' + escapeHtml(task.status || "Scheduled") + "</p>" +
-    (task.assignedToName ? '<p><strong>Assigned:</strong> ' + escapeHtml(task.assignedToName) + "</p>" : "") +
-    (task.notes ? '<p><strong>Notes:</strong> ' + escapeHtml(task.notes) + "</p>" : "") +
-    '<div class="button-row">' +
-      (task.status === "Completed" ? '<button type="button" class="secondary-button" data-action="open-scheduled-care-log" data-id="' + escapeHtml(task.id) + '">View Log</button>' : '<button type="button" data-action="complete-scheduled-care-task" data-id="' + escapeHtml(task.id) + '">Complete & Log to Dog</button>') +
-      '<button type="button" class="secondary-button" data-action="edit-scheduled-care-task" data-id="' + escapeHtml(task.id) + '">Edit</button>' +
-    "</div>" +
-  "</article>";
+  const open = taskSchedulerPanelOpen;
+  panel.classList.toggle("is-open", open);
+  panel.classList.toggle("is-detail-mode", mode === "detail" && Boolean(task?.id));
+  panel.classList.toggle("is-form-mode", mode !== "detail" || !task?.id);
+  panel.innerHTML = content;
+  syncScheduledCareTaskFormVisibility();
 }
 
 function renderTaskScheduler() {
@@ -346,6 +445,7 @@ function renderTaskScheduler() {
   board.innerHTML = taskSchedulerView === "month" ? taskSchedulerMonthHtml() : taskSchedulerWeekHtml();
   renderTaskSchedulerMiniCalendar();
   renderTaskSchedulerLegend();
+  $("#taskSchedulerPage .task-scheduler-layout")?.classList.toggle("has-panel-open", taskSchedulerPanelOpen);
   const selected = scheduledCareTasks().find((task) => task.id === taskSchedulerSelectedTaskId);
   renderTaskSchedulerDetail(selected || null);
 }
@@ -519,8 +619,10 @@ async function removeScheduledCareTask(id = "") {
     updatedAt: new Date().toISOString(),
   });
   await sendPayload(updated);
-  $("#detailDialog")?.close();
   if (taskSchedulerSelectedTaskId === id) taskSchedulerSelectedTaskId = "";
+  taskSchedulerEditingTaskId = "";
+  taskSchedulerPanelMode = "new";
+  taskSchedulerPanelOpen = taskSchedulerIsDesktop();
   renderTaskScheduler();
   showToast("Scheduled task removed.");
   return updated;
@@ -531,7 +633,10 @@ function setupTaskSchedulerEventListeners() {
   if (!page || page.dataset.taskSchedulerBound === "true") return;
   page.dataset.taskSchedulerBound = "true";
 
-  $("#openScheduledCareTaskButton")?.addEventListener("click", () => openScheduledCareTaskPopup());
+  $("#openScheduledCareTaskButton")?.addEventListener("click", () => {
+    setTaskSchedulerPanel("new", "", true);
+    renderTaskScheduler();
+  });
   $("#taskSchedulerTodayButton")?.addEventListener("click", () => {
     taskSchedulerAnchorDate = todayDate();
     renderTaskScheduler();
@@ -558,13 +663,14 @@ function setupTaskSchedulerEventListeners() {
     if (!action) return;
 
     if (action.dataset.action === "open-scheduled-care-task") {
-      taskSchedulerSelectedTaskId = action.dataset.id;
-      renderTaskSchedulerDetail(scheduledCareTasks().find((task) => task.id === action.dataset.id));
+      setTaskSchedulerPanel("detail", action.dataset.id, true);
+      renderTaskScheduler();
       return;
     }
 
     if (action.dataset.action === "edit-scheduled-care-task") {
-      openScheduledCareTaskPopup(action.dataset.id);
+      setTaskSchedulerPanel("edit", action.dataset.id, true);
+      renderTaskScheduler();
       return;
     }
 
@@ -581,6 +687,28 @@ function setupTaskSchedulerEventListeners() {
     if (action.dataset.action === "task-scheduler-jump-date") {
       taskSchedulerAnchorDate = action.dataset.date;
       renderTaskScheduler();
+      return;
+    }
+
+    if (action.dataset.action === "task-scheduler-mini-prev") {
+      taskSchedulerAnchorDate = addMonths(taskSchedulerAnchorDate, -1);
+      renderTaskScheduler();
+      return;
+    }
+
+    if (action.dataset.action === "task-scheduler-mini-next") {
+      taskSchedulerAnchorDate = addMonths(taskSchedulerAnchorDate, 1);
+      renderTaskScheduler();
+      return;
+    }
+
+    if (action.dataset.action === "close-task-scheduler-panel") {
+      closeTaskSchedulerPanel();
+      return;
+    }
+
+    if (action.dataset.action === "remove-scheduled-care-task") {
+      await removeScheduledCareTask(action.dataset.id);
       return;
     }
   });
@@ -603,6 +731,25 @@ function setupTaskSchedulerEventListeners() {
     const id = event.dataTransfer?.getData("text/plain") || taskSchedulerDragTaskId;
     taskSchedulerDragTaskId = "";
     await moveScheduledCareTask(id, slot.dataset.taskDropDate, slot.dataset.taskDropTime || "09:00");
+  });
+
+  page.addEventListener("change", (event) => {
+    const formEl = event.target.closest("#scheduledCareTaskForm");
+    if (!formEl) return;
+    syncScheduledCareTaskFormVisibility();
+    const boardingDogSelect = formEl.querySelector("[data-task-boarding-dog-select]");
+    const serviceSelect = formEl.querySelector("[data-task-boarding-service-select]");
+    if (serviceSelect && boardingDogSelect && event.target === boardingDogSelect) {
+      serviceSelect.innerHTML = boardingServiceOptionsForScheduler(boardingDogSelect.value);
+      serviceSelect.dataset.loadedDogId = boardingDogSelect.value;
+    }
+  });
+
+  page.addEventListener("submit", async (event) => {
+    const formEl = event.target.closest("#scheduledCareTaskForm");
+    if (!formEl) return;
+    event.preventDefault();
+    await saveScheduledCareTaskFromForm(formEl);
   });
 
   $("#detailDialogBody")?.addEventListener("change", (event) => {
