@@ -198,6 +198,7 @@ var mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardi
 var mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 var mobileMoreMenuItems = [
   { pageId: "timesheetPage", label: "Timesheet", roles: ["helper", "admin"] },
+  { pageId: "taskSchedulerPage", label: "Task Scheduling", roles: ["helper", "admin"] },
   { pageId: "maintenancePage", label: "Maintenance", roles: ["helper", "admin"] },
   { pageId: "requestsPage", label: "Requests", roles: ["helper", "admin"] },
   { pageId: "financialsPage", label: "Financials", roles: ["admin"] },
@@ -342,6 +343,7 @@ var stateKeys = {
   dailyTask: "cth-dailyTask-records",
   dailyTaskCompletion: "cth-dailyTaskCompletion-records",
   careLog: "cth-careLog-records",
+  scheduledCareTask: "cth-scheduledCareTask-records",
   customerDog: "cth-customerDog-records",
   dog: "cth-dog-records",
   userDogAccess: "cth-userDogAccess-records",
@@ -1131,7 +1133,7 @@ function initSupabaseClient() {
 
 function recordTypes() {
   return [
-    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "customerDog",
+    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "customerDog",
     "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink",
     "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
   ];
@@ -1151,6 +1153,7 @@ function remoteRecordTypesForPage(pageId = "") {
   const pageTypes = {
     dashboardPage: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", "careLog", "calendarNote"],
     dailyPage: ["dailyTask", "careLog", "ownedDog", "boardingDog", "calendarNote"],
+    taskSchedulerPage: ["scheduledCareTask", "ownedDog", "boardingDog", "customerDog", "service", "dailyTask", "careLog"],
     ourDogsPage: ["ownedDog", "careLog", "customerDog", "boardingDog"],
     boardingDogsPage: ["boardingDog", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
     requestsPage: ["request"],
@@ -3657,10 +3660,12 @@ function renderAfterRealtimeTypes(types = []) {
   const requestChanged = typeSet.has("request");
   const maintenanceChanged = typeSet.has("maintenance");
   const timesheetChanged = hasAny(["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"]);
+  const taskSchedulerChanged = hasAny(["scheduledCareTask", "ownedDog", "boardingDog", "customerDog", "service", "dailyTask", "careLog"]);
 
   // Efficiency flow: never render a hidden heavy page from realtime. Render only the visible work area plus shared UI.
   if (activePage === "dashboardPage" && (boardingChanged || dailyChanged || requestChanged || maintenanceChanged || timesheetChanged)) renderDashboard();
   if (activePage === "dailyPage" && dailyChanged) renderDailyTaskLists();
+  if (activePage === "taskSchedulerPage" && taskSchedulerChanged) renderTaskScheduler();
   if (activePage === "ourDogsPage" && ownedDogChanged) renderOwnedDogs();
   if (activePage === "boardingDogsPage" && boardingChanged) {
     renderBoardingDogs();
@@ -9370,6 +9375,7 @@ function renderActivePageRecords(pageId = activePageId()) {
   const renderers = {
     dashboardPage: () => renderDashboard(),
     dailyPage: () => renderDailyTaskLists(),
+    taskSchedulerPage: () => renderTaskScheduler(),
     ourDogsPage: () => renderOwnedDogs(),
     boardingDogsPage: () => { renderBoardingDogs(); renderBoardingRequests(); },
     requestsPage: () => renderRequests(),
@@ -9397,6 +9403,7 @@ function renderAllRecords(options = {}) {
     return;
   }
   renderDailyTaskLists();
+  renderTaskScheduler();
   renderDashboard();
   renderOwnedDogs();
   renderBoardingDogs();
@@ -9896,6 +9903,7 @@ function initEvents() {
     const button = event.target.closest(".global-search-result");
     if (button) openGlobalSearchResult(button);
   });
+  if (typeof setupTaskSchedulerEventListeners === "function") setupTaskSchedulerEventListeners();
   $("#exportBoardingQueueButton")?.addEventListener("click", exportBoardingQueue);
   $("#exportTimesheetButton")?.addEventListener("click", exportTimesheet);
   $("#viewTimesheetButton")?.addEventListener("click", openTimesheetViewPopup);

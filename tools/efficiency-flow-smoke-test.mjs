@@ -13,11 +13,13 @@ const timesheet = read("js/timesheet.js");
 
 const selectionMatch = shared.match(/function customerDogSelectionErrorMessage\(count = 0\) \{([\s\S]*?)\n\}/);
 assert.ok(selectionMatch, "customerDogSelectionErrorMessage helper is present");
-const customerDogSelectionErrorMessage = new Function("BOARDING_MAX_DOGS_PER_REQUEST", "count", selectionMatch[1]);
-assert.equal(customerDogSelectionErrorMessage(4, 0), "Select at least one dog for the boarding request.");
-assert.equal(customerDogSelectionErrorMessage(4, 1), "");
-assert.equal(customerDogSelectionErrorMessage(4, 4), "");
-assert.equal(customerDogSelectionErrorMessage(4, 5), "Select up to 4 dogs for one boarding request. Please submit a second request for additional dogs.");
+const customerDogSelectionErrorMessage = new Function("BOARDING_MAX_DOGS_PER_REQUEST", "$", "count", selectionMatch[1]);
+const requestMode = (value) => (selector) => selector === "#customerRequestMode" ? { value } : null;
+assert.equal(customerDogSelectionErrorMessage(4, requestMode("boarding"), 0), "Select at least one dog for the boarding request.");
+assert.equal(customerDogSelectionErrorMessage(4, requestMode("service"), 0), "Select at least one dog for the service request.");
+assert.equal(customerDogSelectionErrorMessage(4, requestMode("boarding"), 1), "");
+assert.equal(customerDogSelectionErrorMessage(4, requestMode("boarding"), 4), "");
+assert.equal(customerDogSelectionErrorMessage(4, requestMode("boarding"), 5), "Select up to 4 dogs for one request. Please submit a second request for additional dogs.");
 
 assert.match(shared, /function dailyTaskCompletionFromRow/, "daily task completion row mapper is present");
 assert.match(shared, /function mergeDailyTaskCompletionRecords/, "daily task completion merge helper is present");

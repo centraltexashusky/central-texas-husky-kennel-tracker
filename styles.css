@@ -6994,3 +6994,186 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
   border-color: rgba(219, 176, 74, 0.95) !important;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24), inset 0 0 0 1px rgba(219, 176, 74, 0.72) !important;
 }
+
+.task-scheduler-toolbar {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.task-scheduler-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 300px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.task-scheduler-sidebar,
+.task-scheduler-detail-panel,
+.task-scheduler-board {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #d8dee8);
+  border-radius: 18px;
+  padding: 1rem;
+}
+
+.task-scheduler-board {
+  overflow-x: auto;
+}
+
+.task-scheduler-week-grid {
+  display: grid;
+  grid-template-columns: 70px repeat(7, minmax(130px, 1fr));
+  min-width: 980px;
+  min-height: 680px;
+}
+
+.task-scheduler-week-header,
+.task-scheduler-time-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+  border-bottom: 1px solid #e6eaf0;
+  padding: 0.6rem;
+  font-weight: 700;
+}
+
+.task-scheduler-time-label {
+  color: #667085;
+  font-size: 0.85rem;
+}
+
+.task-scheduler-slot {
+  min-height: 72px;
+  border-left: 1px solid #e6eaf0;
+  border-bottom: 1px solid #e6eaf0;
+  padding: 0.35rem;
+}
+
+.task-scheduler-slot:hover,
+.task-scheduler-month-day:hover {
+  background: #f7faff;
+}
+
+.task-scheduler-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 0.5rem;
+}
+
+.task-scheduler-month-day {
+  min-height: 130px;
+  border: 1px solid #e6eaf0;
+  border-radius: 14px;
+  padding: 0.6rem;
+  background: #fff;
+}
+
+.task-scheduler-month-day.is-outside-month {
+  opacity: 0.68;
+}
+
+.task-scheduler-card {
+  width: 100%;
+  display: block;
+  text-align: left;
+  border: 1px solid #b8cdfd;
+  border-radius: 12px;
+  background: #eef4ff;
+  color: #15223a;
+  padding: 0.45rem 0.55rem;
+  margin-bottom: 0.35rem;
+  cursor: grab;
+  box-shadow: 0 6px 18px rgba(15, 43, 99, 0.08);
+}
+
+.task-scheduler-card:active {
+  cursor: grabbing;
+}
+
+.task-scheduler-card strong,
+.task-scheduler-card span {
+  display: block;
+  line-height: 1.25;
+}
+
+.task-scheduler-card span {
+  font-size: 0.78rem;
+  color: #526070;
+}
+
+.task-scheduler-card.is-completed {
+  opacity: 0.68;
+  cursor: default;
+}
+
+.task-scheduler-card.is-bath { background: #eef4ff; border-color: #4b7bec; }
+.task-scheduler-card.is-exercise { background: #eafafa; border-color: #32b8c6; }
+.task-scheduler-card.is-grooming { background: #f4edff; border-color: #8b5cf6; }
+.task-scheduler-card.is-medication { background: #edf9ef; border-color: #50a65f; }
+.task-scheduler-card.is-feeding { background: #fff3e5; border-color: #fb923c; }
+.task-scheduler-card.is-training { background: #fff8df; border-color: #facc15; }
+.task-scheduler-card.is-general,
+.task-scheduler-card.is-other { background: #f3f4f6; border-color: #9ca3af; }
+
+.task-scheduler-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+}
+
+.task-scheduler-mini-grid button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem;
+  background: transparent;
+}
+
+.task-scheduler-mini-grid button.is-today {
+  background: #0b63ff;
+  color: #fff;
+}
+
+.task-scheduler-mini-grid small {
+  display: block;
+  font-size: 0.65rem;
+}
+
+.task-scheduler-legend {
+  margin-top: 1rem;
+}
+
+.task-scheduler-legend-item {
+  display: block;
+  margin: 0.35rem 0;
+  font-size: 0.9rem;
+}
+
+.task-scheduler-detail-card h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .task-scheduler-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .task-scheduler-sidebar,
+  .task-scheduler-detail-panel {
+    order: 2;
+  }
+
+  .task-scheduler-week-grid {
+    grid-template-columns: 56px repeat(7, minmax(105px, 1fr));
+    min-width: 790px;
+    min-height: 560px;
+  }
+
+  .task-scheduler-month-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

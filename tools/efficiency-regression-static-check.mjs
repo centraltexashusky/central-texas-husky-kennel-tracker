@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260615-timesheet-efficiency-v1",
+    mustInclude: "20260616-task-scheduler-v1",
     message: "production cache keys must be bumped.",
   },
 ];

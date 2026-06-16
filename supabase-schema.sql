@@ -258,6 +258,7 @@ as $$
     'timesheet',
     'dailyTask',
     'careLog',
+    'scheduledCareTask',
     'calendarNote',
     'dogVaccination',
     'dogInternalNote',

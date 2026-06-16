@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260615-timesheet-efficiency-v1" />
+    <link rel="stylesheet" href="styles.css?v=20260616-task-scheduler-v1" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -46,6 +46,7 @@
           <button class="nav-button" type="button" data-page="dashboardPage" data-roles="helper,admin">Main Dashboard</button>
           <button class="nav-button" type="button" data-page="timesheetPage" data-roles="helper,admin">Timesheet</button>
           <button class="nav-button" type="button" data-page="dailyPage" data-roles="helper,admin">Daily Tasks</button>
+          <button class="nav-button" type="button" data-page="taskSchedulerPage" data-roles="helper,admin">Task Scheduling</button>
           <button class="nav-button" type="button" data-page="ourDogsPage" data-roles="helper,admin">Our Dogs</button>
           <button class="nav-button" type="button" data-page="boardingDogsPage" data-roles="helper,admin">Boarding Dogs</button>
           <button class="nav-button" type="button" data-page="requestsPage" data-roles="helper,admin">Request</button>
@@ -652,6 +653,41 @@
         </form>
         <div id="recentSubmissions" class="submission-list"></div>
       </section>
+      </section>
+
+      <section class="page-view" id="taskSchedulerPage">
+        <section class="form-section task-scheduler-page">
+          <div class="section-heading">
+            <span>📅</span>
+            <div>
+              <h2>Task Scheduling</h2>
+              <p>Schedule dog care tasks, drag them to new dates, and complete them into the dog’s care log.</p>
+            </div>
+          </div>
+
+          <div class="task-scheduler-toolbar">
+            <button type="button" class="secondary-button" id="taskSchedulerTodayButton">Today</button>
+            <button type="button" class="secondary-button" id="taskSchedulerPrevButton">‹</button>
+            <strong id="taskSchedulerRangeLabel"></strong>
+            <button type="button" class="secondary-button" id="taskSchedulerNextButton">›</button>
+            <div class="segmented-control" role="group" aria-label="Task scheduler view">
+              <button type="button" id="taskSchedulerWeekViewButton" data-task-scheduler-view="week">Week</button>
+              <button type="button" id="taskSchedulerMonthViewButton" data-task-scheduler-view="month">Month</button>
+            </div>
+            <button type="button" id="openScheduledCareTaskButton">+ New Task</button>
+          </div>
+
+          <div class="task-scheduler-layout">
+            <aside class="task-scheduler-sidebar">
+              <div class="task-scheduler-mini-calendar" id="taskSchedulerMiniCalendar"></div>
+              <div class="task-scheduler-legend" id="taskSchedulerLegend"></div>
+            </aside>
+            <div class="task-scheduler-board" id="taskSchedulerBoard" aria-live="polite"></div>
+            <aside class="task-scheduler-detail-panel" id="taskSchedulerDetailPanel">
+              <p>Select a task to see details.</p>
+            </aside>
+          </div>
+        </section>
       </section>
 
       <section class="page-view" id="timesheetPage">
@@ -1342,6 +1378,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260615-staff-view-v1"></script>
+  <script type="module" src="js/main.js?v=20260616-task-scheduler-v1"></script>
 </body>
 </html>

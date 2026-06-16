@@ -4963,7 +4963,19 @@ function renderBoardingHistory(record = activeBoardingDog()) {
   if (!list) return;
   const displayRecord = boardingDogWithStayStatus(record || {});
   const stays = displayRecord?.stays || [];
-  list.innerHTML = stays.length
+  const careLogs = arrayValue(displayRecord.careLogs)
+    .filter((log) => !log.removed)
+    .sort((a, b) => new Date(b.loggedAt || b.date || 0) - new Date(a.loggedAt || a.date || 0));
+  const careLogHtml = careLogs.length
+    ? '<section class="popup-record-section"><h3>Care Logs</h3>' + careLogs.map((log) =>
+        '<article class="record-card compact-record-card">' +
+          '<strong>' + escapeHtml([log.careType || "Care", log.date || ""].filter(Boolean).join(" - ")) + '</strong>' +
+          '<span>' + escapeHtml([log.completedBy || "", formatDateTime(log.loggedAt || "")].filter(Boolean).join(" | ")) + '</span>' +
+          (log.note ? '<p>' + escapeHtml(log.note) + '</p>' : '') +
+        '</article>'
+      ).join("") + '</section>'
+    : "";
+  const stayHtml = stays.length
     ? stays
         .map((stay) => {
           const events = boardingStayLifecycleEvents(displayRecord, stay);
@@ -4978,6 +4990,7 @@ function renderBoardingHistory(record = activeBoardingDog()) {
         })
         .join("")
     : "<p>No boarding history is available for this dog yet.</p>";
+  list.innerHTML = careLogHtml + stayHtml;
 }
 
 function openBoardingStayHistory(record = activeBoardingDog(), stayId = "") {
