@@ -4671,6 +4671,38 @@ option {
   gap: 14px;
 }
 
+.owned-vaccination-panel {
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(14, 165, 233, 0.10)),
+    rgba(8, 17, 27, 0.54);
+  border: 1px solid rgba(96, 165, 250, 0.82);
+  border-radius: 16px;
+  box-shadow:
+    inset 0 0 0 1px rgba(191, 219, 254, 0.12),
+    0 14px 34px rgba(15, 23, 42, 0.18);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.owned-vaccination-panel-heading h3 {
+  color: rgba(239, 246, 255, 0.96);
+  font-size: 1rem;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+.owned-vaccination-panel-heading p {
+  color: rgba(191, 219, 254, 0.82);
+  font-size: 0.88rem;
+  font-weight: 650;
+  margin: 4px 0 0;
+}
+
+.owned-vaccination-grid {
+  margin: 0;
+}
+
 .owned-profile-section[hidden],
 .boarding-profile-section[hidden] {
   display: none !important;
@@ -7549,6 +7581,34 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 .task-scheduler-legend-item.is-general,
 .task-scheduler-legend-item.is-other { --task-color: #64748b; }
 
+#taskSchedulerPage .task-scheduler-card[data-task-color-key] {
+  background: color-mix(in srgb, var(--task-color) 12%, #fff);
+  border-color: color-mix(in srgb, var(--task-color) 70%, #fff);
+  border-left-color: var(--task-color);
+}
+
+#taskSchedulerPage .task-scheduler-card .task-scheduler-avatar,
+#taskSchedulerPage .task-scheduler-avatar {
+  border-radius: 10px;
+  display: inline-flex;
+}
+
+#taskSchedulerPage .task-scheduler-avatar.is-large {
+  border-radius: 14px;
+}
+
+#taskSchedulerPage .task-scheduler-avatar [data-profile-photo-initials] {
+  align-items: center;
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  width: 100%;
+}
+
+#taskSchedulerPage .task-scheduler-avatar [hidden] {
+  display: none !important;
+}
+
 .task-scheduler-panel-header {
   align-items: flex-start;
   display: flex;
@@ -7992,7 +8052,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
     padding: 0.42rem;
   }
 
-  .task-scheduler-card .task-scheduler-avatar {
+  #taskSchedulerPage .task-scheduler-card .task-scheduler-avatar {
     display: none;
   }
 

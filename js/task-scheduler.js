@@ -134,8 +134,14 @@ function taskSchedulerDogAvatarHtml(task = {}, className = "task-scheduler-avata
   const dog = taskSchedulerDogForTask(task) || {};
   const name = task.dogName || dog.dogName || dog.callName || dog.showName || "Dog";
   const photo = typeof profilePhotoDirectSource === "function" ? profilePhotoDirectSource(dog) : (dog.profilePhotoData || dog.profilePhotoUrl || "");
-  if (photo) return '<span class="' + escapeHtml(className) + '"><img src="' + escapeHtml(photo) + '" alt="' + escapeHtml(name) + '" /></span>';
-  return '<span class="' + escapeHtml(className) + '">' + escapeHtml(avatarText(name)) + "</span>";
+  const hasPhotoSource = typeof profilePhotoHasSource === "function" ? profilePhotoHasSource(dog) : Boolean(photo);
+  const photoRecord = { ...dog, id: dog.id || task.dogId || "", type: dog.type || task.dogType || "ownedDog" };
+  const attrs = hasPhotoSource && typeof profilePhotoAccessAttrs === "function" ? profilePhotoAccessAttrs(photoRecord, task.dogType || "ownedDog") : "";
+  const initials = escapeHtml(avatarText(name));
+  if (hasPhotoSource) {
+    return '<span class="' + escapeHtml(className) + '"' + attrs + '><img' + (photo ? ' src="' + escapeHtml(photo) + '"' : "") + ' alt="' + escapeHtml(name) + '"' + (photo ? "" : " hidden") + ' /><span data-profile-photo-initials' + (photo ? " hidden" : "") + '>' + initials + "</span></span>";
+  }
+  return '<span class="' + escapeHtml(className) + '">' + initials + "</span>";
 }
 
 function taskSchedulerPanelHeaderHtml(title = "New Task", subtitle = "Schedule a task and link it to a dog's care log.") {
@@ -202,7 +208,10 @@ function taskSchedulerDogForTask(task = {}) {
   if (task.dogType === "boardingDog") {
     return boardingDogRecordForDisplay(task.dogId) || consolidatedBoardingDogRecords().find((dog) => dog.id === task.dogId || arrayValue(dog.sourceRecordIds).includes(task.dogId)) || null;
   }
-  return readRecords("ownedDog").find((dog) => dog.id === task.dogId && !dog.removed) || null;
+  const taskName = String(task.dogName || "").trim().toLowerCase();
+  return readRecords("ownedDog").find((dog) => dog.id === task.dogId && !dog.removed)
+    || readRecords("ownedDog").find((dog) => !dog.removed && taskName && [ownedDogDisplayName(dog), dog.callName, dog.showName, dog.dogName].some((name) => String(name || "").trim().toLowerCase() === taskName))
+    || null;
 }
 
 function boardingServiceOptionsForScheduler(dogId = "", selectedTaskRef = "") {
@@ -507,6 +516,7 @@ function renderTaskScheduler() {
   $("#taskSchedulerPage .task-scheduler-layout")?.classList.toggle("has-panel-open", taskSchedulerPanelOpen);
   const selected = scheduledCareTasks().find((task) => task.id === taskSchedulerSelectedTaskId);
   renderTaskSchedulerDetail(selected || null);
+  if (typeof hydrateProfilePhotoElements === "function") hydrateProfilePhotoElements($("#taskSchedulerPage"));
 }
 
 // Task scheduling: drag/drop only changes the scheduler record date and start time.
