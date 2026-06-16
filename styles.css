@@ -1527,6 +1527,46 @@ label.has-error textarea {
   color: var(--red);
 }
 
+.field-info-icon {
+  align-items: center;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(147, 197, 253, 0.8);
+  border-radius: 999px;
+  color: #bfdbfe;
+  cursor: help;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  height: 18px;
+  justify-content: center;
+  margin-left: 0.35rem;
+  position: relative;
+  text-transform: none;
+  width: 18px;
+}
+
+.field-info-icon:hover::after,
+.field-info-icon:focus-visible::after {
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+  color: #fff;
+  content: attr(title);
+  font-size: 0.78rem;
+  font-weight: 700;
+  left: 50%;
+  letter-spacing: 0;
+  min-width: 210px;
+  padding: 0.45rem 0.55rem;
+  position: absolute;
+  text-transform: none;
+  transform: translateX(-50%);
+  white-space: normal;
+  z-index: 50;
+}
+
 input[type="date"],
 input[type="datetime-local"],
 input[type="email"],
@@ -7488,6 +7528,12 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .task-scheduler-card.is-bath,
 .task-scheduler-legend-item.is-bath { --task-color: #0b63ff; }
+.task-scheduler-card.is-treadmill,
+.task-scheduler-legend-item.is-treadmill { --task-color: #22a7b8; }
+.task-scheduler-card.is-scooter-run,
+.task-scheduler-legend-item.is-scooter-run { --task-color: #14a7b8; }
+.task-scheduler-card.is-yard-run,
+.task-scheduler-legend-item.is-yard-run { --task-color: #0f9f95; }
 .task-scheduler-card.is-exercise,
 .task-scheduler-legend-item.is-exercise { --task-color: #22a7b8; }
 .task-scheduler-card.is-grooming,
@@ -7527,6 +7573,113 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   font-size: 1.25rem;
   min-width: 40px;
   padding: 0;
+}
+
+#taskSchedulerPage.is-active .task-scheduler-page,
+#taskSchedulerPage .task-scheduler-layout,
+#taskSchedulerPage .task-scheduler-sidebar,
+#taskSchedulerPage .task-scheduler-board,
+#taskSchedulerPage .task-scheduler-detail-panel {
+  min-width: 0;
+}
+
+#taskSchedulerPage.is-active .task-scheduler-page,
+#taskSchedulerPage .task-scheduler-sidebar {
+  overflow: hidden;
+}
+
+#taskSchedulerPage .task-scheduler-mini-calendar {
+  min-width: 0;
+}
+
+#taskSchedulerPage .task-scheduler-mini-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+#taskSchedulerPage .task-scheduler-mini-grid button {
+  align-items: center;
+  display: inline-grid;
+  height: 34px;
+  justify-self: center;
+  min-width: 0;
+  padding: 0;
+  width: 34px;
+}
+
+#taskSchedulerPage .task-scheduler-panel-close.secondary-button,
+#taskSchedulerPage .task-scheduler-mini-header .secondary-button {
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  opacity: 1;
+}
+
+#taskSchedulerPage .task-scheduler-panel-close.secondary-button:hover,
+#taskSchedulerPage .task-scheduler-panel-close.secondary-button:focus-visible,
+#taskSchedulerPage .task-scheduler-mini-header .secondary-button:hover,
+#taskSchedulerPage .task-scheduler-mini-header .secondary-button:focus-visible {
+  background: #eff6ff;
+  border-color: #0b63ff;
+  color: #0b63ff;
+}
+
+#taskSchedulerPage .task-scheduler-detail-card .secondary-button,
+#taskSchedulerPage .task-scheduler-panel-form .secondary-button {
+  background: #fff;
+  border: 1px solid #0b63ff;
+  color: #0b63ff;
+  opacity: 1;
+}
+
+#taskSchedulerPage .task-scheduler-detail-card .secondary-button:hover,
+#taskSchedulerPage .task-scheduler-detail-card .secondary-button:focus-visible,
+#taskSchedulerPage .task-scheduler-panel-form .secondary-button:hover,
+#taskSchedulerPage .task-scheduler-panel-form .secondary-button:focus-visible {
+  background: #eff6ff;
+  color: #0047d8;
+}
+
+#taskSchedulerPage .task-scheduler-detail-card .danger-button,
+#taskSchedulerPage .task-scheduler-panel-form .danger-button {
+  background: #fff5f5;
+  border-color: #fecaca;
+  color: #b42318;
+}
+
+#taskSchedulerPage .task-scheduler-detail-card .danger-button:hover,
+#taskSchedulerPage .task-scheduler-detail-card .danger-button:focus-visible,
+#taskSchedulerPage .task-scheduler-panel-form .danger-button:hover,
+#taskSchedulerPage .task-scheduler-panel-form .danger-button:focus-visible {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+#taskSchedulerPage .task-scheduler-form-actions button {
+  text-indent: 0;
+  visibility: visible;
+}
+
+#taskSchedulerPage .task-scheduler-legend-item {
+  border-radius: 8px;
+  cursor: pointer;
+  padding: 0.18rem 0.25rem;
+  position: relative;
+}
+
+#taskSchedulerPage .task-scheduler-legend-item:hover,
+#taskSchedulerPage .task-scheduler-legend-item:focus-within {
+  background: #eef6ff;
+}
+
+#taskSchedulerPage .task-scheduler-legend-item input[type="color"] {
+  height: 1px;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+
+#taskSchedulerPage .task-scheduler-legend-item i {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--task-color) 18%, transparent);
 }
 
 .task-scheduler-panel-form {

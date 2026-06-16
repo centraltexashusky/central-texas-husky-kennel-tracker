@@ -7,12 +7,13 @@ var taskSchedulerDragTaskId = "";
 var taskSchedulerPanelMode = "new";
 var taskSchedulerEditingTaskId = "";
 var taskSchedulerPanelOpen = window.innerWidth >= 901;
+var TASK_SCHEDULER_COLOR_KEY = "cth-task-scheduler-type-colors";
 
 var TASK_SCHEDULER_TYPES = [
   { key: "Bath", label: "Bath", className: "is-bath" },
-  { key: "Treadmill", label: "Treadmill", className: "is-exercise" },
-  { key: "Scooter Run", label: "Scooter Run", className: "is-exercise" },
-  { key: "Yard Run", label: "Yard Run", className: "is-exercise" },
+  { key: "Treadmill", label: "Treadmill", className: "is-treadmill" },
+  { key: "Scooter Run", label: "Scooter Run", className: "is-scooter-run" },
+  { key: "Yard Run", label: "Yard Run", className: "is-yard-run" },
   { key: "Training", label: "Training", className: "is-training" },
   { key: "Nail Trim", label: "Nail Trim", className: "is-grooming" },
   { key: "Medication", label: "Medication", className: "is-medication" },
@@ -20,6 +21,19 @@ var TASK_SCHEDULER_TYPES = [
   { key: "General Care", label: "General Care", className: "is-general" },
   { key: "Other", label: "Other", className: "is-other" },
 ];
+
+var TASK_SCHEDULER_DEFAULT_COLORS = {
+  Bath: "#0b63ff",
+  Treadmill: "#22a7b8",
+  "Scooter Run": "#14a7b8",
+  "Yard Run": "#0f9f95",
+  Training: "#eab308",
+  "Nail Trim": "#8b5cf6",
+  Medication: "#22c55e",
+  "Feeding Note": "#f97316",
+  "General Care": "#64748b",
+  Other: "#64748b",
+};
 
 function scheduledCareTasks() {
   return readRecords("scheduledCareTask")
@@ -29,6 +43,48 @@ function scheduledCareTasks() {
 
 function scheduledCareTaskTypeMeta(type = "") {
   return TASK_SCHEDULER_TYPES.find((item) => item.key === type) || TASK_SCHEDULER_TYPES[TASK_SCHEDULER_TYPES.length - 1];
+}
+
+function taskSchedulerStoredTypeColors() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TASK_SCHEDULER_COLOR_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function taskSchedulerSafeColor(value = "") {
+  const color = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : "";
+}
+
+function taskSchedulerColorForType(type = "") {
+  const stored = taskSchedulerStoredTypeColors();
+  return taskSchedulerSafeColor(stored[type]) || TASK_SCHEDULER_DEFAULT_COLORS[type] || TASK_SCHEDULER_DEFAULT_COLORS.Other;
+}
+
+function taskSchedulerTypeColorStyle(type = "") {
+  return ' style="--task-color: ' + escapeHtml(taskSchedulerColorForType(type)) + ';"';
+}
+
+function saveTaskSchedulerTypeColor(type = "", color = "") {
+  if (!TASK_SCHEDULER_TYPES.some((item) => item.key === type)) return;
+  const safeColor = taskSchedulerSafeColor(color);
+  if (!safeColor) return;
+  const stored = taskSchedulerStoredTypeColors();
+  stored[type] = safeColor;
+  localStorage.setItem(TASK_SCHEDULER_COLOR_KEY, JSON.stringify(stored));
+}
+
+function applyTaskSchedulerTypeColor(type = "", color = "") {
+  const safeColor = taskSchedulerSafeColor(color);
+  if (!safeColor) return;
+  $$("[data-task-color-key]").forEach((element) => {
+    if (element.dataset.taskColorKey !== type) return;
+    element.style.setProperty("--task-color", safeColor);
+    if (element.matches('input[type="color"]')) element.value = safeColor;
+  });
 }
 
 function taskSchedulerIsDesktop() {
@@ -290,7 +346,7 @@ async function saveScheduledCareTaskFromForm(formEl) {
 function scheduledCareTaskCardHtml(task = {}) {
   const meta = scheduledCareTaskTypeMeta(task.activityType);
   const statusClass = task.status === "Completed" ? " is-completed" : "";
-  return '<button type="button" draggable="true" class="task-scheduler-card ' + escapeHtml(meta.className) + statusClass + '" data-action="open-scheduled-care-task" data-id="' + escapeHtml(task.id) + '">' +
+  return '<button type="button" draggable="true" class="task-scheduler-card ' + escapeHtml(meta.className) + statusClass + '" data-action="open-scheduled-care-task" data-id="' + escapeHtml(task.id) + '" data-task-color-key="' + escapeHtml(meta.key) + '"' + taskSchedulerTypeColorStyle(meta.key) + '>' +
     taskSchedulerDogAvatarHtml(task) +
     '<span class="task-scheduler-card-copy"><strong>' + escapeHtml(task.title || task.activityType || "Task") + "</strong>" +
     '<span>' + escapeHtml([task.dogName || "Dog", taskSchedulerTimeRange(task)].filter(Boolean).join(" | ")) + "</span></span>" +
@@ -387,7 +443,10 @@ function renderTaskSchedulerLegend() {
   const el = $("#taskSchedulerLegend");
   if (!el) return;
   el.innerHTML = '<h3>Task Types</h3>' + TASK_SCHEDULER_TYPES.map((type) =>
-    '<span class="task-scheduler-legend-item ' + escapeHtml(type.className) + '"><i></i>' + escapeHtml(type.label) + "</span>"
+    '<label class="task-scheduler-legend-item ' + escapeHtml(type.className) + '" data-task-color-key="' + escapeHtml(type.key) + '"' + taskSchedulerTypeColorStyle(type.key) + '>' +
+      '<input type="color" data-task-color-key="' + escapeHtml(type.key) + '" value="' + escapeHtml(taskSchedulerColorForType(type.key)) + '" aria-label="Edit ' + escapeHtml(type.label) + ' color" />' +
+      '<i></i><span>' + escapeHtml(type.label) + "</span>" +
+    "</label>"
   ).join("");
 }
 
@@ -733,7 +792,20 @@ function setupTaskSchedulerEventListeners() {
     await moveScheduledCareTask(id, slot.dataset.taskDropDate, slot.dataset.taskDropTime || "09:00");
   });
 
+  page.addEventListener("input", (event) => {
+    const colorInput = event.target.closest("[data-task-color-key]");
+    if (!colorInput) return;
+    saveTaskSchedulerTypeColor(colorInput.dataset.taskColorKey, colorInput.value);
+    applyTaskSchedulerTypeColor(colorInput.dataset.taskColorKey, colorInput.value);
+  });
+
   page.addEventListener("change", (event) => {
+    const colorInput = event.target.closest("[data-task-color-key]");
+    if (colorInput) {
+      saveTaskSchedulerTypeColor(colorInput.dataset.taskColorKey, colorInput.value);
+      applyTaskSchedulerTypeColor(colorInput.dataset.taskColorKey, colorInput.value);
+      return;
+    }
     const formEl = event.target.closest("#scheduledCareTaskForm");
     if (!formEl) return;
     syncScheduledCareTaskFormVisibility();

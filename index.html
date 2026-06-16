@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260616-task-scheduler-v2" />
+    <link rel="stylesheet" href="styles.css?v=20260616-health-scheduler-fixes" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -849,7 +849,6 @@
               <div class="field-grid">
                 <label>Call name<input type="text" name="callName" required /></label>
                 <label>Show name<input type="text" name="showName" /></label>
-                <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
                 <label>Date of birth<input type="date" name="dateOfBirth" /></label>
                 <label>Sex<select name="sex" id="ownedDogSex" required><option>Male</option><option>Female</option></select></label>
                 <label>Spayed / Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Spayed</option><option>Neutered</option><option>Intact</option><option>Unknown</option></select></label>
@@ -861,7 +860,8 @@
                 <label id="ownedNextDhppLabel">Next DHPP vaccination <span id="ownedNextDhppWarning" class="vaccine-warning"></span><input type="date" name="nextDhppDate" id="ownedNextDhppDate" /></label>
                 <label>Last Bordetella vaccination<input type="date" name="bordetellaDate" id="ownedBordetellaDate" /></label>
                 <label id="ownedNextBordetellaLabel">Next Bordetella vaccination <span id="ownedNextBordetellaWarning" class="vaccine-warning"></span><input type="date" name="nextBordetellaDate" id="ownedNextBordetellaDate" /></label>
-                <label>Last heartworm medication<input type="date" name="heartwormDate" /></label>
+                <label>Last heartworm medication <span class="field-info-icon" role="button" tabindex="0" aria-label="Heartworm medication is done every 30 days." title="Heartworm medication is done every 30 days.">i</span><input type="date" name="heartwormDate" /></label>
+                <label>Last Leptospirosis vaccination<input type="date" name="leptospirosisDate" /></label>
               </div>
               <label>General notes<textarea name="notes" rows="3"></textarea></label>
             </section>
@@ -1082,7 +1082,6 @@
                 <label>Dog name<input type="text" name="dogName" required /></label>
                 <label>Breed / description<input type="text" name="breedDescription" /></label>
                 <label>Date of birth<input type="date" name="dateOfBirth" /></label>
-                <label>Profile photo link <small style="font-weight:normal;color:#888">(optional fallback)</small><input type="url" name="profilePhotoUrl" placeholder="Paste a direct image URL if upload is not available" /></label>
                 <input type="hidden" name="sex" />
                 <label>Sex / Spayed-Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Male Intact</option><option>Male Neutered</option><option>Male Unknown</option><option>Female Intact</option><option>Female Spayed</option><option>Female Unknown</option></select><small>Matches the customer dog profile selection.</small></label>
                 <label>Owner name<input type="text" name="ownerName" required /></label>
@@ -1379,6 +1378,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260616-task-scheduler-v2"></script>
+  <script type="module" src="js/main.js?v=20260616-health-scheduler-fixes"></script>
 </body>
 </html>

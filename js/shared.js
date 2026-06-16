@@ -543,6 +543,7 @@ function normalizeOwnedDogCare(record = {}) {
   copy.dhppDate = dateOnly(copy.dhppDate);
   copy.bordetellaDate = dateOnly(copy.bordetellaDate);
   copy.heartwormDate = dateOnly(copy.heartwormDate);
+  copy.leptospirosisDate = dateOnly(copy.leptospirosisDate);
   copy.nextRabiesDate = dateOnly(copy.nextRabiesDate);
   copy.nextDhppDate = dateOnly(copy.nextDhppDate);
   copy.nextBordetellaDate = dateOnly(copy.nextBordetellaDate);
@@ -5869,6 +5870,7 @@ var canonicalDogProfileFields = [
   "dhppDate",
   "bordetellaDate",
   "heartwormDate",
+  "leptospirosisDate",
   "rabiesGoodThreeYears",
   "dhppGoodThreeYears",
   "rabiesDuration",
@@ -7402,6 +7404,14 @@ var ownedHealthDueConfig = [
   { field: "nextBordetellaDate", label: "Bordetella", labelId: "ownedNextBordetellaLabel", warningId: "ownedNextBordetellaWarning" },
 ];
 
+var ownedLoggedVaccinationConfig = [
+  { field: "rabiesDate", label: "Rabies" },
+  { field: "dhppDate", label: "DHPP" },
+  { field: "bordetellaDate", label: "Bordetella" },
+];
+
+var HEARTWORM_MEDICATION_INTERVAL_DAYS = 30;
+
 function ownedHealthDueText(label, days, compact = false) {
   if (days === null) return "";
   const absoluteDays = Math.abs(days);
@@ -7412,7 +7422,15 @@ function ownedHealthDueText(label, days, compact = false) {
 }
 
 function ownedDogHealthDueItems(record = {}, referenceDate = todayDate()) {
-  return ownedHealthDueConfig
+  const missingVaccinations = ownedLoggedVaccinationConfig
+    .filter((config) => !dateOnly(record[config.field]))
+    .map((config) => ({
+      ...config,
+      label: "No " + config.label + " Logged",
+      className: "is-red-warning",
+      missing: true,
+    }));
+  const vaccineDueItems = ownedHealthDueConfig
     .map((config) => {
       const dueDate = dateOnly(record[config.field]);
       if (!dueDate) return null;
@@ -7428,6 +7446,23 @@ function ownedDogHealthDueItems(record = {}, referenceDate = todayDate()) {
       };
     })
     .filter(Boolean);
+  const heartwormItem = ownedDogHeartwormDueItem(record, referenceDate);
+  return [...missingVaccinations, ...vaccineDueItems, ...(heartwormItem ? [heartwormItem] : [])];
+}
+
+function ownedDogHeartwormDueItem(record = {}, referenceDate = todayDate()) {
+  const lastDate = dateOnly(record.heartwormDate);
+  if (!lastDate) return null;
+  const dueDate = addDays(lastDate, HEARTWORM_MEDICATION_INTERVAL_DAYS);
+  const days = daysBetweenDates(referenceDate, dueDate);
+  if (days === null || days > 0) return null;
+  return {
+    field: "heartwormDate",
+    label: ownedHealthDueText("Heartworm", days, true),
+    dueDate,
+    days,
+    className: days < 0 ? "is-red-warning" : "is-orange-warning",
+  };
 }
 
 function ownedDogHealthDueChipsHtml(record = {}, referenceDate = todayDate()) {
@@ -7468,6 +7503,7 @@ var ownedDogMedicalHistoryFields = [
   { field: "dhppDate", type: "DHPP Vaccination", label: "DHPP vaccination" },
   { field: "bordetellaDate", type: "Bordetella Vaccination", label: "Bordetella vaccination" },
   { field: "heartwormDate", type: "Heartworm Medication", label: "Heartworm medication" },
+  { field: "leptospirosisDate", type: "Leptospirosis Vaccination", label: "Leptospirosis vaccination" },
 ];
 
 function ownedDogMedicalHistoryEntryExists(history = [], field, type, date) {

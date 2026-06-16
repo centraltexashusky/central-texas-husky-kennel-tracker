@@ -634,8 +634,9 @@ function ownedDogMobileCardHtml(record = {}) {
     ? \`<button type="button" class="mobile-dog-photo-button" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs(dog, "ownedDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`
     : \`<button type="button" class="mobile-dog-photo-button mobile-dog-photo-initials" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} profile">\${escapeHtml(avatarText(name))}</button>\`;
   const heatAction = dog.sex === "Female" ? \`<button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Heat Note" data-id="\${escapeHtml(dog.id)}">Heat Note</button>\` : "";
+  const healthDueTags = ownedDogHealthDueItems(dog);
   return \`
-    <article class="record-card mobile-roster-card \${ownedDogExerciseDue(dog) || ownedDogTrainingDue(dog) || ownedDogBathDue(dog) ? "has-care-due" : ""}" data-id="\${escapeHtml(dog.id)}">
+    <article class="record-card mobile-roster-card \${ownedDogExerciseDue(dog) || ownedDogTrainingDue(dog) || ownedDogBathDue(dog) || healthDueTags.length ? "has-care-due" : ""}" data-id="\${escapeHtml(dog.id)}">
       <div class="mobile-roster-card-main">
         \${photoHtml}
         <strong>\${escapeHtml(name)}</strong>
@@ -949,6 +950,7 @@ function ownedDogOverviewPopupHtml(record = {}) {
     ["Last Bordetella", dog.bordetellaDate || "Not recorded"],
     ["Next Bordetella", dog.nextBordetellaDate || "Not scheduled"],
     ["Last heartworm", dog.heartwormDate || "Not recorded"],
+    ["Last Leptospirosis", dog.leptospirosisDate || "Not recorded"],
     ["Care status", ownedDogCareSummary(dog)],
     ["Special care", dog.specialCare || dog.medicalCareNotes || dog.behaviorNotes || ""],
     ["General note", dog.generalCareNotes || dog.notes || ""],

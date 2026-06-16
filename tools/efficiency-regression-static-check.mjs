@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260616-task-scheduler-v2",
+    mustInclude: "20260616-health-scheduler-fixes",
     message: "production cache keys must be bumped.",
   },
 ];
