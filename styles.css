@@ -1448,6 +1448,10 @@ label {
   justify-content: flex-start;
 }
 
+.has-field-info .field-info-icon {
+  margin-left: 0;
+}
+
 .has-field-info .required-mark {
   margin-left: auto;
 }
@@ -4703,6 +4707,10 @@ option {
   margin: 0;
 }
 
+.owned-leptospirosis-field {
+  grid-column: 1;
+}
+
 .owned-profile-section[hidden],
 .boarding-profile-section[hidden] {
   display: none !important;
@@ -7607,6 +7615,32 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 #taskSchedulerPage .task-scheduler-avatar [hidden] {
   display: none !important;
+}
+
+.task-scheduler-avatar-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 14px;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+}
+
+.task-scheduler-avatar-button:disabled {
+  cursor: default;
+}
+
+.task-scheduler-avatar-button:not(:disabled):focus-visible {
+  outline: 3px solid rgba(11, 99, 255, 0.28);
+  outline-offset: 3px;
+}
+
+.task-scheduler-avatar-button:not(:disabled):hover .task-scheduler-avatar {
+  box-shadow: 0 0 0 3px rgba(11, 99, 255, 0.16);
 }
 
 .task-scheduler-panel-header {

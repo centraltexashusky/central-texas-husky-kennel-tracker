@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260616-scheduler-profile-fixes" />
+    <link rel="stylesheet" href="styles.css?v=20260616-scheduler-detail-polish" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -867,8 +867,8 @@
                 <label id="ownedNextDhppLabel">Next DHPP vaccination <span id="ownedNextDhppWarning" class="vaccine-warning"></span><input type="date" name="nextDhppDate" id="ownedNextDhppDate" /></label>
                 <label>Last Bordetella vaccination<input type="date" name="bordetellaDate" id="ownedBordetellaDate" /></label>
                 <label id="ownedNextBordetellaLabel">Next Bordetella vaccination <span id="ownedNextBordetellaWarning" class="vaccine-warning"></span><input type="date" name="nextBordetellaDate" id="ownedNextBordetellaDate" /></label>
-                <label>Last heartworm medication <span class="field-info-icon" role="button" tabindex="0" aria-label="Heartworm medication is done every 30 days." title="Heartworm medication is done every 30 days.">i</span><input type="date" name="heartwormDate" /></label>
-                <label>Last Leptospirosis vaccination<input type="date" name="leptospirosisDate" /></label>
+                <label class="has-field-info"><span class="field-label-text"><span>Last heartworm medication</span><span class="field-info-icon" role="button" tabindex="0" aria-label="Heartworm medication is done every 30 days." title="Heartworm medication is done every 30 days.">i</span></span><input type="date" name="heartwormDate" /></label>
+                <label class="owned-leptospirosis-field">Last Leptospirosis vaccination<input type="date" name="leptospirosisDate" /></label>
                 </div>
               </section>
               <label>General notes<textarea name="notes" rows="3"></textarea></label>
@@ -1386,6 +1386,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260616-scheduler-profile-fixes"></script>
+  <script type="module" src="js/main.js?v=20260616-scheduler-detail-polish"></script>
 </body>
 </html>

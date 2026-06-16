@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260616-scheduler-profile-fixes",
+    mustInclude: "20260616-scheduler-detail-polish",
     message: "production cache keys must be bumped.",
   },
 ];

@@ -15,7 +15,6 @@ var TASK_SCHEDULER_TYPES = [
   { key: "Scooter Run", label: "Scooter Run", className: "is-scooter-run" },
   { key: "Yard Run", label: "Yard Run", className: "is-yard-run" },
   { key: "Training", label: "Training", className: "is-training" },
-  { key: "Nail Trim", label: "Nail Trim", className: "is-grooming" },
   { key: "Medication", label: "Medication", className: "is-medication" },
   { key: "Feeding Note", label: "Feeding Note", className: "is-feeding" },
   { key: "General Care", label: "General Care", className: "is-general" },
@@ -28,7 +27,6 @@ var TASK_SCHEDULER_DEFAULT_COLORS = {
   "Scooter Run": "#14a7b8",
   "Yard Run": "#0f9f95",
   Training: "#eab308",
-  "Nail Trim": "#8b5cf6",
   Medication: "#22c55e",
   "Feeding Note": "#f97316",
   "General Care": "#64748b",
@@ -142,6 +140,16 @@ function taskSchedulerDogAvatarHtml(task = {}, className = "task-scheduler-avata
     return '<span class="' + escapeHtml(className) + '"' + attrs + '><img' + (photo ? ' src="' + escapeHtml(photo) + '"' : "") + ' alt="' + escapeHtml(name) + '"' + (photo ? "" : " hidden") + ' /><span data-profile-photo-initials' + (photo ? " hidden" : "") + '>' + initials + "</span></span>";
   }
   return '<span class="' + escapeHtml(className) + '">' + initials + "</span>";
+}
+
+function taskSchedulerDetailAvatarHtml(task = {}) {
+  const dog = taskSchedulerDogForTask(task) || {};
+  const name = task.dogName || dog.dogName || dog.callName || dog.showName || "Dog";
+  const hasPhotoSource = typeof profilePhotoHasSource === "function" && profilePhotoHasSource(dog);
+  const label = hasPhotoSource ? "View " + name + " profile photo" : name + " profile photo not available";
+  return '<button type="button" class="task-scheduler-avatar-button" data-action="view-task-scheduler-dog-photo" data-id="' + escapeHtml(task.id || "") + '" aria-label="' + escapeHtml(label) + '"' + (hasPhotoSource ? "" : " disabled") + ">" +
+    taskSchedulerDogAvatarHtml(task, "task-scheduler-avatar is-large") +
+  "</button>";
 }
 
 function taskSchedulerPanelHeaderHtml(title = "New Task", subtitle = "Schedule a task and link it to a dog's care log.") {
@@ -464,7 +472,7 @@ function taskSchedulerDetailPanelHtml(task = {}) {
   return taskSchedulerPanelHeaderHtml(task.title || task.activityType || "Task Details", completed ? "Completed task and care-log details." : "Review, edit, or complete this scheduled care task.") +
     '<article class="task-scheduler-detail-card">' +
       '<div class="task-scheduler-detail-hero">' +
-        taskSchedulerDogAvatarHtml(task, "task-scheduler-avatar is-large") +
+        taskSchedulerDetailAvatarHtml(task) +
         '<div><h4>' + escapeHtml(task.dogName || "Dog") + '</h4><p>' + escapeHtml(task.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog") + '</p></div>' +
       '</div>' +
       '<div class="task-scheduler-detail-row"><span>Date</span><strong>' + escapeHtml(taskSchedulerLongDateLabel(task.date)) + '</strong></div>' +
@@ -734,6 +742,17 @@ function setupTaskSchedulerEventListeners() {
     if (action.dataset.action === "open-scheduled-care-task") {
       setTaskSchedulerPanel("detail", action.dataset.id, true);
       renderTaskScheduler();
+      return;
+    }
+
+    if (action.dataset.action === "view-task-scheduler-dog-photo") {
+      const task = scheduledCareTasks().find((item) => item.id === action.dataset.id) || {};
+      const dog = taskSchedulerDogForTask(task);
+      if (dog && typeof openDogProfilePhoto === "function" && typeof profilePhotoHasSource === "function" && profilePhotoHasSource(dog)) {
+        await openDogProfilePhoto({ ...dog, type: dog.type || task.dogType || "ownedDog" }, task.dogType || dog.type || "ownedDog");
+      } else {
+        showToast("No profile photo is available for this dog.");
+      }
       return;
     }
 
