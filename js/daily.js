@@ -50,7 +50,7 @@ function ownedDogCareSummary(record = {}, date = todayDate()) {
   if (ownedDogBathDue(record, date)) parts.push("Bath due");
   const heat = ownedDogHeatStatus(record, date);
   if (heat.inHeat) parts.push("In heat");
-  else if (heat.expectedSoon || heat.overdue) parts.push("Heat watch");
+  else if (heat.expectedSoon || heat.overdue) parts.push("Heat expected");
   if (record.careStatus) parts.push(record.careStatus);
   return parts.join(", ") || "Current";
 }
@@ -613,16 +613,36 @@ function ownedDogCareTagsHtml(record = {}) {
   if (ownedDogExerciseDue(record)) tags.push("Exercise due");
   if (ownedDogTrainingDue(record)) tags.push("Training due");
   if (ownedDogBathDue(record)) tags.push("Bath due");
-  const heat = ownedDogHeatStatus(record);
-  if (heat.inHeat) tags.push("In heat");
-  else if (heat.expectedSoon || heat.overdue) tags.push("Heat watch");
   if (ownedDogHasCareNote(record)) tags.push("Special care");
-  const healthDueTags = ownedDogHealthDueItems(record);
+  const alertItems = ownedDogRosterAlertItems(record);
   const tagHtml = [
     ...tags.map((tag) => statusChipHtml(tag)),
-    ...healthDueTags.map((item) => statusChipHtml(item.label, "health-due-chip " + item.className)),
+    ...alertItems.map((item) => statusChipHtml(item.label, "health-due-chip " + item.className)),
   ].join("");
   return tagHtml ? \`<div class="chip-row">\${tagHtml}</div>\` : "";
+}
+
+function ownedDogHeatAlertItem(record = {}, referenceDate = todayDate()) {
+  const heat = ownedDogHeatStatus(record, referenceDate);
+  if (heat.inHeat) return { label: "Female in heat", className: "heat-alert-chip is-red-warning" };
+  if (heat.expectedSoon || heat.overdue) return { label: "Heat expected", className: "heat-alert-chip is-orange-warning" };
+  return null;
+}
+
+function ownedDogRosterAlertItems(record = {}, referenceDate = todayDate()) {
+  const heatItem = ownedDogHeatAlertItem(record, referenceDate);
+  return [...(heatItem ? [heatItem] : []), ...ownedDogHealthDueItems(record, referenceDate)];
+}
+
+function ownedDogRosterAlertChipsHtml(record = {}, referenceDate = todayDate()) {
+  const items = ownedDogRosterAlertItems(record, referenceDate);
+  return items.length
+    ? '<div class="chip-row health-due-chip-row">' + items.map((item) => statusChipHtml(item.label, "health-due-chip " + item.className)).join("") + "</div>"
+    : "";
+}
+
+function ownedDogHasRosterAlert(record = {}, referenceDate = todayDate()) {
+  return ownedDogRosterAlertItems(record, referenceDate).length > 0;
 }
 
 function ownedDogMobileCardHtml(record = {}) {
@@ -634,9 +654,9 @@ function ownedDogMobileCardHtml(record = {}) {
     ? \`<button type="button" class="mobile-dog-photo-button" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs(dog, "ownedDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`
     : \`<button type="button" class="mobile-dog-photo-button mobile-dog-photo-initials" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} profile">\${escapeHtml(avatarText(name))}</button>\`;
   const heatAction = dog.sex === "Female" ? \`<button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Heat Note" data-id="\${escapeHtml(dog.id)}">Heat Note</button>\` : "";
-  const healthDueTags = ownedDogHealthDueItems(dog);
+  const hasRosterAlert = ownedDogHasRosterAlert(dog);
   return \`
-    <article class="record-card mobile-roster-card \${ownedDogExerciseDue(dog) || ownedDogTrainingDue(dog) || ownedDogBathDue(dog) || healthDueTags.length ? "has-care-due" : ""}" data-id="\${escapeHtml(dog.id)}">
+    <article class="record-card mobile-roster-card \${ownedDogExerciseDue(dog) || ownedDogTrainingDue(dog) || ownedDogBathDue(dog) || hasRosterAlert ? "has-care-due" : ""}" data-id="\${escapeHtml(dog.id)}">
       <div class="mobile-roster-card-main">
         \${photoHtml}
         <strong>\${escapeHtml(name)}</strong>
@@ -723,14 +743,14 @@ function renderOwnedDogs() {
     ? records
         .map((record) => {
           const heat = ownedDogHeatStatus(record);
-          const healthDue = ownedDogHealthDueItems(record);
+          const hasRosterAlert = ownedDogHasRosterAlert(record);
           const rowClass = [
-            ownedDogExerciseDue(record) || ownedDogTrainingDue(record) || ownedDogBathDue(record) || healthDue.length ? "has-care-due" : "",
+            ownedDogExerciseDue(record) || ownedDogTrainingDue(record) || ownedDogBathDue(record) || hasRosterAlert ? "has-care-due" : "",
             heat.inHeat ? "is-in-heat" : "",
           ].filter(Boolean).join(" ");
           return \`<tr data-id="\${record.id}" class="\${rowClass}">\${columns.map((column) => {
             const cellValue = escapeHtml(column.value(record));
-            return \`<td>\${cellValue}\${column.key === "callName" ? ownedDogHealthDueChipsHtml(record) : ""}</td>\`;
+            return \`<td>\${cellValue}\${column.key === "callName" ? ownedDogRosterAlertChipsHtml(record) : ""}</td>\`;
           }).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("ownedDog")}<button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(record.id)}">View</button><button type="button" class="secondary-button" data-action="edit-owned" data-id="\${escapeHtml(record.id)}">Edit</button><button type="button" class="secondary-button" data-action="log-owned-care" data-id="\${escapeHtml(record.id)}">Log Care</button></div></td></tr>\`;
         })
         .join("")

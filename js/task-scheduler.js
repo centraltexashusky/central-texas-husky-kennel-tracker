@@ -7,6 +7,7 @@ var taskSchedulerDragTaskId = "";
 var taskSchedulerPanelMode = "new";
 var taskSchedulerEditingTaskId = "";
 var taskSchedulerPanelOpen = window.innerWidth >= 901;
+var taskSchedulerDraftTask = null;
 var TASK_SCHEDULER_COLOR_KEY = "cth-task-scheduler-type-colors";
 
 var TASK_SCHEDULER_TYPES = [
@@ -99,6 +100,7 @@ function setTaskSchedulerPanel(mode = "new", id = "", open = true) {
 function closeTaskSchedulerPanel() {
   taskSchedulerPanelOpen = false;
   taskSchedulerEditingTaskId = "";
+  taskSchedulerDraftTask = null;
   if (!taskSchedulerSelectedTaskId) taskSchedulerPanelMode = "new";
   renderTaskScheduler();
 }
@@ -240,6 +242,48 @@ function boardingServiceOptionsForScheduler(dogId = "", selectedTaskRef = "") {
   return '<option value="">No linked boarding service</option>' + options.join("");
 }
 
+function taskSchedulerAssignableUsers() {
+  const users = typeof settingsUsers === "function" ? settingsUsers() : readRecords("settingsUser").filter((user) => !user.removed);
+  const role = typeof currentRole === "function" ? currentRole() : "";
+  const current = typeof currentUser !== "undefined" && currentUser && ["admin", "helper"].includes(role)
+    ? { name: currentUser.name || currentUser.email || (typeof roleLabel === "function" ? roleLabel(role) : "Staff"), email: currentUser.email || "", role }
+    : null;
+  const seen = new Set();
+  return [...users, current].filter(Boolean)
+    .filter((user) => !user.removed && ["admin", "helper", "staff"].includes(user.role))
+    .filter((user) => {
+      const key = String(user.email || user.name || "").toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => String(a.name || a.email || "").localeCompare(String(b.name || b.email || "")));
+}
+
+function taskSchedulerAssigneeValue(user = {}) {
+  return user.name || user.email || "";
+}
+
+function taskSchedulerAssignedToOptions(selectedValue = "") {
+  const selected = String(selectedValue || "");
+  const seen = new Set([""]);
+  let html = '<option value=""' + (!selected ? " selected" : "") + ">Nobody</option>";
+  taskSchedulerAssignableUsers().forEach((user) => {
+    const value = taskSchedulerAssigneeValue(user);
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    const label = [value, typeof roleLabel === "function" ? roleLabel(user.role) : user.role].filter(Boolean).join(" - ");
+    html += '<option value="' + escapeHtml(value) + '"' + (value === selected ? " selected" : "") + ">" + escapeHtml(label) + "</option>";
+  });
+  if (selected && !seen.has(selected)) html += '<option value="' + escapeHtml(selected) + '" selected>' + escapeHtml(selected) + "</option>";
+  return html;
+}
+
+function taskSchedulerAssigneeForName(name = "") {
+  const selected = String(name || "");
+  return taskSchedulerAssignableUsers().find((user) => taskSchedulerAssigneeValue(user) === selected) || null;
+}
+
 function scheduledCareTaskFormHtml(task = {}) {
   const dogType = task.dogType || "ownedDog";
   const typeOptions = TASK_SCHEDULER_TYPES.map((item) =>
@@ -260,7 +304,7 @@ function scheduledCareTaskFormHtml(task = {}) {
     '<label class="task-scheduler-form-row"><span>Date</span><input type="date" name="date" value="' + escapeHtml(task.date || taskSchedulerAnchorDate || todayDate()) + '" required /></label>' +
     '<label class="task-scheduler-form-row"><span>Time</span><input type="time" name="startTime" value="' + escapeHtml(task.startTime || "09:00") + '" required /></label>' +
     '<label class="task-scheduler-form-row"><span>Duration</span><input type="number" name="durationMinutes" min="5" step="5" value="' + escapeHtml(task.durationMinutes || 45) + '" /></label>' +
-    '<label class="task-scheduler-form-row"><span>Assigned to</span><input type="text" name="assignedToName" value="' + escapeHtml(task.assignedToName || "") + '" placeholder="Morning Staff" /></label>' +
+    '<label class="task-scheduler-form-row"><span>Assigned to</span><select name="assignedToName">' + taskSchedulerAssignedToOptions(task.assignedToName || "") + "</select></label>" +
     '<label class="task-scheduler-form-row task-scheduler-notes-row"><span>Notes</span><textarea name="notes" rows="3" placeholder="Use hypoallergenic shampoo">' + escapeHtml(task.notes || "") + "</textarea></label>" +
     '<div class="task-scheduler-form-actions">' +
       '<button type="submit">Save Task</button>' +
@@ -272,6 +316,7 @@ function scheduledCareTaskFormHtml(task = {}) {
 
 function openScheduledCareTaskPopup(id = "") {
   const task = scheduledCareTasks().find((item) => item.id === id) || {};
+  taskSchedulerDraftTask = null;
   setTaskSchedulerPanel(id ? "edit" : "new", id, true);
   if (task.id) taskSchedulerSelectedTaskId = task.id;
   renderTaskScheduler();
@@ -310,6 +355,7 @@ function scheduledCareTaskPayloadFromForm(formEl, existing = {}) {
 
   const now = new Date().toISOString();
   const [boardingStayId = "", boardingRequestCode = "", boardingServiceTaskId = "", boardingServiceTaskKey = ""] = String(data.boardingServiceRef || "").split("::");
+  const assignee = taskSchedulerAssigneeForName(data.assignedToName);
 
   return {
     type: "scheduledCareTask",
@@ -326,7 +372,7 @@ function scheduledCareTaskPayloadFromForm(formEl, existing = {}) {
     startTime: data.startTime,
     durationMinutes: Number(data.durationMinutes || 45),
     assignedToName: data.assignedToName || "",
-    assignedToEmail: existing.assignedToEmail || "",
+    assignedToEmail: assignee?.email || (data.assignedToName ? existing.assignedToEmail || "" : ""),
     notes: data.notes || "",
     status: existing.status || "Scheduled",
     boardingStayId: dogType === "boardingDog" ? boardingStayId : "",
@@ -350,6 +396,7 @@ async function saveScheduledCareTaskFromForm(formEl) {
     const record = upsertRecord("scheduledCareTask", { ...existing, ...draft });
     await sendPayload(record);
     taskSchedulerSelectedTaskId = record.id;
+    taskSchedulerDraftTask = null;
     setTaskSchedulerPanel("detail", record.id, true);
     renderTaskScheduler();
     showToast("Task saved.");
@@ -501,7 +548,7 @@ function renderTaskSchedulerDetail(task = null) {
   } else if (mode === "detail" && task?.id) {
     content = taskSchedulerDetailPanelHtml(task);
   } else {
-    content = taskSchedulerPanelHeaderHtml("New Task", "Schedule a task and link it to a dog's care log.") + scheduledCareTaskFormHtml({});
+    content = taskSchedulerPanelHeaderHtml("New Task", "Schedule a task and link it to a dog's care log.") + scheduledCareTaskFormHtml(taskSchedulerDraftTask || {});
   }
   const open = taskSchedulerPanelOpen;
   panel.classList.toggle("is-open", open);
@@ -546,6 +593,17 @@ async function moveScheduledCareTask(id = "", date = "", startTime = "") {
   renderTaskScheduler();
   showToast("Task moved.");
   return updated;
+}
+
+function openTaskSchedulerSlotDraft(slot) {
+  if (!slot) return;
+  taskSchedulerDraftTask = {
+    date: dateOnly(slot.dataset.taskDropDate) || taskSchedulerAnchorDate || todayDate(),
+    startTime: slot.dataset.taskDropTime || "09:00",
+  };
+  taskSchedulerSelectedTaskId = "";
+  setTaskSchedulerPanel("new", "", true);
+  renderTaskScheduler();
 }
 
 async function completeScheduledCareTask(id = "") {
@@ -697,6 +755,7 @@ async function removeScheduledCareTask(id = "") {
   });
   await sendPayload(updated);
   if (taskSchedulerSelectedTaskId === id) taskSchedulerSelectedTaskId = "";
+  taskSchedulerDraftTask = null;
   taskSchedulerEditingTaskId = "";
   taskSchedulerPanelMode = "new";
   taskSchedulerPanelOpen = taskSchedulerIsDesktop();
@@ -711,6 +770,7 @@ function setupTaskSchedulerEventListeners() {
   page.dataset.taskSchedulerBound = "true";
 
   $("#openScheduledCareTaskButton")?.addEventListener("click", () => {
+    taskSchedulerDraftTask = null;
     setTaskSchedulerPanel("new", "", true);
     renderTaskScheduler();
   });
@@ -728,6 +788,13 @@ function setupTaskSchedulerEventListeners() {
   });
 
   page.addEventListener("click", async (event) => {
+    const doubleClickedSlot = event.detail >= 2 ? event.target.closest("[data-task-drop-date]") : null;
+    if (doubleClickedSlot && !event.target.closest("[data-action]")) {
+      event.preventDefault();
+      openTaskSchedulerSlotDraft(doubleClickedSlot);
+      return;
+    }
+
     const viewButton = event.target.closest("[data-task-scheduler-view]");
     if (viewButton) {
       taskSchedulerView = viewButton.dataset.taskSchedulerView || "week";
@@ -740,6 +807,7 @@ function setupTaskSchedulerEventListeners() {
     if (!action) return;
 
     if (action.dataset.action === "open-scheduled-care-task") {
+      taskSchedulerDraftTask = null;
       setTaskSchedulerPanel("detail", action.dataset.id, true);
       renderTaskScheduler();
       return;
@@ -757,6 +825,7 @@ function setupTaskSchedulerEventListeners() {
     }
 
     if (action.dataset.action === "edit-scheduled-care-task") {
+      taskSchedulerDraftTask = null;
       setTaskSchedulerPanel("edit", action.dataset.id, true);
       renderTaskScheduler();
       return;
@@ -799,6 +868,13 @@ function setupTaskSchedulerEventListeners() {
       await removeScheduledCareTask(action.dataset.id);
       return;
     }
+  });
+
+  page.addEventListener("dblclick", (event) => {
+    const slot = event.target.closest("[data-task-drop-date]");
+    if (!slot || event.target.closest("[data-action]")) return;
+    event.preventDefault();
+    openTaskSchedulerSlotDraft(slot);
   });
 
   page.addEventListener("dragstart", (event) => {

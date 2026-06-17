@@ -7499,6 +7499,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   background:
     repeating-linear-gradient(to bottom, rgba(226, 232, 240, 0.52) 0, rgba(226, 232, 240, 0.52) 1px, transparent 1px, transparent 32px),
     #fff;
+  cursor: cell;
   min-height: 74px;
 }
 
@@ -7981,7 +7982,11 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   }
 
   #openScheduledCareTaskButton {
-    border-radius: 999px;
+    background: transparent;
+    border-color: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    color: #0b63ff;
     grid-column: 3;
     grid-row: 1;
     min-width: 40px;
@@ -8020,9 +8025,12 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
   .task-scheduler-mobile-week-strip {
     border-bottom: 1px solid #dbe3ef;
+    box-sizing: border-box;
     display: grid;
-    grid-template-columns: repeat(7, minmax(44px, 1fr));
+    grid-template-columns: repeat(7, minmax(82px, 1fr));
     margin-bottom: 0.35rem;
+    min-width: 626px;
+    padding-left: 52px;
   }
 
   .task-scheduler-mobile-week-strip button {
