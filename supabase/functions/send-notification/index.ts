@@ -22,6 +22,11 @@ type NotifyBody = {
   notificationId?: string;
 };
 
+type MediaEmailLink = {
+  label: string;
+  url: string;
+};
+
 const MEDIA_BUCKET = "kennel-media";
 const DEFAULT_MEDIA_LINK_SECONDS = 7 * 24 * 60 * 60;
 
@@ -275,8 +280,45 @@ function mediaLabel(item: Record<string, unknown>, index: number) {
   return `Media ${index + 1}`;
 }
 
+function mediaKindFromText(value = "") {
+  const text = value.toLowerCase();
+  if (/(video\/|\.mp4\b|\.mov\b|\.webm\b|\.m4v\b|\bvideo\b)/.test(text)) return "video";
+  if (/(image\/|\.jpe?g\b|\.png\b|\.webp\b|\.gif\b|\bphoto\b|\bimage\b)/.test(text)) return "photo";
+  return "document";
+}
+
+function mediaButtonLabelFromText(value = "") {
+  return `Click here to view ${mediaKindFromText(value)}`;
+}
+
+function mediaPlainTextLine(link: MediaEmailLink) {
+  return `${link.label}: ${link.url}`;
+}
+
+function mediaEmailLinkFromLine(line = "", heading = ""): MediaEmailLink | null {
+  const cleanLine = line.replace(/^-\s*/, "").trim();
+  const urlMatch = cleanLine.match(/https?:\/\/\S+/);
+  if (!urlMatch) return null;
+  const url = urlMatch[0];
+  const rawLabel = cleanLine.replace(url, "").replace(/[:\-]\s*$/, "").trim();
+  const context = [heading, rawLabel, url].filter(Boolean).join(" ");
+  if (!/(media|file|photo|video|document|image)/i.test(context)) return null;
+  return {
+    label: /^click here to view/i.test(rawLabel) ? rawLabel : mediaButtonLabelFromText(context),
+    url,
+  };
+}
+
+function mediaLinkButtonHtml(link: MediaEmailLink) {
+  return `<a href="${escapeHtml(link.url)}" style="display:inline-block;background:#111111;border:1px solid #d7a83d;border-radius:12px;color:#fff8dd;text-decoration:none;font-size:14px;font-weight:800;line-height:1.25;padding:12px 18px;">${escapeHtml(link.label)}</a>`;
+}
+
+function mediaLinksButtonListHtml(links: MediaEmailLink[]) {
+  return links.map((link) => `<div style="margin-top:10px;">${mediaLinkButtonHtml(link)}</div>`).join("");
+}
+
 async function mediaLines(adminClient: ReturnType<typeof createClient>, mediaItems: unknown[]) {
-  const lines: string[] = [];
+  const lines: MediaEmailLink[] = [];
   const seconds = mediaLinkSeconds();
   for (const [index, rawItem] of mediaItems.entries()) {
     const item = (rawItem && typeof rawItem === "object" ? rawItem : {}) as Record<string, unknown>;
@@ -287,7 +329,10 @@ async function mediaLines(adminClient: ReturnType<typeof createClient>, mediaIte
       if (!error && data?.signedUrl) url = data.signedUrl;
     }
     if (!url || url.startsWith("data:")) continue;
-    lines.push(`${mediaLabel(item, index)}: ${url}`);
+    lines.push({
+      label: mediaButtonLabelFromText([mediaLabel(item, index), item.type, item.contentType, url].filter(Boolean).join(" ")),
+      url,
+    });
   }
   return lines;
 }
@@ -546,7 +591,7 @@ function renderAdminBoardingRequestEmail(
     action?: string;
     requestType?: string;
     serviceLines?: string[];
-    mediaLines?: string[];
+    mediaLines?: MediaEmailLink[];
   } = {},
 ) {
   const details = getBoardingEmailDetails(record, stay);
@@ -583,7 +628,7 @@ function renderAdminBoardingRequestEmail(
             <tr>
               <td style="padding:20px 24px;">
                 <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:18px;font-weight:700;">Media links</div>
-                <div style="margin-top:10px;color:#344054;font-size:14px;line-height:1.55;">${mediaLines.map((line) => emailValue(line)).join("<br>")}</div>
+                ${mediaLinksButtonListHtml(mediaLines)}
               </td>
             </tr>
           </table>
@@ -765,7 +810,7 @@ function renderAdminBoardingRequestEmail(
     ...serviceLines.map((line) => `- ${line}`),
     `Estimated total: ${emailTextValue(details.total)}`,
     details.notes ? `Notes: ${String(details.notes)}` : "",
-    ...(mediaLines.length ? ["", "Media links:", ...mediaLines] : []),
+    ...(mediaLines.length ? ["", "Media links:", ...mediaLines.map(mediaPlainTextLine)] : []),
     "",
     `View Request: ${details.dashboardUrl}`,
   ].filter(Boolean).join("\n");
@@ -785,6 +830,7 @@ type ParsedEmailBody = {
   details: { label: string; value: string }[];
   intro: string[];
   lists: { title: string; items: string[] }[];
+  mediaLinks: MediaEmailLink[];
 };
 
 function parsePremiumTextBody(body: string): ParsedEmailBody {
@@ -813,6 +859,7 @@ function parsePremiumTextBody(body: string): ParsedEmailBody {
   const details: ParsedEmailBody["details"] = [];
   const intro: string[] = [];
   const lists: ParsedEmailBody["lists"] = [];
+  const mediaLinks: MediaEmailLink[] = [];
   let currentListTitle = "";
 
   for (const [index, line] of rawLines.entries()) {
@@ -822,6 +869,11 @@ function parsePremiumTextBody(body: string): ParsedEmailBody {
       if (!lists.some((list) => list.title === currentListTitle)) {
         lists.push({ title: currentListTitle, items: [] });
       }
+      continue;
+    }
+    const mediaLink = mediaEmailLinkFromLine(line, currentListTitle);
+    if (mediaLink) {
+      mediaLinks.push(mediaLink);
       continue;
     }
     if (line.startsWith("-")) {
@@ -851,6 +903,7 @@ function parsePremiumTextBody(body: string): ParsedEmailBody {
     details,
     intro,
     lists: lists.filter((list) => list.items.length),
+    mediaLinks,
   };
 }
 
@@ -937,6 +990,21 @@ function renderPremiumTextEmail(options: {
     </tr>`;
   }).join("");
 
+  const mediaLinksHtml = parsed.mediaLinks.length
+    ? `<tr>
+      <td style="padding:0 22px 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:16px;">
+          <tr>
+            <td style="padding:18px 20px;">
+              <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;line-height:1.25;font-weight:700;">Media links</div>
+              ${mediaLinksButtonListHtml(parsed.mediaLinks)}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>`
+    : "";
+
   const accentColor = isUrgent ? "#d84a3f" : "#b98524";
   const ctaLabel = parsed.actionLabel || "Open Snuggle Stay";
   const html = `<!doctype html>
@@ -992,6 +1060,7 @@ function renderPremiumTextEmail(options: {
             </tr>
             ${detailCardHtml}
             ${listsHtml}
+            ${mediaLinksHtml}
             <tr>
               <td align="center" style="padding:0 22px 28px;">
                 <a href="${escapeHtml(parsed.actionUrl)}" style="display:block;background:#c9962f;background:linear-gradient(180deg,#f0c76c,#b98524);border:1px solid #8a5c14;border-radius:12px;color:#111111;text-decoration:none;font-size:17px;font-weight:800;padding:15px 20px;box-shadow:0 8px 18px rgba(185,133,36,0.22);">
@@ -1278,8 +1347,8 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         "",
         `Dog: ${record.dogName || ""}`,
         `Owner: ${record.ownerName || record.ownerEmail || record.customerEmail || ""}`,
-        `Files: ${record.vaccinationFiles || record.profilePhotoUrl || "Uploaded file"}`,
-        ...(media.length ? ["", "File links:", ...media] : []),
+        `Files: ${record.vaccinationFiles || (record.profilePhotoUrl ? "Profile photo" : "Uploaded file")}`,
+        ...(media.length ? ["", "File links:", ...media.map(mediaPlainTextLine)] : []),
         "",
         `Review uploaded files: ${appLink("#boardingDogsPage")}`,
       ].join("\n"),
@@ -1299,7 +1368,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         `Date: ${record.date || record.dailyReportDate || ""}`,
         `Logged by: ${record.completedBy || record.completedEmail || ""}`,
         `Note: ${record.note || ""}`,
-        ...(media.length ? ["", "Media links:", ...media] : []),
+        ...(media.length ? ["", "Media links:", ...media.map(mediaPlainTextLine)] : []),
         "",
         `Review daily care log: ${appLink("#dailyPage")}`,
       ].join("\n"),
@@ -1319,7 +1388,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         `Category: ${record.category || ""}`,
         `Request: ${record.requestText || ""}`,
         `Reason: ${record.reason || ""}`,
-        ...(media.length ? ["", "Media links:", ...media] : []),
+        ...(media.length ? ["", "Media links:", ...media.map(mediaPlainTextLine)] : []),
         "",
         `Review request: ${appLink("#requestsPage")}`,
       ].join("\n"),
@@ -1339,7 +1408,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         `Category: ${record.category || ""}`,
         `Request: ${record.requestText || ""}`,
         `Reason: ${record.reason || ""}`,
-        ...(media.length ? ["", "Media links:", ...media] : []),
+        ...(media.length ? ["", "Media links:", ...media.map(mediaPlainTextLine)] : []),
         "",
         `Review request: ${appLink("#requestsPage")}`,
       ].join("\n"),
@@ -1360,7 +1429,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         `Issue: ${record.issue || ""}`,
         `Suggested action: ${record.suggestedAction || ""}`,
         `Files: ${record.mediaFiles || ""}`,
-        ...(media.length ? ["", "Media links:", ...media] : []),
+        ...(media.length ? ["", "Media links:", ...media.map(mediaPlainTextLine)] : []),
         "",
         `Review request: ${appLink("#maintenancePage")}`,
       ].join("\n"),
@@ -1381,7 +1450,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         `Issue: ${record.issue || ""}`,
         `Suggested action: ${record.suggestedAction || ""}`,
         `Files: ${record.mediaFiles || ""}`,
-        ...(media.length ? ["", "Media links:", ...media] : []),
+        ...(media.length ? ["", "Media links:", ...media.map(mediaPlainTextLine)] : []),
         "",
         `Review request: ${appLink("#maintenancePage")}`,
       ].join("\n"),
@@ -1472,7 +1541,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         requestCode ? `Stay ID: ${requestCode}` : "",
         stayLabel ? `Stay: ${stayLabel}` : "",
         `Update: ${update.note || record.dailyActivity || ""}`,
-        ...(media.length ? ["", "Photo/video links:", ...media] : []),
+        ...(media.length ? ["", "Photo/video links:", ...media.map(mediaPlainTextLine)] : []),
         "",
         `Open updates: ${appLink("#customerUpdatesPage")}`,
       ].filter(Boolean).join("\n"),
