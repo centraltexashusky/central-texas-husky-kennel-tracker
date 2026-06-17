@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260616-scheduler-slot-staff-fixes-v3",
+    mustInclude: "20260617-scheduler-day-timeline",
     message: "production cache keys must be bumped.",
   },
 ];

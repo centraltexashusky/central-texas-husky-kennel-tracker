@@ -7332,7 +7332,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 #taskSchedulerPage .task-scheduler-toolbar .segmented-control {
-  width: 220px;
+  width: 320px;
 }
 
 .task-dog-type-toggle {
@@ -7467,8 +7467,20 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .task-scheduler-week-grid {
   border-radius: 14px;
-  min-width: 760px;
+  min-width: var(--task-grid-min-width, 760px);
   overflow: hidden;
+}
+
+.task-scheduler-time-grid {
+  display: grid;
+  grid-template-columns: 70px repeat(var(--task-day-count, 7), minmax(var(--task-day-min-width, 130px), 1fr));
+  grid-template-rows: 54px repeat(var(--task-slot-count, 52), var(--task-slot-height, 20px));
+  min-height: auto;
+  position: relative;
+}
+
+.task-scheduler-day-grid {
+  --task-slot-height: 22px;
 }
 
 .task-scheduler-week-header {
@@ -7496,11 +7508,16 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-slot {
-  background:
-    repeating-linear-gradient(to bottom, rgba(226, 232, 240, 0.52) 0, rgba(226, 232, 240, 0.52) 1px, transparent 1px, transparent 32px),
-    #fff;
+  background: #fff;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  border-left: 1px solid #e6eaf0;
   cursor: cell;
-  min-height: 74px;
+  min-height: 0;
+  padding: 0;
+}
+
+.task-scheduler-time-grid .task-scheduler-slot:nth-of-type(4n + 1) {
+  border-top-color: #dbe3ef;
 }
 
 .task-scheduler-month-grid {
@@ -7523,6 +7540,17 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   gap: 0.55rem;
   min-height: 54px;
   overflow: hidden;
+}
+
+.task-scheduler-card.is-positioned {
+  align-self: stretch;
+  height: auto;
+  justify-self: start;
+  margin: 3px 0 3px calc((100% / var(--task-lane-count, 1)) * var(--task-lane-index, 0) + 3px);
+  min-height: 0;
+  padding: 0.35rem 0.45rem;
+  width: calc((100% / var(--task-lane-count, 1)) - 6px);
+  z-index: 3;
 }
 
 .task-scheduler-card-copy {
@@ -8027,9 +8055,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
     border-bottom: 1px solid #dbe3ef;
     box-sizing: border-box;
     display: grid;
-    grid-template-columns: repeat(7, minmax(82px, 1fr));
+    grid-template-columns: repeat(7, minmax(var(--task-day-min-width, 118px), 1fr));
     margin-bottom: 0.35rem;
-    min-width: 626px;
+    min-width: var(--task-mobile-grid-min-width, 878px);
     padding-left: 52px;
   }
 
@@ -8066,9 +8094,10 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   }
 
   .task-scheduler-week-grid {
-    grid-template-columns: 52px repeat(7, minmax(82px, 1fr));
-    min-height: 640px;
-    min-width: 626px;
+    grid-template-columns: 52px repeat(var(--task-day-count, 7), minmax(var(--task-day-min-width, 118px), 1fr));
+    grid-template-rows: 0 repeat(var(--task-slot-count, 52), var(--task-mobile-slot-height, 20px));
+    min-height: auto;
+    min-width: var(--task-mobile-grid-min-width, 878px);
   }
 
   .task-scheduler-week-header {
@@ -8081,8 +8110,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   }
 
   .task-scheduler-slot {
-    min-height: 68px;
-    padding: 0.22rem;
+    min-height: 0;
+    padding: 0;
   }
 
   .task-scheduler-card {
@@ -8090,8 +8119,16 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
     border-left-width: 3px;
     display: grid;
     gap: 0.25rem;
-    min-height: 66px;
+    min-height: 0;
     padding: 0.42rem;
+  }
+
+  .task-scheduler-card.is-positioned {
+    padding: 0.35rem;
+  }
+
+  .task-scheduler-day-grid {
+    --task-mobile-slot-height: 22px;
   }
 
   #taskSchedulerPage .task-scheduler-card .task-scheduler-avatar {

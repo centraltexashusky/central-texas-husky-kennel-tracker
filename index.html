@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260616-scheduler-slot-staff-fixes-v3" />
+    <link rel="stylesheet" href="styles.css?v=20260617-scheduler-day-timeline" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -670,6 +670,7 @@
             <strong id="taskSchedulerRangeLabel"></strong>
             <button type="button" class="secondary-button" id="taskSchedulerNextButton">›</button>
             <div class="segmented-control" role="group" aria-label="Task scheduler view">
+              <button type="button" id="taskSchedulerDayViewButton" data-task-scheduler-view="day">Day</button>
               <button type="button" id="taskSchedulerWeekViewButton" data-task-scheduler-view="week">Week</button>
               <button type="button" id="taskSchedulerMonthViewButton" data-task-scheduler-view="month">Month</button>
             </div>
@@ -1385,6 +1386,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260616-scheduler-slot-staff-fixes-v3"></script>
+  <script type="module" src="js/main.js?v=20260617-scheduler-day-timeline"></script>
 </body>
 </html>
