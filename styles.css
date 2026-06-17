@@ -7545,6 +7545,11 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   border-radius: 10px;
 }
 
+.task-scheduler-month-day.has-missed-tasks {
+  border-color: #ef4444;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.55), 0 10px 22px rgba(239, 68, 68, 0.12);
+}
+
 .task-scheduler-card {
   --task-color: #0b63ff;
   align-items: center;

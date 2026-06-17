@@ -534,6 +534,13 @@ async function syncOwnedDogCareFromDailyReport(record) {
   for (const dog of dogUpdates.values()) {
     const saved = upsertRecord("ownedDog", dog);
     await sendPayload(saved);
+    if (typeof syncOwnedDogBathTask === "function") {
+      try {
+        await syncOwnedDogBathTask(saved);
+      } catch (error) {
+        console.warn("Owned dog bath task sync failed after daily care update.", error);
+      }
+    }
   }
   if (dogUpdates.size) {
     renderOwnedDogs();
@@ -1073,6 +1080,13 @@ async function removeOwnedLog(logId) {
     updatedAt: new Date().toISOString(),
   });
   await sendPayload(record);
+  if (nextBath.length !== bathHistory.length && typeof syncOwnedDogBathTask === "function") {
+    try {
+      await syncOwnedDogBathTask(record);
+    } catch (error) {
+      console.warn("Owned dog bath task sync failed after activity removal.", error);
+    }
+  }
   renderOwnedActivity(record);
   renderOwnedDogs();
   showToast("Activity entry removed.");

@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260617-scheduler-sticky-time",
+    mustInclude: "20260617-owned-bath-auto-tasks",
     message: "production cache keys must be bumped.",
   },
 ];

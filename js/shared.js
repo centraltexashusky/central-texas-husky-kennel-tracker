@@ -7618,7 +7618,11 @@ function applyOwnedCareLog(record = {}, type, minutes, note = "") {
     dog.lastExerciseDate = log.date;
   }
   dog.updatedAt = new Date().toISOString();
-  return upsertRecord("ownedDog", dog);
+  const saved = upsertRecord("ownedDog", dog);
+  if (type === "Bath" && typeof syncOwnedDogBathTask === "function") {
+    syncOwnedDogBathTask(saved).catch((error) => console.warn("Owned dog bath task sync failed after bath log.", error));
+  }
+  return saved;
 }
 
 // Extracted to js/daily.js: addOwnedLog
@@ -11712,6 +11716,13 @@ function initEvents() {
         await sendPayload(record);
       } catch (error) {
         syncError = friendlyNetworkError(error);
+      }
+      if (typeof syncOwnedDogBathTask === "function") {
+        try {
+          await syncOwnedDogBathTask(record);
+        } catch (error) {
+          console.warn("Owned dog bath task sync failed after dog save.", error);
+        }
       }
       formEl.elements.id.value = record.id;
       setOwnedCareEntryVisibility(true);
