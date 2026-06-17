@@ -2316,7 +2316,7 @@ function boardingCalendarDayHeadingHtml(day = "", index = 0) {
   const date = new Date(day + "T12:00:00");
   const weekday = Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-US", { weekday: "short" });
   const label = Number.isNaN(date.getTime()) ? day.slice(-2) : String(date.getDate());
-  return '<div class="boarding-calendar-day-heading" style="grid-row: 1; grid-column: ' + (index + 2) + ';"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(weekday) + '</span></div>';
+  return '<div class="boarding-calendar-day-heading" data-boarding-calendar-day="' + escapeHtml(day) + '" style="grid-row: 1; grid-column: ' + (index + 2) + ';"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(weekday) + '</span></div>';
 }
 
 function boardingCalendarStatusLegendHtml(entries = []) {
@@ -2351,6 +2351,20 @@ function boardingCalendarCurrentTimeLineHtml(days = [], rowCount = 0) {
   const offset = Math.round(dayFraction * 10000) / 100;
   const title = "Current time: " + formatDateTime(now.toISOString());
   return '<span class="boarding-calendar-now-line" aria-hidden="true" title="' + escapeHtml(title) + '" style="grid-row: 1 / span ' + (rowCount + 1) + '; grid-column: ' + (dayIndex + 2) + '; --boarding-calendar-now-offset: ' + offset + '%;"></span>';
+}
+
+function scrollBoardingCalendarToToday() {
+  const today = todayDate();
+  if (boardingCalendarMonthKey(boardingCalendarMonth) !== today.slice(0, 7)) return;
+  window.requestAnimationFrame(() => {
+    const scrollEl = $("#boardingCalendarView .boarding-calendar-scroll");
+    const grid = scrollEl?.querySelector(".boarding-calendar-grid");
+    const todayHeading = grid?.querySelector('[data-boarding-calendar-day="' + today + '"]');
+    if (!scrollEl || !grid || !todayHeading) return;
+    const styles = window.getComputedStyle(grid);
+    const dogColumnWidth = parseFloat(styles.getPropertyValue("--boarding-calendar-dog-col")) || grid.querySelector(".boarding-calendar-corner")?.offsetWidth || 0;
+    scrollEl.scrollLeft = Math.max(0, todayHeading.offsetLeft - dogColumnWidth);
+  });
 }
 
 function boardingCalendarEntryHtml(entry = {}, index = 0, days = []) {
@@ -2398,6 +2412,7 @@ function renderBoardingCalendar(records = []) {
     + grid
     + boardingCalendarStatusLegendHtml(allEntries)
     + '</section>';
+  if (entries.length) scrollBoardingCalendarToToday();
 }
 
 function boardingDogForCustomerDog(dog = {}) {

@@ -2,7 +2,7 @@
 import "./shared.js?v=20260616-health-scheduler-fixes";
 import "./auth.js?v=20260610-page-scoped-sync-v2";
 import "./customer.js?v=20260611-service-dropoff-v1";
-import "./boarding.js?v=20260616-health-scheduler-fixes";
+import "./boarding.js?v=20260617-boarding-calendar-today-scroll";
 import "./daily.js?v=20260616-scheduler-slot-staff-fixes-v3";
 import "./task-scheduler.js?v=20260617-scheduler-day-timeline";
 import "./timesheet.js?v=20260615-staff-view-v1";
