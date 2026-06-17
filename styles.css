@@ -7476,6 +7476,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   grid-template-columns: 70px repeat(var(--task-day-count, 7), minmax(var(--task-day-min-width, 130px), 1fr));
   grid-template-rows: 54px repeat(var(--task-slot-count, 52), var(--task-slot-height, 20px));
   min-height: auto;
+  overflow: visible;
   position: relative;
 }
 
@@ -7505,6 +7506,22 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   background: #fbfdff;
   border-right: 1px solid #e6eaf0;
   color: #64748b;
+}
+
+.task-scheduler-time-grid .task-scheduler-time-label {
+  box-shadow: 8px 0 16px rgba(15, 23, 42, 0.06);
+  left: 0;
+  position: sticky;
+  z-index: 8;
+}
+
+.task-scheduler-time-grid .task-scheduler-time-label:not(.task-scheduler-week-header) {
+  top: auto;
+}
+
+.task-scheduler-time-grid .task-scheduler-week-header.task-scheduler-time-label {
+  top: 0;
+  z-index: 10;
 }
 
 .task-scheduler-slot {

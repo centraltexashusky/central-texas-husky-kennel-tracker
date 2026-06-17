@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260617-scheduler-day-timeline",
+    mustInclude: "20260617-scheduler-sticky-time",
     message: "production cache keys must be bumped.",
   },
 ];
