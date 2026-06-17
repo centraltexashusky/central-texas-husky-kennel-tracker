@@ -67,9 +67,13 @@ function isOwnedDogNextBathTask(task = {}, dogId = "") {
 }
 
 function activeOwnedDogNextBathTask(dog = {}) {
+  return activeOwnedDogNextBathTasks(dog)[0] || null;
+}
+
+function activeOwnedDogNextBathTasks(dog = {}) {
   return readRecords("scheduledCareTask")
     .filter((task) => isOwnedDogNextBathTask(task, dog.id) && task.status !== "Completed" && task.status !== "Cancelled")
-    .sort((a, b) => String(b.updatedAt || b.submittedAt || "").localeCompare(String(a.updatedAt || a.submittedAt || "")))[0] || null;
+    .sort((a, b) => String(b.updatedAt || b.submittedAt || "").localeCompare(String(a.updatedAt || a.submittedAt || "")));
 }
 
 function existingOwnedDogBathTaskOnDate(dog = {}, date = "", excludeId = "") {
@@ -141,18 +145,29 @@ async function retireOwnedDogNextBathTask(task = {}) {
   return true;
 }
 
+async function retireDuplicateOwnedDogNextBathTasks(dog = {}, keepId = "") {
+  let changed = false;
+  const duplicateTasks = activeOwnedDogNextBathTasks(dog).filter((task) => task.id !== keepId && !task.sourceManualOverride);
+  for (const task of duplicateTasks) {
+    changed = await retireOwnedDogNextBathTask(task) || changed;
+  }
+  return changed;
+}
+
 async function syncOwnedDogBathTask(dog = {}) {
   if (!dog?.id) return false;
   const { clean, nextBathDate } = ownedDogNextBathTaskSchedule(dog);
   const existingAutoTask = activeOwnedDogNextBathTask(clean);
   if (!nextBathDate || clean.removed) {
-    return existingAutoTask ? retireOwnedDogNextBathTask(existingAutoTask) : false;
+    return retireDuplicateOwnedDogNextBathTasks(clean, "");
   }
-  if (existingAutoTask?.status === "Completed" || existingAutoTask?.sourceManualOverride) return false;
+  if (existingAutoTask?.sourceManualOverride) {
+    return retireDuplicateOwnedDogNextBathTasks(clean, existingAutoTask.id);
+  }
 
   const sameDateTask = existingOwnedDogBathTaskOnDate(clean, nextBathDate, existingAutoTask?.id || "");
   if (sameDateTask && !isOwnedDogNextBathTask(sameDateTask, clean.id)) {
-    return existingAutoTask ? retireOwnedDogNextBathTask(existingAutoTask) : false;
+    return retireDuplicateOwnedDogNextBathTasks(clean, "");
   }
 
   const nextPayload = ownedDogNextBathTaskPayload(clean, existingAutoTask || {});
@@ -167,9 +182,10 @@ async function syncOwnedDogBathTask(dog = {}) {
     existingAutoTask.notes !== nextPayload.notes ||
     existingAutoTask.sourceLastBath !== nextPayload.sourceLastBath ||
     Number(existingAutoTask.sourceBathIntervalDays || 0) !== nextPayload.sourceBathIntervalDays;
-  if (!changed) return false;
+  if (!changed) return retireDuplicateOwnedDogNextBathTasks(clean, existingAutoTask.id);
   const saved = upsertRecord("scheduledCareTask", nextPayload);
   await sendPayload(saved);
+  await retireDuplicateOwnedDogNextBathTasks(clean, saved.id);
   return true;
 }
 
@@ -785,10 +801,26 @@ function hourLabel(hour) {
   return (hour - 12) + " PM";
 }
 
+function taskSchedulerMonthWeekdayHeadersHtml() {
+  const weekdays = [
+    ["Sunday", "Sun"],
+    ["Monday", "Mon"],
+    ["Tuesday", "Tue"],
+    ["Wednesday", "Wed"],
+    ["Thursday", "Thu"],
+    ["Friday", "Fri"],
+    ["Saturday", "Sat"],
+  ];
+  return weekdays.map(([full, short]) =>
+    '<div class="task-scheduler-month-weekday"><span class="weekday-full">' + escapeHtml(full) + '</span><span class="weekday-short">' + escapeHtml(short) + "</span></div>"
+  ).join("");
+}
+
 function taskSchedulerMonthHtml() {
   const dates = taskSchedulerMonthDates(taskSchedulerAnchorDate);
   const anchorMonth = new Date(taskSchedulerAnchorDate + "T12:00:00").getMonth();
   return '<div class="task-scheduler-month-grid">' +
+    taskSchedulerMonthWeekdayHeadersHtml() +
     dates.map((date) => {
       const dateObj = new Date(date + "T12:00:00");
       const tasks = tasksForSchedulerDate(date);

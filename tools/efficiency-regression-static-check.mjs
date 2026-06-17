@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260617-owned-bath-auto-tasks",
+    mustInclude: "20260617-month-weekdays-dedupe",
     message: "production cache keys must be bumped.",
   },
 ];
