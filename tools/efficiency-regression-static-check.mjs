@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260617-month-mobile-drilldown",
+    mustInclude: "20260618-day-mobile-fit",
     message: "production cache keys must be bumped.",
   },
 ];
