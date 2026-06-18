@@ -658,6 +658,18 @@ function scheduledCareTaskCardHtml(task = {}, layout = null) {
   "</button>";
 }
 
+function scheduledCareTaskMonthChipHtml(task = {}) {
+  const meta = scheduledCareTaskTypeMeta(task.activityType || task.title);
+  const statusClass = task.status === "Completed" ? " is-completed" : "";
+  const label = [
+    task.title || task.activityType || "Task",
+    [taskSchedulerTaskSubject(task), taskSchedulerTimeRange(task)].filter(Boolean).join(" | "),
+  ].filter(Boolean).join(" ");
+  return '<button type="button" draggable="true" class="task-scheduler-month-task ' + escapeHtml(meta.className) + statusClass + '" data-action="open-scheduled-care-task" data-id="' + escapeHtml(task.id) + '" data-task-color-key="' + escapeHtml(meta.key) + '" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '"' + taskSchedulerStyleAttr({ "--task-color": taskSchedulerColorForType(meta.key) }) + ">" +
+    escapeHtml(label) +
+  "</button>";
+}
+
 function tasksForSchedulerDate(date = "") {
   return scheduledCareTasks().filter((task) => task.date === date && task.status !== "Cancelled");
 }
@@ -828,8 +840,9 @@ function taskSchedulerMonthHtml() {
       const missedClass = taskSchedulerDateHasMissedTasks(date) ? " has-missed-tasks" : "";
       return '<div class="task-scheduler-month-day' + outsideClass + missedClass + '" data-task-drop-date="' + escapeHtml(date) + '" data-task-drop-time="09:00">' +
         '<strong>' + escapeHtml(String(dateObj.getDate())) + "</strong>" +
-        tasks.slice(0, 4).map(scheduledCareTaskCardHtml).join("") +
-        (tasks.length > 4 ? '<span class="muted-text">+' + (tasks.length - 4) + " more</span>" : "") +
+        tasks.slice(0, 4).map(scheduledCareTaskMonthChipHtml).join("") +
+        (tasks.length > 2 ? '<span class="task-scheduler-month-more is-mobile" aria-label="' + escapeHtml(String(tasks.length - 2)) + ' more scheduled tasks">...</span>' : "") +
+        (tasks.length > 4 ? '<span class="task-scheduler-month-more is-desktop" aria-label="' + escapeHtml(String(tasks.length - 4)) + ' more scheduled tasks">...</span>' : "") +
       "</div>";
     }).join("") +
   "</div>";
@@ -1144,7 +1157,7 @@ function setupTaskSchedulerEventListeners() {
 
   page.addEventListener("click", async (event) => {
     const doubleClickedSlot = event.detail >= 2 ? event.target.closest("[data-task-drop-date]") : null;
-    if (doubleClickedSlot && !event.target.closest("[data-action]")) {
+    if (taskSchedulerView !== "month" && doubleClickedSlot && !event.target.closest("[data-action]")) {
       event.preventDefault();
       openTaskSchedulerSlotDraft(doubleClickedSlot);
       return;
@@ -1153,6 +1166,16 @@ function setupTaskSchedulerEventListeners() {
     const viewButton = event.target.closest("[data-task-scheduler-view]");
     if (viewButton) {
       taskSchedulerView = viewButton.dataset.taskSchedulerView || "week";
+      localStorage.setItem("cth-task-scheduler-view", taskSchedulerView);
+      renderTaskScheduler();
+      return;
+    }
+
+    const monthDay = event.target.closest(".task-scheduler-month-day[data-task-drop-date]");
+    if (taskSchedulerView === "month" && monthDay && !event.target.closest("[data-action]")) {
+      event.preventDefault();
+      taskSchedulerAnchorDate = monthDay.dataset.taskDropDate || taskSchedulerAnchorDate;
+      taskSchedulerView = "day";
       localStorage.setItem("cth-task-scheduler-view", taskSchedulerView);
       renderTaskScheduler();
       return;
@@ -1227,7 +1250,7 @@ function setupTaskSchedulerEventListeners() {
 
   page.addEventListener("dblclick", (event) => {
     const slot = event.target.closest("[data-task-drop-date]");
-    if (!slot || event.target.closest("[data-action]")) return;
+    if (!slot || taskSchedulerView === "month" || event.target.closest("[data-action]")) return;
     event.preventDefault();
     openTaskSchedulerSlotDraft(slot);
   });

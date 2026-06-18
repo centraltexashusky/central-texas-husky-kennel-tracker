@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260617-month-weekdays-dedupe",
+    mustInclude: "20260617-month-mobile-drilldown",
     message: "production cache keys must be bumped.",
   },
 ];

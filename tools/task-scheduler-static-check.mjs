@@ -13,6 +13,8 @@ const checks = [
   ["js/task-scheduler.js", "boardingServiceOptionsForScheduler", "Missing boarding service selection."],
   ["js/task-scheduler.js", "taskSchedulerMonthWeekdayHeadersHtml", "Month view must render weekday headers."],
   ["js/task-scheduler.js", "retireDuplicateOwnedDogNextBathTasks", "Owned dog next-bath sync must retire duplicate generated tasks."],
+  ["js/task-scheduler.js", "scheduledCareTaskMonthChipHtml", "Month view must use compact single-line task chips."],
+  ["js/task-scheduler.js", "taskSchedulerView = \"day\"", "Month date-cell clicks must drill into day view."],
   ["js/boarding.js", "careLogs", "Boarding dog profile must render scheduled care logs."],
   ["supabase-schema.sql", "scheduledCareTask", "RLS must allow staff/admin scheduled care task writes."],
 ];
