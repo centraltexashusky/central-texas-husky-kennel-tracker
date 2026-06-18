@@ -1733,6 +1733,8 @@ function boardingServiceTaskQuantity(value = {}) {
   return match ? Math.max(1, Number(match[1] || 1)) : 1;
 }
 
+var BOARDING_SERVICE_AUTO_TASK_SOURCE = "boardingServiceRequest";
+
 function boardingServiceTaskKey(task = {}) {
   return [
     String(task.serviceId || "").trim().toLowerCase(),
@@ -1746,6 +1748,119 @@ function boardingServiceTaskNameKey(task = {}) {
 
 function boardingServiceTaskNameFromKey(taskKey = "") {
   return String(taskKey || "").split("|").pop() || "";
+}
+
+function boardingServiceTaskUnitIndexValue(value = "") {
+  const number = Number(value || 0);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
+}
+
+function boardingServiceTaskUnitCount(task = {}) {
+  return Math.max(1, Math.floor(Number(task.quantity || boardingServiceTaskQuantity(task) || 1)));
+}
+
+function boardingServiceTaskUnitId(task = {}, unitIndex = 1) {
+  return [task.id || boardingServiceTaskKey(task) || boardingServiceTaskDisplayName(task), "unit", unitIndex].filter(Boolean).join("::");
+}
+
+function boardingServiceTaskUnits(task = {}) {
+  const total = boardingServiceTaskUnitCount(task);
+  const previousUnits = arrayValue(task.serviceUnits || task.units || task.completionUnits);
+  const previousByIndex = new Map(previousUnits.map((unit, index) => [boardingServiceTaskUnitIndexValue(unit.index || unit.unitIndex || index + 1) || index + 1, unit]));
+  const allPreviouslyComplete = task.status === "completed" && !previousUnits.length;
+  const units = [];
+  for (let index = 1; index <= total; index += 1) {
+    const previous = previousByIndex.get(index) || {};
+    const completed = previous.status === "completed" || previous.completed === true || allPreviouslyComplete;
+    units.push({
+      ...previous,
+      id: previous.id || boardingServiceTaskUnitId(task, index),
+      index,
+      unitIndex: index,
+      unitCount: total,
+      label: previous.label || (boardingServiceTaskDisplayName(task) + (total > 1 ? " " + index + " of " + total : "")),
+      status: completed ? "completed" : previous.status || "pending",
+      completedAt: completed ? previous.completedAt || task.completedAt || "" : previous.completedAt || "",
+      completedBy: completed ? previous.completedBy || task.completedBy || "" : previous.completedBy || "",
+      completedByEmail: completed ? previous.completedByEmail || task.completedByEmail || "" : previous.completedByEmail || "",
+      completedSource: completed ? previous.completedSource || task.completedSource || "" : previous.completedSource || "",
+      scheduledCareTaskId: previous.scheduledCareTaskId || "",
+    });
+  }
+  return units;
+}
+
+function boardingServiceTaskWithUnitProgress(task = {}) {
+  const units = boardingServiceTaskUnits(task);
+  const completedUnits = units.filter((unit) => unit.status === "completed");
+  const allComplete = Boolean(units.length && completedUnits.length === units.length);
+  return {
+    ...task,
+    serviceUnits: units,
+    completedUnitCount: completedUnits.length,
+    remainingUnitCount: Math.max(0, units.length - completedUnits.length),
+    status: allComplete ? "completed" : "pending",
+    completedAt: allComplete ? task.completedAt || completedUnits[completedUnits.length - 1]?.completedAt || "" : task.completedAt || "",
+    completedBy: allComplete ? task.completedBy || completedUnits[completedUnits.length - 1]?.completedBy || "" : task.completedBy || "",
+    completedByEmail: allComplete ? task.completedByEmail || completedUnits[completedUnits.length - 1]?.completedByEmail || "" : task.completedByEmail || "",
+  };
+}
+
+function boardingServiceTaskIsBath(task = {}) {
+  const text = normalizedServiceLookupText(boardingServiceTaskDisplayName(task));
+  return text === "bath" || text.includes(" bath") || text.startsWith("bath") || text.includes("premium bath");
+}
+
+function boardingServiceTaskIsTreadmill(task = {}) {
+  return normalizedServiceLookupText(boardingServiceTaskDisplayName(task)).includes("treadmill");
+}
+
+function boardingServicePickupIsAfternoon(stay = {}) {
+  const pickup = new Date(stay.pickupTime || stay.scheduledPickupTime || stay.requestedPickupTime || 0);
+  return !Number.isNaN(pickup.getTime()) && pickup.getHours() >= 12;
+}
+
+function boardingServiceApprovedDate(record = {}, stay = {}) {
+  return dateOnly(stay.approvedAt || record.approvedAt || stay.updatedAt || record.updatedAt || stay.createdAt || record.submittedAt || todayDate()) || todayDate();
+}
+
+function boardingServiceEligibleDates(record = {}, stay = {}) {
+  if (isServiceRequestStay(record, stay)) return [boardingServiceApprovedDate(record, stay)];
+  const start = dateOnly(stay.dropoffTime || stay.scheduledDropoffTime || stay.requestedDropoffTime);
+  const pickupDate = dateOnly(stay.pickupTime || stay.scheduledPickupTime || stay.requestedPickupTime);
+  if (!start) return [boardingServiceApprovedDate(record, stay)];
+  const lastDate = pickupDate
+    ? boardingServicePickupIsAfternoon(stay) ? pickupDate : addDays(pickupDate, -1)
+    : start;
+  const dates = [];
+  let current = start;
+  while (current && current <= lastDate && dates.length < 90) {
+    dates.push(current);
+    current = addDays(current, 1);
+  }
+  return dates.length ? dates : [start];
+}
+
+function boardingServiceBathScheduleDate(record = {}, stay = {}) {
+  if (isServiceRequestStay(record, stay)) return boardingServiceApprovedDate(record, stay);
+  const pickupDate = dateOnly(stay.pickupTime || stay.scheduledPickupTime || stay.requestedPickupTime);
+  if (!pickupDate) return boardingServiceEligibleDates(record, stay).slice(-1)[0] || boardingServiceApprovedDate(record, stay);
+  return boardingServicePickupIsAfternoon(stay) ? pickupDate : addDays(pickupDate, -1);
+}
+
+function boardingServiceTaskUnitSourceKey(record = {}, stay = {}, task = {}, unitIndex = 1) {
+  const stayIdentity = stay.requestCode || boardingStayRequestCode(record, stay) || stay.id || boardingStayMergeKeyForRecord(record, stay);
+  const serviceIdentity = task.id || boardingServiceTaskKey(task) || boardingServiceTaskDisplayName(task);
+  return [BOARDING_SERVICE_AUTO_TASK_SOURCE, record.id || "", stayIdentity || "", serviceIdentity || "", boardingServiceTaskUnitIndexValue(unitIndex) || 1].join(":");
+}
+
+function boardingServiceTaskStackingAlert(record = {}, stay = {}, task = {}) {
+  if (isServiceRequestStay(record, stay)) return "";
+  const quantity = boardingServiceTaskUnitCount(task);
+  const eligibleDays = boardingServiceEligibleDates(record, stay).length;
+  return quantity > eligibleDays
+    ? quantity + " " + boardingServiceTaskDisplayName(task) + " units are scheduled across " + eligibleDays + " eligible stay day" + (eligibleDays === 1 ? "" : "s") + ", so some repeat on the same day."
+    : "";
 }
 
 function boardingServiceTaskSources(record = {}, stay = {}) {
@@ -1814,7 +1929,7 @@ function boardingStayServiceTasks(record = {}, stay = {}) {
     const id = boardingServiceTaskStableId(record, stay, source);
     const sourceKey = boardingServiceTaskKey(source);
     const previous = existingById.get(id) || existingById.get(source.id) || existingByKey.get(sourceKey) || existingByName.get(boardingServiceTaskNameKey(source)) || {};
-    return {
+    return boardingServiceTaskWithUnitProgress({
       ...previous,
       ...source,
       id,
@@ -1823,7 +1938,7 @@ function boardingStayServiceTasks(record = {}, stay = {}) {
       completedBy: previous.completedBy || "",
       completedByEmail: previous.completedByEmail || "",
       updatedAt: previous.updatedAt || source.requestedAt || stay.updatedAt || "",
-    };
+    });
   });
 }
 
@@ -1869,27 +1984,42 @@ function boardingStayServiceTaskListHtml(record = {}, stay = {}, options = {}) {
   return \`<div class="boarding-service-task-list">
     <strong>Stay services</strong>
     \${stats.tasks.map((task) => {
+      const units = boardingServiceTaskUnits(task);
       const complete = task.status === "completed";
-      const meta = complete ? \`Completed \${formatDateTime(task.completedAt) || ""}\`.trim() : "Needs completion before pickup";
+      const progress = (task.completedUnitCount || 0) + " of " + units.length + " completed";
+      const meta = complete ? "Completed " + (formatDateTime(task.completedAt) || "") : progress;
       const taskKey = boardingServiceTaskKey(task);
-      const action = !complete && options.actions
-        ? \`<button type="button" class="secondary-button" data-action="complete-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id)}" data-task-key="\${escapeHtml(taskKey)}">Mark Done</button>\`
-        : "";
+      const alert = boardingServiceTaskStackingAlert(record, stay, task);
+      const unitRows = units.map((unit) => {
+        const unitComplete = unit.status === "completed";
+        const unitMeta = unitComplete
+          ? "Completed " + (formatDateTime(unit.completedAt) || "") + (unit.completedBy ? " by " + unit.completedBy : "")
+          : "Needs completion before pickup";
+        const action = !unitComplete && options.actions
+          ? \`<button type="button" class="secondary-button" data-action="complete-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id)}" data-task-key="\${escapeHtml(taskKey)}" data-unit-index="\${escapeHtml(unit.index)}">Mark Done</button>\`
+          : "";
+        return \`<div class="boarding-service-unit-row \${unitComplete ? "is-service-complete" : ""}">
+          <div><strong>\${escapeHtml(unit.label || task.serviceName || "Service")}</strong><span>\${escapeHtml(unitMeta)}</span></div>
+          <div class="record-actions">\${unitComplete ? statusChipHtml("Done", "boarding-service-chip is-service-complete") : statusChipHtml("Open", "boarding-service-chip is-service-due")}\${action}</div>
+        </div>\`;
+      }).join("");
       return \`<article class="record-card compact-record-card boarding-service-task-card \${complete ? "is-service-complete" : ""}">
         <div>
           <strong>\${escapeHtml(task.label || task.serviceName || "Service")}</strong>
           <span>\${escapeHtml(meta)}</span>
+          \${alert ? \`<p class="boarding-service-stack-alert">\${escapeHtml(alert)}</p>\` : ""}
         </div>
-        <div class="record-actions">\${complete ? statusChipHtml("Done", "boarding-service-chip is-service-complete") : statusChipHtml("Open", "boarding-service-chip is-service-due")}\${action}</div>
+        <div class="boarding-service-unit-list">\${unitRows}</div>
       </article>\`;
     }).join("")}
   </div>\`;
 }
 
-function boardingStayWithServiceTaskStatus(record = {}, stay = {}, taskId = "", status = "completed", targetTask = {}, targetTaskKey = "") {
+function boardingStayWithServiceTaskStatus(record = {}, stay = {}, taskId = "", status = "completed", targetTask = {}, targetTaskKey = "", unitIndex = "", options = {}) {
   if (!stay?.id || (!taskId && !targetTaskKey)) return stay;
-  const timestamp = new Date().toISOString();
-  const staff = staffIdentity();
+  const timestamp = options.timestamp || new Date().toISOString();
+  const staff = options.staff || staffIdentity();
+  const requestedUnitIndex = boardingServiceTaskUnitIndexValue(unitIndex);
   const targetKey = targetTaskKey || (targetTask && Object.keys(targetTask).length ? boardingServiceTaskKey(targetTask) : "");
   const targetNameKey = targetTask && Object.keys(targetTask).length ? boardingServiceTaskNameKey(targetTask) : boardingServiceTaskNameFromKey(targetKey);
   const tasks = boardingStayServiceTasks(record, stay).map((task) => {
@@ -1897,12 +2027,32 @@ function boardingStayWithServiceTaskStatus(record = {}, stay = {}, taskId = "", 
       || (targetKey && boardingServiceTaskKey(task) === targetKey)
       || (targetNameKey && boardingServiceTaskNameKey(task) === targetNameKey);
     if (!sameTask) return task;
+    const units = boardingServiceTaskUnits(task);
+    const targetUnitIndex = requestedUnitIndex || units.find((unit) => unit.status !== "completed")?.index || units[0]?.index || 1;
+    const nextUnits = units.map((unit) => {
+      if (unit.index !== targetUnitIndex) return unit;
+      return {
+        ...unit,
+        status,
+        completedAt: status === "completed" ? timestamp : "",
+        completedBy: status === "completed" ? staff.name : "",
+        completedByEmail: status === "completed" ? staff.email : "",
+        completedSource: status === "completed" ? options.source || "boardingDogModal" : "",
+        scheduledCareTaskId: options.scheduledCareTaskId || unit.scheduledCareTaskId || "",
+      };
+    });
+    const completedUnits = nextUnits.filter((unit) => unit.status === "completed");
+    const allComplete = Boolean(nextUnits.length && completedUnits.length === nextUnits.length);
     return {
       ...task,
-      status,
-      completedAt: status === "completed" ? timestamp : task.completedAt || "",
-      completedBy: status === "completed" ? staff.name : task.completedBy || "",
-      completedByEmail: status === "completed" ? staff.email : task.completedByEmail || "",
+      serviceUnits: nextUnits,
+      completedUnitCount: completedUnits.length,
+      remainingUnitCount: Math.max(0, nextUnits.length - completedUnits.length),
+      status: allComplete ? "completed" : "pending",
+      completedAt: allComplete ? timestamp : "",
+      completedBy: allComplete ? staff.name : "",
+      completedByEmail: allComplete ? staff.email : "",
+      lastCompletedUnitIndex: status === "completed" ? targetUnitIndex : task.lastCompletedUnitIndex || "",
       updatedAt: timestamp,
     };
   });
@@ -1913,7 +2063,104 @@ function boardingStayWithServiceTaskStatus(record = {}, stay = {}, taskId = "", 
   };
 }
 
-async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, taskId = "", status = "completed", taskKey = "") {
+function boardingServiceTaskUnitForCompletion(task = {}, unitIndex = "") {
+  const units = boardingServiceTaskUnits(task);
+  const requestedUnitIndex = boardingServiceTaskUnitIndexValue(unitIndex);
+  return units.find((unit) => unit.index === requestedUnitIndex)
+    || units.find((unit) => unit.status !== "completed")
+    || units[0]
+    || {
+      id: boardingServiceTaskUnitId(task, 1),
+      index: 1,
+      unitIndex: 1,
+      unitCount: 1,
+      label: boardingServiceTaskDisplayName(task),
+      status: "pending",
+    };
+}
+
+function boardingServiceCompletionLogPayload(record = {}, stay = {}, task = {}, unit = {}, options = {}) {
+  const timestamp = options.timestamp || new Date().toISOString();
+  const staff = options.staff || staffIdentity();
+  const requestCode = boardingStayRequestCode(record, stay);
+  const serviceName = boardingServiceTaskDisplayName(task);
+  const unitLabel = unit.label || serviceName;
+  return {
+    id: options.careLogId || uid("boardingCareLog"),
+    source: options.source || "boardingDogModal",
+    scheduledCareTaskId: options.scheduledCareTaskId || unit.scheduledCareTaskId || "",
+    dogType: "boardingDog",
+    dogId: record.id || "",
+    dogName: record.dogName || "Boarding Dog",
+    careType: serviceName,
+    minutes: options.minutes || task.durationMinutes || "",
+    note: [unitLabel + " completed.", options.note || ""].filter(Boolean).join(" "),
+    date: options.date || todayDate(),
+    loggedAt: timestamp,
+    completedBy: staff.name,
+    completedEmail: staff.email,
+    completedByEmail: staff.email,
+    stayId: stay.id || "",
+    requestCode,
+    serviceTaskId: task.id || "",
+    serviceTaskKey: boardingServiceTaskKey(task),
+    serviceUnitId: unit.id || boardingServiceTaskUnitId(task, unit.index || 1),
+    serviceUnitIndex: unit.index || unit.unitIndex || 1,
+    serviceUnitCount: unit.unitCount || boardingServiceTaskUnitCount(task),
+  };
+}
+
+function boardingServiceCareLogsWithCompletion(record = {}, log = {}) {
+  const unitIndex = Number(log.serviceUnitIndex || 0);
+  return [
+    log,
+    ...arrayValue(record.careLogs).filter((item) => {
+      if (item.id === log.id) return false;
+      const sameServiceUnit = log.serviceTaskId &&
+        item.serviceTaskId === log.serviceTaskId &&
+        Number(item.serviceUnitIndex || 0) === unitIndex &&
+        String(item.requestCode || "") === String(log.requestCode || "") &&
+        item.source === log.source;
+      return !sameServiceUnit;
+    }),
+  ];
+}
+
+async function retireScheduledCareTasksForBoardingServiceUnit(record = {}, stay = {}, task = {}, unitIndex = "", options = {}) {
+  if (options.retireLinkedSchedule === false) return false;
+  const unit = boardingServiceTaskUnitForCompletion(task, unitIndex);
+  const sourceKey = boardingServiceTaskUnitSourceKey(record, stay, task, unit.index || unitIndex || 1);
+  const now = options.timestamp || new Date().toISOString();
+  const staff = options.staff || staffIdentity();
+  const activeTasks = readRecords("scheduledCareTask").filter((scheduledTask) => {
+    if (!scheduledTask || scheduledTask.removed || scheduledTask.status === "Completed" || scheduledTask.status === "Cancelled") return false;
+    if (scheduledTask.sourceKey && scheduledTask.sourceKey === sourceKey) return true;
+    const sameTask = scheduledTask.boardingServiceTaskId && scheduledTask.boardingServiceTaskId === task.id;
+    const sameKey = scheduledTask.boardingServiceTaskKey && scheduledTask.boardingServiceTaskKey === boardingServiceTaskKey(task);
+    const sameUnit = Number(scheduledTask.boardingServiceUnitIndex || 0) === Number(unit.index || 0);
+    const sameStay = (!scheduledTask.boardingStayId || scheduledTask.boardingStayId === stay.id) &&
+      (!scheduledTask.boardingRequestCode || scheduledTask.boardingRequestCode === boardingStayRequestCode(record, stay));
+    return sameStay && sameUnit && (sameTask || sameKey);
+  });
+  if (!activeTasks.length) return false;
+  const retired = activeTasks.map((scheduledTask) => upsertRecord("scheduledCareTask", {
+    ...scheduledTask,
+    removed: true,
+    removedAt: now,
+    removedBy: staff.name || "Staff",
+    removedReason: "boarding service unit completed",
+    retiredByBoardingServiceCompletion: true,
+    updatedAt: now,
+  }));
+  if (typeof sendPayloadBatch === "function") {
+    await sendPayloadBatch(retired);
+  } else {
+    for (const payload of retired) await sendPayload(payload);
+  }
+  return true;
+}
+
+async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, taskId = "", status = "completed", taskKey = "", unitIndex = "", options = {}) {
   const displayRecord = boardingDogRecordForDisplay(record.id || reference.dogId || "") || record;
   const targetStay = boardingStayByReference(displayRecord, reference);
   if (!displayRecord?.id || !targetStay?.id || (!taskId && !taskKey)) {
@@ -1927,6 +2174,17 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
     showToast("That stay service could not be found.");
     return null;
   }
+  const timestamp = options.timestamp || new Date().toISOString();
+  const staff = options.staff || staffIdentity();
+  const targetUnit = boardingServiceTaskUnitForCompletion(targetTask, unitIndex);
+  const completedAlready = status === "completed" && targetUnit.status === "completed";
+  const shouldCreateCareLog = status === "completed" && options.createCareLog !== false && !completedAlready;
+  const completionCareLogId = shouldCreateCareLog ? options.careLogId || uid("boardingCareLog") : "";
+  const statusOptions = {
+    ...options,
+    timestamp,
+    staff,
+  };
   const explicitStayIds = new Set([
     reference.stayId,
     reference.id,
@@ -1959,11 +2217,18 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
     const matchIndexes = new Set(matchingStayIndexes(rawRecord));
     if (!matchIndexes.size) continue;
     const nextStays = stays.map((stay, index) => (matchIndexes.has(index)
-      ? boardingStayWithServiceTaskStatus(displayRecord, { ...stay, requestCode: stay.requestCode || targetRequestCode }, taskId, status, targetTask, targetTaskKey)
+      ? boardingStayWithServiceTaskStatus(displayRecord, { ...stay, requestCode: stay.requestCode || targetRequestCode }, taskId, status, targetTask, targetTaskKey, targetUnit.index || unitIndex, statusOptions)
       : stay));
+    const completionLog = shouldCreateCareLog
+      ? boardingServiceCompletionLogPayload(rawRecord, { ...targetStay, requestCode: targetStay.requestCode || targetRequestCode }, targetTask, targetUnit, {
+        ...statusOptions,
+        careLogId: completionCareLogId,
+      })
+      : null;
     const updated = upsertRecord("boardingDog", {
       ...rawRecord,
       stays: nextStays,
+      ...(completionLog ? { careLogs: boardingServiceCareLogsWithCompletion(rawRecord, completionLog) } : {}),
       updatedAt: new Date().toISOString(),
     });
     await sendPayload(updated);
@@ -1974,6 +2239,12 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
     return null;
   }
   const latest = boardingDogRecordForDisplay(displayRecord.id) || savedRecords[0] || displayRecord;
+  if (status === "completed" && !completedAlready) {
+    await retireScheduledCareTasksForBoardingServiceUnit(displayRecord, targetStay, targetTask, targetUnit.index || unitIndex, statusOptions);
+  }
+  if (options.syncScheduler !== false && typeof syncBoardingServiceTasksForRecord === "function") {
+    await syncBoardingServiceTasksForRecord(latest, { render: false });
+  }
   if ($("#boardingDogForm")?.elements.id.value === latest.id || sourceRecordIds.includes($("#boardingDogForm")?.elements.id.value)) {
     renderBoardingStays(latest);
     renderBoardingCustomerUpdates(latest);
@@ -1983,6 +2254,7 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
   renderBoardingRequests();
   renderCustomerRequests();
   renderDashboard();
+  if (typeof renderTaskScheduler === "function" && activePageId() === "taskSchedulerPage") renderTaskScheduler();
   showToast(status === "completed" ? "Stay service marked done." : "Stay service updated.");
   return latest;
 }
@@ -3730,6 +4002,9 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   if (options.stayId) {
     await syncDuplicateBoardingStayStatusRecords(record, updated, boardingStayByReference(record, options) || boardingStayByReference(updated, options), nextStatus, options);
   }
+  if (typeof syncBoardingServiceTasksForRecord === "function") {
+    await syncBoardingServiceTasksForRecord(updated, { render: false });
+  }
   renderBoardingDogs();
   renderBoardingRequests();
   renderCustomerRequests();
@@ -4163,7 +4438,10 @@ async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approv
       result = stay.id
         ? await approveBoardingStay(record, stay.id, reference)
         : upsertRecord("boardingDog", approveBoardingRecord(record));
-      if (!stay.id && result) await sendPayload(result);
+      if (!stay.id && result) {
+        await sendPayload(result);
+        if (typeof syncBoardingServiceTasksForRecord === "function") await syncBoardingServiceTasksForRecord(result, { render: false });
+      }
     } else if (nextStatus === "Cancelled") {
       const cancelOptions = {
         ...reference,
@@ -4834,6 +5112,9 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
     await notifyIfNeeded(serviceRequestReadyForPickupNotificationRecord(updated, options), serviceReadyNotificationEvent);
   }
   await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay || boardingStayByReference(updated, options), nextStatus, options);
+  if (typeof syncBoardingServiceTasksForRecord === "function") {
+    await syncBoardingServiceTasksForRecord(updated, { render: false });
+  }
   await addAuditLog("Changed boarding stay status", "boardingDog", updated, \`\${updated.dogName || "Dog"} stay \${options.stayId}: \${nextStatus}\`);
   renderBoardingDogs();
   renderBoardingRequests();
@@ -4927,6 +5208,9 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
   await sendPayload(updated);
   if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
   await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay, "Approved", options);
+  if (typeof syncBoardingServiceTasksForRecord === "function") {
+    await syncBoardingServiceTasksForRecord(updated, { render: false });
+  }
   await addAuditLog("Approved boarding stay", "boardingDog", updated, \`\${updated.dogName || "Dog"} stay \${boardingStayRequestCode(updated, targetStay)}: Approved\`);
   renderBoardingDogs();
   renderBoardingRequests();

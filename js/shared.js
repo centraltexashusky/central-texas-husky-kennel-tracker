@@ -10084,7 +10084,7 @@ function initEvents() {
     if (stayServiceCard) {
       const dog = boardingDogRecordForDisplay(stayServiceCard.dataset.dogId || stayServiceCard.dataset.id);
       const reference = boardingStayReferenceFromAction(stayServiceCard);
-      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, stayServiceCard.dataset.taskId || "", "completed", stayServiceCard.dataset.taskKey || "");
+      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, stayServiceCard.dataset.taskId || "", "completed", stayServiceCard.dataset.taskKey || "", stayServiceCard.dataset.unitIndex || "");
       if (updated) showStayServiceCompletionConfirmation(updated, reference, stayServiceCard.dataset.taskId || "", stayServiceCard.dataset.taskKey || "", dashboardAlertFilter);
       return;
     }
@@ -10785,7 +10785,7 @@ function initEvents() {
     if (action.dataset.action === "complete-stay-service") {
       const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
       const alertFilter = action.closest("[data-dashboard-alert-popup]")?.dataset.dashboardAlertPopup || "";
-      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, boardingStayReferenceFromAction(action), action.dataset.taskId || "", "completed", action.dataset.taskKey || "");
+      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, boardingStayReferenceFromAction(action), action.dataset.taskId || "", "completed", action.dataset.taskKey || "", action.dataset.unitIndex || "");
       if (updated) showStayServiceCompletionConfirmation(updated, boardingStayReferenceFromAction(action), action.dataset.taskId || "", action.dataset.taskKey || "", alertFilter);
       return;
     }
@@ -11978,6 +11978,7 @@ function initEvents() {
           const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", {});
           const updated = upsertRecord("boardingDog", approveBoardingRecord(record));
           await sendPayload(updated);
+          if (typeof syncBoardingServiceTasksForRecord === "function") await syncBoardingServiceTasksForRecord(updated, { render: false });
           if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
           renderBoardingDogs();
           renderBoardingRequests();
@@ -12049,6 +12050,7 @@ function initEvents() {
         const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", {});
         const updated = upsertRecord("boardingDog", approveBoardingRecord(record));
         await sendPayload(updated);
+        if (typeof syncBoardingServiceTasksForRecord === "function") await syncBoardingServiceTasksForRecord(updated, { render: false });
         if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
         renderBoardingDogs();
         renderBoardingRequests();
@@ -12268,7 +12270,7 @@ function initEvents() {
     if (button.dataset.action === "remove-stay") openBoardingStayRemoveConfirm(dog, reference);
     if (button.dataset.action === "open-owner-update-for-stay") openOwnerUpdateAlert(dog?.id || button.dataset.dogId, reference);
     if (button.dataset.action === "complete-stay-service") {
-      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, button.dataset.taskId || "", "completed", button.dataset.taskKey || "");
+      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, button.dataset.taskId || "", "completed", button.dataset.taskKey || "", button.dataset.unitIndex || "");
       if (updated) showStayServiceCompletionConfirmation(updated, reference, button.dataset.taskId || "", button.dataset.taskKey || "");
     }
   });

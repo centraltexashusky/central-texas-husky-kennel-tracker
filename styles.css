@@ -5519,16 +5519,55 @@ button.is-loading {
 }
 
 .boarding-service-task-card {
-  align-items: center;
-  display: flex;
+  align-items: stretch;
+  display: grid;
   gap: 10px;
-  justify-content: space-between;
 }
 
 .boarding-service-task-card > div:first-child {
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+.boarding-service-unit-list {
+  display: grid;
+  gap: 6px;
+}
+
+.boarding-service-unit-row {
+  align-items: center;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.55rem;
+}
+
+.boarding-service-unit-row > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.boarding-service-unit-row > div:first-child span {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.boarding-service-unit-row.is-service-complete {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.boarding-service-stack-alert {
+  color: #fde68a;
+  font-size: 0.84rem;
+  font-weight: 800;
+  margin: 4px 0 0;
 }
 
 .boarding-service-due-card {
@@ -7269,6 +7308,19 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
   cursor: default;
 }
 
+.task-scheduler-card.is-pending-confirmation,
+.task-scheduler-month-task.is-pending-confirmation {
+  opacity: 0.76;
+}
+
+.task-scheduler-pending-label {
+  color: color-mix(in srgb, var(--task-color) 70%, #475569) !important;
+  font-size: 0.68rem !important;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .task-scheduler-card.is-bath { background: #eef4ff; border-color: #4b7bec; }
 .task-scheduler-card.is-exercise { background: #eafafa; border-color: #32b8c6; }
 .task-scheduler-card.is-grooming { background: #f4edff; border-color: #8b5cf6; }
@@ -7723,6 +7775,20 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   background: color-mix(in srgb, var(--task-color) 12%, #fff);
   border-color: color-mix(in srgb, var(--task-color) 70%, #fff);
   border-left-color: var(--task-color);
+}
+
+#taskSchedulerPage .task-scheduler-card.is-pending-confirmation[data-task-color-key],
+#taskSchedulerPage .task-scheduler-month-task.is-pending-confirmation[data-task-color-key] {
+  background: color-mix(in srgb, var(--task-color) 6%, #fff);
+  border-color: color-mix(in srgb, var(--task-color) 52%, #fff);
+  border-style: dashed;
+  border-left-color: var(--task-color);
+  border-left-style: solid;
+}
+
+.task-scheduler-status-card.is-pending-confirmation {
+  background: color-mix(in srgb, #0b63ff 5%, #fff);
+  border-style: dashed;
 }
 
 #taskSchedulerPage .task-scheduler-card .task-scheduler-avatar,
