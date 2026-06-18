@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260618-day-mobile-fit",
+    mustInclude: "20260618-landscape-nav-hide",
     message: "production cache keys must be bumped.",
   },
 ];

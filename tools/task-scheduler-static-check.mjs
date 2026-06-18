@@ -16,6 +16,8 @@ const checks = [
   ["js/task-scheduler.js", "scheduledCareTaskMonthChipHtml", "Month view must use compact single-line task chips."],
   ["js/task-scheduler.js", "taskSchedulerView = \"day\"", "Month date-cell clicks must drill into day view."],
   ["styles.css", "grid-template-columns: 52px minmax(0, 1fr)", "Mobile day view must fit the viewport width."],
+  ["styles.css", "@media (max-width: 980px) and (orientation: landscape)", "Landscape mobile must hide the bottom nav."],
+  ["styles.css", "@media (max-width: 900px) and (orientation: landscape)", "Task Scheduler landscape view must remove bottom-nav spacing."],
   ["js/boarding.js", "careLogs", "Boarding dog profile must render scheduled care logs."],
   ["supabase-schema.sql", "scheduledCareTask", "RLS must allow staff/admin scheduled care task writes."],
 ];
