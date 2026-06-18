@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260618-boarding-service-auto-tasks",
+    mustInclude: "20260618-task-scheduler-detail-drag",
     message: "production cache keys must be bumped.",
   },
 ];

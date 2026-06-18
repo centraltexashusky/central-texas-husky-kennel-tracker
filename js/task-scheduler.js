@@ -137,8 +137,8 @@ function ownedDogNextBathTaskPayload(dog = {}, existing = {}) {
   };
 }
 
-async function retireOwnedDogNextBathTask(task = {}) {
-  if (!task?.id || task.status === "Completed" || task.sourceManualOverride) return false;
+async function retireOwnedDogNextBathTask(task = {}, options = {}) {
+  if (!task?.id || task.status === "Completed" || (task.sourceManualOverride && !options.force)) return false;
   const updated = upsertRecord("scheduledCareTask", {
     ...task,
     removed: true,
@@ -161,18 +161,24 @@ async function retireDuplicateOwnedDogNextBathTasks(dog = {}, keepId = "") {
 
 async function syncOwnedDogBathTask(dog = {}) {
   if (!dog?.id) return false;
-  const { clean, nextBathDate } = ownedDogNextBathTaskSchedule(dog);
+  const { clean, lastBath, intervalDays, nextBathDate } = ownedDogNextBathTaskSchedule(dog);
   const existingAutoTask = activeOwnedDogNextBathTask(clean);
+  let sourceChangedForManualOverride = false;
   if (!nextBathDate || clean.removed) {
     return retireDuplicateOwnedDogNextBathTasks(clean, "");
   }
   if (existingAutoTask?.sourceManualOverride) {
-    return retireDuplicateOwnedDogNextBathTasks(clean, existingAutoTask.id);
+    const sourceChanged = existingAutoTask.sourceLastBath !== lastBath ||
+      Number(existingAutoTask.sourceBathIntervalDays || 0) !== Number(intervalDays || 0) ||
+      existingAutoTask.sourceBathDate !== nextBathDate;
+    if (!sourceChanged) return retireDuplicateOwnedDogNextBathTasks(clean, existingAutoTask.id);
+    sourceChangedForManualOverride = true;
   }
 
   const sameDateTask = existingOwnedDogBathTaskOnDate(clean, nextBathDate, existingAutoTask?.id || "");
   if (sameDateTask && !isOwnedDogNextBathTask(sameDateTask, clean.id)) {
-    return retireDuplicateOwnedDogNextBathTasks(clean, "");
+    const changed = sourceChangedForManualOverride ? await retireOwnedDogNextBathTask(existingAutoTask, { force: true }) : false;
+    return await retireDuplicateOwnedDogNextBathTasks(clean, "") || changed;
   }
 
   const nextPayload = ownedDogNextBathTaskPayload(clean, existingAutoTask || {});
@@ -665,6 +671,13 @@ function taskSchedulerDetailAvatarHtml(task = {}) {
   return '<button type="button" class="task-scheduler-avatar-button" data-action="view-task-scheduler-dog-photo" data-id="' + escapeHtml(task.id || "") + '" aria-label="' + escapeHtml(label) + '"' + (hasPhotoSource ? "" : " disabled") + ">" +
     taskSchedulerDogAvatarHtml(task, "task-scheduler-avatar is-large") +
   "</button>";
+}
+
+function taskSchedulerDogProfileActionHtml(task = {}) {
+  if (task.dogType !== "boardingDog") return "";
+  const dog = taskSchedulerDogForTask(task);
+  if (!dog?.id && !task.dogId) return "";
+  return '<button type="button" class="secondary-button task-scheduler-profile-action" data-action="view-task-scheduler-dog-profile" data-id="' + escapeHtml(task.id || "") + '">View Dog Profile</button>';
 }
 
 function taskSchedulerPanelHeaderHtml(title = "New Task", subtitle = "Schedule a task and link it to a dog's care log.") {
@@ -1194,7 +1207,7 @@ function taskSchedulerDetailPanelHtml(task = {}) {
     '<article class="task-scheduler-detail-card">' +
       '<div class="task-scheduler-detail-hero">' +
         taskSchedulerDetailAvatarHtml(task) +
-        '<div><h4>' + escapeHtml(generalTask ? taskSchedulerTaskSubject(task) : task.dogName || "Dog") + '</h4><p>' + escapeHtml(generalTask ? "Task" : task.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog") + '</p></div>' +
+        '<div><h4>' + escapeHtml(generalTask ? taskSchedulerTaskSubject(task) : task.dogName || "Dog") + '</h4><p>' + escapeHtml(generalTask ? "Task" : task.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog") + '</p>' + taskSchedulerDogProfileActionHtml(task) + '</div>' +
       '</div>' +
       '<div class="task-scheduler-detail-row"><span>Date</span><strong>' + escapeHtml(taskSchedulerLongDateLabel(task.date)) + '</strong></div>' +
       '<div class="task-scheduler-detail-row"><span>Time</span><strong>' + escapeHtml(taskSchedulerTimeRange(task) || task.startTime || "") + '</strong></div>' +
@@ -1456,6 +1469,59 @@ async function removeScheduledCareTask(id = "") {
   return updated;
 }
 
+function confirmRemoveScheduledCareTask(id = "") {
+  const task = scheduledCareTasks().find((item) => item.id === id);
+  if (!task) return;
+  const taskLabel = task.title || task.activityType || "Task";
+  const dogLabel = taskSchedulerTaskSubject(task);
+  showDetailDialog("Delete Task", '<article class="record-card compact-record-card task-scheduler-delete-confirm">' +
+    '<strong>Delete this scheduled task?</strong>' +
+    '<p>' + escapeHtml([taskLabel, dogLabel, taskSchedulerLongDateLabel(task.date), taskSchedulerTimeRange(task)].filter(Boolean).join(" | ")) + '</p>' +
+    '<p>This removes the calendar task. Completed care logs already saved for this task will stay in the dog history.</p>' +
+    '<div class="button-row">' +
+      '<button type="button" class="secondary-button danger-button" data-action="confirm-remove-scheduled-care-task" data-id="' + escapeHtml(id) + '">Delete Task</button>' +
+      '<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>' +
+    '</div>' +
+  '</article>');
+}
+
+function openTaskSchedulerDogProfile(id = "") {
+  const task = scheduledCareTasks().find((item) => item.id === id) || {};
+  if (task.dogType !== "boardingDog") return;
+  const dog = taskSchedulerDogForTask(task);
+  if (dog && typeof openBoardingDogToTab === "function") {
+    openBoardingDogToTab(dog, "Boarding & Request");
+  } else {
+    showToast("Boarding dog profile was not found.");
+  }
+}
+
+function taskSchedulerDropSlotFromPoint(event) {
+  const elements = typeof document.elementsFromPoint === "function" ? document.elementsFromPoint(event.clientX, event.clientY) : [];
+  const directSlot = elements.find((element) => element?.matches?.("[data-task-drop-date]"));
+  if (directSlot) return directSlot;
+  if (taskSchedulerView === "month") return event.target.closest(".task-scheduler-month-day[data-task-drop-date]");
+  const grid = event.target.closest(".task-scheduler-time-grid") || $("#taskSchedulerBoard .task-scheduler-time-grid");
+  if (!grid) return null;
+  const dates = taskSchedulerVisibleDates();
+  const range = taskSchedulerTimeGridRange(dates);
+  const rect = grid.getBoundingClientRect();
+  const firstSlot = grid.querySelector(".task-scheduler-slot[data-task-drop-date]");
+  if (!firstSlot || event.clientY < firstSlot.getBoundingClientRect().top || event.clientY > rect.bottom) return null;
+  const timeColumn = grid.querySelector(".task-scheduler-time-label:not(.task-scheduler-week-header)");
+  const timeColumnWidth = timeColumn?.getBoundingClientRect().width || (window.innerWidth <= 900 ? 52 : 70);
+  if (event.clientX < rect.left + timeColumnWidth || event.clientX > rect.right) return null;
+  const dayWidth = Math.max(1, (rect.width - timeColumnWidth) / Math.max(1, dates.length));
+  const dateIndex = Math.max(0, Math.min(dates.length - 1, Math.floor((event.clientX - rect.left - timeColumnWidth) / dayWidth)));
+  const slotRect = firstSlot.getBoundingClientRect();
+  const slotHeight = slotRect.height || 20;
+  const slotIndex = Math.max(0, Math.min(range.slotCount - 1, Math.floor((event.clientY - slotRect.top) / slotHeight)));
+  const date = dates[dateIndex];
+  const time = taskSchedulerTimeFromMinutes(range.startMinutes + slotIndex * TASK_SCHEDULER_SLOT_MINUTES);
+  return Array.from(grid.querySelectorAll(".task-scheduler-slot[data-task-drop-date]"))
+    .find((slot) => slot.dataset.taskDropDate === date && slot.dataset.taskDropTime === time) || null;
+}
+
 function setupTaskSchedulerEventListeners() {
   const page = $("#taskSchedulerPage");
   if (!page || page.dataset.taskSchedulerBound === "true") return;
@@ -1528,6 +1594,11 @@ function setupTaskSchedulerEventListeners() {
       return;
     }
 
+    if (action.dataset.action === "view-task-scheduler-dog-profile") {
+      openTaskSchedulerDogProfile(action.dataset.id);
+      return;
+    }
+
     if (action.dataset.action === "edit-scheduled-care-task") {
       taskSchedulerDraftTask = null;
       setTaskSchedulerPanel("edit", action.dataset.id, true);
@@ -1569,7 +1640,7 @@ function setupTaskSchedulerEventListeners() {
     }
 
     if (action.dataset.action === "remove-scheduled-care-task") {
-      await removeScheduledCareTask(action.dataset.id);
+      confirmRemoveScheduledCareTask(action.dataset.id);
       return;
     }
   });
@@ -1589,11 +1660,11 @@ function setupTaskSchedulerEventListeners() {
   });
 
   page.addEventListener("dragover", (event) => {
-    if (event.target.closest("[data-task-drop-date]")) event.preventDefault();
+    if (taskSchedulerDropSlotFromPoint(event)) event.preventDefault();
   });
 
   page.addEventListener("drop", async (event) => {
-    const slot = event.target.closest("[data-task-drop-date]");
+    const slot = taskSchedulerDropSlotFromPoint(event);
     if (!slot) return;
     event.preventDefault();
     const id = event.dataTransfer?.getData("text/plain") || taskSchedulerDragTaskId;
@@ -1662,7 +1733,14 @@ function setupTaskSchedulerEventListeners() {
     const remove = event.target.closest('[data-action="remove-scheduled-care-task"]');
     if (remove) {
       event.preventDefault();
-      await removeScheduledCareTask(remove.dataset.id);
+      confirmRemoveScheduledCareTask(remove.dataset.id);
+      return;
+    }
+    const confirmRemove = event.target.closest('[data-action="confirm-remove-scheduled-care-task"]');
+    if (confirmRemove) {
+      event.preventDefault();
+      $("#detailDialog")?.close();
+      await removeScheduledCareTask(confirmRemove.dataset.id);
     }
   });
 }
