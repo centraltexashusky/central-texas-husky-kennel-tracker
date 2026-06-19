@@ -7232,9 +7232,9 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
 }
 
 .task-scheduler-month-day.is-today {
-  background: #dbeafe;
-  border-color: #0b63ff;
-  box-shadow: inset 0 0 0 1px rgba(11, 99, 255, 0.45), 0 12px 24px rgba(11, 99, 255, 0.12);
+  background: linear-gradient(180deg, #fff7ed 0%, #fffbeb 58%, #fef3c7 100%);
+  border-color: #f59e0b;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.48), 0 12px 24px rgba(180, 83, 9, 0.14);
 }
 
 .task-scheduler-month-day > strong {
