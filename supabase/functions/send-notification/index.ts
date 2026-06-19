@@ -322,6 +322,27 @@ function mediaLinksButtonListHtml(links: MediaEmailLink[]) {
   return links.map((link) => `<div style="margin-top:10px;">${mediaLinkButtonHtml(link)}</div>`).join("");
 }
 
+function normalizeMediaEmailLinks(value: unknown, heading = "Media links") {
+  const items = Array.isArray(value) ? value : [];
+  const links: MediaEmailLink[] = [];
+  for (const item of items) {
+    if (item && typeof item === "object") {
+      const media = item as Record<string, unknown>;
+      const url = String(media.url || "").trim();
+      if (!url || url.startsWith("data:")) continue;
+      const label = String(media.label || "").trim();
+      links.push({
+        label: /^click here to view/i.test(label) ? label : mediaButtonLabelFromText([heading, label, url].filter(Boolean).join(" ")),
+        url,
+      });
+      continue;
+    }
+    const link = mediaEmailLinkFromLine(String(item || ""), heading);
+    if (link) links.push(link);
+  }
+  return links;
+}
+
 async function mediaLines(adminClient: ReturnType<typeof createClient>, mediaItems: unknown[]) {
   const lines: MediaEmailLink[] = [];
   const seconds = mediaLinkSeconds();
@@ -602,7 +623,7 @@ function renderAdminBoardingRequestEmail(
   const details = getBoardingEmailDetails(record, stay);
   const logoUrl = emailLogoUrl();
   const serviceLines = options.serviceLines?.length ? options.serviceLines : requestServiceLines(record, stay);
-  const mediaLines = options.mediaLines || [];
+  const mediaLines = normalizeMediaEmailLinks(options.mediaLines || []);
   const requestType = options.requestType || requestTypeLabel(record, stay);
   const isServiceOnly = requestType.toLowerCase().includes("service");
   const action = String(options.action || "submitted").toLowerCase();

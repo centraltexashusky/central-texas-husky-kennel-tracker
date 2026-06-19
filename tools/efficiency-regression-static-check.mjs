@@ -58,6 +58,16 @@ const checks = [
     mustInclude: "mediaEmailLinkFromLine(`${String(label",
     message: "notification email detail rows must inspect label/value media URL pairs.",
   },
+  {
+    path: "supabase/functions/send-notification/index.ts",
+    mustInclude: "const mediaLines = normalizeMediaEmailLinks(options.mediaLines || []);",
+    message: "admin boarding request emails must normalize media links before rendering.",
+  },
+  {
+    path: "supabase/functions/send-notification/index.ts",
+    mustInclude: "mediaLinksButtonListHtml(mediaLines)",
+    message: "admin boarding request emails must render media links as labeled buttons.",
+  },
 ];
 
 const failures = [];
