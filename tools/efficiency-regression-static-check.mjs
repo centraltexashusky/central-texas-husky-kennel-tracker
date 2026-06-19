@@ -45,8 +45,18 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260618-task-scheduler-detail-drag",
+    mustInclude: "20260618-task-scheduler-today-window",
     message: "production cache keys must be bumped.",
+  },
+  {
+    path: "supabase/functions/send-notification/index.ts",
+    mustInclude: "premiumDetailValueHtml",
+    message: "notification emails must convert media URL detail values into labeled buttons.",
+  },
+  {
+    path: "supabase/functions/send-notification/index.ts",
+    mustInclude: "mediaEmailLinkFromLine(`${String(label",
+    message: "notification email detail rows must inspect label/value media URL pairs.",
   },
 ];
 

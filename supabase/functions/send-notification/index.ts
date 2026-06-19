@@ -256,6 +256,11 @@ function formatPremiumDetailValue(label: unknown, value: unknown) {
   return emailValue(value);
 }
 
+function premiumDetailValueHtml(label: unknown, value: unknown) {
+  const mediaLink = mediaEmailLinkFromLine(`${String(label || "").trim()}: ${String(value ?? "").trim()}`, String(label || ""));
+  return mediaLink ? mediaLinkButtonHtml(mediaLink) : formatPremiumDetailValue(label, value);
+}
+
 function arrayValue(value: unknown) {
   return Array.isArray(value) ? value : [];
 }
@@ -934,7 +939,7 @@ function renderPremiumTextEmail(options: {
   const detailsHtml = parsed.details.length
     ? parsed.details.map((detail, index) => {
         const isLast = index === parsed.details.length - 1;
-        const valueHtml = formatPremiumDetailValue(detail.label, detail.value);
+        const valueHtml = premiumDetailValueHtml(detail.label, detail.value);
         return `<tr>
           <td valign="top" style="padding:${index === 0 ? "0" : "14px"} 0 14px;${isLast ? "" : "border-bottom:1px dotted #d7b46a;"}">
             <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:16px;line-height:1.25;font-weight:700;">${emailValue(detail.label)}:</div>

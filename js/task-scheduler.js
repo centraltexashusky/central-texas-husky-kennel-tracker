@@ -694,7 +694,7 @@ function taskSchedulerWeekStart(date = taskSchedulerAnchorDate) {
 }
 
 function taskSchedulerWeekDates(date = taskSchedulerAnchorDate) {
-  const start = taskSchedulerWeekStart(date);
+  const start = dateOnly(date) || todayDate();
   return Array.from({ length: 7 }, (_, index) => addDays(start, index));
 }
 
@@ -1160,8 +1160,9 @@ function taskSchedulerMonthHtml() {
       const dateObj = new Date(date + "T12:00:00");
       const tasks = tasksForSchedulerDate(date);
       const outsideClass = dateObj.getMonth() === anchorMonth ? "" : " is-outside-month";
+      const todayClass = date === todayDate() ? " is-today" : "";
       const missedClass = taskSchedulerDateHasMissedTasks(date) ? " has-missed-tasks" : "";
-      return '<div class="task-scheduler-month-day' + outsideClass + missedClass + '" data-task-drop-date="' + escapeHtml(date) + '" data-task-drop-time="09:00">' +
+      return '<div class="task-scheduler-month-day' + outsideClass + todayClass + missedClass + '" data-task-drop-date="' + escapeHtml(date) + '" data-task-drop-time="09:00">' +
         '<strong>' + escapeHtml(String(dateObj.getDate())) + "</strong>" +
         tasks.slice(0, 4).map(scheduledCareTaskMonthChipHtml).join("") +
         (tasks.length > 2 ? '<span class="task-scheduler-month-more is-mobile" aria-label="' + escapeHtml(String(tasks.length - 2)) + ' more scheduled tasks">...</span>' : "") +

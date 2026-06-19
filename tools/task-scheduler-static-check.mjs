@@ -15,6 +15,8 @@ const checks = [
   ["js/task-scheduler.js", "view-task-scheduler-dog-profile", "Task details must link to the boarding dog profile."],
   ["js/task-scheduler.js", "boardingServiceOptionsForScheduler", "Missing boarding service selection."],
   ["js/task-scheduler.js", "taskSchedulerMonthWeekdayHeadersHtml", "Month view must render weekday headers."],
+  ["js/task-scheduler.js", "const start = dateOnly(date) || todayDate();", "Week view must start at the current anchor date."],
+  ["js/task-scheduler.js", "const todayClass = date === todayDate() ? \" is-today\" : \"\";", "Month view must mark the current day."],
   ["js/task-scheduler.js", "retireDuplicateOwnedDogNextBathTasks", "Owned dog next-bath sync must retire duplicate generated tasks."],
   ["js/task-scheduler.js", "BOARDING_SERVICE_AUTO_TASK_SOURCE", "Boarding service requests must auto-generate scheduler tasks."],
   ["js/task-scheduler.js", "syncBoardingServiceTasksForRecord", "Boarding service request scheduler sync is missing."],

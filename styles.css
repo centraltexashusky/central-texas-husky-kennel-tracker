@@ -7231,6 +7231,12 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
   opacity: 0.68;
 }
 
+.task-scheduler-month-day.is-today {
+  background: #dbeafe;
+  border-color: #0b63ff;
+  box-shadow: inset 0 0 0 1px rgba(11, 99, 255, 0.45), 0 12px 24px rgba(11, 99, 255, 0.12);
+}
+
 .task-scheduler-month-day > strong {
   flex: 0 0 auto;
   line-height: 1;
@@ -7713,6 +7719,17 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .task-scheduler-month-day {
   border-radius: 10px;
+}
+
+.task-scheduler-month-day.is-today > strong {
+  align-items: center;
+  background: #0b63ff;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  height: 1.55rem;
+  justify-content: center;
+  width: 1.55rem;
 }
 
 .task-scheduler-month-day.has-missed-tasks {
