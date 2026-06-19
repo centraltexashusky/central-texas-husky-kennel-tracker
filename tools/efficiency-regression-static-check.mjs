@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260618-task-scheduler-today-window",
+    mustInclude: "20260619-scheduler-milestones-complete",
     message: "production cache keys must be bumped.",
   },
   {

@@ -7310,8 +7310,23 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
 }
 
 .task-scheduler-card.is-completed {
-  opacity: 0.68;
+  opacity: 1;
   cursor: default;
+}
+
+.task-scheduler-complete-badge {
+  align-items: center;
+  background: #16a34a;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex !important;
+  flex: 0 0 22px;
+  font-size: 0.82rem !important;
+  font-weight: 950;
+  height: 22px;
+  justify-content: center;
+  line-height: 1 !important;
+  width: 22px;
 }
 
 .task-scheduler-card.is-pending-confirmation,
@@ -7333,6 +7348,8 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
 .task-scheduler-card.is-medication { background: #edf9ef; border-color: #50a65f; }
 .task-scheduler-card.is-feeding { background: #fff3e5; border-color: #fb923c; }
 .task-scheduler-card.is-training { background: #fff8df; border-color: #facc15; }
+.task-scheduler-card.is-drop-off { background: #ecfeff; border-color: #06b6d4; }
+.task-scheduler-card.is-pick-up { background: #f5f3ff; border-color: #a855f7; }
 .task-scheduler-card.is-general,
 .task-scheduler-card.is-other { background: #f3f4f6; border-color: #9ca3af; }
 
@@ -7822,6 +7839,10 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 .task-scheduler-legend-item.is-feeding { --task-color: #f97316; }
 .task-scheduler-card.is-training,
 .task-scheduler-legend-item.is-training { --task-color: #eab308; }
+.task-scheduler-card.is-drop-off,
+.task-scheduler-legend-item.is-drop-off { --task-color: #06b6d4; }
+.task-scheduler-card.is-pick-up,
+.task-scheduler-legend-item.is-pick-up { --task-color: #a855f7; }
 .task-scheduler-card.is-general,
 .task-scheduler-card.is-other,
 .task-scheduler-legend-item.is-general,
@@ -7840,6 +7861,24 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   border-style: dashed;
   border-left-color: var(--task-color);
   border-left-style: solid;
+}
+
+#taskSchedulerPage .task-scheduler-card.is-completed[data-task-color-key],
+#taskSchedulerPage .task-scheduler-month-task.is-completed[data-task-color-key] {
+  background: #ecfdf5;
+  border-color: #22c55e;
+  border-left-color: #16a34a;
+  color: #14532d;
+  opacity: 1;
+}
+
+#taskSchedulerPage [data-action="complete-scheduled-care-task"]:disabled {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+  box-shadow: none;
+  color: #64748b;
+  filter: none;
+  opacity: 1;
 }
 
 .task-scheduler-status-card.is-pending-confirmation {
