@@ -322,6 +322,16 @@ function mediaLinksButtonListHtml(links: MediaEmailLink[]) {
   return links.map((link) => `<div style="margin-top:10px;">${mediaLinkButtonHtml(link)}</div>`).join("");
 }
 
+function uniqueMediaEmailLinks(links: MediaEmailLink[]) {
+  const seen = new Set<string>();
+  return links.filter((link) => {
+    const url = String(link?.url || "").trim();
+    if (!url || seen.has(url)) return false;
+    seen.add(url);
+    return true;
+  });
+}
+
 function normalizeMediaEmailLinks(value: unknown, heading = "Media links") {
   const items = Array.isArray(value) ? value : [];
   const links: MediaEmailLink[] = [];
@@ -914,6 +924,11 @@ function parsePremiumTextBody(body: string): ParsedEmailBody {
     }
     const detailMatch = line.match(/^([^:]{2,48}):\s*(.*)$/);
     if (detailMatch) {
+      const detailMediaLink = mediaEmailLinkFromLine(line, detailMatch[1].trim());
+      if (detailMediaLink) {
+        mediaLinks.push(detailMediaLink);
+        continue;
+      }
       details.push({
         label: detailMatch[1].trim(),
         value: detailMatch[2].trim() || "Not provided",
@@ -946,6 +961,7 @@ function premiumAudienceLabel(audience: unknown, priority: unknown) {
 function renderPremiumTextEmail(options: {
   audience?: unknown;
   body: string;
+  mediaLinks?: MediaEmailLink[];
   priority?: unknown;
   subject: string;
 }) {
@@ -957,6 +973,10 @@ function renderPremiumTextEmail(options: {
   const introText = parsed.intro.length
     ? parsed.intro.join("<br>")
     : "A Snuggle Stay notification needs your attention.";
+  const mediaLinks = uniqueMediaEmailLinks([
+    ...parsed.mediaLinks,
+    ...normalizeMediaEmailLinks(options.mediaLinks || [], "Media links"),
+  ]);
   const detailsHtml = parsed.details.length
     ? parsed.details.map((detail, index) => {
         const isLast = index === parsed.details.length - 1;
@@ -1016,14 +1036,14 @@ function renderPremiumTextEmail(options: {
     </tr>`;
   }).join("");
 
-  const mediaLinksHtml = parsed.mediaLinks.length
+  const mediaLinksHtml = mediaLinks.length
     ? `<tr>
       <td style="padding:0 22px 24px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffaf1;border:1px solid #d7b46a;border-radius:16px;">
           <tr>
             <td style="padding:18px 20px;">
               <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:17px;line-height:1.25;font-weight:700;">Media links</div>
-              ${mediaLinksButtonListHtml(parsed.mediaLinks)}
+              ${mediaLinksButtonListHtml(mediaLinks)}
             </td>
           </tr>
         </table>
@@ -1558,20 +1578,31 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const requestCode = String(update.requestCode || "").trim();
     const stayLabel = String(update.stayLabel || "").trim();
     const media = await mediaLines(adminClient, arrayValue(update.mediaItems));
-    return {
-      subject: `Stay update: ${record.dogName || update.dogName || "Your dog"}${requestCode ? ` (${requestCode})` : ""}`,
-      body: [
-        "Central Texas Husky sent a stay update.",
-        "",
-        `Dog: ${record.dogName || update.dogName || ""}`,
-        requestCode ? `Stay ID: ${requestCode}` : "",
-        stayLabel ? `Stay: ${stayLabel}` : "",
-        `Update: ${update.note || record.dailyActivity || ""}`,
-        ...(media.length ? ["", "Photo/video links:", ...media.map(mediaPlainTextLine)] : []),
-        "",
-        `Open updates: ${appLink("#customerUpdatesPage")}`,
-      ].filter(Boolean).join("\n"),
+    const subject = `Stay update: ${record.dogName || update.dogName || "Your dog"}${requestCode ? ` (${requestCode})` : ""}`;
+    const body = [
+      "Central Texas Husky sent a stay update.",
+      "",
+      `Dog: ${record.dogName || update.dogName || ""}`,
+      requestCode ? `Stay ID: ${requestCode}` : "",
+      stayLabel ? `Stay: ${stayLabel}` : "",
+      `Update: ${update.note || record.dailyActivity || ""}`,
+      ...(media.length ? ["", "Photo/video links:", ...media.map(mediaPlainTextLine)] : []),
+      "",
+      `Open updates: ${appLink("#customerUpdatesPage")}`,
+    ].filter(Boolean).join("\n");
+    const rendered = renderPremiumTextEmail({
+      audience: "Customer",
+      body,
+      mediaLinks: media,
       priority: "normal",
+      subject,
+    });
+    return {
+      subject,
+      body,
+      html: rendered.html,
+      priority: "normal",
+      template: rendered.template,
       to: customerStayAudienceEmails(record, notification),
       sms: false,
     };
