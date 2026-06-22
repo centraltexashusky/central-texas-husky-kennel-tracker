@@ -603,6 +603,8 @@ function notificationSavedMessageIsSpecific(message = "") {
 function notificationStayIdText(source = {}) {
   const stay = boardingPrimaryStay(source) || {};
   return source.latestCustomerCancellation?.requestCode
+    || source.latestCustomerRequestStatus?.requestCode
+    || source.latestCustomerRequestStatus?.stayId
     || source.latestCustomerUpdate?.requestCode
     || source.latestServiceReadyForPickup?.requestCode
     || source.requestCode
@@ -918,15 +920,30 @@ function customerStayUpdateAudienceEmails(record = {}) {
   );
 }
 
+function customerRequestStatusStay(record = {}) {
+  const latest = record.latestCustomerRequestStatus || {};
+  return boardingStayByReference(record, {
+    stayId: latest.stayId || "",
+    requestCode: latest.requestCode || "",
+  }) || boardingPrimaryStay(record) || {};
+}
+
+function customerRequestStatusTypeLabel(record = {}, stay = customerRequestStatusStay(record)) {
+  return record.latestCustomerRequestStatus?.requestType
+    || (isServiceRequestStay(record, stay) ? "service request" : "boarding request");
+}
+
 function customerRequestStatusNotificationTitle(record = {}, statusLabel = "updated") {
-  return "Boarding/service request " + statusLabel + ": " + (record.dogName || "Customer dog");
+  const requestType = customerRequestStatusTypeLabel(record);
+  return requestType.charAt(0).toUpperCase() + requestType.slice(1) + " " + statusLabel + ": " + (record.dogName || "Customer dog");
 }
 
 function customerRequestStatusNotificationMessage(record = {}, statusLabel = "updated", detail = "") {
-  const stay = boardingPrimaryStay(record) || {};
+  const stay = customerRequestStatusStay(record);
   const schedule = stay?.id ? stayScheduleRangeLabel(record, stay) : boardingScheduleText(record);
   const stayId = notificationStayIdText(record);
-  let message = "Your boarding/service request" + (record.dogName ? " for " + record.dogName : "") + " has been " + statusLabel + ".";
+  const requestType = customerRequestStatusTypeLabel(record, stay);
+  let message = "Your " + requestType + (record.dogName ? " for " + record.dogName : "") + " has been " + statusLabel + ".";
   if (schedule) message += " " + schedule + ".";
   if (stayId) message += " Stay ID: " + stayId + ".";
   if (detail) message += " " + detail;

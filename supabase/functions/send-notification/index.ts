@@ -432,17 +432,86 @@ function notificationActionTarget(notification: Record<string, unknown>) {
     : {};
 }
 
+function objectValue(source: Record<string, unknown>, key: string) {
+  return source[key] && typeof source[key] === "object"
+    ? source[key] as Record<string, unknown>
+    : {};
+}
+
+function customerRequestStatusReference(record: Record<string, unknown>) {
+  const latest = objectValue(record, "latestCustomerRequestStatus");
+  return {
+    requestCode: String(latest.requestCode || "").trim(),
+    stayId: String(latest.stayId || "").trim(),
+  };
+}
+
+function statusHistoryReference(record: Record<string, unknown>, eventName = "") {
+  const targetStatus = eventName === "boardingCustomerRequestApproved"
+    ? "Approved"
+    : eventName === "boardingCustomerRequestDeclined" || eventName === "boardingCustomerRequestCancelled"
+    ? "Cancelled"
+    : "";
+  if (!targetStatus) return { requestCode: "", stayId: "" };
+  const history = arrayValue(record.statusHistory)
+    .filter((item) => item && typeof item === "object")
+    .map((item) => item as Record<string, unknown>)
+    .reverse();
+  const match = history.find((item) => String(item.to || "").trim() === targetStatus && (item.stayId || item.requestCode));
+  return {
+    requestCode: String(match?.requestCode || "").trim(),
+    stayId: String(match?.stayId || "").trim(),
+  };
+}
+
+function notificationTargetStayReferences(
+  record: Record<string, unknown>,
+  notification: Record<string, unknown>,
+  eventName = "",
+) {
+  const source = notificationSourceSnapshot(notification);
+  const actionTarget = notificationActionTarget(notification);
+  const ready = objectValue(source, "latestServiceReadyForPickup");
+  const sourceStatus = customerRequestStatusReference(source);
+  const recordStatus = customerRequestStatusReference(record);
+  const sourceHistory = statusHistoryReference(source, eventName);
+  const recordHistory = statusHistoryReference(record, eventName);
+  const notificationReference = {
+    requestCode: String(notification.requestCode || "").trim(),
+    stayId: String(notification.stayId || "").trim(),
+  };
+  const actionReference = {
+    requestCode: String(actionTarget.requestCode || "").trim(),
+    stayId: String(actionTarget.stayId || "").trim(),
+  };
+  const readyReference = {
+    requestCode: String(ready.requestCode || "").trim(),
+    stayId: String(ready.stayId || "").trim(),
+  };
+  const customerStatusEvent = [
+    "boardingCustomerRequestApproved",
+    "boardingCustomerRequestDeclined",
+    "boardingCustomerRequestCancelled",
+    "boardingCustomerRequestUpdatedByStaff",
+  ].includes(eventName);
+  const references = customerStatusEvent
+    ? [sourceStatus, recordStatus, sourceHistory, recordHistory, notificationReference, actionReference, readyReference]
+    : [notificationReference, actionReference, readyReference, sourceStatus, recordStatus, sourceHistory, recordHistory];
+  return references.filter((reference) => reference.stayId || reference.requestCode);
+}
+
 function notificationTargetStayId(notification: Record<string, unknown>) {
   const source = notificationSourceSnapshot(notification);
   const actionTarget = notificationActionTarget(notification);
-  const ready = source.latestServiceReadyForPickup && typeof source.latestServiceReadyForPickup === "object"
-    ? source.latestServiceReadyForPickup as Record<string, unknown>
-    : {};
+  const ready = objectValue(source, "latestServiceReadyForPickup");
+  const latestStatus = customerRequestStatusReference(source);
   return String(
     notification.stayId
     || notification.requestCode
     || actionTarget.stayId
     || actionTarget.requestCode
+    || latestStatus.stayId
+    || latestStatus.requestCode
     || ready.requestCode
     || ready.stayId
     || "",
@@ -457,10 +526,22 @@ function stayMatchesTargetId(record: Record<string, unknown>, stay: Record<strin
     .includes(targetId);
 }
 
-function notificationTargetStay(record: Record<string, unknown>, notification: Record<string, unknown> = {}) {
+function stayMatchesReference(record: Record<string, unknown>, stay: Record<string, unknown>, reference: Record<string, string>) {
+  return stayMatchesTargetId(record, stay, reference.stayId) || stayMatchesTargetId(record, stay, reference.requestCode);
+}
+
+function notificationTargetStay(record: Record<string, unknown>, notification: Record<string, unknown> = {}, eventName = "") {
   const targetId = notificationTargetStayId(notification);
   const source = notificationSourceSnapshot(notification);
   const records = [source, record].filter((item) => Object.keys(item).length);
+  const references = notificationTargetStayReferences(record, notification, eventName);
+  for (const reference of references) {
+    for (const candidateRecord of records) {
+      const match = arrayValue(candidateRecord.stays)
+        .find((stay) => stay && typeof stay === "object" && stayMatchesReference(candidateRecord, stay as Record<string, unknown>, reference));
+      if (match && typeof match === "object") return match as Record<string, unknown>;
+    }
+  }
   for (const candidateRecord of records) {
     const match = arrayValue(candidateRecord.stays)
       .find((stay) => stay && typeof stay === "object" && stayMatchesTargetId(candidateRecord, stay as Record<string, unknown>, targetId));
@@ -1252,7 +1333,7 @@ function hydrateNotificationPayload(
 }
 
 async function notificationContent(adminClient: ReturnType<typeof createClient>, eventName: string, record: Record<string, unknown>, notification: Record<string, unknown> = {}) {
-  const stay = notificationTargetStay(record, notification);
+  const stay = notificationTargetStay(record, notification, eventName);
   const audienceEmails = await notificationAudienceEmails(adminClient, eventName, record, notification);
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";

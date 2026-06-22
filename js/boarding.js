@@ -148,6 +148,36 @@ function serviceRequestReadyForPickupNotificationRecord(record = {}, options = {
   };
 }
 
+function customerRequestStatusNotificationRecord(record = {}, nextStatus = "", options = {}) {
+  const targetStay = (options.stayId || options.requestCode)
+    ? boardingStayByReference(record, options)
+    : boardingStatusTargetStay(record, nextStatus, options) || boardingPrimaryStay(record) || {};
+  if (!targetStay?.id) return record;
+  const requestCode = boardingStayRequestCode(record, targetStay);
+  const transitionActor = boardingTransitionActorPayload(options);
+  return {
+    ...record,
+    latestCustomerRequestStatus: {
+      dogName: record.dogName || "",
+      requestCode,
+      requestType: isServiceRequestStay(record, targetStay) ? "service request" : "boarding request",
+      requestedDropoffTime: targetStay.requestedDropoffTime || targetStay.dropoffTime || "",
+      requestedPickupTime: targetStay.requestedPickupTime || targetStay.pickupTime || "",
+      requestedTime: targetStay.dropoffTime || targetStay.requestedDropoffTime || "",
+      scheduledDropoffTime: targetStay.scheduledDropoffTime || targetStay.dropoffTime || targetStay.requestedDropoffTime || "",
+      scheduledPickupTime: targetStay.scheduledPickupTime || targetStay.pickupTime || targetStay.requestedPickupTime || "",
+      status: nextStatus,
+      statusLabel: String(nextStatus || "").toLowerCase(),
+      stayId: targetStay.id || "",
+      stayType: targetStay.stayType || record.stayType || "",
+      updatedAt: new Date().toISOString(),
+      updatedBy: transitionActor.name,
+      updatedByEmail: transitionActor.email,
+      updatedByRole: transitionActor.role,
+    },
+  };
+}
+
 function normalizedBoardingDeclineNote(note = "") {
   return String(note || "").trim();
 }
@@ -3993,7 +4023,12 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
     showToast("That boarding status transition is not allowed.");
     return null;
   }
-  const updated = upsertRecord("boardingDog", transitioned);
+  const updated = upsertRecord(
+    "boardingDog",
+    customerNotificationEvent
+      ? customerRequestStatusNotificationRecord(transitioned, nextStatus, options)
+      : transitioned,
+  );
   await sendPayload(updated);
   if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
   if (serviceReadyNotificationEvent) {
@@ -5169,7 +5204,7 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
     };
   });
   const summaryStatus = boardingSummaryStatusFromStays(transitioned, updatedStays, "Approved");
-  const updated = upsertRecord("boardingDog", {
+  const approvedRecord = {
     ...transitioned,
     boardingStatus: summaryStatus,
     approvedAt: record.approvedAt || timestamp,
@@ -5204,7 +5239,13 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
       },
     ],
     flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
-  });
+  };
+  const updated = upsertRecord(
+    "boardingDog",
+    customerNotificationEvent
+      ? customerRequestStatusNotificationRecord(approvedRecord, "Approved", options)
+      : approvedRecord,
+  );
   await sendPayload(updated);
   if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
   await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay, "Approved", options);
