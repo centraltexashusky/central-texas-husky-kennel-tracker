@@ -583,6 +583,15 @@ function customerEmailsForRecord(record: Record<string, unknown>) {
 function requestServiceItems(record: Record<string, unknown>, stay: Record<string, unknown>) {
   const stayRequests = Array.isArray(stay.requests) ? stay.requests : [];
   const recordRequests = Array.isArray(record.requestedServices) ? record.requestedServices : [];
+  const hasSpecificStay = Boolean(
+    stay.id
+    || stay.dropoffTime
+    || stay.pickupTime
+    || stay.requestedDropoffTime
+    || stay.requestedPickupTime
+    || Object.prototype.hasOwnProperty.call(stay, "requests")
+  );
+  if (hasSpecificStay) return stayRequests;
   return stayRequests.length ? stayRequests : recordRequests;
 }
 
