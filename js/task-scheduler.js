@@ -357,6 +357,54 @@ function boardingStayMilestoneSourceKey(record = {}, stay = {}, milestoneType = 
   return [BOARDING_STAY_MILESTONE_TASK_SOURCE, record.id || "", stayIdentity || "", milestoneType].join(":");
 }
 
+function boardingStayMilestoneTypeForTask(task = {}) {
+  const explicit = String(task.sourceMilestoneType || "").trim();
+  if (explicit) return explicit;
+  const label = String(task.activityType || task.title || "").toLowerCase();
+  if (label.includes("drop")) return "dropOff";
+  if (label.includes("pick")) return "pickUp";
+  return "";
+}
+
+function boardingStayMilestoneTaskMatchesDateTime(task = {}, milestone = {}) {
+  const plannedDate = dateOnly(milestone.dateTime || "");
+  const plannedStart = taskSchedulerTimeFromDateTime(milestone.dateTime || "", "");
+  const taskDate = task.date || dateOnly(task.sourceMilestoneDateTime || "");
+  const taskStart = String(task.startTime || taskSchedulerTimeFromDateTime(task.sourceMilestoneDateTime || "", "")).slice(0, 5);
+  return Boolean(plannedDate && plannedStart && taskDate === plannedDate && taskStart === plannedStart);
+}
+
+function boardingStayMilestoneTaskMatchesMilestone(record = {}, stay = {}, milestone = {}, task = {}, sourceKey = "") {
+  if (!isBoardingStayMilestoneAutoTask(task)) return false;
+  if (sourceKey && task.sourceKey === sourceKey) return true;
+  const recordIds = new Set([record.id, ...arrayValue(record.sourceRecordIds)].filter(Boolean).map(String));
+  const taskDogId = String(task.sourceDogId || task.dogId || "");
+  if (!recordIds.has(taskDogId)) return false;
+  if (boardingStayMilestoneTypeForTask(task) !== milestone.type) return false;
+  if (!boardingStayMilestoneTaskMatchesDateTime(task, milestone)) return false;
+
+  const requestCode = typeof boardingStayRequestCode === "function" ? boardingStayRequestCode(record, stay) : stay.requestCode || "";
+  const taskRequestCode = String(task.sourceRequestCode || task.boardingRequestCode || "").trim();
+  if (requestCode && taskRequestCode && requestCode === taskRequestCode) return true;
+
+  const stayIds = new Set([
+    stay.id,
+    ...arrayValue(stay.sourceStayIds),
+    ...arrayValue(stay.duplicateStayIds),
+  ].filter(Boolean).map(String));
+  const taskStayId = String(task.sourceStayId || task.boardingStayId || "").trim();
+  if (taskStayId && stayIds.has(taskStayId)) return true;
+
+  // Legacy generated tasks may carry stale request/stay ids; same dog, milestone type, and exact time is the compatibility match.
+  return true;
+}
+
+function boardingStayMilestoneTaskCandidates(record = {}, stay = {}, milestone = {}, sourceKey = "") {
+  return boardingStayMilestoneAutoTasks().filter((task) =>
+    boardingStayMilestoneTaskMatchesMilestone(record, stay, milestone, task, sourceKey)
+  );
+}
+
 function boardingStayMilestoneDefinitions(record = {}, stay = {}) {
   const serviceOnly = typeof isServiceRequestStay === "function" && isServiceRequestStay(record, stay);
   const dropoffTime = stay.dropoffTime || stay.scheduledDropoffTime || stay.requestedDropoffTime || "";
@@ -460,10 +508,10 @@ function boardingStayMilestoneTaskNeedsUpdate(existing = {}, draft = {}) {
 
 function preferredBoardingStayMilestoneTask(candidates = []) {
   return candidates.slice().sort((a, b) => {
-    const manualDelta = Number(Boolean(b.sourceManualOverride)) - Number(Boolean(a.sourceManualOverride));
-    if (manualDelta) return manualDelta;
     const completedDelta = Number(b.status === "Completed") - Number(a.status === "Completed");
     if (completedDelta) return completedDelta;
+    const manualDelta = Number(Boolean(b.sourceManualOverride)) - Number(Boolean(a.sourceManualOverride));
+    if (manualDelta) return manualDelta;
     return String(b.updatedAt || b.submittedAt || "").localeCompare(String(a.updatedAt || a.submittedAt || ""));
   })[0] || null;
 }
@@ -617,7 +665,7 @@ async function syncBoardingStayMilestoneTasksForRecord(record = {}, options = {}
       const sourceKey = boardingStayMilestoneSourceKey(displayRecord, stay, milestone.type);
       if (!sourceKey) return;
       desiredKeys.add(sourceKey);
-      const candidates = boardingStayMilestoneAutoTasks(sourceKey);
+      const candidates = boardingStayMilestoneTaskCandidates(displayRecord, stay, milestone, sourceKey);
       const keep = preferredBoardingStayMilestoneTask(candidates);
       candidates.filter((task) => task.id !== keep?.id && task.status !== "Completed").forEach((duplicate) => {
         queueBoardingServiceTaskChange(changesById, upsertRecord("scheduledCareTask", {
