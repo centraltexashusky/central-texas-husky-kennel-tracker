@@ -19,6 +19,8 @@ var OWNED_DOG_BATH_TASK_DURATION_MINUTES = 120;
 var ownedDogBathTaskSyncQueued = false;
 var BOARDING_SERVICE_AUTO_TASK_SOURCE = "boardingServiceRequest";
 var BOARDING_SERVICE_BATH_TASK_DURATION_MINUTES = 120;
+var BOARDING_SERVICE_BOOTCAMP_TRAINING_TASK_DURATION_MINUTES = 30;
+var BOARDING_SERVICE_BOOTCAMP_TRAINING_TASK_START_TIME = "09:00";
 var BOARDING_SERVICE_DEFAULT_TASK_DURATION_MINUTES = 45;
 var BOARDING_SERVICE_TASK_START_TIMES = ["09:00", "11:00", "13:00", "15:00", "17:00"];
 var BOARDING_STAY_MILESTONE_TASK_SOURCE = "boardingStayMilestone";
@@ -303,6 +305,7 @@ function boardingServiceTaskActivityType(task = {}) {
 
 function boardingServiceTaskDurationMinutes(task = {}) {
   if (typeof boardingServiceTaskIsBath === "function" && boardingServiceTaskIsBath(task)) return BOARDING_SERVICE_BATH_TASK_DURATION_MINUTES;
+  if (typeof boardingServiceTaskIsBootcampTraining === "function" && boardingServiceTaskIsBootcampTraining(task)) return BOARDING_SERVICE_BOOTCAMP_TRAINING_TASK_DURATION_MINUTES;
   return Number(task.durationMinutes || task.minutes || 0) || BOARDING_SERVICE_DEFAULT_TASK_DURATION_MINUTES;
 }
 
@@ -333,6 +336,8 @@ function boardingServiceTaskStartTimeForUnit(record = {}, stay = {}, task = {}, 
     }
     return "09:00";
   }
+  if (typeof boardingServiceTaskIsBootcampTraining === "function" && boardingServiceTaskIsBootcampTraining(task)) return BOARDING_SERVICE_BOOTCAMP_TRAINING_TASK_START_TIME;
+  if (task.defaultStartTime) return String(task.defaultStartTime || "09:00").slice(0, 5);
   const eligibleDates = typeof boardingServiceEligibleDates === "function" ? boardingServiceEligibleDates(record, stay) : [todayDate()];
   const wave = Math.floor((Math.max(1, Number(unitIndex || 1)) - 1) / Math.max(1, eligibleDates.length || 1));
   return BOARDING_SERVICE_TASK_START_TIMES[wave % BOARDING_SERVICE_TASK_START_TIMES.length] || "09:00";
