@@ -84,6 +84,7 @@ var impersonationSession = null;
 var supabaseClient = null;
 var recordCache = {};
 var recordRevision = {};
+var localStorageQuotaCleanupAttempted = false;
 var boardingDogConsolidationCache = { signature: "", result: [] };
 var remoteLoadPromise = null;
 var remoteLoadActiveTypes = new Set();
@@ -847,10 +848,105 @@ function cloneCachedRecord(record) {
   return record && typeof record === "object" ? { ...record } : record;
 }
 
+function isQuotaExceededError(error) {
+  const name = String(error?.name || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    error?.code === 22 ||
+    error?.code === 1014 ||
+    name.includes("quota") ||
+    name.includes("ns_error_dom_quota_reached") ||
+    message.includes("quota") ||
+    message.includes("exceeded")
+  );
+}
+
+function clearOptionalLocalStorageCaches() {
+  try {
+    [
+      PROFILE_PHOTO_CACHE_META_KEY,
+      SIGNED_MEDIA_URL_STORAGE_KEY,
+      stateKeys.tableConfig,
+      stateKeys.tableSort,
+      stateKeys.boardingRequestStatusFilter,
+      stateKeys.boardingRequestsDetailsOpen,
+      "cth-task-scheduler-color",
+      "cth-task-scheduler-view",
+    ].filter(Boolean).forEach((key) => localStorage.removeItem(key));
+
+    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+      const key = localStorage.key(index);
+      if (!key) continue;
+      if (
+        key.startsWith("cth-signed-media-") ||
+        key.startsWith("cth-profile-photo-cache") ||
+        key.startsWith("cth-table-") ||
+        key.startsWith("cth-task-scheduler-")
+      ) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch (cleanupError) {
+    console.warn("Could not clear optional local browser caches.", cleanupError);
+  }
+
+  signedMediaUrlCache.clear();
+  profilePhotoFailureCache.clear();
+  profilePhotoBlobUrlCache.forEach((entry) => {
+    if (entry?.url) URL.revokeObjectURL(entry.url);
+  });
+  profilePhotoBlobUrlCache.clear();
+
+  try {
+    if (profilePhotoCacheSupported()) {
+      caches.delete(PROFILE_PHOTO_CACHE_NAME).catch((error) => {
+        console.warn("Could not clear browser profile photo cache.", error);
+      });
+    }
+  } catch (cacheError) {
+    console.warn("Could not inspect browser profile photo cache.", cacheError);
+  }
+}
+
+function safeLocalStorageSetItem(key, raw, options = {}) {
+  if (!key) return false;
+  try {
+    localStorage.setItem(key, raw);
+    return true;
+  } catch (error) {
+    if (isQuotaExceededError(error) && !localStorageQuotaCleanupAttempted) {
+      localStorageQuotaCleanupAttempted = true;
+      clearOptionalLocalStorageCaches();
+      try {
+        localStorage.setItem(key, raw);
+        return true;
+      } catch (retryError) {
+        if (options.quiet !== true) {
+          console.warn("Local browser storage is full after cache cleanup.", retryError);
+        }
+        return false;
+      }
+    }
+    if (options.quiet !== true) {
+      console.warn("Local browser storage write failed.", error);
+    }
+    return false;
+  }
+}
+
 function readRecords(type) {
   const key = stateKeys[type];
-  const raw = localStorage.getItem(key) || "[]";
   const cached = recordCache[type];
+  if (!key) return [];
+  let raw = "[]";
+  try {
+    raw = localStorage.getItem(key) || "[]";
+  } catch (error) {
+    if (cached?.records) return cached.records.map(cloneCachedRecord);
+    console.warn("Local browser storage read failed.", error);
+    return [];
+  }
+  if (cached?.memoryOnly && Array.isArray(cached.records)) return cached.records.map(cloneCachedRecord);
   if (cached?.raw === raw) return cached.records.map(cloneCachedRecord);
   let parsed = [];
   try {
@@ -921,13 +1017,19 @@ function writeRecords(type, records) {
   const compactedRecords = compactRecordsForStorage(records);
   try {
     const raw = JSON.stringify(compactedRecords);
-    localStorage.setItem(stateKeys[type], raw);
-    recordCache[type] = { raw, records: compactedRecords.map(cloneCachedRecord) };
+    const storageSaved = safeLocalStorageSetItem(stateKeys[type], raw, { quiet: true });
+    if (!storageSaved) {
+      console.warn(
+        "Record cache for " + type + " is using memory only because this device's browser storage is full.",
+      );
+    }
+    recordCache[type] = { raw, records: compactedRecords.map(cloneCachedRecord), memoryOnly: !storageSaved };
     recordRevision[type] = (recordRevision[type] || 0) + 1;
     if (type === "boardingDog" || type === "customerDog") invalidateBoardingDogConsolidationCache();
     return compactedRecords;
   } catch (error) {
-    showToast("This record could not be saved. Try a smaller file or remove large uploads.");
+    console.warn("This record could not be cached locally.", error);
+    if (isQuotaExceededError(error)) return compactedRecords;
     throw error;
   }
 }
@@ -3918,7 +4020,7 @@ async function loadRemoteRecords(options = {}) {
       remoteTypes.filter((type) => type !== TASK_TEMPLATE_RECORD_TYPE).forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
       if (currentUser) {
         currentUser.role = roleForAccount(currentUser);
-        localStorage.setItem(stateKeys.session, JSON.stringify(currentUser));
+        safeLocalStorageSetItem(stateKeys.session, JSON.stringify(currentUser), { quiet: true });
       }
       if (options.syncCustomerAccessProfiles === true) await syncMissingCustomerAccessProfiles();
       if (options.syncLegacyDogModel === true) await syncLegacyDogModelRecords();
