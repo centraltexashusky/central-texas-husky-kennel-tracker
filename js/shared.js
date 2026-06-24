@@ -68,6 +68,7 @@ var helperKey = $("#helperKey");
 var loginStatus = $("#loginStatus");
 var loginHelp = $("#loginHelp");
 var syncNowButton = $("#syncNowButton");
+var clearLocalCacheButton = $("#clearLocalCacheButton");
 var headerUserName = $("#headerUserName");
 var headerLogoutButton = $("#headerLogoutButton");
 var syncIntervalId = null;
@@ -93,6 +94,9 @@ var remoteLoadQueuedRender = false;
 var remoteLoadQueuedPageId = "";
 var lastRemoteRecordsSignatureByRequest = new Map();
 var activePageRemoteLoadTimer = null;
+var appHistoryNavigationInProgress = false;
+var appSurfaceHistoryStack = [];
+var activePageLoadingTargets = new Set();
 var dailyTaskCompletionSyncAvailable = true;
 var notificationReadSyncAvailable = true;
 var detailDialogContext = null;
@@ -1571,6 +1575,71 @@ function efficiencyPerfEnd(mark = {}) {
   console.info(\`[efficiency] \${mark.label}: \${elapsed}ms\`);
 }
 
+function appInlineLoaderHtml(label = "Loading") {
+  return \`<div class="app-inline-loader" role="status" aria-live="polite"><img src="assets/icons/arkinlight-husky-logo-transparent.png?v=20260606-app-boot-loader-animated-dots" alt="" aria-hidden="true" /><span>\${escapeHtml(label)}<span class="loading-dots" aria-hidden="true">...</span></span></div>\`;
+}
+
+function setAppPageLoading(pageId = activePageId(), loading = false, label = "Loading") {
+  const page = document.getElementById(normalizePageId(pageId) || activePageId());
+  if (!page?.classList.contains("page-view")) return;
+  const key = page.id;
+  if (loading) activePageLoadingTargets.add(key);
+  else activePageLoadingTargets.delete(key);
+  page.classList.toggle("is-page-loading", activePageLoadingTargets.has(key));
+  let loader = page.querySelector(":scope > .app-inline-loader");
+  if (activePageLoadingTargets.has(key)) {
+    if (!loader) {
+      page.insertAdjacentHTML("afterbegin", appInlineLoaderHtml(label));
+      loader = page.querySelector(":scope > .app-inline-loader");
+    }
+    const labelEl = loader?.querySelector("span");
+    if (labelEl) labelEl.innerHTML = \`\${escapeHtml(label)}<span class="loading-dots" aria-hidden="true">...</span>\`;
+    if (loader) loader.hidden = false;
+  } else if (loader) {
+    loader.remove();
+  }
+}
+
+function clearLocalRecordCaches() {
+  const types = uniqueRemoteRecordTypes([...recordTypes(), TASK_TEMPLATE_RECORD_TYPE]);
+  types.forEach((type) => {
+    const key = stateKeys[type];
+    if (!key) return;
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn(\`Could not clear local \${type} cache.\`, error);
+    }
+    delete recordCache[type];
+    recordRevision[type] = (recordRevision[type] || 0) + 1;
+  });
+  invalidateBoardingDogConsolidationCache();
+  lastRemoteRecordsSignature = null;
+  lastRemoteRecordsSignatureByRequest.clear();
+}
+
+async function clearLocalAppCache() {
+  const pageId = activePageId();
+  setAppPageLoading(pageId, true, "Clearing local cache");
+  try {
+    clearLocalRecordCaches();
+    clearOptionalLocalStorageCaches();
+    localStorageQuotaCleanupAttempted = false;
+    renderAllRecords({ activeOnly: true });
+    if (helperIsLoggedIn() && supabaseClient && !localTestMode) {
+      await loadRemoteRecords({ render: true, pageId });
+      showToast("Local cache cleared and current page reloaded.");
+    } else {
+      showToast("Local cache cleared on this device.");
+    }
+  } catch (error) {
+    console.warn("Local cache clear failed.", error);
+    showDetailDialog("Cache Not Cleared", \`<p>The local cache could not be cleared: \${escapeHtml(error.message || String(error))}</p>\`);
+  } finally {
+    setAppPageLoading(pageId, false);
+  }
+}
+
 // Extracted to js/auth.js: cachedSupabaseSessionUser
 
 
@@ -2605,6 +2674,7 @@ function updateHeaderUser() {
   headerUserName.textContent = impersonating ? \`Impersonating \${currentUser?.name || currentUser?.email || "user"}\` : currentUser?.name || "Not signed in";
   modeLabel.textContent = currentUser ? (impersonating ? \`Admin view as \${roleLabel(currentUser.role)}\` : localTestMode ? "Local test mode" : \`\${roleLabel(currentUser.role)} account\`) : "Sign in to continue";
   headerLogoutButton.hidden = !currentUser;
+  if (clearLocalCacheButton) clearLocalCacheButton.hidden = !currentUser;
   headerLogoutButton.textContent = impersonating ? "Stop Impersonation" : "Log out";
   headerLogoutButton.classList.toggle("stop-impersonation-button", impersonating);
   document.body.classList.toggle("role-helper", currentRole() === "helper");
@@ -2657,6 +2727,123 @@ function activePageId() {
   return $(".page-view.is-active")?.id || "loginPage";
 }
 
+function pageUrlForHistory(pageId = activePageId()) {
+  const normalized = normalizePageId(pageId);
+  const hash = normalized && normalized !== "loginPage" ? \`#\${encodeURIComponent(normalized)}\` : "";
+  return \`\${window.location.pathname}\${window.location.search}\${hash}\`;
+}
+
+function appHistoryState(pageId = activePageId(), surface = "") {
+  return { snuggleStay: true, pageId: normalizePageId(pageId), surface };
+}
+
+function updateAppPageHistory(pageId = activePageId(), mode = "replace") {
+  if (mode === "none" || appHistoryNavigationInProgress) return;
+  const normalized = normalizePageId(pageId);
+  const state = appHistoryState(normalized);
+  const url = pageUrlForHistory(normalized);
+  try {
+    appSurfaceHistoryStack = [];
+    if (mode === "push" && window.location.href !== new URL(url, window.location.href).href) {
+      window.history.pushState(state, document.title, url);
+    } else {
+      window.history.replaceState(state, document.title, url);
+    }
+  } catch (error) {
+    console.warn("Could not update app navigation history.", error);
+  }
+}
+
+function pushAppSurfaceHistory(surface = "") {
+  if (!surface || !appInitialized || appHistoryNavigationInProgress) return;
+  const pageId = activePageId();
+  const currentState = window.history.state || {};
+  if (currentState.snuggleStay && currentState.pageId === pageId && currentState.surface === surface) return;
+  try {
+    window.history.pushState(appHistoryState(pageId, surface), document.title, pageUrlForHistory(pageId));
+    appSurfaceHistoryStack.push(surface);
+  } catch (error) {
+    console.warn("Could not add app panel history.", error);
+  }
+}
+
+function removeAppSurfaceFromStack(surface = "") {
+  const index = surface ? appSurfaceHistoryStack.lastIndexOf(surface) : appSurfaceHistoryStack.length - 1;
+  if (index >= 0) appSurfaceHistoryStack.splice(index, 1);
+}
+
+function closeAppSurfaceFromUi(surface = "", closeFallback = null) {
+  if (!surface || appHistoryNavigationInProgress) {
+    if (typeof closeFallback === "function") closeFallback();
+    return;
+  }
+  const currentState = window.history.state || {};
+  if (currentState.snuggleStay && currentState.surface === surface && appSurfaceHistoryStack.includes(surface)) {
+    window.history.back();
+    return;
+  }
+  removeAppSurfaceFromStack(surface);
+  if (typeof closeFallback === "function") closeFallback();
+}
+
+function closeTopAppSurfaceFromHistory() {
+  const mobileMoreSheet = $("#mobileMoreSheet");
+  if (mobileMoreSheet && !mobileMoreSheet.hidden) {
+    setMobileMoreOpen(false);
+    return true;
+  }
+  const mediaDialog = $("#mediaDialog");
+  if (mediaDialog?.open) {
+    mediaDialog.close();
+    return true;
+  }
+  const detailDialog = $("#detailDialog");
+  if (detailDialog?.open) {
+    if ($("#customerDogForm")?.parentElement?.id === "customerDogPopupMount") closeCustomerDogModal();
+    else detailDialog.close();
+    return true;
+  }
+  const bookingDialog = $("#bookingConfirmDialog");
+  if (bookingDialog?.open) {
+    bookingDialog.close();
+    return true;
+  }
+  const ownedDogDetail = $("#ownedDogDetail");
+  if (ownedDogDetail && !ownedDogDetail.hidden) {
+    closeOwnedDogModal();
+    return true;
+  }
+  const boardingDogDetail = $("#boardingDogDetail");
+  if (boardingDogDetail && !boardingDogDetail.hidden) {
+    closeBoardingDogModal();
+    return true;
+  }
+  const serviceEditorPanel = $("#serviceEditorPanel");
+  if (serviceEditorPanel && !serviceEditorPanel.hidden) {
+    serviceEditorPanel.hidden = true;
+    return true;
+  }
+  if (activePageId() === "taskSchedulerPage" && typeof taskSchedulerPanelOpen !== "undefined" && taskSchedulerPanelOpen && typeof closeTaskSchedulerPanel === "function") {
+    closeTaskSchedulerPanel();
+    return true;
+  }
+  return false;
+}
+
+function handleAppHistoryPopState() {
+  if (appSurfaceHistoryStack.length) {
+    appSurfaceHistoryStack.pop();
+    if (closeTopAppSurfaceFromHistory()) return;
+  }
+  const nextPage = pageIdFromHash() || (helperIsLoggedIn() ? defaultPageForRole(currentRole()) : "loginPage");
+  appHistoryNavigationInProgress = true;
+  try {
+    switchPage(nextPage, { history: "none", scroll: false });
+  } finally {
+    appHistoryNavigationInProgress = false;
+  }
+}
+
 function navigationPageEntries() {
   return $$(".side-nav .nav-button[data-page]:not([data-settings-root])").map((button) => ({
     label: button.textContent.trim(),
@@ -2699,6 +2886,7 @@ function setMobileMoreOpen(open) {
   if (!sheet || !backdrop || !button) return;
   const shouldOpen = Boolean(open && mobileMoreEntries().length);
   if (shouldOpen) renderMobileMoreMenu();
+  if (shouldOpen && sheet.hidden) pushAppSurfaceHistory("mobile-more");
   sheet.hidden = !shouldOpen;
   backdrop.hidden = !shouldOpen;
   button.setAttribute("aria-expanded", String(shouldOpen));
@@ -3953,6 +4141,8 @@ async function loadRemoteRecords(options = {}) {
     return;
   }
 
+  const loadingPageId = options.pageId || activePageId();
+  const showPageLoader = options.render !== false;
   if (remoteLoadPromise) {
     const missingTypes = requestedRemoteTypes.filter((type) => !remoteLoadActiveTypes.has(type));
     if (missingTypes.length) {
@@ -3969,6 +4159,7 @@ async function loadRemoteRecords(options = {}) {
   remoteLoadInProgress = true;
   remoteLoadStartedAt = Date.now();
   if (syncNowButton) syncNowButton.disabled = true;
+  if (showPageLoader) setAppPageLoading(loadingPageId, true, "Syncing records");
 
   let loadPromise = null;
   loadPromise = (async () => {
@@ -4038,6 +4229,7 @@ async function loadRemoteRecords(options = {}) {
       remoteLoadStartedAt = 0;
       lastRemoteLoadFinishedAt = Date.now();
       if (syncNowButton) syncNowButton.disabled = false;
+      if (showPageLoader) setAppPageLoading(loadingPageId, false);
       efficiencyPerfEnd(mark);
       flushQueuedRemoteRecordLoad();
     }
@@ -4963,7 +5155,10 @@ function showDetailDialog(title, html, context = null, options = {}) {
   } else {
     completeButton.hidden = true;
   }
-  if (dialog && !dialog.open) dialog.showModal();
+  if (dialog && !dialog.open) {
+    dialog.showModal();
+    pushAppSurfaceHistory(options.historySurface || "detail-dialog");
+  }
 }
 
 function showMediaDialog(src, type, name, context = null) {
@@ -4977,6 +5172,7 @@ function showMediaDialog(src, type, name, context = null) {
   if (!src) {
     $("#mediaDialogBody").innerHTML = \`<p>This file was not uploaded to the database. The maximum file size is \${MAX_MEDIA_UPLOAD_MB} MB.</p>\${name ? \`<p><strong>Saved file name:</strong> \${escapeHtml(name)}</p>\` : ""}\`;
     $("#mediaDialog").showModal();
+    pushAppSurfaceHistory("media-dialog");
     return;
   }
   const safeSrc = escapeHtml(src || "");
@@ -4992,6 +5188,7 @@ function showMediaDialog(src, type, name, context = null) {
           ? \`<iframe class="media-iframe" src="\${safeSrc}" title="\${safeName}"></iframe><a href="\${safeSrc}" target="_blank" rel="noopener">Open in a new tab</a>\`
           : \`<p>This file type cannot be previewed here.</p>\`) + openLink;
   $("#mediaDialog").showModal();
+  pushAppSurfaceHistory("media-dialog");
 }
 
 function updateMediaZoom() {
@@ -7470,7 +7667,11 @@ function refreshBoardingDogFileViews(record = activeBoardingDog() || {}) {
 // Extracted to js/daily.js: openOwnedDog
 
 
-function closeOwnedDogModal() {
+function closeOwnedDogModal(options = {}) {
+  if (!options.skipHistory) {
+    closeAppSurfaceFromUi("owned-dog-modal", () => closeOwnedDogModal({ skipHistory: true }));
+    return;
+  }
   const ownedDogDetail = $("#ownedDogDetail");
   if (ownedDogDetail) ownedDogDetail.hidden = true;
   document.body.classList.remove("owned-dog-modal-open");
@@ -7485,7 +7686,11 @@ function closeOwnedDogModal() {
 // Extracted to js/boarding.js: openBoardingDog
 
 
-function closeBoardingDogModal() {
+function closeBoardingDogModal(options = {}) {
+  if (!options.skipHistory) {
+    closeAppSurfaceFromUi("boarding-dog-modal", () => closeBoardingDogModal({ skipHistory: true }));
+    return;
+  }
   const boardingDogDetail = $("#boardingDogDetail");
   if (boardingDogDetail) boardingDogDetail.hidden = true;
   document.body.classList.remove("boarding-dog-modal-open");
@@ -9449,6 +9654,7 @@ function showBookingConfirmDialog(estimate) {
     </div>
   \`;
   $("#bookingConfirmDialog").showModal();
+  pushAppSurfaceHistory("booking-confirm-dialog");
 }
 
 // Extracted to js/customer.js: submitPendingCustomerBooking
@@ -9514,6 +9720,7 @@ function renderSharedRecords() {
 }
 
 function renderActivePageRecords(pageId = activePageId()) {
+  const mark = efficiencyPerfStart(\`renderActivePageRecords:\${pageId}\`);
   const renderers = {
     dashboardPage: () => renderDashboard(),
     dailyPage: () => renderDailyTaskLists(),
@@ -9537,11 +9744,14 @@ function renderActivePageRecords(pageId = activePageId()) {
   };
   renderers[pageId]?.();
   renderSharedRecords();
+  efficiencyPerfEnd(mark);
 }
 
 function renderAllRecords(options = {}) {
+  const mark = efficiencyPerfStart(options.activeOnly ? "renderAllRecords:activeOnly" : "renderAllRecords:full");
   if (options.activeOnly) {
     renderActivePageRecords();
+    efficiencyPerfEnd(mark);
     return;
   }
   renderDailyTaskLists();
@@ -9567,6 +9777,7 @@ function renderAllRecords(options = {}) {
   renderCustomerFiles();
   renderDemoSubmissions();
   renderSharedRecords();
+  efficiencyPerfEnd(mark);
 }
 
 // === MODULE: SEARCH ===
@@ -10020,9 +10231,11 @@ function initEvents() {
   });
   window.addEventListener("focus", () => scheduleAppResumeRecovery("focus"));
   window.addEventListener("online", () => scheduleAppResumeRecovery("online"));
+  window.addEventListener("popstate", handleAppHistoryPopState);
   window.addEventListener("hashchange", () => {
+    if (appHistoryNavigationInProgress) return;
     const pageId = pageIdFromHash();
-    if (pageId && pageId !== activePageId()) switchPage(pageId);
+    if (pageId && pageId !== activePageId()) switchPage(pageId, { history: "none" });
   });
   $("#mobileBottomNav").addEventListener("click", (event) => {
     const button = event.target.closest(".mobile-bottom-nav-button");
@@ -10031,15 +10244,15 @@ function initEvents() {
       setMobileMoreOpen($("#mobileMoreSheet")?.hidden);
       return;
     }
-    if (button.dataset.page) switchPage(button.dataset.page);
+    if (button.dataset.page) switchPage(button.dataset.page, { history: "push" });
   });
   $("#mobileMoreMenuList").addEventListener("click", (event) => {
     const button = event.target.closest(".mobile-more-menu-item[data-page], .mobile-more-item[data-page]");
     if (!button) return;
-    switchPage(button.dataset.page);
+    switchPage(button.dataset.page, { history: "push" });
   });
-  $("#mobileMoreBackdrop").addEventListener("click", () => setMobileMoreOpen(false));
-  $("#mobileMoreCloseButton").addEventListener("click", () => setMobileMoreOpen(false));
+  $("#mobileMoreBackdrop").addEventListener("click", () => closeAppSurfaceFromUi("mobile-more", () => setMobileMoreOpen(false)));
+  $("#mobileMoreCloseButton").addEventListener("click", () => closeAppSurfaceFromUi("mobile-more", () => setMobileMoreOpen(false)));
   $("#globalQuickSearch")?.addEventListener("input", renderGlobalSearchResults);
   $("#globalSearchResults")?.addEventListener("click", (event) => {
     const button = event.target.closest(".global-search-result");
@@ -10106,9 +10319,10 @@ function initEvents() {
     }
   });
   $$(".nav-button").forEach((button) => {
-    button.addEventListener("click", () => switchPage(button.dataset.page));
+    button.addEventListener("click", () => switchPage(button.dataset.page, { history: "push" }));
   });
-  syncNowButton.addEventListener("click", loadRemoteRecords);
+  syncNowButton.addEventListener("click", () => loadRemoteRecords({ render: true, pageId: activePageId() }));
+  clearLocalCacheButton?.addEventListener("click", clearLocalAppCache);
   headerLogoutButton.addEventListener("click", clearHelper);
   $("#dashboardDate").addEventListener("change", () => {
     $("#calendarNoteForm").elements.noteDate.value = $("#dashboardDate").value || todayDate();
@@ -10403,10 +10617,18 @@ function initEvents() {
   });
   $("#closeDetailDialog").addEventListener("click", () => {
     if ($("#customerDogForm")?.parentElement?.id === "customerDogPopupMount") {
-      closeCustomerDogModal();
+      closeAppSurfaceFromUi("detail-dialog", closeCustomerDogModal);
       return;
     }
-    $("#detailDialog").close();
+    closeAppSurfaceFromUi("detail-dialog", () => $("#detailDialog").close());
+  });
+  $("#detailDialog").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    if ($("#customerDogForm")?.parentElement?.id === "customerDogPopupMount") {
+      closeAppSurfaceFromUi("detail-dialog", closeCustomerDogModal);
+      return;
+    }
+    closeAppSurfaceFromUi("detail-dialog", () => $("#detailDialog").close());
   });
   $("#detailDialog").addEventListener("close", restoreCustomerDogFormHome);
   $("#detailDialogBody").addEventListener("submit", async (event) => {
@@ -11148,7 +11370,11 @@ function initEvents() {
     setOwnedFormLocked(false);
     showToast("Dog record opened for editing.");
   });
-  $("#closeMediaDialog").addEventListener("click", () => $("#mediaDialog").close());
+  $("#closeMediaDialog").addEventListener("click", () => closeAppSurfaceFromUi("media-dialog", () => $("#mediaDialog").close()));
+  $("#mediaDialog").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeAppSurfaceFromUi("media-dialog", () => $("#mediaDialog").close());
+  });
   $("#replaceOwnedDogPhotoButton")?.addEventListener("click", () => {
     const dogId = $("#replaceOwnedDogPhotoButton")?.dataset.id || "";
     const dog = readRecords("ownedDog").find((record) => record.id === dogId && !record.removed);
@@ -12783,7 +13009,7 @@ function initEvents() {
   });
   $("#cancelBookingRequestButton").addEventListener("click", () => {
     pendingCustomerBooking = null;
-    $("#bookingConfirmDialog").close();
+    closeAppSurfaceFromUi("booking-confirm-dialog", () => $("#bookingConfirmDialog").close());
   });
   $("#confirmBookingRequestButton").addEventListener("click", submitPendingCustomerBooking);
   $("#resetCustomerBookingButton").addEventListener("click", resetCustomerBookingForm);
@@ -12939,8 +13165,9 @@ function scheduleActivePageRemoteLoad(pageId = activePageId()) {
   }, 80);
 }
 
-function switchPage(pageId) {
+function switchPage(pageId, options = {}) {
   pageId = normalizePageId(pageId);
+  const historyMode = options.history || "replace";
   if (!pageAllowed(pageId)) {
     showToast(helperIsLoggedIn() ? "Your login does not have access to that page." : "Sign in first.");
     const fallback = helperIsLoggedIn() ? defaultPageForRole(currentRole()) : "loginPage";
@@ -12948,10 +13175,9 @@ function switchPage(pageId) {
   }
   if (helperIsLoggedIn() && pageId !== "loginPage") {
     localStorage.setItem(stateKeys.lastPage, pageId);
-    const nextHash = \`#\${encodeURIComponent(pageId)}\`;
-    if (window.location.hash !== nextHash) window.history.replaceState({}, document.title, \`\${window.location.pathname}\${window.location.search}\${nextHash}\`);
-  } else if (pageId === "loginPage" && window.location.hash && pageIdFromHash()) {
-    window.history.replaceState({}, document.title, \`\${window.location.pathname}\${window.location.search}\`);
+    updateAppPageHistory(pageId, historyMode);
+  } else if (pageId === "loginPage") {
+    updateAppPageHistory(pageId, historyMode);
   }
   $$(".nav-button").forEach((item) => {
     const exact = normalizePageId(item.dataset.page || "") === pageId;
@@ -12972,7 +13198,7 @@ function switchPage(pageId) {
   }
   if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
   if (pageId === "ourDogsPage") window.setTimeout(() => $("#ownedDogSearch")?.focus(), 100);
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (options.scroll !== false) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function ensureAppShellVisible(reason = "") {

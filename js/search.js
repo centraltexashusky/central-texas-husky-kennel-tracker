@@ -54,7 +54,7 @@ function openGlobalSearchResult(button) {
   const type = button.dataset.type;
   const id = button.dataset.id;
   const pageId = button.dataset.page;
-  switchPage(pageId);
+  switchPage(pageId, { history: "push" });
   if (type === "ownedDog") {
     const record = readRecords("ownedDog").find((item) => item.id === id);
     if (record) openOwnedDogOverviewPopup(record);

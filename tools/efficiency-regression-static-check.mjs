@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260619-scheduler-milestones-complete",
+    mustInclude: "20260623-efficiency-guardrails",
     message: "production cache keys must be bumped.",
   },
   {

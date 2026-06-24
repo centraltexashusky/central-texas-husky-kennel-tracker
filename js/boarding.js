@@ -5066,6 +5066,7 @@ function openBoardingDog(record = {}) {
     document.body.appendChild(boardingDogDetail);
   }
   boardingDogDetail.hidden = false;
+  if (typeof pushAppSurfaceHistory === "function") pushAppSurfaceHistory("boarding-dog-modal");
   document.body.classList.add("boarding-dog-modal-open");
   boardingDogDetail.scrollTop = 0;
   $("#boardingDogDetailTitle").textContent = record.id ? \`Edit \${record.dogName || "Boarding Dog"}\` : "Add Boarding Dog";

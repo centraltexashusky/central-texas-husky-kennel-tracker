@@ -1609,6 +1609,7 @@ function openService(record = {}) {
   const panel = $("#serviceEditorPanel");
   if (panel && panel.parentElement !== document.body) document.body.appendChild(panel);
   if (panel) panel.hidden = false;
+  if (typeof pushAppSurfaceHistory === "function") pushAppSurfaceHistory("service-editor-panel");
   const form = $("#serviceForm");
   form.reset();
   form.dataset.mode = formRecord.id ? "edit" : "create";
@@ -1629,7 +1630,11 @@ function openService(record = {}) {
   $("#removeServiceButton").hidden = !formRecord.id;
 }
 
-function closeServiceModal() {
+function closeServiceModal(options = {}) {
+  if (!options.skipHistory && typeof closeAppSurfaceFromUi === "function") {
+    closeAppSurfaceFromUi("service-editor-panel", () => closeServiceModal({ skipHistory: true }));
+    return;
+  }
   const form = $("#serviceForm");
   if (form) form.dataset.mode = "create";
   $("#serviceEditorPanel").hidden = true;

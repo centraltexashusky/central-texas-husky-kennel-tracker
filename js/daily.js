@@ -816,6 +816,7 @@ function openOwnedDog(record = {}) {
     document.body.appendChild(ownedDogDetail);
   }
   ownedDogDetail.hidden = false;
+  if (typeof pushAppSurfaceHistory === "function") pushAppSurfaceHistory("owned-dog-modal");
   document.body.classList.add("owned-dog-modal-open");
   ownedDogDetail.scrollTop = 0;
   selectedDogPhotos.owned = null;

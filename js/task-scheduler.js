@@ -860,9 +860,14 @@ function setTaskSchedulerPanel(mode = "new", id = "", open = true) {
   taskSchedulerEditingTaskId = mode === "edit" ? id : "";
   if (mode === "detail") taskSchedulerSelectedTaskId = id || taskSchedulerSelectedTaskId;
   taskSchedulerPanelOpen = open || taskSchedulerIsDesktop();
+  if (open && typeof pushAppSurfaceHistory === "function") pushAppSurfaceHistory("task-scheduler-panel");
 }
 
-function closeTaskSchedulerPanel() {
+function closeTaskSchedulerPanel(options = {}) {
+  if (!options.skipHistory && typeof closeAppSurfaceFromUi === "function") {
+    closeAppSurfaceFromUi("task-scheduler-panel", () => closeTaskSchedulerPanel({ skipHistory: true }));
+    return;
+  }
   taskSchedulerPanelOpen = false;
   taskSchedulerEditingTaskId = "";
   taskSchedulerDraftTask = null;
