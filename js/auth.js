@@ -13,6 +13,10 @@ function roleForAccount(account = {}) {
   return "customer";
 }
 
+function isStaffRole(role = currentRole()) {
+  return ["admin", "helper", "staff"].includes(role);
+}
+
 function userFromSupabase(supabaseUser) {
   if (!supabaseUser?.email) return null;
   const email = supabaseUser.email.toLowerCase();
@@ -291,12 +295,13 @@ function pageAllowed(pageId) {
   if (!page?.classList.contains("page-view")) return false;
   const button = navigationButtonForPage(pageId);
   const roles = (button?.dataset.roles || "helper,admin").split(",");
-  return helperIsLoggedIn() && roles.includes(currentRole());
+  const role = currentRole();
+  return helperIsLoggedIn() && (roles.includes(role) || (role === "staff" && roles.includes("helper")));
 }
 
 function defaultPageForRole(role = currentRole()) {
   if (role === "customer") return "customerPage";
-  if (role === "helper" || role === "admin") return "dashboardPage";
+  if (isStaffRole(role)) return "dashboardPage";
   return "loginPage";
 }
 

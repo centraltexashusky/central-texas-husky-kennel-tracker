@@ -328,7 +328,7 @@ function boardingCancellationAuditHtml(record = {}, stay = {}, options = {}) {
 
 function shouldPromptBoardingDecline(record = {}, nextStatus = "", options = {}) {
   if (nextStatus !== "Cancelled" || options.declineSubmitted || currentRole() === "customer") return false;
-  if (!["admin", "helper"].includes(currentRole())) return false;
+  if (!isStaffRole()) return false;
   const targetStay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) : boardingStatusTargetStay(record, nextStatus, options);
   const status = targetStay ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
   const customerRequest = Boolean(record.customerRequest || targetStay?.source === "customer-request" || targetStay?.source === "customer");

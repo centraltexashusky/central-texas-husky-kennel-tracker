@@ -202,10 +202,10 @@ var defaultTaskTabMeta = [
 var mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
 var mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 var mobileMoreMenuItems = [
-  { pageId: "timesheetPage", label: "Timesheet", roles: ["helper", "admin"] },
-  { pageId: "taskSchedulerPage", label: "Task Scheduling", roles: ["helper", "admin"] },
-  { pageId: "maintenancePage", label: "Maintenance", roles: ["helper", "admin"] },
-  { pageId: "requestsPage", label: "Requests", roles: ["helper", "admin"] },
+  { pageId: "timesheetPage", label: "Timesheet", roles: ["helper", "staff", "admin"] },
+  { pageId: "taskSchedulerPage", label: "Task Scheduling", roles: ["helper", "staff", "admin"] },
+  { pageId: "maintenancePage", label: "Maintenance", roles: ["helper", "staff", "admin"] },
+  { pageId: "requestsPage", label: "Requests", roles: ["helper", "staff", "admin"] },
   { pageId: "financialsPage", label: "Financials", roles: ["admin"] },
   { pageId: "settingsUsersPage", label: "Users", roles: ["admin"] },
   { pageId: "settingsKennelLocationsPage", label: "Kennel Locations", roles: ["admin"] },
@@ -1490,7 +1490,7 @@ async function ensureCustomerAccessProfile(source = {}, options = {}) {
 
 async function syncMissingCustomerAccessProfiles() {
   if (localTestMode || !supabaseClient || customerProfileSyncInProgress) return;
-  if (!["admin", "helper"].includes(currentRole())) return;
+  if (!isStaffRole()) return;
   customerProfileSyncInProgress = true;
   try {
     const sources = [];
@@ -2677,7 +2677,7 @@ function updateHeaderUser() {
   if (clearLocalCacheButton) clearLocalCacheButton.hidden = !currentUser;
   headerLogoutButton.textContent = impersonating ? "Stop Impersonation" : "Log out";
   headerLogoutButton.classList.toggle("stop-impersonation-button", impersonating);
-  document.body.classList.toggle("role-helper", currentRole() === "helper");
+  document.body.classList.toggle("role-helper", currentRole() === "helper" || currentRole() === "staff");
   document.body.classList.toggle("role-admin", currentRole() === "admin");
   document.body.classList.toggle("role-customer", currentRole() === "customer");
   document.body.classList.toggle("is-impersonating", impersonating);
@@ -2944,7 +2944,7 @@ function updateNavigationAccess() {
 
 function roleLabel(role = "") {
   if (role === "admin") return "Admin";
-  if (role === "helper") return "Staff";
+  if (role === "helper" || role === "staff") return "Staff";
   return "Customer";
 }
 
@@ -6571,7 +6571,7 @@ function buildLegacyDogModelMigration() {
 }
 
 async function syncLegacyDogModelRecords() {
-  if (localTestMode || !supabaseClient || !["admin", "helper"].includes(currentRole())) return null;
+  if (localTestMode || !supabaseClient || !isStaffRole()) return null;
   const migration = buildLegacyDogModelMigration();
   let savedCount = 0;
   for (const [type, payload] of migration.records) {
@@ -8563,7 +8563,7 @@ function canRemoveCalendarNote(note) {
 }
 
 function canCreateCalendarNote() {
-  return ["helper", "admin"].includes(currentRole());
+  return isStaffRole();
 }
 
 function renderCalendarNotes() {
@@ -9879,12 +9879,12 @@ async function notifyIfNeeded(record = {}, eventName = "") {
       smsResult: data?.smsResult || "",
       sentAt: new Date().toISOString(),
     });
-    if (["admin", "helper"].includes(currentRole())) await sendPayload(updated);
+    if (isStaffRole()) await sendPayload(updated);
     renderNotifications();
     return updated;
   } catch (error) {
     const failed = upsertRecord("notificationLog", { ...notification, deliveryStatus: "in-app only", deliveryError: error.message || String(error) });
-    if (["admin", "helper"].includes(currentRole())) await sendPayload(failed);
+    if (isStaffRole()) await sendPayload(failed);
     renderNotifications();
     return failed;
   }

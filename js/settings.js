@@ -205,7 +205,7 @@ function settingsUsers() {
 }
 
 function settingsUserRoleRank(role = "") {
-  return { customer: 1, helper: 2, admin: 3 }[role] || 0;
+  return { customer: 1, helper: 2, staff: 2, admin: 3 }[role] || 0;
 }
 
 function canonicalSettingsUser(users = []) {
@@ -784,7 +784,7 @@ function renderCfoNotes() {
 
 function settingsUserTabFor(user = {}) {
   if (user.role === "admin") return "admin";
-  if (user.role === "helper") return "staff";
+  if (user.role === "helper" || user.role === "staff") return "staff";
   if (userMemberFlag(user)) return "member";
   return "customer";
 }
@@ -1421,7 +1421,7 @@ function settingsUserPopupHtml(user = {}) {
       <div class="field-grid">
         <label>Name<input type="text" name="name" required value="\${escapeHtml(user.name || "")}" /></label>
         <label>Email<input type="email" name="email" required value="\${escapeHtml(user.email || "")}" /></label>
-        <label>Role<select name="role" required><option value="customer" \${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" \${user.role === "helper" ? "selected" : ""}>Staff</option><option value="admin" \${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
+        <label>Role<select name="role" required><option value="customer" \${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" \${user.role === "helper" || user.role === "staff" ? "selected" : ""}>Staff</option><option value="admin" \${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
       </div>
       <label class="inline-check"><input type="checkbox" name="isMember" \${userMemberFlag(user) ? "checked" : ""} /> Member customer pricing</label>
       <div class="admin-password-panel">

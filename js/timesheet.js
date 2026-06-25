@@ -258,9 +258,9 @@ async function saveTimeEntry(payload, options = {}) {
 
 function timesheetStaffChoices(record = {}) {
   const choices = settingsUsers()
-    .filter((user) => ["helper", "admin"].includes(user.role))
+    .filter((user) => isStaffRole(user.role))
     .map((user) => ({ name: user.name || user.email || "Staff", email: user.email || "", id: user.id || "" }));
-  if (currentUser && ["helper", "admin"].includes(currentRole())) {
+  if (currentUser && isStaffRole()) {
     choices.push({ name: currentUser.name || currentUser.email || "Current staff", email: currentUser.email || "", id: currentUser.key || currentUser.email || "" });
   }
   if (record.helperName || record.helperEmail) {

@@ -271,7 +271,7 @@ function openDashboardAlertPopup(filter = "All") {
 }
 
 function alertManagedUsers() {
-  return settingsUsers().filter((user) => ["admin", "helper"].includes(user.role));
+  return settingsUsers().filter((user) => isStaffRole(user.role));
 }
 
 function customerAlertUsers() {
@@ -280,7 +280,7 @@ function customerAlertUsers() {
 
 function schedulePublishedAudienceEmails() {
   return settingsUsers()
-    .filter((user) => !user.removed && ["admin", "helper"].includes(user.role) && user.email)
+    .filter((user) => !user.removed && isStaffRole(user.role) && user.email)
     .map((user) => user.email);
 }
 
@@ -295,7 +295,7 @@ function alertPreferenceForEmail(email = "") {
 
 function defaultAlertTypesForUser(user = {}) {
   if (user.role === "admin") return [...adminDefaultAlertTypes];
-  if (user.role === "helper") return [...staffDefaultAlertTypes];
+  if (user.role === "helper" || user.role === "staff") return [...staffDefaultAlertTypes];
   return [];
 }
 
@@ -1119,13 +1119,13 @@ function notificationEventConfig(eventName = "", record = {}) {
 function notificationAudienceEmails(config = {}, eventName = "") {
   const emails = [...(config.audienceEmails || [])];
   const audienceRoles = config.audienceRoles || [];
-  const roleUsers = settingsUsers().filter((user) => !user.removed && audienceRoles.includes(user.role));
+  const roleUsers = settingsUsers().filter((user) => !user.removed && audienceRoles.some((role) => role === user.role || (role === "helper" && user.role === "staff") || (role === "staff" && user.role === "helper")));
   const hasSavedAdminUser = settingsUsers().some((user) => !user.removed && user.role === "admin" && user.email);
-  if (eventName && (audienceRoles.includes("helper") || audienceRoles.includes("admin"))) {
+  if (eventName && (audienceRoles.includes("helper") || audienceRoles.includes("staff") || audienceRoles.includes("admin"))) {
     roleUsers
       .filter((user) => userReceivesAlertType(user, eventName))
       .forEach((user) => emails.push(user.email));
-  } else if (audienceRoles.includes("helper") || audienceRoles.includes("admin")) {
+  } else if (audienceRoles.includes("helper") || audienceRoles.includes("staff") || audienceRoles.includes("admin")) {
     roleUsers.forEach((user) => emails.push(user.email));
   }
   if (audienceRoles.includes("admin") && !hasSavedAdminUser) emails.push(...getAdminEmails());

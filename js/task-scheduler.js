@@ -1060,7 +1060,7 @@ function boardingServiceOptionsForScheduler(dogId = "", selectedTaskRef = "") {
 function taskSchedulerAssignableUsers() {
   const users = typeof settingsUsers === "function" ? settingsUsers() : readRecords("settingsUser").filter((user) => !user.removed);
   const role = typeof currentRole === "function" ? currentRole() : "";
-  const current = typeof currentUser !== "undefined" && currentUser && ["admin", "helper"].includes(role)
+  const current = typeof currentUser !== "undefined" && currentUser && isStaffRole(role)
     ? { name: currentUser.name || currentUser.email || (typeof roleLabel === "function" ? roleLabel(role) : "Staff"), email: currentUser.email || "", role }
     : null;
   const seen = new Set();

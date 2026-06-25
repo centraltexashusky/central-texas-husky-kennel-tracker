@@ -150,15 +150,25 @@ set search_path = public, pg_temp
 as $$
   -- Bootstrap admin access by inserting a settingsUser kennel_records row
   -- directly in Supabase Studio with payload.role = 'admin'.
-  select coalesce((
-    select lower(coalesce(kr.payload ->> 'role', ''))
+  with matching_profile as (
+    select
+      lower(coalesce(kr.payload ->> 'role', '')) as role,
+      lower(coalesce(kr.payload ->> 'removed', 'false')) as removed
     from public.kennel_records kr
     where kr.type = 'settingsUser'
       and lower(coalesce(kr.payload ->> 'email', '')) = public.kennel_auth_email()
-      and lower(coalesce(kr.payload ->> 'removed', 'false')) <> 'true'
     order by kr.updated_at desc nulls last, kr.submitted_at desc nulls last
     limit 1
-  ), '')
+  ),
+  jwt_role as (
+    select lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() ->> 'role', '')) as role
+  )
+  select case
+    when exists (select 1 from matching_profile where removed = 'true') then ''
+    when exists (select 1 from matching_profile where removed <> 'true') then coalesce((select role from matching_profile where removed <> 'true'), '')
+    when (select role from jwt_role) in ('admin', 'helper', 'staff') then (select role from jwt_role)
+    else ''
+  end
 $$;
 
 create or replace function kennel_private.kennel_is_admin()
@@ -201,13 +211,25 @@ as $$
       lower(coalesce(payload ->> 'email', '')) as email,
       lower(coalesce(payload ->> 'role', '')) as role,
       coalesce(payload ->> 'id', '') as payload_id,
-      lower(coalesce(payload ->> 'removed', 'false')) as removed
+      lower(coalesce(payload ->> 'removed', 'false')) as removed,
+      lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() ->> 'role', '')) as jwt_role
   )
   select email <> ''
     and email = public.kennel_auth_email()
     and removed <> 'true'
     and (
       role in ('customer', 'member', 'customer | member')
+      or (
+        role in ('admin', 'helper', 'staff')
+        and role = incoming.jwt_role
+        and not exists (
+          select 1
+          from public.kennel_records kr
+          where kr.type = 'settingsUser'
+            and lower(coalesce(kr.payload ->> 'email', '')) = incoming.email
+            and lower(coalesce(kr.payload ->> 'removed', 'false')) = 'true'
+        )
+      )
       or exists (
         select 1
         from public.kennel_records kr
@@ -250,9 +272,12 @@ stable
 set search_path = public, pg_temp
 as $$
   select record_type in (
+    'dog',
     'ownedDog',
     'boardingDog',
+    'boardingReservation',
     'customerDog',
+    'reservationService',
     'request',
     'maintenance',
     'timesheet',
@@ -266,6 +291,7 @@ as $$
     'reservationCustomerUpdate',
     'dogClaimRequest',
     'legacyDogLink',
+    'userDogAccess',
     'notificationLog',
     'timeOffRequest'
   )
@@ -390,6 +416,7 @@ using (
   or user_id = auth.uid()
   or public.kennel_payload_has_email(payload)
   or public.kennel_payload_audience_has_email(payload)
+  or (type = 'settingsUser' and lower(coalesce(payload ->> 'email', '')) = public.kennel_auth_email())
 )
 with check (
   public.kennel_customer_can_write(type, payload)
