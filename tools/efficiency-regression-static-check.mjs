@@ -45,7 +45,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260623-efficiency-guardrails",
+    mustInclude: "20260624-belongings-checkout-review",
     message: "production cache keys must be bumped.",
   },
   {

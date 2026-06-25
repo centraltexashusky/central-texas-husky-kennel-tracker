@@ -7397,6 +7397,14 @@ async function handleInlineBoardingStatusClick(button) {
   if (!record || !nextStatus) return;
   const reference = boardingStayReferenceFromAction(button);
   const options = reference.stayId ? reference : {};
+  if (nextStatus === "Ready For Pickup") {
+    openReadyForPickupReview(record, options);
+    return;
+  }
+  if (nextStatus === "Checked Out") {
+    openCheckoutInvoicePopup(record, options);
+    return;
+  }
   const optimisticRecord = withInlineBoardingStatusTransition(record, nextStatus, options);
   if (!optimisticRecord) {
     showToast("That boarding status transition is not allowed.");
@@ -11087,6 +11095,14 @@ function initEvents() {
       const options = boardingStayReferenceFromAction(action);
       const stay = boardingStayByReference(dog || {}, options) || {};
       const currentStayStatus = boardingStayDisplayStatus(dog, stay);
+      if (action.dataset.nextStatus === "Ready For Pickup") {
+        openReadyForPickupReview(dog, options);
+        return;
+      }
+      if (action.dataset.nextStatus === "Checked Out") {
+        openCheckoutInvoicePopup(dog, options);
+        return;
+      }
       if (action.dataset.nextStatus === "Checked In") {
         options.allowEarly = true;
         options.early = boardingTransitionIsEarly(dog, "Checked In", options);

@@ -63,6 +63,26 @@ function boardingStayDataAttrs(record = {}, stay = {}) {
   return \` data-stay-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}"\`;
 }
 
+function boardingStayBelongings(stay = {}) {
+  return String(stay.belongings || stay.belongingsInfo || stay.checkIn?.belongings || "").trim();
+}
+
+function boardingStayBelongingsHtml(stay = {}, options = {}) {
+  const belongings = boardingStayBelongings(stay);
+  if (!belongings && !options.showEmpty) return "";
+  const label = options.label || "Belongings";
+  const text = belongings || options.emptyText || "No belongings listed";
+  return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(label)}</strong><p>\${escapeHtml(text)}</p></article>\`;
+}
+
+function boardingStayBelongingsLineHtml(stay = {}, options = {}) {
+  const belongings = boardingStayBelongings(stay);
+  if (!belongings && !options.showEmpty) return "";
+  const label = options.label || "Belongings";
+  const text = belongings || options.emptyText || "No belongings listed";
+  return \`<p><strong>\${escapeHtml(label)}:</strong> \${escapeHtml(text)}</p>\`;
+}
+
 function boardingStayStatusButtonHtml(record = {}, stay = {}, action = "change-stay-status") {
   const requestCode = stay?.id ? boardingStayRequestCode(record, stay) : "";
   return \`<button type="button" class="status-chip-button" data-action="\${escapeHtml(action)}" data-dog-id="\${escapeHtml(record.id || "")}" data-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(requestCode)}">\${boardingStayStatusChipHtml(record, stay)}</button>\`;
@@ -454,6 +474,7 @@ function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new
       actualCheckInAt: nextStatus === "Approved" ? "" : nextStatus === "Checked In" ? stay.actualCheckInAt || actualCheckInAt : stay.actualCheckInAt || "",
       actualDropoffAt: nextStatus === "Approved" ? "" : nextStatus === "Checked In" ? stay.actualDropoffAt || actualCheckInAt : stay.actualDropoffAt || "",
       actualPickupAt: nextStatus === "Checked Out" ? stay.actualPickupAt || timestamp : stay.actualPickupAt || "",
+      belongings: nextStatus === "Checked In" ? checkInDetails?.belongings || stay.belongings || "" : stay.belongings || stay.checkIn?.belongings || "",
       billingStartPolicy: nextStatus === "Checked In" ? checkInDetails?.billingStartPolicy || stay.billingStartPolicy || "scheduled" : stay.billingStartPolicy || "",
       billingStartTime: nextStatus === "Checked In" ? checkInDetails?.billingStartTime || stay.billingStartTime || scheduledDropoffTime : stay.billingStartTime || "",
       readyForPickupAt: ["Approved", "Checked In", "In Kennel"].includes(nextStatus) ? "" : stay.readyForPickupAt || "",
@@ -2397,6 +2418,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
     <p>\${escapeHtml(boardingStayServicesText(stay, { customerFacing: isCustomer, user: boardingPricingUserForRecord(record), preferCatalogPricing: true }))}</p>
     \${options.showServiceTasks ? boardingStayServiceTaskListHtml(record, stay, { actions: options.serviceActions }) : ""}
     \${stay.bathPlan ? \`<p>\${escapeHtml(stay.bathPlan)}</p>\` : ""}
+    \${boardingStayBelongingsLineHtml(stay)}
     \${stay.stayNotes ? \`<p>\${escapeHtml(stay.stayNotes)}</p>\` : ""}
     \${boardingCancellationAuditHtml(record, stay, { customer: isCustomer })}
     \${boardingCancellationReasonHtml(record, stay, { customer: isCustomer })}
@@ -2998,7 +3020,6 @@ function boardingStayServiceSummary(record = {}, stayOverride = null) {
 function boardingPickupReviewHtml(record = {}, options = {}) {
   const stay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) || {} : activeBoardingStay(record) || currentOrNextStay(record) || {};
   const services = boardingStayServiceSummary(record, stay);
-  const belongings = stay.checkIn?.belongings || "No belongings listed";
   const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const serviceStats = boardingStayServiceStats(record, stay);
   const serviceReview = serviceStats.total
@@ -3016,7 +3037,7 @@ function boardingPickupReviewHtml(record = {}, options = {}) {
       <p>\${escapeHtml(record.ownerEmail || "No email saved")}</p>
     </article>
     \${stay.id ? boardingStayDetailCardHtml(record, stay, { compact: true, showServiceTasks: false }) : ""}
-    <article class="record-card compact-record-card"><strong>Belongings to leave with dog</strong><p>\${escapeHtml(belongings)}</p></article>
+    \${boardingStayBelongingsHtml(stay, { showEmpty: true, label: "Belongings to leave with dog" })}
     \${serviceReview}
     \${serviceMessage}
     <label>Pickup note<textarea id="pickupReadyNote" rows="3" placeholder="Lost belonging, alternate pickup person, damaged crate, or other checkout note"></textarea></label>
@@ -3042,6 +3063,7 @@ function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
       <p>Status: \${escapeHtml(paymentStatus)}\${record.paymentMethod ? \` by \${escapeHtml(record.paymentMethod)}\` : ""}</p>
     </article>
     \${stay.id ? boardingStayDetailCardHtml(record, stay, { compact: true, hideInvoiceSummary: true }) : ""}
+    \${boardingStayBelongingsHtml(stay, { showEmpty: true, label: "Belongings to return at checkout" })}
     <article class="record-card compact-record-card"><strong>Services</strong><p>\${escapeHtml(services.length ? services.join(", ") : "No services listed")}</p></article>
     \${stay.id ? boardingStayInvoiceSummaryHtml(record, stay, { final: true }) : \`<article class="record-card compact-record-card"><strong>Total</strong><p>\${escapeHtml(total ? money(total) : "No invoice total saved")}</p></article>\`}
     <label>Checkout note<textarea id="checkoutNote" rows="3" placeholder="Payment note, pickup person, invoice issue, or checkout detail"></textarea></label>
@@ -3337,6 +3359,8 @@ function boardingStayFormHtml(record = {}, stay = {}) {
   const completionTimeHelp = serviceOnly ? '<small>Shown to the customer after approval as the expected pick-up time after service.</small>' : "";
   const notesPlaceholder = serviceOnly ? "Owner instructions or service notes" : "Owner instructions or pickup grooming notes";
   const submitLabel = serviceOnly ? (isEdit ? "Update Service" : "Add Service") : (isEdit ? "Save Boarding Stay" : "Add Boarding Stay");
+  const belongings = boardingStayBelongings(stay);
+  const belongingsField = serviceOnly ? "" : \`<label>Dog's belongings<textarea name="belongings" rows="3" placeholder="Leash, collar, food, treats, bowls, medication, toys">\${escapeHtml(belongings)}</textarea><small>Shown during ready-for-pickup and checkout review.</small></label>\`;
   return \`
     <form id="boardingStayPopupForm" class="tracker-form" data-dog-id="\${escapeHtml(record.id || "")}">
       <input type="hidden" name="stayId" value="\${escapeHtml(stay.id || "")}" />
@@ -3352,6 +3376,7 @@ function boardingStayFormHtml(record = {}, stay = {}) {
       \${serviceOnly ? "" : boardingStayLocationFieldsHtml(stay)}
       <div class="checklist compact">\${stayRequestCheckboxesHtml(stay, record)}</div>
       \${boardingStayBillingAdjustmentFieldsHtml(stay)}
+      \${belongingsField}
       <label>Stay notes<textarea name="stayNotes" rows="3" placeholder="\${escapeHtml(notesPlaceholder)}">\${escapeHtml(stay.stayNotes || "")}</textarea></label>
       <div class="button-row"><button type="submit">\${submitLabel}</button></div>
     </form>\`;
@@ -3407,7 +3432,7 @@ function boardingCheckInHtml(record = {}, nextStatus = "Checked In", options = {
   const addedServices = state.addedServices || [];
   const serviceRows = boardingCheckInServices(record, addedServices, options);
   const foodInstructions = formValues.foodInstructions ?? boardingFoodInstructions(record);
-  const belongings = formValues.belongings || stay.checkIn?.belongings || "";
+  const belongings = formValues.belongings ?? boardingStayBelongings(stay);
   const earlyCheckIn = Boolean(options.early);
   const scheduledDropoffTime = stay.scheduledDropoffTime || stay.requestedDropoffTime || stay.dropoffTime || "";
   const scheduledPickupTime = stay.scheduledPickupTime || stay.requestedPickupTime || stay.pickupTime || "";
@@ -3511,6 +3536,7 @@ async function saveBoardingStayFromForm(formEl) {
   const existingStayStatus = normalizeBoardingStatus({ boardingStatus: existingStay?.status || "" });
   const shouldAutoApproveStay = !existingStay || (!dog.customerRequest && existingStayStatus === "Pending");
   const selectedRequests = selectedStayRequestsFromForm(formEl);
+  const belongings = String(payload.belongings || "").trim();
   const invoiceAdjustments = invoiceAdjustmentsFromStayForm(formEl, existingStay || {}, timestamp);
   const adjustmentEvents = invoiceAdjustmentEventChanges(existingStay?.invoiceAdjustments || [], invoiceAdjustments, timestamp);
   const location = payload.kennelLocationId
@@ -3541,6 +3567,8 @@ async function saveBoardingStayFromForm(formEl) {
     stayProgramId: effectiveStayProgram?.id || effectiveStayProgram?.serviceId || "",
     stayProgramName: effectiveStayProgram?.serviceName || effectiveStayProgram?.name || "",
     stayProgramRate: effectiveStayProgram?.rate || effectiveStayProgram?.basePrice || 0,
+    belongings,
+    checkIn: existingStay?.checkIn ? { ...existingStay.checkIn, belongings } : existingStay?.checkIn || null,
   };
   const pricingSnapshot = boardingPricingSnapshotForStay(dog, draftStay, {
     currentDogRole: boardingRateRole,
@@ -3562,6 +3590,8 @@ async function saveBoardingStayFromForm(formEl) {
     billingDays: pricingSnapshot.billingDays,
     requests: selectedRequests,
     stayNotes: payload.stayNotes,
+    belongings,
+    checkIn: existingStay?.checkIn ? { ...existingStay.checkIn, belongings } : existingStay?.checkIn || null,
     stayProgram: effectiveStayProgram,
     stayProgramId: effectiveStayProgram?.id || effectiveStayProgram?.serviceId || "",
     stayProgramName: effectiveStayProgram?.serviceName || effectiveStayProgram?.name || "",
@@ -5177,7 +5207,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
       const articleClass = serviceOnly ? "record-card is-service-only-request" : "record-card";
       const editLabel = serviceOnly ? "Edit Service" : "Edit Stay";
       const removeLabel = serviceOnly ? "Remove Service" : "Remove Stay";
-      return \`<article class="\${articleClass}"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingServiceOnlyChipHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p><p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${editLabel}</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${removeLabel}</button></div></article>\`;
+      return \`<article class="\${articleClass}"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingServiceOnlyChipHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p>\${boardingStayBelongingsLineHtml(stay)}<p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${editLabel}</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${removeLabel}</button></div></article>\`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }
@@ -5367,13 +5397,14 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
 function boardingStayLifecycleEvents(record = {}, stay = {}) {
   const events = [];
   const stayIds = boardingStaySourceIds(stay);
+  const belongings = boardingStayBelongings(stay);
   const add = (label, date, by, note = "") => {
     if (!date && !note) return;
     events.push({ label, date, by, note });
   };
   add("Boarding request entered", stay.submittedAt || record.submittedAt, record.requestedBy || record.ownerName || record.submittedBy, stay.stayNotes || "");
   add("Request approved", stay.approvedAt || record.approvedAt, stay.approvedBy || record.approvedBy, "");
-  add("Checked in", stay.checkedInAt || record.checkedInAt || stay.checkIn?.verifiedAt, stay.checkedInBy || stay.checkIn?.verifiedBy || record.checkedInBy, stay.checkIn?.belongings ? \`Belongings: \${stay.checkIn.belongings}\` : "");
+  add("Checked in", stay.checkedInAt || record.checkedInAt || stay.checkIn?.verifiedAt, stay.checkedInBy || stay.checkIn?.verifiedBy || record.checkedInBy, belongings ? \`Belongings: \${belongings}\` : "");
   add("Placed in kennel", stay.kennelAssignedAt || record.kennelAssignedAt || record.inKennelAt, stay.kennelAssignedBy || record.kennelAssignedBy || record.statusHistory?.find((item) => item.to === "In Kennel")?.by, [stay.kennelBuilding || record.kennelBuilding, stay.kennelLocationName || record.kennelLocationName].filter(Boolean).join(" - "));
   add("Ready for pickup", stay.readyForPickupAt || record.readyForPickupAt, stay.readyForPickupBy || record.statusHistory?.find((item) => item.to === "Ready For Pickup")?.by, "");
   add("Checked out", stay.checkedOutAt || record.checkedOutAt, stay.checkedOutBy || record.statusHistory?.find((item) => item.to === "Checked Out")?.by, record.paymentStatus ? \`Payment: \${record.paymentStatus}\${record.paymentMethod ? \` by \${record.paymentMethod}\` : ""}\` : "");
@@ -5419,10 +5450,12 @@ function renderBoardingHistory(record = activeBoardingDog()) {
           const events = boardingStayLifecycleEvents(displayRecord, stay);
           const location = [stay.kennelBuilding || displayRecord.kennelBuilding, stay.kennelLocationName || displayRecord.kennelLocationName].filter(Boolean).join(" - ");
           const requestCode = boardingStayRequestCode(displayRecord, stay);
+          const belongings = boardingStayBelongings(stay);
           return \`<article class="record-card clickable-card compact-record-card" data-action="view-boarding-stay-history" data-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(requestCode)}">
             <strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong>
             <div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusChipHtml(displayRecord, stay)}</div>
             <p>\${escapeHtml(location || boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }) || "No location or service request saved")}</p>
+            \${belongings ? \`<p>\${escapeHtml(\`Belongings: \${belongings}\`)}</p>\` : ""}
             <span>\${events.length} lifecycle event\${events.length === 1 ? "" : "s"}</span>
           </article>\`;
         })
