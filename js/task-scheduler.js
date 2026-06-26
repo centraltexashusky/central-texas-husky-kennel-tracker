@@ -7,7 +7,7 @@ var taskSchedulerSelectedTaskId = "";
 var taskSchedulerDragTaskId = "";
 var taskSchedulerPanelMode = "new";
 var taskSchedulerEditingTaskId = "";
-var taskSchedulerPanelOpen = window.innerWidth >= 901;
+var taskSchedulerPanelOpen = false;
 var taskSchedulerDraftTask = null;
 var TASK_SCHEDULER_COLOR_KEY = "cth-task-scheduler-type-colors";
 var TASK_SCHEDULER_SLOT_MINUTES = 15;
@@ -893,7 +893,7 @@ function setTaskSchedulerPanel(mode = "new", id = "", open = true) {
   taskSchedulerPanelMode = mode;
   taskSchedulerEditingTaskId = mode === "edit" ? id : "";
   if (mode === "detail") taskSchedulerSelectedTaskId = id || taskSchedulerSelectedTaskId;
-  taskSchedulerPanelOpen = open || taskSchedulerIsDesktop();
+  taskSchedulerPanelOpen = Boolean(open);
   if (open && typeof pushAppSurfaceHistory === "function") pushAppSurfaceHistory("task-scheduler-panel");
 }
 
@@ -1811,7 +1811,7 @@ async function removeScheduledCareTask(id = "") {
   taskSchedulerDraftTask = null;
   taskSchedulerEditingTaskId = "";
   taskSchedulerPanelMode = "new";
-  taskSchedulerPanelOpen = taskSchedulerIsDesktop();
+  taskSchedulerPanelOpen = false;
   renderTaskScheduler();
   showToast("Scheduled task removed.");
   return updated;

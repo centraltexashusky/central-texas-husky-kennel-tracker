@@ -1315,6 +1315,46 @@ function currentDbUserId() {
   return isSupabaseUser() ? currentUser.key : null;
 }
 
+var REMOTE_ADMIN_CONFIG_RECORD_TYPES = new Set([
+  "service",
+  "cfoNote",
+  "kennelLocation",
+  "kennelBuilding",
+  "operationHours",
+  "operationDateOverride",
+  "auditLog",
+  "notificationPreference",
+  TASK_TEMPLATE_RECORD_TYPE,
+]);
+
+function canWriteRemoteRecordType(type = "") {
+  if (!type) return false;
+  if (localTestMode || !supabaseClient) return true;
+  if (!REMOTE_ADMIN_CONFIG_RECORD_TYPES.has(type)) return true;
+  return currentRole() === "admin";
+}
+
+function remoteWriteHelperEmail(payload = {}) {
+  return payload.helperEmail || payload.staffEmail || currentUser?.email || helperEmail?.value || payload.email || "";
+}
+
+function remoteWriteUserId(payload = {}) {
+  return currentDbUserId() || (payload.type === "settingsUser" ? payload.authId || payload.key || "" : "") || null;
+}
+
+function shouldSeedDefaultAdminConfigRecords() {
+  return localTestMode || !supabaseClient || currentRole() === "admin";
+}
+
+function seedDefaultAdminConfigRecords() {
+  if (!shouldSeedDefaultAdminConfigRecords()) return;
+  if (typeof seedDefaultServices === "function") seedDefaultServices();
+  if (typeof seedDefaultCfoNotes === "function") seedDefaultCfoNotes();
+  if (typeof seedDefaultKennelLocations === "function") seedDefaultKennelLocations();
+  if (typeof seedDefaultKennelBuildings === "function") seedDefaultKennelBuildings();
+  if (typeof seedDefaultOperationHours === "function") seedDefaultOperationHours();
+}
+
 // Extracted to js/auth.js: loginWithProvider
 
 
@@ -1527,10 +1567,10 @@ async function syncMissingCustomerAccessProfiles() {
   }
 }
 
-async function ensureAppUserProfile(user) {
+async function ensureAppUserProfile(user, options = {}) {
   if (!user?.email) return null;
   const record = upsertRecord("settingsUser", profileRecordForLogin(user));
-  await sendPayload(record);
+  await sendPayload(record, { quiet: options.quiet === true });
   return record;
 }
 
@@ -1681,10 +1721,18 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     }
     const refreshedUser = { ...user, role: roleForAccount(user) || user.role || "customer" };
     let profile = savedUserFor(refreshedUser) || null;
+    const confirmProfile = async () => {
+      try {
+        return await ensureAppUserProfile(refreshedUser, { quiet: true });
+      } catch (error) {
+        console.warn("Could not confirm signed-in user profile.", error);
+        return savedUserFor(refreshedUser) || null;
+      }
+    };
     if (options.deferProfileWrite === true) {
-      ensureAppUserProfile(refreshedUser).catch((error) => console.warn("Could not confirm restored user profile.", error));
+      confirmProfile().catch((error) => console.warn("Could not confirm restored user profile.", error));
     } else {
-      profile = await ensureAppUserProfile(refreshedUser);
+      profile = await confirmProfile() || profile;
     }
     const syncedUser = {
       ...refreshedUser,
@@ -3840,18 +3888,23 @@ async function addCustomTabTask(button) {
 // Extracted to js/daily.js: setOwnedFormLocked
 
 
-async function sendPayload(payload) {
+async function sendPayload(payload, options = {}) {
   if (localTestMode || !supabaseClient) {
     modeLabel.textContent = localTestMode ? "Local test saved" : "Local saved";
     return { ok: true, local: true };
+  }
+  if (!canWriteRemoteRecordType(payload?.type)) {
+    modeLabel.textContent = "Local saved";
+    console.warn("Skipped remote save for admin-only record type from non-admin session.", payload?.type);
+    return { ok: true, skippedRemote: true };
   }
   try {
     const { error } = await supabaseClient.from("kennel_records").upsert({
       id: payload.id,
       type: payload.type,
       payload: payloadForSheet(payload),
-      helper_email: payload.helperEmail || currentUser?.email || "",
-      user_id: currentDbUserId(),
+      helper_email: remoteWriteHelperEmail(payload),
+      user_id: remoteWriteUserId(payload),
       submitted_at: payload.submittedAt || new Date().toISOString(),
       updated_at: payload.updatedAt || new Date().toISOString(),
     });
@@ -3859,8 +3912,10 @@ async function sendPayload(payload) {
     modeLabel.textContent = "Saved";
     return { ok: true };
   } catch (error) {
-    modeLabel.textContent = "Save failed";
-    showToast(\`Save failed: \${error.message}\`);
+    if (!options.quiet) {
+      modeLabel.textContent = "Save failed";
+      showToast(\`Save failed: \${error.message}\`);
+    }
     throw error;
   }
 }
@@ -3875,14 +3930,22 @@ async function sendPayloadBatch(payloads = [], options = {}) {
     return { ok: true, local: true, count: records.length };
   }
 
+  const remoteRecords = records.filter((record) => canWriteRemoteRecordType(record.type));
+  const skippedCount = records.length - remoteRecords.length;
+  if (!remoteRecords.length) {
+    modeLabel.textContent = "Local batch saved";
+    if (skippedCount) console.warn("Skipped remote batch save for admin-only record types from non-admin session.", records.map((record) => record.type));
+    return { ok: true, count: 0, skippedRemote: skippedCount };
+  }
+
   try {
     const now = new Date().toISOString();
-    const rows = records.map((payload) => ({
+    const rows = remoteRecords.map((payload) => ({
       id: payload.id,
       type: payload.type,
       payload: payloadForSheet({ ...payload, updatedAt: payload.updatedAt || now }),
-      helper_email: payload.helperEmail || payload.staffEmail || currentUser?.email || "",
-      user_id: currentDbUserId(),
+      helper_email: remoteWriteHelperEmail(payload),
+      user_id: remoteWriteUserId(payload),
       submitted_at: payload.submittedAt || now,
       updated_at: payload.updatedAt || now,
     }));
@@ -3891,12 +3954,15 @@ async function sendPayloadBatch(payloads = [], options = {}) {
     const { error } = await supabaseClient.from("kennel_records").upsert(rows);
     if (error) throw error;
 
-    records.forEach((record) => upsertRecord(record.type, record));
+    remoteRecords.forEach((record) => upsertRecord(record.type, record));
     modeLabel.textContent = "Batch saved";
-    return { ok: true, count: records.length };
+    if (skippedCount) console.warn("Skipped remote batch save for admin-only record types from non-admin session.", records.filter((record) => !remoteRecords.includes(record)).map((record) => record.type));
+    return { ok: true, count: remoteRecords.length, skippedRemote: skippedCount };
   } catch (error) {
-    modeLabel.textContent = "Batch save failed";
-    showToast(\`Batch save failed: \${error.message}\`);
+    if (!options.quiet) {
+      modeLabel.textContent = "Batch save failed";
+      showToast(\`Batch save failed: \${error.message}\`);
+    }
     throw error;
   }
 }
@@ -13273,11 +13339,6 @@ async function initializeApp() {
     ensureTaskConfig();
     setDefaultDateAndDay();
     $("#dashboardDate").value = todayDate();
-    seedDefaultServices();
-    seedDefaultCfoNotes();
-    seedDefaultKennelLocations();
-    seedDefaultKennelBuildings();
-    seedDefaultOperationHours();
     updateConditionalSections();
     updateRotationBanner();
     updateCompletionCount();
@@ -13296,6 +13357,7 @@ async function initializeApp() {
     }
     updateNavigationAccess();
     if (helperIsLoggedIn()) {
+      seedDefaultAdminConfigRecords();
       if (!renderedDuringSessionRestore) renderAllRecords({ activeOnly: true });
       switchPage(rememberedPageForRole(currentRole()));
       requirePasswordChangeIfNeeded();
