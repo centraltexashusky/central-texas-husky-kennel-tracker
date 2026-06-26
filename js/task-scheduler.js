@@ -26,6 +26,8 @@ var BOARDING_SERVICE_TASK_START_TIMES = ["09:00", "11:00", "13:00", "15:00", "17
 var BOARDING_STAY_MILESTONE_TASK_SOURCE = "boardingStayMilestone";
 var BOARDING_STAY_MILESTONE_DURATION_MINUTES = 30;
 var boardingServiceTaskSyncQueued = false;
+var ownedDogBathTaskLastSyncSignature = "";
+var boardingServiceTaskLastSyncSignature = "";
 
 var TASK_SCHEDULER_TYPES = [
   { key: "Bath", label: "Bath", className: "is-bath" },
@@ -217,17 +219,53 @@ async function syncOwnedDogBathTasks() {
 }
 
 function scheduleOwnedDogBathTaskSync(renderAfterChange = true) {
+  const nextSignature = ownedDogBathTaskSyncSourceSignature();
+  if (!ownedDogBathTaskSyncQueued && nextSignature && nextSignature === ownedDogBathTaskLastSyncSignature) return;
   if (ownedDogBathTaskSyncQueued) return;
   ownedDogBathTaskSyncQueued = true;
   window.setTimeout(async () => {
     ownedDogBathTaskSyncQueued = false;
     try {
       const changed = await syncOwnedDogBathTasks();
+      ownedDogBathTaskLastSyncSignature = ownedDogBathTaskSyncSourceSignature();
       if (changed && renderAfterChange && activePageId() === "taskSchedulerPage") renderTaskScheduler();
     } catch (error) {
       console.warn("Owned dog bath task sync failed.", error);
     }
   }, 0);
+}
+
+function ownedDogBathTaskSyncSourceSignature() {
+  const dogs = readRecords("ownedDog")
+    .filter((record) => !record.removed)
+    .map((dog) => {
+      const schedule = ownedDogNextBathTaskSchedule(dog);
+      return [
+        dog.id,
+        dog.dogName || "",
+        schedule.lastBath || "",
+        schedule.intervalDays || "",
+        schedule.nextBathDate || "",
+        dog.updatedAt || "",
+      ].join("::");
+    })
+    .sort();
+  const tasks = readRecords("scheduledCareTask")
+    .filter((task) => isOwnedDogNextBathTask(task))
+    .map((task) => [
+      task.id,
+      task.dogId || task.sourceDogId || "",
+      task.date || "",
+      task.startTime || "",
+      task.durationMinutes || "",
+      task.status || "",
+      task.removed ? "removed" : "active",
+      task.sourceManualOverride ? "manual" : "auto",
+      task.sourceLastBath || "",
+      task.sourceBathIntervalDays || "",
+    ].join("::"))
+    .sort();
+  return JSON.stringify({ dogs, tasks });
 }
 
 function isBoardingServiceAutoTask(task = {}, sourceKey = "") {
@@ -819,17 +857,65 @@ async function syncBoardingServiceTasks(options = {}) {
 }
 
 function scheduleBoardingServiceTaskSync(renderAfterChange = true) {
+  const nextSignature = boardingServiceTaskSyncSourceSignature();
+  if (!boardingServiceTaskSyncQueued && nextSignature && nextSignature === boardingServiceTaskLastSyncSignature) return;
   if (boardingServiceTaskSyncQueued) return;
   boardingServiceTaskSyncQueued = true;
   window.setTimeout(async () => {
     boardingServiceTaskSyncQueued = false;
     try {
       const changed = await syncBoardingServiceTasks();
+      boardingServiceTaskLastSyncSignature = boardingServiceTaskSyncSourceSignature();
       if (changed && renderAfterChange && activePageId() === "taskSchedulerPage") renderTaskScheduler();
     } catch (error) {
       console.warn("Boarding service task sync failed.", error);
     }
   }, 0);
+}
+
+function boardingServiceTaskSyncSourceSignature() {
+  const records = consolidatedBoardingDogRecords(readRecords("boardingDog").filter((record) => !record.removed));
+  const stays = records.flatMap((record) => arrayValue(record.stays).map((stay) => {
+    const stats = typeof boardingStayServiceStats === "function" ? boardingStayServiceStats(record, stay) : { tasks: [] };
+    const serviceState = arrayValue(stats.tasks).map((task) => {
+      const units = typeof boardingServiceTaskUnits === "function" ? boardingServiceTaskUnits(task) : [];
+      return [
+        typeof boardingServiceTaskKey === "function" ? boardingServiceTaskKey(task) : task.id || task.serviceName || task.label || "",
+        task.quantity || "",
+        task.status || "",
+        units.map((unit) => [unit.index || unit.unitIndex || "", unit.status || ""].join(":")).join(","),
+      ].join("::");
+    }).sort().join("||");
+    return [
+      record.id || "",
+      boardingStayRequestCode(record, stay),
+      stay.id || "",
+      boardingStayDisplayStatus(record, stay),
+      stay.dropoffTime || "",
+      stay.pickupTime || "",
+      stay.stayType || "",
+      stay.kennelLocationId || "",
+      stay.kennelLocationName || "",
+      boardingStayRequestsKey(stay),
+      serviceState,
+    ].join("::");
+  })).sort();
+  const tasks = readRecords("scheduledCareTask")
+    .filter((task) => isBoardingServiceAutoTask(task) || isBoardingStayMilestoneAutoTask(task))
+    .map((task) => [
+      task.id,
+      task.sourceKey || "",
+      task.dogId || task.sourceDogId || "",
+      task.date || "",
+      task.startTime || "",
+      task.durationMinutes || "",
+      task.status || "",
+      task.removed ? "removed" : "active",
+      task.sourceManualOverride ? "manual" : "auto",
+      task.confirmationStatus || "",
+    ].join("::"))
+    .sort();
+  return JSON.stringify({ stays, tasks });
 }
 
 function scheduledCareTaskHasManualAutoOverride(existing = {}, draft = {}) {
@@ -1955,9 +2041,15 @@ function setupTaskSchedulerEventListeners() {
     }
 
     if (action.dataset.action === "complete-scheduled-care-task") {
-      setTaskSchedulerActionLoading(action, true);
-      await completeScheduledCareTask(action.dataset.id);
-      if (action.isConnected) setTaskSchedulerActionLoading(action, false);
+      setTaskSchedulerActionLoading(action, true, "Saving task...");
+      if (typeof setAppPageLoading === "function") setAppPageLoading("taskSchedulerPage", true, "Saving task");
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      try {
+        await completeScheduledCareTask(action.dataset.id);
+      } finally {
+        if (typeof setAppPageLoading === "function") setAppPageLoading("taskSchedulerPage", false);
+        if (action.isConnected) setTaskSchedulerActionLoading(action, false);
+      }
       return;
     }
 

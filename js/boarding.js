@@ -4,7 +4,7 @@ const __snuggleStayModuleSource = `function statusChipHtml(label, className = ""
 }
 
 var boardingCalendarMonth = todayDate().slice(0, 7);
-var boardingCalendarInactiveStatuses = new Set(["Cancelled"]);
+var boardingCalendarInactiveStatuses = new Set(["Cancelled", "Checked Out"]);
 
 function dogTypeBadgeHtml(type) {
   const labels = {
@@ -2702,7 +2702,8 @@ function boardingCalendarEntries(records = [], monthKey = boardingCalendarMonth)
   const entries = [];
   records.forEach((record) => {
     const displayRecord = boardingDogWithStayStatus(record || {});
-    const stays = arrayValue(displayRecord.stays).length ? arrayValue(displayRecord.stays) : [displayRecord].filter((item) => item.dropoffTime || item.pickupTime);
+    const rawStays = arrayValue(displayRecord.stays).length ? arrayValue(displayRecord.stays) : [displayRecord].filter((item) => item.dropoffTime || item.pickupTime);
+    const stays = dedupeBoardingStaysForDisplay(displayRecord, rawStays);
     stays.forEach((stay) => {
       const dates = boardingCalendarStayDates(stay);
       if (!dates) return;
@@ -3851,6 +3852,43 @@ function dedupeBoardingStaysByExplicitRequestCode(stays = []) {
     .map((item) => item.stay);
 }
 
+function boardingStayCustomerUpdateDedupeKey(record = {}, stay = {}) {
+  const source = String(stay.source || "").toLowerCase();
+  const groupId = String(stay.requestGroupId || stay.reservationGroupId || stay.familyReservationId || record.requestGroupId || record.reservationGroupId || "").trim();
+  if (!groupId || !source.includes("customer")) return "";
+  const pickup = String(stay.pickupTime || stay.scheduledPickupTime || stay.requestedPickupTime || "").trim();
+  const services = boardingStayRequestsKey(stay);
+  if (!pickup && !services) return "";
+  return [
+    "customer-update",
+    String(record.id || record.dogName || "").trim().toLowerCase(),
+    groupId,
+    String(stay.stayType || "").trim().toLowerCase(),
+    pickup,
+    services,
+    [stay.kennelLocationId, stay.kennelLocationName, stay.kennelBuilding].filter(Boolean).join("|").toLowerCase(),
+  ].join("|");
+}
+
+function dedupeBoardingStaysForDisplay(record = {}, stays = []) {
+  const keyed = new Map();
+  const unkeyed = [];
+  dedupeBoardingStaysByExplicitRequestCode(stays).forEach((stay, index) => {
+    const key = boardingStayCustomerUpdateDedupeKey(record, stay);
+    if (!key) {
+      unkeyed.push({ stay, index });
+      return;
+    }
+    const current = keyed.get(key);
+    if (!current || boardingStayIsFresher(stay, index, current.stay, current.index)) {
+      keyed.set(key, { stay, index });
+    }
+  });
+  return [...unkeyed, ...keyed.values()]
+    .sort((a, b) => a.index - b.index)
+    .map((item) => item.stay);
+}
+
 function boardingStayWithRequestCode(record = {}, stay = {}) {
   if (!stay || !Object.keys(stay).length) return stay || {};
   return {
@@ -3943,7 +3981,7 @@ function boardingStayMergeTime(record = {}, stay = {}) {
 
 function boardingDogWithMergedStays(record = {}) {
   if (!record) return {};
-  const stays = dedupeBoardingStaysByExplicitRequestCode(mergeBoardingStays([record], record));
+  const stays = dedupeBoardingStaysForDisplay(record, mergeBoardingStays([record], record));
   return {
     ...record,
     sourceRecordIds: record.sourceRecordIds?.length ? record.sourceRecordIds : [record.id].filter(Boolean),
@@ -3975,7 +4013,7 @@ function boardingStayEntryForRecord(record = {}, stay = {}) {
 function boardingStayEntries(records = []) {
   return records.flatMap((record) => {
     const displayRecord = boardingDogWithStayStatus(record || {});
-    const stays = displayRecord.stays?.length ? dedupeBoardingStaysByExplicitRequestCode(displayRecord.stays) : [{}];
+    const stays = displayRecord.stays?.length ? dedupeBoardingStaysForDisplay(displayRecord, displayRecord.stays) : [{}];
     return stays.map((stay) => boardingStayEntryForRecord(displayRecord, stay));
   });
 }
@@ -5198,7 +5236,7 @@ async function updateBoardingKennelLocation(locationId = "") {
 
 function renderBoardingStays(record = activeBoardingDog()) {
   const displayRecord = boardingDogWithStayStatus(record || {});
-  const stays = dedupeBoardingStaysByExplicitRequestCode(displayRecord?.stays || []);
+  const stays = dedupeBoardingStaysForDisplay(displayRecord, displayRecord?.stays || []);
   $("#boardingStayHistory").innerHTML = stays.length
     ? stays.map((stay) => {
       const requestCode = boardingStayRequestCode(displayRecord, stay);

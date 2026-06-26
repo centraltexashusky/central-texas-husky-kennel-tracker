@@ -1753,6 +1753,13 @@ async function submitPendingCustomerBooking() {
       const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
       const useExisting = Boolean(existingTarget);
       const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
+      const existingStayRequestCode = existingStay && Object.keys(existingStay).length
+        ? boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, existingStay)
+        : "";
+      const existingStaySourceIds = [...new Set([
+        ...(typeof boardingStaySourceIds === "function" ? boardingStaySourceIds(existingStay) : [existingStay.id].filter(Boolean)),
+        editingStayId,
+      ].filter(Boolean).map(String))];
       const stayRequests = dogServices.map((service) => ({
         id: service.id,
         serviceId: service.id,
@@ -1834,6 +1841,7 @@ async function submitPendingCustomerBooking() {
         createdAt: editingRecord ? existingStay.createdAt || new Date().toISOString() : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         source: "customer-request",
+        sourceStayIds: editingRecord ? existingStaySourceIds : [],
         requestGroupId,
         reservationGroupId: requestGroupId,
         familyReservationId: requestGroupId,
@@ -1864,9 +1872,13 @@ async function submitPendingCustomerBooking() {
         estimatedTotal: pricingSnapshot.total,
       };
       stay.bathPlan = bathPlanForStay(stay);
-      stay.requestCode = boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, stay);
+      stay.requestCode = existingStay.requestCode || existingStayRequestCode || boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, stay);
       stay.serviceTasks = boardingStayServiceTasks(existingTarget || sharedBoardingRecord || dog, stay);
-      const existingStays = useExisting ? (existingTarget.stays || []).filter((item) => !boardingStaySharesExplicitIdentity(item, stay)) : [];
+      const existingStays = useExisting ? (existingTarget.stays || []).filter((item) => {
+        if (boardingStaySharesExplicitIdentity(item, stay)) return false;
+        const itemRequestCode = boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, item);
+        return !stay.requestCode || itemRequestCode !== stay.requestCode;
+      }) : [];
       existingStays.unshift(stay);
       const ownerEmail = normalizeEmail(existingTarget?.ownerEmail || dog.ownerEmail || currentUser?.email);
       const secondaryOwnerEmail = normalizeEmail(existingTarget?.secondaryOwnerEmail || dog.secondaryOwnerEmail);

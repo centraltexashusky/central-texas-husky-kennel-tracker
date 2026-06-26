@@ -7916,6 +7916,12 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   opacity: 1;
 }
 
+#taskSchedulerPage .task-scheduler-form-actions button:hover,
+#taskSchedulerPage .task-scheduler-card:hover,
+#taskSchedulerPage .task-scheduler-month-task:hover {
+  transform: none;
+}
+
 .task-scheduler-status-card.is-pending-confirmation {
   background: color-mix(in srgb, #0b63ff 5%, #fff);
   border-style: dashed;

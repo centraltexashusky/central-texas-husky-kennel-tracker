@@ -6888,6 +6888,7 @@ function ownerUpdateStayForRecord(record = {}, reference = {}) {
 
 function ownerUpdateStayIsAvailable(record = {}, stay = {}) {
   if (!stay?.id) return false;
+  if (typeof isServiceRequestStay === "function" && isServiceRequestStay(record, stay)) return false;
   return activeBoardingStayStatuses.includes(boardingStayDisplayStatus(record, stay));
 }
 
