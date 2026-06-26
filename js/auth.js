@@ -224,6 +224,7 @@ async function restoreSupabaseSession() {
 }
 
 function setHelper(user, options = {}) {
+  if (typeof clearRemoteWriteIdentityCache === "function") clearRemoteWriteIdentityCache();
   currentUser = { ...user, role: user.role || "helper" };
   localTestMode = currentUser.authProvider === "local-test" || String(currentUser.key || "").startsWith("local-test-");
   if (localTestMode) supabaseClient = null;
@@ -249,6 +250,7 @@ function setHelper(user, options = {}) {
 
 function clearLocalAppSession(options = {}) {
   stopAutoSync();
+  if (typeof clearRemoteWriteIdentityCache === "function") clearRemoteWriteIdentityCache();
   localTestMode = false;
   currentUser = null;
   impersonationSession = null;

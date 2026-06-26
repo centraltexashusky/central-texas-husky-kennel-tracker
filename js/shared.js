@@ -1342,6 +1342,68 @@ function remoteWriteUserId(payload = {}) {
   return currentDbUserId() || (payload.type === "settingsUser" ? payload.authId || payload.key || "" : "") || null;
 }
 
+var REMOTE_WRITE_IDENTITY_TTL_MS = 30000;
+var remoteWriteIdentityCache = { checkedAt: 0, user: null };
+
+function clearRemoteWriteIdentityCache() {
+  remoteWriteIdentityCache = { checkedAt: 0, user: null };
+}
+
+async function remoteWriteIdentity(payload = {}) {
+  let sessionUser = null;
+  if (supabaseClient && !localTestMode) {
+    const now = Date.now();
+    if (remoteWriteIdentityCache.user && now - remoteWriteIdentityCache.checkedAt < REMOTE_WRITE_IDENTITY_TTL_MS) {
+      sessionUser = remoteWriteIdentityCache.user;
+    } else {
+      try {
+        const { data } = await supabaseClient.auth.getSession();
+        sessionUser = data?.session?.user || null;
+        remoteWriteIdentityCache = { checkedAt: now, user: sessionUser };
+      } catch (error) {
+        console.warn("Could not read Supabase session before remote write.", error);
+      }
+    }
+  }
+
+  const sessionEmail = normalizeEmail(sessionUser?.email || "");
+  const appEmail = normalizeEmail(currentUser?.email || "");
+  const isAdminImpersonation = typeof isImpersonating === "function" && isImpersonating();
+  if (sessionEmail && appEmail && sessionEmail !== appEmail && !isAdminImpersonation) {
+    const error = new Error("The browser is signed in to a different account. Sign out and sign back in before saving.");
+    error.code = "AUTH_SESSION_MISMATCH";
+    throw error;
+  }
+  if (!sessionUser && currentUser?.authProvider === "supabase") {
+    const error = new Error("The saved login session is no longer active. Sign out and sign back in before saving.");
+    error.code = "AUTH_SESSION_MISSING";
+    throw error;
+  }
+  return {
+    userId: sessionUser?.id || remoteWriteUserId(payload),
+    email: sessionUser?.email || remoteWriteHelperEmail(payload),
+  };
+}
+
+function remoteWriteRow(payload = {}, now = new Date().toISOString(), identity = {}) {
+  return {
+    id: payload.id,
+    type: payload.type,
+    payload: payloadForSheet({ ...payload, updatedAt: payload.updatedAt || now }),
+    helper_email: identity.email || remoteWriteHelperEmail(payload),
+    user_id: identity.userId || remoteWriteUserId(payload),
+    submitted_at: payload.submittedAt || now,
+    updated_at: payload.updatedAt || now,
+  };
+}
+
+function remoteSaveErrorMessage(error = {}) {
+  if (error?.code === "AUTH_SESSION_MISMATCH" || error?.code === "AUTH_SESSION_MISSING") {
+    return error.message;
+  }
+  return error?.message || String(error);
+}
+
 function shouldSeedDefaultAdminConfigRecords() {
   return localTestMode || !supabaseClient || currentRole() === "admin";
 }
@@ -3899,25 +3961,32 @@ async function sendPayload(payload, options = {}) {
     return { ok: true, skippedRemote: true };
   }
   try {
-    const { error } = await supabaseClient.from("kennel_records").upsert({
-      id: payload.id,
-      type: payload.type,
-      payload: payloadForSheet(payload),
-      helper_email: remoteWriteHelperEmail(payload),
-      user_id: remoteWriteUserId(payload),
-      submitted_at: payload.submittedAt || new Date().toISOString(),
-      updated_at: payload.updatedAt || new Date().toISOString(),
-    });
+    const now = new Date().toISOString();
+    const identity = await remoteWriteIdentity(payload);
+    const { error } = await supabaseClient.from("kennel_records").upsert(remoteWriteRow(payload, now, identity));
     if (error) throw error;
     modeLabel.textContent = "Saved";
     return { ok: true };
   } catch (error) {
     if (!options.quiet) {
       modeLabel.textContent = "Save failed";
-      showToast(\`Save failed: \${error.message}\`);
+      showToast(\`Save failed: \${remoteSaveErrorMessage(error)}\`);
     }
     throw error;
   }
+}
+
+async function sendPayloadBatchIndividually(records = []) {
+  const failures = [];
+  for (const record of records) {
+    try {
+      await sendPayload(record, { quiet: true });
+      upsertRecord(record.type, record);
+    } catch (error) {
+      failures.push({ record, error });
+    }
+  }
+  return failures;
 }
 
 async function sendPayloadBatch(payloads = [], options = {}) {
@@ -3940,15 +4009,8 @@ async function sendPayloadBatch(payloads = [], options = {}) {
 
   try {
     const now = new Date().toISOString();
-    const rows = remoteRecords.map((payload) => ({
-      id: payload.id,
-      type: payload.type,
-      payload: payloadForSheet({ ...payload, updatedAt: payload.updatedAt || now }),
-      helper_email: remoteWriteHelperEmail(payload),
-      user_id: remoteWriteUserId(payload),
-      submitted_at: payload.submittedAt || now,
-      updated_at: payload.updatedAt || now,
-    }));
+    const identity = await remoteWriteIdentity(remoteRecords[0] || {});
+    const rows = remoteRecords.map((payload) => remoteWriteRow(payload, now, identity));
 
     // Timesheet efficiency: one Supabase upsert keeps bulk scheduling fast and avoids one network round trip per shift.
     const { error } = await supabaseClient.from("kennel_records").upsert(rows);
@@ -3959,9 +4021,31 @@ async function sendPayloadBatch(payloads = [], options = {}) {
     if (skippedCount) console.warn("Skipped remote batch save for admin-only record types from non-admin session.", records.filter((record) => !remoteRecords.includes(record)).map((record) => record.type));
     return { ok: true, count: remoteRecords.length, skippedRemote: skippedCount };
   } catch (error) {
+    if (remoteRecords.length > 1 && options.retryIndividually !== false) {
+      console.warn("Batch save failed; retrying records one at a time.", error);
+      const failures = await sendPayloadBatchIndividually(remoteRecords);
+      const successCount = remoteRecords.length - failures.length;
+      if (successCount > 0) {
+        modeLabel.textContent = failures.length ? "Partial batch saved" : "Batch saved";
+        if (failures.length) {
+          console.warn(
+            "Some records could not be saved after individual retry.",
+            failures.map((failure) => ({
+              id: failure.record?.id,
+              type: failure.record?.type,
+              error: remoteSaveErrorMessage(failure.error),
+            })),
+          );
+          if (!options.quiet) showToast(\`\${successCount} records saved. \${failures.length} could not save; sign out and back in if this continues.\`);
+          return { ok: false, count: successCount, failed: failures.length, skippedRemote: skippedCount };
+        }
+        if (skippedCount) console.warn("Skipped remote batch save for admin-only record types from non-admin session.", records.filter((record) => !remoteRecords.includes(record)).map((record) => record.type));
+        return { ok: true, count: successCount, skippedRemote: skippedCount };
+      }
+    }
     if (!options.quiet) {
       modeLabel.textContent = "Batch save failed";
-      showToast(\`Batch save failed: \${error.message}\`);
+      showToast(\`Batch save failed: \${remoteSaveErrorMessage(error)}\`);
     }
     throw error;
   }

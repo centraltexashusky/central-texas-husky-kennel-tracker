@@ -1,6 +1,6 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260626-staff-login-panel-fix";
-import "./auth.js?v=20260625-staff-rls-fix";
+import "./shared.js?v=20260626-staff-session-rls-fix";
+import "./auth.js?v=20260626-staff-session-rls-fix";
 import "./customer.js?v=20260611-service-dropoff-v1";
 import "./boarding.js?v=20260625-staff-rls-fix";
 import "./daily.js?v=20260623-efficiency-guardrails";
