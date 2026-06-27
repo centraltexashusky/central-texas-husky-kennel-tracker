@@ -1891,14 +1891,27 @@ Deno.serve(async (req) => {
     "boardingCustomerRequestUpdatedByStaff",
     "serviceRequestReadyForPickup",
   ]);
-  if (staffOnlyCustomerEvents.has(eventName) && !isStaff) {
-    return json({ error: "Only staff can send this customer notification." }, 403, req);
+  const staffOnlyOperationalEvents = new Set([
+    ...staffOnlyCustomerEvents,
+    "urgentStaffAlertSent",
+    "urgentCustomerAlertSent",
+    "schedulePublished",
+    "scheduleChangedAfterPublish",
+    "timeOffReviewed",
+  ]);
+  if (staffOnlyOperationalEvents.has(eventName) && !isStaff) {
+    return json({ error: "Only staff can send this notification." }, 403, req);
   }
 
   let notificationPayload: Record<string, unknown> = {};
   if (body.notificationId) {
     const { data } = await adminClient.from("kennel_records").select("payload").eq("id", body.notificationId).maybeSingle();
     notificationPayload = (data?.payload && typeof data.payload === "object" ? data.payload : {}) as Record<string, unknown>;
+    const notificationSourceId = String(notificationPayload.sourceId || "").trim();
+    const notificationEventName = String(notificationPayload.eventName || "").trim();
+    if (!isStaff && ((notificationSourceId && notificationSourceId !== recordId) || (notificationEventName && notificationEventName !== eventName))) {
+      return json({ error: "Notification record does not match this request." }, 403, req);
+    }
   }
 
   const content = await notificationContent(adminClient, eventName, sourceRecord, notificationPayload);

@@ -94,6 +94,8 @@ var remoteLoadQueuedRender = false;
 var remoteLoadQueuedPageId = "";
 var lastRemoteRecordsSignatureByRequest = new Map();
 var activePageRemoteLoadTimer = null;
+var activePageRemoteLoadLastKey = "";
+var activePageRemoteLoadLastAt = 0;
 var appHistoryNavigationInProgress = false;
 var appSurfaceHistoryStack = [];
 var activePageLoadingTargets = new Set();
@@ -156,11 +158,13 @@ var AUTH_BOOT_TIMEOUT_MS = 8000;
 var AUTH_SYNC_STALE_MS = 15000;
 var APP_RESUME_DEBOUNCE_MS = 900;
 var APP_RESUME_REMOTE_REFRESH_MS = 30000;
+var ACTIVE_PAGE_REMOTE_LOAD_THROTTLE_MS = 6000;
 var remoteLoadStartedAt = 0;
 var lastRemoteLoadFinishedAt = 0;
 var appInitialized = false;
 var appResumeTimer = null;
 var lastAppResumeAt = 0;
+var autoSyncIdentityKey = "";
 var showReadNotifications = false;
 var visibleReadNotificationCount = 4;
 var MAX_READ_NOTIFICATIONS = 10;
@@ -1282,6 +1286,10 @@ function remoteRecordTypesForPage(pageId = "") {
   return uniqueRemoteRecordTypes([...coreTypes, ...(pageTypes[normalizedPageId] || [])]);
 }
 
+function authProfileRemoteTypes() {
+  return uniqueRemoteRecordTypes(["settingsUser"]);
+}
+
 // === MODULE: SETTINGS ===
 // Extracted to js/settings.js: settingsUsers
 
@@ -1835,13 +1843,16 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
   authSessionSyncStartedAt = Date.now();
   pendingAuthUserForRemoteWrite = user;
   authSessionSyncPromise = (async () => {
+    const previousRole = currentRole();
     const initialPageId = normalizePageId(options.initialPageId || pageIdFromHash() || rememberedPageForRole(user.role));
-    const remoteLoad = loadRemoteRecords({ render: options.awaitRemoteLoad === false, pageId: initialPageId });
-    if (options.awaitRemoteLoad === false) {
-      remoteLoad.catch((error) => console.warn("Background profile sync records could not load.", error));
-    } else {
-      await remoteLoad;
-    }
+    const remoteLoad = loadRemoteRecords({
+      types: options.remoteTypes || authProfileRemoteTypes(),
+      render: false,
+      showLoader: false,
+      quiet: true,
+      pageId: initialPageId,
+    });
+    await remoteLoad;
     const refreshedUser = { ...user, role: roleForAccount(user) || user.role || "customer" };
     let profile = savedUserFor(refreshedUser) || null;
     const confirmProfile = async () => {
@@ -1864,12 +1875,19 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     };
     setHelper(syncedUser, { switchAfterLogin: false, render: false });
     updateNavigationAccess();
+    const activeId = activePageId();
+    const shouldRepairPage = options.repairPageAfterSync !== false && (!pageAllowed(activeId) || (helperIsLoggedIn() && activeId === "loginPage"));
     if (options.render !== false) {
       renderAllRecords({ activeOnly: true });
       scheduleProfilePhotoHydrationSweep(300);
     }
     startAutoSync();
     if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(syncedUser.role));
+    else if (shouldRepairPage) switchPage(defaultPageForRole(syncedUser.role), { history: "replace" });
+    else if (previousRole && previousRole !== syncedUser.role) {
+      renderActivePageRecords(activeId);
+      scheduleActivePageRemoteLoad(activeId);
+    }
     requirePasswordChangeIfNeeded();
     return syncedUser;
   })();
@@ -2766,6 +2784,7 @@ function stopAutoSync() {
     realtimeReconnectTimer = null;
   }
   realtimePendingTypes.clear();
+  autoSyncIdentityKey = "";
   if (realtimeChannel && supabaseClient?.removeChannel) {
     const channel = realtimeChannel;
     realtimeChannel = null;
@@ -2774,6 +2793,10 @@ function stopAutoSync() {
     return;
   }
   realtimeChannel = null;
+}
+
+function autoSyncIdentityForCurrentUser() {
+  return currentDbUserId() || normalizeEmail(currentUser?.email || helperEmail?.value || "staff");
 }
 
 // Extracted to js/auth.js: clearLocalAppSession
@@ -4335,6 +4358,8 @@ function flushQueuedRemoteRecordLoad() {
       types: queuedTypes,
       render: queuedRender,
       pageId: queuedPageId || activePageId(),
+      showLoader: false,
+      quiet: true,
     }).catch((error) => console.warn("Queued remote page sync failed.", error));
   }, 0);
 }
@@ -4354,7 +4379,8 @@ async function loadRemoteRecords(options = {}) {
   }
 
   const loadingPageId = options.pageId || activePageId();
-  const showPageLoader = options.render !== false;
+  const showPageLoader = options.showLoader !== false && options.render !== false;
+  const quietLoad = options.quiet === true;
   if (remoteLoadPromise) {
     const missingTypes = requestedRemoteTypes.filter((type) => !remoteLoadActiveTypes.has(type));
     if (missingTypes.length) {
@@ -4408,7 +4434,6 @@ async function loadRemoteRecords(options = {}) {
 
       if (!remoteDataChanged) {
         modeLabel.textContent = "Synced";
-        if (options.render !== false) renderAllRecords({ activeOnly: true });
         return;
       }
 
@@ -4433,7 +4458,8 @@ async function loadRemoteRecords(options = {}) {
       modeLabel.textContent = "Synced";
     } catch (error) {
       modeLabel.textContent = "Load failed";
-      showToast(\`Records could not load: \${error.message}\`);
+      if (quietLoad) console.warn("Records could not load.", error);
+      else showToast(\`Records could not load: \${error.message}\`);
     } finally {
       if (remoteLoadPromise === loadPromise) remoteLoadPromise = null;
       remoteLoadActiveTypes.clear();
@@ -4473,14 +4499,17 @@ function scheduleRealtimeReconnect() {
   if (realtimeReconnectTimer || localTestMode || !supabaseClient || !helperIsLoggedIn()) return;
   realtimeReconnectTimer = window.setTimeout(() => {
     realtimeReconnectTimer = null;
-    startAutoSync();
+    startAutoSync({ force: true });
   }, 5000);
 }
 
-function startAutoSync() {
-  stopAutoSync();
+function startAutoSync(options = {}) {
   if (localTestMode || !supabaseClient || !helperIsLoggedIn()) return;
-  const channelName = "kennel-records-" + (currentDbUserId() || normalizeEmail(currentUser?.email || helperEmail?.value || "staff")) + "-" + Date.now().toString(36);
+  const identityKey = autoSyncIdentityForCurrentUser();
+  if (!options.force && identityKey && autoSyncIdentityKey === identityKey && realtimeChannel && syncIntervalId) return;
+  stopAutoSync();
+  autoSyncIdentityKey = identityKey;
+  const channelName = "kennel-records-" + identityKey + "-" + Date.now().toString(36);
   realtimeChannel = supabaseClient
     .channel(channelName)
     .on("postgres_changes", { event: "*", schema: "public", table: "kennel_records" }, handleRealtimeKennelRecordChange);
@@ -4497,7 +4526,7 @@ function startAutoSync() {
     });
   syncIntervalId = window.setInterval(() => {
     if (!remoteLoadInProgress) {
-      loadRemoteRecords({ render: false, pageId: activePageId() }).catch((error) => console.warn("Background sync failed.", error));
+      loadRemoteRecords({ render: false, pageId: activePageId(), quiet: true }).catch((error) => console.warn("Background sync failed.", error));
     }
   }, 60000);
 }
@@ -13384,11 +13413,16 @@ function initEvents() {
 
 function scheduleActivePageRemoteLoad(pageId = activePageId()) {
   if (!helperIsLoggedIn() || pageId === "loginPage" || localTestMode || !supabaseClient) return;
+  const requestKey = \`\${pageId}||\${remoteLoadRequestKey(remoteRecordTypesForPage(pageId))}\`;
+  const now = Date.now();
+  if (requestKey === activePageRemoteLoadLastKey && now - activePageRemoteLoadLastAt < ACTIVE_PAGE_REMOTE_LOAD_THROTTLE_MS) return;
+  activePageRemoteLoadLastKey = requestKey;
+  activePageRemoteLoadLastAt = now;
   if (activePageRemoteLoadTimer) window.clearTimeout(activePageRemoteLoadTimer);
   // Efficiency flow: render from local cache first, then refresh only the active page's remote types.
   activePageRemoteLoadTimer = window.setTimeout(() => {
     activePageRemoteLoadTimer = null;
-    loadRemoteRecords({ render: true, pageId }).catch((error) => {
+    loadRemoteRecords({ render: true, pageId, showLoader: false, quiet: true }).catch((error) => {
       console.warn(\`Active page sync failed for \${pageId}.\`, error);
     });
   }, 80);
@@ -13472,7 +13506,7 @@ async function resumeAppFromLifecycle(reason = "resume") {
     return;
   }
   if (supabaseClient && !localTestMode && !remoteLoadInProgress && now - lastRemoteLoadFinishedAt > APP_RESUME_REMOTE_REFRESH_MS) {
-    loadRemoteRecords({ render: true, pageId: activePageId() }).catch((error) => {
+    loadRemoteRecords({ render: true, pageId: activePageId(), showLoader: false, quiet: true }).catch((error) => {
       console.warn("Resume sync failed.", error);
     });
   }

@@ -17,6 +17,10 @@ function isStaffRole(role = currentRole()) {
   return ["admin", "helper", "staff"].includes(role);
 }
 
+function isCustomerRole(role = currentRole()) {
+  return ["customer", "member", "customer | member"].includes(role);
+}
+
 function userFromSupabase(supabaseUser) {
   if (!supabaseUser?.email) return null;
   const email = supabaseUser.email.toLowerCase();
@@ -177,7 +181,7 @@ async function loginWithPassword(event) {
   }
   const user = await syncAuthenticatedSupabaseUser(authData.user);
   if (!user) return;
-  switchPage(user.role === "customer" ? "customerPage" : "dashboardPage");
+  switchPage(isCustomerRole(user.role) ? "customerPage" : "dashboardPage");
   formEl.reset();
   showToast(\`\${user.name} is logged in.\`);
 }
@@ -298,11 +302,11 @@ function pageAllowed(pageId) {
   const button = navigationButtonForPage(pageId);
   const roles = (button?.dataset.roles || "helper,admin").split(",");
   const role = currentRole();
-  return helperIsLoggedIn() && (roles.includes(role) || (role === "staff" && roles.includes("helper")));
+  return helperIsLoggedIn() && (roles.includes(role) || (roles.includes("customer") && isCustomerRole(role)) || (role === "staff" && roles.includes("helper")));
 }
 
 function defaultPageForRole(role = currentRole()) {
-  if (role === "customer") return "customerPage";
+  if (isCustomerRole(role)) return "customerPage";
   if (isStaffRole(role)) return "dashboardPage";
   return "loginPage";
 }
