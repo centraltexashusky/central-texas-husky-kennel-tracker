@@ -1315,6 +1315,41 @@ function currentDbUserId() {
   return isSupabaseUser() ? currentUser.key : null;
 }
 
+var pendingAuthUserForRemoteWrite = null;
+
+var REMOTE_STAFF_WRITE_RECORD_TYPES = new Set([
+  "dog",
+  "ownedDog",
+  "boardingDog",
+  "boardingReservation",
+  "customerDog",
+  "reservationService",
+  "request",
+  "maintenance",
+  "timesheet",
+  "dailyTask",
+  "careLog",
+  "scheduledCareTask",
+  "calendarNote",
+  "dogVaccination",
+  "dogInternalNote",
+  "dogActivityLog",
+  "reservationCustomerUpdate",
+  "dogClaimRequest",
+  "legacyDogLink",
+  "userDogAccess",
+  "notificationLog",
+  "timeOffRequest",
+]);
+
+var REMOTE_CUSTOMER_WRITE_RECORD_TYPES = new Set([
+  "boardingDog",
+  "customerDog",
+  "request",
+  "maintenance",
+  "notificationLog",
+]);
+
 var REMOTE_ADMIN_CONFIG_RECORD_TYPES = new Set([
   "service",
   "cfoNote",
@@ -1324,14 +1359,39 @@ var REMOTE_ADMIN_CONFIG_RECORD_TYPES = new Set([
   "operationDateOverride",
   "auditLog",
   "notificationPreference",
+  "staffSchedule",
+  "kennelHoliday",
+  "scheduleTemplate",
+  "schedulePublish",
   TASK_TEMPLATE_RECORD_TYPE,
 ]);
 
-function canWriteRemoteRecordType(type = "") {
+function settingsUserPayloadBelongsToCurrentSession(payload = {}) {
+  if (!payload || payload.type !== "settingsUser") return false;
+  const currentId = pendingAuthUserForRemoteWrite?.key || currentDbUserId();
+  const payloadIds = [payload.authId, payload.key, payload.userId, payload.id, ...(payload.alternateAuthIds || [])]
+    .filter(Boolean)
+    .map((value) => String(value));
+  if (currentId && payloadIds.includes(String(currentId))) return true;
+  const currentEmail = normalizeEmail(pendingAuthUserForRemoteWrite?.email || currentUser?.email || helperEmail?.value || "");
+  const payloadEmail = normalizeEmail(payload.email || payload.ownerEmail || payload.customerEmail || "");
+  return Boolean(currentEmail && payloadEmail && currentEmail === payloadEmail);
+}
+
+function canWriteRemoteRecord(payload = {}) {
+  const type = typeof payload === "string" ? payload : payload?.type || "";
   if (!type) return false;
   if (localTestMode || !supabaseClient) return true;
-  if (!REMOTE_ADMIN_CONFIG_RECORD_TYPES.has(type)) return true;
-  return currentRole() === "admin";
+  const role = currentRole();
+  if (role === "admin") return true;
+  if (type === "settingsUser") return settingsUserPayloadBelongsToCurrentSession(payload);
+  if (isStaffRole(role)) return REMOTE_STAFF_WRITE_RECORD_TYPES.has(type);
+  if (role === "customer" || role === "member" || role === "customer | member") return REMOTE_CUSTOMER_WRITE_RECORD_TYPES.has(type);
+  return !REMOTE_ADMIN_CONFIG_RECORD_TYPES.has(type);
+}
+
+function canWriteRemoteRecordType(type = "") {
+  return canWriteRemoteRecord({ type });
 }
 
 function remoteWriteHelperEmail(payload = {}) {
@@ -1592,7 +1652,7 @@ async function ensureCustomerAccessProfile(source = {}, options = {}) {
 
 async function syncMissingCustomerAccessProfiles() {
   if (localTestMode || !supabaseClient || customerProfileSyncInProgress) return;
-  if (!isStaffRole()) return;
+  if (currentRole() !== "admin") return;
   customerProfileSyncInProgress = true;
   try {
     const sources = [];
@@ -1773,6 +1833,7 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
   recoverStaleAuthSync("new auth sync request");
   if (authSessionSyncPromise) return authSessionSyncPromise;
   authSessionSyncStartedAt = Date.now();
+  pendingAuthUserForRemoteWrite = user;
   authSessionSyncPromise = (async () => {
     const initialPageId = normalizePageId(options.initialPageId || pageIdFromHash() || rememberedPageForRole(user.role));
     const remoteLoad = loadRemoteRecords({ render: options.awaitRemoteLoad === false, pageId: initialPageId });
@@ -1817,6 +1878,7 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
   } finally {
     authSessionSyncPromise = null;
     authSessionSyncStartedAt = 0;
+    pendingAuthUserForRemoteWrite = null;
   }
 }
 
@@ -3955,9 +4017,9 @@ async function sendPayload(payload, options = {}) {
     modeLabel.textContent = localTestMode ? "Local test saved" : "Local saved";
     return { ok: true, local: true };
   }
-  if (!canWriteRemoteRecordType(payload?.type)) {
+  if (!canWriteRemoteRecord(payload)) {
     modeLabel.textContent = "Local saved";
-    console.warn("Skipped remote save for admin-only record type from non-admin session.", payload?.type);
+    console.warn("Skipped remote save for record type disallowed by this session.", payload?.type);
     return { ok: true, skippedRemote: true };
   }
   try {
@@ -3999,11 +4061,11 @@ async function sendPayloadBatch(payloads = [], options = {}) {
     return { ok: true, local: true, count: records.length };
   }
 
-  const remoteRecords = records.filter((record) => canWriteRemoteRecordType(record.type));
+  const remoteRecords = records.filter((record) => canWriteRemoteRecord(record));
   const skippedCount = records.length - remoteRecords.length;
   if (!remoteRecords.length) {
     modeLabel.textContent = "Local batch saved";
-    if (skippedCount) console.warn("Skipped remote batch save for admin-only record types from non-admin session.", records.map((record) => record.type));
+    if (skippedCount) console.warn("Skipped remote batch save for record types disallowed by this session.", records.map((record) => record.type));
     return { ok: true, count: 0, skippedRemote: skippedCount };
   }
 
@@ -4018,7 +4080,7 @@ async function sendPayloadBatch(payloads = [], options = {}) {
 
     remoteRecords.forEach((record) => upsertRecord(record.type, record));
     modeLabel.textContent = "Batch saved";
-    if (skippedCount) console.warn("Skipped remote batch save for admin-only record types from non-admin session.", records.filter((record) => !remoteRecords.includes(record)).map((record) => record.type));
+    if (skippedCount) console.warn("Skipped remote batch save for record types disallowed by this session.", records.filter((record) => !remoteRecords.includes(record)).map((record) => record.type));
     return { ok: true, count: remoteRecords.length, skippedRemote: skippedCount };
   } catch (error) {
     if (remoteRecords.length > 1 && options.retryIndividually !== false) {
@@ -4039,7 +4101,7 @@ async function sendPayloadBatch(payloads = [], options = {}) {
           if (!options.quiet) showToast(\`\${successCount} records saved. \${failures.length} could not save; sign out and back in if this continues.\`);
           return { ok: false, count: successCount, failed: failures.length, skippedRemote: skippedCount };
         }
-        if (skippedCount) console.warn("Skipped remote batch save for admin-only record types from non-admin session.", records.filter((record) => !remoteRecords.includes(record)).map((record) => record.type));
+        if (skippedCount) console.warn("Skipped remote batch save for record types disallowed by this session.", records.filter((record) => !remoteRecords.includes(record)).map((record) => record.type));
         return { ok: true, count: successCount, skippedRemote: skippedCount };
       }
     }

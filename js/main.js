@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260626-stay-scheduler-fix";
+import "./shared.js?v=20260626-staff-login-rls-guard";
 import "./auth.js?v=20260626-staff-session-rls-fix";
 import "./customer.js?v=20260626-stay-scheduler-fix";
 import "./boarding.js?v=20260626-stay-scheduler-fix";

@@ -44,8 +44,33 @@ const checks = [
     message: "notification read receipts table must exist.",
   },
   {
+    path: "js/shared.js",
+    mustInclude: "REMOTE_STAFF_WRITE_RECORD_TYPES",
+    message: "remote writes must use a staff RLS allowlist.",
+  },
+  {
+    path: "js/shared.js",
+    mustInclude: 'if (currentRole() !== "admin") return;',
+    message: "background customer access profile sync must be admin-only.",
+  },
+  {
+    path: "js/shared.js",
+    mustInclude: '"staffSchedule",',
+    message: "staffSchedule remote writes must be guarded for non-admin sessions.",
+  },
+  {
+    path: "js/shared.js",
+    mustInclude: "settingsUserPayloadBelongsToCurrentSession",
+    message: "settingsUser writes must be limited to the current session for non-admins.",
+  },
+  {
+    path: "js/shared.js",
+    mustInclude: "pendingAuthUserForRemoteWrite = user;",
+    message: "initial auth profile writes must use the pending Supabase identity.",
+  },
+  {
     path: "index.html",
-    mustInclude: "20260624-belongings-checkout-review",
+    mustInclude: "20260626-staff-login-rls-guard",
     message: "production cache keys must be bumped.",
   },
   {
