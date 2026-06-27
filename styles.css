@@ -28,6 +28,54 @@
   --focus: 0 0 0 3px rgba(62, 122, 127, 0.22);
 }
 
+/* Prevent content flash during bulk DOM updates from remote sync. */
+body.is-bulk-rendering .page-view.is-active > *:not(.app-inline-loader):not(.page-loader) {
+  opacity: 0;
+  transition: none;
+}
+
+body:not(.is-bulk-rendering) .page-view.is-active > * {
+  opacity: 1;
+  transition: opacity 0.12s ease;
+}
+
+@keyframes skeletonPulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.skeleton-card {
+  background: var(--glass-fill-soft, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 10px;
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+  background: var(--glass-fill, rgba(255, 255, 255, 0.12));
+  margin-bottom: 8px;
+}
+
+.skeleton-line.is-short {
+  width: 45%;
+}
+
+.skeleton-line.is-medium {
+  width: 70%;
+}
+
+.skeleton-line.is-long {
+  width: 90%;
+}
+
 * {
   box-sizing: border-box;
 }

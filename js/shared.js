@@ -101,6 +101,8 @@ var appSurfaceHistoryStack = [];
 var activePageLoadingTargets = new Set();
 var dailyTaskCompletionSyncAvailable = true;
 var notificationReadSyncAvailable = true;
+var renderDebounceTimer = null;
+var renderDebounceOptions = null;
 var detailDialogContext = null;
 var pendingCustomerBooking = null;
 var customerBookingSubmitInProgress = false;
@@ -174,6 +176,11 @@ var PROFILE_PHOTO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 var PROFILE_PHOTO_CACHE_MAX_ITEMS = 160;
 var SIGNED_MEDIA_URL_STORAGE_KEY = "cth-signed-media-url-cache-v1";
 var SIGNED_MEDIA_URL_CACHE_MAX_ITEMS = 240;
+
+function isRemoteLoadRequired() {
+  if (!lastRemoteLoadFinishedAt) return true;
+  return Date.now() - lastRemoteLoadFinishedAt > APP_RESUME_REMOTE_REFRESH_MS;
+}
 
 var careDefaults = {
   exerciseFrequencyDays: 0,
@@ -1223,6 +1230,10 @@ function initSupabaseClient() {
     }
     if (event === "SIGNED_IN" && session?.user) {
       if (Date.now() < suppressAuthSyncUntil) return;
+      if (authSessionSyncPromise) return;
+      const incomingEmail = normalizeEmail(session.user.email || "");
+      const currentEmail = normalizeEmail(currentUser?.email || "");
+      if (incomingEmail && currentEmail === incomingEmail && helperIsLoggedIn() && !isRemoteLoadRequired()) return;
       scheduleProfilePhotoHydrationSweep(900);
       syncAuthenticatedSupabaseUser(session.user, {
         switchAfterLogin: false,
@@ -1878,7 +1889,7 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     const activeId = activePageId();
     const shouldRepairPage = options.repairPageAfterSync !== false && (!pageAllowed(activeId) || (helperIsLoggedIn() && activeId === "loginPage"));
     if (options.render !== false) {
-      renderAllRecords({ activeOnly: true });
+      scheduleRender({ activeOnly: true });
       scheduleProfilePhotoHydrationSweep(300);
     }
     startAutoSync();
@@ -1886,6 +1897,7 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     else if (shouldRepairPage) switchPage(defaultPageForRole(syncedUser.role), { history: "replace" });
     else if (previousRole && previousRole !== syncedUser.role) {
       renderActivePageRecords(activeId);
+      renderSharedRecords();
       scheduleActivePageRemoteLoad(activeId);
     }
     requirePasswordChangeIfNeeded();
@@ -4161,7 +4173,14 @@ function renderAllRecordsFromRemoteLoad() {
     deferredRemoteRenderTimer = window.setTimeout(renderAllRecordsFromRemoteLoad, REMOTE_RENDER_SCROLL_IDLE_MS);
     return;
   }
-  renderAllRecords({ activeOnly: true });
+  document.body.classList.add("is-bulk-rendering");
+  try {
+    renderAllRecords({ activeOnly: true });
+  } finally {
+    window.requestAnimationFrame(() => {
+      document.body.classList.remove("is-bulk-rendering");
+    });
+  }
 }
 
 function realtimeSourceIsCurrentUser(row = {}) {
@@ -4283,7 +4302,12 @@ function remoteTaskCompletionSignature(rows = []) {
 
 function remoteDailyTaskCompletionSetupMissing(error) {
   const message = String(error?.message || "");
-  return /daily_task_completions|schema cache|relation .* does not exist|could not find/i.test(message);
+  const code = String(error?.code || "");
+  return (
+    /daily_task_completions|schema cache|relation .* does not exist|could not find/i.test(message)
+    || code === "42501"
+    || /permission denied|insufficient_privilege|not allowed/i.test(message)
+  );
 }
 
 function normalizeNotificationReadRow(row = {}) {
@@ -4380,7 +4404,7 @@ async function loadRemoteRecords(options = {}) {
 
   const loadingPageId = options.pageId || activePageId();
   const showPageLoader = options.showLoader !== false && options.render !== false;
-  const quietLoad = options.quiet === true;
+  const quietLoad = options.quiet === true || options.silent === true;
   if (remoteLoadPromise) {
     const missingTypes = requestedRemoteTypes.filter((type) => !remoteLoadActiveTypes.has(type));
     if (missingTypes.length) {
@@ -4526,7 +4550,7 @@ function startAutoSync(options = {}) {
     });
   syncIntervalId = window.setInterval(() => {
     if (!remoteLoadInProgress) {
-      loadRemoteRecords({ render: false, pageId: activePageId(), quiet: true }).catch((error) => console.warn("Background sync failed.", error));
+      loadRemoteRecords({ render: false, pageId: activePageId(), quiet: true, silent: true }).catch((error) => console.warn("Background sync failed.", error));
     }
   }, 60000);
 }
@@ -9969,6 +9993,25 @@ function renderSharedRecords() {
   renderGlobalSearchResults();
 }
 
+function scheduleRender(options = {}) {
+  if (renderDebounceOptions) {
+    renderDebounceOptions = {
+      ...renderDebounceOptions,
+      ...options,
+      activeOnly: renderDebounceOptions.activeOnly !== false && options.activeOnly !== false,
+    };
+  } else {
+    renderDebounceOptions = { ...options };
+  }
+  if (renderDebounceTimer) return;
+  renderDebounceTimer = window.setTimeout(() => {
+    const opts = renderDebounceOptions || {};
+    renderDebounceOptions = null;
+    renderDebounceTimer = null;
+    renderAllRecords(opts);
+  }, 80);
+}
+
 function renderActivePageRecords(pageId = activePageId()) {
   const mark = efficiencyPerfStart(\`renderActivePageRecords:\${pageId}\`);
   const renderers = {
@@ -9993,7 +10036,6 @@ function renderActivePageRecords(pageId = activePageId()) {
     customerFilesPage: () => renderCustomerFiles(),
   };
   renderers[pageId]?.();
-  renderSharedRecords();
   efficiencyPerfEnd(mark);
 }
 
@@ -10001,6 +10043,7 @@ function renderAllRecords(options = {}) {
   const mark = efficiencyPerfStart(options.activeOnly ? "renderAllRecords:activeOnly" : "renderAllRecords:full");
   if (options.activeOnly) {
     renderActivePageRecords();
+    renderSharedRecords();
     efficiencyPerfEnd(mark);
     return;
   }
@@ -13457,6 +13500,7 @@ function switchPage(pageId, options = {}) {
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
   if (helperIsLoggedIn() && pageId !== "loginPage") {
     renderActivePageRecords(pageId);
+    renderSharedRecords();
     scheduleActivePageRemoteLoad(pageId);
   }
   if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
@@ -13500,7 +13544,7 @@ async function resumeAppFromLifecycle(reason = "resume") {
   if (!helperIsLoggedIn()) {
     const restored = await restoreSupabaseSession();
     if (restored) {
-      renderAllRecords({ activeOnly: true });
+      scheduleRender({ activeOnly: true });
       ensureAppShellVisible(\`\${reason}:session-restored\`);
     }
     return;

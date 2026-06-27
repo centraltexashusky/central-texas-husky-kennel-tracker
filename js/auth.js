@@ -179,6 +179,7 @@ async function loginWithPassword(event) {
     );
     return;
   }
+  suppressAuthSyncUntil = Date.now() + 3000;
   const user = await syncAuthenticatedSupabaseUser(authData.user);
   if (!user) return;
   switchPage(isCustomerRole(user.role) ? "customerPage" : "dashboardPage");
@@ -245,7 +246,7 @@ function setHelper(user, options = {}) {
   if (options.render !== false) {
     renderDailyTaskLists();
     fillCustomerDefaults();
-    renderAllRecords({ activeOnly: true });
+    scheduleRender({ activeOnly: true });
     scheduleProfilePhotoHydrationSweep(300);
   }
   if (options.switchAfterLogin !== false) switchPage(rememberedPageForRole(currentUser.role));

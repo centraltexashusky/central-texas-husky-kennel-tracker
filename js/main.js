@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260626-staff-login-rls-guard-login-flicker-fix";
-import "./auth.js?v=20260626-staff-session-rls-fix-login-role-fix";
+import "./shared.js?v=20260626-staff-login-rls-guard-login-flicker-fix-full-review-fixes";
+import "./auth.js?v=20260626-staff-session-rls-fix-login-role-fix-full-review-fixes";
 import "./customer.js?v=20260626-stay-scheduler-fix";
-import "./boarding.js?v=20260626-stay-scheduler-fix";
+import "./boarding.js?v=20260626-stay-scheduler-fix-skeleton-loading";
 import "./daily.js?v=20260623-efficiency-guardrails";
 import "./task-scheduler.js?v=20260626-stay-scheduler-fix";
 import "./timesheet.js?v=20260625-staff-rls-fix";

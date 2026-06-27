@@ -16,6 +16,13 @@ create table if not exists public.kennel_records (
 create index if not exists kennel_records_type_idx on public.kennel_records (type);
 create index if not exists kennel_records_updated_idx on public.kennel_records (updated_at desc);
 create index if not exists kennel_records_helper_idx on public.kennel_records (helper_email);
+create index if not exists kennel_records_type_updated_idx
+  on public.kennel_records (type, updated_at desc);
+-- Composite index for kennel_user_role() JSONB email lookup.
+-- This is called on every RLS check across the app.
+create index if not exists kennel_records_settings_user_email_idx
+  on public.kennel_records (type, (lower(coalesce(payload ->> 'email', ''))))
+  where type = 'settingsUser';
 
 alter table public.kennel_records enable row level security;
 
@@ -143,32 +150,62 @@ create schema if not exists kennel_private;
 
 create or replace function kennel_private.kennel_user_role()
 returns text
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_cached text;
+  v_jwt_role text;
+  v_profile_removed text;
+  v_profile_role text;
+  v_role text;
+begin
+  begin
+    v_cached := current_setting('kennel.user_role_cache', true);
+    if v_cached is not null and v_cached <> '' then
+      return v_cached;
+    end if;
+  exception when others then
+    null;
+  end;
+
   -- Bootstrap admin access by inserting a settingsUser kennel_records row
   -- directly in Supabase Studio with payload.role = 'admin'.
-  with matching_profile as (
-    select
-      lower(coalesce(kr.payload ->> 'role', '')) as role,
-      lower(coalesce(kr.payload ->> 'removed', 'false')) as removed
-    from public.kennel_records kr
-    where kr.type = 'settingsUser'
-      and lower(coalesce(kr.payload ->> 'email', '')) = public.kennel_auth_email()
-    order by kr.updated_at desc nulls last, kr.submitted_at desc nulls last
-    limit 1
-  ),
-  jwt_role as (
-    select lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', auth.jwt() ->> 'role', '')) as role
-  )
-  select case
-    when exists (select 1 from matching_profile where removed = 'true') then ''
-    when exists (select 1 from matching_profile where removed <> 'true') then coalesce((select role from matching_profile where removed <> 'true'), '')
-    when (select role from jwt_role) in ('admin', 'helper', 'staff') then (select role from jwt_role)
-    else ''
-  end
+  select
+    lower(coalesce(kr.payload ->> 'role', '')),
+    lower(coalesce(kr.payload ->> 'removed', 'false'))
+  into v_profile_role, v_profile_removed
+  from public.kennel_records kr
+  where kr.type = 'settingsUser'
+    and lower(coalesce(kr.payload ->> 'email', '')) = public.kennel_auth_email()
+  order by kr.updated_at desc nulls last, kr.submitted_at desc nulls last
+  limit 1;
+
+  if found then
+    if v_profile_removed = 'true' then
+      v_role := '';
+    else
+      v_role := coalesce(v_profile_role, '');
+    end if;
+  else
+    v_jwt_role := lower(coalesce(
+      auth.jwt() -> 'app_metadata' ->> 'role',
+      auth.jwt() ->> 'role',
+      ''
+    ));
+    if v_jwt_role in ('admin', 'helper', 'staff') then
+      v_role := v_jwt_role;
+    else
+      v_role := '';
+    end if;
+  end if;
+
+  v_role := coalesce(v_role, '');
+  perform set_config('kennel.user_role_cache', v_role, true);
+  return v_role;
+end;
 $$;
 
 create or replace function kennel_private.kennel_is_admin()
@@ -463,6 +500,7 @@ alter table public.daily_task_completions enable row level security;
 
 drop policy if exists "Kennel staff can read daily task completions" on public.daily_task_completions;
 drop policy if exists "Kennel staff can insert daily task completions" on public.daily_task_completions;
+drop policy if exists "Kennel staff can update daily task completions" on public.daily_task_completions;
 
 create policy "Kennel staff can read daily task completions"
 on public.daily_task_completions
@@ -474,6 +512,13 @@ create policy "Kennel staff can insert daily task completions"
 on public.daily_task_completions
 for insert
 to authenticated
+with check (kennel_private.kennel_is_staff_member());
+
+create policy "Kennel staff can update daily task completions"
+on public.daily_task_completions
+for update
+to authenticated
+using (kennel_private.kennel_is_staff_member())
 with check (kennel_private.kennel_is_staff_member());
 
 create or replace function public.complete_daily_task_atomic(

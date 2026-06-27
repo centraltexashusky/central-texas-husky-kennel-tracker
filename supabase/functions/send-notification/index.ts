@@ -29,6 +29,29 @@ type MediaEmailLink = {
 
 const MEDIA_BUCKET = "kennel-media";
 const DEFAULT_MEDIA_LINK_SECONDS = 7 * 24 * 60 * 60;
+const ALLOWED_EVENT_NAMES = new Set([
+  "boardingCustomerRequestApproved",
+  "boardingCustomerRequestCancelled",
+  "boardingCustomerRequestDeclined",
+  "boardingCustomerRequestUpdatedByStaff",
+  "careLogAdminAlertCreated",
+  "customerApprovedStayCancelled",
+  "customerBoardingRequestCreated",
+  "customerBoardingRequestUpdated",
+  "customerDogFileUploaded",
+  "customerStayUpdateSent",
+  "kennelRequestCreated",
+  "maintenanceCreated",
+  "scheduleChangedAfterPublish",
+  "schedulePublished",
+  "serviceRequestReadyForPickup",
+  "timeOffRequested",
+  "timeOffReviewed",
+  "urgentCustomerAlertSent",
+  "urgentKennelRequestCreated",
+  "urgentMaintenanceCreated",
+  "urgentStaffAlertSent",
+]);
 
 const json = (body: Record<string, unknown>, status: number, req: Request) =>
   new Response(JSON.stringify(body), {
@@ -1864,6 +1887,9 @@ Deno.serve(async (req) => {
   const eventName = String(body.eventName || "");
   const recordId = String(body.recordId || "");
   if (!eventName || !recordId) return json({ error: "eventName and recordId are required." }, 400, req);
+  if (!ALLOWED_EVENT_NAMES.has(eventName)) {
+    return json({ error: "Unsupported notification event." }, 400, req);
+  }
 
   const { data: sourceRow, error: sourceError } = await adminClient
     .from("kennel_records")

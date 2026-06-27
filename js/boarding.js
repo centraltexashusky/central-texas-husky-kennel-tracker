@@ -4048,6 +4048,14 @@ function handleBoardingViewToggle(view = "board") {
   $("#boardingDogQuickCards")?.classList.toggle("is-hidden", boardingViewMode !== "list");
 }
 
+function boardingSkeletonCardsHtml(count = 3) {
+  return Array.from({ length: count }, () => \`<div class="skeleton-card" aria-hidden="true">
+    <div class="skeleton-line is-medium"></div>
+    <div class="skeleton-line is-short"></div>
+    <div class="skeleton-line is-long"></div>
+  </div>\`).join("");
+}
+
 function renderBoardingDogs() {
   const mark = efficiencyPerfStart("renderBoardingDogs");
   try {
@@ -4062,6 +4070,29 @@ function renderBoardingDogs() {
     const tableHead = $("#boardingDogTableHead");
     const tableBody = $("#boardingDogTableBody");
     const columnManager = $("#boardingDogColumnManager");
+
+    if (!allRecords.length && remoteLoadInProgress) {
+      const skeleton = boardingSkeletonCardsHtml();
+      if (activeView === "board" && queueContainer) queueContainer.innerHTML = skeleton;
+      else if (queueContainer) queueContainer.innerHTML = "";
+      if (activeView === "calendar" && calendarContainer) calendarContainer.innerHTML = skeleton;
+      else if (calendarContainer) calendarContainer.innerHTML = "";
+      if (activeView === "list") {
+        if (quickCardsContainer) quickCardsContainer.innerHTML = skeleton;
+        if (tableHead) tableHead.innerHTML = "";
+        if (tableBody) tableBody.innerHTML = "";
+      } else {
+        if (quickCardsContainer) quickCardsContainer.innerHTML = "";
+        if (tableHead) tableHead.innerHTML = "";
+        if (tableBody) tableBody.innerHTML = "";
+      }
+      if (columnManager) {
+        columnManager.innerHTML = "";
+        columnManager.hidden = true;
+      }
+      handleBoardingViewToggle(activeView);
+      return;
+    }
 
     if (activeView === "board") {
       renderBoardingQueueGroups(allRecords);
