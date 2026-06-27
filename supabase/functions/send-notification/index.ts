@@ -29,6 +29,8 @@ type MediaEmailLink = {
 
 const MEDIA_BUCKET = "kennel-media";
 const DEFAULT_MEDIA_LINK_SECONDS = 7 * 24 * 60 * 60;
+const KENNEL_EMAIL_TIME_ZONE = "America/Chicago";
+const KENNEL_EMAIL_TIME_ZONE_LABEL = "CT";
 const ALLOWED_EVENT_NAMES = new Set([
   "boardingCustomerRequestApproved",
   "boardingCustomerRequestCancelled",
@@ -199,50 +201,80 @@ function emailTextValue(value: unknown, fallback = "Not provided") {
   return text || fallback;
 }
 
-function formatEmailDateTime(value: unknown) {
-  if (!value) return "Not provided";
-  const text = String(value).trim();
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return escapeHtml(text);
+function formatEmailClockText(hour: string | number, minute: string | number) {
+  const hourNumber = Number(hour);
+  const minuteNumber = Number(minute);
+  if (!Number.isFinite(hourNumber) || !Number.isFinite(minuteNumber)) return "";
+  const hour12 = hourNumber % 12 || 12;
+  const period = hourNumber >= 12 ? "PM" : "AM";
+  return `${hour12}:${String(minuteNumber).padStart(2, "0")} ${period}`;
+}
+
+function formatEmailDateOnlyText(value: string, dateStyle: "medium" | "long" = "medium") {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12, 0, 0));
+  if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "America/Chicago",
+    dateStyle,
+    timeZone: "UTC",
   }).format(date);
 }
 
-function formatEmailDateTimeText(value: unknown) {
+function formatEmailLocalDateTimeText(value: string, dateStyle: "medium" | "long" = "medium") {
+  const text = value.trim();
+  const localIsoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d{1,6})?)?$/);
+  if (!localIsoMatch) return "";
+  const [, year, month, day, hour, minute] = localIsoMatch;
+  const dateText = formatEmailDateOnlyText(`${year}-${month}-${day}`, dateStyle);
+  const timeText = formatEmailClockText(hour, minute);
+  return dateText && timeText ? `${dateText}, ${timeText} ${KENNEL_EMAIL_TIME_ZONE_LABEL}` : "";
+}
+
+function formatEmailZonedDateTimeText(value: string, dateStyle: "medium" | "long" = "medium") {
+  const text = value.trim();
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return "";
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    dateStyle,
+    timeStyle: "short",
+    timeZone: KENNEL_EMAIL_TIME_ZONE,
+  }).format(date);
+  return `${formatted} ${KENNEL_EMAIL_TIME_ZONE_LABEL}`;
+}
+
+function formatEmailDateTimeText(value: unknown, options: { dateStyle?: "medium" | "long" } = {}) {
   if (!value) return "Not provided";
   const text = String(value).trim();
-  const localIsoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2}(?:\.\d{1,6})?)?$/);
-  if (localIsoMatch) {
-    const [, year, month, day, hour, minute] = localIsoMatch;
-    const monthName = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ][Number(month) - 1] || month;
-    const hourNumber = Number(hour);
-    const hour12 = hourNumber % 12 || 12;
-    const period = hourNumber >= 12 ? "PM" : "AM";
-    return `${monthName} ${Number(day)}, ${year} at ${hour12}:${minute} ${period}`;
+  const dateStyle = options.dateStyle || "medium";
+  const dateOnlyText = formatEmailDateOnlyText(text, dateStyle);
+  if (dateOnlyText) return dateOnlyText;
+  const localText = formatEmailLocalDateTimeText(text, dateStyle);
+  if (localText) return localText;
+  const zonedText = formatEmailZonedDateTimeText(text, dateStyle);
+  return zonedText || text;
+}
+
+function formatEmailDateTime(value: unknown) {
+  return escapeHtml(formatEmailDateTimeText(value, { dateStyle: "medium" }));
+}
+
+function formatEmailTimeOnlyText(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const localTimeMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (localTimeMatch) {
+    return `${formatEmailClockText(localTimeMatch[1], localTimeMatch[2])} ${KENNEL_EMAIL_TIME_ZONE_LABEL}`;
   }
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text;
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "long",
-    timeStyle: "short",
-    timeZone: "America/Chicago",
-  }).format(date);
+  return formatEmailDateTimeText(raw);
+}
+
+function formatEmailTimeRangeText(start: unknown, end: unknown) {
+  const startText = formatEmailTimeOnlyText(start);
+  const endText = formatEmailTimeOnlyText(end);
+  if (startText && endText) return `${startText} to ${endText}`;
+  return startText || endText;
 }
 
 function formatEmailMoneyText(value: unknown) {
@@ -1294,7 +1326,7 @@ function notificationFallbackFields(eventName: string, sourceRecord: Record<stri
   }
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";
-    const schedule = stayScheduleText(stay);
+    const schedule = stayScheduleEmailText(stay);
     return {
       id: notificationId,
       type: "notificationLog",
@@ -1653,6 +1685,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     };
   }
   if (eventName === "schedulePublished" || eventName === "scheduleChangedAfterPublish") {
+    const shiftText = formatEmailTimeRangeText(record.startTime, record.endTime);
     return {
       subject: eventName === "schedulePublished" ? "Kennel schedule published" : "Kennel schedule changed",
       body: [
@@ -1660,7 +1693,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
         "",
         `Week: ${record.weekStart || record.date || ""}${record.weekEnd ? ` to ${record.weekEnd}` : ""}`,
         `Staff: ${record.staffName || ""}`,
-        `Shift: ${record.startTime || ""}${record.endTime ? ` to ${record.endTime}` : ""}`,
+        shiftText ? `Shift: ${shiftText}` : "",
         "",
         `View schedule: ${appLink("#timesheetPage")}`,
       ].join("\n"),
