@@ -27,6 +27,8 @@ const checks = [
   ["js/task-scheduler.js", "boardingServiceUnitIndex", "Generated boarding service tasks must track service quantity units."],
   ["js/task-scheduler.js", "Completed & Logged", "Completed tasks must keep a disabled completion control visible."],
   ["js/task-scheduler.js", "task-scheduler-complete-badge", "Completed calendar tasks must render a visible checkmark."],
+  ["js/task-scheduler.js", "syncScheduledCareTasksFromDailyRecord", "Daily care logs must complete matching scheduled care tasks."],
+  ["js/shared.js", "syncScheduledCareTasksFromDailyRecord(record", "Daily work saves must run scheduler completion sync before dog care resync."],
   ["js/boarding.js", "retireScheduledCareTasksForBoardingServiceUnit", "Completing a boarding service unit must retire the matching open calendar task."],
   ["js/boarding.js", "data-unit-index", "Boarding service completion buttons must target individual service units."],
   ["styles.css", "is-pending-confirmation", "Pending check-in scheduler tasks must have a distinct visual state."],

@@ -3396,6 +3396,9 @@ function structuredCareLogsForDate(date = currentDailyDate()) {
 async function saveDailyWorkPayload(payload) {
   const record = upsertRecord("dailyTask", payload);
   await sendPayload(record);
+  if (typeof syncScheduledCareTasksFromDailyRecord === "function") {
+    await syncScheduledCareTasksFromDailyRecord(record, { render: false, renderDashboard: false });
+  }
   await syncOwnedDogCareFromDailyReport(record);
   renderDailyTaskLists(record);
   renderDemoSubmissions();
