@@ -3,64 +3,64 @@
   color-scheme: light;
 
   /* Core palette */
-  --ink: #0F172A;
-  --muted: #64748B;
-  --line: #E2E8F0;
-  --paper: #F5F7FB;
+  --ink: #172033;
+  --muted: #65748B;
+  --line: #DDE5E2;
+  --paper: #F6F8F5;
   --panel: #FFFFFF;
   --surface: var(--panel);
 
   /* Semantic background */
   --color-background-primary: #FFFFFF;
-  --color-background-secondary: #F5F7FB;
-  --color-background-info: #DBEAFE;
-  --color-background-success: #DCFCE7;
-  --color-background-warning: #FEF3C7;
-  --color-background-danger: #FEE2E2;
+  --color-background-secondary: #F6F8F5;
+  --color-background-info: #EAF1FF;
+  --color-background-success: #E5F4EC;
+  --color-background-warning: #FFF3D8;
+  --color-background-danger: #FBE6E4;
 
   /* Semantic borders */
-  --color-border-tertiary: #E2E8F0;
+  --color-border-tertiary: #DDE5E2;
 
   /* Semantic text */
-  --color-text-primary: #0F172A;
-  --color-text-secondary: #64748B;
-  --color-text-tertiary: #94A3B8;
-  --color-text-info: #1D4ED8;
-  --color-text-success: #15803D;
-  --color-text-warning: #B45309;
-  --color-text-danger: #B91C1C;
+  --color-text-primary: #172033;
+  --color-text-secondary: #65748B;
+  --color-text-tertiary: #8FA0B3;
+  --color-text-info: #2559C7;
+  --color-text-success: #2E7D5B;
+  --color-text-warning: #A96510;
+  --color-text-danger: #9F342F;
 
   /* Brand accent colors */
-  --teal: #2563EB;
-  --teal-dark: #1D4ED8;
-  --sage: #EFF6FF;
-  --gold: #F59E0B;
-  --red: #EF4444;
+  --teal: #2E7D5B;
+  --teal-dark: #276B57;
+  --sage: #EEF4FF;
+  --gold: #D89A2B;
+  --red: #C2413A;
 
   /* Shadows and focus */
-  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.06);
-  --focus: 0 0 0 3px rgba(37, 99, 235, 0.22);
+  --shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.06);
+  --focus: 0 0 0 3px rgba(47, 111, 237, 0.2);
 
   /* Glass tokens - flat in light mode, no blur */
   --glass-blur: 0px;
   --glass-blur-high: 0px;
   --glass-fill: #FFFFFF;
-  --glass-fill-soft: #F8FAFC;
-  --glass-fill-hover: #EFF6FF;
-  --glass-border: #E2E8F0;
-  --glass-border-outer: #F1F5F9;
-  --glass-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.04);
+  --glass-fill-soft: #F8FAF7;
+  --glass-fill-hover: #EEF4FF;
+  --glass-border: #DDE5E2;
+  --glass-border-outer: #EEF2EE;
+  --glass-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.05);
   --glass-specular: none;
   --glass-radius: 12px;
   --glass-radius-sm: 8px;
   --glass-radius-pill: 50px;
 
   /* Tint fills */
-  --tint-blue: #DBEAFE;
-  --tint-blue-strong: #2563EB;
-  --tint-green: #DCFCE7;
-  --tint-gold: #FEF3C7;
-  --tint-red: #FEE2E2;
+  --tint-blue: #EAF1FF;
+  --tint-blue-strong: #315F85;
+  --tint-green: #E5F4EC;
+  --tint-gold: #FFF3D8;
+  --tint-red: #FBE6E4;
 }
 
 /* Prevent content flash during bulk DOM updates from remote sync. */
@@ -124,14 +124,14 @@ body:not(.is-bulk-rendering) .page-view.is-active > * {
 }
 
 html {
-  background: #F5F7FB;
-  color: #0F172A;
+  background: #F6F8F5;
+  color: #172033;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
 }
 
 body {
-  background: #F5F7FB;
+  background: #F6F8F5;
   margin: 0;
   min-width: 0;
   overflow-x: hidden;
@@ -165,7 +165,7 @@ iframe {
 }
 
 .sidebar {
-  background: #1E3A5F;
+  background: #17324D;
   color: #FFFFFF;
   min-height: 100vh;
   padding: 22px 16px;
@@ -186,7 +186,7 @@ iframe {
 }
 
 .sidebar-brand span {
-  color: #93C5FD;
+  color: #B9C8D6;
 }
 
 .side-nav {
@@ -207,7 +207,7 @@ iframe {
 
 .nav-button {
   background: transparent;
-  color: #CBD5E1;
+  color: #D8E0E7;
   justify-content: flex-start;
   text-align: left;
   width: 100%;
@@ -221,7 +221,7 @@ iframe {
 
 .nav-button:hover,
 .nav-button.is-active {
-  background: #2563EB;
+  background: #315F85;
   color: #FFFFFF;
 }
 
@@ -234,7 +234,7 @@ iframe {
 .nav-button:disabled:hover,
 .nav-button.is-locked:hover {
   background: transparent;
-  color: #CBD5E1;
+  color: #D8E0E7;
 }
 
 .nav-button.is-hidden-nav {
@@ -351,8 +351,8 @@ body.role-helper #dashboardPage.is-active {
 .page-header {
   align-items: flex-start;
   background: #FFFFFF;
-  border-bottom: 1px solid #E2E8F0;
-  color: #0F172A;
+  border-bottom: 1px solid #DDE5E2;
+  color: #172033;
   display: flex;
   gap: 18px;
   justify-content: space-between;
@@ -812,10 +812,10 @@ body.owned-dog-modal-open {
 .dashboard-priority-card {
   align-items: start;
   background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #DDE5E2;
   border-left-width: 4px;
   border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.06);
   color: var(--text);
   display: grid;
   gap: 4px;
@@ -825,28 +825,28 @@ body.owned-dog-modal-open {
 }
 
 .dashboard-priority-card strong {
-  color: #0F172A;
+  color: #172033;
   font-size: 2.2rem;
   line-height: 1;
 }
 
 .dashboard-priority-card span {
-  color: #64748B;
+  color: #65748B;
   font-size: 0.85rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .dashboard-priority-card.is-count-clear {
-  border-left-color: #16A34A;
+  border-left-color: #2E7D5B;
 }
 
 .dashboard-priority-card.is-count-watch {
-  border-left-color: #F59E0B;
+  border-left-color: #D89A2B;
 }
 
 .dashboard-priority-card.is-count-urgent {
-  border-left-color: #EF4444;
+  border-left-color: #C2413A;
 }
 
 .dashboard-filter {
@@ -3077,28 +3077,28 @@ textarea {
 
 .boarding-queue-card {
   background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #DDE5E2;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-  color: #0F172A;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.06);
+  color: #172033;
   display: grid;
   gap: 8px;
   padding: 12px;
 }
 
 .boarding-queue-card > span {
-  color: #64748B;
+  color: #65748B;
   font-size: 1.5rem;
   font-weight: 900;
 }
 
 .boarding-queue-item {
   align-items: center;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
+  background: #F8FAF7;
+  border: 1px solid #DDE5E2;
   border-radius: 8px;
   box-shadow: none;
-  color: #0F172A;
+  color: #172033;
   display: grid;
   gap: 10px;
   grid-template-columns: 48px minmax(0, 1fr);
@@ -3145,7 +3145,7 @@ textarea {
 }
 
 .boarding-queue-item small {
-  color: #64748B;
+  color: #65748B;
   font-weight: 650;
 }
 
@@ -4819,7 +4819,7 @@ option {
 
 .owned-vaccination-panel {
   background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(14, 165, 233, 0.10)),
+    linear-gradient(135deg, rgba(47, 111, 237, 0.18), rgba(14, 165, 233, 0.10)),
     rgba(8, 17, 27, 0.54);
   border: 1px solid rgba(96, 165, 250, 0.82);
   border-radius: 16px;
@@ -7440,7 +7440,7 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
 }
 
 .task-scheduler-month-task {
-  --task-color: #2563EB;
+  --task-color: #2F6FED;
   background: color-mix(in srgb, var(--task-color) 12%, #fff);
   border: 1px solid color-mix(in srgb, var(--task-color) 70%, #fff);
   border-left: 4px solid var(--task-color);
@@ -7565,7 +7565,7 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
 }
 
 .task-scheduler-mini-grid button.is-today {
-  background: #2563EB;
+  background: #2F6FED;
   color: #fff;
 }
 
@@ -7633,7 +7633,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   background: #eaf1ff;
   border: 1px solid #bfdbfe;
   border-radius: 10px;
-  color: #2563EB;
+  color: #2F6FED;
   display: inline-flex;
   font-size: 1.15rem;
   height: 36px;
@@ -7703,9 +7703,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 #taskSchedulerTodayButton:focus-visible,
 #taskSchedulerPrevButton:focus-visible,
 #taskSchedulerNextButton:focus-visible {
-  border-color: #2563EB !important;
-  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.2);
-  color: #2563EB !important;
+  border-color: #2F6FED !important;
+  box-shadow: 0 10px 22px rgba(47, 111, 237, 0.2);
+  color: #2F6FED !important;
 }
 
 #taskSchedulerPage .task-scheduler-toolbar .segmented-control,
@@ -7744,9 +7744,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 #taskSchedulerPage .task-scheduler-toolbar .segmented-control button.is-active,
 .task-dog-type-toggle label:has(input:checked) {
-  background: #2563EB;
+  background: #2F6FED;
   color: #fff;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.22);
+  box-shadow: 0 8px 18px rgba(47, 111, 237, 0.22);
 }
 
 .task-dog-type-toggle input {
@@ -7757,8 +7757,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 #openScheduledCareTaskButton,
 #taskSchedulerPage .task-scheduler-form-actions button[type="submit"],
 #taskSchedulerPage [data-action="complete-scheduled-care-task"] {
-  background: #2563EB;
-  border-color: #2563EB;
+  background: #2F6FED;
+  border-color: #2F6FED;
   color: #fff;
 }
 
@@ -7817,7 +7817,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-mini-grid button.is-selected {
-  box-shadow: inset 0 0 0 2px #2563EB;
+  box-shadow: inset 0 0 0 2px #2F6FED;
 }
 
 .task-scheduler-mini-grid button small {
@@ -7937,7 +7937,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .task-scheduler-month-day.is-today > strong {
   align-items: center;
-  background: #2563EB;
+  background: #2F6FED;
   border-radius: 999px;
   color: #fff;
   display: inline-flex;
@@ -7952,7 +7952,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-card {
-  --task-color: #2563EB;
+  --task-color: #2F6FED;
   align-items: center;
   background: color-mix(in srgb, var(--task-color) 12%, #fff);
   border-color: color-mix(in srgb, var(--task-color) 70%, #fff);
@@ -8019,7 +8019,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-card.is-bath,
-.task-scheduler-legend-item.is-bath { --task-color: #2563EB; }
+.task-scheduler-legend-item.is-bath { --task-color: #2F6FED; }
 .task-scheduler-card.is-treadmill,
 .task-scheduler-legend-item.is-treadmill { --task-color: #22a7b8; }
 .task-scheduler-card.is-scooter-run,
@@ -8085,7 +8085,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-status-card.is-pending-confirmation {
-  background: color-mix(in srgb, #2563EB 5%, #fff);
+  background: color-mix(in srgb, #2F6FED 5%, #fff);
   border-style: dashed;
 }
 
@@ -8129,12 +8129,12 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-avatar-button:not(:disabled):focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline: 3px solid rgba(47, 111, 237, 0.28);
   outline-offset: 3px;
 }
 
 .task-scheduler-avatar-button:not(:disabled):hover .task-scheduler-avatar {
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.16);
 }
 
 .task-scheduler-panel-header {
@@ -8207,15 +8207,15 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 #taskSchedulerPage .task-scheduler-mini-header .secondary-button:hover,
 #taskSchedulerPage .task-scheduler-mini-header .secondary-button:focus-visible {
   background: #eff6ff;
-  border-color: #2563EB;
-  color: #2563EB;
+  border-color: #2F6FED;
+  color: #2F6FED;
 }
 
 #taskSchedulerPage .task-scheduler-detail-card .secondary-button,
 #taskSchedulerPage .task-scheduler-panel-form .secondary-button {
   background: #fff;
-  border: 1px solid #2563EB;
-  color: #2563EB;
+  border: 1px solid #2F6FED;
+  color: #2F6FED;
   opacity: 1;
 }
 
@@ -8281,7 +8281,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-panel-note {
-  color: #2563EB;
+  color: #2F6FED;
   font-size: 0.86rem;
   margin: 0.65rem 0;
 }
@@ -8489,7 +8489,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
     border-color: transparent;
     border-radius: 0;
     box-shadow: none;
-    color: #2563EB;
+    color: #2F6FED;
     grid-column: 3;
     grid-row: 1;
     min-width: 40px;
@@ -8564,7 +8564,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   }
 
   .task-scheduler-mobile-week-strip button.is-active strong {
-    background: #2563EB;
+    background: #2F6FED;
     color: #fff;
   }
 
@@ -8757,8 +8757,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .app-boot-loader {
   background:
-    linear-gradient(145deg, rgba(234, 241, 255, 0.92), rgba(245, 247, 251, 0.96)),
-    #F5F7FB;
+    linear-gradient(145deg, rgba(238, 244, 255, 0.92), rgba(246, 248, 245, 0.96)),
+    #F6F8F5;
   color: var(--ink);
 }
 
@@ -8767,8 +8767,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .sidebar {
-  background: #1E3A5F;
-  border-right: 1px solid #1E3A5F;
+  background: #17324D;
+  border-right: 1px solid #17324D;
   box-shadow: none;
   color: #FFFFFF;
 }
@@ -8778,21 +8778,21 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .sidebar-brand span {
-  color: #93C5FD;
+  color: #B9C8D6;
 }
 
 :root[data-theme="light"] .nav-button {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
-  color: #CBD5E1;
+  color: #D8E0E7;
   filter: none;
 }
 
 :root[data-theme="light"] .nav-button:hover,
 :root[data-theme="light"] .nav-button.is-active {
-  background: #2563EB;
-  border-color: #2563EB;
+  background: #315F85;
+  border-color: #315F85;
   color: #FFFFFF;
   filter: none;
   transform: none;
@@ -8803,7 +8803,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .nav-button:disabled:hover,
 :root[data-theme="light"] .nav-button.is-locked:hover {
   background: transparent;
-  color: #CBD5E1;
+  color: #D8E0E7;
 }
 
 :root[data-theme="light"] :where(.subhead, .login-panel p, .section-heading p, .dashboard-card p, .role-note, .customer-dog-item span, .dog-profile-editor p, .record-card span, .record-card p, .submission-item p, .field-help, .user-card small, .calendar-title span, .calendar-weekdays span, .summary-card span, .time-card span, .notification-item span, .notification-item p, .schedule-shift-card span, .schedule-warning-list, .schedule-day-card header span, .inline-save-status, .boarding-request-total-row span, .boarding-request-date-row, .boarding-family-header span, .boarding-family-header p) {
@@ -8816,9 +8816,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] body:not(.is-login-view) :where(.status-card, .notice, .alert-banner, .signup-panel, .table-wrap, .dog-profile-editor, .dashboard-card, .role-note, .customer-dog-item, .customer-next-action-card, .customer-flow-empty, .customer-service-group, .estimate-box, .estimate-total, .task-calendar, .summary-card, .helper-total-item, .login-panel, .form-section, .recent-submissions, .inline-check, .record-card, .toggle-row, .checklist label, .admin-task-controls, .admin-password-panel, .column-chip, .detail-dialog, .detail-row, .activity-entry, .time-card, .submission-item, .rotation-banner, .submit-bar, .structured-care-panel, .owned-profile-section, .boarding-profile-section, .compact-record-card, .schedule-day-card, .schedule-shift-card, .notification-panel, .notification-item, .filter-toolbar, .profile-tabs, .dashboard-action-panel, .alert-checkbox-group, .settings-user-card, .boarding-family-group) {
   background: #FFFFFF !important;
-  border: 1px solid #E2E8F0 !important;
+  border: 1px solid #DDE5E2 !important;
   border-radius: 12px !important;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.06) !important;
   color: var(--ink);
 }
 
@@ -8835,53 +8835,53 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] :where(.boarding-dog-modal .detail-row, .owned-dog-modal .detail-row, .service-modal .detail-row, .customer-dog-modal .detail-row, .customer-request-modal .detail-row, .detail-dialog .detail-row, .detail-dialog .record-card) {
-  background: #F8FAFC !important;
+  background: #F8FAF7 !important;
   border-color: var(--line) !important;
   color: var(--ink);
 }
 
 :root[data-theme="light"] button {
-  background: #2563EB;
-  border-color: #2563EB;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  background: #2F6FED;
+  border-color: #2F6FED;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 6px 16px rgba(47, 111, 237, 0.14);
   color: #FFFFFF;
   filter: none;
 }
 
 :root[data-theme="light"] button:hover {
-  background: #1D4ED8;
-  border-color: #1D4ED8;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
+  background: #2559C7;
+  border-color: #2559C7;
+  box-shadow: 0 8px 18px rgba(47, 111, 237, 0.2);
   filter: none;
 }
 
 :root[data-theme="light"] .dashboard-priority-card,
 :root[data-theme="light"] .dashboard-priority-card:hover {
   background: #FFFFFF;
-  border-color: #E2E8F0;
+  border-color: #DDE5E2;
   border-left-width: 4px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-  color: #0F172A;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.06);
+  color: #172033;
 }
 
 :root[data-theme="light"] .dashboard-priority-card.is-count-clear {
-  border-left-color: #16A34A;
+  border-left-color: #2E7D5B;
 }
 
 :root[data-theme="light"] .dashboard-priority-card.is-count-watch {
-  border-left-color: #F59E0B;
+  border-left-color: #D89A2B;
 }
 
 :root[data-theme="light"] .dashboard-priority-card.is-count-urgent {
-  border-left-color: #EF4444;
+  border-left-color: #C2413A;
 }
 
 :root[data-theme="light"] .dashboard-priority-card strong {
-  color: #0F172A;
+  color: #172033;
 }
 
 :root[data-theme="light"] .dashboard-priority-card span {
-  color: #64748B;
+  color: #65748B;
 }
 
 :root[data-theme="light"] :where(.secondary-button, .sync-button, .media-preview-button, .icon-button, .remove-task-button, .column-chip, .section-heading span, .status-dot) {
@@ -8892,59 +8892,184 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] :where(.secondary-button:hover, .sync-button:hover, .media-preview-button:hover, .icon-button:hover, .remove-task-button:hover, .clickable-card:hover) {
-  background: #EFF6FF;
-  border-color: #BFDBFE;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  background: #EEF4FF;
+  border-color: #C8D8F6;
+  box-shadow: 0 8px 22px rgba(23, 32, 51, 0.08);
+}
+
+:root[data-theme="light"] :where(.request-filter-button, .daily-task-tabs button, .alert-filter-toolbar button, .boarding-roster-tabs button, .profile-tabs button, .care-filter-toolbar button, .view-toggle-button) {
+  background: #FFFFFF;
+  border-color: #DDE5E2;
+  box-shadow: none;
+  color: #314158;
+}
+
+:root[data-theme="light"] :where(.request-filter-button:hover, .daily-task-tabs button:hover, .alert-filter-toolbar button:hover, .boarding-roster-tabs button:hover, .profile-tabs button:hover, .care-filter-toolbar button:hover, .view-toggle-button:hover) {
+  background: #F8FAF7;
+  border-color: #C9D6D2;
+  box-shadow: 0 4px 12px rgba(23, 32, 51, 0.06);
+  color: #172033;
+}
+
+:root[data-theme="light"] :where(.request-filter-button.is-active, .request-filter-button[aria-pressed="true"], .request-filter-button[aria-selected="true"], .daily-task-tabs button.is-active, .daily-task-tabs button[aria-selected="true"], .alert-filter-toolbar button.is-active, .alert-filter-toolbar button[aria-selected="true"], .boarding-roster-tabs button.is-active, .boarding-roster-tabs button[aria-selected="true"], .profile-tabs .is-active, .care-filter-toolbar .is-active, .view-toggle-button.is-active) {
+  background: #2F6FED;
+  border-color: #2F6FED;
+  box-shadow: 0 6px 16px rgba(47, 111, 237, 0.16);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] :where(.request-filter-button span, .alert-filter-toolbar button span, .boarding-roster-tabs button span) {
+  background: #EEF2EE;
+  color: #65748B;
+}
+
+:root[data-theme="light"] :where(.request-filter-button.is-active span, .request-filter-button[aria-pressed="true"] span, .request-filter-button[aria-selected="true"] span, .alert-filter-toolbar button.is-active span, .alert-filter-toolbar button[aria-selected="true"] span, .boarding-roster-tabs button.is-active span, .boarding-roster-tabs button[aria-selected="true"] span) {
+  background: rgba(255, 255, 255, 0.22);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .request-filter-button,
+:root[data-theme="light"] .daily-task-tabs button,
+:root[data-theme="light"] .alert-filter-toolbar button,
+:root[data-theme="light"] .boarding-roster-tabs button,
+:root[data-theme="light"] .profile-tabs button,
+:root[data-theme="light"] .care-filter-toolbar button,
+:root[data-theme="light"] .view-toggle-button {
+  background: #FFFFFF;
+  border-color: #DDE5E2;
+  box-shadow: none;
+  color: #314158;
+}
+
+:root[data-theme="light"] .request-filter-button:hover,
+:root[data-theme="light"] .daily-task-tabs button:hover,
+:root[data-theme="light"] .alert-filter-toolbar button:hover,
+:root[data-theme="light"] .boarding-roster-tabs button:hover,
+:root[data-theme="light"] .profile-tabs button:hover,
+:root[data-theme="light"] .care-filter-toolbar button:hover,
+:root[data-theme="light"] .view-toggle-button:hover {
+  background: #F8FAF7;
+  border-color: #C9D6D2;
+  box-shadow: 0 4px 12px rgba(23, 32, 51, 0.06);
+  color: #172033;
+}
+
+:root[data-theme="light"] .request-filter-button.is-active,
+:root[data-theme="light"] .request-filter-button[aria-pressed="true"],
+:root[data-theme="light"] .request-filter-button[aria-selected="true"],
+:root[data-theme="light"] .daily-task-tabs button.is-active,
+:root[data-theme="light"] .daily-task-tabs button[aria-selected="true"],
+:root[data-theme="light"] .alert-filter-toolbar button.is-active,
+:root[data-theme="light"] .alert-filter-toolbar button[aria-selected="true"],
+:root[data-theme="light"] .boarding-roster-tabs button.is-active,
+:root[data-theme="light"] .boarding-roster-tabs button[aria-selected="true"],
+:root[data-theme="light"] .profile-tabs .is-active,
+:root[data-theme="light"] .care-filter-toolbar .is-active,
+:root[data-theme="light"] .view-toggle-button.is-active {
+  background: #2F6FED;
+  border-color: #2F6FED;
+  box-shadow: 0 6px 16px rgba(47, 111, 237, 0.16);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .request-filter-button span,
+:root[data-theme="light"] .alert-filter-toolbar button span,
+:root[data-theme="light"] .boarding-roster-tabs button span {
+  background: #EEF2EE;
+  color: #65748B;
+}
+
+:root[data-theme="light"] .request-filter-button.is-active span,
+:root[data-theme="light"] .request-filter-button[aria-pressed="true"] span,
+:root[data-theme="light"] .request-filter-button[aria-selected="true"] span,
+:root[data-theme="light"] .alert-filter-toolbar button.is-active span,
+:root[data-theme="light"] .alert-filter-toolbar button[aria-selected="true"] span,
+:root[data-theme="light"] .boarding-roster-tabs button.is-active span,
+:root[data-theme="light"] .boarding-roster-tabs button[aria-selected="true"] span {
+  background: rgba(255, 255, 255, 0.22);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .calendar-day {
+  background: #FFFFFF;
+  border-color: #DDE5E2;
+  box-shadow: none;
+  color: #172033;
+}
+
+:root[data-theme="light"] .calendar-day:hover {
+  background: #F8FAF7;
+  border-color: #C9D6D2;
+  color: #172033;
+}
+
+:root[data-theme="light"] .calendar-day.has-records {
+  border-color: #BFD0F1;
+  box-shadow: inset 0 -3px 0 #2F6FED;
+}
+
+:root[data-theme="light"] .calendar-day.has-notes {
+  box-shadow: inset 0 -3px 0 #D89A2B;
+}
+
+:root[data-theme="light"] .calendar-day.has-records.has-notes {
+  box-shadow: inset 0 -3px 0 #2F6FED, inset 0 -6px 0 #D89A2B;
+}
+
+:root[data-theme="light"] .calendar-day.is-selected {
+  background: #FFF3D8;
+  border-color: #D89A2B;
+  color: #172033;
 }
 
 :root[data-theme="light"] :where(.danger-button, .remove-task-button) {
-  background: #FEE2E2;
-  border-color: #FECACA;
-  color: #991B1B;
+  background: #FBE6E4;
+  border-color: #E8AAA5;
+  color: #9F342F;
 }
 
 :root[data-theme="light"] .sync-button.stop-impersonation-button,
 :root[data-theme="light"] .sync-button.stop-impersonation-button:hover {
-  background: #EF4444;
-  border-color: #EF4444;
+  background: #C2413A;
+  border-color: #C2413A;
   color: #FFFFFF;
 }
 
 :root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open,
 :root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open:hover,
 :root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open:focus-visible {
-  background: #F59E0B !important;
-  border-color: #F59E0B !important;
-  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.24);
+  background: #D89A2B !important;
+  border-color: #D89A2B !important;
+  box-shadow: 0 8px 20px rgba(216, 154, 43, 0.22);
   color: #FFFFFF !important;
 }
 
 :root[data-theme="light"] :where(input[type="date"], input[type="datetime-local"], input[type="email"], input[type="number"], input[type="password"], input[type="search"], input[type="tel"], input[type="text"], input[type="url"], input[type="file"], select, textarea, .task-edit-input, .service-quantity, .filter-toolbar select, .table-toolbar input[type="search"]) {
   background: #FFFFFF;
-  border-color: #CBD5E1;
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  border-color: #C9D6D2;
+  box-shadow: inset 0 1px 2px rgba(23, 32, 51, 0.04);
   color: var(--ink);
 }
 
 :root[data-theme="light"] :where(.boarding-dog-modal input, .boarding-dog-modal select, .boarding-dog-modal textarea, .owned-dog-modal input, .owned-dog-modal select, .owned-dog-modal textarea, .service-modal input, .service-modal select, .service-modal textarea, .customer-dog-modal input, .customer-dog-modal select, .customer-dog-modal textarea, .customer-request-modal input, .customer-request-modal select, .customer-request-modal textarea, .detail-dialog input, .detail-dialog select, .detail-dialog textarea) {
   background: #FFFFFF;
-  border-color: #CBD5E1;
+  border-color: #C9D6D2;
   color: var(--ink);
 }
 
 :root[data-theme="light"] input::placeholder,
 :root[data-theme="light"] textarea::placeholder {
-  color: #94A3B8;
+  color: #8FA0B3;
 }
 
 :root[data-theme="light"] :where(input[readonly], textarea[readonly], select.is-readonly-select, .tracker-form.is-readonly input, .tracker-form.is-readonly select, .tracker-form.is-readonly textarea) {
-  background: #F8FAFC;
+  background: #F8FAF7;
   color: var(--muted);
 }
 
 :root[data-theme="light"] :where(input:focus, select:focus, textarea:focus, button:focus-visible, .task-edit-input:focus) {
-  border-color: #2563EB;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  border-color: #2F6FED;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.16);
   outline: 0;
 }
 
@@ -8958,13 +9083,13 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .data-table th {
-  background: #EAF1FF;
+  background: #EEF4FF;
   color: var(--ink);
 }
 
 :root[data-theme="light"] .data-table th[data-sort-column]:hover,
 :root[data-theme="light"] .data-table th[data-settings-sort]:hover {
-  background: #DBEAFE;
+  background: #E5EEFF;
   color: var(--ink);
 }
 
@@ -8974,88 +9099,80 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .data-table tr:hover td {
-  background: #F8FAFC;
+  background: #F8FAF7;
 }
 
 :root[data-theme="light"] :where(.notice, .alert-banner, .estimate-total, .rotation-banner) {
-  background: #FEF3C7 !important;
-  border-color: #FDE68A !important;
-  color: #B45309;
+  background: #FFF3D8 !important;
+  border-color: #E8C46D !important;
+  color: #A96510;
 }
 
 :root[data-theme="light"] .record-card.is-completed {
-  background: #F8FAFC !important;
+  background: #F8FAF7 !important;
   opacity: 0.84;
 }
 
 :root[data-theme="light"] .record-card.is-urgent {
-  background: #FEE2E2 !important;
-  border-color: #FCA5A5 !important;
-  box-shadow: inset 4px 0 0 #EF4444, 0 10px 30px rgba(15, 23, 42, 0.06) !important;
-}
-
-:root[data-theme="light"] .profile-tabs .is-active,
-:root[data-theme="light"] .care-filter-toolbar .is-active,
-:root[data-theme="light"] .view-toggle-button.is-active {
-  background: #EFF6FF;
-  border-color: #BFDBFE;
-  color: #2563EB;
+  background: #FBE6E4 !important;
+  border-color: #E8AAA5 !important;
+  box-shadow: inset 4px 0 0 #C2413A, 0 8px 22px rgba(23, 32, 51, 0.06) !important;
 }
 
 :root[data-theme="light"] .owned-vaccination-panel {
-  background: #EFF6FF;
-  border-color: #BFDBFE;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  background: #EEF4FF;
+  border-color: #C8D8F6;
+  box-shadow: 0 8px 22px rgba(23, 32, 51, 0.06);
 }
 
 :root[data-theme="light"] .owned-vaccination-panel-heading p {
-  color: #64748B;
+  color: #65748B;
 }
 
 :root[data-theme="light"] .status-chip {
-  background: #EFF6FF;
-  border-color: #BFDBFE;
-  color: #1D4ED8;
+  background: #EEF4FF;
+  border-color: #C8D8F6;
+  color: #2559C7;
 }
 
 :root[data-theme="light"] :where(.dog-type-chip.ownedDog, .boarding-status-chip.is-status-approved, .boarding-status-chip.is-status-checked-in, .boarding-status-chip.is-status-in-kennel, .vaccination-status-chip.is-vaccine-ok, .boarding-service-chip.is-service-complete, .inline-save-status.is-saved) {
-  background: #DCFCE7;
-  border-color: #BBF7D0;
-  color: #15803D;
+  background: #E5F4EC;
+  border-color: #B8DEC9;
+  color: #2E7D5B;
 }
 
 :root[data-theme="light"] :where(.boarding-status-chip.is-status-pending, .boarding-status-chip.is-status-ready-for-pickup, .vaccination-status-chip.is-vaccine-needed, .boarding-service-chip.is-service-due, .warning-chip) {
-  background: #FEF3C7;
-  border-color: #FDE68A;
-  color: #B45309;
+  background: #FFF3D8;
+  border-color: #E8C46D;
+  color: #A96510;
 }
 
 :root[data-theme="light"] :where(.vaccination-status-chip.is-vaccine-expired, .boarding-service-chip.is-service-overdue, .inline-save-status.is-error) {
-  background: #FEE2E2;
-  border-color: #FECACA;
-  color: #B91C1C;
+  background: #FBE6E4;
+  border-color: #E8AAA5;
+  color: #9F342F;
 }
 
 :root[data-theme="light"] :where(.dog-type-chip.boardingDog, .boarding-request-code-chip, .boarding-service-chip.is-service-pending, .boarding-family-chip) {
-  background: #DBEAFE;
-  border-color: #93C5FD;
-  color: #1E40AF;
+  background: #EAF1FF;
+  border-color: #BFD0F1;
+  color: #2559C7;
 }
 
 :root[data-theme="light"] :where(.dog-type-chip.customerDog) {
-  background: #FEF3C7;
-  border-color: #FDE68A;
-  color: #B45309;
+  background: #FFF3D8;
+  border-color: #E8C46D;
+  color: #A96510;
 }
 
 :root[data-theme="light"] :where(.boarding-status-chip.is-status-cancelled, .boarding-status-chip.is-status-checked-out) {
-  background: #F1F5F9;
-  border-color: #CBD5E1;
-  color: #475569;
+  background: #EEF2EE;
+  border-color: #C9D6D2;
+  color: #65748B;
 }
 
 :root[data-theme="light"] .boarding-family-group {
-  border-left-color: #2563EB !important;
+  border-left-color: #2F6FED !important;
 }
 
 :root[data-theme="light"] .operation-calendar {
@@ -9080,17 +9197,17 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day.has-override {
-  background: #FEF3C7 !important;
-  border-color: #FDE68A;
+  background: #FFF3D8 !important;
+  border-color: #E8C46D;
 }
 
 :root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day.is-closed {
-  background: #FEE2E2 !important;
-  border-color: #FCA5A5;
+  background: #FBE6E4 !important;
+  border-color: #E8AAA5;
 }
 
 :root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day.is-outside-month {
-  background: #F1F5F9 !important;
+  background: #EEF2EE !important;
 }
 
 :root[data-theme="light"] .global-search-panel,
@@ -9106,9 +9223,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .mobile-bottom-nav {
-  background: #1E3A5F !important;
+  background: #17324D !important;
   border-color: rgba(229, 237, 247, 0.16);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24) !important;
+  box-shadow: 0 12px 28px rgba(23, 32, 51, 0.24) !important;
   color: #FFFFFF;
 }
 
@@ -9116,24 +9233,24 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
-  color: #CBD5E1;
+  color: #D8E0E7;
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active,
 :root[data-theme="light"] .mobile-bottom-nav-button:hover {
-  background: #2563EB;
+  background: #315F85;
   box-shadow: none;
   color: #FFFFFF;
 }
 
 :root[data-theme="light"] .mobile-more-backdrop {
-  background: rgba(15, 23, 42, 0.42) !important;
+  background: rgba(23, 32, 51, 0.42) !important;
 }
 
 :root[data-theme="light"] .mobile-more-sheet {
   background: #FFFFFF !important;
   border-color: var(--line);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18) !important;
+  box-shadow: 0 24px 60px rgba(23, 32, 51, 0.18) !important;
   color: var(--ink);
 }
 
@@ -9155,14 +9272,14 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .mobile-more-menu-item::after {
-  color: #94A3B8;
+  color: #8FA0B3;
 }
 
 :root[data-theme="light"] .mobile-more-menu-item:hover,
 :root[data-theme="light"] .mobile-more-menu-item:focus-visible,
 :root[data-theme="light"] .mobile-more-menu-item.is-active {
-  background: #EAF1FF;
-  color: #2563EB;
+  background: #EEF4FF;
+  color: #2559C7;
 }
 
 :root[data-theme="light"] .mobile-more-empty {
@@ -9206,8 +9323,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .mobile-more-theme-option.is-active,
 .mobile-more-theme-option[aria-pressed="true"] {
-  background: #2563EB;
-  border-color: #2563EB;
+  background: #2F6FED;
+  border-color: #2F6FED;
   color: #FFFFFF;
 }
 
@@ -9220,7 +9337,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .mobile-more-theme-toggle {
-  background: #F8FAFC;
+  background: #F8FAF7;
   border-color: var(--line);
 }
 
@@ -9232,7 +9349,207 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .mobile-more-theme-option.is-active,
 :root[data-theme="light"] .mobile-more-theme-option[aria-pressed="true"] {
-  background: #2563EB;
-  border-color: #2563EB;
+  background: #315F85;
+  border-color: #315F85;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .sidebar {
+  background: #10283F;
+  border-right-color: #10283F;
+}
+
+:root[data-theme="light"] .nav-button {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #EEF5F7;
+}
+
+:root[data-theme="light"] .nav-button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .nav-button.is-active {
+  background: #F4F8F7;
+  border-color: #FFFFFF;
+  box-shadow: inset 4px 0 0 #D89A2B, 0 8px 22px rgba(0, 0, 0, 0.18);
+  color: #10283F;
+}
+
+:root[data-theme="light"] .nav-button:disabled,
+:root[data-theme="light"] .nav-button.is-locked,
+:root[data-theme="light"] .nav-button:disabled:hover,
+:root[data-theme="light"] .nav-button.is-locked:hover {
+  background: transparent;
+  border-color: transparent;
+  color: rgba(238, 245, 247, 0.58);
+}
+
+:root[data-theme="light"] button {
+  background: #FFFFFF;
+  border: 1px solid #C9D6D2;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 6px 14px rgba(23, 32, 51, 0.06);
+  color: #172033;
+}
+
+:root[data-theme="light"] button:hover {
+  background: #F8FAF7;
+  border-color: #AFC2BB;
+  box-shadow: 0 8px 18px rgba(23, 32, 51, 0.1);
+  color: #172033;
+  filter: none;
+}
+
+:root[data-theme="light"] :where(button[type="submit"], .complete-button, .task-done-button:not(:disabled), #openScheduledCareTaskButton, #taskSchedulerPage .task-scheduler-form-actions button[type="submit"], #taskSchedulerPage [data-action="complete-scheduled-care-task"]) {
+  background: #2E7D5B;
+  border-color: #2E7D5B;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 18px rgba(46, 125, 91, 0.18);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] :where(button[type="submit"], .complete-button, .task-done-button:not(:disabled), #openScheduledCareTaskButton, #taskSchedulerPage .task-scheduler-form-actions button[type="submit"], #taskSchedulerPage [data-action="complete-scheduled-care-task"]):hover {
+  background: #276B57;
+  border-color: #276B57;
+  box-shadow: 0 10px 22px rgba(46, 125, 91, 0.22);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] :where(.sync-button, #clearLocalCacheButton, #logoutButton, .secondary-button, .media-preview-button, .icon-button) {
+  background: #FFFFFF;
+  border-color: #C9D6D2;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04);
+  color: #172033;
+}
+
+:root[data-theme="light"] :where(.sync-button, #clearLocalCacheButton, #logoutButton, .secondary-button, .media-preview-button, .icon-button):hover {
+  background: #F8FAF7;
+  border-color: #AFC2BB;
+  box-shadow: 0 8px 18px rgba(23, 32, 51, 0.08);
+  color: #172033;
+}
+
+:root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open,
+:root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open:hover,
+:root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open:focus-visible {
+  background: #FFF3D8 !important;
+  border-color: #D89A2B !important;
+  box-shadow: 0 8px 18px rgba(216, 154, 43, 0.18);
+  color: #6F4A0D !important;
+}
+
+:root[data-theme="light"] :where(.request-filter-button.is-active, .request-filter-button[aria-pressed="true"], .request-filter-button[aria-selected="true"], .daily-task-tabs button.is-active, .daily-task-tabs button[aria-selected="true"], .alert-filter-toolbar button.is-active, .alert-filter-toolbar button[aria-selected="true"], .boarding-roster-tabs button.is-active, .boarding-roster-tabs button[aria-selected="true"], .profile-tabs .is-active, .care-filter-toolbar .is-active, .view-toggle-button.is-active, #taskSchedulerPage .task-scheduler-toolbar .segmented-control button.is-active, .task-dog-type-toggle label:has(input:checked)) {
+  background: #315F85;
+  border-color: #315F85;
+  box-shadow: 0 6px 16px rgba(49, 95, 133, 0.16);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .calendar-day.is-selected {
+  background: #FFF7E6;
+  border-color: #D89A2B;
+  box-shadow: inset 0 0 0 1px rgba(216, 154, 43, 0.18);
+  color: #172033;
+}
+
+:root[data-theme="light"] #calendarNoteForm {
+  background: #FFF8E8;
+  border: 1px solid #E8C46D;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 20px rgba(216, 154, 43, 0.12);
+  color: #172033;
+}
+
+:root[data-theme="light"] #calendarNoteForm input[name="noteDate"],
+:root[data-theme="light"] #calendarNoteForm input[name="note"] {
+  background: #FFFFFF;
+  border-color: #D7B35F;
+  box-shadow: inset 0 1px 2px rgba(23, 32, 51, 0.04);
+  color: #172033;
+}
+
+:root[data-theme="light"] #calendarNoteForm input[name="noteDate"]:focus,
+:root[data-theme="light"] #calendarNoteForm input[name="note"]:focus {
+  border-color: #D89A2B;
+  box-shadow: 0 0 0 3px rgba(216, 154, 43, 0.18);
+}
+
+:root[data-theme="light"] .reminder-panel {
+  background: #F8FAF7;
+  border: 1px solid #DDE5E2;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04);
+  color: #172033;
+}
+
+:root[data-theme="light"] .reminder-panel article {
+  border-top-color: #DDE5E2;
+}
+
+:root[data-theme="light"] .reminder-panel span {
+  color: #6F4A0D;
+}
+
+:root[data-theme="light"] .reminder-panel p {
+  color: #65748B;
+}
+
+:root[data-theme="light"] .mobile-bottom-nav {
+  background: #10283F !important;
+}
+
+:root[data-theme="light"] .mobile-bottom-nav-button.is-active,
+:root[data-theme="light"] .mobile-bottom-nav-button:hover {
+  background: #F4F8F7;
+  color: #10283F;
+}
+
+:root[data-theme="light"] .request-filter-button.is-active,
+:root[data-theme="light"] .request-filter-button[aria-pressed="true"],
+:root[data-theme="light"] .request-filter-button[aria-selected="true"],
+:root[data-theme="light"] .daily-task-tabs button.is-active,
+:root[data-theme="light"] .daily-task-tabs button[aria-selected="true"],
+:root[data-theme="light"] .alert-filter-toolbar button.is-active,
+:root[data-theme="light"] .alert-filter-toolbar button[aria-selected="true"],
+:root[data-theme="light"] .boarding-roster-tabs button.is-active,
+:root[data-theme="light"] .boarding-roster-tabs button[aria-selected="true"],
+:root[data-theme="light"] .profile-tabs .is-active,
+:root[data-theme="light"] .care-filter-toolbar .is-active,
+:root[data-theme="light"] .view-toggle-button.is-active,
+:root[data-theme="light"] #taskSchedulerPage .task-scheduler-toolbar .segmented-control button.is-active,
+:root[data-theme="light"] .task-dog-type-toggle label:has(input:checked) {
+  background: #315F85;
+  border-color: #315F85;
+  box-shadow: 0 6px 16px rgba(49, 95, 133, 0.16);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .task-scheduler-mini-grid button.is-today,
+:root[data-theme="light"] .task-scheduler-month-day.is-today > strong,
+:root[data-theme="light"] .task-scheduler-mobile-week-strip button.is-active strong {
+  background: #315F85;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] button[type="submit"],
+:root[data-theme="light"] .complete-button,
+:root[data-theme="light"] .task-done-button:not(:disabled),
+:root[data-theme="light"] #openScheduledCareTaskButton,
+:root[data-theme="light"] #taskSchedulerPage .task-scheduler-form-actions button[type="submit"],
+:root[data-theme="light"] #taskSchedulerPage [data-action="complete-scheduled-care-task"] {
+  background: #2E7D5B;
+  border-color: #2E7D5B;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 18px rgba(46, 125, 91, 0.18);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] button[type="submit"]:hover,
+:root[data-theme="light"] .complete-button:hover,
+:root[data-theme="light"] .task-done-button:not(:disabled):hover,
+:root[data-theme="light"] #openScheduledCareTaskButton:hover,
+:root[data-theme="light"] #taskSchedulerPage .task-scheduler-form-actions button[type="submit"]:hover,
+:root[data-theme="light"] #taskSchedulerPage [data-action="complete-scheduled-care-task"]:hover {
+  background: #276B57;
+  border-color: #276B57;
+  box-shadow: 0 10px 22px rgba(46, 125, 91, 0.22);
   color: #FFFFFF;
 }

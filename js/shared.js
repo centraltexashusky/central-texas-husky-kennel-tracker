@@ -63,12 +63,45 @@ function normalizeCuddleStayTheme(value) {
   return value === "dark" ? "dark" : "light";
 }
 
-function getSavedCuddleStayTheme() {
+function optionalCuddleStayTheme(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "dark" || normalized === "light" ? normalized : "";
+}
+
+function rememberCuddleStayTheme(theme) {
+  const normalizedTheme = normalizeCuddleStayTheme(theme);
+  try {
+    localStorage.setItem(CUDDLE_STAY_THEME_KEY, normalizedTheme);
+  } catch (error) {
+    // Storage can be blocked; keep the selected theme for this session.
+  }
+  return normalizedTheme;
+}
+
+function themePreferenceFromUserProfile(profile = {}) {
+  return optionalCuddleStayTheme(
+    profile.themePreference
+      || profile.preferences?.theme
+      || profile.uiPreferences?.theme
+      || profile.theme,
+  );
+}
+
+function currentUserThemePreference() {
+  if (!currentUser?.email || currentUser.authProvider === "admin-impersonation") return "";
+  return themePreferenceFromUserProfile(savedUserFor(currentUser) || currentUser);
+}
+
+function localCuddleStayTheme() {
   try {
     return normalizeCuddleStayTheme(localStorage.getItem(CUDDLE_STAY_THEME_KEY));
   } catch (error) {
     return "light";
   }
+}
+
+function getSavedCuddleStayTheme() {
+  return currentUserThemePreference() || localCuddleStayTheme();
 }
 
 function activeCuddleStayTheme() {
@@ -90,14 +123,48 @@ function applyCuddleStayTheme(theme) {
   updateThemeMenuState(normalizedTheme);
 }
 
+function applyCurrentUserThemePreference() {
+  const profileTheme = currentUserThemePreference();
+  if (!profileTheme) return "";
+  rememberCuddleStayTheme(profileTheme);
+  applyCuddleStayTheme(profileTheme);
+  if (currentUser) {
+    currentUser.themePreference = profileTheme;
+    currentUser.preferences = { ...(currentUser.preferences || {}), theme: profileTheme };
+    currentUser.uiPreferences = { ...(currentUser.uiPreferences || {}), theme: profileTheme };
+  }
+  return profileTheme;
+}
+
+function saveCurrentUserThemePreference(theme, options = {}) {
+  if (!currentUser?.email || currentUser.authProvider === "admin-impersonation") return null;
+  const normalizedTheme = normalizeCuddleStayTheme(theme);
+  const existing = savedUserFor(currentUser) || {};
+  const preferences = { ...(existing.preferences || currentUser.preferences || {}), theme: normalizedTheme };
+  const uiPreferences = { ...(existing.uiPreferences || currentUser.uiPreferences || {}), theme: normalizedTheme };
+  const record = upsertRecord("settingsUser", {
+    ...profileRecordForUser(currentUser),
+    ...existing,
+    themePreference: normalizedTheme,
+    preferences,
+    uiPreferences,
+    removed: false,
+  });
+  currentUser.themePreference = normalizedTheme;
+  currentUser.preferences = preferences;
+  currentUser.uiPreferences = uiPreferences;
+  safeLocalStorageSetItem(stateKeys.session, JSON.stringify(currentUser), { quiet: true });
+  sendPayload(record, { quiet: options.quiet === true }).catch((error) => {
+    console.warn("Could not save theme preference to user profile.", error);
+  });
+  return record;
+}
+
 function saveCuddleStayTheme(theme) {
   const normalizedTheme = normalizeCuddleStayTheme(theme);
-  try {
-    localStorage.setItem(CUDDLE_STAY_THEME_KEY, normalizedTheme);
-  } catch (error) {
-    // Storage can be blocked; keep the selected theme for this session.
-  }
+  rememberCuddleStayTheme(normalizedTheme);
   applyCuddleStayTheme(normalizedTheme);
+  saveCurrentUserThemePreference(normalizedTheme);
 }
 
 var form = $("#kennelForm");
@@ -1924,12 +1991,18 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
     } else {
       profile = await confirmProfile() || profile;
     }
+    const profileThemePreference = themePreferenceFromUserProfile(profile);
+    const sessionThemePreference = profileThemePreference || localCuddleStayTheme();
     const syncedUser = {
       ...refreshedUser,
       role: profile?.role || roleForAccount(refreshedUser) || refreshedUser.role || "customer",
       name: profile?.name || refreshedUser.name,
+      themePreference: sessionThemePreference,
+      preferences: { ...(profile?.preferences || {}), theme: sessionThemePreference },
+      uiPreferences: { ...(profile?.uiPreferences || {}), theme: sessionThemePreference },
     };
     setHelper(syncedUser, { switchAfterLogin: false, render: false });
+    if (!profileThemePreference) saveCurrentUserThemePreference(sessionThemePreference, { quiet: true });
     updateNavigationAccess();
     const activeId = activePageId();
     const shouldRepairPage = options.repairPageAfterSync !== false && (!pageAllowed(activeId) || (helperIsLoggedIn() && activeId === "loginPage"));
@@ -4537,6 +4610,7 @@ async function loadRemoteRecords(options = {}) {
       remoteTypes.filter((type) => type !== TASK_TEMPLATE_RECORD_TYPE).forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
       if (currentUser) {
         currentUser.role = roleForAccount(currentUser);
+        applyCurrentUserThemePreference();
         safeLocalStorageSetItem(stateKeys.session, JSON.stringify(currentUser), { quiet: true });
       }
       if (options.syncCustomerAccessProfiles === true) await syncMissingCustomerAccessProfiles();

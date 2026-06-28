@@ -239,6 +239,7 @@ function setHelper(user, options = {}) {
   helperEmail.value = user.email || "";
   helperKey.value = user.key || "";
   updateHeaderUser();
+  applyCurrentUserThemePreference();
   loginStatus.textContent = currentUser.name ? \`\${roleLabel(currentUser.role)} logged in: \${currentUser.name}\` : "Logged in";
   loginHelp.textContent = \`\${currentUser.email || "Account"} | Access: \${roleLabel(currentUser.role)}\`;
   $("#clearHelperButton").hidden = false;
