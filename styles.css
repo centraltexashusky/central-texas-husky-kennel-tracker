@@ -9524,7 +9524,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   left: 50%;
   pointer-events: none;
   position: absolute;
-  top: -1px;
+  top: 27px;
   width: 18px;
 }
 
