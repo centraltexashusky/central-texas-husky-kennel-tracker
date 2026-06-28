@@ -3529,7 +3529,10 @@ async function saveBoardingStayFromForm(formEl) {
     || (!payload.stayId && !payload.requestCode ? (dog.stays || []).find((item) => boardingStayMatchesIdentity(item, draftStayIdentity)) : null);
   const timestamp = new Date().toISOString();
   const existingStayStatus = normalizeBoardingStatus({ boardingStatus: existingStay?.status || "" });
+  const existingStayDisplayStatus = existingStay ? boardingStayDisplayStatus(dog, existingStay) : "";
   const shouldAutoApproveStay = !existingStay || (!dog.customerRequest && existingStayStatus === "Pending");
+  const shouldRestoreCancelledStay = existingStayDisplayStatus === "Cancelled";
+  const restoreActor = shouldRestoreCancelledStay ? boardingTransitionActorPayload() : null;
   const selectedRequests = selectedStayRequestsFromForm(formEl);
   const belongings = String(payload.belongings || "").trim();
   const invoiceAdjustments = invoiceAdjustmentsFromStayForm(formEl, existingStay || {}, timestamp);
@@ -3572,6 +3575,31 @@ async function saveBoardingStayFromForm(formEl) {
     boardingRateService: selectedStandardBoardingRateService,
     boardingRateServiceId: selectedStandardBoardingRateService?.id || (!effectiveStayProgram ? payload.boardingRateServiceId || "" : ""),
   });
+  const restoreCancelledStayPatch = shouldRestoreCancelledStay
+    ? {
+        status: "Approved",
+        approvedAt: existingStay?.approvedAt || timestamp,
+        approvedBy: existingStay?.approvedBy || restoreActor?.name || currentUser?.name || helperName?.value || "",
+        cancelledAt: "",
+        cancelledBy: "",
+        cancelledByEmail: "",
+        cancelledByRole: "",
+        cancelledSource: "",
+        customerCancellationReason: "",
+        customerCancellationAt: "",
+        customerCancellationBy: "",
+        customerCancellationByEmail: "",
+        actualCheckInAt: "",
+        actualDropoffAt: "",
+        actualPickupAt: "",
+        readyForPickupAt: "",
+        kennelBuilding: "",
+        kennelLocationId: "",
+        kennelLocationName: "",
+        kennelAssignedAt: "",
+        checkIn: null,
+      }
+    : {};
   const stay = {
     ...existingStay,
     id: payload.stayId || existingStay?.id || uid("stay"),
@@ -3599,6 +3627,7 @@ async function saveBoardingStayFromForm(formEl) {
     kennelLocationId: isServiceRequest ? "" : location ? location.id : "",
     kennelLocationName: isServiceRequest ? "" : location ? location.name : "",
     kennelAssignedAt: isServiceRequest ? "" : location ? existingStay?.kennelAssignedAt || timestamp : "",
+    ...restoreCancelledStayPatch,
   };
   stay.bathPlan = bathPlanForStay(stay);
   stay.requestCode = payload.requestCode || boardingStayRequestCode(dog, stay);
@@ -3606,14 +3635,49 @@ async function saveBoardingStayFromForm(formEl) {
   const stays = (dog.stays || []).filter((item) => !boardingStayMatchesIdentity(item, stay));
   stays.unshift(stay);
   const currentDogStatus = normalizeBoardingStatus(dog);
+  const restoreCancelledStatusUpdates = shouldRestoreCancelledStay
+    ? {
+        boardingStatus: boardingSummaryStatusFromStays(dog, stays, "Approved"),
+        approvedAt: dog.approvedAt || timestamp,
+        approvedBy: dog.approvedBy || restoreActor?.name || currentUser?.name || helperName?.value || "",
+        cancelledAt: "",
+        cancelledBy: "",
+        cancelledByEmail: "",
+        cancelledByRole: "",
+        cancelledSource: "",
+        customerCancellationReason: "",
+        customerCancellationAt: "",
+        customerCancellationBy: "",
+        customerCancellationByEmail: "",
+        latestCustomerCancellation: null,
+        statusHistory: [
+          ...(dog.statusHistory || []),
+          {
+            from: existingStayDisplayStatus,
+            to: "Approved",
+            stayId: stay.id,
+            requestCode: boardingStayRequestCode(dog, stay),
+            date: timestamp,
+            by: restoreActor?.name || currentUser?.name || helperName?.value || "",
+            byEmail: restoreActor?.email || currentUser?.email || helperEmail?.value || "",
+            byRole: restoreActor?.role || currentRole(),
+            source: restoreActor?.source || "staff",
+          },
+        ],
+        flags: (dog.flags || []).filter((flag) => flag !== "Required update from owner"),
+      }
+    : {};
   const statusUpdates = !existingStay && ["Pending", "Cancelled", "Checked Out"].includes(currentDogStatus)
     ? {
         boardingStatus: "Approved",
         statusHistory: [...(dog.statusHistory || []), { from: currentDogStatus, to: "Approved", date: timestamp, by: currentUser?.name || helperName?.value || "" }],
       }
     : {};
-  const record = upsertRecord("boardingDog", { ...dog, ...statusUpdates, stays });
+  const record = upsertRecord("boardingDog", { ...dog, ...statusUpdates, ...restoreCancelledStatusUpdates, stays });
   await sendPayload(record);
+  if (shouldRestoreCancelledStay) {
+    await addAuditLog("Restored cancelled boarding stay", "boardingDog", record, "Stay ID: " + boardingStayRequestCode(record, stay) + " | Approved");
+  }
   if (invoiceAdjustmentsChanged(existingStay?.invoiceAdjustments || [], invoiceAdjustments)) {
     const requestCode = boardingStayRequestCode(record, stay);
     const details = normalizeInvoiceAdjustments(invoiceAdjustments)
