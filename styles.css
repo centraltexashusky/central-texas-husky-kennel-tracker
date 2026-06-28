@@ -811,11 +811,13 @@ body.owned-dog-modal-open {
 
 .dashboard-priority-card {
   align-items: start;
-  background: #FFFFFF;
-  border: 1px solid #DDE5E2;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+    rgba(8, 17, 27, 0.70);
+  border: 1px solid rgba(215, 228, 226, 0.18);
   border-left-width: 4px;
   border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.06);
+  box-shadow: var(--glass-specular);
   color: var(--text);
   display: grid;
   gap: 4px;
@@ -825,13 +827,13 @@ body.owned-dog-modal-open {
 }
 
 .dashboard-priority-card strong {
-  color: #172033;
+  color: var(--text);
   font-size: 2.2rem;
   line-height: 1;
 }
 
 .dashboard-priority-card span {
-  color: #65748B;
+  color: var(--muted);
   font-size: 0.85rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -3076,29 +3078,31 @@ textarea {
 }
 
 .boarding-queue-card {
-  background: #FFFFFF;
-  border: 1px solid #DDE5E2;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+    rgba(8, 17, 27, 0.70);
+  border: 1px solid rgba(215, 228, 226, 0.18);
   border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.06);
-  color: #172033;
+  box-shadow: var(--glass-specular);
+  color: var(--text);
   display: grid;
   gap: 8px;
   padding: 12px;
 }
 
 .boarding-queue-card > span {
-  color: #65748B;
+  color: var(--muted);
   font-size: 1.5rem;
   font-weight: 900;
 }
 
 .boarding-queue-item {
   align-items: center;
-  background: #F8FAF7;
-  border: 1px solid #DDE5E2;
+  background: rgba(15, 32, 50, 0.78);
+  border: 1px solid rgba(215, 228, 226, 0.18);
   border-radius: 8px;
   box-shadow: none;
-  color: #172033;
+  color: var(--text);
   display: grid;
   gap: 10px;
   grid-template-columns: 48px minmax(0, 1fr);
@@ -3145,7 +3149,7 @@ textarea {
 }
 
 .boarding-queue-item small {
-  color: #65748B;
+  color: var(--muted);
   font-weight: 650;
 }
 
