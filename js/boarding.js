@@ -2556,13 +2556,49 @@ function boardingRosterFilterLabel(filter) {
   return filter === "Ready For Pickup" ? "Ready for Pickup" : filter;
 }
 
+function boardingStayPickupHasPassed(stay = {}, date = new Date()) {
+  const pickup = new Date(stay.pickupTime || stay.scheduledPickupTime || stay.requestedPickupTime || "");
+  const reference = date instanceof Date ? date : new Date(date);
+  return !Number.isNaN(pickup.getTime()) && !Number.isNaN(reference.getTime()) && pickup < reference;
+}
+
+function boardingStayIsCurrentOrUpcoming(record = {}, stay = {}, date = new Date()) {
+  if (!stay?.id) return true;
+  const status = boardingStayDisplayStatus(record, stay);
+  if (["Cancelled", "Checked Out"].includes(status)) return false;
+  if (["Pending", "Approved"].includes(status) && boardingStayPickupHasPassed(stay, date)) return false;
+  return true;
+}
+
+function boardingRecordHasCurrentOrUpcomingStatus(record = {}, status = "", date = new Date()) {
+  const stays = arrayValue(record.stays);
+  if (!stays.length) {
+    const recordStatus = normalizeBoardingStatus(record);
+    if (recordStatus !== status) return false;
+    if (["Pending", "Approved"].includes(recordStatus) && boardingStayPickupHasPassed(record, date)) return false;
+    return true;
+  }
+  return stays.some((stay) => boardingStayDisplayStatus(record, stay) === status && boardingStayIsCurrentOrUpcoming(record, stay, date));
+}
+
+function boardingRecordHasActionableStay(record = {}, date = new Date()) {
+  const stays = arrayValue(record.stays);
+  if (!stays.length) {
+    const status = normalizeBoardingStatus(record);
+    if (["Cancelled", "Checked Out"].includes(status)) return false;
+    if (["Pending", "Approved"].includes(status) && boardingStayPickupHasPassed(record, date)) return false;
+    return true;
+  }
+  return stays.some((stay) => boardingStayIsCurrentOrUpcoming(record, stay, date));
+}
+
 function boardingDogMatchesRosterFilter(record = {}, filter = boardingDogRosterFilter) {
   const status = boardingDisplayStatus(record);
   const hasActiveStay = isCurrentlyBoarding(record);
   const hasStays = Boolean((record.stays || []).length);
   if (filter === "All Boarding Dogs") return true;
-  if (filter === "Pending" || filter === "Pending Approval") return status === "Pending" && !hasActiveStay;
-  if (filter === "Approved") return status === "Approved" && !hasActiveStay;
+  if (filter === "Pending" || filter === "Pending Approval") return boardingRecordHasCurrentOrUpcomingStatus(record, "Pending") && !hasActiveStay;
+  if (filter === "Approved") return boardingRecordHasCurrentOrUpcomingStatus(record, "Approved") && !hasActiveStay;
   if (filter === "In Kennel") return status === "In Kennel" && (hasActiveStay || !hasStays);
   if (filter === "Ready For Pickup") return status === "Ready For Pickup" && (hasActiveStay || !hasStays);
   return hasActiveStay || (!hasStays && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status));
@@ -3700,6 +3736,7 @@ function renderBoardingQuickCards(records = []) {
   if (!container) return;
   const actionable = records
     .filter((record) => !["Cancelled", "Checked Out"].includes(boardingDisplayStatus(record)))
+    .filter((record) => boardingRecordHasActionableStay(record))
     .sort((a, b) => boardingQuickSortTime(a) - boardingQuickSortTime(b));
   container.innerHTML = actionable.length
     ? actionable.map(boardingQuickCardHtml).join("")
