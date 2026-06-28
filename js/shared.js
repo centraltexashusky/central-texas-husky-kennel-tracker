@@ -57,6 +57,49 @@ function cssEscapeValue(value = "") {
   return text.replace(/["\\\\]/g, "\\\\$&");
 }
 
+var CUDDLE_STAY_THEME_KEY = "cuddleStayTheme";
+
+function normalizeCuddleStayTheme(value) {
+  return value === "dark" ? "dark" : "light";
+}
+
+function getSavedCuddleStayTheme() {
+  try {
+    return normalizeCuddleStayTheme(localStorage.getItem(CUDDLE_STAY_THEME_KEY));
+  } catch (error) {
+    return "light";
+  }
+}
+
+function activeCuddleStayTheme() {
+  return normalizeCuddleStayTheme(document.documentElement.dataset.theme || getSavedCuddleStayTheme());
+}
+
+function updateThemeMenuState(theme = activeCuddleStayTheme()) {
+  const normalizedTheme = normalizeCuddleStayTheme(theme);
+  $$("[data-theme-option]").forEach((button) => {
+    const active = normalizeCuddleStayTheme(button.dataset.themeOption) === normalizedTheme;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function applyCuddleStayTheme(theme) {
+  const normalizedTheme = normalizeCuddleStayTheme(theme);
+  document.documentElement.dataset.theme = normalizedTheme;
+  updateThemeMenuState(normalizedTheme);
+}
+
+function saveCuddleStayTheme(theme) {
+  const normalizedTheme = normalizeCuddleStayTheme(theme);
+  try {
+    localStorage.setItem(CUDDLE_STAY_THEME_KEY, normalizedTheme);
+  } catch (error) {
+    // Storage can be blocked; keep the selected theme for this session.
+  }
+  applyCuddleStayTheme(normalizedTheme);
+}
+
 var form = $("#kennelForm");
 var modeLabel = $("#modeLabel");
 var daySelect = $("#dayOfWeek");
@@ -3071,12 +3114,27 @@ function mobileMoreEntries() {
   return [...configured, ...remainingNavEntries];
 }
 
+function mobileMoreHasContent() {
+  return helperIsLoggedIn();
+}
+
+function renderMobileThemeMenu() {
+  const theme = activeCuddleStayTheme();
+  return '<section class="mobile-more-theme" aria-label="Theme">' +
+    '<span class="mobile-more-theme-label">Theme</span>' +
+    '<div class="mobile-more-theme-toggle" role="group" aria-label="Theme">' +
+    '<button type="button" class="mobile-more-theme-option ' + (theme === "light" ? "is-active" : "") + '" data-theme-option="light" aria-pressed="' + String(theme === "light") + '">Light Mode</button>' +
+    '<button type="button" class="mobile-more-theme-option ' + (theme === "dark" ? "is-active" : "") + '" data-theme-option="dark" aria-pressed="' + String(theme === "dark") + '">Dark Mode</button>' +
+    '</div>' +
+    '</section>';
+}
+
 function renderMobileMoreMenu() {
   const list = $("#mobileMoreMenuList");
   if (!list) return;
   const currentPage = activePageId();
   const entries = mobileMoreEntries();
-  list.innerHTML = entries.length
+  const pageItems = entries.length
     ? entries
         .map(
           (entry) => {
@@ -3085,7 +3143,9 @@ function renderMobileMoreMenu() {
           },
         )
         .join("")
-    : \`<p class="mobile-more-empty">No additional pages are available for this login.</p>\`;
+    : "";
+  list.innerHTML = pageItems + renderMobileThemeMenu();
+  updateThemeMenuState();
 }
 
 function setMobileMoreOpen(open) {
@@ -3093,7 +3153,7 @@ function setMobileMoreOpen(open) {
   const backdrop = $("#mobileMoreBackdrop");
   const button = $("#mobileMoreButton");
   if (!sheet || !backdrop || !button) return;
-  const shouldOpen = Boolean(open && mobileMoreEntries().length);
+  const shouldOpen = Boolean(open && mobileMoreHasContent());
   if (shouldOpen) renderMobileMoreMenu();
   if (shouldOpen && sheet.hidden) pushAppSurfaceHistory("mobile-more");
   sheet.hidden = !shouldOpen;
@@ -3125,9 +3185,9 @@ function updateMobileNavigationAccess() {
   });
   const moreButton = $("#mobileMoreButton");
   if (moreButton) {
-    const hasMorePages = mobileMoreEntries().length > 0;
-    moreButton.disabled = !signedIn || !hasMorePages;
-    moreButton.hidden = !signedIn || !hasMorePages;
+    const hasMoreContent = mobileMoreHasContent();
+    moreButton.disabled = !signedIn || !hasMoreContent;
+    moreButton.hidden = !signedIn || !hasMoreContent;
   }
   if (!signedIn) setMobileMoreOpen(false);
   syncMobileNavigationActive();
@@ -10615,6 +10675,11 @@ function initEvents() {
     if (button.dataset.page) switchPage(button.dataset.page, { history: "push" });
   });
   $("#mobileMoreMenuList").addEventListener("click", (event) => {
+    const themeButton = event.target.closest(".mobile-more-theme-option[data-theme-option]");
+    if (themeButton) {
+      saveCuddleStayTheme(themeButton.dataset.themeOption);
+      return;
+    }
     const button = event.target.closest(".mobile-more-menu-item[data-page], .mobile-more-item[data-page]");
     if (!button) return;
     switchPage(button.dataset.page, { history: "push" });
@@ -13640,6 +13705,7 @@ async function resumeAppFromLifecycle(reason = "resume") {
 
 async function initializeApp() {
   document.body.classList.add("is-auth-booting");
+  applyCuddleStayTheme(getSavedCuddleStayTheme());
   let renderedDuringSessionRestore = false;
   try {
     initSupabaseClient();

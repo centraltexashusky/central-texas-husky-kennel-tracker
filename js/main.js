@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260628-our-dogs-filter-info-boarding-rows";
+import "./shared.js?v=20260628-our-dogs-filter-info-boarding-rows-theme-switch-light-mode";
 import "./auth.js?v=20260626-staff-session-rls-fix-login-role-fix-full-review-fixes";
 import "./customer.js?v=20260626-stay-scheduler-fix";
 import "./boarding.js?v=20260626-stay-scheduler-fix-skeleton-loading";

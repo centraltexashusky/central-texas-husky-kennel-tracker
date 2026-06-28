@@ -1,31 +1,50 @@
-:root {
-  --ink: #1f2d36;
-  --muted: #5e727b;
-  --line: #d7e0df;
-  --paper: #fbfaf7;
-  --panel: #ffffff;
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: #0F172A;
+  --muted: #475569;
+  --line: #E2E8F0;
+  --paper: #F5F7FB;
+  --panel: #FFFFFF;
   --surface: var(--panel);
   --color-background-primary: var(--panel);
-  --color-background-secondary: #f6f8f7;
-  --color-background-info: #e6f1fb;
-  --color-background-success: #eaf3de;
-  --color-background-warning: #fff7d6;
-  --color-background-danger: #fde8e5;
+  --color-background-secondary: #F5F7FB;
+  --color-background-info: #DBEAFE;
+  --color-background-success: #DCFCE7;
+  --color-background-warning: #FFF7ED;
+  --color-background-danger: #FEE2E2;
   --color-border-tertiary: var(--line);
   --color-text-primary: var(--ink);
   --color-text-secondary: var(--muted);
-  --color-text-tertiary: rgba(94, 114, 123, 0.76);
-  --color-text-info: #185fa5;
-  --color-text-success: #1f7a3b;
-  --color-text-warning: #8a5c00;
-  --color-text-danger: #a7352e;
-  --teal: #3e7a7f;
-  --teal-dark: #285a60;
-  --sage: #dfece7;
-  --gold: #f1c96f;
-  --red: #bf4e45;
-  --shadow: 0 16px 44px rgba(31, 45, 54, 0.1);
-  --focus: 0 0 0 3px rgba(62, 122, 127, 0.22);
+  --color-text-tertiary: #64748B;
+  --color-text-info: #1E40AF;
+  --color-text-success: #166534;
+  --color-text-warning: #9A3412;
+  --color-text-danger: #991B1B;
+  --teal: #0B63FF;
+  --teal-dark: #084ECC;
+  --sage: #EAF1FF;
+  --gold: #F97316;
+  --red: #EF4444;
+  --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  --focus: 0 0 0 3px rgba(11, 99, 255, 0.22);
+  --glass-blur: 0px;
+  --glass-blur-high: 0px;
+  --glass-fill: #FFFFFF;
+  --glass-fill-soft: #F8FAFC;
+  --glass-fill-hover: #EAF1FF;
+  --glass-border: #E2E8F0;
+  --glass-border-outer: #EEF2F7;
+  --glass-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  --glass-specular: none;
+  --glass-radius: 20px;
+  --glass-radius-sm: 12px;
+  --glass-radius-pill: 50px;
+  --tint-blue: #EAF1FF;
+  --tint-blue-strong: #0B63FF;
+  --tint-green: #DCFCE7;
+  --tint-gold: #FFF7ED;
+  --tint-red: #FEE2E2;
 }
 
 /* Prevent content flash during bulk DOM updates from remote sync. */
@@ -4204,8 +4223,9 @@ button:disabled {
   transform: translateX(-50%) translateY(0);
 }
 
-/* Liquid Glass theme layer */
-:root {
+/* Liquid Glass theme layer preserved as Dark Mode. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
   --glass-blur: 32px;
   --glass-blur-high: 40px;
   --glass-fill: rgba(255, 255, 255, 0.13);
@@ -4235,6 +4255,21 @@ button:disabled {
   --red: rgba(255, 105, 97, 0.9);
   --shadow: var(--glass-shadow), var(--glass-specular);
   --focus: 0 0 0 3px rgba(10, 132, 255, 0.18);
+  --surface: var(--panel);
+  --color-background-primary: var(--panel);
+  --color-background-secondary: rgba(8, 17, 27, 0.66);
+  --color-background-info: rgba(88, 196, 255, 0.14);
+  --color-background-success: rgba(34, 197, 94, 0.20);
+  --color-background-warning: rgba(255, 204, 102, 0.18);
+  --color-background-danger: rgba(255, 69, 58, 0.18);
+  --color-border-tertiary: var(--glass-border);
+  --color-text-primary: var(--ink);
+  --color-text-secondary: var(--muted);
+  --color-text-tertiary: rgba(255, 255, 255, 0.44);
+  --color-text-info: #e0f2fe;
+  --color-text-success: #dcfce7;
+  --color-text-warning: #fff7ed;
+  --color-text-danger: #fee2e2;
 }
 
 html {
@@ -5834,7 +5869,7 @@ button.is-loading {
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root[data-theme="dark"] {
     --glass-blur: 40px;
     --glass-blur-high: 48px;
     --glass-fill: rgba(255, 255, 255, 0.08);
@@ -5843,7 +5878,7 @@ button.is-loading {
     --paper: #050914;
   }
 
-  body {
+  :root[data-theme="dark"] body {
     background:
       linear-gradient(155deg, rgba(255, 255, 255, 0.06) 0%, transparent 26%),
       linear-gradient(50deg, rgba(10, 132, 255, 0.13) 0%, transparent 38%, rgba(52, 199, 89, 0.10) 100%),
@@ -8675,4 +8710,469 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   body:has(#taskSchedulerPage.is-active) .app-shell {
     padding-bottom: 32px;
   }
+}
+
+:root[data-theme="light"] {
+  background: var(--paper);
+  color: var(--ink);
+  color-scheme: light;
+}
+
+:root[data-theme="light"] body {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+:root[data-theme="light"] body::before {
+  display: none;
+}
+
+:root[data-theme="light"] .app-layout {
+  background: var(--paper);
+}
+
+:root[data-theme="light"] .app-boot-loader {
+  background:
+    linear-gradient(145deg, rgba(234, 241, 255, 0.92), rgba(245, 247, 251, 0.96)),
+    #F5F7FB;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .app-boot-loader p {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .sidebar {
+  background: #07101D;
+  border-right: 1px solid #0B1F34;
+  box-shadow: none;
+  color: #E5EDF7;
+}
+
+:root[data-theme="light"] .sidebar-brand {
+  border-bottom-color: rgba(229, 237, 247, 0.16);
+}
+
+:root[data-theme="light"] .sidebar-brand span {
+  color: #94A3B8;
+}
+
+:root[data-theme="light"] .nav-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #E5EDF7;
+  filter: none;
+}
+
+:root[data-theme="light"] .nav-button:hover,
+:root[data-theme="light"] .nav-button.is-active {
+  background: #0B63FF;
+  border-color: #0B63FF;
+  color: #FFFFFF;
+  filter: none;
+  transform: none;
+}
+
+:root[data-theme="light"] .nav-button:disabled,
+:root[data-theme="light"] .nav-button.is-locked,
+:root[data-theme="light"] .nav-button:disabled:hover,
+:root[data-theme="light"] .nav-button.is-locked:hover {
+  background: transparent;
+  color: #94A3B8;
+}
+
+:root[data-theme="light"] :where(.subhead, .login-panel p, .section-heading p, .dashboard-card p, .role-note, .customer-dog-item span, .dog-profile-editor p, .record-card span, .record-card p, .submission-item p, .field-help, .user-card small, .calendar-title span, .calendar-weekdays span, .summary-card span, .time-card span, .notification-item span, .notification-item p, .schedule-shift-card span, .schedule-warning-list, .schedule-day-card header span, .inline-save-status, .boarding-request-total-row span, .boarding-request-date-row, .boarding-family-header span, .boarding-family-header p) {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] :where(h1, h2, .record-card strong, .status-card span, .dashboard-card strong, .summary-card strong, .time-card strong, .customer-dog-item strong, .owned-vaccination-panel-heading h3, .settings-user-card, .boarding-family-header strong) {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(.status-card, .notice, .alert-banner, .signup-panel, .table-wrap, .dog-profile-editor, .dashboard-card, .role-note, .customer-dog-item, .customer-next-action-card, .customer-flow-empty, .customer-service-group, .estimate-box, .estimate-total, .task-calendar, .summary-card, .helper-total-item, .login-panel, .form-section, .recent-submissions, .inline-check, .record-card, .toggle-row, .checklist label, .admin-task-controls, .admin-password-panel, .column-chip, .detail-dialog, .detail-row, .activity-entry, .time-card, .submission-item, .rotation-banner, .submit-bar, .structured-care-panel, .owned-profile-section, .boarding-profile-section, .compact-record-card, .schedule-day-card, .schedule-shift-card, .notification-panel, .notification-item, .filter-toolbar, .profile-tabs, .dashboard-action-panel, .alert-checkbox-group, .settings-user-card, .boarding-family-group) {
+  background: #FFFFFF !important;
+  border-color: var(--line) !important;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06) !important;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] :where(.form-section, .recent-submissions, .detail-dialog) {
+  background: #FFFFFF;
+  border-color: var(--line);
+}
+
+:root[data-theme="light"] :where(.boarding-dog-modal:not([hidden]), .owned-dog-modal:not([hidden]), .service-modal:not([hidden]), .customer-dog-modal:not([hidden]), .customer-request-modal:not([hidden])) {
+  background: #FFFFFF !important;
+  border-color: var(--line) !important;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.42), 0 18px 45px rgba(15, 23, 42, 0.12) !important;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] :where(.boarding-dog-modal .detail-row, .owned-dog-modal .detail-row, .service-modal .detail-row, .customer-dog-modal .detail-row, .customer-request-modal .detail-row, .detail-dialog .detail-row, .detail-dialog .record-card) {
+  background: #F8FAFC !important;
+  border-color: var(--line) !important;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] button {
+  background: #0B63FF;
+  border-color: #0B63FF;
+  box-shadow: 0 8px 18px rgba(11, 99, 255, 0.22);
+  color: #FFFFFF;
+  filter: none;
+}
+
+:root[data-theme="light"] button:hover {
+  background: #084ECC;
+  border-color: #084ECC;
+  box-shadow: 0 10px 22px rgba(11, 99, 255, 0.24);
+  filter: none;
+}
+
+:root[data-theme="light"] :where(.secondary-button, .sync-button, .media-preview-button, .icon-button, .remove-task-button, .column-chip, .section-heading span, .status-dot) {
+  background: #FFFFFF;
+  border-color: var(--line);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] :where(.secondary-button:hover, .sync-button:hover, .media-preview-button:hover, .icon-button:hover, .remove-task-button:hover, .clickable-card:hover) {
+  background: #EAF1FF;
+  border-color: #BFDBFE;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="light"] :where(.danger-button, .remove-task-button) {
+  background: #FEE2E2;
+  border-color: #FECACA;
+  color: #991B1B;
+}
+
+:root[data-theme="light"] .sync-button.stop-impersonation-button,
+:root[data-theme="light"] .sync-button.stop-impersonation-button:hover {
+  background: #EF4444;
+  border-color: #EF4444;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open,
+:root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open:hover,
+:root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open:focus-visible {
+  background: #F97316 !important;
+  border-color: #F97316 !important;
+  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.24);
+  color: #FFFFFF !important;
+}
+
+:root[data-theme="light"] :where(input[type="date"], input[type="datetime-local"], input[type="email"], input[type="number"], input[type="password"], input[type="search"], input[type="tel"], input[type="text"], input[type="url"], input[type="file"], select, textarea, .task-edit-input, .service-quantity, .filter-toolbar select, .table-toolbar input[type="search"]) {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+  color: var(--ink);
+}
+
+:root[data-theme="light"] :where(.boarding-dog-modal input, .boarding-dog-modal select, .boarding-dog-modal textarea, .owned-dog-modal input, .owned-dog-modal select, .owned-dog-modal textarea, .service-modal input, .service-modal select, .service-modal textarea, .customer-dog-modal input, .customer-dog-modal select, .customer-dog-modal textarea, .customer-request-modal input, .customer-request-modal select, .customer-request-modal textarea, .detail-dialog input, .detail-dialog select, .detail-dialog textarea) {
+  background: #FFFFFF;
+  border-color: #CBD5E1;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] input::placeholder,
+:root[data-theme="light"] textarea::placeholder {
+  color: #94A3B8;
+}
+
+:root[data-theme="light"] :where(input[readonly], textarea[readonly], select.is-readonly-select, .tracker-form.is-readonly input, .tracker-form.is-readonly select, .tracker-form.is-readonly textarea) {
+  background: #F8FAFC;
+  color: var(--muted);
+}
+
+:root[data-theme="light"] :where(input:focus, select:focus, textarea:focus, button:focus-visible, .task-edit-input:focus) {
+  border-color: #0B63FF;
+  box-shadow: var(--focus);
+  outline: 0;
+}
+
+:root[data-theme="light"] option {
+  background: #FFFFFF;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .data-table {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .data-table th {
+  background: #EAF1FF;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .data-table th[data-sort-column]:hover,
+:root[data-theme="light"] .data-table th[data-settings-sort]:hover {
+  background: #DBEAFE;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .data-table td {
+  background: #FFFFFF;
+  border-bottom-color: var(--line);
+}
+
+:root[data-theme="light"] .data-table tr:hover td {
+  background: #F8FAFC;
+}
+
+:root[data-theme="light"] :where(.notice, .alert-banner, .estimate-total, .rotation-banner) {
+  background: #FFF7ED !important;
+  border-color: #FED7AA !important;
+  color: #9A3412;
+}
+
+:root[data-theme="light"] .record-card.is-completed {
+  background: #F8FAFC !important;
+  opacity: 0.84;
+}
+
+:root[data-theme="light"] .record-card.is-urgent {
+  background: #FEE2E2 !important;
+  border-color: #FCA5A5 !important;
+  box-shadow: inset 4px 0 0 #EF4444, 0 10px 30px rgba(15, 23, 42, 0.06) !important;
+}
+
+:root[data-theme="light"] .profile-tabs .is-active,
+:root[data-theme="light"] .care-filter-toolbar .is-active,
+:root[data-theme="light"] .view-toggle-button.is-active {
+  background: #EAF1FF;
+  border-color: #BFDBFE;
+  color: #0B63FF;
+}
+
+:root[data-theme="light"] .owned-vaccination-panel {
+  background: #EFF6FF;
+  border-color: #BFDBFE;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+:root[data-theme="light"] .owned-vaccination-panel-heading p {
+  color: #475569;
+}
+
+:root[data-theme="light"] :where(.dog-type-chip.ownedDog, .boarding-status-chip.is-status-approved, .boarding-status-chip.is-status-checked-in, .boarding-status-chip.is-status-in-kennel, .vaccination-status-chip.is-vaccine-ok, .boarding-service-chip.is-service-complete, .inline-save-status.is-saved) {
+  background: #DCFCE7;
+  border-color: #86EFAC;
+  color: #166534;
+}
+
+:root[data-theme="light"] :where(.boarding-status-chip.is-status-pending, .vaccination-status-chip.is-vaccine-needed, .boarding-service-chip.is-service-due) {
+  background: #FFF7ED;
+  border-color: #FED7AA;
+  color: #9A3412;
+}
+
+:root[data-theme="light"] :where(.vaccination-status-chip.is-vaccine-expired, .boarding-service-chip.is-service-overdue, .inline-save-status.is-error) {
+  background: #FEE2E2;
+  border-color: #FCA5A5;
+  color: #991B1B;
+}
+
+:root[data-theme="light"] :where(.dog-type-chip.boardingDog, .boarding-request-code-chip, .boarding-status-chip.is-status-ready-for-pickup, .boarding-service-chip.is-service-pending, .boarding-family-chip) {
+  background: #DBEAFE;
+  border-color: #93C5FD;
+  color: #1E40AF;
+}
+
+:root[data-theme="light"] :where(.dog-type-chip.customerDog) {
+  background: #FFF7ED;
+  border-color: #FED7AA;
+  color: #9A3412;
+}
+
+:root[data-theme="light"] :where(.boarding-status-chip.is-status-cancelled, .boarding-status-chip.is-status-checked-out) {
+  background: #F1F5F9;
+  border-color: #CBD5E1;
+  color: #475569;
+}
+
+:root[data-theme="light"] .boarding-family-group {
+  border-left-color: #2563EB !important;
+}
+
+:root[data-theme="light"] .operation-calendar {
+  background: #FFFFFF;
+  border-color: var(--line);
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day {
+  background: #FFFFFF !important;
+  border-color: var(--line);
+  color: var(--ink) !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day strong {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day span,
+:root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day small,
+:root[data-theme="light"] .operation-calendar-header {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day.has-override {
+  background: #FFF7ED !important;
+  border-color: #FDBA74;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day.is-closed {
+  background: #FEE2E2 !important;
+  border-color: #FCA5A5;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day.is-outside-month {
+  background: #F1F5F9 !important;
+}
+
+:root[data-theme="light"] .global-search-panel,
+:root[data-theme="light"] .global-search-result {
+  background: #FFFFFF;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .global-search-result span,
+:root[data-theme="light"] .global-search-results p {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .mobile-bottom-nav {
+  background: #07101D !important;
+  border-color: rgba(229, 237, 247, 0.16);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24) !important;
+  color: #E5EDF7;
+}
+
+:root[data-theme="light"] .mobile-bottom-nav-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #E5EDF7;
+}
+
+:root[data-theme="light"] .mobile-bottom-nav-button.is-active,
+:root[data-theme="light"] .mobile-bottom-nav-button:hover {
+  background: #0B63FF;
+  box-shadow: none;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .mobile-more-backdrop {
+  background: rgba(15, 23, 42, 0.42) !important;
+}
+
+:root[data-theme="light"] .mobile-more-sheet {
+  background: #FFFFFF !important;
+  border-color: var(--line);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18) !important;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .mobile-more-header span {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .mobile-more-header h2,
+:root[data-theme="light"] .mobile-more-close {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .mobile-more-close,
+:root[data-theme="light"] .mobile-more-menu-item {
+  background: #FFFFFF;
+  border-color: var(--line);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .mobile-more-menu-item::after {
+  color: #94A3B8;
+}
+
+:root[data-theme="light"] .mobile-more-menu-item:hover,
+:root[data-theme="light"] .mobile-more-menu-item:focus-visible,
+:root[data-theme="light"] .mobile-more-menu-item.is-active {
+  background: #EAF1FF;
+  color: #0B63FF;
+}
+
+:root[data-theme="light"] .mobile-more-empty {
+  color: var(--muted);
+}
+
+.mobile-more-theme {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.mobile-more-theme-label {
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mobile-more-theme-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.mobile-more-theme-option {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.82);
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.mobile-more-theme-option.is-active,
+.mobile-more-theme-option[aria-pressed="true"] {
+  background: #0B63FF;
+  border-color: #0B63FF;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .mobile-more-theme {
+  border-top-color: var(--line);
+}
+
+:root[data-theme="light"] .mobile-more-theme-label {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .mobile-more-theme-toggle {
+  background: #F8FAFC;
+  border-color: var(--line);
+}
+
+:root[data-theme="light"] .mobile-more-theme-option {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .mobile-more-theme-option.is-active,
+:root[data-theme="light"] .mobile-more-theme-option[aria-pressed="true"] {
+  background: #0B63FF;
+  border-color: #0B63FF;
+  color: #FFFFFF;
 }
