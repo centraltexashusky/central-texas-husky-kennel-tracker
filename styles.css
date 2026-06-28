@@ -26,13 +26,13 @@
   --color-text-secondary: #65748B;
   --color-text-tertiary: #8FA0B3;
   --color-text-info: #2559C7;
-  --color-text-success: #2E7D5B;
+  --color-text-success: #16864E;
   --color-text-warning: #A96510;
   --color-text-danger: #9F342F;
 
   /* Brand accent colors */
-  --teal: #2E7D5B;
-  --teal-dark: #276B57;
+  --teal: #1A9F63;
+  --teal-dark: #147A4D;
   --sage: #EEF4FF;
   --gold: #D89A2B;
   --red: #C2413A;
@@ -58,7 +58,7 @@
   /* Tint fills */
   --tint-blue: #EAF1FF;
   --tint-blue-strong: #315F85;
-  --tint-green: #E5F4EC;
+  --tint-green: #E2F7EA;
   --tint-gold: #FFF3D8;
   --tint-red: #FBE6E4;
 }
@@ -838,7 +838,7 @@ body.owned-dog-modal-open {
 }
 
 .dashboard-priority-card.is-count-clear {
-  border-left-color: #2E7D5B;
+  border-left-color: #1FB76C;
 }
 
 .dashboard-priority-card.is-count-watch {
@@ -8865,7 +8865,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .dashboard-priority-card.is-count-clear {
-  border-left-color: #2E7D5B;
+  border-left-color: #1FB76C;
 }
 
 :root[data-theme="light"] .dashboard-priority-card.is-count-watch {
@@ -9136,9 +9136,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] :where(.dog-type-chip.ownedDog, .boarding-status-chip.is-status-approved, .boarding-status-chip.is-status-checked-in, .boarding-status-chip.is-status-in-kennel, .vaccination-status-chip.is-vaccine-ok, .boarding-service-chip.is-service-complete, .inline-save-status.is-saved) {
-  background: #E5F4EC;
-  border-color: #B8DEC9;
-  color: #2E7D5B;
+  background: #E2F7EA;
+  border-color: #A8E4C1;
+  color: #16864E;
 }
 
 :root[data-theme="light"] :where(.boarding-status-chip.is-status-pending, .boarding-status-chip.is-status-ready-for-pickup, .vaccination-status-chip.is-vaccine-needed, .boarding-service-chip.is-service-due, .warning-chip) {
@@ -9499,8 +9499,14 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active,
 :root[data-theme="light"] .mobile-bottom-nav-button:hover {
-  background: #F4F8F7;
-  color: #10283F;
+  background: rgba(255, 255, 255, 0.12);
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .mobile-bottom-nav-button.is-active {
+  background: #CFE8F7;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.58), 0 8px 18px rgba(9, 31, 50, 0.22);
+  color: #0F3554;
 }
 
 :root[data-theme="light"] .request-filter-button.is-active,
@@ -9536,9 +9542,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] #openScheduledCareTaskButton,
 :root[data-theme="light"] #taskSchedulerPage .task-scheduler-form-actions button[type="submit"],
 :root[data-theme="light"] #taskSchedulerPage [data-action="complete-scheduled-care-task"] {
-  background: #2E7D5B;
-  border-color: #2E7D5B;
-  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 18px rgba(46, 125, 91, 0.18);
+  background: #1A9F63;
+  border-color: #1A9F63;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 18px rgba(26, 159, 99, 0.18);
   color: #FFFFFF;
 }
 
@@ -9548,8 +9554,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] #openScheduledCareTaskButton:hover,
 :root[data-theme="light"] #taskSchedulerPage .task-scheduler-form-actions button[type="submit"]:hover,
 :root[data-theme="light"] #taskSchedulerPage [data-action="complete-scheduled-care-task"]:hover {
-  background: #276B57;
-  border-color: #276B57;
-  box-shadow: 0 10px 22px rgba(46, 125, 91, 0.22);
+  background: #147A4D;
+  border-color: #147A4D;
+  box-shadow: 0 10px 22px rgba(26, 159, 99, 0.22);
   color: #FFFFFF;
 }
