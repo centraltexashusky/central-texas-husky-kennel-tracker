@@ -727,10 +727,99 @@ function renderOwnedDogMobileCards(records = []) {
     const priority = (dog) => Number(ownedDogExerciseDue(dog)) + Number(ownedDogTrainingDue(dog)) + Number(ownedDogBathDue(dog)) + Number(ownedDogHeatStatus(dog).expectedSoon || ownedDogHeatStatus(dog).inHeat || ownedDogHeatStatus(dog).overdue);
     return priority(b) - priority(a) || ownedDogDisplayName(a).localeCompare(ownedDogDisplayName(b));
   });
+  if (ownedDogCareFilter === "Special Care") {
+    container.innerHTML = mobileRecords.length
+      ? mobileRecords.map(ownedDogSpecialCareMobileCardHtml).join("")
+      : \`<article class="record-card mobile-roster-card"><strong>No matching Special Care dogs</strong><p>Try a shorter search or another care filter.</p></article>\`;
+    return;
+  }
   container.innerHTML = mobileRecords.length
     ? mobileRecords.map(ownedDogMobileCardHtml).join("")
     : \`<article class="record-card mobile-roster-card"><strong>No matching dogs</strong><p>Try a shorter search or another care filter.</p></article>\`;
   hydrateProfilePhotoElements(container);
+}
+
+function ownedDogSpecialCareLogDate(log = {}) {
+  return dateOnly(log.date || log.loggedAt || log.createdAt || log.updatedAt);
+}
+
+function ownedDogSpecialCareDateLabel(date = "") {
+  const cleanDate = dateOnly(date);
+  if (!cleanDate) return "No date";
+  const parsed = new Date(cleanDate + "T00:00:00");
+  if (Number.isNaN(parsed.getTime())) return cleanDate;
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function ownedDogSpecialCareWeeklyLogs(record = {}, referenceDate = todayDate()) {
+  const endDate = dateOnly(referenceDate) || todayDate();
+  return ownedDogActivityLogs(record)
+    .map((log) => ({ ...log, displayDate: ownedDogSpecialCareLogDate(log) }))
+    .filter((log) => {
+      const days = daysBetweenDates(log.displayDate, endDate);
+      return days !== null && days >= 0 && days < 7;
+    });
+}
+
+function ownedDogSpecialCareLogClass(log = {}) {
+  const label = \`\${log.group || ""} \${log.type || ""}\`.toLowerCase();
+  if (/medical|behavior|care/.test(label)) return "is-medical";
+  if (/heat/.test(label)) return "is-heat";
+  if (/bath/.test(label)) return "is-bath";
+  if (/training/.test(label)) return "is-training";
+  return "is-exercise";
+}
+
+function ownedDogSpecialCareDogBoxHtml(record = {}) {
+  const dog = normalizeOwnedDogCare(record);
+  const name = ownedDogDisplayName(dog) || "Dog";
+  const meta = [dog.sex, dog.careStatus || ownedDogCareSummary(dog)].filter(Boolean).join(" | ");
+  return \`<div class="special-care-dog-box">
+    <strong>\${escapeHtml(name)}</strong>
+    \${meta ? \`<span>\${escapeHtml(meta)}</span>\` : ""}
+    <div class="record-actions special-care-dog-actions">
+      <button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(dog.id)}">View</button>
+      <button type="button" class="secondary-button" data-action="edit-owned" data-id="\${escapeHtml(dog.id)}">Edit</button>
+      <button type="button" class="secondary-button" data-action="log-owned-care" data-id="\${escapeHtml(dog.id)}">Log Care</button>
+    </div>
+  </div>\`;
+}
+
+function ownedDogSpecialCareLogHtml(log = {}) {
+  const type = log.type || log.group || "Care";
+  const note = [log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ");
+  const byline = log.completedBy ? \`<span>Logged by \${escapeHtml(log.completedBy)}</span>\` : "";
+  return \`<article class="special-care-log-entry">
+    <time class="special-care-log-date" datetime="\${escapeHtml(log.displayDate || "")}">\${escapeHtml(ownedDogSpecialCareDateLabel(log.displayDate))}</time>
+    <span class="special-care-log-type \${ownedDogSpecialCareLogClass(log)}">\${escapeHtml(type)}</span>
+    <div class="special-care-log-note">
+      <p>\${escapeHtml(note || "No note recorded.")}</p>
+      \${byline}
+      \${mediaLinkHtml(log)}
+    </div>
+  </article>\`;
+}
+
+function ownedDogSpecialCareLogsHtml(record = {}) {
+  const logs = ownedDogSpecialCareWeeklyLogs(record);
+  return logs.length
+    ? \`<div class="special-care-log-list">\${logs.map(ownedDogSpecialCareLogHtml).join("")}</div>\`
+    : \`<div class="special-care-empty-log">No dated health logs in the last 7 days. Use Log Care to add a health note.</div>\`;
+}
+
+function ownedDogSpecialCareMobileCardHtml(record = {}) {
+  return \`
+    <article class="record-card mobile-roster-card special-care-mobile-card" data-id="\${escapeHtml(record.id || "")}">
+      \${ownedDogSpecialCareDogBoxHtml(record)}
+      \${ownedDogSpecialCareLogsHtml(record)}
+    </article>\`;
+}
+
+function renderOwnedDogSpecialCareTable(records = []) {
+  $("#ownedDogTableHead").innerHTML = '<tr><th>Dog</th><th>Health logs - last 7 days</th></tr>';
+  $("#ownedDogTableBody").innerHTML = records.length
+    ? records.map((record) => \`<tr class="special-care-health-row" data-id="\${escapeHtml(record.id || "")}"><td class="special-care-dog-cell">\${ownedDogSpecialCareDogBoxHtml(record)}</td><td class="special-care-log-cell">\${ownedDogSpecialCareLogsHtml(record)}</td></tr>\`).join("")
+    : '<tr><td colspan="2">No matching Special Care dogs. Try a shorter search or another care filter.</td></tr>';
 }
 
 function renderOwnedDogs() {
@@ -741,6 +830,9 @@ function renderOwnedDogs() {
   const allDogs = readRecords("ownedDog").filter((record) => !record.removed);
   const records = sortRecordsForTable("ownedDog", allDogs.filter((record) => query ? matches(record, query) : ownedDogMatchesCareFilter(record)));
   const columns = activeColumns("ownedDog");
+  const isSpecialCareView = ownedDogCareFilter === "Special Care";
+  $("#ownedDogTable")?.classList.toggle("is-special-care-table", isSpecialCareView);
+  $("#ownedDogColumnManager").hidden = isSpecialCareView;
   const summary = {
     total: allDogs.length,
     exerciseDue: allDogs.filter((dog) => ownedDogExerciseDue(dog)).length,
@@ -760,25 +852,29 @@ function renderOwnedDogs() {
     $("#ownedDogSummary").hidden = true;
   }
   renderOwnedDogFilterCounts(summary);
-  $("#ownedDogTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="ownedDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
-  $("#ownedDogTableBody").innerHTML = records.length
-    ? records
-        .map((record) => {
-          const heat = ownedDogHeatStatus(record);
-          const hasRosterAlert = ownedDogHasRosterAlert(record);
-          const rowClass = [
-            ownedDogExerciseDue(record) || ownedDogTrainingDue(record) || ownedDogBathDue(record) || hasRosterAlert ? "has-care-due" : "",
-            heat.inHeat ? "is-in-heat" : "",
-          ].filter(Boolean).join(" ");
-          return \`<tr data-id="\${record.id}" class="\${rowClass}">\${columns.map((column) => {
-            const cellValue = escapeHtml(column.value(record));
-            return \`<td>\${cellValue}\${column.key === "callName" ? ownedDogRosterAlertChipsHtml(record) : ""}</td>\`;
-          }).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("ownedDog")}<button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(record.id)}">View</button><button type="button" class="secondary-button" data-action="edit-owned" data-id="\${escapeHtml(record.id)}">Edit</button><button type="button" class="secondary-button" data-action="log-owned-care" data-id="\${escapeHtml(record.id)}">Log Care</button></div></td></tr>\`;
-        })
-        .join("")
-    : \`<tr><td colspan="\${(columns.length || 1) + 1}">No matching dogs. Use Add New Dog.</td></tr>\`;
+  if (isSpecialCareView) {
+    renderOwnedDogSpecialCareTable(records);
+  } else {
+    $("#ownedDogTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="ownedDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
+    $("#ownedDogTableBody").innerHTML = records.length
+      ? records
+          .map((record) => {
+            const heat = ownedDogHeatStatus(record);
+            const hasRosterAlert = ownedDogHasRosterAlert(record);
+            const rowClass = [
+              ownedDogExerciseDue(record) || ownedDogTrainingDue(record) || ownedDogBathDue(record) || hasRosterAlert ? "has-care-due" : "",
+              heat.inHeat ? "is-in-heat" : "",
+            ].filter(Boolean).join(" ");
+            return \`<tr data-id="\${record.id}" class="\${rowClass}">\${columns.map((column) => {
+              const cellValue = escapeHtml(column.value(record));
+              return \`<td>\${cellValue}\${column.key === "callName" ? ownedDogRosterAlertChipsHtml(record) : ""}</td>\`;
+            }).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("ownedDog")}<button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(record.id)}">View</button><button type="button" class="secondary-button" data-action="edit-owned" data-id="\${escapeHtml(record.id)}">Edit</button><button type="button" class="secondary-button" data-action="log-owned-care" data-id="\${escapeHtml(record.id)}">Log Care</button></div></td></tr>\`;
+          })
+          .join("")
+      : \`<tr><td colspan="\${(columns.length || 1) + 1}">No matching dogs. Use Add New Dog.</td></tr>\`;
+  }
   renderOwnedDogMobileCards(records);
-  renderColumnManager("ownedDog", "#ownedDogColumnManager");
+  if (!isSpecialCareView) renderColumnManager("ownedDog", "#ownedDogColumnManager");
   renderCareDogOptions();
 }
 

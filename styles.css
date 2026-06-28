@@ -5242,6 +5242,149 @@ option {
   gap: 6px;
 }
 
+.data-table.is-special-care-table {
+  border-collapse: separate;
+  border-spacing: 0 12px;
+  min-width: 860px;
+}
+
+.data-table.is-special-care-table th {
+  background: rgba(185, 222, 207, 0.18);
+}
+
+.data-table.is-special-care-table td {
+  background: transparent;
+  border-bottom: 0;
+  padding: 10px;
+  vertical-align: stretch;
+}
+
+.special-care-dog-cell {
+  width: 280px;
+}
+
+.special-care-dog-box {
+  background:
+    linear-gradient(135deg, rgba(216, 154, 43, 0.16), rgba(185, 222, 207, 0.08)),
+    rgba(8, 17, 27, 0.58);
+  border: 2px solid rgba(216, 154, 43, 0.88);
+  border-radius: 12px;
+  box-shadow: inset 4px 0 0 rgba(216, 154, 43, 0.95), 0 12px 28px rgba(0, 0, 0, 0.16);
+  display: grid;
+  gap: 8px;
+  height: 100%;
+  padding: 14px 14px 14px 16px;
+}
+
+.special-care-dog-box strong {
+  color: var(--text);
+  font-size: 1.25rem;
+  line-height: 1.15;
+}
+
+.special-care-dog-box span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.special-care-dog-actions {
+  gap: 6px;
+  min-width: 0;
+}
+
+.special-care-dog-actions button {
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.special-care-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.special-care-log-entry {
+  align-items: start;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 92px 142px minmax(0, 1fr);
+  padding: 12px;
+}
+
+.special-care-log-date {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.special-care-log-type {
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 5px 8px;
+  text-align: center;
+}
+
+.special-care-log-type.is-medical {
+  background: rgba(194, 65, 58, 0.18);
+  color: #FCA5A5;
+}
+
+.special-care-log-type.is-heat {
+  background: rgba(216, 154, 43, 0.20);
+  color: #FACC6B;
+}
+
+.special-care-log-type.is-bath {
+  background: rgba(96, 165, 250, 0.18);
+  color: #93C5FD;
+}
+
+.special-care-log-type.is-training {
+  background: rgba(26, 159, 99, 0.18);
+  color: #86EFAC;
+}
+
+.special-care-log-type.is-exercise {
+  background: rgba(148, 163, 184, 0.20);
+  color: #CBD5E1;
+}
+
+.special-care-log-note {
+  display: grid;
+  gap: 4px;
+}
+
+.special-care-log-note p,
+.special-care-log-note span {
+  margin: 0;
+}
+
+.special-care-log-note p {
+  color: var(--text);
+  font-weight: 760;
+}
+
+.special-care-log-note span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.special-care-empty-log {
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  color: var(--muted);
+  font-weight: 750;
+  padding: 14px;
+}
+
+.special-care-mobile-card {
+  gap: 12px;
+}
+
 .boarding-mobile-card-main {
   align-items: start;
   grid-template-columns: 78px minmax(0, 1fr);
@@ -6197,6 +6340,14 @@ button.is-loading {
 
   .mobile-roster-list {
     display: grid;
+  }
+
+  .special-care-log-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .special-care-log-type {
+    justify-self: start;
   }
 
   .mobile-card-list {
@@ -9101,6 +9252,73 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .data-table tr:hover td {
   background: #F8FAF7;
+}
+
+:root[data-theme="light"] .data-table.is-special-care-table th {
+  background: #F2F7F5;
+  color: #52647C;
+}
+
+:root[data-theme="light"] .data-table.is-special-care-table td {
+  background: transparent;
+  border-bottom-color: transparent;
+}
+
+:root[data-theme="light"] .data-table.is-special-care-table tr:hover td {
+  background: transparent;
+}
+
+:root[data-theme="light"] .special-care-dog-box {
+  background: #FFFFFF;
+  border-color: #D89A2B;
+  box-shadow: inset 4px 0 0 #D89A2B, 0 10px 24px rgba(23, 32, 51, 0.08);
+}
+
+:root[data-theme="light"] .special-care-dog-box strong,
+:root[data-theme="light"] .special-care-log-date,
+:root[data-theme="light"] .special-care-log-note p {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .special-care-dog-box span,
+:root[data-theme="light"] .special-care-log-note span,
+:root[data-theme="light"] .special-care-empty-log {
+  color: var(--muted);
+}
+
+:root[data-theme="light"] .special-care-log-entry {
+  background: #F8FAF7;
+  border-color: #DDE5E2;
+}
+
+:root[data-theme="light"] .special-care-log-type.is-medical {
+  background: #FBE6E4;
+  color: #9F342F;
+}
+
+:root[data-theme="light"] .special-care-log-type.is-heat {
+  background: #FFF3D8;
+  color: #8A5A00;
+}
+
+:root[data-theme="light"] .special-care-log-type.is-bath {
+  background: #EAF1FF;
+  color: #2559C7;
+}
+
+:root[data-theme="light"] .special-care-log-type.is-training {
+  background: #E2F7EA;
+  color: #16864E;
+}
+
+:root[data-theme="light"] .special-care-log-type.is-exercise {
+  background: #EEF4FF;
+  color: #52647C;
+}
+
+:root[data-theme="light"] .special-care-empty-log {
+  background: #F8FAF7;
+  border-color: #DDE5E2;
 }
 
 :root[data-theme="light"] :where(.notice, .alert-banner, .estimate-total, .rotation-banner) {
