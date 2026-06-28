@@ -72,7 +72,8 @@ function boardingStayBelongingsHtml(stay = {}, options = {}) {
   if (!belongings && !options.showEmpty) return "";
   const label = options.label || "Belongings";
   const text = belongings || options.emptyText || "No belongings listed";
-  return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(label)}</strong><p>\${escapeHtml(text)}</p></article>\`;
+  const extraClass = options.className ? \` \${escapeHtml(options.className)}\` : "";
+  return \`<article class="record-card compact-record-card\${extraClass}"><strong>\${escapeHtml(label)}</strong><p>\${escapeHtml(text)}</p></article>\`;
 }
 
 function boardingStayBelongingsLineHtml(stay = {}, options = {}) {
@@ -3094,7 +3095,7 @@ function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
       <p>Status: \${escapeHtml(paymentStatus)}\${record.paymentMethod ? \` by \${escapeHtml(record.paymentMethod)}\` : ""}</p>
     </article>
     \${stay.id ? boardingStayDetailCardHtml(record, stay, { compact: true, hideInvoiceSummary: true }) : ""}
-    \${boardingStayBelongingsHtml(stay, { showEmpty: true, label: "Belongings to return at checkout" })}
+    \${boardingStayBelongingsHtml(stay, { showEmpty: true, label: "Belongings to return at checkout", className: "boarding-checkout-belongings-card" })}
     <article class="record-card compact-record-card"><strong>Services</strong><p>\${escapeHtml(services.length ? services.join(", ") : "No services listed")}</p></article>
     \${stay.id ? boardingStayInvoiceSummaryHtml(record, stay, { final: true }) : \`<article class="record-card compact-record-card"><strong>Total</strong><p>\${escapeHtml(total ? money(total) : "No invoice total saved")}</p></article>\`}
     <label>Checkout note<textarea id="checkoutNote" rows="3" placeholder="Payment note, pickup person, invoice issue, or checkout detail"></textarea></label>

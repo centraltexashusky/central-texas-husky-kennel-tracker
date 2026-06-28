@@ -9904,3 +9904,26 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .boarding-queue-item .kennel-tag {
   color: #65748B;
 }
+
+.record-card.boarding-checkout-belongings-card {
+  border-color: #F97316 !important;
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.72), 0 8px 18px rgba(249, 115, 22, 0.16) !important;
+}
+
+.record-card.boarding-checkout-belongings-card strong {
+  color: #FED7AA;
+}
+
+:root[data-theme="light"] .record-card.boarding-checkout-belongings-card {
+  background: #FFF7ED !important;
+  border-color: #F97316 !important;
+  box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.55), 0 8px 18px rgba(249, 115, 22, 0.14) !important;
+}
+
+:root[data-theme="light"] .record-card.boarding-checkout-belongings-card strong {
+  color: #9A3412;
+}
+
+:root[data-theme="light"] .record-card.boarding-checkout-belongings-card p {
+  color: #40526A;
+}
