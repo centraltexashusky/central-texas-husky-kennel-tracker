@@ -1,49 +1,65 @@
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
+
+  /* Core palette */
   --ink: #0F172A;
-  --muted: #475569;
+  --muted: #64748B;
   --line: #E2E8F0;
   --paper: #F5F7FB;
   --panel: #FFFFFF;
   --surface: var(--panel);
-  --color-background-primary: var(--panel);
+
+  /* Semantic background */
+  --color-background-primary: #FFFFFF;
   --color-background-secondary: #F5F7FB;
   --color-background-info: #DBEAFE;
   --color-background-success: #DCFCE7;
-  --color-background-warning: #FFF7ED;
+  --color-background-warning: #FEF3C7;
   --color-background-danger: #FEE2E2;
-  --color-border-tertiary: var(--line);
-  --color-text-primary: var(--ink);
-  --color-text-secondary: var(--muted);
-  --color-text-tertiary: #64748B;
-  --color-text-info: #1E40AF;
-  --color-text-success: #166534;
-  --color-text-warning: #9A3412;
-  --color-text-danger: #991B1B;
-  --teal: #0B63FF;
-  --teal-dark: #084ECC;
-  --sage: #EAF1FF;
-  --gold: #F97316;
+
+  /* Semantic borders */
+  --color-border-tertiary: #E2E8F0;
+
+  /* Semantic text */
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #64748B;
+  --color-text-tertiary: #94A3B8;
+  --color-text-info: #1D4ED8;
+  --color-text-success: #15803D;
+  --color-text-warning: #B45309;
+  --color-text-danger: #B91C1C;
+
+  /* Brand accent colors */
+  --teal: #2563EB;
+  --teal-dark: #1D4ED8;
+  --sage: #EFF6FF;
+  --gold: #F59E0B;
   --red: #EF4444;
-  --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
-  --focus: 0 0 0 3px rgba(11, 99, 255, 0.22);
+
+  /* Shadows and focus */
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.06);
+  --focus: 0 0 0 3px rgba(37, 99, 235, 0.22);
+
+  /* Glass tokens - flat in light mode, no blur */
   --glass-blur: 0px;
   --glass-blur-high: 0px;
   --glass-fill: #FFFFFF;
   --glass-fill-soft: #F8FAFC;
-  --glass-fill-hover: #EAF1FF;
+  --glass-fill-hover: #EFF6FF;
   --glass-border: #E2E8F0;
-  --glass-border-outer: #EEF2F7;
-  --glass-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+  --glass-border-outer: #F1F5F9;
+  --glass-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.04);
   --glass-specular: none;
-  --glass-radius: 20px;
-  --glass-radius-sm: 12px;
+  --glass-radius: 12px;
+  --glass-radius-sm: 8px;
   --glass-radius-pill: 50px;
-  --tint-blue: #EAF1FF;
-  --tint-blue-strong: #0B63FF;
+
+  /* Tint fills */
+  --tint-blue: #DBEAFE;
+  --tint-blue-strong: #2563EB;
   --tint-green: #DCFCE7;
-  --tint-gold: #FFF7ED;
+  --tint-gold: #FEF3C7;
   --tint-red: #FEE2E2;
 }
 
@@ -108,13 +124,14 @@ body:not(.is-bulk-rendering) .page-view.is-active > * {
 }
 
 html {
-  background: var(--paper);
-  color: var(--ink);
+  background: #F5F7FB;
+  color: #0F172A;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
 }
 
 body {
+  background: #F5F7FB;
   margin: 0;
   min-width: 0;
   overflow-x: hidden;
@@ -148,8 +165,8 @@ iframe {
 }
 
 .sidebar {
-  background: #173138;
-  color: #fff;
+  background: #1E3A5F;
+  color: #FFFFFF;
   min-height: 100vh;
   padding: 22px 16px;
   position: sticky;
@@ -157,7 +174,7 @@ iframe {
 }
 
 .sidebar-brand {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   display: grid;
   gap: 5px;
   margin-bottom: 18px;
@@ -169,7 +186,7 @@ iframe {
 }
 
 .sidebar-brand span {
-  color: #bad0cf;
+  color: #93C5FD;
 }
 
 .side-nav {
@@ -190,7 +207,7 @@ iframe {
 
 .nav-button {
   background: transparent;
-  color: #e8efee;
+  color: #CBD5E1;
   justify-content: flex-start;
   text-align: left;
   width: 100%;
@@ -204,8 +221,8 @@ iframe {
 
 .nav-button:hover,
 .nav-button.is-active {
-  background: #f1c96f;
-  color: #1f2d36;
+  background: #2563EB;
+  color: #FFFFFF;
 }
 
 .nav-button:disabled,
@@ -217,7 +234,7 @@ iframe {
 .nav-button:disabled:hover,
 .nav-button.is-locked:hover {
   background: transparent;
-  color: #e8efee;
+  color: #CBD5E1;
 }
 
 .nav-button.is-hidden-nav {
@@ -333,6 +350,9 @@ body.role-helper #dashboardPage.is-active {
 
 .page-header {
   align-items: flex-start;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E8F0;
+  color: #0F172A;
   display: flex;
   gap: 18px;
   justify-content: space-between;
@@ -791,10 +811,11 @@ body.owned-dog-modal-open {
 
 .dashboard-priority-card {
   align-items: start;
-  background: var(--surface, var(--color-background-secondary));
-  border: 0.5px solid var(--line, var(--color-border-tertiary));
-  border-left-width: 6px;
-  border-radius: 8px;
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-left-width: 4px;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   color: var(--text);
   display: grid;
   gap: 4px;
@@ -804,27 +825,28 @@ body.owned-dog-modal-open {
 }
 
 .dashboard-priority-card strong {
+  color: #0F172A;
   font-size: 2.2rem;
   line-height: 1;
 }
 
 .dashboard-priority-card span {
-  color: var(--color-text-secondary);
+  color: #64748B;
   font-size: 0.85rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .dashboard-priority-card.is-count-clear {
-  border-left-color: #22c55e;
+  border-left-color: #16A34A;
 }
 
 .dashboard-priority-card.is-count-watch {
-  border-left-color: #f59e0b;
+  border-left-color: #F59E0B;
 }
 
 .dashboard-priority-card.is-count-urgent {
-  border-left-color: #ef4444;
+  border-left-color: #EF4444;
 }
 
 .dashboard-filter {
@@ -3054,27 +3076,29 @@ textarea {
 }
 
 .boarding-queue-card {
-  background: var(--surface, var(--color-background-secondary));
-  border: 0.5px solid var(--line, var(--color-border-tertiary));
-  border-radius: 8px;
-  color: var(--ink, var(--color-text-primary));
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  color: #0F172A;
   display: grid;
   gap: 8px;
   padding: 12px;
 }
 
 .boarding-queue-card > span {
+  color: #64748B;
   font-size: 1.5rem;
   font-weight: 900;
 }
 
 .boarding-queue-item {
   align-items: center;
-  background: var(--color-background-primary);
-  border: 0.5px solid var(--color-border-tertiary);
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
   border-radius: 8px;
   box-shadow: none;
-  color: var(--color-text-primary);
+  color: #0F172A;
   display: grid;
   gap: 10px;
   grid-template-columns: 48px minmax(0, 1fr);
@@ -3121,7 +3145,7 @@ textarea {
 }
 
 .boarding-queue-item small {
-  color: var(--color-text-secondary);
+  color: #64748B;
   font-weight: 650;
 }
 
@@ -7416,7 +7440,7 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
 }
 
 .task-scheduler-month-task {
-  --task-color: #0b63ff;
+  --task-color: #2563EB;
   background: color-mix(in srgb, var(--task-color) 12%, #fff);
   border: 1px solid color-mix(in srgb, var(--task-color) 70%, #fff);
   border-left: 4px solid var(--task-color);
@@ -7541,7 +7565,7 @@ body:not(.is-login-view) .record-card.is-service-only-request:focus-within {
 }
 
 .task-scheduler-mini-grid button.is-today {
-  background: #0b63ff;
+  background: #2563EB;
   color: #fff;
 }
 
@@ -7609,7 +7633,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   background: #eaf1ff;
   border: 1px solid #bfdbfe;
   border-radius: 10px;
-  color: #0b63ff;
+  color: #2563EB;
   display: inline-flex;
   font-size: 1.15rem;
   height: 36px;
@@ -7679,9 +7703,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 #taskSchedulerTodayButton:focus-visible,
 #taskSchedulerPrevButton:focus-visible,
 #taskSchedulerNextButton:focus-visible {
-  border-color: #0b63ff !important;
-  box-shadow: 0 10px 22px rgba(11, 99, 255, 0.2);
-  color: #0b63ff !important;
+  border-color: #2563EB !important;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.2);
+  color: #2563EB !important;
 }
 
 #taskSchedulerPage .task-scheduler-toolbar .segmented-control,
@@ -7720,9 +7744,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 #taskSchedulerPage .task-scheduler-toolbar .segmented-control button.is-active,
 .task-dog-type-toggle label:has(input:checked) {
-  background: #0b63ff;
+  background: #2563EB;
   color: #fff;
-  box-shadow: 0 8px 18px rgba(11, 99, 255, 0.22);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.22);
 }
 
 .task-dog-type-toggle input {
@@ -7733,8 +7757,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 #openScheduledCareTaskButton,
 #taskSchedulerPage .task-scheduler-form-actions button[type="submit"],
 #taskSchedulerPage [data-action="complete-scheduled-care-task"] {
-  background: #0b63ff;
-  border-color: #0b63ff;
+  background: #2563EB;
+  border-color: #2563EB;
   color: #fff;
 }
 
@@ -7793,7 +7817,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-mini-grid button.is-selected {
-  box-shadow: inset 0 0 0 2px #0b63ff;
+  box-shadow: inset 0 0 0 2px #2563EB;
 }
 
 .task-scheduler-mini-grid button small {
@@ -7913,7 +7937,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .task-scheduler-month-day.is-today > strong {
   align-items: center;
-  background: #0b63ff;
+  background: #2563EB;
   border-radius: 999px;
   color: #fff;
   display: inline-flex;
@@ -7928,7 +7952,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-card {
-  --task-color: #0b63ff;
+  --task-color: #2563EB;
   align-items: center;
   background: color-mix(in srgb, var(--task-color) 12%, #fff);
   border-color: color-mix(in srgb, var(--task-color) 70%, #fff);
@@ -7995,7 +8019,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-card.is-bath,
-.task-scheduler-legend-item.is-bath { --task-color: #0b63ff; }
+.task-scheduler-legend-item.is-bath { --task-color: #2563EB; }
 .task-scheduler-card.is-treadmill,
 .task-scheduler-legend-item.is-treadmill { --task-color: #22a7b8; }
 .task-scheduler-card.is-scooter-run,
@@ -8061,7 +8085,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-status-card.is-pending-confirmation {
-  background: color-mix(in srgb, #0b63ff 5%, #fff);
+  background: color-mix(in srgb, #2563EB 5%, #fff);
   border-style: dashed;
 }
 
@@ -8105,12 +8129,12 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-avatar-button:not(:disabled):focus-visible {
-  outline: 3px solid rgba(11, 99, 255, 0.28);
+  outline: 3px solid rgba(37, 99, 235, 0.28);
   outline-offset: 3px;
 }
 
 .task-scheduler-avatar-button:not(:disabled):hover .task-scheduler-avatar {
-  box-shadow: 0 0 0 3px rgba(11, 99, 255, 0.16);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
 .task-scheduler-panel-header {
@@ -8183,15 +8207,15 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 #taskSchedulerPage .task-scheduler-mini-header .secondary-button:hover,
 #taskSchedulerPage .task-scheduler-mini-header .secondary-button:focus-visible {
   background: #eff6ff;
-  border-color: #0b63ff;
-  color: #0b63ff;
+  border-color: #2563EB;
+  color: #2563EB;
 }
 
 #taskSchedulerPage .task-scheduler-detail-card .secondary-button,
 #taskSchedulerPage .task-scheduler-panel-form .secondary-button {
   background: #fff;
-  border: 1px solid #0b63ff;
-  color: #0b63ff;
+  border: 1px solid #2563EB;
+  color: #2563EB;
   opacity: 1;
 }
 
@@ -8257,7 +8281,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-panel-note {
-  color: #0b63ff;
+  color: #2563EB;
   font-size: 0.86rem;
   margin: 0.65rem 0;
 }
@@ -8465,7 +8489,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
     border-color: transparent;
     border-radius: 0;
     box-shadow: none;
-    color: #0b63ff;
+    color: #2563EB;
     grid-column: 3;
     grid-row: 1;
     min-width: 40px;
@@ -8540,7 +8564,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   }
 
   .task-scheduler-mobile-week-strip button.is-active strong {
-    background: #0b63ff;
+    background: #2563EB;
     color: #fff;
   }
 
@@ -8743,32 +8767,32 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .sidebar {
-  background: #07101D;
-  border-right: 1px solid #0B1F34;
+  background: #1E3A5F;
+  border-right: 1px solid #1E3A5F;
   box-shadow: none;
-  color: #E5EDF7;
+  color: #FFFFFF;
 }
 
 :root[data-theme="light"] .sidebar-brand {
-  border-bottom-color: rgba(229, 237, 247, 0.16);
+  border-bottom-color: rgba(255, 255, 255, 0.14);
 }
 
 :root[data-theme="light"] .sidebar-brand span {
-  color: #94A3B8;
+  color: #93C5FD;
 }
 
 :root[data-theme="light"] .nav-button {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
-  color: #E5EDF7;
+  color: #CBD5E1;
   filter: none;
 }
 
 :root[data-theme="light"] .nav-button:hover,
 :root[data-theme="light"] .nav-button.is-active {
-  background: #0B63FF;
-  border-color: #0B63FF;
+  background: #2563EB;
+  border-color: #2563EB;
   color: #FFFFFF;
   filter: none;
   transform: none;
@@ -8779,7 +8803,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .nav-button:disabled:hover,
 :root[data-theme="light"] .nav-button.is-locked:hover {
   background: transparent;
-  color: #94A3B8;
+  color: #CBD5E1;
 }
 
 :root[data-theme="light"] :where(.subhead, .login-panel p, .section-heading p, .dashboard-card p, .role-note, .customer-dog-item span, .dog-profile-editor p, .record-card span, .record-card p, .submission-item p, .field-help, .user-card small, .calendar-title span, .calendar-weekdays span, .summary-card span, .time-card span, .notification-item span, .notification-item p, .schedule-shift-card span, .schedule-warning-list, .schedule-day-card header span, .inline-save-status, .boarding-request-total-row span, .boarding-request-date-row, .boarding-family-header span, .boarding-family-header p) {
@@ -8792,8 +8816,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] body:not(.is-login-view) :where(.status-card, .notice, .alert-banner, .signup-panel, .table-wrap, .dog-profile-editor, .dashboard-card, .role-note, .customer-dog-item, .customer-next-action-card, .customer-flow-empty, .customer-service-group, .estimate-box, .estimate-total, .task-calendar, .summary-card, .helper-total-item, .login-panel, .form-section, .recent-submissions, .inline-check, .record-card, .toggle-row, .checklist label, .admin-task-controls, .admin-password-panel, .column-chip, .detail-dialog, .detail-row, .activity-entry, .time-card, .submission-item, .rotation-banner, .submit-bar, .structured-care-panel, .owned-profile-section, .boarding-profile-section, .compact-record-card, .schedule-day-card, .schedule-shift-card, .notification-panel, .notification-item, .filter-toolbar, .profile-tabs, .dashboard-action-panel, .alert-checkbox-group, .settings-user-card, .boarding-family-group) {
   background: #FFFFFF !important;
-  border-color: var(--line) !important;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06) !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06) !important;
   color: var(--ink);
 }
 
@@ -8816,18 +8841,47 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] button {
-  background: #0B63FF;
-  border-color: #0B63FF;
-  box-shadow: 0 8px 18px rgba(11, 99, 255, 0.22);
+  background: #2563EB;
+  border-color: #2563EB;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
   color: #FFFFFF;
   filter: none;
 }
 
 :root[data-theme="light"] button:hover {
-  background: #084ECC;
-  border-color: #084ECC;
-  box-shadow: 0 10px 22px rgba(11, 99, 255, 0.24);
+  background: #1D4ED8;
+  border-color: #1D4ED8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.22);
   filter: none;
+}
+
+:root[data-theme="light"] .dashboard-priority-card,
+:root[data-theme="light"] .dashboard-priority-card:hover {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+  border-left-width: 4px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  color: #0F172A;
+}
+
+:root[data-theme="light"] .dashboard-priority-card.is-count-clear {
+  border-left-color: #16A34A;
+}
+
+:root[data-theme="light"] .dashboard-priority-card.is-count-watch {
+  border-left-color: #F59E0B;
+}
+
+:root[data-theme="light"] .dashboard-priority-card.is-count-urgent {
+  border-left-color: #EF4444;
+}
+
+:root[data-theme="light"] .dashboard-priority-card strong {
+  color: #0F172A;
+}
+
+:root[data-theme="light"] .dashboard-priority-card span {
+  color: #64748B;
 }
 
 :root[data-theme="light"] :where(.secondary-button, .sync-button, .media-preview-button, .icon-button, .remove-task-button, .column-chip, .section-heading span, .status-dot) {
@@ -8838,7 +8892,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] :where(.secondary-button:hover, .sync-button:hover, .media-preview-button:hover, .icon-button:hover, .remove-task-button:hover, .clickable-card:hover) {
-  background: #EAF1FF;
+  background: #EFF6FF;
   border-color: #BFDBFE;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
@@ -8859,9 +8913,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open,
 :root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open:hover,
 :root[data-theme="light"] .sync-button.notification-bell-button.is-alert-panel-open:focus-visible {
-  background: #F97316 !important;
-  border-color: #F97316 !important;
-  box-shadow: 0 8px 20px rgba(249, 115, 22, 0.24);
+  background: #F59E0B !important;
+  border-color: #F59E0B !important;
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.24);
   color: #FFFFFF !important;
 }
 
@@ -8889,8 +8943,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] :where(input:focus, select:focus, textarea:focus, button:focus-visible, .task-edit-input:focus) {
-  border-color: #0B63FF;
-  box-shadow: var(--focus);
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
   outline: 0;
 }
 
@@ -8924,9 +8978,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] :where(.notice, .alert-banner, .estimate-total, .rotation-banner) {
-  background: #FFF7ED !important;
-  border-color: #FED7AA !important;
-  color: #9A3412;
+  background: #FEF3C7 !important;
+  border-color: #FDE68A !important;
+  color: #B45309;
 }
 
 :root[data-theme="light"] .record-card.is-completed {
@@ -8943,9 +8997,9 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .profile-tabs .is-active,
 :root[data-theme="light"] .care-filter-toolbar .is-active,
 :root[data-theme="light"] .view-toggle-button.is-active {
-  background: #EAF1FF;
+  background: #EFF6FF;
   border-color: #BFDBFE;
-  color: #0B63FF;
+  color: #2563EB;
 }
 
 :root[data-theme="light"] .owned-vaccination-panel {
@@ -8955,37 +9009,43 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .owned-vaccination-panel-heading p {
-  color: #475569;
+  color: #64748B;
+}
+
+:root[data-theme="light"] .status-chip {
+  background: #EFF6FF;
+  border-color: #BFDBFE;
+  color: #1D4ED8;
 }
 
 :root[data-theme="light"] :where(.dog-type-chip.ownedDog, .boarding-status-chip.is-status-approved, .boarding-status-chip.is-status-checked-in, .boarding-status-chip.is-status-in-kennel, .vaccination-status-chip.is-vaccine-ok, .boarding-service-chip.is-service-complete, .inline-save-status.is-saved) {
   background: #DCFCE7;
-  border-color: #86EFAC;
-  color: #166534;
+  border-color: #BBF7D0;
+  color: #15803D;
 }
 
-:root[data-theme="light"] :where(.boarding-status-chip.is-status-pending, .vaccination-status-chip.is-vaccine-needed, .boarding-service-chip.is-service-due) {
-  background: #FFF7ED;
-  border-color: #FED7AA;
-  color: #9A3412;
+:root[data-theme="light"] :where(.boarding-status-chip.is-status-pending, .boarding-status-chip.is-status-ready-for-pickup, .vaccination-status-chip.is-vaccine-needed, .boarding-service-chip.is-service-due, .warning-chip) {
+  background: #FEF3C7;
+  border-color: #FDE68A;
+  color: #B45309;
 }
 
 :root[data-theme="light"] :where(.vaccination-status-chip.is-vaccine-expired, .boarding-service-chip.is-service-overdue, .inline-save-status.is-error) {
   background: #FEE2E2;
-  border-color: #FCA5A5;
-  color: #991B1B;
+  border-color: #FECACA;
+  color: #B91C1C;
 }
 
-:root[data-theme="light"] :where(.dog-type-chip.boardingDog, .boarding-request-code-chip, .boarding-status-chip.is-status-ready-for-pickup, .boarding-service-chip.is-service-pending, .boarding-family-chip) {
+:root[data-theme="light"] :where(.dog-type-chip.boardingDog, .boarding-request-code-chip, .boarding-service-chip.is-service-pending, .boarding-family-chip) {
   background: #DBEAFE;
   border-color: #93C5FD;
   color: #1E40AF;
 }
 
 :root[data-theme="light"] :where(.dog-type-chip.customerDog) {
-  background: #FFF7ED;
-  border-color: #FED7AA;
-  color: #9A3412;
+  background: #FEF3C7;
+  border-color: #FDE68A;
+  color: #B45309;
 }
 
 :root[data-theme="light"] :where(.boarding-status-chip.is-status-cancelled, .boarding-status-chip.is-status-checked-out) {
@@ -9020,8 +9080,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day.has-override {
-  background: #FFF7ED !important;
-  border-color: #FDBA74;
+  background: #FEF3C7 !important;
+  border-color: #FDE68A;
 }
 
 :root[data-theme="light"] body:not(.is-login-view) .operation-calendar-day.is-closed {
@@ -9046,22 +9106,22 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .mobile-bottom-nav {
-  background: #07101D !important;
+  background: #1E3A5F !important;
   border-color: rgba(229, 237, 247, 0.16);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24) !important;
-  color: #E5EDF7;
+  color: #FFFFFF;
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
-  color: #E5EDF7;
+  color: #CBD5E1;
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active,
 :root[data-theme="light"] .mobile-bottom-nav-button:hover {
-  background: #0B63FF;
+  background: #2563EB;
   box-shadow: none;
   color: #FFFFFF;
 }
@@ -9102,7 +9162,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .mobile-more-menu-item:focus-visible,
 :root[data-theme="light"] .mobile-more-menu-item.is-active {
   background: #EAF1FF;
-  color: #0B63FF;
+  color: #2563EB;
 }
 
 :root[data-theme="light"] .mobile-more-empty {
@@ -9146,8 +9206,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .mobile-more-theme-option.is-active,
 .mobile-more-theme-option[aria-pressed="true"] {
-  background: #0B63FF;
-  border-color: #0B63FF;
+  background: #2563EB;
+  border-color: #2563EB;
   color: #FFFFFF;
 }
 
@@ -9172,7 +9232,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .mobile-more-theme-option.is-active,
 :root[data-theme="light"] .mobile-more-theme-option[aria-pressed="true"] {
-  background: #0B63FF;
-  border-color: #0B63FF;
+  background: #2563EB;
+  border-color: #2563EB;
   color: #FFFFFF;
 }
