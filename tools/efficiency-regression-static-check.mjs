@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260626-staff-login-rls-guard",
+    mustInclude: "20260627-profile-photo-thumbnails",
     message: "production cache keys must be bumped.",
   },
   {

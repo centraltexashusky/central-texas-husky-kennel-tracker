@@ -1,5 +1,5 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260626-daily-care-scheduler-completion-sync";
+import "./shared.js?v=20260627-profile-photo-thumbnails";
 import "./auth.js?v=20260626-staff-session-rls-fix-login-role-fix-full-review-fixes";
 import "./customer.js?v=20260626-stay-scheduler-fix";
 import "./boarding.js?v=20260626-stay-scheduler-fix-skeleton-loading";

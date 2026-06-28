@@ -3,6 +3,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const MEDIA_BUCKET = "kennel-media";
 const SIGNED_URL_SECONDS = 600;
+const PROFILE_THUMB_VARIANT = "profileThumb";
+const PROFILE_THUMB_TRANSFORM = {
+  width: 160,
+  height: 160,
+  resize: "cover" as const,
+  quality: 70,
+};
 const ALLOWED_STORAGE_PREFIXES = [
   "users/",
   "dog-photos/",
@@ -25,6 +32,7 @@ type MediaAccessBody = {
   storagePath?: string;
   recordId?: string;
   recordType?: string;
+  variant?: string;
 };
 
 const json = (body: Record<string, unknown>, status = 200) =>
@@ -96,6 +104,17 @@ function safeStoragePath(value: unknown) {
 function storageOwnerUserId(path: string) {
   if (!path.startsWith("users/")) return "";
   return path.split("/")[1] || "";
+}
+
+function storagePathIsDogPhoto(path: string) {
+  return path.startsWith("dog-photos/") || path.includes("/dog-photos/");
+}
+
+function signedUrlOptionsFor(body: MediaAccessBody, storagePath: string) {
+  if (body.variant === PROFILE_THUMB_VARIANT && storagePathIsDogPhoto(storagePath)) {
+    return { transform: PROFILE_THUMB_TRANSFORM };
+  }
+  return undefined;
 }
 
 function normalizeStoragePathReference(value: unknown) {
@@ -189,7 +208,8 @@ Deno.serve(async (req) => {
 
   if (!allowed) return json({ error: "Not authorized for this file." }, 403);
 
-  const { data, error } = await adminClient.storage.from(MEDIA_BUCKET).createSignedUrl(storagePath, SIGNED_URL_SECONDS);
+  const signedUrlOptions = signedUrlOptionsFor(body, storagePath);
+  const { data, error } = await adminClient.storage.from(MEDIA_BUCKET).createSignedUrl(storagePath, SIGNED_URL_SECONDS, signedUrlOptions);
   if (error || !data?.signedUrl) return json({ error: error?.message || "Could not create a signed media URL." }, 500);
-  return json({ signedUrl: data.signedUrl, expiresIn: SIGNED_URL_SECONDS });
+  return json({ signedUrl: data.signedUrl, expiresIn: SIGNED_URL_SECONDS, variant: signedUrlOptions ? PROFILE_THUMB_VARIANT : "full" });
 });

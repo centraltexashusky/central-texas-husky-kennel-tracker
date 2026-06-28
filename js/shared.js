@@ -170,12 +170,14 @@ var autoSyncIdentityKey = "";
 var showReadNotifications = false;
 var visibleReadNotificationCount = 4;
 var MAX_READ_NOTIFICATIONS = 10;
-var PROFILE_PHOTO_CACHE_NAME = "cth-profile-photo-cache-v1";
-var PROFILE_PHOTO_CACHE_META_KEY = "cth-profile-photo-cache-meta-v1";
+var PROFILE_PHOTO_CACHE_NAME = "cth-profile-photo-cache-v2";
+var PROFILE_PHOTO_CACHE_META_KEY = "cth-profile-photo-cache-meta-v2";
 var PROFILE_PHOTO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 var PROFILE_PHOTO_CACHE_MAX_ITEMS = 160;
-var SIGNED_MEDIA_URL_STORAGE_KEY = "cth-signed-media-url-cache-v1";
+var SIGNED_MEDIA_URL_STORAGE_KEY = "cth-signed-media-url-cache-v2";
 var SIGNED_MEDIA_URL_CACHE_MAX_ITEMS = 240;
+var PROFILE_PHOTO_FULL_VARIANT = "full";
+var PROFILE_PHOTO_THUMBNAIL_VARIANT = "profileThumb";
 
 function isRemoteLoadRequired() {
   if (!lastRemoteLoadFinishedAt) return true;
@@ -4812,6 +4814,10 @@ function profilePhotoHasSource(record = {}) {
   return Boolean(profilePhotoDirectSource(record) || profilePhotoStoragePath(record));
 }
 
+function normalizeProfilePhotoVariant(value = "") {
+  return String(value || "").trim() === PROFILE_PHOTO_THUMBNAIL_VARIANT ? PROFILE_PHOTO_THUMBNAIL_VARIANT : PROFILE_PHOTO_FULL_VARIANT;
+}
+
 function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
   const direct = profilePhotoDirectSource(record);
   const storagePath = profilePhotoStoragePath(record);
@@ -4820,6 +4826,7 @@ function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
   if (storagePath) {
     attrs.push('data-profile-photo-path="' + escapeHtml(storagePath) + '"');
     attrs.push('data-storage-path="' + escapeHtml(storagePath) + '"');
+    attrs.push('data-profile-photo-variant="' + PROFILE_PHOTO_THUMBNAIL_VARIANT + '"');
   }
   if (record.id) attrs.push('data-source-record-id="' + escapeHtml(record.id) + '"');
   attrs.push('data-source-record-type="' + escapeHtml(record.type || fallbackRecordType || "") + '"');
@@ -4834,21 +4841,28 @@ function profilePhotoCacheViewerKey() {
   return currentDbUserId?.() || currentUser?.email || currentUser?.name || "";
 }
 
-function profilePhotoCacheEntryKey(storagePath = "") {
+function profilePhotoCacheEntryKey(storagePath = "", variant = PROFILE_PHOTO_FULL_VARIANT) {
   const path = String(storagePath || "").trim();
   const viewerKey = profilePhotoCacheViewerKey();
-  return path && viewerKey ? viewerKey + "|" + path : "";
+  const sourceVariant = normalizeProfilePhotoVariant(variant);
+  return path && viewerKey ? viewerKey + "|" + sourceVariant + "|" + path : "";
 }
 
-function profilePhotoCacheRequestUrl(storagePath = "") {
-  const entryKey = profilePhotoCacheEntryKey(storagePath);
+function profilePhotoCacheRequestUrl(storagePath = "", variant = PROFILE_PHOTO_FULL_VARIANT) {
+  const entryKey = profilePhotoCacheEntryKey(storagePath, variant);
   return entryKey ? window.location.origin + "/__cth-profile-photo-cache/" + encodeURIComponent(entryKey) : "";
 }
 
-function signedMediaUrlCacheEntryKey(storagePath = "") {
+function signedMediaUrlCacheEntryKey(storagePath = "", variant = PROFILE_PHOTO_FULL_VARIANT) {
   const path = String(storagePath || "").trim();
   const viewerKey = profilePhotoCacheViewerKey();
-  return path && viewerKey ? viewerKey + "|" + path : path;
+  const sourceVariant = normalizeProfilePhotoVariant(variant);
+  return path && viewerKey ? viewerKey + "|" + sourceVariant + "|" + path : path ? sourceVariant + "|" + path : "";
+}
+
+function profilePhotoFailureKey(storagePath = "", variant = PROFILE_PHOTO_FULL_VARIANT) {
+  const path = String(storagePath || "").trim();
+  return path ? normalizeProfilePhotoVariant(variant) + "|" + path : "";
 }
 
 function readSignedMediaUrlStorageCache() {
@@ -4886,8 +4900,8 @@ function pruneSignedMediaUrlStorageCache(cache = null) {
   return currentCache;
 }
 
-function persistedSignedMediaUrlForPath(storagePath = "") {
-  const cacheKey = signedMediaUrlCacheEntryKey(storagePath);
+function persistedSignedMediaUrlForPath(storagePath = "", variant = PROFILE_PHOTO_FULL_VARIANT) {
+  const cacheKey = signedMediaUrlCacheEntryKey(storagePath, variant);
   if (!cacheKey) return "";
   const stored = readSignedMediaUrlStorageCache()[cacheKey];
   if (!stored?.url || Number(stored.expiresAt || 0) <= Date.now()) return "";
@@ -4895,8 +4909,8 @@ function persistedSignedMediaUrlForPath(storagePath = "") {
   return stored.url;
 }
 
-function saveSignedMediaUrlForPath(storagePath = "", signedUrl = "", expiresAt = 0) {
-  const cacheKey = signedMediaUrlCacheEntryKey(storagePath);
+function saveSignedMediaUrlForPath(storagePath = "", signedUrl = "", expiresAt = 0, variant = PROFILE_PHOTO_FULL_VARIANT) {
+  const cacheKey = signedMediaUrlCacheEntryKey(storagePath, variant);
   if (!cacheKey || !signedUrl || !expiresAt) return;
   signedMediaUrlCache.set(cacheKey, { url: signedUrl, expiresAt });
   const storageCache = pruneSignedMediaUrlStorageCache();
@@ -4904,18 +4918,26 @@ function saveSignedMediaUrlForPath(storagePath = "", signedUrl = "", expiresAt =
     url: signedUrl,
     expiresAt,
     savedAt: Date.now(),
+    variant: normalizeProfilePhotoVariant(variant),
   };
   writeSignedMediaUrlStorageCache(storageCache);
 }
 
-function clearSignedMediaUrlForPath(storagePath = "") {
-  const cacheKey = signedMediaUrlCacheEntryKey(storagePath);
-  if (!cacheKey) return;
-  signedMediaUrlCache.delete(cacheKey);
+function clearSignedMediaUrlForPath(storagePath = "", variant = "") {
+  const variants = variant ? [normalizeProfilePhotoVariant(variant)] : [PROFILE_PHOTO_FULL_VARIANT, PROFILE_PHOTO_THUMBNAIL_VARIANT];
+  const cacheKeys = variants.map((item) => signedMediaUrlCacheEntryKey(storagePath, item)).filter(Boolean);
+  if (!cacheKeys.length) return;
+  cacheKeys.forEach((cacheKey) => signedMediaUrlCache.delete(cacheKey));
   signedMediaUrlCache.delete(storagePath);
   const storageCache = readSignedMediaUrlStorageCache();
-  if (storageCache[cacheKey]) {
-    delete storageCache[cacheKey];
+  let changed = false;
+  cacheKeys.forEach((cacheKey) => {
+    if (storageCache[cacheKey]) {
+      delete storageCache[cacheKey];
+      changed = true;
+    }
+  });
+  if (changed) {
     writeSignedMediaUrlStorageCache(storageCache);
   }
 }
@@ -4937,9 +4959,9 @@ function writeProfilePhotoCacheMeta(meta = {}) {
   }
 }
 
-async function removeCachedProfilePhoto(storagePath = "") {
-  const requestUrl = profilePhotoCacheRequestUrl(storagePath);
-  const entryKey = profilePhotoCacheEntryKey(storagePath);
+async function removeCachedProfilePhoto(storagePath = "", variant = PROFILE_PHOTO_FULL_VARIANT) {
+  const requestUrl = profilePhotoCacheRequestUrl(storagePath, variant);
+  const entryKey = profilePhotoCacheEntryKey(storagePath, variant);
   if (!requestUrl || !entryKey) return;
   const existing = profilePhotoBlobUrlCache.get(entryKey);
   if (existing?.url) URL.revokeObjectURL(existing.url);
@@ -4983,15 +5005,15 @@ async function pruneProfilePhotoCache(meta = null, cache = null) {
   if (changed) writeProfilePhotoCacheMeta(currentMeta);
 }
 
-async function cachedProfilePhotoObjectUrlForPath(storagePath = "") {
-  const requestUrl = profilePhotoCacheRequestUrl(storagePath);
-  const entryKey = profilePhotoCacheEntryKey(storagePath);
+async function cachedProfilePhotoObjectUrlForPath(storagePath = "", variant = PROFILE_PHOTO_FULL_VARIANT) {
+  const requestUrl = profilePhotoCacheRequestUrl(storagePath, variant);
+  const entryKey = profilePhotoCacheEntryKey(storagePath, variant);
   if (!profilePhotoCacheSupported() || !requestUrl || !entryKey) return "";
   const meta = readProfilePhotoCacheMeta();
   const item = meta[entryKey];
   const cachedAt = Number(item?.cachedAt || 0);
   if (!cachedAt || Date.now() - cachedAt > PROFILE_PHOTO_CACHE_MAX_AGE_MS) {
-    await removeCachedProfilePhoto(storagePath);
+    await removeCachedProfilePhoto(storagePath, variant);
     return "";
   }
   const existing = profilePhotoBlobUrlCache.get(entryKey);
@@ -5000,12 +5022,12 @@ async function cachedProfilePhotoObjectUrlForPath(storagePath = "") {
     const cache = await caches.open(PROFILE_PHOTO_CACHE_NAME);
     const response = await cache.match(requestUrl);
     if (!response?.ok) {
-      await removeCachedProfilePhoto(storagePath);
+      await removeCachedProfilePhoto(storagePath, variant);
       return "";
     }
     const blob = await response.blob();
     if (!blob.size || (blob.type && !blob.type.startsWith("image/"))) {
-      await removeCachedProfilePhoto(storagePath);
+      await removeCachedProfilePhoto(storagePath, variant);
       return "";
     }
     if (existing?.url) URL.revokeObjectURL(existing.url);
@@ -5017,9 +5039,9 @@ async function cachedProfilePhotoObjectUrlForPath(storagePath = "") {
   }
 }
 
-async function cacheProfilePhotoFromSignedUrl(storagePath = "", signedUrl = "") {
-  const requestUrl = profilePhotoCacheRequestUrl(storagePath);
-  const entryKey = profilePhotoCacheEntryKey(storagePath);
+async function cacheProfilePhotoFromSignedUrl(storagePath = "", signedUrl = "", variant = PROFILE_PHOTO_FULL_VARIANT) {
+  const requestUrl = profilePhotoCacheRequestUrl(storagePath, variant);
+  const entryKey = profilePhotoCacheEntryKey(storagePath, variant);
   if (!profilePhotoCacheSupported() || !requestUrl || !entryKey || !signedUrl || signedUrl.startsWith("blob:")) return;
   if (profilePhotoCacheWritePromises.has(entryKey)) return profilePhotoCacheWritePromises.get(entryKey);
   const writePromise = (async () => {
@@ -5043,6 +5065,7 @@ async function cacheProfilePhotoFromSignedUrl(storagePath = "", signedUrl = "") 
       cachedAt,
       contentType: blob.type || response.headers.get("Content-Type") || "image/jpeg",
       size: blob.size || 0,
+      variant: normalizeProfilePhotoVariant(variant),
     };
     writeProfilePhotoCacheMeta(meta);
     await pruneProfilePhotoCache(meta, cache);
@@ -5053,11 +5076,18 @@ async function cacheProfilePhotoFromSignedUrl(storagePath = "", signedUrl = "") 
   return writePromise;
 }
 
-async function profilePhotoDisplaySourceForPath(storagePath = "", context = {}) {
-  const cachedUrl = await cachedProfilePhotoObjectUrlForPath(storagePath);
-  if (cachedUrl) return { url: cachedUrl, cached: true };
-  const signedUrl = await signedMediaUrlForPath(storagePath, context);
-  return { url: signedUrl, cached: false };
+async function profilePhotoDisplaySourceForPath(storagePath = "", context = {}, options = {}) {
+  const requestedVariant = normalizeProfilePhotoVariant(options.variant || context.profilePhotoVariant || "");
+  const cachedUrl = await cachedProfilePhotoObjectUrlForPath(storagePath, requestedVariant);
+  if (cachedUrl) return { url: cachedUrl, cached: true, variant: requestedVariant };
+  try {
+    const signedUrl = await signedMediaUrlForPath(storagePath, { ...context, profilePhotoVariant: requestedVariant });
+    return { url: signedUrl, cached: false, variant: requestedVariant };
+  } catch (error) {
+    if (requestedVariant !== PROFILE_PHOTO_THUMBNAIL_VARIANT) throw error;
+    const signedUrl = await signedMediaUrlForPath(storagePath, { ...context, profilePhotoVariant: PROFILE_PHOTO_FULL_VARIANT });
+    return { url: signedUrl, cached: false, variant: PROFILE_PHOTO_FULL_VARIANT, fallback: true };
+  }
 }
 
 function clearProfilePhotoHydrationTimer(element) {
@@ -5075,10 +5105,11 @@ function scheduleProfilePhotoHydrationRetry(element, relatedInitials, token, err
     return;
   }
   const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
+  const variant = normalizeProfilePhotoVariant(element.dataset.profilePhotoVariant || PROFILE_PHOTO_THUMBNAIL_VARIANT);
   const img = element.matches("img") ? element : element.querySelector("img");
   element.dataset.profilePhotoRetryCount = String(retries + 1);
   element.dataset.src = "";
-  if (storagePath) clearSignedMediaUrlForPath(storagePath);
+  if (storagePath) clearSignedMediaUrlForPath(storagePath, variant);
   if (img && !img.dataset.directPhotoSource) {
     img.removeAttribute("src");
     img.hidden = true;
@@ -5087,14 +5118,14 @@ function scheduleProfilePhotoHydrationRetry(element, relatedInitials, token, err
   clearProfilePhotoHydrationTimer(element);
   const timer = window.setTimeout(() => {
     profilePhotoHydrationTimers.delete(element);
-    if (storagePath) profilePhotoFailureCache.delete(storagePath);
+    if (storagePath) profilePhotoFailureCache.delete(profilePhotoFailureKey(storagePath, variant));
     queueProfilePhotoHydration(element);
   }, delays[retries]);
   profilePhotoHydrationTimers.set(element, timer);
 }
 
-function profilePhotoHydrationToken(element, storagePath) {
-  return storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
+function profilePhotoHydrationToken(element, storagePath, variant = PROFILE_PHOTO_FULL_VARIANT) {
+  return normalizeProfilePhotoVariant(variant) + "|" + storagePath + "|" + (element.dataset.sourceRecordId || "") + "|" + (element.dataset.sourceRecordType || "");
 }
 
 function profilePhotoInitialsForElement(element, img = null, relatedInitials = null) {
@@ -5122,8 +5153,9 @@ function revealLoadedProfilePhotoElement(element, relatedInitials = null) {
   if (!element) return false;
   const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
   const img = element.matches("img") ? element : element.querySelector("img");
+  const variant = normalizeProfilePhotoVariant(element.dataset.profilePhotoVariant || PROFILE_PHOTO_THUMBNAIL_VARIANT);
   if (!storagePath || !img || img.naturalWidth <= 0) return false;
-  const token = element.dataset.profilePhotoToken || profilePhotoHydrationToken(element, storagePath);
+  const token = element.dataset.profilePhotoToken || profilePhotoHydrationToken(element, storagePath, variant);
   element.dataset.profilePhotoToken = token;
   const signedUrl = element.dataset.src || img.currentSrc || img.src || "";
   applyHydratedProfilePhoto(element, img, profilePhotoInitialsForElement(element, img, relatedInitials), signedUrl, token);
@@ -5171,13 +5203,14 @@ async function hydrateProfilePhotoElement(element, relatedInitials = null) {
   const storagePath = element.dataset.profilePhotoPath || element.dataset.storagePath || "";
   const img = element.matches("img") ? element : element.querySelector("img");
   const initials = profilePhotoInitialsForElement(element, img, relatedInitials);
+  const requestedVariant = normalizeProfilePhotoVariant(element.dataset.profilePhotoVariant || PROFILE_PHOTO_THUMBNAIL_VARIANT);
   const existingSource = element.dataset.src || img?.getAttribute("src") || "";
   if (!storagePath || localTestMode || !img) return;
 
-  const failUntil = profilePhotoFailureCache.get(storagePath) || 0;
+  const failUntil = profilePhotoFailureCache.get(profilePhotoFailureKey(storagePath, requestedVariant)) || 0;
   if (failUntil > Date.now()) return;
 
-  const token = profilePhotoHydrationToken(element, storagePath);
+  const token = profilePhotoHydrationToken(element, storagePath, requestedVariant);
   element.dataset.profilePhotoToken = token;
 
   if (existingSource) {
@@ -5193,14 +5226,16 @@ async function hydrateProfilePhotoElement(element, relatedInitials = null) {
   element.dataset.profilePhotoHydrating = "true";
 
   try {
-    const { url: photoUrl, cached } = await profilePhotoDisplaySourceForPath(storagePath, {
+    const { url: photoUrl, cached, variant } = await profilePhotoDisplaySourceForPath(storagePath, {
       sourceRecordId: element.dataset.sourceRecordId || "",
       sourceRecordType: element.dataset.sourceRecordType || "",
-    });
+      profilePhotoVariant: requestedVariant,
+    }, { variant: requestedVariant });
+    const loadedVariant = variant || requestedVariant;
 
     if (element.dataset.profilePhotoToken !== token) return;
     if (!photoUrl) {
-      profilePhotoFailureCache.set(storagePath, Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
+      profilePhotoFailureCache.set(profilePhotoFailureKey(storagePath, requestedVariant), Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
       scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Profile photo access returned an empty signed URL."));
       return;
     }
@@ -5210,15 +5245,49 @@ async function hydrateProfilePhotoElement(element, relatedInitials = null) {
     };
 
     img.onload = () => {
-      profilePhotoFailureCache.delete(storagePath);
+      delete element.dataset.profilePhotoFullFallbackAttempted;
+      profilePhotoFailureCache.delete(profilePhotoFailureKey(storagePath, requestedVariant));
       applyHydratedProfilePhoto(element, img, initials, photoUrl, token);
-      if (!cached) cacheProfilePhotoFromSignedUrl(storagePath, photoUrl);
+      if (!cached) cacheProfilePhotoFromSignedUrl(storagePath, photoUrl, loadedVariant);
     };
 
-    img.onerror = () => {
+    img.onerror = async () => {
       if (element.dataset.profilePhotoToken !== token) return;
-      profilePhotoFailureCache.set(storagePath, Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
-      if (cached) removeCachedProfilePhoto(storagePath);
+      if (requestedVariant === PROFILE_PHOTO_THUMBNAIL_VARIANT && loadedVariant === PROFILE_PHOTO_THUMBNAIL_VARIANT && element.dataset.profilePhotoFullFallbackAttempted !== "true") {
+        element.dataset.profilePhotoFullFallbackAttempted = "true";
+        if (cached) removeCachedProfilePhoto(storagePath, loadedVariant);
+        clearSignedMediaUrlForPath(storagePath, loadedVariant);
+        try {
+          const { url: fallbackUrl, cached: fallbackCached, variant: fallbackVariant } = await profilePhotoDisplaySourceForPath(storagePath, {
+            sourceRecordId: element.dataset.sourceRecordId || "",
+            sourceRecordType: element.dataset.sourceRecordType || "",
+            profilePhotoVariant: PROFILE_PHOTO_FULL_VARIANT,
+          }, { variant: PROFILE_PHOTO_FULL_VARIANT });
+          if (element.dataset.profilePhotoToken !== token) return;
+          if (fallbackUrl) {
+            const fullVariant = fallbackVariant || PROFILE_PHOTO_FULL_VARIANT;
+            img.onload = () => {
+              delete element.dataset.profilePhotoFullFallbackAttempted;
+              profilePhotoFailureCache.delete(profilePhotoFailureKey(storagePath, requestedVariant));
+              profilePhotoFailureCache.delete(profilePhotoFailureKey(storagePath, fullVariant));
+              applyHydratedProfilePhoto(element, img, initials, fallbackUrl, token);
+              if (!fallbackCached) cacheProfilePhotoFromSignedUrl(storagePath, fallbackUrl, fullVariant);
+            };
+            img.onerror = () => {
+              if (element.dataset.profilePhotoToken !== token) return;
+              profilePhotoFailureCache.set(profilePhotoFailureKey(storagePath, fullVariant), Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
+              if (fallbackCached) removeCachedProfilePhoto(storagePath, fullVariant);
+              scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Full profile photo fallback failed to load."));
+            };
+            img.src = fallbackUrl;
+            return;
+          }
+        } catch (fallbackError) {
+          console.warn("Profile photo thumbnail fallback failed.", fallbackError);
+        }
+      }
+      profilePhotoFailureCache.set(profilePhotoFailureKey(storagePath, requestedVariant), Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
+      if (cached) removeCachedProfilePhoto(storagePath, loadedVariant);
       scheduleProfilePhotoHydrationRetry(element, initials, token, new Error("Signed profile photo image failed to load."));
     };
 
@@ -5227,7 +5296,7 @@ async function hydrateProfilePhotoElement(element, relatedInitials = null) {
     window.requestAnimationFrame?.(revealIfLoaded);
     window.setTimeout(revealIfLoaded, 1500);
   } catch (error) {
-    profilePhotoFailureCache.set(storagePath, Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
+    profilePhotoFailureCache.set(profilePhotoFailureKey(storagePath, requestedVariant), Date.now() + PROFILE_PHOTO_FAILURE_TTL_MS);
     scheduleProfilePhotoHydrationRetry(element, initials, token, error);
   } finally {
     delete element.dataset.profilePhotoHydrating;
@@ -5262,22 +5331,25 @@ function scheduleProfilePhotoHydrationSweep(delay = 600) {
 async function signedMediaUrlForPath(storagePath = "", context = {}) {
   const path = String(storagePath || "").trim();
   if (!path || !supabaseClient || localTestMode) return "";
-  const cacheKey = signedMediaUrlCacheEntryKey(path);
+  const variant = normalizeProfilePhotoVariant(context.profilePhotoVariant || context.variant || "");
+  const cacheKey = signedMediaUrlCacheEntryKey(path, variant);
   const cached = signedMediaUrlCache.get(cacheKey) || signedMediaUrlCache.get(path);
   if (cached && cached.expiresAt > Date.now()) return cached.url;
-  const persistedUrl = persistedSignedMediaUrlForPath(path);
+  const persistedUrl = persistedSignedMediaUrlForPath(path, variant);
   if (persistedUrl) return persistedUrl;
+  const body = {
+    storagePath: path,
+    recordId: context.sourceRecordId || context.recordId || "",
+    recordType: context.sourceRecordType || context.recordType || "",
+  };
+  if (variant === PROFILE_PHOTO_THUMBNAIL_VARIANT) body.variant = PROFILE_PHOTO_THUMBNAIL_VARIANT;
   const { data, error } = await supabaseClient.functions.invoke("media-access", {
-    body: {
-      storagePath: path,
-      recordId: context.sourceRecordId || context.recordId || "",
-      recordType: context.sourceRecordType || context.recordType || "",
-    },
+    body,
   });
   if (error) throw error;
   const signedUrl = data?.signedUrl || "";
   if (signedUrl) {
-    saveSignedMediaUrlForPath(path, signedUrl, Date.now() + Math.max(60, Number(data?.expiresIn || 600) - 30) * 1000);
+    saveSignedMediaUrlForPath(path, signedUrl, Date.now() + Math.max(60, Number(data?.expiresIn || 600) - 30) * 1000, variant);
   }
   return signedUrl;
 }
