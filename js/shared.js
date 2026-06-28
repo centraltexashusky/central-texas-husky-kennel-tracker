@@ -12233,6 +12233,13 @@ function initEvents() {
   ["ownedNextRabiesDate", "ownedNextDhppDate", "ownedNextBordetellaDate"].forEach((id) => document.getElementById(id)?.addEventListener("change", updateOwnedHealthDueWarnings));
   $("#ownedDogSearch").addEventListener("input", renderOwnedDogs);
   $("#ownedDogCareFilters").addEventListener("click", (event) => {
+    const infoButton = event.target.closest('[data-action="owned-special-care-info"]');
+    if (infoButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      openOwnedDogSpecialCareInfo();
+      return;
+    }
     const button = event.target.closest("[data-filter]");
     if (!button) return;
     ownedDogCareFilter = button.dataset.filter || "All";

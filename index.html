@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Snuggle Stay</title>
-    <link rel="stylesheet" href="styles.css?v=20260626-full-review-loading-fixes" />
+    <link rel="stylesheet" href="styles.css?v=20260628-our-dogs-filter-info-boarding-rows" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -806,7 +806,12 @@
             <button type="button" class="secondary-button" data-filter="Females">Females</button>
             <button type="button" class="secondary-button" data-filter="Males">Males</button>
             <button type="button" class="secondary-button" data-filter="Heat Watch">Heat Watch</button>
-            <button type="button" class="secondary-button" data-filter="Special Care">Special Care</button>
+            <span class="special-care-filter-group">
+              <button type="button" class="secondary-button" data-filter="Special Care">Special Care</button>
+              <button type="button" class="owned-care-info-button" data-action="owned-special-care-info" aria-label="What triggers Special Care alerts" title="What triggers Special Care alerts">
+                <img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" />
+              </button>
+            </span>
             <input type="search" id="ownedDogSearch" class="filter-search-input" placeholder="Search dog name" />
           </div>
           <div class="mobile-roster-list" id="ownedDogMobileCards" aria-label="Mobile Our Dogs quick actions"></div>
@@ -1387,6 +1392,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260627-legacy-bath-scheduler-completion"></script>
+  <script type="module" src="js/main.js?v=20260628-our-dogs-filter-info-boarding-rows"></script>
 </body>
 </html>

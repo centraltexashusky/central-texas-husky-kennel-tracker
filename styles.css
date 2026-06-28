@@ -2647,7 +2647,7 @@ textarea {
 .boarding-queue-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   margin: 12px 0;
 }
 
@@ -4816,6 +4816,45 @@ option {
   padding: 8px;
 }
 
+.special-care-filter-group {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.special-care-filter-group .secondary-button {
+  flex: 1 1 auto;
+}
+
+.owned-care-info-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 34px;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 34px;
+  padding: 2px;
+  width: 34px;
+}
+
+.owned-care-info-button img {
+  display: block;
+  height: 28px;
+  pointer-events: none;
+  width: 28px;
+}
+
+.owned-care-info-button:focus,
+.owned-care-info-button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
 .profile-tabs .is-active,
 .care-filter-toolbar .is-active {
   background: rgba(185, 222, 207, 0.24);
@@ -5906,6 +5945,18 @@ button.is-loading {
     width: 100%;
   }
 
+  .special-care-filter-group {
+    width: 100%;
+  }
+
+  .special-care-filter-group .secondary-button {
+    min-width: 0;
+  }
+
+  .special-care-filter-group .owned-care-info-button {
+    width: 34px;
+  }
+
   .operation-calendar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -6173,6 +6224,10 @@ button.is-loading {
   .table-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .special-care-filter-group {
+    width: 100%;
   }
 
   .form-section,

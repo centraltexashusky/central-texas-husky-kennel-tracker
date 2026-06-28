@@ -70,8 +70,38 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260627-legacy-bath-scheduler-completion",
+    mustInclude: "20260628-our-dogs-filter-info-boarding-rows",
     message: "production cache keys must be bumped.",
+  },
+  {
+    path: "index.html",
+    mustInclude: 'data-action="owned-special-care-info"',
+    message: "Our Dogs Special Care filter must expose a clickable info control.",
+  },
+  {
+    path: "js/shared.js",
+    mustInclude: 'data-action="owned-special-care-info"',
+    message: "Our Dogs Special Care info control must be wired to the dialog.",
+  },
+  {
+    path: "js/daily.js",
+    mustInclude: "openOwnedDogSpecialCareInfo",
+    message: "Our Dogs Special Care info dialog must explain filter triggers.",
+  },
+  {
+    path: "js/daily.js",
+    mustInclude: "query ? matches(record, query) : ownedDogMatchesCareFilter(record)",
+    message: "Our Dogs search must search all dogs when a query is entered.",
+  },
+  {
+    path: "js/daily.js",
+    mustInclude: 'const query = ($("#ownedDogSearch").value || "").trim();',
+    message: "Our Dogs search input must be trimmed before deciding whether to bypass the active filter.",
+  },
+  {
+    path: "styles.css",
+    mustInclude: "grid-template-columns: minmax(0, 1fr);",
+    message: "boarding queue groups must render one area per row.",
   },
   {
     path: "supabase/functions/send-notification/index.ts",

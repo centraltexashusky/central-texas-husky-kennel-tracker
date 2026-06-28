@@ -77,6 +77,21 @@ function ownedDogMatchesCareFilter(record = {}, filter = ownedDogCareFilter, dat
   return true;
 }
 
+function ownedDogSpecialCareInfoHtml() {
+  const rows = [
+    ["Special care notes", "Any saved handling, medication, allergy, feeding, coat care, or other special-care instruction."],
+    ["Medical care notes", "Any saved ongoing medical or care note that staff should review."],
+    ["Care status", "Care status set to Special Care, Medical Watch, Recovery, Behavior Watch, or Heat Watch."],
+    ["Manual care-note history", "Any manually logged care note on the dog timeline. Automatic health-date updates do not count."],
+  ];
+  return '<p>Dogs appear under Special Care when any of these are saved on the dog record:</p>' +
+    '<div class="detail-list">' + rows.map(([label, value]) => '<div class="detail-row"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(value) + '</span></div>').join("") + '</div>';
+}
+
+function openOwnedDogSpecialCareInfo() {
+  showDetailDialog("Special Care Alerts", ownedDogSpecialCareInfoHtml());
+}
+
 function taskTemplateId(shift, text, index) {
   return \`\${shift}-\${index}-\${String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "task"}\`;
 }
@@ -714,17 +729,17 @@ function renderOwnedDogMobileCards(records = []) {
   });
   container.innerHTML = mobileRecords.length
     ? mobileRecords.map(ownedDogMobileCardHtml).join("")
-    : \`<article class="record-card mobile-roster-card"><strong>No matching dogs</strong><p>Try a shorter name or switch the care filter back to All.</p></article>\`;
+    : \`<article class="record-card mobile-roster-card"><strong>No matching dogs</strong><p>Try a shorter search or another care filter.</p></article>\`;
   hydrateProfilePhotoElements(container);
 }
 
 function renderOwnedDogs() {
-  const query = $("#ownedDogSearch").value || "";
+  const query = ($("#ownedDogSearch").value || "").trim();
   const isAdmin = currentRole() === "admin";
   const addButton = $("#addOwnedDogButton");
   if (addButton) addButton.hidden = !isAdmin;
   const allDogs = readRecords("ownedDog").filter((record) => !record.removed);
-  const records = sortRecordsForTable("ownedDog", allDogs.filter((record) => matches(record, query) && ownedDogMatchesCareFilter(record)));
+  const records = sortRecordsForTable("ownedDog", allDogs.filter((record) => query ? matches(record, query) : ownedDogMatchesCareFilter(record)));
   const columns = activeColumns("ownedDog");
   const summary = {
     total: allDogs.length,

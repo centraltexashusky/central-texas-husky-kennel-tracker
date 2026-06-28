@@ -40,12 +40,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260627-profile-photo-thumbnails",
+    includes: "20260628-our-dogs-filter-info-boarding-rows",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260627-legacy-bath-scheduler-completion",
+    includes: "20260628-our-dogs-filter-info-boarding-rows",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];
