@@ -9729,11 +9729,11 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active {
-  background: #F7FAF8;
-  border-color: rgba(216, 154, 43, 0.66);
+  background: #315F85;
+  border-color: rgba(216, 154, 43, 0.78);
   border-radius: 24px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 -3px 0 #D89A2B;
-  color: #172033;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 -3px 0 #D89A2B, inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: #FFFFFF;
   margin-top: -6px;
   min-height: 68px;
   padding-bottom: 10px;
