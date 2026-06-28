@@ -9714,18 +9714,30 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .mobile-bottom-nav {
   background: #10283F !important;
+  border-color: rgba(248, 250, 247, 0.12);
+  padding: 8px 10px 10px;
 }
 
-:root[data-theme="light"] .mobile-bottom-nav-button.is-active,
+:root[data-theme="light"] .mobile-bottom-nav-button {
+  border: 1px solid transparent;
+  color: #D8E0E7;
+}
+
 :root[data-theme="light"] .mobile-bottom-nav-button:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #FFFFFF;
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active {
-  background: transparent;
-  box-shadow: none;
-  color: #F7C948;
+  background: #F7FAF8;
+  border-color: rgba(216, 154, 43, 0.66);
+  border-radius: 24px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 -3px 0 #D89A2B;
+  color: #172033;
+  margin-top: -6px;
+  min-height: 68px;
+  padding-bottom: 10px;
+  padding-top: 8px;
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active .mobile-bottom-nav-icon,
@@ -9734,30 +9746,29 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   z-index: 2;
 }
 
-:root[data-theme="light"] .mobile-bottom-nav-button.is-active::before,
-:root[data-theme="light"] .mobile-bottom-nav-button.is-active::after {
-  border-radius: 999px;
-  content: "";
-  height: 18px;
-  left: 50%;
-  pointer-events: none;
-  position: absolute;
-  top: 27px;
-  width: 18px;
+:root[data-theme="light"] .mobile-bottom-nav-button.is-active[data-page="boardingDogsPage"] .mobile-bottom-nav-image {
+  background: #10283F;
+  border-radius: 8px;
+  box-sizing: border-box;
+  padding: 3px;
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active::before {
-  background: #F7C948;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28), 0 4px 10px rgba(247, 201, 72, 0.32);
-  transform: translateX(-50%);
-  z-index: 0;
+  content: none !important;
+  display: none !important;
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active::after {
-  background: #10283F;
-  box-shadow: -1px 1px 0 rgba(255, 255, 255, 0.06);
-  transform: translateX(calc(-50% + 5px)) translateY(-2px);
-  z-index: 1;
+  background: #D89A2B;
+  border-radius: 999px;
+  content: "";
+  height: 3px;
+  left: 28%;
+  pointer-events: none;
+  position: absolute;
+  right: 28%;
+  bottom: 5px;
+  z-index: 2;
 }
 
 :root[data-theme="light"] .request-filter-button.is-active,
@@ -9809,4 +9820,44 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   border-color: #147A4D;
   box-shadow: 0 10px 22px rgba(26, 159, 99, 0.22);
   color: #FFFFFF;
+}
+
+:root[data-theme="light"] .secondary-button.boarding-owner-update-needed {
+  background: #FFFFFF;
+  border-color: #D95752 !important;
+  box-shadow: inset 0 0 0 1px rgba(217, 87, 82, 0.48), 0 6px 14px rgba(217, 87, 82, 0.12);
+  color: #172033;
+}
+
+:root[data-theme="light"] .secondary-button.boarding-owner-update-needed:hover {
+  background: #FFF5F4;
+  border-color: #C2413A !important;
+  box-shadow: inset 0 0 0 1px rgba(194, 65, 58, 0.55), 0 8px 18px rgba(194, 65, 58, 0.16);
+  color: #172033;
+}
+
+:root[data-theme="light"] .secondary-button.boarding-owner-update-current {
+  background: #FFFFFF;
+  border-color: #1FB76C !important;
+  box-shadow: inset 0 0 0 1px rgba(31, 183, 108, 0.48), 0 6px 14px rgba(31, 183, 108, 0.12);
+  color: #172033;
+}
+
+:root[data-theme="light"] .secondary-button.boarding-owner-update-current:hover {
+  background: #F1FBF5;
+  border-color: #16864E !important;
+  box-shadow: inset 0 0 0 1px rgba(22, 134, 78, 0.55), 0 8px 18px rgba(22, 134, 78, 0.16);
+  color: #172033;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) #boardingSchedulePanel {
+  background: #D2D9D7 !important;
+  border-color: #B7C2BE !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.42), 0 10px 24px rgba(23, 32, 51, 0.10) !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) #boardingSchedulePanel #boardingStayHistory > .record-card {
+  background: #FFFFFF !important;
+  border-color: #AFC2BB !important;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.05), 0 8px 18px rgba(23, 32, 51, 0.10) !important;
 }

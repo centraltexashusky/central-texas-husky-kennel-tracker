@@ -2625,15 +2625,9 @@ function boardingServiceOnlyChipHtml(record = {}, stay = {}) {
 }
 
 function boardingQueueGroupHtml(title, records = []) {
-  const PREVIEW_LIMIT = 6;
-  const preview = records.slice(0, PREVIEW_LIMIT);
-  const overflow = records.length - PREVIEW_LIMIT;
-  const overflowHtml = overflow > 0
-    ? \`<button type="button" class="boarding-queue-overflow" data-action="boarding-queue-show-more" data-filter="\${escapeHtml(title)}">+\${overflow} more - view all</button>\`
-    : "";
   return \`<article class="boarding-queue-card"><strong>\${escapeHtml(title)}</strong><span>\${records.length}</span>\${
-    preview.length
-      ? preview.map((record) => {
+    records.length
+      ? records.map((record) => {
         const stay = boardingQueueStayForGroup(title, record) || boardingPrimaryStay(record) || {};
         const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
         const kennel = boardingKennelLocationLabel(record, stay);
@@ -2642,7 +2636,7 @@ function boardingQueueGroupHtml(title, records = []) {
         return \`<button type="button" class="\${itemClass}" data-action="open-queue-stay-status" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${boardingDogThumbnailHtml(record, { className: "boarding-queue-photo" })}<span class="boarding-queue-item-content"><span class="boarding-queue-item-title"><span>\${escapeHtml(record.dogName || "Dog")}\${kennel ? \` <small class="kennel-tag">\${escapeHtml(kennel)}</small>\` : ""}</span>\${boardingServiceOnlyChipHtml(record, stay)}</span><small>\${escapeHtml(boardingScheduleText(record, stay))}</small></span></button>\`;
       }).join("")
       : \`<p>No dogs in this group.</p>\`
-  }\${overflowHtml}</article>\`;
+  }</article>\`;
 }
 
 function renderBoardingQueueGroups(records = []) {
