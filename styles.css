@@ -350,9 +350,6 @@ body.role-helper #dashboardPage.is-active {
 
 .page-header {
   align-items: flex-start;
-  background: #FFFFFF;
-  border-bottom: 1px solid #DDE5E2;
-  color: #172033;
   display: flex;
   gap: 18px;
   justify-content: space-between;
