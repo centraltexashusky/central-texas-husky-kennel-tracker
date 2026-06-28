@@ -105,6 +105,43 @@ function scheduledCareTaskForDailyLog(log = {}) {
     .sort(scheduledCareTaskSortForDailyLog)[0] || null;
 }
 
+function schedulerDailyRecordDate(record = {}) {
+  return dateOnly(record.date || (typeof dailySubmissionDate === "function" ? dailySubmissionDate(record) : "") || record.submittedAt || record.createdAt || "");
+}
+
+function legacyBathLogsForDailyRecord(record = {}, existingLogs = []) {
+  const recordDate = schedulerDailyRecordDate(record);
+  if (!record?.id || !recordDate) return [];
+  const structuredBathDogIds = new Set(existingLogs
+    .filter((log) => scheduledCareCompletionTypeKey(log.careType || log.category || log.type) === "bath")
+    .map((log) => String(log.dogId || ""))
+    .filter(Boolean));
+  return arrayValue(record.dogsBathedIds)
+    .map((dogId) => String(dogId || ""))
+    .filter((dogId) => dogId && !structuredBathDogIds.has(dogId))
+    .map((dogId) => {
+      const dog = readRecords("ownedDog").find((item) => item.id === dogId && !item.removed) || {};
+      return {
+        id: record.id + "-legacy-bath-" + dogId + "-Bath",
+        source: "dailyLegacyBath",
+        sourceCareLogId: "legacy-bath-" + dogId,
+        dogId,
+        dogName: ownedDogDisplayName(dog) || dog.dogName || "Dog",
+        careType: "Bath",
+        date: recordDate,
+        loggedAt: record.updatedAt || record.submittedAt || record.createdAt || recordDate,
+        completedBy: record.helperName || "",
+        completedEmail: record.helperEmail || "",
+      };
+    });
+}
+
+function schedulerCareLogsForDailyRecord(record = {}) {
+  const structuredLogs = arrayValue(record.structuredCareLogs || record.careLogs)
+    .filter((log) => log?.id && String(log.source || "") !== "taskScheduler");
+  return [...structuredLogs, ...legacyBathLogsForDailyRecord(record, structuredLogs)];
+}
+
 function latestOwnedDogBathLogForDate(dog = {}, date = "") {
   const targetDate = dateOnly(date);
   if (!targetDate) return null;
@@ -133,8 +170,7 @@ async function completeScheduledCareTaskFromCareLog(task = {}, log = {}, dailyRe
 async function syncScheduledCareTasksFromDailyRecord(record = {}, options = {}) {
   if (!record?.id || record.removed) return false;
   let changed = false;
-  const logs = arrayValue(record.structuredCareLogs || record.careLogs)
-    .filter((log) => log?.id && String(log.source || "") !== "taskScheduler");
+  const logs = schedulerCareLogsForDailyRecord(record);
   for (const log of logs) {
     const task = scheduledCareTaskForDailyLog(log);
     if (!task) continue;
@@ -162,7 +198,7 @@ async function syncScheduledCareTasksFromDailyLogs(options = {}) {
 function dailyCareLogTaskCompletionSyncSourceSignature() {
   const logs = readRecords("dailyTask")
     .filter((record) => !record.removed)
-    .flatMap((record) => arrayValue(record.structuredCareLogs || record.careLogs).map((log) => [
+    .flatMap((record) => schedulerCareLogsForDailyRecord(record).map((log) => [
       record.id || "",
       log.id || "",
       log.dogId || "",
@@ -2020,7 +2056,7 @@ function scheduledCareTaskLogForTask(task = {}) {
     return arrayValue(dog?.careLogs).find((log) => log.id === task.careLogId || log.scheduledCareTaskId === task.id) || null;
   }
   return readRecords("dailyTask")
-    .flatMap((record) => arrayValue(record.structuredCareLogs || record.careLogs))
+    .flatMap((record) => schedulerCareLogsForDailyRecord(record))
     .find((log) => log.id === task.careLogId || log.scheduledCareTaskId === task.id) || null;
 }
 

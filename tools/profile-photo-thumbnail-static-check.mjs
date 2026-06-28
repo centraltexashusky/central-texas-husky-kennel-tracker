@@ -45,8 +45,8 @@ const checks = [
   },
   {
     path: "index.html",
-    includes: "20260627-profile-photo-thumbnails",
-    message: "top-level script cache key must be bumped for profile thumbnail loading.",
+    includes: "20260627-legacy-bath-scheduler-completion",
+    message: "top-level script cache key must include the latest deployment token.",
   },
 ];
 

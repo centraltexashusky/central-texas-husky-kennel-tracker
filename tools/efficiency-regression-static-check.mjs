@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260627-profile-photo-thumbnails",
+    mustInclude: "20260627-legacy-bath-scheduler-completion",
     message: "production cache keys must be bumped.",
   },
   {
