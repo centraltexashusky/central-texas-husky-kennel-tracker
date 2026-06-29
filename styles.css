@@ -9927,3 +9927,124 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .record-card.boarding-checkout-belongings-card p {
   color: #40526A;
 }
+
+.page-header .eyebrow {
+  color: #D89A2B;
+}
+
+:root[data-theme="light"] .page-header .eyebrow {
+  color: #B7791F;
+}
+
+#boardingViewToggle {
+  gap: 8px;
+  overflow: visible;
+  padding: 4px;
+}
+
+#boardingViewToggle .view-toggle-button {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  min-height: 42px;
+}
+
+.missed-boarding-notes-card {
+  background: linear-gradient(135deg, rgba(92, 58, 20, 0.96), rgba(36, 51, 67, 0.96));
+  border-color: #D89A2B !important;
+  box-shadow: inset 0 0 0 1px rgba(216, 154, 43, 0.36), 0 10px 24px rgba(216, 154, 43, 0.14);
+}
+
+.missed-boarding-notes-card .status-chip {
+  background: rgba(216, 154, 43, 0.18);
+  border-color: rgba(216, 154, 43, 0.5);
+  color: #F8D78C;
+}
+
+.missed-boarding-notes-popup {
+  display: grid;
+  gap: 14px;
+}
+
+.missed-boarding-notes-table-wrap {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.missed-boarding-notes-table {
+  border-collapse: collapse;
+  min-width: 520px;
+  width: 100%;
+}
+
+.missed-boarding-notes-table th,
+.missed-boarding-notes-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.missed-boarding-notes-table thead th {
+  background: rgba(216, 154, 43, 0.12);
+  color: #F8D78C;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.missed-boarding-notes-table tbody tr:last-child th,
+.missed-boarding-notes-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.missed-boarding-notes-dog {
+  background: rgba(216, 154, 43, 0.1);
+  color: #F9E5B2;
+  width: 34%;
+}
+
+.missed-boarding-note-row {
+  display: grid;
+  gap: 6px;
+}
+
+.missed-boarding-note-row span {
+  color: #F8D78C;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.missed-boarding-note-row p {
+  margin: 0;
+}
+
+:root[data-theme="light"] .missed-boarding-notes-card {
+  background: #FFFBEB;
+  border-color: #D89A2B !important;
+  box-shadow: inset 0 0 0 1px rgba(216, 154, 43, 0.35), 0 10px 22px rgba(216, 154, 43, 0.12);
+}
+
+:root[data-theme="light"] .missed-boarding-notes-card .status-chip {
+  background: #FEF3C7;
+  border-color: #D89A2B;
+  color: #92400E;
+}
+
+:root[data-theme="light"] .missed-boarding-notes-table-wrap {
+  border-color: #E6C675;
+}
+
+:root[data-theme="light"] .missed-boarding-notes-table thead th {
+  background: #FEF3C7;
+  color: #713F12;
+}
+
+:root[data-theme="light"] .missed-boarding-notes-dog {
+  background: #FFFBEB;
+  color: #172033;
+}
+
+:root[data-theme="light"] .missed-boarding-note-row span {
+  color: #9A5B0A;
+}

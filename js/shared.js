@@ -1743,6 +1743,7 @@ function profileRecordForLogin(user) {
   const loginAt = new Date().toISOString();
   return {
     ...profileRecordForUser(user),
+    previousLoginAt: existing.lastLoginAt || existing.previousLoginAt || "",
     lastLoginAt: loginAt,
     lastLoginEmail: user.email || existing.lastLoginEmail || "",
     lastLoginProvider: user.authProvider || existing.authProvider || "",
@@ -1997,6 +1998,9 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
       ...refreshedUser,
       role: profile?.role || roleForAccount(refreshedUser) || refreshedUser.role || "customer",
       name: profile?.name || refreshedUser.name,
+      previousLoginAt: profile?.previousLoginAt || refreshedUser.previousLoginAt || "",
+      lastLoginAt: profile?.lastLoginAt || refreshedUser.lastLoginAt || "",
+      missedBoardingNotesReadAt: profile?.missedBoardingNotesReadAt || refreshedUser.missedBoardingNotesReadAt || "",
       themePreference: sessionThemePreference,
       preferences: { ...(profile?.preferences || {}), theme: sessionThemePreference },
       uiPreferences: { ...(profile?.uiPreferences || {}), theme: sessionThemePreference },
@@ -10870,6 +10874,11 @@ function initEvents() {
     if (record) showDetailDialog(titleForRecord(card.dataset.type, record), detailForRecord(card.dataset.type, record));
   });
   $("#dashboardAlerts")?.addEventListener("click", async (event) => {
+    const missedNotesButton = event.target.closest('[data-action="open-missed-boarding-notes"]');
+    if (missedNotesButton) {
+      openMissedBoardingNotesPopup();
+      return;
+    }
     const alertPopupButton = event.target.closest('[data-action="open-dashboard-alert-popup"]');
     if (alertPopupButton) {
       openDashboardAlertPopup(alertPopupButton.dataset.alertFilter || "All");
@@ -11500,6 +11509,22 @@ function initEvents() {
     }
     if (action.dataset.action === "open-dashboard-alert-popup") {
       openDashboardAlertPopup(action.dataset.alertFilter || "All");
+      return;
+    }
+    if (action.dataset.action === "open-missed-boarding-notes") {
+      openMissedBoardingNotesPopup();
+      return;
+    }
+    if (action.dataset.action === "mark-missed-boarding-notes-read") {
+      await markMissedBoardingNotesRead();
+      $("#detailDialog").close();
+      renderDashboard();
+      showToast("Summary alert marked read.");
+      return;
+    }
+    if (action.dataset.action === "read-later-missed-boarding-notes") {
+      $("#detailDialog").close();
+      showToast("Summary alert left unread.");
       return;
     }
     if (action.dataset.action === "clear-boarding-request-filter") {

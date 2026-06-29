@@ -187,6 +187,203 @@ function dashboardAlertCardHtml(alert = {}) {
   return \`<article class="record-card \${clickableClass}is-urgent" \${attrs}><span class="status-chip">\${escapeHtml(alert.category || "Alert")}</span>\${alert.html || ""}\${buttonLabel ? \`<div class="record-actions"><button type="button" class="secondary-button">\${escapeHtml(buttonLabel)}</button></div>\` : ""}</article>\`;
 }
 
+function missedBoardingNotesTimestampMs(value = "") {
+  if (!value) return 0;
+  const timestamp = new Date(value).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function missedBoardingNotesLatestTimestamp(values = []) {
+  const timestamps = values.map(missedBoardingNotesTimestampMs).filter(Boolean);
+  if (!timestamps.length) return "";
+  return new Date(Math.max(...timestamps)).toISOString();
+}
+
+function missedBoardingNotesCurrentProfile() {
+  const email = currentUser?.email || helperEmail?.value || "";
+  return savedUserFor({ email, key: currentUser?.key || "" }) || currentUser || {};
+}
+
+function missedBoardingNotesReadStorageKey() {
+  return "cth-missed-boarding-notes-read-at:" + currentUserNotificationKey();
+}
+
+function missedBoardingNotesStoredReadAt() {
+  try {
+    return localStorage.getItem(missedBoardingNotesReadStorageKey()) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function missedBoardingNotesSince() {
+  const profile = missedBoardingNotesCurrentProfile();
+  const checkedAt = missedBoardingNotesLatestTimestamp([
+    missedBoardingNotesStoredReadAt(),
+    currentUser?.missedBoardingNotesReadAt,
+    profile.missedBoardingNotesReadAt,
+    currentUser?.previousLoginAt,
+    profile.previousLoginAt,
+  ]);
+  if (checkedAt) return checkedAt;
+  return currentUser?.lastLoginAt || profile.lastLoginAt || new Date().toISOString();
+}
+
+function missedBoardingNotesCanView() {
+  return typeof isStaffRole === "function" ? isStaffRole(currentRole()) : ["admin", "staff", "helper"].includes(currentRole());
+}
+
+function missedBoardingNotesDogName(record = {}, fallback = "") {
+  return record.dogName || record.callName || record.showName || record.name || fallback || "Boarding dog";
+}
+
+function missedBoardingNotesDogKey(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function missedBoardingNotesBoardingRecords() {
+  const records = typeof consolidatedBoardingDogRecords === "function" ? consolidatedBoardingDogRecords() : readRecords("boardingDog");
+  return records.filter((record) => {
+    if (!record || record.removed) return false;
+    if (typeof boardingRecordHasActionableStay === "function") return boardingRecordHasActionableStay(record);
+    const status = typeof boardingDisplayStatus === "function" ? boardingDisplayStatus(record) : record.boardingStatus || record.status || "";
+    return !["Cancelled", "Checked Out"].includes(status);
+  });
+}
+
+function missedBoardingNotesCareLogMatches(log = {}) {
+  const label = [log.careType, log.category, log.group, log.type, log.label].filter(Boolean).join(" ");
+  return /medical|behavior/i.test(label);
+}
+
+function missedBoardingNotesLogTimestamp(log = {}, fallback = "") {
+  return log.loggedAt || log.completedAt || log.updatedAt || log.createdAt || log.submittedAt || log.date || fallback || "";
+}
+
+function missedBoardingNotesEntries() {
+  if (!missedBoardingNotesCanView()) return [];
+  const since = missedBoardingNotesSince();
+  const sinceMs = missedBoardingNotesTimestampMs(since);
+  const records = missedBoardingNotesBoardingRecords();
+  const dogIds = new Set(records.map((record) => String(record.id || "")).filter(Boolean));
+  const dogByName = new Map(records.map((record) => [missedBoardingNotesDogKey(missedBoardingNotesDogName(record)), record]).filter(([name]) => name));
+  const entries = [];
+  const seen = new Set();
+  const addEntry = (entry = {}) => {
+    const timestamp = entry.timestamp || "";
+    if (sinceMs && missedBoardingNotesTimestampMs(timestamp) <= sinceMs) return;
+    const note = String(entry.note || "").trim();
+    if (!note) return;
+    const dogName = entry.dogName || "Boarding dog";
+    const signature = [entry.dogId || missedBoardingNotesDogKey(dogName), entry.type || "", timestamp, note].join("|");
+    if (seen.has(signature)) return;
+    seen.add(signature);
+    entries.push({
+      ...entry,
+      dogName,
+      dogKey: entry.dogId || missedBoardingNotesDogKey(dogName),
+      timestamp,
+      type: entry.type || "Medical/Behavior Note",
+      note,
+    });
+  };
+
+  records.forEach((record) => {
+    const dogName = missedBoardingNotesDogName(record);
+    const timestamp = record.updatedAt || record.submittedAt || record.createdAt || "";
+    [
+      ["Medical notes", record.medicalNotes || record.medicalCareNotes || ""],
+      ["Behavior notes", record.behaviorNotes || ""],
+      ["Special care", record.specialCare || ""],
+    ].forEach(([type, note]) => addEntry({ dogId: record.id || "", dogName, type, note, timestamp }));
+    arrayValue(record.careLogs).forEach((log) => {
+      if (!missedBoardingNotesCareLogMatches(log)) return;
+      addEntry({
+        dogId: record.id || log.dogId || "",
+        dogName: log.dogName || dogName,
+        type: log.careType || log.category || "Medical/Behavior Note",
+        note: log.note || log.notes || log.summary || "",
+        timestamp: missedBoardingNotesLogTimestamp(log, timestamp),
+      });
+    });
+  });
+
+  readRecords("dailyTask").forEach((record) => {
+    arrayValue(record.structuredCareLogs || record.careLogs).forEach((log) => {
+      if (!missedBoardingNotesCareLogMatches(log)) return;
+      const dogId = String(log.dogId || "");
+      const matchedRecord = (dogId && dogIds.has(dogId) && records.find((item) => String(item.id || "") === dogId)) || dogByName.get(missedBoardingNotesDogKey(log.dogName || ""));
+      if (!matchedRecord && log.dogType !== "boardingDog") return;
+      addEntry({
+        dogId: matchedRecord?.id || dogId,
+        dogName: log.dogName || missedBoardingNotesDogName(matchedRecord || {}),
+        type: log.careType || log.category || "Medical/Behavior Note",
+        note: log.note || log.notes || "",
+        timestamp: missedBoardingNotesLogTimestamp(log, record.updatedAt || record.submittedAt || record.date || ""),
+      });
+    });
+  });
+
+  return entries.sort((a, b) => missedBoardingNotesTimestampMs(b.timestamp) - missedBoardingNotesTimestampMs(a.timestamp));
+}
+
+function missedBoardingNotesGroupedEntries(entries = missedBoardingNotesEntries()) {
+  const groups = new Map();
+  entries.forEach((entry) => {
+    const key = entry.dogKey || missedBoardingNotesDogKey(entry.dogName);
+    if (!groups.has(key)) groups.set(key, { dogName: entry.dogName, entries: [] });
+    groups.get(key).entries.push(entry);
+  });
+  return [...groups.values()].sort((a, b) => a.dogName.localeCompare(b.dogName));
+}
+
+function missedBoardingNotesCardHtml(entries = missedBoardingNotesEntries()) {
+  if (!entries.length) return "";
+  const dogCount = missedBoardingNotesGroupedEntries(entries).length;
+  const noteWord = entries.length === 1 ? "note" : "notes";
+  const dogWord = dogCount === 1 ? "dog" : "dogs";
+  return '<article class="record-card compact-record-card clickable-card missed-boarding-notes-card" data-action="open-missed-boarding-notes"><span class="status-chip">Summary Alert</span><strong>New boarding medical/behavior notes</strong><p>' + entries.length + " " + noteWord + " across " + dogCount + " " + dogWord + " since your last check-in.</p><div class=\\"record-actions\\"><button type=\\"button\\" class=\\"secondary-button\\">Review Summary</button></div></article>";
+}
+
+function missedBoardingNotesTableRowsHtml(entries = missedBoardingNotesEntries()) {
+  return missedBoardingNotesGroupedEntries(entries).map((group) => group.entries.map((entry, index) => {
+    const dogCell = index === 0 ? '<th scope="rowgroup" rowspan="' + group.entries.length + '" class="missed-boarding-notes-dog">' + escapeHtml(group.dogName) + '</th>' : "";
+    const meta = [entry.type, entry.timestamp ? formatDateTime(entry.timestamp) : ""].filter(Boolean).join(" | ");
+    return '<tr>' + dogCell + '<td><div class="missed-boarding-note-row"><span>' + escapeHtml(meta) + '</span><p>' + multilineHtml(entry.note) + '</p></div></td></tr>';
+  }).join("")).join("");
+}
+
+function missedBoardingNotesPopupHtml(entries = missedBoardingNotesEntries()) {
+  const sinceLabel = formatDateTime(missedBoardingNotesSince()) || "your last check-in";
+  const body = entries.length
+    ? '<div class="missed-boarding-notes-table-wrap"><table class="missed-boarding-notes-table"><thead><tr><th>Dog</th><th>Medical / behavior notes</th></tr></thead><tbody>' + missedBoardingNotesTableRowsHtml(entries) + '</tbody></table></div>'
+    : '<p>No missed boarding medical or behavior notes right now.</p>';
+  return '<section class="popup-record-section missed-boarding-notes-popup"><article class="record-card compact-record-card"><strong>Summary Alert</strong><p>Boarding medical and behavior notes logged since ' + escapeHtml(sinceLabel) + '.</p></article>' + body + '<div class="button-row"><button type="button" data-action="mark-missed-boarding-notes-read">Read</button><button type="button" class="secondary-button" data-action="read-later-missed-boarding-notes">Read Later</button></div></section>';
+}
+
+function openMissedBoardingNotesPopup() {
+  showDetailDialog("Summary Alert", missedBoardingNotesPopupHtml(missedBoardingNotesEntries()));
+}
+
+async function markMissedBoardingNotesRead() {
+  const timestamp = new Date().toISOString();
+  safeLocalStorageSetItem(missedBoardingNotesReadStorageKey(), timestamp, { quiet: true });
+  if (currentUser) {
+    currentUser.missedBoardingNotesReadAt = timestamp;
+    safeLocalStorageSetItem(stateKeys.session, JSON.stringify(currentUser), { quiet: true });
+  }
+  const email = currentUser?.email || helperEmail?.value || "";
+  if (!email) return timestamp;
+  const profile = profileRecordForUser({ ...(currentUser || {}), email, name: currentUser?.name || helperName?.value || email });
+  const record = upsertRecord("settingsUser", { ...profile, missedBoardingNotesReadAt: timestamp });
+  try {
+    await sendPayload(record, { quiet: true });
+  } catch (error) {
+    console.warn("Could not sync missed boarding notes read state.", error);
+  }
+  return timestamp;
+}
+
 function customerCancellationAlertNotifications() {
   return readRecords("notificationLog")
     .filter((item) => !item.removed && item.eventName === "customerApprovedStayCancelled" && notificationVisibleToCurrentUser(item) && !notificationIsRead(item))
@@ -243,9 +440,10 @@ function dashboardFilteredAlerts(alerts = [], filter = dashboardAlertFilter) {
 }
 
 function dashboardAlertsSummaryHtml(alerts = []) {
-  if (!alerts.length) return "<p>No action items today.</p>";
+  const missedNotesHtml = missedBoardingNotesCardHtml();
+  if (!alerts.length) return missedNotesHtml || "<p>No action items today.</p>";
   const plural = alerts.length === 1 ? "item" : "items";
-  return \`<article class="record-card compact-record-card clickable-card" data-action="open-dashboard-alert-popup" data-alert-filter="All"><strong>\${alerts.length} action \${plural} today</strong><p>Tap a category above to review and complete that list in a popup.</p><div class="record-actions"><button type="button" class="secondary-button">Open All</button></div></article>\`;
+  return missedNotesHtml + \`<article class="record-card compact-record-card clickable-card" data-action="open-dashboard-alert-popup" data-alert-filter="All"><strong>\${alerts.length} action \${plural} today</strong><p>Tap a category above to review and complete that list in a popup.</p><div class="record-actions"><button type="button" class="secondary-button">Open All</button></div></article>\`;
 }
 
 function dashboardAlertPopupHtml(filter = "All", alerts = dashboardAlertsForMetrics()) {
