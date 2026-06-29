@@ -9733,7 +9733,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   background: #315F85;
   border-color: rgba(216, 154, 43, 0.78);
   border-radius: 24px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 -3px 0 #D89A2B, inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.16);
   color: #FFFFFF;
   margin-top: -6px;
   min-height: 68px;
@@ -9760,16 +9760,8 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active::after {
-  background: #D89A2B;
-  border-radius: 999px;
-  content: "";
-  height: 3px;
-  left: 28%;
-  pointer-events: none;
-  position: absolute;
-  right: 28%;
-  bottom: 5px;
-  z-index: 2;
+  content: none !important;
+  display: none !important;
 }
 
 :root[data-theme="light"] .request-filter-button.is-active,
@@ -10171,18 +10163,26 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .boarding-calendar-bar.is-status-in-kennel,
 :root[data-theme="light"] .boarding-calendar-status-flag.is-status-in-kennel {
-  --calendar-status-border: #0F9F8F;
-  --calendar-status-from: #DDF8F3;
-  --calendar-status-to: #5AD6C8;
-  --calendar-status-text: #083F3A;
+  --calendar-status-border: #0F766E;
+  --calendar-status-from: #0F766E;
+  --calendar-status-to: #14B8A6;
+  --calendar-status-text: #FFFFFF;
 }
 
 :root[data-theme="light"] .boarding-calendar-bar.is-status-ready-for-pickup,
 :root[data-theme="light"] .boarding-calendar-status-flag.is-status-ready-for-pickup {
-  --calendar-status-border: #16A34A;
-  --calendar-status-from: #E4FBEA;
-  --calendar-status-to: #73DB92;
-  --calendar-status-text: #0B4525;
+  --calendar-status-border: #15803D;
+  --calendar-status-from: #15803D;
+  --calendar-status-to: #22C55E;
+  --calendar-status-text: #FFFFFF;
+}
+
+:root[data-theme="light"] .boarding-calendar-bar.is-status-in-kennel small,
+:root[data-theme="light"] .boarding-calendar-bar.is-status-ready-for-pickup small,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-in-kennel small,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-ready-for-pickup small {
+  background: rgba(255, 255, 255, 0.22);
+  color: #FFFFFF;
 }
 
 :root[data-theme="light"] .boarding-calendar-bar.is-status-checked-out,
