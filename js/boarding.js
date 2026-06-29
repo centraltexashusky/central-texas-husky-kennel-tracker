@@ -5,6 +5,7 @@ const __snuggleStayModuleSource = `function statusChipHtml(label, className = ""
 
 var boardingCalendarMonth = todayDate().slice(0, 7);
 var boardingCalendarInactiveStatuses = new Set(["Cancelled", "Checked Out"]);
+var boardingCalendarHiddenLegendStatuses = new Set(["Cancelled"]);
 
 function dogTypeBadgeHtml(type) {
   const labels = {
@@ -2778,7 +2779,7 @@ function boardingCalendarStatusLegendHtml(entries = []) {
     acc[status] = (acc[status] || 0) + 1;
     return acc;
   }, {});
-  const statuses = boardingLifecycleStatuses.filter((status) => counts[status]);
+  const statuses = boardingLifecycleStatuses.filter((status) => counts[status] && !boardingCalendarHiddenLegendStatuses.has(status));
   if (!statuses.length) return "";
   return '<div class="boarding-calendar-status-flags" aria-label="Boarding status colors">' + statuses.map((status) => {
     const count = counts[status] || 0;

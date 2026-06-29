@@ -10048,3 +10048,169 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .missed-boarding-note-row span {
   color: #9A5B0A;
 }
+
+:root[data-theme="light"] .boarding-calendar-card {
+  background: #F7FAF7;
+  border-color: #D5E1DD;
+  box-shadow: 0 10px 24px rgba(23, 32, 51, 0.08);
+  color: #172033;
+}
+
+:root[data-theme="light"] .boarding-calendar-header strong {
+  color: #172033;
+}
+
+:root[data-theme="light"] .boarding-calendar-header span {
+  color: #52647C;
+}
+
+:root[data-theme="light"] .boarding-calendar-icon-button,
+:root[data-theme="light"] .boarding-calendar-month-button {
+  background: #FFFFFF;
+  border-color: #C9D6D2;
+  box-shadow: 0 4px 12px rgba(23, 32, 51, 0.06);
+  color: #172033;
+}
+
+:root[data-theme="light"] .boarding-calendar-scroll {
+  background: #ECF3EF;
+  border-color: #CBDAD4;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+:root[data-theme="light"] .boarding-calendar-corner,
+:root[data-theme="light"] .boarding-calendar-day-heading {
+  background: #E6EFEA;
+  border-bottom-color: #C6D5CF;
+  border-right-color: #C6D5CF;
+  color: #314158;
+}
+
+:root[data-theme="light"] .boarding-calendar-day-heading strong {
+  color: #172033;
+}
+
+:root[data-theme="light"] .boarding-calendar-day-heading span {
+  color: #65748B;
+}
+
+:root[data-theme="light"] .boarding-calendar-dog-cell {
+  background: #FFFFFF;
+  border-bottom-color: #C8D7D1;
+  border-right-color: #C8D7D1;
+  box-shadow: 10px 0 18px rgba(23, 32, 51, 0.04);
+  color: #172033;
+}
+
+:root[data-theme="light"] .boarding-calendar-dog-cell strong {
+  color: #172033;
+}
+
+:root[data-theme="light"] .boarding-calendar-dog-cell span {
+  color: #315F85;
+}
+
+:root[data-theme="light"] .boarding-calendar-day-cell {
+  background:
+    linear-gradient(90deg, rgba(49, 95, 133, 0.05), rgba(49, 95, 133, 0.015)),
+    #F8FAF7;
+  border-bottom-color: #D8E3DE;
+  border-right-color: #D8E3DE;
+}
+
+:root[data-theme="light"] .boarding-calendar-now-line::before {
+  border-left-color: #D89A2B;
+  box-shadow: 0 0 0 1px rgba(216, 154, 43, 0.2), 0 0 12px rgba(216, 154, 43, 0.35);
+}
+
+:root[data-theme="light"] .boarding-calendar-bar,
+:root[data-theme="light"] .boarding-calendar-status-flag {
+  --calendar-status-border: #8EA3B7;
+  --calendar-status-from: #EEF4F8;
+  --calendar-status-to: #D9E5EE;
+  --calendar-status-text: #172033;
+}
+
+:root[data-theme="light"] .boarding-calendar-bar {
+  box-shadow: 0 8px 18px rgba(23, 32, 51, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+:root[data-theme="light"] .boarding-calendar-bar::before {
+  background: var(--calendar-status-border);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.74);
+}
+
+:root[data-theme="light"] .boarding-calendar-status-flag small {
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--calendar-status-text);
+}
+
+:root[data-theme="light"] .boarding-calendar-bar.is-status-pending,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-pending {
+  --calendar-status-border: #D89A2B;
+  --calendar-status-from: #FFF7D6;
+  --calendar-status-to: #F7C65A;
+  --calendar-status-text: #432B04;
+}
+
+:root[data-theme="light"] .boarding-calendar-bar.is-status-approved,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-approved {
+  --calendar-status-border: #2F6FED;
+  --calendar-status-from: #E7F0FF;
+  --calendar-status-to: #80AFF8;
+  --calendar-status-text: #12355F;
+}
+
+:root[data-theme="light"] .boarding-calendar-bar.is-status-checked-in,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-checked-in {
+  --calendar-status-border: #6366F1;
+  --calendar-status-from: #ECEBFF;
+  --calendar-status-to: #A9A7F8;
+  --calendar-status-text: #29255F;
+}
+
+:root[data-theme="light"] .boarding-calendar-bar.is-status-in-kennel,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-in-kennel {
+  --calendar-status-border: #0F9F8F;
+  --calendar-status-from: #DDF8F3;
+  --calendar-status-to: #5AD6C8;
+  --calendar-status-text: #083F3A;
+}
+
+:root[data-theme="light"] .boarding-calendar-bar.is-status-ready-for-pickup,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-ready-for-pickup {
+  --calendar-status-border: #16A34A;
+  --calendar-status-from: #E4FBEA;
+  --calendar-status-to: #73DB92;
+  --calendar-status-text: #0B4525;
+}
+
+:root[data-theme="light"] .boarding-calendar-bar.is-status-checked-out,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-checked-out {
+  --calendar-status-border: #7C8DA3;
+  --calendar-status-from: #F1F5F9;
+  --calendar-status-to: #C9D4E2;
+  --calendar-status-text: #26384F;
+}
+
+:root[data-theme="light"] .boarding-calendar-bar.is-status-cancelled,
+:root[data-theme="light"] .boarding-calendar-status-flag.is-status-cancelled {
+  --calendar-status-border: #8B5CF6;
+  --calendar-status-from: #F2EAFE;
+  --calendar-status-to: #C6B5F7;
+  --calendar-status-text: #3D2670;
+}
+
+:root[data-theme="light"] .boarding-calendar-status-flag.is-inactive {
+  --calendar-status-border: #A8B5C4;
+  --calendar-status-from: #F4F7FA;
+  --calendar-status-to: #E1E7EE;
+  --calendar-status-text: #40526A;
+  box-shadow: inset 0 0 0 1px rgba(64, 82, 106, 0.08);
+}
+
+:root[data-theme="light"] .boarding-calendar-status-flag.is-inactive::after {
+  background: #65748B;
+  border-color: #52647C;
+  color: #FFFFFF;
+}
