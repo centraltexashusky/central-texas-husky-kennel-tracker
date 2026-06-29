@@ -3018,6 +3018,8 @@ function boardingQuickActionButtons(record = {}) {
   }
   const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
   if (ownerUpdateButton) buttons.push(ownerUpdateButton);
+  const medicalBehaviorButton = boardingMedicalBehaviorButtonHtml(record, stay);
+  if (medicalBehaviorButton) buttons.push(medicalBehaviorButton);
   if (status === "Checked Out") {
     buttons.push(\`<button type="button" class="secondary-button" data-action="change-boarding" data-id="\${escapeHtml(record.id)}"\${stayAttr}>View Record</button>\`);
   } else {
@@ -5403,7 +5405,7 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
 function boardingMedicalBehaviorButtonHtml(record = {}, stay = {}) {
   if (typeof currentRole === "function" && currentRole() === "customer") return "";
   const stayAttrs = stay?.id ? boardingStayDataAttrs(record, stay) : "";
-  return '<button type="button" class="secondary-button" data-action="open-boarding-medical-behavior-note" data-dog-id="' + escapeHtml(record.id || "") + '"' + stayAttrs + '>Medical/Behavior</button>';
+  return '<button type="button" class="secondary-button" data-action="open-boarding-medical-behavior-note" data-id="' + escapeHtml(record.id || "") + '" data-dog-id="' + escapeHtml(record.id || "") + '"' + stayAttrs + '>Medical/Behavior</button>';
 }
 
 function boardingMedicalBehaviorNoteFormHtml(record = {}, stay = {}) {

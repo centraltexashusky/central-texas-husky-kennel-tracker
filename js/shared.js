@@ -12961,6 +12961,10 @@ function initEvents() {
       openOwnerUpdateAlert(record.id, reference);
       return;
     }
+    if (button.dataset.action === "open-boarding-medical-behavior-note") {
+      openBoardingMedicalBehaviorNotePopup(record, reference);
+      return;
+    }
     if (button.dataset.action === "cancel-boarding") {
       const customerNotificationEvent = !stayId ? boardingCustomerRequestStatusEventName(record, "Cancelled", {}) : "";
       const updated = stayId
@@ -12997,6 +13001,10 @@ function initEvents() {
     }
     if (button.dataset.action === "open-owner-update-for-stay") {
       openOwnerUpdateAlert(record.id, boardingStayReferenceFromAction(button));
+      return;
+    }
+    if (button.dataset.action === "open-boarding-medical-behavior-note") {
+      openBoardingMedicalBehaviorNotePopup(record, boardingStayReferenceFromAction(button));
       return;
     }
     if (button.dataset.action === "open-mobile-stay-status-menu") {
