@@ -7,7 +7,7 @@ import "./daily.js?v=20260628-our-dogs-filter-info-boarding-rows-special-care-we
 import "./task-scheduler.js?v=20260627-legacy-bath-scheduler-completion";
 import "./timesheet.js?v=20260625-staff-rls-fix";
 import "./settings.js?v=20260625-staff-rls-fix";
-import "./notifications.js?v=20260628-our-dogs-filter-info-boarding-rows-missed-boarding-notes-alert";
+import "./notifications.js?v=20260628-our-dogs-filter-info-boarding-rows-weekly-medical-summary";
 import "./search.js?v=20260623-efficiency-guardrails";
 
 initializeApp().catch((error) => {

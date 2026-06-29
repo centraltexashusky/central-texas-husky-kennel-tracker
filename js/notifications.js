@@ -217,16 +217,9 @@ function missedBoardingNotesStoredReadAt() {
 }
 
 function missedBoardingNotesSince() {
-  const profile = missedBoardingNotesCurrentProfile();
-  const checkedAt = missedBoardingNotesLatestTimestamp([
-    missedBoardingNotesStoredReadAt(),
-    currentUser?.missedBoardingNotesReadAt,
-    profile.missedBoardingNotesReadAt,
-    currentUser?.previousLoginAt,
-    profile.previousLoginAt,
-  ]);
-  if (checkedAt) return checkedAt;
-  return currentUser?.lastLoginAt || profile.lastLoginAt || new Date().toISOString();
+  const today = typeof todayDate === "function" ? todayDate() : new Date().toISOString().slice(0, 10);
+  const startDate = typeof addDays === "function" ? addDays(today, -6) : new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  return startDate + "T00:00:00";
 }
 
 function missedBoardingNotesCanView() {
@@ -251,9 +244,24 @@ function missedBoardingNotesBoardingRecords() {
   });
 }
 
+function missedBoardingNotesOwnedRecords() {
+  return readRecords("ownedDog").filter((record) => record && !record.removed);
+}
+
+function missedBoardingNotesOwnedActivityLogs(record = {}) {
+  const dog = typeof normalizeOwnedDogCare === "function" ? normalizeOwnedDogCare(record) : record;
+  return [
+    ...arrayValue(dog.exerciseLogs).map((log) => ({ ...log, group: "Exercise" })),
+    ...arrayValue(dog.trainingLogs).map((log) => ({ ...log, group: "Training" })),
+    ...arrayValue(dog.bathHistory).map((log) => ({ ...log, group: "Bath" })),
+    ...arrayValue(dog.heatHistory).map((log) => ({ ...log, group: "Heat" })),
+    ...arrayValue(dog.careNotesHistory).map((log) => ({ ...log, group: "Medical/Care" })),
+  ];
+}
+
 function missedBoardingNotesCareLogMatches(log = {}) {
   const label = [log.careType, log.category, log.group, log.type, log.label].filter(Boolean).join(" ");
-  return /medical|behavior/i.test(label);
+  return /medical|behavior|medical\\/care|special care/i.test(label);
 }
 
 function missedBoardingNotesLogTimestamp(log = {}, fallback = "") {
@@ -265,23 +273,29 @@ function missedBoardingNotesEntries() {
   const since = missedBoardingNotesSince();
   const sinceMs = missedBoardingNotesTimestampMs(since);
   const records = missedBoardingNotesBoardingRecords();
+  const ownedRecords = missedBoardingNotesOwnedRecords();
   const dogIds = new Set(records.map((record) => String(record.id || "")).filter(Boolean));
+  const ownedDogIds = new Set(ownedRecords.map((record) => String(record.id || "")).filter(Boolean));
   const dogByName = new Map(records.map((record) => [missedBoardingNotesDogKey(missedBoardingNotesDogName(record)), record]).filter(([name]) => name));
+  const ownedDogByName = new Map(ownedRecords.map((record) => [missedBoardingNotesDogKey(missedBoardingNotesDogName(record, "Our dog")), record]).filter(([name]) => name));
   const entries = [];
   const seen = new Set();
   const addEntry = (entry = {}) => {
     const timestamp = entry.timestamp || "";
-    if (sinceMs && missedBoardingNotesTimestampMs(timestamp) <= sinceMs) return;
+    if (sinceMs && missedBoardingNotesTimestampMs(timestamp) < sinceMs) return;
     const note = String(entry.note || "").trim();
     if (!note) return;
-    const dogName = entry.dogName || "Boarding dog";
-    const signature = [entry.dogId || missedBoardingNotesDogKey(dogName), entry.type || "", timestamp, note].join("|");
+    const sourceLabel = entry.sourceLabel || entry.source || "Boarding";
+    const dogName = entry.dogName || (sourceLabel === "Our Dogs" ? "Our dog" : "Boarding dog");
+    const dogKey = entry.dogKey || [sourceLabel, entry.dogId || missedBoardingNotesDogKey(dogName)].join(":");
+    const signature = [dogKey, entry.type || "", timestamp, note].join("|");
     if (seen.has(signature)) return;
     seen.add(signature);
     entries.push({
       ...entry,
+      sourceLabel,
       dogName,
-      dogKey: entry.dogId || missedBoardingNotesDogKey(dogName),
+      dogKey,
       timestamp,
       type: entry.type || "Medical/Behavior Note",
       note,
@@ -295,13 +309,36 @@ function missedBoardingNotesEntries() {
       ["Medical notes", record.medicalNotes || record.medicalCareNotes || ""],
       ["Behavior notes", record.behaviorNotes || ""],
       ["Special care", record.specialCare || ""],
-    ].forEach(([type, note]) => addEntry({ dogId: record.id || "", dogName, type, note, timestamp }));
+    ].forEach(([type, note]) => addEntry({ sourceLabel: "Boarding", dogId: record.id || "", dogName, type, note, timestamp }));
     arrayValue(record.careLogs).forEach((log) => {
       if (!missedBoardingNotesCareLogMatches(log)) return;
       addEntry({
+        sourceLabel: "Boarding",
         dogId: record.id || log.dogId || "",
         dogName: log.dogName || dogName,
         type: log.careType || log.category || "Medical/Behavior Note",
+        note: log.note || log.notes || log.summary || "",
+        timestamp: missedBoardingNotesLogTimestamp(log, timestamp),
+      });
+    });
+  });
+
+  ownedRecords.forEach((record) => {
+    const dogName = missedBoardingNotesDogName(record, "Our dog");
+    const timestamp = record.updatedAt || record.submittedAt || record.createdAt || "";
+    [
+      ["Medical notes", record.medicalNotes || record.medicalCareNotes || ""],
+      ["Behavior notes", record.behaviorNotes || ""],
+      ["Special care", record.specialCare || ""],
+      ["Care status", record.careStatus || ""],
+    ].forEach(([type, note]) => addEntry({ sourceLabel: "Our Dogs", dogId: record.id || "", dogName, type, note, timestamp }));
+    missedBoardingNotesOwnedActivityLogs(record).forEach((log) => {
+      if (!missedBoardingNotesCareLogMatches(log)) return;
+      addEntry({
+        sourceLabel: "Our Dogs",
+        dogId: record.id || log.dogId || "",
+        dogName: log.dogName || dogName,
+        type: log.careType || log.type || log.category || log.group || "Medical/Behavior Note",
         note: log.note || log.notes || log.summary || "",
         timestamp: missedBoardingNotesLogTimestamp(log, timestamp),
       });
@@ -312,11 +349,17 @@ function missedBoardingNotesEntries() {
     arrayValue(record.structuredCareLogs || record.careLogs).forEach((log) => {
       if (!missedBoardingNotesCareLogMatches(log)) return;
       const dogId = String(log.dogId || "");
-      const matchedRecord = (dogId && dogIds.has(dogId) && records.find((item) => String(item.id || "") === dogId)) || dogByName.get(missedBoardingNotesDogKey(log.dogName || ""));
-      if (!matchedRecord && log.dogType !== "boardingDog") return;
+      const dogNameKey = missedBoardingNotesDogKey(log.dogName || "");
+      const matchedBoardingRecord = (dogId && dogIds.has(dogId) && records.find((item) => String(item.id || "") === dogId)) || dogByName.get(dogNameKey);
+      const matchedOwnedRecord = (dogId && ownedDogIds.has(dogId) && ownedRecords.find((item) => String(item.id || "") === dogId)) || ownedDogByName.get(dogNameKey);
+      const isOwnedLog = log.dogType === "ownedDog" || (!log.dogType && Boolean(matchedOwnedRecord)) || (log.dogType !== "boardingDog" && Boolean(matchedOwnedRecord));
+      const matchedRecord = isOwnedLog ? matchedOwnedRecord : matchedBoardingRecord;
+      if (!matchedRecord && !["boardingDog", "ownedDog"].includes(log.dogType || "")) return;
+      const sourceLabel = isOwnedLog || log.dogType === "ownedDog" ? "Our Dogs" : "Boarding";
       addEntry({
+        sourceLabel,
         dogId: matchedRecord?.id || dogId,
-        dogName: log.dogName || missedBoardingNotesDogName(matchedRecord || {}),
+        dogName: log.dogName || missedBoardingNotesDogName(matchedRecord || {}, sourceLabel === "Our Dogs" ? "Our dog" : "Boarding dog"),
         type: log.careType || log.category || "Medical/Behavior Note",
         note: log.note || log.notes || "",
         timestamp: missedBoardingNotesLogTimestamp(log, record.updatedAt || record.submittedAt || record.date || ""),
@@ -342,23 +385,22 @@ function missedBoardingNotesCardHtml(entries = missedBoardingNotesEntries()) {
   const dogCount = missedBoardingNotesGroupedEntries(entries).length;
   const noteWord = entries.length === 1 ? "note" : "notes";
   const dogWord = dogCount === 1 ? "dog" : "dogs";
-  return '<article class="record-card compact-record-card clickable-card missed-boarding-notes-card" data-action="open-missed-boarding-notes"><span class="status-chip">Summary Alert</span><strong>New boarding medical/behavior notes</strong><p>' + entries.length + " " + noteWord + " across " + dogCount + " " + dogWord + " since your last check-in.</p><div class=\\"record-actions\\"><button type=\\"button\\" class=\\"secondary-button\\">Review Summary</button></div></article>";
+  return '<article class="record-card compact-record-card clickable-card missed-boarding-notes-card" data-action="open-missed-boarding-notes"><span class="status-chip">Summary Alert</span><strong>Medical/behavior notes this week</strong><p>' + entries.length + " " + noteWord + " across " + dogCount + " " + dogWord + " in the past week.</p><div class=\\"record-actions\\"><button type=\\"button\\" class=\\"secondary-button\\">Review Summary</button></div></article>";
 }
 
 function missedBoardingNotesTableRowsHtml(entries = missedBoardingNotesEntries()) {
   return missedBoardingNotesGroupedEntries(entries).map((group) => group.entries.map((entry, index) => {
     const dogCell = index === 0 ? '<th scope="rowgroup" rowspan="' + group.entries.length + '" class="missed-boarding-notes-dog">' + escapeHtml(group.dogName) + '</th>' : "";
-    const meta = [entry.type, entry.timestamp ? formatDateTime(entry.timestamp) : ""].filter(Boolean).join(" | ");
+    const meta = [entry.sourceLabel, entry.type, entry.timestamp ? formatDateTime(entry.timestamp) : ""].filter(Boolean).join(" | ");
     return '<tr>' + dogCell + '<td><div class="missed-boarding-note-row"><span>' + escapeHtml(meta) + '</span><p>' + multilineHtml(entry.note) + '</p></div></td></tr>';
   }).join("")).join("");
 }
 
 function missedBoardingNotesPopupHtml(entries = missedBoardingNotesEntries()) {
-  const sinceLabel = formatDateTime(missedBoardingNotesSince()) || "your last check-in";
   const body = entries.length
     ? '<div class="missed-boarding-notes-table-wrap"><table class="missed-boarding-notes-table"><thead><tr><th>Dog</th><th>Medical / behavior notes</th></tr></thead><tbody>' + missedBoardingNotesTableRowsHtml(entries) + '</tbody></table></div>'
-    : '<p>No missed boarding medical or behavior notes right now.</p>';
-  return '<section class="popup-record-section missed-boarding-notes-popup"><article class="record-card compact-record-card"><strong>Summary Alert</strong><p>Boarding medical and behavior notes logged since ' + escapeHtml(sinceLabel) + '.</p></article>' + body + '<div class="button-row"><button type="button" data-action="mark-missed-boarding-notes-read">Read</button><button type="button" class="secondary-button" data-action="read-later-missed-boarding-notes">Read Later</button></div></section>';
+    : '<p>No boarding or Our Dogs medical/behavior notes in the past week.</p>';
+  return '<section class="popup-record-section missed-boarding-notes-popup"><article class="record-card compact-record-card"><strong>Summary Alert</strong><p>Boarding and Our Dogs medical/behavior notes from the past week.</p></article>' + body + '<div class="button-row"><button type="button" data-action="mark-missed-boarding-notes-read">Read</button><button type="button" class="secondary-button" data-action="read-later-missed-boarding-notes">Read Later</button></div></section>';
 }
 
 function openMissedBoardingNotesPopup() {
