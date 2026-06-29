@@ -12434,6 +12434,12 @@ function initEvents() {
     setOwnedDogActiveTab(button.dataset.ownedProfileTab);
   });
   $("#boardingDogProfileTabs")?.addEventListener("click", (event) => {
+    const action = event.target.closest('[data-action="open-boarding-medical-behavior-note"]');
+    if (action) {
+      event.preventDefault();
+      openBoardingMedicalBehaviorNotePopup(activeBoardingDog(), boardingStayReferenceFromAction(action));
+      return;
+    }
     const button = event.target.closest("[data-boarding-profile-tab]");
     if (!button || button.disabled) return;
     setBoardingDogActiveTab(button.dataset.boardingProfileTab);
