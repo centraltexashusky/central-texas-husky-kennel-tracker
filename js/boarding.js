@@ -5384,10 +5384,11 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const serviceRows = boardingRequestServiceRowsHtml(record, stay);
   const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
+  const medicalBehaviorButton = boardingMedicalBehaviorButtonHtml(record, stay);
   const serviceOnly = isServiceRequestStay(record, stay);
   const scopeText = serviceOnly ? "Status changes apply only to this service request." : "Status changes apply only to this boarding request/stay.";
   const statusButtons = nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-next-status="\${escapeHtml(nextStatus)}">\${escapeHtml(stayTransitionLabel(status, nextStatus))}</button>\`);
-  const buttons = [ownerUpdateButton, ...statusButtons].filter(Boolean);
+  const buttons = [ownerUpdateButton, medicalBehaviorButton, ...statusButtons].filter(Boolean);
   return \`<section class="popup-record-section">
     <article class="record-card compact-record-card \${serviceOnly ? "is-service-only-request" : ""}">
       <strong>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</strong>
@@ -5397,6 +5398,130 @@ function boardingStayStatusMenuHtml(record = {}, stay = {}) {
     </article>
     <div class="record-actions">\${buttons.length ? buttons.join("") : "<p>No status changes are available for this stay.</p>"}</div>
   </section>\`;
+}
+
+function boardingMedicalBehaviorButtonHtml(record = {}, stay = {}) {
+  if (typeof currentRole === "function" && currentRole() === "customer") return "";
+  const stayAttrs = stay?.id ? boardingStayDataAttrs(record, stay) : "";
+  return '<button type="button" class="secondary-button" data-action="open-boarding-medical-behavior-note" data-dog-id="' + escapeHtml(record.id || "") + '"' + stayAttrs + '>Medical/Behavior</button>';
+}
+
+function boardingMedicalBehaviorNoteFormHtml(record = {}, stay = {}) {
+  const stayAttrs = stay?.id ? boardingStayDataAttrs(record, stay) : "";
+  const requestCode = stay?.id ? boardingStayRequestCode(record, stay) : "";
+  const staySummary = [requestCode, stayScheduleRangeLabel(record, stay)].filter(Boolean).join(" | ");
+  return '<form id="boardingMedicalBehaviorNoteForm" class="tracker-form" data-dog-id="' + escapeHtml(record.id || "") + '"' + stayAttrs + '>' +
+    '<article class="record-card compact-record-card">' +
+      '<strong>' + escapeHtml(record.dogName || "Boarding dog") + '</strong>' +
+      (staySummary ? '<p>' + escapeHtml(staySummary) + '</p>' : '') +
+      '<p>Staff-only Medical/Behavior notes are saved to this dog\\'s care history.</p>' +
+    '</article>' +
+    '<label>Note date<input type="date" name="date" required value="' + escapeHtml(todayDate()) + '" /></label>' +
+    '<label>Medical/Behavior note<textarea name="note" rows="5" required placeholder="Medication, medical observation, behavior concern, or staff-only care detail"></textarea></label>' +
+    '<div class="button-row"><button type="submit">Save Staff Note</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>' +
+  '</form>';
+}
+
+function boardingMedicalBehaviorStayForSource(sourceRecord = {}, targetStay = {}, reference = {}) {
+  return boardingStayByReference(sourceRecord, reference)
+    || arrayValue(sourceRecord.stays).find((stay) => boardingStayMatchesIdentity(stay, targetStay))
+    || targetStay
+    || {};
+}
+
+function boardingMedicalBehaviorLogPayload(record = {}, stay = {}, data = {}) {
+  const timestamp = data.timestamp || new Date().toISOString();
+  const staff = data.staff || staffIdentity();
+  const requestCode = stay?.id ? boardingStayRequestCode(record, stay) : String(data.requestCode || "").trim();
+  return {
+    id: data.id || uid("boardingCareLog"),
+    source: "boarding-medical-behavior-note",
+    dogType: "boardingDog",
+    dogId: record.id || "",
+    dogName: record.dogName || "Boarding dog",
+    careType: "Medical/Behavior Note",
+    category: "Medical/Behavior",
+    type: "Medical/Behavior Note",
+    note: String(data.note || "").trim(),
+    date: data.date || todayDate(),
+    loggedAt: timestamp,
+    completedBy: staff.name,
+    completedEmail: staff.email,
+    completedByEmail: staff.email,
+    stayId: stay?.id || data.stayId || "",
+    requestCode,
+    staffOnly: true,
+    visibility: "staff",
+  };
+}
+
+async function saveBoardingMedicalBehaviorNote(record = {}, reference = {}, data = {}) {
+  const displayRecord = boardingDogRecordForDisplay(record.id || reference.dogId || "") || boardingDogWithStayStatus(record || {});
+  if (!displayRecord?.id) {
+    showToast("This boarding dog record could not be found.");
+    return null;
+  }
+  const note = String(data.note || "").trim();
+  if (!note) {
+    showToast("Add a Medical/Behavior note before saving.");
+    return null;
+  }
+  const targetStay = boardingStayByReference(displayRecord, reference) || activeBoardingStay(displayRecord) || currentOrNextStay(displayRecord) || {};
+  const timestamp = new Date().toISOString();
+  const staff = staffIdentity();
+  const logId = uid("boardingCareLog");
+  const sourceIds = displayRecord.sourceRecordIds?.length ? displayRecord.sourceRecordIds : [displayRecord.id];
+  const sourceRecords = readRecords("boardingDog").filter((item) => sourceIds.includes(item.id) && !item.removed);
+  const recordsToUpdate = sourceRecords.length ? sourceRecords : [displayRecord];
+  const savedRecords = [];
+  for (const sourceRecord of recordsToUpdate) {
+    const sourceStay = boardingMedicalBehaviorStayForSource(sourceRecord, targetStay, reference);
+    const log = boardingMedicalBehaviorLogPayload(sourceRecord, sourceStay, {
+      ...data,
+      id: logId,
+      note,
+      timestamp,
+      staff,
+      requestCode: reference.requestCode || boardingStayRequestCode(displayRecord, targetStay),
+      stayId: sourceStay?.id || targetStay?.id || "",
+    });
+    const updated = upsertRecord("boardingDog", {
+      ...sourceRecord,
+      careLogs: [log, ...arrayValue(sourceRecord.careLogs).filter((item) => item.id !== logId)],
+      updatedAt: timestamp,
+    });
+    await sendPayload(updated);
+    savedRecords.push(updated);
+  }
+  const refreshed = boardingDogRecordForDisplay(displayRecord.id) || savedRecords[0] || displayRecord;
+  if ($("#boardingDogForm")?.elements.id.value && (refreshed.id === $("#boardingDogForm").elements.id.value || sourceIds.includes($("#boardingDogForm").elements.id.value))) {
+    renderBoardingHistory(refreshed);
+    renderBoardingStays(refreshed);
+  }
+  renderBoardingDogs();
+  renderBoardingRequests();
+  renderDashboard();
+  await addAuditLog("Logged boarding medical/behavior note", "boardingDog", refreshed, (refreshed.dogName || "Dog") + " | " + (reference.requestCode || logId));
+  showToast("Medical/Behavior staff note saved.");
+  return refreshed;
+}
+
+async function saveBoardingMedicalBehaviorNoteFromForm(formEl) {
+  const record = boardingDogRecordForDisplay(formEl.dataset.dogId || formEl.dataset.id || "");
+  return saveBoardingMedicalBehaviorNote(record || {}, boardingStayReferenceFromAction(formEl), {
+    date: formEl.elements.date?.value || todayDate(),
+    note: formEl.elements.note?.value || "",
+  });
+}
+
+function openBoardingMedicalBehaviorNotePopup(record = activeBoardingDog(), reference = {}) {
+  const displayRecord = boardingDogRecordForDisplay(record?.id || reference.dogId || "") || boardingDogWithStayStatus(record || {});
+  if (!displayRecord?.id) {
+    showToast("This boarding dog record could not be opened.");
+    return;
+  }
+  const stay = boardingStayByReference(displayRecord, reference) || activeBoardingStay(displayRecord) || currentOrNextStay(displayRecord) || {};
+  showDetailDialog("Medical/Behavior Staff Note", boardingMedicalBehaviorNoteFormHtml(displayRecord, stay));
 }
 
 function openBoardingStayStatusMenu(record = activeBoardingDog(), stayId = "") {

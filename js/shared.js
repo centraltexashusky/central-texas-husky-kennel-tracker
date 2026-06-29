@@ -11179,12 +11179,13 @@ function initEvents() {
     const boardingCheckInForm = event.target.closest("#boardingCheckInForm");
     const boardingCheckInServiceForm = event.target.closest("#boardingCheckInServiceForm");
     const boardingDeclineRequestForm = event.target.closest("#boardingDeclineRequestForm");
+    const boardingMedicalBehaviorNoteForm = event.target.closest("#boardingMedicalBehaviorNoteForm");
     const paymentMethodForm = event.target.closest("#paymentMethodForm");
     const urgentAlertForm = event.target.closest("#urgentAlertForm");
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
     const boardingRequestFilterForm = event.target.closest("#boardingRequestFilterForm");
     const customerCancellationReasonForm = event.target.closest("#customerCancellationReasonForm");
-    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, holidayForm, operationDateOverrideForm, taskTabForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
+    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, holidayForm, operationDateOverrideForm, taskTabForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, boardingMedicalBehaviorNoteForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
     if (!handledDetailForms.some(Boolean)) return;
     event.preventDefault();
     if (customerCancellationReasonForm) {
@@ -11243,6 +11244,14 @@ function initEvents() {
     }
     if (boardingCheckInServiceForm) {
       await submitBoardingCheckInServiceForm(boardingCheckInServiceForm);
+      return;
+    }
+    if (boardingMedicalBehaviorNoteForm) {
+      if (!validateForm(boardingMedicalBehaviorNoteForm)) return;
+      const updated = await saveBoardingMedicalBehaviorNoteFromForm(boardingMedicalBehaviorNoteForm);
+      if (updated) {
+        showDetailDialog("Medical/Behavior Note Saved", '<p>The staff note was saved to ' + escapeHtml(updated.dogName || "this dog") + "'s boarding history.</p>");
+      }
       return;
     }
     if (ownedDogPhotoUploadForm) {
@@ -11616,6 +11625,11 @@ function initEvents() {
     if (action.dataset.action === "open-owner-update-for-stay") {
       const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
       if (dog) openOwnerUpdateAlert(dog.id, boardingStayReferenceFromAction(action));
+      return;
+    }
+    if (action.dataset.action === "open-boarding-medical-behavior-note") {
+      const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
+      if (dog) openBoardingMedicalBehaviorNotePopup(dog, boardingStayReferenceFromAction(action));
       return;
     }
     if (action.dataset.action === "transition-boarding-stay") {
