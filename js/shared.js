@@ -2944,7 +2944,10 @@ function isImpersonating() {
 }
 
 function startUserImpersonation(user = {}) {
-  if (currentRole() !== "admin" || !currentUser?.key) {
+  const adminKey = typeof accountSessionKey === "function"
+    ? accountSessionKey(currentUser)
+    : (currentUser?.key || currentUser?.authId || currentUser?.id || normalizeEmail(currentUser?.email || ""));
+  if (currentRole() !== "admin" || !adminKey) {
     showToast("Only admins can impersonate users.");
     return;
   }
@@ -2954,6 +2957,7 @@ function startUserImpersonation(user = {}) {
   }
   const admin = {
     ...currentUser,
+    key: adminKey,
     role: roleForAccount(currentUser) || currentUser.role || "admin",
   };
   const target = impersonationUserFromSettings(user);
@@ -2963,7 +2967,7 @@ function startUserImpersonation(user = {}) {
     returnPage: activePageId() || "settingsUsersPage",
     startedAt: new Date().toISOString(),
   };
-  localStorage.setItem(stateKeys.impersonation, JSON.stringify(impersonationSession));
+  safeLocalStorageSetItem(stateKeys.impersonation, JSON.stringify(impersonationSession), { quiet: true });
   $("#detailDialog")?.close();
   setHelper(target, { switchAfterLogin: false, persistSession: false });
   switchPage(defaultPageForRole(target.role));

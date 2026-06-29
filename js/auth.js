@@ -21,6 +21,10 @@ function isCustomerRole(role = currentRole()) {
   return ["customer", "member", "customer | member"].includes(role);
 }
 
+function accountSessionKey(account = {}) {
+  return account?.key || account?.authId || account?.id || normalizeEmail(account?.email || "");
+}
+
 function userFromSupabase(supabaseUser) {
   if (!supabaseUser?.email) return null;
   const email = supabaseUser.email.toLowerCase();
@@ -230,14 +234,15 @@ async function restoreSupabaseSession() {
 
 function setHelper(user, options = {}) {
   if (typeof clearRemoteWriteIdentityCache === "function") clearRemoteWriteIdentityCache();
-  currentUser = { ...user, role: user.role || "helper" };
+  const key = accountSessionKey(user);
+  currentUser = { ...user, key, role: user.role || "helper" };
   localTestMode = currentUser.authProvider === "local-test" || String(currentUser.key || "").startsWith("local-test-");
   if (localTestMode) supabaseClient = null;
   if (options.persistSession !== false) safeLocalStorageSetItem(stateKeys.session, JSON.stringify(currentUser), { quiet: true });
   setDefaultDateAndDay();
-  helperName.value = user.name || "";
-  helperEmail.value = user.email || "";
-  helperKey.value = user.key || "";
+  helperName.value = currentUser.name || "";
+  helperEmail.value = currentUser.email || "";
+  helperKey.value = currentUser.key || "";
   updateHeaderUser();
   applyCurrentUserThemePreference();
   loginStatus.textContent = currentUser.name ? \`\${roleLabel(currentUser.role)} logged in: \${currentUser.name}\` : "Logged in";
@@ -289,7 +294,7 @@ function clearLocalAppSession(options = {}) {
 }
 
 function helperIsLoggedIn() {
-  return Boolean(currentUser?.key);
+  return Boolean(accountSessionKey(currentUser));
 }
 
 function currentRole() {
