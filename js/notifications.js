@@ -1080,8 +1080,8 @@ function notificationCategoryForEvent(eventName = "", recordOrNotification = {})
   if (name.includes("boarding") || name.includes("stay") || sourceType === "boardingdog") return "Boarding";
   if (name.includes("carelog") || name.includes("medical") || sourceType === "carelog") return "Medical/Care";
   if (name.includes("maintenance") || sourceType === "maintenance") return "Maintenance";
+  if (name.includes("schedule") || name.includes("timeoff") || sourceType === "timesheet" || sourceType === "timeoffrequest") return "Staff";
   if (name.includes("request") || sourceType === "request") return "Requests";
-  if (name.includes("schedule") || name.includes("timeoff") || sourceType === "timesheet") return "Staff";
   if (name.includes("customer")) return "Customer";
   return notificationSourceTypeLabel(sourceType || eventName) || "Alert";
 }
@@ -1116,9 +1116,10 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   if (name === "serviceRequestReadyForPickup") return "Open Request";
   if (name === "customerApprovedStayCancelled" || sourceType === "boardingDog") return "Open Stay";
   if (sourceType === "maintenance" || name.includes("Maintenance")) return "Open Maintenance";
-  if (sourceType === "request" || name.includes("Request")) return "Open Request";
   if (sourceType === "careLog" || name === "careLogAdminAlertCreated") return "Open Care Note";
-  if (sourceType === "timesheet" || name.includes("timeOff") || name.includes("schedule")) return "Open Staff Item";
+  if (name === "timeOffRequested") return "Review Time Off";
+  if (sourceType === "timesheet" || sourceType === "timeOffRequest" || name.includes("timeOff") || name.includes("schedule")) return "Open Staff Item";
+  if (sourceType === "request" || name.includes("Request")) return "Open Request";
   return "Open Alert";
 }
 
@@ -1414,6 +1415,36 @@ function createNotificationRecord(record = {}, eventName = "", config = {}) {
   });
 }
 
+function notificationRetentionTimestamp(notification = {}) {
+  const timestamp = notification.submittedAt || notification.sentAt || notification.updatedAt || "";
+  const time = new Date(timestamp).getTime();
+  return Number.isFinite(time) ? time : Date.now();
+}
+
+function notificationExpiredByRetention(notification = {}) {
+  const cutoff = new Date(notificationRetentionCutoffIso()).getTime();
+  return notificationRetentionTimestamp(notification) < cutoff;
+}
+
+function pruneExpiredNotifications(options = {}) {
+  const records = readRecords("notificationLog");
+  const now = new Date().toISOString();
+  const expiredIds = new Set(records
+    .filter((item) => item?.id && !item.removed && notificationExpiredByRetention(item))
+    .map((item) => item.id));
+  if (!expiredIds.size) return [];
+  const updatedRecords = records.map((item) => expiredIds.has(item.id)
+    ? { ...item, removed: true, removedAt: now, removedBy: "notification-retention", updatedAt: now }
+    : item);
+  writeRecords("notificationLog", updatedRecords);
+  const expired = updatedRecords.filter((item) => expiredIds.has(item.id));
+  if (options.sync !== false && !localTestMode && supabaseClient && isStaffRole()) {
+    Promise.allSettled(expired.map((item) => sendPayload(item, { quiet: true })))
+      .catch((error) => console.warn("Expired alert cleanup failed.", error));
+  }
+  return expired;
+}
+
 function renderNotifications() {
   const button = $("#notificationBellButton");
   const badge = $("#notificationUnreadBadge");
@@ -1422,6 +1453,7 @@ function renderNotifications() {
   const summary = $("#notificationPanelSummary");
   const readButton = $("#showReadNotificationsButton");
   if (!button || !badge || !panel || !list || !summary) return;
+  pruneExpiredNotifications();
   const available = readRecords("notificationLog")
     .filter((item) => !item.removed && notificationVisibleToCurrentUser(item))
     .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
@@ -1645,6 +1677,20 @@ async function openCustomerCancellationAlertById(id = "") {
   return openBoardingCustomerCancellationAlert(notification);
 }
 
+function openTimeOffNotificationReview(notification = {}) {
+  const source = notificationSourceSnapshot(notification);
+  const actionTarget = notification.actionTarget || {};
+  const sourceId = notification.sourceId || actionTarget.sourceId || source.id || "";
+  const record = readRecords("timeOffRequest").find((item) => item.id === sourceId && !item.removed)
+    || (source?.type === "timeOffRequest" && source.id ? source : null);
+  if (!record) return false;
+  switchPage("timesheetPage");
+  if (typeof setTimesheetTab === "function") setTimesheetTab("timeOff");
+  if (typeof renderTimesheet === "function") renderTimesheet();
+  openTimeOffReviewPopup(record);
+  return true;
+}
+
 async function openNotification(id = "") {
   const notification = await markNotificationRead(id);
   if (!notification) return;
@@ -1686,10 +1732,9 @@ async function openNotification(id = "") {
   if (sourceType === "careLog") {
     if (openCareLogNotificationRecord(sourceId)) return;
   }
-  if (sourceType === "timeOffRequest") {
-    const record = readRecords("timeOffRequest").find((item) => item.id === sourceId);
-    if (record) {
-      openTimeOffReviewPopup(record);
+  if (sourceType === "timeOffRequest" || notification.eventName === "timeOffRequested") {
+    if (openTimeOffNotificationReview(notification)) {
+      renderDashboard();
       return;
     }
   }

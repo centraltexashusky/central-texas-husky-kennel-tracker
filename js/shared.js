@@ -286,6 +286,7 @@ var autoSyncIdentityKey = "";
 var showReadNotifications = false;
 var visibleReadNotificationCount = 4;
 var MAX_READ_NOTIFICATIONS = 10;
+var NOTIFICATION_RETENTION_DAYS = 3;
 var PROFILE_PHOTO_CACHE_NAME = "cth-profile-photo-cache-v2";
 var PROFILE_PHOTO_CACHE_META_KEY = "cth-profile-photo-cache-meta-v2";
 var PROFILE_PHOTO_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -4456,10 +4457,12 @@ async function fetchRemoteRecordRowsForType(type) {
   const rows = [];
   let from = 0;
   while (true) {
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
       .from("kennel_records")
       .select("id,type,payload,helper_email,user_id,submitted_at,updated_at")
-      .eq("type", type)
+      .eq("type", type);
+    if (type === "notificationLog") query = query.gte("submitted_at", notificationRetentionCutoffIso());
+    const { data, error } = await query
       .order("updated_at", { ascending: false })
       .range(from, from + pageSize - 1);
     if (error) throw error;
@@ -4467,6 +4470,10 @@ async function fetchRemoteRecordRowsForType(type) {
     if (!data || data.length < pageSize) return rows;
     from += pageSize;
   }
+}
+
+function notificationRetentionCutoffIso() {
+  return new Date(Date.now() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
 async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp()) {
