@@ -1123,6 +1123,18 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   return "Open Alert";
 }
 
+function notificationIsTimeOffReviewAlert(notification = {}) {
+  const source = notification.sourceSnapshot ? notificationSourceSnapshot(notification) : notification;
+  const eventName = String(notification.eventName || "").toLowerCase();
+  const sourceType = String(notification.sourceType || source.type || "").toLowerCase();
+  const actionTargetType = String(notification.actionTarget?.sourceType || notification.actionTarget?.type || "").toLowerCase();
+  const reason = String(notification.alertReason || notification.reason || "").toLowerCase();
+  return eventName === "timeoffrequested"
+    || sourceType === "timeoffrequest"
+    || actionTargetType === "timeoffrequest"
+    || reason.includes("time off");
+}
+
 function notificationActionTarget(eventName = "", record = {}) {
   const sourceType = record.type || record.sourceType || "";
   const stayId = notificationStayIdText(record);
@@ -1138,7 +1150,7 @@ function notificationActionTarget(eventName = "", record = {}) {
 function unreadNotificationCategorySummary(unread = []) {
   if (!unread.length) return "No unread alerts.";
   const counts = unread.reduce((summary, notification) => {
-    const category = notification.alertCategory || notificationCategoryForEvent(notification.eventName, notification);
+    const category = notificationIsTimeOffReviewAlert(notification) ? "Staff" : (notification.alertCategory || notificationCategoryForEvent(notification.eventName, notification));
     summary[category] = (summary[category] || 0) + 1;
     return summary;
   }, {});
@@ -1461,10 +1473,11 @@ function renderNotifications() {
   const read = available.filter((item) => notificationIsRead(item)).slice(0, MAX_READ_NOTIFICATIONS);
   visibleReadNotificationCount = Math.min(Math.max(visibleReadNotificationCount, 4), MAX_READ_NOTIFICATIONS);
   const notificationItemHtml = (item) => {
-    const category = item.alertCategory || notificationCategoryForEvent(item.eventName, item);
+    const isTimeOffReview = notificationIsTimeOffReviewAlert(item);
+    const category = isTimeOffReview ? "Staff" : (item.alertCategory || notificationCategoryForEvent(item.eventName, item));
     const reason = item.alertReason || notificationReasonForEvent(item.eventName, item);
     const stayId = item.stayId || notificationStayIdText(notificationSourceSnapshot(item));
-    const actionLabel = item.actionLabel || notificationActionLabel(item.eventName, item);
+    const actionLabel = isTimeOffReview ? "Review Time Off" : (item.actionLabel || notificationActionLabel(item.eventName, item));
     const meta = [category, reason, stayId ? "Stay ID: " + stayId : "", actionLabel].filter(Boolean).join(" | ");
     return \`<article class="notification-item \${notificationIsRead(item) ? "is-read" : ""} \${item.priority === "urgent" ? "is-urgent" : ""}" data-action="open-notification" data-id="\${escapeHtml(item.id)}"><strong>\${escapeHtml(notificationDisplayTitle(item))}</strong><p>\${escapeHtml(notificationDisplayMessage(item))}</p><span>\${escapeHtml(meta)}</span><span>\${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | \${escapeHtml(notificationChannelsText(item))}</span></article>\`;
   };
