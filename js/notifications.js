@@ -1379,7 +1379,9 @@ function createNotificationRecord(record = {}, eventName = "", config = {}) {
   const now = new Date().toISOString();
   const sourceType = record.type || "";
   const sourceId = record.id || uid("source");
-  const sourceSnapshot = payloadForSheet(record);
+  const sourceSnapshot = typeof compactNotificationSnapshotForStorage === "function"
+    ? compactNotificationSnapshotForStorage(payloadForSheet(record))
+    : payloadForSheet(record);
   const dedupeKey = \`\${eventName}:\${sourceType}:\${sourceId}:\${record.updatedAt || record.submittedAt || now}\`;
   const existing = readRecords("notificationLog").find((item) => item.dedupeKey === dedupeKey && !item.removed);
   if (existing) return existing;

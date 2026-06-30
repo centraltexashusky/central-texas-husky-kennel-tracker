@@ -271,8 +271,12 @@ var AUTH_SYNC_STALE_MS = 15000;
 var APP_RESUME_DEBOUNCE_MS = 900;
 var APP_RESUME_REMOTE_REFRESH_MS = 30000;
 var ACTIVE_PAGE_REMOTE_LOAD_THROTTLE_MS = 6000;
+var NOTIFICATION_BACKGROUND_LOAD_DELAY_MS = 1500;
+var NOTIFICATION_BACKGROUND_LOAD_THROTTLE_MS = 60000;
 var remoteLoadStartedAt = 0;
 var lastRemoteLoadFinishedAt = 0;
+var notificationBackgroundLoadTimer = null;
+var lastNotificationBackgroundLoadAt = 0;
 var appInitialized = false;
 var appResumeTimer = null;
 var lastAppResumeAt = 0;
@@ -1098,10 +1102,55 @@ function compactMediaItemsForStorage(items = [], maxInlineMediaLength = 1800000)
   });
 }
 
-function compactRecordsForStorage(records) {
+function compactNotificationSnapshotForStorage(snapshot = {}) {
+  const compact = { ...snapshot };
+  delete compact.profilePhotoData;
+  delete compact.profilePhoto;
+  delete compact.mediaItems;
+  delete compact.documents;
+  delete compact.vaccinationRecords;
+  delete compact.requestMedia;
+  delete compact.maintenanceMedia;
+  delete compact.careLogs;
+  delete compact.statusHistory;
+  delete compact.flags;
+  if (Array.isArray(compact.customerUpdates)) {
+    compact.customerUpdates = compact.customerUpdates.slice(0, 3).map((update) => {
+      const clean = { ...update };
+      delete clean.mediaItems;
+      return clean;
+    });
+  }
+  if (compact.latestCustomerUpdate?.mediaItems) {
+    compact.latestCustomerUpdate = { ...compact.latestCustomerUpdate };
+    delete compact.latestCustomerUpdate.mediaItems;
+  }
+  if (Array.isArray(compact.stays)) {
+    compact.stays = compact.stays.slice(0, 5).map((stay) => ({
+      id: stay.id || "",
+      requestCode: stay.requestCode || "",
+      status: stay.status || "",
+      dropoffTime: stay.dropoffTime || "",
+      pickupTime: stay.pickupTime || "",
+      kennelLocationName: stay.kennelLocationName || "",
+      kennelBuilding: stay.kennelBuilding || "",
+    }));
+  }
+  return compact;
+}
+
+function compactNotificationRecordForStorage(record = {}) {
+  const clean = { ...record };
+  if (clean.sourceSnapshot && typeof clean.sourceSnapshot === "object") {
+    clean.sourceSnapshot = compactNotificationSnapshotForStorage(clean.sourceSnapshot);
+  }
+  return clean;
+}
+
+function compactRecordsForStorage(records, type = "") {
   const maxInlineMediaLength = 1800000;
   return records.map((record) => {
-    const copy = { ...record };
+    const copy = type === "notificationLog" ? compactNotificationRecordForStorage(record) : { ...record };
     delete copy.profilePhotoData;
     delete copy.profilePhoto;
     if (Array.isArray(copy.mediaItems)) copy.mediaItems = compactMediaItemsForStorage(copy.mediaItems, maxInlineMediaLength);
@@ -1141,7 +1190,7 @@ function cloneConsolidatedBoardingDog(record = {}) {
 }
 
 function writeRecords(type, records) {
-  const compactedRecords = compactRecordsForStorage(records);
+  const compactedRecords = compactRecordsForStorage(records, type);
   try {
     const raw = JSON.stringify(compactedRecords);
     const storageSaved = safeLocalStorageSetItem(stateKeys[type], raw, { quiet: true });
@@ -1383,9 +1432,9 @@ function remoteRecordTypesForCurrentApp() {
 }
 
 function remoteRecordTypesForPage(pageId = "") {
-  const coreTypes = ["settingsUser", "notificationLog", "notificationPreference", TASK_TEMPLATE_RECORD_TYPE];
+  const coreTypes = ["settingsUser", "notificationPreference", TASK_TEMPLATE_RECORD_TYPE];
   const pageTypes = {
-    dashboardPage: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", "careLog", "calendarNote"],
+    dashboardPage: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", "careLog", "calendarNote", "notificationLog"],
     dailyPage: ["dailyTask", "careLog", "ownedDog", "boardingDog", "calendarNote"],
     taskSchedulerPage: ["scheduledCareTask", "ownedDog", "boardingDog", "customerDog", "service", "dailyTask", "careLog"],
     ourDogsPage: ["ownedDog", "careLog", "customerDog", "boardingDog"],
@@ -13745,8 +13794,30 @@ function scheduleActivePageRemoteLoad(pageId = activePageId()) {
     activePageRemoteLoadTimer = null;
     loadRemoteRecords({ render: true, pageId, showLoader: false, quiet: true }).catch((error) => {
       console.warn(\`Active page sync failed for \${pageId}.\`, error);
+    }).finally(() => {
+      scheduleNotificationBackgroundLoad(pageId);
     });
   }, 80);
+}
+
+function scheduleNotificationBackgroundLoad(pageId = activePageId()) {
+  if (!helperIsLoggedIn() || pageId === "loginPage" || localTestMode || !supabaseClient) return;
+  if (["dashboardPage", "settingsAlertsPage"].includes(normalizePageId(pageId))) return;
+  const now = Date.now();
+  if (notificationBackgroundLoadTimer || now - lastNotificationBackgroundLoadAt < NOTIFICATION_BACKGROUND_LOAD_THROTTLE_MS) return;
+  notificationBackgroundLoadTimer = window.setTimeout(() => {
+    notificationBackgroundLoadTimer = null;
+    lastNotificationBackgroundLoadAt = Date.now();
+    loadRemoteRecords({
+      types: ["notificationLog", "notificationPreference"],
+      render: false,
+      showLoader: false,
+      quiet: true,
+      silent: true,
+    })
+      .then(() => renderNotifications())
+      .catch((error) => console.warn("Background notification sync failed.", error));
+  }, NOTIFICATION_BACKGROUND_LOAD_DELAY_MS);
 }
 
 function switchPage(pageId, options = {}) {
