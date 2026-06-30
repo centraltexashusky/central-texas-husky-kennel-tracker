@@ -1438,6 +1438,25 @@ function notificationExpiredByRetention(notification = {}) {
   return notificationRetentionTimestamp(notification) < cutoff;
 }
 
+var notificationRetentionRemoteCleanupStarted = false;
+
+function scheduleRemoteNotificationRetentionCleanup() {
+  if (notificationRetentionRemoteCleanupStarted || localTestMode || !supabaseClient || !isStaffRole()) return;
+  notificationRetentionRemoteCleanupStarted = true;
+  supabaseClient
+    .from("kennel_records")
+    .delete()
+    .eq("type", "notificationLog")
+    .lt("submitted_at", notificationRetentionCutoffIso())
+    .then(({ error }) => {
+      if (error) throw error;
+    })
+    .catch((error) => {
+      notificationRetentionRemoteCleanupStarted = false;
+      console.warn("Expired remote alert cleanup failed.", error);
+    });
+}
+
 function pruneExpiredNotifications(options = {}) {
   const records = readRecords("notificationLog");
   const now = new Date().toISOString();
@@ -1466,6 +1485,7 @@ function renderNotifications() {
   const readButton = $("#showReadNotificationsButton");
   if (!button || !badge || !panel || !list || !summary) return;
   pruneExpiredNotifications();
+  scheduleRemoteNotificationRetentionCleanup();
   const available = readRecords("notificationLog")
     .filter((item) => !item.removed && notificationVisibleToCurrentUser(item))
     .sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
