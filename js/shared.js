@@ -266,6 +266,7 @@ var DERIVED_DOG_MODEL_RECORD_TYPES = new Set([
 ]);
 var REMOTE_RENDER_SCROLL_IDLE_MS = 1200;
 var REMOTE_LOAD_STALE_MS = 15000;
+var REMOTE_TYPE_LOAD_TIMEOUT_MS = 7000;
 var AUTH_BOOT_TIMEOUT_MS = 8000;
 var AUTH_SYNC_STALE_MS = 15000;
 var APP_RESUME_DEBOUNCE_MS = 900;
@@ -275,6 +276,7 @@ var NOTIFICATION_BACKGROUND_LOAD_DELAY_MS = 1500;
 var NOTIFICATION_BACKGROUND_LOAD_THROTTLE_MS = 60000;
 var remoteLoadStartedAt = 0;
 var lastRemoteLoadFinishedAt = 0;
+var lastRemoteRecordFetchFailedTypes = new Set();
 var notificationBackgroundLoadTimer = null;
 var lastNotificationBackgroundLoadAt = 0;
 var appInitialized = false;
@@ -4449,17 +4451,15 @@ function scheduleRealtimeRender(types = []) {
   }, 250);
 }
 
-async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp()) {
+async function fetchRemoteRecordRowsForType(type) {
   const pageSize = 1000;
   const rows = [];
   let from = 0;
-  const remoteTypes = uniqueRemoteRecordTypes(types);
-  if (!remoteTypes.length) return rows;
   while (true) {
     const { data, error } = await supabaseClient
       .from("kennel_records")
       .select("id,type,payload,helper_email,user_id,submitted_at,updated_at")
-      .in("type", remoteTypes)
+      .eq("type", type)
       .order("updated_at", { ascending: false })
       .range(from, from + pageSize - 1);
     if (error) throw error;
@@ -4467,6 +4467,24 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp()) {
     if (!data || data.length < pageSize) return rows;
     from += pageSize;
   }
+}
+
+async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp()) {
+  const remoteTypes = uniqueRemoteRecordTypes(types);
+  lastRemoteRecordFetchFailedTypes = new Set();
+  if (!remoteTypes.length) return [];
+  const batches = await Promise.all(remoteTypes.map(async (type) => {
+    try {
+      return await withTimeout(fetchRemoteRecordRowsForType(type), REMOTE_TYPE_LOAD_TIMEOUT_MS, \`Remote \${type} records load\`);
+    } catch (error) {
+      lastRemoteRecordFetchFailedTypes.add(type);
+      console.warn(\`Remote \${type} records could not load.\`, error);
+      return [];
+    }
+  }));
+  return batches
+    .flat()
+    .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
 }
 
 async function fetchRemoteDailyTaskCompletionRows() {
@@ -4622,9 +4640,12 @@ async function loadRemoteRecords(options = {}) {
   loadPromise = (async () => {
     try {
       const data = await withTimeout(fetchRemoteRecordRows(requestedRemoteTypes), REMOTE_LOAD_STALE_MS, "Remote record load");
+      const failedRemoteTypes = new Set(lastRemoteRecordFetchFailedTypes || []);
+      const loadedRemoteTypes = requestedRemoteTypes.filter((type) => !failedRemoteTypes.has(type));
+      if (!loadedRemoteTypes.length) throw appTimeoutError("Remote record load");
 
       let taskCompletionRows = [];
-      if (dailyTaskCompletionSyncAvailable && requestedRemoteTypes.includes("dailyTask")) {
+      if (dailyTaskCompletionSyncAvailable && requestedRemoteTypes.includes("dailyTask") && !failedRemoteTypes.has("dailyTask")) {
         try {
           taskCompletionRows = await withTimeout(fetchRemoteDailyTaskCompletionRows(), 6000, "Daily task completion load");
           mergeDailyTaskCompletionRecords(taskCompletionRows, { replaceLocal: true });
@@ -4638,32 +4659,34 @@ async function loadRemoteRecords(options = {}) {
         }
       }
 
-      if (typeof fetchRemoteNotificationReadRows === "function" && requestedRemoteTypes.includes("notificationLog")) {
+      if (typeof fetchRemoteNotificationReadRows === "function" && requestedRemoteTypes.includes("notificationLog") && !failedRemoteTypes.has("notificationLog")) {
         await fetchRemoteNotificationReadRows().catch((error) => {
           console.warn("Notification read receipts could not load.", error);
         });
       }
 
       const requestKey = remoteLoadRequestKey(requestedRemoteTypes);
-      const nextSignature = requestKey + "||" + remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
+      const failedSignature = failedRemoteTypes.size ? "||failed:" + [...failedRemoteTypes].sort().join(",") : "";
+      const nextSignature = requestKey + failedSignature + "||" + remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
       const previousSignature = lastRemoteRecordsSignatureByRequest.get(requestKey);
       const remoteDataChanged = nextSignature !== previousSignature;
       lastRemoteRecordsSignatureByRequest.set(requestKey, nextSignature);
       lastRemoteRecordsSignature = nextSignature;
 
       if (!remoteDataChanged) {
-        modeLabel.textContent = "Synced";
+        modeLabel.textContent = failedRemoteTypes.size ? "Partial sync" : "Synced";
         return;
       }
 
-      const remoteTypes = requestedRemoteTypes;
+      const remoteTypes = loadedRemoteTypes;
       const grouped = Object.fromEntries(remoteTypes.map((type) => [type, []]));
       (data || []).forEach((row) => {
         if (grouped[row.type]) grouped[row.type].push(row.payload);
       });
 
       const loadedRemoteTaskTemplate = applyRemoteTaskTemplate(data || []);
-      if (!loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
+      const taskTemplateLoaded = requestedRemoteTypes.includes(TASK_TEMPLATE_RECORD_TYPE) && !failedRemoteTypes.has(TASK_TEMPLATE_RECORD_TYPE);
+      if (taskTemplateLoaded && !loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
       remoteTypes.filter((type) => type !== TASK_TEMPLATE_RECORD_TYPE).forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
       if (currentUser) {
         currentUser.role = roleForAccount(currentUser);
@@ -4675,7 +4698,7 @@ async function loadRemoteRecords(options = {}) {
       if (options.render !== false) renderAllRecordsFromRemoteLoad();
       updateNavigationAccess();
       updateHeaderUser();
-      modeLabel.textContent = "Synced";
+      modeLabel.textContent = failedRemoteTypes.size ? "Partial sync" : "Synced";
     } catch (error) {
       modeLabel.textContent = "Load failed";
       if (quietLoad) console.warn("Records could not load.", error);
