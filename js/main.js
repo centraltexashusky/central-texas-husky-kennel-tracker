@@ -1,13 +1,13 @@
 // === MODULE: MAIN ===
-import "./shared.js?v=20260628-our-dogs-filter-info-boarding-rows-alert-retention-timeoff-review";
+import "./shared.js?v=20260628-our-dogs-filter-info-boarding-rows-summary-popup-scheduler-header";
 import "./auth.js?v=20260628-impersonation-session-key-fix";
 import "./customer.js?v=20260626-stay-scheduler-fix";
 import "./boarding.js?v=20260628-our-dogs-filter-info-boarding-rows-profile-medical-behavior-log";
 import "./daily.js?v=20260628-our-dogs-filter-info-boarding-rows-special-care-weekly-health";
-import "./task-scheduler.js?v=20260627-legacy-bath-scheduler-completion";
+import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-summary-popup-scheduler-header";
 import "./timesheet.js?v=20260625-staff-rls-fix";
 import "./settings.js?v=20260625-staff-rls-fix";
-import "./notifications.js?v=20260628-our-dogs-filter-info-boarding-rows-missed-notes-skip-empty-placeholders";
+import "./notifications.js?v=20260628-our-dogs-filter-info-boarding-rows-summary-popup-scheduler-header";
 import "./search.js?v=20260623-efficiency-guardrails";
 
 initializeApp().catch((error) => {

@@ -5693,8 +5693,10 @@ function phoneLinkHtml(phone = "", label = "") {
 function showDetailDialog(title, html, context = null, options = {}) {
   detailDialogContext = context;
   const dialog = $("#detailDialog");
-  dialog?.classList.remove("is-customer-dog-editor");
+  dialog?.classList.remove("is-customer-dog-editor", "has-backdrop-close");
+  if (dialog) dialog.dataset.backdropClose = options.backdropClose ? "true" : "false";
   if (options.dialogClass) dialog?.classList.add(options.dialogClass);
+  if (options.backdropClose) dialog?.classList.add("has-backdrop-close");
   $("#detailDialogTitle").textContent = title;
   $("#detailDialogBody").innerHTML = html;
   hydrateProfilePhotoElements($("#detailDialogBody"));
@@ -9998,7 +10000,9 @@ function restoreCustomerDogFormHome() {
   const home = $("#customerDogFormHome");
   if (formEl) formEl.hidden = true;
   if (formEl && home && formEl.parentElement !== home) home.appendChild(formEl);
-  $("#detailDialog")?.classList.remove("is-customer-dog-editor");
+  const dialog = $("#detailDialog");
+  dialog?.classList.remove("is-customer-dog-editor", "has-backdrop-close");
+  if (dialog) delete dialog.dataset.backdropClose;
   if (typeof renderCustomerDogs === "function") renderCustomerDogs();
 }
 
@@ -11228,6 +11232,11 @@ function initEvents() {
       return;
     }
     closeAppSurfaceFromUi("detail-dialog", () => $("#detailDialog").close());
+  });
+  $("#detailDialog").addEventListener("click", (event) => {
+    const dialog = event.currentTarget;
+    if (event.target !== dialog || dialog.dataset.backdropClose !== "true") return;
+    closeAppSurfaceFromUi("detail-dialog", () => dialog.close());
   });
   $("#detailDialog").addEventListener("close", restoreCustomerDogFormHome);
   $("#detailDialogBody").addEventListener("submit", async (event) => {

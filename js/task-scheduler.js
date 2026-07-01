@@ -1723,8 +1723,17 @@ function taskSchedulerWeekHtml() {
   return taskSchedulerMobileWeekStripHtml(dates, dayMinWidth) + taskSchedulerTimelineGridHtml(dates, "task-scheduler-week-grid");
 }
 
+function taskSchedulerDayBoardHeaderHtml(date = taskSchedulerAnchorDate || todayDate()) {
+  const source = new Date((dateOnly(date) || todayDate()) + "T12:00:00");
+  return '<div class="task-scheduler-day-board-header">' +
+    '<span>Day schedule</span>' +
+    '<strong>' + escapeHtml(source.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })) + '</strong>' +
+  '</div>';
+}
+
 function taskSchedulerDayHtml() {
-  return taskSchedulerTimelineGridHtml([taskSchedulerAnchorDate || todayDate()], "task-scheduler-week-grid task-scheduler-day-grid");
+  const date = taskSchedulerAnchorDate || todayDate();
+  return taskSchedulerDayBoardHeaderHtml(date) + taskSchedulerTimelineGridHtml([date], "task-scheduler-week-grid task-scheduler-day-grid");
 }
 
 function hourLabel(hour) {

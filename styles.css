@@ -8014,6 +8014,33 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   overflow: hidden;
 }
 
+.task-scheduler-day-board-header {
+  align-items: center;
+  background: color-mix(in srgb, var(--surface) 88%, var(--gold) 12%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.task-scheduler-day-board-header span {
+  color: var(--gold);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.task-scheduler-day-board-header strong {
+  font-size: 1rem;
+  text-align: right;
+}
+
 .task-scheduler-time-grid {
   display: grid;
   grid-template-columns: 70px repeat(var(--task-day-count, 7), minmax(var(--task-day-min-width, 130px), 1fr));
@@ -9964,14 +9991,18 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .missed-boarding-notes-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 10px;
   min-width: 520px;
   width: 100%;
 }
 
+.missed-boarding-notes-dog-col {
+  width: clamp(7rem, 16vw, 10rem);
+}
+
 .missed-boarding-notes-table th,
 .missed-boarding-notes-table td {
-  border-bottom: 1px solid var(--line);
   padding: 12px 14px;
   text-align: left;
   vertical-align: top;
@@ -9979,20 +10010,50 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .missed-boarding-notes-table thead th {
   background: rgba(216, 154, 43, 0.12);
+  border-bottom: 0;
   color: #F8D78C;
   font-size: 0.78rem;
   text-transform: uppercase;
 }
 
-.missed-boarding-notes-table tbody tr:last-child th,
-.missed-boarding-notes-table tbody tr:last-child td {
-  border-bottom: 0;
+.missed-boarding-notes-group th,
+.missed-boarding-notes-group td {
+  background: rgba(8, 19, 32, 0.74);
+  border-bottom: 1px solid rgba(216, 154, 43, 0.2);
+  border-top: 1px solid rgba(216, 154, 43, 0.32);
+}
+
+.missed-boarding-notes-group tr + tr td {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+.missed-boarding-notes-group tr:first-child td {
+  border-top-right-radius: 10px;
+}
+
+.missed-boarding-notes-group tr:last-child td {
+  border-bottom-right-radius: 10px;
+}
+
+.missed-boarding-notes-group .missed-boarding-notes-dog {
+  border-bottom-left-radius: 10px;
+  border-left: 1px solid rgba(216, 154, 43, 0.32);
+  border-top-left-radius: 10px;
+}
+
+.missed-boarding-notes-group td:last-child {
+  border-right: 1px solid rgba(216, 154, 43, 0.32);
 }
 
 .missed-boarding-notes-dog {
-  background: rgba(216, 154, 43, 0.1);
+  background: rgba(216, 154, 43, 0.14);
   color: #F9E5B2;
-  width: 34%;
+  width: clamp(7rem, 16vw, 10rem);
+}
+
+.missed-boarding-notes-dog span {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .missed-boarding-note-row {
@@ -10030,6 +10091,22 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 :root[data-theme="light"] .missed-boarding-notes-table thead th {
   background: #FEF3C7;
   color: #713F12;
+}
+
+:root[data-theme="light"] .missed-boarding-notes-group th,
+:root[data-theme="light"] .missed-boarding-notes-group td {
+  background: #FFFFFF;
+  border-bottom-color: #F1D99A;
+  border-top-color: #D89A2B;
+}
+
+:root[data-theme="light"] .missed-boarding-notes-group tr + tr td {
+  border-top-color: #F2E5C3;
+}
+
+:root[data-theme="light"] .missed-boarding-notes-group .missed-boarding-notes-dog,
+:root[data-theme="light"] .missed-boarding-notes-group td:last-child {
+  border-color: #D89A2B;
 }
 
 :root[data-theme="light"] .missed-boarding-notes-dog {

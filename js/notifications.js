@@ -406,22 +406,25 @@ function missedBoardingNotesCardHtml(entries = missedBoardingNotesEntries()) {
 }
 
 function missedBoardingNotesTableRowsHtml(entries = missedBoardingNotesEntries()) {
-  return missedBoardingNotesGroupedEntries(entries).map((group) => group.entries.map((entry, index) => {
-    const dogCell = index === 0 ? '<th scope="rowgroup" rowspan="' + group.entries.length + '" class="missed-boarding-notes-dog">' + escapeHtml(group.dogName) + '</th>' : "";
-    const meta = [entry.sourceLabel, entry.type, entry.timestamp ? formatDateTime(entry.timestamp) : ""].filter(Boolean).join(" | ");
-    return '<tr>' + dogCell + '<td><div class="missed-boarding-note-row"><span>' + escapeHtml(meta) + '</span><p>' + multilineHtml(entry.note) + '</p></div></td></tr>';
-  }).join("")).join("");
+  return missedBoardingNotesGroupedEntries(entries).map((group) => {
+    const rows = group.entries.map((entry, index) => {
+      const dogCell = index === 0 ? '<th scope="rowgroup" rowspan="' + group.entries.length + '" class="missed-boarding-notes-dog"><span>' + escapeHtml(group.dogName) + '</span></th>' : "";
+      const meta = [entry.sourceLabel, entry.type, entry.timestamp ? formatDateTime(entry.timestamp) : ""].filter(Boolean).join(" | ");
+      return '<tr>' + dogCell + '<td><div class="missed-boarding-note-row"><span>' + escapeHtml(meta) + '</span><p>' + multilineHtml(entry.note) + '</p></div></td></tr>';
+    }).join("");
+    return '<tbody class="missed-boarding-notes-group">' + rows + '</tbody>';
+  }).join("");
 }
 
 function missedBoardingNotesPopupHtml(entries = missedBoardingNotesEntries()) {
   const body = entries.length
-    ? '<div class="missed-boarding-notes-table-wrap"><table class="missed-boarding-notes-table"><thead><tr><th>Dog</th><th>Medical / behavior notes</th></tr></thead><tbody>' + missedBoardingNotesTableRowsHtml(entries) + '</tbody></table></div>'
+    ? '<div class="missed-boarding-notes-table-wrap"><table class="missed-boarding-notes-table"><colgroup><col class="missed-boarding-notes-dog-col"><col></colgroup><thead><tr><th>Dog</th><th>Medical / behavior notes</th></tr></thead>' + missedBoardingNotesTableRowsHtml(entries) + '</table></div>'
     : '<p>No boarding or Our Dogs medical/behavior notes in the past week.</p>';
-  return '<section class="popup-record-section missed-boarding-notes-popup"><article class="record-card compact-record-card"><strong>Summary Alert</strong><p>Boarding and Our Dogs medical/behavior notes from the past week.</p></article>' + body + '<div class="button-row"><button type="button" data-action="mark-missed-boarding-notes-read">Read</button><button type="button" class="secondary-button" data-action="read-later-missed-boarding-notes">Read Later</button></div></section>';
+  return '<section class="popup-record-section missed-boarding-notes-popup"><article class="record-card compact-record-card"><strong>Summary Alert</strong><p>Boarding and Our Dogs medical/behavior notes from the past week.</p></article>' + body + '</section>';
 }
 
 function openMissedBoardingNotesPopup() {
-  showDetailDialog("Summary Alert", missedBoardingNotesPopupHtml(missedBoardingNotesEntries()));
+  showDetailDialog("Summary Alert", missedBoardingNotesPopupHtml(missedBoardingNotesEntries()), null, { backdropClose: true });
 }
 
 async function markMissedBoardingNotesRead() {
