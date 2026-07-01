@@ -272,6 +272,10 @@ function missedBoardingNotesNormalizedNote(value = "") {
   return String(value || "").trim().replace(/\\s+/g, " ").toLowerCase();
 }
 
+function missedBoardingNotesPlaceholderNote(value = "") {
+  return /^(none|none\\.|n\\/a|na|no|no note|no notes|not recorded|not saved|not applicable|unknown|-|--)$/i.test(missedBoardingNotesNormalizedNote(value));
+}
+
 function missedBoardingNotesTimestampMinuteKey(value = "") {
   const timestamp = missedBoardingNotesTimestampMs(value);
   if (!timestamp) return String(value || "");
@@ -303,7 +307,7 @@ function missedBoardingNotesEntries() {
     const timestamp = entry.timestamp || "";
     if (sinceMs && missedBoardingNotesTimestampMs(timestamp) < sinceMs) return;
     const note = String(entry.note || "").trim();
-    if (!note) return;
+    if (!note || missedBoardingNotesPlaceholderNote(note)) return;
     const sourceLabel = entry.sourceLabel || entry.source || "Boarding";
     const dogName = entry.dogName || (sourceLabel === "Our Dogs" ? "Our dog" : "Boarding dog");
     const dogKey = entry.dogKey || [sourceLabel, entry.dogId || missedBoardingNotesDogKey(dogName)].join(":");
