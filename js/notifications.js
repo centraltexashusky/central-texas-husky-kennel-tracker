@@ -276,7 +276,6 @@ function missedBoardingNotesEntrySignature(entry = {}, dogKey = "", timestamp = 
   const sourceDailyTaskId = String(entry.sourceDailyTaskId || "").trim();
   const sourceCareLogId = String(entry.sourceCareLogId || entry.logId || "").trim();
   if (sourceDailyTaskId && sourceCareLogId) return [dogKey, sourceDailyTaskId, sourceCareLogId].join("|");
-  if (sourceCareLogId) return [dogKey, sourceCareLogId].join("|");
   return [dogKey, timestamp, missedBoardingNotesNormalizedNote(note)].join("|");
 }
 
