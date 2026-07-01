@@ -272,13 +272,19 @@ function missedBoardingNotesNormalizedNote(value = "") {
   return String(value || "").trim().replace(/\\s+/g, " ").toLowerCase();
 }
 
+function missedBoardingNotesTimestampMinuteKey(value = "") {
+  const timestamp = missedBoardingNotesTimestampMs(value);
+  if (!timestamp) return String(value || "");
+  return new Date(Math.floor(timestamp / 60000) * 60000).toISOString();
+}
+
 function missedBoardingNotesEntrySignature(entry = {}, dogKey = "", timestamp = "", note = "") {
   const sourceDailyTaskId = String(entry.sourceDailyTaskId || "").trim();
   const sourceCareLogId = String(entry.sourceCareLogId || entry.logId || "").trim();
   if (sourceDailyTaskId && sourceCareLogId) return [dogKey, sourceDailyTaskId, sourceCareLogId].join("|");
   const dogNameKey = missedBoardingNotesDogKey(entry.dogName || "");
   const displayDogKey = dogNameKey ? [entry.sourceLabel || entry.source || "", dogNameKey].join(":") : dogKey;
-  return [displayDogKey, timestamp, missedBoardingNotesNormalizedNote(note)].join("|");
+  return [displayDogKey, missedBoardingNotesTimestampMinuteKey(timestamp), missedBoardingNotesNormalizedNote(note)].join("|");
 }
 
 function missedBoardingNotesEntries() {
