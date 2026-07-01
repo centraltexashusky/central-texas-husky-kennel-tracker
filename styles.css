@@ -8118,10 +8118,11 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 .task-scheduler-day-board-header {
   align-items: center;
-  background: color-mix(in srgb, var(--surface) 88%, var(--gold) 12%);
-  border: 1px solid var(--line);
+  background: linear-gradient(135deg, #12314A 0%, #1D5274 100%);
+  border: 1px solid rgba(246, 199, 102, 0.58);
   border-radius: 14px;
-  color: var(--ink);
+  box-shadow: 0 10px 24px rgba(15, 49, 74, 0.22);
+  color: #FFFFFF;
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
@@ -8131,7 +8132,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-day-board-header span {
-  color: var(--gold);
+  color: #F6C766;
   font-size: 0.72rem;
   font-weight: 900;
   letter-spacing: 0;
@@ -8139,6 +8140,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 .task-scheduler-day-board-header strong {
+  color: #FFFFFF;
   font-size: 1rem;
   text-align: right;
 }

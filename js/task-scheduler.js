@@ -573,6 +573,82 @@ function boardingServiceTaskStartTimeForUnit(record = {}, stay = {}, task = {}, 
   return BOARDING_SERVICE_TASK_START_TIMES[wave % BOARDING_SERVICE_TASK_START_TIMES.length] || "09:00";
 }
 
+function boardingServiceSchedulerStayIdentity(record = {}, stay = {}) {
+  return stay.requestCode || (typeof boardingStayRequestCode === "function" ? boardingStayRequestCode(record, stay) : "") || stay.id || "";
+}
+
+function boardingServiceTaskBathSchedulePriority(task = {}) {
+  if (typeof boardingServiceTaskIsBath !== "function" || !boardingServiceTaskIsBath(task)) return 0;
+  const text = typeof normalizedServiceLookupText === "function"
+    ? normalizedServiceLookupText(typeof boardingServiceTaskDisplayName === "function" ? boardingServiceTaskDisplayName(task) : task.serviceName || task.label || "")
+    : String(task.serviceName || task.label || "").toLowerCase();
+  if (text.includes("full premium bath")) return 0;
+  if (text === "bath" || text === "full bath" || text.startsWith("full bath")) return 1;
+  if (text.includes("de shed") || text.includes("deshed") || text.includes("de shedding") || text.includes("add on") || text.includes("addon")) return 8;
+  return 3;
+}
+
+function boardingServiceTaskSchedulerSort(left = {}, right = {}) {
+  return boardingServiceTaskBathSchedulePriority(left) - boardingServiceTaskBathSchedulePriority(right) ||
+    String(typeof boardingServiceTaskDisplayName === "function" ? boardingServiceTaskDisplayName(left) : left.serviceName || left.label || "").localeCompare(String(typeof boardingServiceTaskDisplayName === "function" ? boardingServiceTaskDisplayName(right) : right.serviceName || right.label || ""));
+}
+
+function boardingServiceTaskSchedulerCanonicalKey(record = {}, stay = {}, task = {}, unitIndex = 1) {
+  const stayIdentity = boardingServiceSchedulerStayIdentity(record, stay);
+  const unit = typeof boardingServiceTaskUnitIndexValue === "function" ? boardingServiceTaskUnitIndexValue(unitIndex) || 1 : Number(unitIndex || 1) || 1;
+  if (typeof boardingServiceTaskIsBath === "function" && boardingServiceTaskIsBath(task)) {
+    return [BOARDING_SERVICE_AUTO_TASK_SOURCE, record.id || "", stayIdentity || "", "bath", unit].join(":");
+  }
+  if (typeof boardingServiceTaskUnitSourceKey === "function") return boardingServiceTaskUnitSourceKey(record, stay, task, unit);
+  const taskKey = typeof boardingServiceTaskKey === "function" ? boardingServiceTaskKey(task) : task.id || task.serviceName || task.label || "";
+  return [BOARDING_SERVICE_AUTO_TASK_SOURCE, record.id || "", stayIdentity || "", taskKey || "", unit].join(":");
+}
+
+function scheduledBoardingServiceTaskIsBath(task = {}) {
+  const activity = String(task.activityType || task.title || "").trim();
+  if (scheduledCareCompletionTypeKey(activity) === "bath") return true;
+  const serviceText = typeof normalizedServiceLookupText === "function"
+    ? normalizedServiceLookupText([task.boardingServiceTaskKey, task.boardingServiceUnitLabel].filter(Boolean).join(" "))
+    : String([task.boardingServiceTaskKey, task.boardingServiceUnitLabel].filter(Boolean).join(" ")).toLowerCase();
+  return serviceText === "bath" || serviceText.includes(" bath") || serviceText.startsWith("bath") || serviceText.includes("premium bath");
+}
+
+function boardingServiceStayForScheduledTask(record = {}, task = {}) {
+  const taskStayId = String(task.sourceStayId || task.boardingStayId || "").trim();
+  const taskRequestCode = String(task.sourceRequestCode || task.boardingRequestCode || "").trim();
+  return arrayValue(record.stays).find((stay) =>
+    (taskStayId && stay.id === taskStayId) ||
+    (taskRequestCode && boardingServiceSchedulerStayIdentity(record, stay) === taskRequestCode)
+  ) || null;
+}
+
+function scheduledBoardingServiceTaskCanonicalKey(record = {}, stay = {}, task = {}) {
+  const unit = typeof boardingServiceTaskUnitIndexValue === "function" ? boardingServiceTaskUnitIndexValue(task.boardingServiceUnitIndex || 1) || 1 : Number(task.boardingServiceUnitIndex || 1) || 1;
+  const stayIdentity = boardingServiceSchedulerStayIdentity(record, stay);
+  if (scheduledBoardingServiceTaskIsBath(task)) {
+    return [BOARDING_SERVICE_AUTO_TASK_SOURCE, record.id || "", stayIdentity || "", "bath", unit].join(":");
+  }
+  return task.sourceKey || [BOARDING_SERVICE_AUTO_TASK_SOURCE, record.id || "", stayIdentity || "", task.boardingServiceTaskKey || task.boardingServiceTaskId || task.activityType || task.title || "", unit].join(":");
+}
+
+function activeBoardingServiceAutoTasksForCanonical(record = {}, stay = {}, canonicalKey = "") {
+  if (!canonicalKey) return [];
+  return boardingServiceAutoTasksForRecord(record).filter((task) =>
+    task.status !== "Completed" &&
+    task.status !== "Cancelled" &&
+    scheduledBoardingServiceTaskCanonicalKey(record, stay, task) === canonicalKey
+  );
+}
+
+function uniqueScheduledCareTasks(tasks = []) {
+  const seen = new Set();
+  return tasks.filter((task) => {
+    if (!task?.id || seen.has(task.id)) return false;
+    seen.add(task.id);
+    return true;
+  });
+}
+
 function taskSchedulerTimeFromDateTime(value = "", fallback = "09:00") {
   const source = new Date(value || 0);
   if (!Number.isNaN(source.getTime())) {
@@ -978,6 +1054,7 @@ async function syncBoardingServiceTasksForRecord(record = {}, options = {}) {
   const displayRecord = boardingDogRecordForDisplay(record.id || "") || record;
   if (!displayRecord?.id) return false;
   const desiredKeys = new Set();
+  const desiredCanonicalKeys = new Set();
   const changesById = new Map();
   const now = new Date().toISOString();
   const staff = staffIdentity();
@@ -985,15 +1062,22 @@ async function syncBoardingServiceTasksForRecord(record = {}, options = {}) {
   arrayValue(displayRecord.stays).forEach((stay) => {
     if (!boardingServiceTaskStayIsSchedulable(displayRecord, stay)) return;
     const stats = typeof boardingStayServiceStats === "function" ? boardingStayServiceStats(displayRecord, stay) : { tasks: [] };
-    arrayValue(stats.tasks).forEach((serviceTask) => {
+    arrayValue(stats.tasks).slice().sort(boardingServiceTaskSchedulerSort).forEach((serviceTask) => {
       arrayValue(typeof boardingServiceTaskUnits === "function" ? boardingServiceTaskUnits(serviceTask) : []).forEach((unit) => {
         if (unit.status === "completed") return;
+        const unitIndex = unit.index || unit.unitIndex || 1;
+        const canonicalKey = boardingServiceTaskSchedulerCanonicalKey(displayRecord, stay, serviceTask, unitIndex);
+        if (canonicalKey && desiredCanonicalKeys.has(canonicalKey)) return;
+        if (canonicalKey) desiredCanonicalKeys.add(canonicalKey);
         const sourceKey = typeof boardingServiceTaskUnitSourceKey === "function"
-          ? boardingServiceTaskUnitSourceKey(displayRecord, stay, serviceTask, unit.index || unit.unitIndex || 1)
+          ? boardingServiceTaskUnitSourceKey(displayRecord, stay, serviceTask, unitIndex)
           : "";
         if (!sourceKey) return;
         desiredKeys.add(sourceKey);
-        const candidates = activeBoardingServiceAutoTasks(sourceKey);
+        const candidates = uniqueScheduledCareTasks([
+          ...activeBoardingServiceAutoTasks(sourceKey),
+          ...activeBoardingServiceAutoTasksForCanonical(displayRecord, stay, canonicalKey),
+        ]);
         const keep = preferredBoardingServiceAutoTask(candidates);
         candidates.filter((task) => task.id !== keep?.id).forEach((duplicate) => {
           queueBoardingServiceTaskChange(changesById, upsertRecord("scheduledCareTask", {
@@ -1015,6 +1099,19 @@ async function syncBoardingServiceTasksForRecord(record = {}, options = {}) {
 
   boardingServiceAutoTasksForRecord(displayRecord).forEach((task) => {
     if (!task.sourceKey || desiredKeys.has(task.sourceKey)) return;
+    const taskStay = boardingServiceStayForScheduledTask(displayRecord, task);
+    const taskCanonicalKey = taskStay ? scheduledBoardingServiceTaskCanonicalKey(displayRecord, taskStay, task) : "";
+    if (taskCanonicalKey && desiredCanonicalKeys.has(taskCanonicalKey)) {
+      queueBoardingServiceTaskChange(changesById, upsertRecord("scheduledCareTask", {
+        ...task,
+        removed: true,
+        removedAt: now,
+        removedBy: staff.name || "System",
+        removedReason: "duplicate boarding service auto task",
+        updatedAt: now,
+      }));
+      return;
+    }
     if (!boardingServiceSourceKeyStillNeeded(displayRecord, task.sourceKey)) {
       queueBoardingServiceTaskChange(changesById, upsertRecord("scheduledCareTask", {
         ...task,
