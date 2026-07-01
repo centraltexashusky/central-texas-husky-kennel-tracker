@@ -3052,6 +3052,57 @@ function boardingStayServiceSummary(record = {}, stayOverride = null) {
   });
 }
 
+function boardingQuickFactHtml(label = "", value = "", className = "") {
+  if (!value) return "";
+  const classes = ["boarding-mobile-fact", className].filter(Boolean).join(" ");
+  return '<span class="' + escapeHtml(classes) + '"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></span>';
+}
+
+function boardingQuickTimeFact(record = {}, stay = {}) {
+  if (!stay?.id) return "";
+  const status = boardingStayDisplayStatus(record, stay);
+  const label = ["Pending", "Approved", "Checked In"].includes(status) ? "Drop-off" : "Pickup";
+  const time = label === "Drop-off" ? stay.dropoffTime : stay.pickupTime;
+  return boardingQuickFactHtml(label, formatDateTime(time || stay.dropoffTime || stay.pickupTime));
+}
+
+function boardingQuickLengthFact(record = {}, stay = {}) {
+  if (!stay?.id) return "";
+  if (isServiceRequestStay(record, stay)) return boardingQuickFactHtml("Stay", "Service only");
+  const days = boardingDays(stay.dropoffTime, stay.pickupTime);
+  return days ? boardingQuickFactHtml("Stay", days + " day" + (days === 1 ? "" : "s")) : "";
+}
+
+function boardingQuickServiceFact(record = {}, stay = {}) {
+  if (!stay?.id) return "";
+  const stats = boardingStayServiceStats(record, stay);
+  if (!stats.total) return "";
+  const value = stats.completedTasks.length + "/" + stats.total + " done";
+  const className = stats.completed ? "is-good" : "is-attention";
+  return boardingQuickFactHtml("Services", value, className);
+}
+
+function boardingQuickOwnerUpdateFact(record = {}, stay = {}) {
+  if (!stay?.id || !ownerUpdateStayIsAvailable(record, stay)) return "";
+  const updated = boardingOwnerUpdateLoggedToday(record, stay);
+  return boardingQuickFactHtml("Owner", updated ? "Updated today" : "Update due", updated ? "is-good" : "is-alert");
+}
+
+function boardingQuickBelongingsFact(stay = {}) {
+  return boardingStayBelongings(stay) ? boardingQuickFactHtml("Belongings", "Saved", "is-muted") : "";
+}
+
+function boardingQuickFactsHtml(record = {}, stay = {}) {
+  const facts = [
+    boardingQuickTimeFact(record, stay),
+    boardingQuickLengthFact(record, stay),
+    boardingQuickServiceFact(record, stay),
+    boardingQuickOwnerUpdateFact(record, stay),
+    boardingQuickBelongingsFact(stay),
+  ].filter(Boolean);
+  return facts.length ? '<div class="boarding-mobile-fact-grid">' + facts.join("") + '</div>' : "";
+}
+
 function boardingPickupReviewHtml(record = {}, options = {}) {
   const stay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) || {} : activeBoardingStay(record) || currentOrNextStay(record) || {};
   const services = boardingStayServiceSummary(record, stay);
@@ -3150,15 +3201,16 @@ function boardingQuickCardHtml(record = {}) {
   const stay = boardingPrimaryStay(record) || {};
   const kennel = boardingKennelLocationLabel(record, stay);
   return \`
-    <article class="record-card mobile-roster-card">
+    <article class="record-card mobile-roster-card boarding-mobile-roster-card">
       <div class="mobile-roster-card-main boarding-mobile-card-main">
         \${boardingDogMobilePhotoHtml(record)}
         <div class="boarding-mobile-card-content">
           <div class="boarding-card-title-row"><strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong>\${vaccinationStatusBadgeHtml(record)}</div>
-          <div class="chip-row">\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}\${boardingRecordStatusButtonHtml(record)}</div>
-          <span>\${escapeHtml(boardingScheduleText(record))}</span>
+          <div class="chip-row boarding-mobile-status-row">\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}\${boardingRecordStatusButtonHtml(record)}</div>
+          \${boardingQuickFactsHtml(record, stay)}
+          <span class="boarding-mobile-schedule-line">\${escapeHtml(boardingScheduleText(record))}</span>
           \${kennel ? \`<span class="boarding-kennel-label">\${escapeHtml(kennel)}</span>\` : ""}
-          <p>\${escapeHtml(record.ownerName || "No owner saved")}\${record.ownerPhone ? \` | \${phoneLinkHtml(record.ownerPhone)}\` : ""}</p>
+          <p class="boarding-mobile-owner-line">\${escapeHtml(record.ownerName || "No owner saved")}\${record.ownerPhone ? \` | \${phoneLinkHtml(record.ownerPhone)}\` : ""}</p>
         </div>
       </div>
       \${boardingQuickActionButtons(record)}

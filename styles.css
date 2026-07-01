@@ -5386,6 +5386,11 @@ option {
   gap: 12px;
 }
 
+.boarding-quick-list .boarding-mobile-roster-card {
+  gap: 10px;
+  padding: 14px;
+}
+
 .boarding-mobile-card-main {
   align-items: start;
   grid-template-columns: 78px minmax(0, 1fr);
@@ -5395,6 +5400,82 @@ option {
   display: grid;
   gap: 6px;
   min-width: 0;
+}
+
+.boarding-mobile-status-row {
+  gap: 6px;
+}
+
+.boarding-mobile-status-row .status-chip {
+  font-size: 0.72rem;
+  padding: 3px 9px;
+}
+
+.boarding-mobile-fact-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 2px;
+}
+
+.boarding-mobile-fact {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.boarding-mobile-fact span {
+  color: rgba(226, 242, 255, 0.6);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.boarding-mobile-fact strong {
+  color: rgba(246, 250, 255, 0.95);
+  font-size: 0.82rem;
+  line-height: 1.15;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.boarding-mobile-fact.is-good {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(74, 222, 128, 0.36);
+}
+
+.boarding-mobile-fact.is-alert {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.48);
+}
+
+.boarding-mobile-fact.is-attention {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.42);
+}
+
+.boarding-mobile-fact.is-muted {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.boarding-mobile-schedule-line,
+.boarding-mobile-owner-line,
+.boarding-kennel-label {
+  color: rgba(226, 242, 255, 0.72);
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.boarding-mobile-owner-line {
+  margin: 0;
 }
 
 .mobile-dog-photo-button {
@@ -5626,6 +5707,27 @@ button.boarding-dog-photo-thumb {
 .quick-action-grid button {
   min-height: 42px;
   padding-inline: 10px;
+}
+
+.boarding-quick-list .boarding-action-grid {
+  gap: 6px;
+}
+
+.boarding-quick-list .boarding-action-grid button {
+  border-radius: 999px;
+  font-size: 0.84rem;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+@media (min-width: 640px) {
+  .boarding-quick-list .boarding-action-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.boarding-quick-list .boarding-action-grid .secondary-button {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 .dog-type-chip.ownedDog {
@@ -9868,6 +9970,48 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   border-color: #16864E !important;
   box-shadow: inset 0 0 0 1px rgba(22, 134, 78, 0.55), 0 8px 18px rgba(22, 134, 78, 0.16);
   color: #172033;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact {
+  background: #F8FAF7;
+  border-color: #DDE5E2;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact span {
+  color: #65748B;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact strong {
+  color: #172033;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact.is-good {
+  background: #E5F4EC;
+  border-color: #1FB76C;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact.is-alert {
+  background: #FFF5F4;
+  border-color: #D95752;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact.is-attention {
+  background: #FFF3D8;
+  border-color: #D89A2B;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact.is-muted {
+  background: #EEF2EE;
+}
+
+:root[data-theme="light"] .boarding-mobile-schedule-line,
+:root[data-theme="light"] .boarding-mobile-owner-line,
+:root[data-theme="light"] .boarding-kennel-label {
+  color: #536782;
+}
+
+:root[data-theme="light"] .boarding-quick-list .boarding-action-grid .secondary-button {
+  box-shadow: 0 4px 10px rgba(23, 32, 51, 0.08);
 }
 
 :root[data-theme="light"] body:not(.is-login-view) #boardingSchedulePanel {
