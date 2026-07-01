@@ -268,6 +268,18 @@ function missedBoardingNotesLogTimestamp(log = {}, fallback = "") {
   return log.loggedAt || log.completedAt || log.updatedAt || log.createdAt || log.submittedAt || log.date || fallback || "";
 }
 
+function missedBoardingNotesNormalizedNote(value = "") {
+  return String(value || "").trim().replace(/\\s+/g, " ").toLowerCase();
+}
+
+function missedBoardingNotesEntrySignature(entry = {}, dogKey = "", timestamp = "", note = "") {
+  const sourceDailyTaskId = String(entry.sourceDailyTaskId || "").trim();
+  const sourceCareLogId = String(entry.sourceCareLogId || entry.logId || "").trim();
+  if (sourceDailyTaskId && sourceCareLogId) return [dogKey, sourceDailyTaskId, sourceCareLogId].join("|");
+  if (sourceCareLogId) return [dogKey, sourceCareLogId].join("|");
+  return [dogKey, timestamp, missedBoardingNotesNormalizedNote(note)].join("|");
+}
+
 function missedBoardingNotesEntries() {
   if (!missedBoardingNotesCanView()) return [];
   const since = missedBoardingNotesSince();
@@ -288,7 +300,7 @@ function missedBoardingNotesEntries() {
     const sourceLabel = entry.sourceLabel || entry.source || "Boarding";
     const dogName = entry.dogName || (sourceLabel === "Our Dogs" ? "Our dog" : "Boarding dog");
     const dogKey = entry.dogKey || [sourceLabel, entry.dogId || missedBoardingNotesDogKey(dogName)].join(":");
-    const signature = [dogKey, entry.type || "", timestamp, note].join("|");
+    const signature = missedBoardingNotesEntrySignature(entry, dogKey, timestamp, note);
     if (seen.has(signature)) return;
     seen.add(signature);
     entries.push({
@@ -305,11 +317,6 @@ function missedBoardingNotesEntries() {
   records.forEach((record) => {
     const dogName = missedBoardingNotesDogName(record);
     const timestamp = record.updatedAt || record.submittedAt || record.createdAt || "";
-    [
-      ["Medical notes", record.medicalNotes || record.medicalCareNotes || ""],
-      ["Behavior notes", record.behaviorNotes || ""],
-      ["Special care", record.specialCare || ""],
-    ].forEach(([type, note]) => addEntry({ sourceLabel: "Boarding", dogId: record.id || "", dogName, type, note, timestamp }));
     arrayValue(record.careLogs).forEach((log) => {
       if (!missedBoardingNotesCareLogMatches(log)) return;
       addEntry({
@@ -319,6 +326,7 @@ function missedBoardingNotesEntries() {
         type: log.careType || log.category || "Medical/Behavior Note",
         note: log.note || log.notes || log.summary || "",
         timestamp: missedBoardingNotesLogTimestamp(log, timestamp),
+        sourceCareLogId: log.id || "",
       });
     });
   });
@@ -326,12 +334,6 @@ function missedBoardingNotesEntries() {
   ownedRecords.forEach((record) => {
     const dogName = missedBoardingNotesDogName(record, "Our dog");
     const timestamp = record.updatedAt || record.submittedAt || record.createdAt || "";
-    [
-      ["Medical notes", record.medicalNotes || record.medicalCareNotes || ""],
-      ["Behavior notes", record.behaviorNotes || ""],
-      ["Special care", record.specialCare || ""],
-      ["Care status", record.careStatus || ""],
-    ].forEach(([type, note]) => addEntry({ sourceLabel: "Our Dogs", dogId: record.id || "", dogName, type, note, timestamp }));
     missedBoardingNotesOwnedActivityLogs(record).forEach((log) => {
       if (!missedBoardingNotesCareLogMatches(log)) return;
       addEntry({
@@ -341,6 +343,8 @@ function missedBoardingNotesEntries() {
         type: log.careType || log.type || log.category || log.group || "Medical/Behavior Note",
         note: log.note || log.notes || log.summary || "",
         timestamp: missedBoardingNotesLogTimestamp(log, timestamp),
+        sourceDailyTaskId: log.sourceDailyTaskId || "",
+        sourceCareLogId: log.sourceCareLogId || log.id || "",
       });
     });
   });
@@ -363,6 +367,8 @@ function missedBoardingNotesEntries() {
         type: log.careType || log.category || "Medical/Behavior Note",
         note: log.note || log.notes || "",
         timestamp: missedBoardingNotesLogTimestamp(log, record.updatedAt || record.submittedAt || record.date || ""),
+        sourceDailyTaskId: record.id || "",
+        sourceCareLogId: log.id || "",
       });
     });
   });
