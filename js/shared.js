@@ -190,6 +190,7 @@ var remoteLoadInProgress = false;
 var lastRemoteRecordsSignature = null;
 var deferredRemoteRenderTimer = null;
 var lastUserScrollAt = 0;
+var lastRemoteTaskCompletionSignature = "";
 var currentUser = null;
 var impersonationSession = null;
 var supabaseClient = null;
@@ -203,6 +204,7 @@ var remoteLoadQueuedTypes = new Set();
 var remoteLoadQueuedRender = false;
 var remoteLoadQueuedPageId = "";
 var lastRemoteRecordsSignatureByRequest = new Map();
+var lastRemoteRecordFetchModesByType = new Map();
 var activePageRemoteLoadTimer = null;
 var activePageRemoteLoadLastKey = "";
 var activePageRemoteLoadLastAt = 0;
@@ -274,11 +276,18 @@ var APP_RESUME_REMOTE_REFRESH_MS = 30000;
 var ACTIVE_PAGE_REMOTE_LOAD_THROTTLE_MS = 6000;
 var NOTIFICATION_BACKGROUND_LOAD_DELAY_MS = 1500;
 var NOTIFICATION_BACKGROUND_LOAD_THROTTLE_MS = 60000;
+var BACKGROUND_SYNC_INTERVAL_MS = 120000;
+var SYNC_META_STORAGE_KEY = "cth-sync-meta-v1";
+var SYNC_DELTA_OVERLAP_MS = 2000;
+var SYNC_FRESH_LABEL_REFRESH_MS = 60000;
 var remoteLoadStartedAt = 0;
 var lastRemoteLoadFinishedAt = 0;
+var lastSuccessfulRemoteLoadFinishedAt = 0;
 var lastRemoteRecordFetchFailedTypes = new Set();
 var notificationBackgroundLoadTimer = null;
 var lastNotificationBackgroundLoadAt = 0;
+var syncFreshnessTimer = null;
+var pendingHiddenTabRemoteRender = false;
 var appInitialized = false;
 var appResumeTimer = null;
 var lastAppResumeAt = 0;
@@ -1066,6 +1075,173 @@ function safeLocalStorageSetItem(key, raw, options = {}) {
     }
     return false;
   }
+}
+
+function normalizeIsoTimestamp(value = "") {
+  const time = Date.parse(value || "");
+  return Number.isFinite(time) ? new Date(time).toISOString() : "";
+}
+
+function readSyncMetaStore() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SYNC_META_STORAGE_KEY) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function writeSyncMetaStore(store = {}) {
+  const cleanStore = store && typeof store === "object" ? store : {};
+  cleanStore.version = 1;
+  cleanStore.updatedAt = new Date().toISOString();
+  safeLocalStorageSetItem(SYNC_META_STORAGE_KEY, JSON.stringify(cleanStore), { quiet: true });
+}
+
+function normalizedSyncIdentity(value = "") {
+  if (typeof normalizeEmail === "function") return normalizeEmail(value);
+  return String(value || "").trim().toLowerCase();
+}
+
+function syncMetaScopeKey() {
+  let identity = "";
+  try {
+    identity = typeof currentDbUserId === "function" ? currentDbUserId() : "";
+  } catch (error) {
+    identity = "";
+  }
+  if (!identity && typeof accountSessionKey === "function") identity = accountSessionKey(currentUser || {});
+  if (!identity) identity = normalizedSyncIdentity(currentUser?.email || helperEmail?.value || "anonymous");
+  const provider = currentUser?.authProvider || "local";
+  const role = typeof currentRole === "function" ? currentRole() || "public" : currentUser?.role || "public";
+  return [provider, identity || "anonymous", role].join(":");
+}
+
+function readSyncMetaForCurrentScope() {
+  const store = readSyncMetaStore();
+  const scope = syncMetaScopeKey();
+  const scoped = store.scopes?.[scope];
+  return scoped && typeof scoped === "object" ? { ...scoped } : {};
+}
+
+function writeSyncMetaForCurrentScope(scopedMeta = {}) {
+  const store = readSyncMetaStore();
+  const scope = syncMetaScopeKey();
+  store.scopes = store.scopes && typeof store.scopes === "object" ? store.scopes : {};
+  store.scopes[scope] = scopedMeta && typeof scopedMeta === "object" ? scopedMeta : {};
+  writeSyncMetaStore(store);
+}
+
+function clearSyncMetaForCurrentScope() {
+  const store = readSyncMetaStore();
+  const scope = syncMetaScopeKey();
+  if (!store.scopes?.[scope]) return;
+  delete store.scopes[scope];
+  writeSyncMetaStore(store);
+}
+
+function syncMetaForType(type = "") {
+  const scopedMeta = readSyncMetaForCurrentScope();
+  const meta = scopedMeta[type];
+  return meta && typeof meta === "object" ? meta : {};
+}
+
+function deltaSinceUpdatedAtForType(type = "", options = {}) {
+  if (options.fullRefresh === true || options.delta === false) return "";
+  const lastRemoteUpdatedAt = normalizeIsoTimestamp(syncMetaForType(type).lastRemoteUpdatedAt || "");
+  if (!lastRemoteUpdatedAt) return "";
+  return new Date(Math.max(0, Date.parse(lastRemoteUpdatedAt) - SYNC_DELTA_OVERLAP_MS)).toISOString();
+}
+
+function newestUpdatedAtFromRows(rows = [], fallback = "") {
+  let newestTime = Date.parse(fallback || "");
+  arrayValue(rows).forEach((row) => {
+    const time = Date.parse(row?.updated_at || row?.updatedAt || "");
+    if (Number.isFinite(time) && (!Number.isFinite(newestTime) || time > newestTime)) newestTime = time;
+  });
+  return Number.isFinite(newestTime) ? new Date(newestTime).toISOString() : "";
+}
+
+function updateSyncMetaForLoad(types = [], rows = [], failedTypes = new Set(), options = {}) {
+  const scopedMeta = readSyncMetaForCurrentScope();
+  const now = new Date().toISOString();
+  const rowsByType = {};
+  arrayValue(rows).forEach((row) => {
+    if (!row?.type) return;
+    if (!rowsByType[row.type]) rowsByType[row.type] = [];
+    rowsByType[row.type].push(row);
+  });
+  uniqueRemoteRecordTypes(types).forEach((type) => {
+    const previous = scopedMeta[type] && typeof scopedMeta[type] === "object" ? scopedMeta[type] : {};
+    if (failedTypes.has(type)) {
+      scopedMeta[type] = {
+        ...previous,
+        lastAttemptAt: now,
+        status: "failed",
+      };
+      return;
+    }
+    const fetchMode = lastRemoteRecordFetchModesByType.get(type) || (options.delta === false ? "full" : "delta");
+    const next = {
+      ...previous,
+      lastAttemptAt: now,
+      lastSuccessfulSyncAt: now,
+      lastRemoteUpdatedAt: newestUpdatedAtFromRows(rowsByType[type] || [], previous.lastRemoteUpdatedAt || ""),
+      lastFetchMode: fetchMode,
+      status: "ok",
+    };
+    if (fetchMode === "full") next.lastFullSyncAt = now;
+    scopedMeta[type] = next;
+  });
+  writeSyncMetaForCurrentScope(scopedMeta);
+}
+
+function syncFreshnessText(timestamp = 0) {
+  const time = typeof timestamp === "number" ? timestamp : Date.parse(timestamp || "");
+  if (!Number.isFinite(time) || time <= 0) return "Sync pending";
+  const elapsedSeconds = Math.max(0, Math.round((Date.now() - time) / 1000));
+  if (elapsedSeconds < 15) return "Updated just now";
+  if (elapsedSeconds < 60) return "Updated " + elapsedSeconds + " sec ago";
+  const elapsedMinutes = Math.round(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) return "Updated " + elapsedMinutes + " min ago";
+  return "Updated " + formatDateTime(new Date(time).toISOString());
+}
+
+function stopSyncFreshnessLabelRefresh() {
+  if (!syncFreshnessTimer) return;
+  window.clearTimeout(syncFreshnessTimer);
+  syncFreshnessTimer = null;
+}
+
+function scheduleSyncFreshnessLabelRefresh() {
+  stopSyncFreshnessLabelRefresh();
+  if (!lastSuccessfulRemoteLoadFinishedAt) return;
+  syncFreshnessTimer = window.setTimeout(() => {
+    syncFreshnessTimer = null;
+    if (!remoteLoadInProgress && helperIsLoggedIn()) {
+      modeLabel.textContent = syncFreshnessText(lastSuccessfulRemoteLoadFinishedAt);
+      scheduleSyncFreshnessLabelRefresh();
+    }
+  }, SYNC_FRESH_LABEL_REFRESH_MS);
+}
+
+function setSyncBadgeState(status = "", options = {}) {
+  if (!modeLabel) return;
+  if (status === "refreshing") {
+    stopSyncFreshnessLabelRefresh();
+    modeLabel.textContent = "Refreshing...";
+    return;
+  }
+  if (status === "synced") {
+    const finishedAt = options.finishedAt || lastSuccessfulRemoteLoadFinishedAt || Date.now();
+    modeLabel.textContent = syncFreshnessText(finishedAt);
+    scheduleSyncFreshnessLabelRefresh();
+    return;
+  }
+  stopSyncFreshnessLabelRefresh();
+  if (status === "partial") modeLabel.textContent = "Partial sync";
+  else if (status === "failed") modeLabel.textContent = "Load failed";
+  else if (status === "live") modeLabel.textContent = lastSuccessfulRemoteLoadFinishedAt ? syncFreshnessText(lastSuccessfulRemoteLoadFinishedAt) : "Live sync active";
 }
 
 function readRecords(type) {
@@ -1962,6 +2138,10 @@ function clearLocalRecordCaches() {
   invalidateBoardingDogConsolidationCache();
   lastRemoteRecordsSignature = null;
   lastRemoteRecordsSignatureByRequest.clear();
+  lastRemoteRecordFetchModesByType.clear();
+  lastRemoteLoadFinishedAt = 0;
+  lastSuccessfulRemoteLoadFinishedAt = 0;
+  clearSyncMetaForCurrentScope();
 }
 
 async function clearLocalAppCache() {
@@ -2957,6 +3137,7 @@ function setOwnedDogSubmitting(formEl, submitting, message = "") {
 
 
 function stopAutoSync() {
+  stopSyncFreshnessLabelRefresh();
   if (syncIntervalId) {
     window.clearInterval(syncIntervalId);
     syncIntervalId = null;
@@ -4361,7 +4542,17 @@ function recentlyScrolled() {
   return Date.now() - lastUserScrollAt < REMOTE_RENDER_SCROLL_IDLE_MS;
 }
 
+function flushHiddenTabRemoteRender() {
+  if (document.visibilityState !== "visible" || !pendingHiddenTabRemoteRender) return;
+  pendingHiddenTabRemoteRender = false;
+  renderAllRecordsFromRemoteLoad();
+}
+
 function renderAllRecordsFromRemoteLoad() {
+  if (document.visibilityState === "hidden") {
+    pendingHiddenTabRemoteRender = true;
+    return;
+  }
   if (deferredRemoteRenderTimer) {
     window.clearTimeout(deferredRemoteRenderTimer);
     deferredRemoteRenderTimer = null;
@@ -4452,15 +4643,17 @@ function scheduleRealtimeRender(types = []) {
   }, 250);
 }
 
-async function fetchRemoteRecordRowsForType(type) {
+async function fetchRemoteRecordRowsForType(type, options = {}) {
   const pageSize = 1000;
   const rows = [];
   let from = 0;
+  const sinceUpdatedAt = normalizeIsoTimestamp(options.sinceUpdatedAt || "");
   while (true) {
     let query = supabaseClient
       .from("kennel_records")
       .select("id,type,payload,helper_email,user_id,submitted_at,updated_at")
       .eq("type", type);
+    if (sinceUpdatedAt) query = query.gte("updated_at", sinceUpdatedAt);
     if (type === "notificationLog") query = query.gte("submitted_at", notificationRetentionCutoffIso());
     const { data, error } = await query
       .order("updated_at", { ascending: false })
@@ -4476,13 +4669,16 @@ function notificationRetentionCutoffIso() {
   return new Date(Date.now() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 }
 
-async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp()) {
+async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), options = {}) {
   const remoteTypes = uniqueRemoteRecordTypes(types);
   lastRemoteRecordFetchFailedTypes = new Set();
+  lastRemoteRecordFetchModesByType.clear();
   if (!remoteTypes.length) return [];
   const batches = await Promise.all(remoteTypes.map(async (type) => {
     try {
-      return await withTimeout(fetchRemoteRecordRowsForType(type), REMOTE_TYPE_LOAD_TIMEOUT_MS, \`Remote \${type} records load\`);
+      const sinceUpdatedAt = deltaSinceUpdatedAtForType(type, options);
+      lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "full");
+      return await withTimeout(fetchRemoteRecordRowsForType(type, { sinceUpdatedAt }), REMOTE_TYPE_LOAD_TIMEOUT_MS, \`Remote \${type} records load\`);
     } catch (error) {
       lastRemoteRecordFetchFailedTypes.add(type);
       console.warn(\`Remote \${type} records could not load.\`, error);
@@ -4625,6 +4821,7 @@ async function loadRemoteRecords(options = {}) {
   const loadingPageId = options.pageId || activePageId();
   const showPageLoader = options.showLoader !== false && options.render !== false;
   const quietLoad = options.quiet === true || options.silent === true;
+  const deltaLoad = options.fullRefresh !== true && options.delta !== false;
   if (remoteLoadPromise) {
     const missingTypes = requestedRemoteTypes.filter((type) => !remoteLoadActiveTypes.has(type));
     if (missingTypes.length) {
@@ -4642,19 +4839,25 @@ async function loadRemoteRecords(options = {}) {
   remoteLoadStartedAt = Date.now();
   if (syncNowButton) syncNowButton.disabled = true;
   if (showPageLoader) setAppPageLoading(loadingPageId, true, "Syncing records");
+  if (options.silent !== true) setSyncBadgeState("refreshing");
 
   let loadPromise = null;
   loadPromise = (async () => {
     try {
-      const data = await withTimeout(fetchRemoteRecordRows(requestedRemoteTypes), REMOTE_LOAD_STALE_MS, "Remote record load");
+      const data = await withTimeout(fetchRemoteRecordRows(requestedRemoteTypes, { delta: deltaLoad }), REMOTE_LOAD_STALE_MS, "Remote record load");
       const failedRemoteTypes = new Set(lastRemoteRecordFetchFailedTypes || []);
       const loadedRemoteTypes = requestedRemoteTypes.filter((type) => !failedRemoteTypes.has(type));
-      if (!loadedRemoteTypes.length) throw appTimeoutError("Remote record load");
+      if (!loadedRemoteTypes.length) {
+        updateSyncMetaForLoad(requestedRemoteTypes, data || [], failedRemoteTypes, { delta: deltaLoad });
+        throw appTimeoutError("Remote record load");
+      }
 
       let taskCompletionRows = [];
+      let taskCompletionRowsLoaded = false;
       if (dailyTaskCompletionSyncAvailable && requestedRemoteTypes.includes("dailyTask") && !failedRemoteTypes.has("dailyTask")) {
         try {
           taskCompletionRows = await withTimeout(fetchRemoteDailyTaskCompletionRows(), 6000, "Daily task completion load");
+          taskCompletionRowsLoaded = true;
           mergeDailyTaskCompletionRecords(taskCompletionRows, { replaceLocal: true });
         } catch (completionError) {
           if (remoteDailyTaskCompletionSetupMissing(completionError)) {
@@ -4674,27 +4877,48 @@ async function loadRemoteRecords(options = {}) {
 
       const requestKey = remoteLoadRequestKey(requestedRemoteTypes);
       const failedSignature = failedRemoteTypes.size ? "||failed:" + [...failedRemoteTypes].sort().join(",") : "";
-      const nextSignature = requestKey + failedSignature + "||" + remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + remoteTaskCompletionSignature(taskCompletionRows);
+      const nextTaskCompletionSignature = remoteTaskCompletionSignature(taskCompletionRows);
+      const taskCompletionChanged = taskCompletionRowsLoaded && nextTaskCompletionSignature !== lastRemoteTaskCompletionSignature;
+      if (taskCompletionRowsLoaded) lastRemoteTaskCompletionSignature = nextTaskCompletionSignature;
+      const nextSignature = requestKey + failedSignature + "||" + remoteRecordsSignature(data || []) + "||dailyTaskCompletions:" + nextTaskCompletionSignature;
       const previousSignature = lastRemoteRecordsSignatureByRequest.get(requestKey);
-      const remoteDataChanged = nextSignature !== previousSignature;
+      const hasFullLoadedTypes = loadedRemoteTypes.some((type) => lastRemoteRecordFetchModesByType.get(type) !== "delta");
+      const remoteDataChanged = hasFullLoadedTypes ? nextSignature !== previousSignature : Boolean((data || []).length || taskCompletionChanged);
       lastRemoteRecordsSignatureByRequest.set(requestKey, nextSignature);
       lastRemoteRecordsSignature = nextSignature;
+      updateSyncMetaForLoad(requestedRemoteTypes, data || [], failedRemoteTypes, { delta: deltaLoad });
 
       if (!remoteDataChanged) {
-        modeLabel.textContent = failedRemoteTypes.size ? "Partial sync" : "Synced";
+        if (!failedRemoteTypes.size) {
+          lastSuccessfulRemoteLoadFinishedAt = Date.now();
+          lastRemoteLoadFinishedAt = lastSuccessfulRemoteLoadFinishedAt;
+        }
+        setSyncBadgeState(failedRemoteTypes.size ? "partial" : "synced", { finishedAt: lastSuccessfulRemoteLoadFinishedAt });
         return;
       }
 
       const remoteTypes = loadedRemoteTypes;
       const grouped = Object.fromEntries(remoteTypes.map((type) => [type, []]));
       (data || []).forEach((row) => {
-        if (grouped[row.type]) grouped[row.type].push(row.payload);
+        if (!grouped[row.type]) return;
+        const payload = row.payload && typeof row.payload === "object" ? { ...row.payload } : row.payload;
+        if (payload && typeof payload === "object" && row.updated_at) {
+          const remoteUpdatedAt = Date.parse(row.updated_at);
+          const payloadUpdatedAt = Date.parse(payload.updatedAt || payload.submittedAt || "");
+          if (Number.isFinite(remoteUpdatedAt) && (!Number.isFinite(payloadUpdatedAt) || remoteUpdatedAt > payloadUpdatedAt)) {
+            payload.updatedAt = row.updated_at;
+          }
+        }
+        grouped[row.type].push(payload);
       });
 
       const loadedRemoteTaskTemplate = applyRemoteTaskTemplate(data || []);
       const taskTemplateLoaded = requestedRemoteTypes.includes(TASK_TEMPLATE_RECORD_TYPE) && !failedRemoteTypes.has(TASK_TEMPLATE_RECORD_TYPE);
       if (taskTemplateLoaded && !loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
-      remoteTypes.filter((type) => type !== TASK_TEMPLATE_RECORD_TYPE).forEach((type) => mergeRecords(type, grouped[type] || [], { replaceLocal: true }));
+      remoteTypes.filter((type) => type !== TASK_TEMPLATE_RECORD_TYPE).forEach((type) => {
+        const replaceLocal = lastRemoteRecordFetchModesByType.get(type) !== "delta";
+        mergeRecords(type, grouped[type] || [], { replaceLocal });
+      });
       if (currentUser) {
         currentUser.role = roleForAccount(currentUser);
         applyCurrentUserThemePreference();
@@ -4705,9 +4929,13 @@ async function loadRemoteRecords(options = {}) {
       if (options.render !== false) renderAllRecordsFromRemoteLoad();
       updateNavigationAccess();
       updateHeaderUser();
-      modeLabel.textContent = failedRemoteTypes.size ? "Partial sync" : "Synced";
+      if (!failedRemoteTypes.size) {
+        lastSuccessfulRemoteLoadFinishedAt = Date.now();
+        lastRemoteLoadFinishedAt = lastSuccessfulRemoteLoadFinishedAt;
+      }
+      setSyncBadgeState(failedRemoteTypes.size ? "partial" : "synced", { finishedAt: lastSuccessfulRemoteLoadFinishedAt });
     } catch (error) {
-      modeLabel.textContent = "Load failed";
+      setSyncBadgeState("failed");
       if (quietLoad) console.warn("Records could not load.", error);
       else showToast(\`Records could not load: \${error.message}\`);
     } finally {
@@ -4771,14 +4999,14 @@ function startAutoSync(options = {}) {
   }
   realtimeChannel = realtimeChannel
     .subscribe((status) => {
-      if (status === "SUBSCRIBED") modeLabel.textContent = "Live sync active";
+      if (status === "SUBSCRIBED") setSyncBadgeState("live");
       if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) scheduleRealtimeReconnect();
     });
   syncIntervalId = window.setInterval(() => {
     if (!remoteLoadInProgress) {
       loadRemoteRecords({ render: false, pageId: activePageId(), quiet: true, silent: true }).catch((error) => console.warn("Background sync failed.", error));
     }
-  }, 60000);
+  }, BACKGROUND_SYNC_INTERVAL_MS);
 }
 
 function payloadForSheet(payload) {
@@ -10820,7 +11048,10 @@ function initEvents() {
     scheduleAppResumeRecovery(event.persisted ? "pageshow-bfcache" : "pageshow");
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) scheduleAppResumeRecovery("visibility");
+    if (!document.hidden) {
+      flushHiddenTabRemoteRender();
+      scheduleAppResumeRecovery("visibility");
+    }
   });
   window.addEventListener("focus", () => scheduleAppResumeRecovery("focus"));
   window.addEventListener("online", () => scheduleAppResumeRecovery("online"));
