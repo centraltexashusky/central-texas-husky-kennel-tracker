@@ -3052,10 +3052,16 @@ function boardingStayServiceSummary(record = {}, stayOverride = null) {
   });
 }
 
-function boardingQuickFactHtml(label = "", value = "", className = "") {
+function boardingQuickFactHtml(label = "", value = "", className = "", options = {}) {
   if (!value) return "";
   const classes = ["boarding-mobile-fact", className].filter(Boolean).join(" ");
-  return '<span class="' + escapeHtml(classes) + '"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></span>';
+  const title = options.title ? ' title="' + escapeHtml(options.title) + '" aria-label="' + escapeHtml(options.title) + '"' : "";
+  const progressPercent = Number(options.progressPercent);
+  const boundedProgressPercent = Math.max(0, Math.min(100, Math.round(progressPercent)));
+  const progress = Number.isFinite(progressPercent)
+    ? '<span class="boarding-mobile-fact-progress" aria-hidden="true"><i style="width: ' + boundedProgressPercent + '%;' + (boundedProgressPercent > 0 ? " min-width: 4px;" : "") + '"></i></span>'
+    : "";
+  return '<span class="' + escapeHtml(classes) + '"' + title + '><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong>' + progress + '</span>';
 }
 
 function boardingQuickTimeFact(record = {}, stay = {}) {
@@ -3070,7 +3076,26 @@ function boardingQuickLengthFact(record = {}, stay = {}) {
   if (!stay?.id) return "";
   if (isServiceRequestStay(record, stay)) return boardingQuickFactHtml("Stay", "Service only");
   const days = boardingDays(stay.dropoffTime, stay.pickupTime);
-  return days ? boardingQuickFactHtml("Stay", days + " day" + (days === 1 ? "" : "s")) : "";
+  if (!days) return "";
+  const dropoffDate = dateOnly(stay.dropoffTime);
+  const pickupDate = dateOnly(stay.pickupTime);
+  const today = todayDate();
+  let elapsed = 0;
+  if (dropoffDate && pickupDate) {
+    if (today >= pickupDate) elapsed = days;
+    else if (today > dropoffDate) elapsed = Math.max(0, daysBetweenDates(dropoffDate, today) || 0);
+  }
+  elapsed = Math.max(0, Math.min(days, elapsed));
+  const remaining = Math.max(0, days - elapsed);
+  const value = elapsed + "/" + days + " day" + (days === 1 ? "" : "s");
+  const remainingText = remaining
+    ? remaining + " day" + (remaining === 1 ? "" : "s") + " left"
+    : "pickup date reached";
+  const title = "Stay progress: " + elapsed + " of " + days + " day" + (days === 1 ? "" : "s") + " complete; " + remainingText + ".";
+  return boardingQuickFactHtml("Stay", value, "is-progress", {
+    progressPercent: days ? (elapsed / days) * 100 : 0,
+    title,
+  });
 }
 
 function boardingQuickServiceFact(record = {}, stay = {}) {

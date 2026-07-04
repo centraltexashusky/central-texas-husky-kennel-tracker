@@ -5539,6 +5539,28 @@ option {
   background: rgba(148, 163, 184, 0.12);
 }
 
+.boarding-mobile-fact.is-progress {
+  background: rgba(49, 95, 133, 0.22);
+  border-color: rgba(125, 177, 213, 0.55);
+}
+
+.boarding-mobile-fact .boarding-mobile-fact-progress {
+  background: rgba(226, 242, 255, 0.18);
+  border-radius: 999px;
+  display: block;
+  height: 4px;
+  margin-top: 2px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.boarding-mobile-fact .boarding-mobile-fact-progress i {
+  background: #7DB1D5;
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+}
+
 .boarding-mobile-schedule-line,
 .boarding-mobile-owner-line,
 .boarding-kennel-label {
@@ -10077,6 +10099,19 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .boarding-mobile-fact.is-muted {
   background: #EEF2EE;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact.is-progress {
+  background: #EAF1FF;
+  border-color: #315F85;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact .boarding-mobile-fact-progress {
+  background: #D9E3EE;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact .boarding-mobile-fact-progress i {
+  background: #315F85;
 }
 
 :root[data-theme="light"] .boarding-mobile-schedule-line,
