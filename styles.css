@@ -3204,6 +3204,51 @@ textarea {
   gap: 6px;
 }
 
+.boarding-queue-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.boarding-queue-flag {
+  align-items: center;
+  background: rgba(125, 177, 213, 0.14);
+  border: 1px solid rgba(125, 177, 213, 0.42);
+  border-radius: 7px;
+  color: rgba(246, 250, 255, 0.92);
+  display: inline-flex;
+  flex: 1 1 210px;
+  gap: 5px;
+  line-height: 1.15;
+  max-width: 100%;
+  min-width: 0;
+  padding: 4px 7px;
+}
+
+.boarding-queue-flag span {
+  color: rgba(226, 242, 255, 0.58);
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.boarding-queue-flag strong {
+  color: rgba(246, 250, 255, 0.95);
+  font-size: 0.73rem;
+  font-weight: 850;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.boarding-queue-kennel-flag {
+  background: rgba(219, 176, 74, 0.14);
+  border-color: rgba(219, 176, 74, 0.46);
+  flex: 0 1 auto;
+}
+
 .boarding-service-only-chip {
   align-items: center;
   background: rgba(219, 176, 74, 0.18);
@@ -10176,6 +10221,25 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .boarding-queue-item .kennel-tag {
   color: #65748B;
+}
+
+:root[data-theme="light"] .boarding-queue-flag {
+  background: #EAF1FF;
+  border-color: #AFC3D5;
+  color: #172033;
+}
+
+:root[data-theme="light"] .boarding-queue-flag span {
+  color: #52647C;
+}
+
+:root[data-theme="light"] .boarding-queue-flag strong {
+  color: #17324D;
+}
+
+:root[data-theme="light"] .boarding-queue-kennel-flag {
+  background: #FFF7DF;
+  border-color: #D8B75E;
 }
 
 .record-card.boarding-checkout-belongings-card {
