@@ -64,7 +64,7 @@
 }
 
 /* Prevent content flash during bulk DOM updates from remote sync. */
-body.is-bulk-rendering .page-view.is-active > *:not(.app-inline-loader):not(.page-loader) {
+body.is-bulk-rendering .page-view.is-active > *:not(.app-inline-loader):not(.page-loader):not(.page-activity-progress) {
   opacity: 0;
   transition: none;
 }
@@ -292,6 +292,78 @@ iframe {
   font-size: 0.88rem;
   font-weight: 850;
   letter-spacing: 0;
+}
+
+.page-activity-progress {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(221, 229, 226, 0.96);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  position: sticky;
+  top: max(10px, env(safe-area-inset-top));
+  z-index: 68;
+}
+
+.page-activity-progress-copy {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  font-size: 0.86rem;
+  font-weight: 850;
+  gap: 12px;
+  justify-content: space-between;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.page-activity-progress-copy [data-page-progress-percent] {
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.page-activity-progress-track {
+  background: #EAF1FF;
+  border-radius: 999px;
+  height: 7px;
+  overflow: hidden;
+}
+
+.page-activity-progress-track span {
+  background: linear-gradient(90deg, var(--teal), #2F6FED, var(--gold));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 0.22s ease;
+  width: 0;
+}
+
+.page-activity-progress.is-complete {
+  border-color: rgba(26, 159, 99, 0.34);
+}
+
+.page-activity-progress.is-complete .page-activity-progress-copy {
+  color: var(--color-text-success);
+}
+
+.page-activity-progress.is-complete .page-activity-progress-track span {
+  background: var(--teal);
+}
+
+.page-activity-progress.is-error {
+  border-color: rgba(194, 65, 58, 0.34);
+}
+
+.page-activity-progress.is-error .page-activity-progress-copy {
+  color: var(--color-text-danger);
+}
+
+.page-activity-progress.is-error .page-activity-progress-track span {
+  background: var(--red);
 }
 
 .page-view.is-page-loading {

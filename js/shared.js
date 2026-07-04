@@ -205,12 +205,14 @@ var remoteLoadQueuedRender = false;
 var remoteLoadQueuedPageId = "";
 var lastRemoteRecordsSignatureByRequest = new Map();
 var lastRemoteRecordFetchModesByType = new Map();
+var remoteLoadRequestSequence = 0;
 var activePageRemoteLoadTimer = null;
 var activePageRemoteLoadLastKey = "";
 var activePageRemoteLoadLastAt = 0;
 var appHistoryNavigationInProgress = false;
 var appSurfaceHistoryStack = [];
 var activePageLoadingTargets = new Set();
+var pageActivityProgressState = new Map();
 var dailyTaskCompletionSyncAvailable = true;
 var notificationReadSyncAvailable = true;
 var renderDebounceTimer = null;
@@ -1245,28 +1247,33 @@ function setSyncBadgeState(status = "", options = {}) {
 }
 
 function readRecords(type) {
+  const mark = efficiencyPerfStart(\`readRecords:\${type}\`, { minMs: 4 });
   const key = stateKeys[type];
   const cached = recordCache[type];
-  if (!key) return [];
-  let raw = "[]";
   try {
-    raw = localStorage.getItem(key) || "[]";
-  } catch (error) {
-    if (cached?.records) return cached.records.map(cloneCachedRecord);
-    console.warn("Local browser storage read failed.", error);
-    return [];
+    if (!key) return [];
+    let raw = "[]";
+    try {
+      raw = localStorage.getItem(key) || "[]";
+    } catch (error) {
+      if (cached?.records) return cached.records.map(cloneCachedRecord);
+      console.warn("Local browser storage read failed.", error);
+      return [];
+    }
+    if (cached?.memoryOnly && Array.isArray(cached.records)) return cached.records.map(cloneCachedRecord);
+    if (cached?.raw === raw) return cached.records.map(cloneCachedRecord);
+    let parsed = [];
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      parsed = [];
+    }
+    const records = Array.isArray(parsed) ? parsed : [];
+    recordCache[type] = { raw, records };
+    return records.map(cloneCachedRecord);
+  } finally {
+    efficiencyPerfEnd(mark);
   }
-  if (cached?.memoryOnly && Array.isArray(cached.records)) return cached.records.map(cloneCachedRecord);
-  if (cached?.raw === raw) return cached.records.map(cloneCachedRecord);
-  let parsed = [];
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    parsed = [];
-  }
-  const records = Array.isArray(parsed) ? parsed : [];
-  recordCache[type] = { raw, records };
-  return records.map(cloneCachedRecord);
 }
 
 function compactMediaItemsForStorage(items = [], maxInlineMediaLength = 1800000) {
@@ -1369,23 +1376,28 @@ function cloneConsolidatedBoardingDog(record = {}) {
 }
 
 function writeRecords(type, records) {
+  const mark = efficiencyPerfStart(\`writeRecords:\${type}\`, { minMs: 8 });
   const compactedRecords = compactRecordsForStorage(records, type);
   try {
-    const raw = JSON.stringify(compactedRecords);
-    const storageSaved = safeLocalStorageSetItem(stateKeys[type], raw, { quiet: true });
-    if (!storageSaved) {
-      console.warn(
-        "Record cache for " + type + " is using memory only because this device's browser storage is full.",
-      );
+    try {
+      const raw = JSON.stringify(compactedRecords);
+      const storageSaved = safeLocalStorageSetItem(stateKeys[type], raw, { quiet: true });
+      if (!storageSaved) {
+        console.warn(
+          "Record cache for " + type + " is using memory only because this device's browser storage is full.",
+        );
+      }
+      recordCache[type] = { raw, records: compactedRecords.map(cloneCachedRecord), memoryOnly: !storageSaved };
+      recordRevision[type] = (recordRevision[type] || 0) + 1;
+      if (type === "boardingDog" || type === "customerDog") invalidateBoardingDogConsolidationCache();
+      return compactedRecords;
+    } catch (error) {
+      console.warn("This record could not be cached locally.", error);
+      if (isQuotaExceededError(error)) return compactedRecords;
+      throw error;
     }
-    recordCache[type] = { raw, records: compactedRecords.map(cloneCachedRecord), memoryOnly: !storageSaved };
-    recordRevision[type] = (recordRevision[type] || 0) + 1;
-    if (type === "boardingDog" || type === "customerDog") invalidateBoardingDogConsolidationCache();
-    return compactedRecords;
-  } catch (error) {
-    console.warn("This record could not be cached locally.", error);
-    if (isQuotaExceededError(error)) return compactedRecords;
-    throw error;
+  } finally {
+    efficiencyPerfEnd(mark);
   }
 }
 
@@ -2087,18 +2099,127 @@ function efficiencyPerfEnabled() {
   }
 }
 
-function efficiencyPerfStart(label = "") {
-  return { label, startedAt: performance.now() };
+function efficiencyPerfStart(label = "", options = {}) {
+  return {
+    label,
+    startedAt: performance.now(),
+    minMs: Number.isFinite(options.minMs) ? options.minMs : 0,
+  };
 }
 
 function efficiencyPerfEnd(mark = {}) {
   if (!mark.label || !efficiencyPerfEnabled()) return;
   const elapsed = Math.round((performance.now() - mark.startedAt) * 10) / 10;
-  console.info(\`[efficiency] \${mark.label}: \${elapsed}ms\`);
+  if (mark.minMs && elapsed < mark.minMs) return;
+  const details = mark.details ? " " + mark.details : "";
+  console.info(\`[efficiency] \${mark.label}: \${elapsed}ms\${details}\`);
 }
 
 function appInlineLoaderHtml(label = "Loading") {
   return \`<div class="app-inline-loader" role="status" aria-live="polite"><img src="assets/icons/arkinlight-husky-logo-transparent.png?v=20260606-app-boot-loader-animated-dots" alt="" aria-hidden="true" /><span>\${escapeHtml(label)}<span class="loading-dots" aria-hidden="true">...</span></span></div>\`;
+}
+
+function pageActivityProgressEligible(pageId = "") {
+  return ["ourDogsPage", "boardingDogsPage"].includes(normalizePageId(pageId));
+}
+
+function ensurePageActivityProgress(pageId = "") {
+  pageId = normalizePageId(pageId);
+  if (!pageActivityProgressEligible(pageId)) return null;
+  const page = document.getElementById(pageId);
+  if (!page?.classList.contains("page-view")) return null;
+  let shell = page.querySelector(":scope > .page-activity-progress");
+  if (!shell) {
+    page.insertAdjacentHTML(
+      "afterbegin",
+      '<div class="page-activity-progress" role="status" aria-live="polite" aria-busy="false" hidden>' +
+        '<div class="page-activity-progress-copy">' +
+          '<span data-page-progress-label>Loading</span>' +
+          '<span data-page-progress-percent>0%</span>' +
+        '</div>' +
+        '<div class="page-activity-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">' +
+          '<span data-page-progress-fill></span>' +
+        '</div>' +
+      '</div>',
+    );
+    shell = page.querySelector(":scope > .page-activity-progress");
+  }
+  return shell;
+}
+
+function updatePageActivityProgressUi(pageId = "", percent = 0, label = "Working", phase = "active") {
+  const shell = ensurePageActivityProgress(pageId);
+  if (!shell) return;
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+  const labelEl = shell.querySelector("[data-page-progress-label]");
+  const percentEl = shell.querySelector("[data-page-progress-percent]");
+  const track = shell.querySelector(".page-activity-progress-track");
+  const fill = shell.querySelector("[data-page-progress-fill]");
+  shell.hidden = false;
+  shell.setAttribute("aria-busy", phase === "active" ? "true" : "false");
+  shell.classList.toggle("is-active", phase === "active");
+  shell.classList.toggle("is-complete", phase === "complete");
+  shell.classList.toggle("is-error", phase === "error");
+  if (labelEl) labelEl.textContent = label || "Working";
+  if (percentEl) percentEl.textContent = safePercent + "%";
+  if (track) track.setAttribute("aria-valuenow", String(safePercent));
+  if (fill) fill.style.width = safePercent + "%";
+}
+
+function clearPageActivityProgressTimers(state = {}) {
+  if (state.timer) window.clearInterval(state.timer);
+  if (state.hideTimer) window.clearTimeout(state.hideTimer);
+  state.timer = null;
+  state.hideTimer = null;
+}
+
+function startPageActivityProgress(pageId = "", label = "Loading latest data") {
+  pageId = normalizePageId(pageId);
+  if (!pageActivityProgressEligible(pageId)) return;
+  const state = pageActivityProgressState.get(pageId) || {};
+  clearPageActivityProgressTimers(state);
+  state.percent = Math.max(14, Math.min(72, state.percent || 14));
+  state.label = label || "Loading latest data";
+  pageActivityProgressState.set(pageId, state);
+  updatePageActivityProgressUi(pageId, state.percent, state.label, "active");
+  state.timer = window.setInterval(() => {
+    const current = pageActivityProgressState.get(pageId);
+    if (!current) return;
+    const remaining = 90 - (current.percent || 0);
+    const step = Math.max(1, Math.round(remaining * 0.18));
+    current.percent = Math.min(90, (current.percent || 0) + step);
+    updatePageActivityProgressUi(pageId, current.percent, current.label || label, "active");
+  }, 220);
+}
+
+function settlePageActivityProgress(pageId = "", label = "Updated", phase = "complete") {
+  pageId = normalizePageId(pageId);
+  if (!pageActivityProgressEligible(pageId)) return;
+  const state = pageActivityProgressState.get(pageId) || {};
+  clearPageActivityProgressTimers(state);
+  state.percent = 100;
+  state.label = label || (phase === "error" ? "Load failed" : "Updated");
+  pageActivityProgressState.set(pageId, state);
+  updatePageActivityProgressUi(pageId, state.percent, state.label, phase);
+  state.hideTimer = window.setTimeout(() => {
+    const current = pageActivityProgressState.get(pageId);
+    if (current !== state) return;
+    clearPageActivityProgressTimers(current);
+    pageActivityProgressState.delete(pageId);
+    const shell = document.getElementById(pageId)?.querySelector(":scope > .page-activity-progress");
+    if (shell) {
+      shell.hidden = true;
+      shell.classList.remove("is-active", "is-complete", "is-error");
+    }
+  }, phase === "error" ? 1800 : 760);
+}
+
+function finishPageActivityProgress(pageId = "", label = "Updated") {
+  settlePageActivityProgress(pageId, label, "complete");
+}
+
+function failPageActivityProgress(pageId = "", label = "Load failed") {
+  settlePageActivityProgress(pageId, label, "error");
 }
 
 function setAppPageLoading(pageId = activePageId(), loading = false, label = "Loading") {
@@ -3128,6 +3249,27 @@ function setOwnedDogSubmitting(formEl, submitting, message = "") {
   setButtonLoading(saveButton, submitting, "Saving...");
   if (submitting || message) setOwnedDogSaveStatus(message, submitting ? "saving" : "");
   ["deleteOwnedDogButton", "cancelOwnedDogEdit"].forEach((id) => {
+    const button = $("#" + id);
+    if (button) button.disabled = submitting;
+  });
+}
+
+function setBoardingDogSaveStatus(message = "", state = "") {
+  const status = $("#boardingDogSaveStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("is-error", state === "error");
+  status.classList.toggle("is-success", state === "success");
+  status.classList.toggle("is-saving", state === "saving");
+}
+
+function setBoardingDogSubmitting(formEl, submitting, message = "") {
+  const saveButton = $("#boardingDogSaveButton");
+  formEl.dataset.boardingDogSubmitting = submitting ? "true" : "";
+  formEl.setAttribute("aria-busy", submitting ? "true" : "false");
+  setButtonLoading(saveButton, submitting, "Saving...");
+  if (submitting || message) setBoardingDogSaveStatus(message, submitting ? "saving" : "");
+  ["deleteBoardingDogButton", "cancelBoardingDogEdit", "closeBoardingDogDialogButton"].forEach((id) => {
     const button = $("#" + id);
     if (button) button.disabled = submitting;
   });
@@ -4549,26 +4691,32 @@ function flushHiddenTabRemoteRender() {
 }
 
 function renderAllRecordsFromRemoteLoad() {
+  const mark = efficiencyPerfStart("renderAllRecordsFromRemoteLoad", { minMs: 8 });
   if (document.visibilityState === "hidden") {
     pendingHiddenTabRemoteRender = true;
+    efficiencyPerfEnd(mark);
     return;
   }
-  if (deferredRemoteRenderTimer) {
-    window.clearTimeout(deferredRemoteRenderTimer);
-    deferredRemoteRenderTimer = null;
-  }
-  if (activePageIsScrollSensitive() && recentlyScrolled()) {
-    modeLabel.textContent = "Loaded; updating after scroll";
-    deferredRemoteRenderTimer = window.setTimeout(renderAllRecordsFromRemoteLoad, REMOTE_RENDER_SCROLL_IDLE_MS);
-    return;
-  }
-  document.body.classList.add("is-bulk-rendering");
   try {
-    renderAllRecords({ activeOnly: true });
+    if (deferredRemoteRenderTimer) {
+      window.clearTimeout(deferredRemoteRenderTimer);
+      deferredRemoteRenderTimer = null;
+    }
+    if (activePageIsScrollSensitive() && recentlyScrolled()) {
+      modeLabel.textContent = "Loaded; updating after scroll";
+      deferredRemoteRenderTimer = window.setTimeout(renderAllRecordsFromRemoteLoad, REMOTE_RENDER_SCROLL_IDLE_MS);
+      return;
+    }
+    document.body.classList.add("is-bulk-rendering");
+    try {
+      renderAllRecords({ activeOnly: true });
+    } finally {
+      window.requestAnimationFrame(() => {
+        document.body.classList.remove("is-bulk-rendering");
+      });
+    }
   } finally {
-    window.requestAnimationFrame(() => {
-      document.body.classList.remove("is-bulk-rendering");
-    });
+    efficiencyPerfEnd(mark);
   }
 }
 
@@ -4644,24 +4792,30 @@ function scheduleRealtimeRender(types = []) {
 }
 
 async function fetchRemoteRecordRowsForType(type, options = {}) {
+  const mark = efficiencyPerfStart(\`fetchRemoteRecordRowsForType:\${type}\`, { minMs: 1 });
   const pageSize = 1000;
   const rows = [];
   let from = 0;
   const sinceUpdatedAt = normalizeIsoTimestamp(options.sinceUpdatedAt || "");
-  while (true) {
-    let query = supabaseClient
-      .from("kennel_records")
-      .select("id,type,payload,helper_email,user_id,submitted_at,updated_at")
-      .eq("type", type);
-    if (sinceUpdatedAt) query = query.gte("updated_at", sinceUpdatedAt);
-    if (type === "notificationLog") query = query.gte("submitted_at", notificationRetentionCutoffIso());
-    const { data, error } = await query
-      .order("updated_at", { ascending: false })
-      .range(from, from + pageSize - 1);
-    if (error) throw error;
-    rows.push(...(data || []));
-    if (!data || data.length < pageSize) return rows;
-    from += pageSize;
+  try {
+    while (true) {
+      let query = supabaseClient
+        .from("kennel_records")
+        .select("id,type,payload,helper_email,user_id,submitted_at,updated_at")
+        .eq("type", type);
+      if (sinceUpdatedAt) query = query.gte("updated_at", sinceUpdatedAt);
+      if (type === "notificationLog") query = query.gte("submitted_at", notificationRetentionCutoffIso());
+      const { data, error } = await query
+        .order("updated_at", { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if (!data || data.length < pageSize) return rows;
+      from += pageSize;
+    }
+  } finally {
+    mark.details = \`(\${sinceUpdatedAt ? "delta" : "full"}, \${rows.length} rows)\`;
+    efficiencyPerfEnd(mark);
   }
 }
 
@@ -4670,24 +4824,32 @@ function notificationRetentionCutoffIso() {
 }
 
 async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), options = {}) {
+  const mark = efficiencyPerfStart("fetchRemoteRecordRows", { minMs: 2 });
   const remoteTypes = uniqueRemoteRecordTypes(types);
   lastRemoteRecordFetchFailedTypes = new Set();
   lastRemoteRecordFetchModesByType.clear();
-  if (!remoteTypes.length) return [];
-  const batches = await Promise.all(remoteTypes.map(async (type) => {
-    try {
-      const sinceUpdatedAt = deltaSinceUpdatedAtForType(type, options);
-      lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "full");
-      return await withTimeout(fetchRemoteRecordRowsForType(type, { sinceUpdatedAt }), REMOTE_TYPE_LOAD_TIMEOUT_MS, \`Remote \${type} records load\`);
-    } catch (error) {
-      lastRemoteRecordFetchFailedTypes.add(type);
-      console.warn(\`Remote \${type} records could not load.\`, error);
-      return [];
-    }
-  }));
-  return batches
-    .flat()
-    .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+  let rows = [];
+  try {
+    if (!remoteTypes.length) return [];
+    const batches = await Promise.all(remoteTypes.map(async (type) => {
+      try {
+        const sinceUpdatedAt = deltaSinceUpdatedAtForType(type, options);
+        lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "full");
+        return await withTimeout(fetchRemoteRecordRowsForType(type, { sinceUpdatedAt }), REMOTE_TYPE_LOAD_TIMEOUT_MS, \`Remote \${type} records load\`);
+      } catch (error) {
+        lastRemoteRecordFetchFailedTypes.add(type);
+        console.warn(\`Remote \${type} records could not load.\`, error);
+        return [];
+      }
+    }));
+    rows = batches
+      .flat()
+      .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+    return rows;
+  } finally {
+    mark.details = \`(\${remoteTypes.length} types, \${rows.length} rows)\`;
+    efficiencyPerfEnd(mark);
+  }
 }
 
 async function fetchRemoteDailyTaskCompletionRows() {
@@ -4698,7 +4860,7 @@ async function fetchRemoteDailyTaskCompletionRows() {
   while (true) {
     const { data, error } = await supabaseClient
       .from("daily_task_completions")
-      .select("*")
+      .select("id,work_date,shift,task_id,task_text,completed_by,completed_email,completed_user_id,completed_at,inserted_at,updated_at")
       .gte("work_date", sinceDate)
       .order("completed_at", { ascending: false })
       .range(from, from + pageSize - 1);
@@ -4747,7 +4909,7 @@ async function fetchRemoteNotificationReadRows() {
   const since = addDays(todayDate(), -120);
   const { data, error } = await supabaseClient
     .from("notification_reads")
-    .select("*")
+    .select("id,notification_id,reader_key,reader_email,read_at")
     .gte("read_at", since)
     .order("read_at", { ascending: false })
     .limit(2000);
@@ -4804,6 +4966,15 @@ function flushQueuedRemoteRecordLoad() {
   }, 0);
 }
 
+function remoteLoadShouldRenderActivePage(options = {}, loadedRemoteTypes = [], loadingPageId = activePageId()) {
+  if (options.render === false) return false;
+  const currentPageId = activePageId();
+  if (!options.pageId || currentPageId === loadingPageId) return true;
+  const loadedTypes = new Set(uniqueRemoteRecordTypes(loadedRemoteTypes));
+  const currentPageTypes = remoteRecordTypesForPage(currentPageId);
+  return currentPageTypes.length > 0 && currentPageTypes.every((type) => loadedTypes.has(type));
+}
+
 async function loadRemoteRecords(options = {}) {
   const mark = efficiencyPerfStart("loadRemoteRecords");
   if (localTestMode || !supabaseClient) {
@@ -4837,9 +5008,19 @@ async function loadRemoteRecords(options = {}) {
   remoteLoadActiveTypes = new Set(requestedRemoteTypes);
   remoteLoadInProgress = true;
   remoteLoadStartedAt = Date.now();
+  const loadRequestId = ++remoteLoadRequestSequence;
   if (syncNowButton) syncNowButton.disabled = true;
   if (showPageLoader) setAppPageLoading(loadingPageId, true, "Syncing records");
+  const showPageActivityProgress = pageActivityProgressEligible(loadingPageId) && options.render !== false && options.silent !== true;
+  if (showPageActivityProgress) startPageActivityProgress(loadingPageId, "Loading latest dog records");
   if (options.silent !== true) setSyncBadgeState("refreshing");
+  let pageActivityProgressSettled = false;
+  const settleRemotePageProgress = (label, failed = false) => {
+    if (!showPageActivityProgress || pageActivityProgressSettled) return;
+    pageActivityProgressSettled = true;
+    if (failed) failPageActivityProgress(loadingPageId, label || "Load failed");
+    else finishPageActivityProgress(loadingPageId, label || "Updated");
+  };
 
   let loadPromise = null;
   loadPromise = (async () => {
@@ -4894,6 +5075,7 @@ async function loadRemoteRecords(options = {}) {
           lastRemoteLoadFinishedAt = lastSuccessfulRemoteLoadFinishedAt;
         }
         setSyncBadgeState(failedRemoteTypes.size ? "partial" : "synced", { finishedAt: lastSuccessfulRemoteLoadFinishedAt });
+        settleRemotePageProgress(failedRemoteTypes.size ? "Partial sync" : "Updated");
         return;
       }
 
@@ -4926,7 +5108,11 @@ async function loadRemoteRecords(options = {}) {
       }
       if (options.syncCustomerAccessProfiles === true) await syncMissingCustomerAccessProfiles();
       if (options.syncLegacyDogModel === true) await syncLegacyDogModelRecords();
-      if (options.render !== false) renderAllRecordsFromRemoteLoad();
+      if (remoteLoadShouldRenderActivePage(options, loadedRemoteTypes, loadingPageId)) {
+        renderAllRecordsFromRemoteLoad();
+      } else if (efficiencyPerfEnabled()) {
+        console.info(\`[efficiency] skipped stale remote render #\${loadRequestId}: \${loadingPageId} -> \${activePageId()}\`);
+      }
       updateNavigationAccess();
       updateHeaderUser();
       if (!failedRemoteTypes.size) {
@@ -4934,7 +5120,9 @@ async function loadRemoteRecords(options = {}) {
         lastRemoteLoadFinishedAt = lastSuccessfulRemoteLoadFinishedAt;
       }
       setSyncBadgeState(failedRemoteTypes.size ? "partial" : "synced", { finishedAt: lastSuccessfulRemoteLoadFinishedAt });
+      settleRemotePageProgress(failedRemoteTypes.size ? "Partial sync" : "Updated");
     } catch (error) {
+      settleRemotePageProgress("Load failed", true);
       setSyncBadgeState("failed");
       if (quietLoad) console.warn("Records could not load.", error);
       else showToast(\`Records could not load: \${error.message}\`);
@@ -12817,12 +13005,22 @@ function initEvents() {
       return;
     }
     const input = $("#ownedDogDocumentFiles");
-    const uploads = await uploadOwnedDogDocumentFiles(input, dog.id);
-    if (!uploads.length) return;
-    const documents = [...ownedDogDocumentItems(dog), ...uploads];
-    const updated = await updateOwnedDogDocuments(documents);
-    if (input) input.value = "";
-    if (updated) showToast(\`\${uploads.length} file\${uploads.length > 1 ? "s" : ""} added.\`);
+    startPageActivityProgress("ourDogsPage", "Uploading dog files");
+    try {
+      const uploads = await uploadOwnedDogDocumentFiles(input, dog.id);
+      if (!uploads.length) {
+        finishPageActivityProgress("ourDogsPage", "No files uploaded");
+        return;
+      }
+      const documents = [...ownedDogDocumentItems(dog), ...uploads];
+      const updated = await updateOwnedDogDocuments(documents);
+      if (input) input.value = "";
+      finishPageActivityProgress("ourDogsPage", "Upload complete");
+      if (updated) showToast(\`\${uploads.length} file\${uploads.length > 1 ? "s" : ""} added.\`);
+    } catch (error) {
+      failPageActivityProgress("ourDogsPage", "Upload failed");
+      throw error;
+    }
   });
   $("#ownedDogFileList")?.addEventListener("click", async (event) => {
     const action = event.target.closest("[data-action]");
@@ -12891,6 +13089,7 @@ function initEvents() {
         setOwnedDogSaveStatus("Fix the highlighted fields before saving.", "error");
         return;
       }
+      startPageActivityProgress("ourDogsPage", "Saving dog profile");
       const dogId = existing.id || formData.id || uid("ownedDog");
       const photo = await durableDogPhoto("owned", existing, formData, $("#ownedDogPhotoInput"), dogId);
       const isFemale = formData.sex === "Female";
@@ -12956,17 +13155,21 @@ function initEvents() {
       const dogName = record.callName || record.showName || "Dog";
       if (syncError) {
         setOwnedDogSaveStatus("Saved on this device, but database sync failed.", "error");
+        finishPageActivityProgress("ourDogsPage", "Saved locally");
         showDetailDialog("Dog Saved Locally Only", \`<p>\${escapeHtml(dogName)} was saved on this device, but it did not sync to the database.</p><p><strong>Reason:</strong> \${escapeHtml(syncError)}</p><p>Keep this record open and tap Save Dog again after checking the connection or refreshing the app.</p>\`);
       } else if (photo.photoError) {
         setOwnedDogSaveStatus("Dog saved. Photo upload failed.", "error");
+        finishPageActivityProgress("ourDogsPage", "Saved without photo");
         showDetailDialog("Dog Saved Without Photo", \`<p>\${escapeHtml(dogName)} has been saved, but the profile photo could not be uploaded: \${escapeHtml(photo.photoError)}</p>\`);
       } else {
         setOwnedDogSaveStatus("Dog saved successfully.", "success");
+        finishPageActivityProgress("ourDogsPage", "Dog saved");
         showDetailDialog("Dog Saved", \`<p>\${escapeHtml(dogName)} has been saved.</p>\`);
       }
     } catch (error) {
       const reason = friendlyNetworkError(error);
       setOwnedDogSaveStatus("Dog was not saved.", "error");
+      failPageActivityProgress("ourDogsPage", "Save failed");
       showDetailDialog("Dog Not Saved", \`<p>The dog record could not be saved.</p><p><strong>Reason:</strong> \${escapeHtml(reason)}</p>\`);
     } finally {
       setOwnedDogSubmitting(formEl, false);
@@ -13132,12 +13335,22 @@ function initEvents() {
       return;
     }
     const input = $("#boardingDogUploadedFiles");
-    const uploads = await uploadBoardingDogDocumentFiles(input, dog.id);
-    if (!uploads.length) return;
-    const documents = [...boardingDogDocumentItems(dog), ...uploads];
-    const updated = await updateBoardingDogDocuments(documents);
-    if (input) input.value = "";
-    if (updated) showToast(\`\${uploads.length} file\${uploads.length > 1 ? "s" : ""} added.\`);
+    startPageActivityProgress("boardingDogsPage", "Uploading boarding dog files");
+    try {
+      const uploads = await uploadBoardingDogDocumentFiles(input, dog.id);
+      if (!uploads.length) {
+        finishPageActivityProgress("boardingDogsPage", "No files uploaded");
+        return;
+      }
+      const documents = [...boardingDogDocumentItems(dog), ...uploads];
+      const updated = await updateBoardingDogDocuments(documents);
+      if (input) input.value = "";
+      finishPageActivityProgress("boardingDogsPage", "Upload complete");
+      if (updated) showToast(\`\${uploads.length} file\${uploads.length > 1 ? "s" : ""} added.\`);
+    } catch (error) {
+      failPageActivityProgress("boardingDogsPage", "Upload failed");
+      throw error;
+    }
   });
   $("#boardingDogUploadedFileList")?.addEventListener("click", async (event) => {
     const action = event.target.closest("[data-action]");
@@ -13377,14 +13590,23 @@ function initEvents() {
   });
   $("#boardingDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
-      const formEl = event.currentTarget;
-      try {
-        const formData = formPayload(formEl);
-        const combinedStatus = combinedDogSpayNeuterStatus(formData);
-        const derivedSex = sexFromCombinedDogSpayNeuterStatus(combinedStatus) || formData.sex || "";
-        if (formEl.elements.sex) formEl.elements.sex.value = derivedSex;
-        if (!validateForm(formEl)) return;
-        let existing = activeBoardingDog() || {};
+    const formEl = event.currentTarget;
+    if (formEl.dataset.boardingDogSubmitting === "true") {
+      showToast("Boarding dog save is already processing.");
+      return;
+    }
+    try {
+      setBoardingDogSubmitting(formEl, true, "Saving boarding dog...");
+      const formData = formPayload(formEl);
+      const combinedStatus = combinedDogSpayNeuterStatus(formData);
+      const derivedSex = sexFromCombinedDogSpayNeuterStatus(combinedStatus) || formData.sex || "";
+      if (formEl.elements.sex) formEl.elements.sex.value = derivedSex;
+      if (!validateForm(formEl)) {
+        setBoardingDogSaveStatus("Fix the highlighted fields before saving.", "error");
+        return;
+      }
+      startPageActivityProgress("boardingDogsPage", "Saving boarding dog");
+      let existing = activeBoardingDog() || {};
       if (!existing.id) {
         existing = findMatchingBoardingDogProfile(formData) || {};
       }
@@ -13470,12 +13692,20 @@ function initEvents() {
       selectedDogPhotos.boarding = null;
       setBoardingFormLocked(false);
       if (photo.photoError) {
+        setBoardingDogSaveStatus("Boarding dog saved. Photo upload failed.", "error");
+        finishPageActivityProgress("boardingDogsPage", "Saved without photo");
         showDetailDialog("Boarding Dog Saved Without Photo", \`<p>\${escapeHtml(record.dogName || "Boarding dog")} has been saved, but the profile photo could not be uploaded: \${escapeHtml(photo.photoError)}</p>\`);
       } else {
+        setBoardingDogSaveStatus("Boarding dog saved successfully.", "success");
+        finishPageActivityProgress("boardingDogsPage", "Boarding dog saved");
         showDetailDialog("Boarding Dog Saved", \`<p>\${escapeHtml(record.dogName || "Boarding dog")} has been saved.</p>\`);
       }
     } catch (error) {
+      setBoardingDogSaveStatus("Boarding dog was not saved.", "error");
+      failPageActivityProgress("boardingDogsPage", "Save failed");
       showDetailDialog("Boarding Dog Not Saved", \`<p>The boarding dog record could not be saved: \${escapeHtml(error.message)}</p>\`);
+    } finally {
+      setBoardingDogSubmitting(formEl, false);
     }
   });
   $("#openBoardingStayPopupButton")?.addEventListener("click", () => {

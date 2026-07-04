@@ -1580,7 +1580,7 @@ async function saveNotificationReadReceipt(id = "") {
   const { data, error } = await supabaseClient
     .from("notification_reads")
     .upsert(row, { onConflict: "notification_id,reader_key" })
-    .select()
+    .select("id,notification_id,reader_key,reader_email,read_at")
     .maybeSingle();
 
   if (error) {
