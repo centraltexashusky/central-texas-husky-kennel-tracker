@@ -5551,6 +5551,22 @@ option {
   padding: 6px 8px;
 }
 
+button.boarding-mobile-fact {
+  appearance: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.boarding-mobile-fact.is-clickable:hover,
+.boarding-mobile-fact.is-clickable:focus-visible {
+  border-color: rgba(125, 177, 213, 0.72);
+  box-shadow: 0 0 0 2px rgba(125, 177, 213, 0.18);
+  outline: none;
+}
+
 .boarding-mobile-fact span {
   color: rgba(226, 242, 255, 0.6);
   font-size: 0.62rem;
@@ -10149,6 +10165,12 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .boarding-mobile-fact.is-muted {
   background: #EEF2EE;
+}
+
+:root[data-theme="light"] .boarding-mobile-fact.is-clickable:hover,
+:root[data-theme="light"] .boarding-mobile-fact.is-clickable:focus-visible {
+  border-color: #315F85;
+  box-shadow: 0 0 0 2px rgba(49, 95, 133, 0.16);
 }
 
 :root[data-theme="light"] .boarding-mobile-fact.is-progress {

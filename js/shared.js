@@ -13545,6 +13545,10 @@ function initEvents() {
       openBoardingMedicalBehaviorNotePopup(record, boardingStayReferenceFromAction(button));
       return;
     }
+    if (button.dataset.action === "open-boarding-belongings") {
+      openBoardingBelongingsPopup(record, boardingStayReferenceFromAction(button));
+      return;
+    }
     if (button.dataset.action === "open-mobile-stay-status-menu") {
       const reference = boardingStayReferenceFromAction(button);
       openBoardingStayStatusMenu(record, { ...reference, stayId: reference.stayId || (currentOrNextStay(record) || activeBoardingStay(record) || {}).id });

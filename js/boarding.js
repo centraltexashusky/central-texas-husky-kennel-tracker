@@ -3077,14 +3077,18 @@ function boardingStayServiceSummary(record = {}, stayOverride = null) {
 
 function boardingQuickFactHtml(label = "", value = "", className = "", options = {}) {
   if (!value) return "";
-  const classes = ["boarding-mobile-fact", className].filter(Boolean).join(" ");
+  const classes = ["boarding-mobile-fact", className, options.action ? "is-clickable" : ""].filter(Boolean).join(" ");
   const title = options.title ? ' title="' + escapeHtml(options.title) + '" aria-label="' + escapeHtml(options.title) + '"' : "";
+  const attrs = options.attrs || "";
+  const action = options.action ? ' data-action="' + escapeHtml(options.action) + '"' : "";
+  const tagName = options.action ? "button" : "span";
+  const type = options.action ? ' type="button"' : "";
   const progressPercent = Number(options.progressPercent);
   const boundedProgressPercent = Math.max(0, Math.min(100, Math.round(progressPercent)));
   const progress = Number.isFinite(progressPercent)
     ? '<span class="boarding-mobile-fact-progress" aria-hidden="true"><i style="width: ' + boundedProgressPercent + '%;' + (boundedProgressPercent > 0 ? " min-width: 4px;" : "") + '"></i></span>'
     : "";
-  return '<span class="' + escapeHtml(classes) + '"' + title + '><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong>' + progress + '</span>';
+  return '<' + tagName + type + ' class="' + escapeHtml(classes) + '"' + action + attrs + title + '><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong>' + progress + '</' + tagName + '>';
 }
 
 function boardingQuickTimeFact(record = {}, stay = {}) {
@@ -3136,8 +3140,14 @@ function boardingQuickOwnerUpdateFact(record = {}, stay = {}) {
   return boardingQuickFactHtml("Owner", updated ? "Updated today" : "Update due", updated ? "is-good" : "is-alert");
 }
 
-function boardingQuickBelongingsFact(stay = {}) {
-  return boardingStayBelongings(stay) ? boardingQuickFactHtml("Belongings", "Saved", "is-muted") : "";
+function boardingQuickBelongingsFact(record = {}, stay = {}) {
+  if (!boardingStayBelongings(stay)) return "";
+  const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
+  return boardingQuickFactHtml("Belongings", "Saved", "is-muted", {
+    action: "open-boarding-belongings",
+    attrs: ' data-id="' + escapeHtml(record.id || "") + '"' + stayAttrs,
+    title: "View saved belongings for " + (record.dogName || "this dog") + ".",
+  });
 }
 
 function boardingQuickFactsHtml(record = {}, stay = {}) {
@@ -3145,9 +3155,32 @@ function boardingQuickFactsHtml(record = {}, stay = {}) {
     boardingQuickTimeFact(record, stay),
     boardingQuickLengthFact(record, stay),
     boardingQuickServiceFact(record, stay),
-    boardingQuickBelongingsFact(stay),
+    boardingQuickBelongingsFact(record, stay),
   ].filter(Boolean);
   return facts.length ? '<div class="boarding-mobile-fact-grid">' + facts.join("") + '</div>' : "";
+}
+
+function boardingBelongingsPopupHtml(record = {}, stay = {}) {
+  const requestCode = stay?.id ? boardingStayRequestCode(record, stay) : "";
+  const schedule = stay?.id ? stayScheduleRangeLabel(record, stay) : "";
+  return \`<section class="popup-record-section">
+    <article class="record-card compact-record-card">
+      <strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong>
+      \${requestCode ? \`<div class="chip-row">\${boardingStayRequestCodeChipHtml(record, stay)}\${boardingStayStatusChipHtml(record, stay)}</div>\` : ""}
+      \${schedule ? \`<p>\${escapeHtml(schedule)}</p>\` : ""}
+    </article>
+    \${boardingStayBelongingsHtml(stay, { showEmpty: true, label: "Saved belongings" })}
+  </section>\`;
+}
+
+function openBoardingBelongingsPopup(record = {}, reference = {}) {
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayByReference(displayRecord, reference) || activeBoardingStay(displayRecord) || currentOrNextStay(displayRecord) || {};
+  if (!displayRecord?.id || !stay?.id) {
+    showToast("Belongings are not available for this stay.");
+    return;
+  }
+  showDetailDialog("Saved Belongings", boardingBelongingsPopupHtml(displayRecord, stay));
 }
 
 function boardingPickupReviewHtml(record = {}, options = {}) {
