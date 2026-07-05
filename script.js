@@ -6252,6 +6252,29 @@ function boardingQueueRecordMatchesGroup(title = "", record = {}) {
   return false;
 }
 
+function boardingQueueFlagHtml(label = "", value = "", className = "") {
+  if (!value) return "";
+  const classes = ["boarding-queue-flag", className].filter(Boolean).join(" ");
+  return `<span class="${escapeHtml(classes)}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></span>`;
+}
+
+function boardingQueueStayDateFlagsHtml(record = {}, stay = {}) {
+  const dropoff = formatDateTime(stay.dropoffTime || record.dropoffTime);
+  const pickup = formatDateTime(stay.pickupTime || record.pickupTime);
+  if (isServiceRequestStay(record, stay)) {
+    return boardingQueueFlagHtml("Requested", dropoff, "boarding-queue-time-flag");
+  }
+  return [
+    boardingQueueFlagHtml("Drop-off", dropoff, "boarding-queue-time-flag"),
+    boardingQueueFlagHtml("Pick-up", pickup, "boarding-queue-time-flag"),
+  ].filter(Boolean).join("");
+}
+
+function boardingQueueKennelFlagHtml(record = {}, stay = {}) {
+  const kennel = boardingKennelLocationLabel(record, stay);
+  return boardingQueueFlagHtml("Kennel", kennel, "boarding-queue-kennel-flag");
+}
+
 function boardingQueueGroupHtml(title, records = []) {
   const PREVIEW_LIMIT = 6;
   const preview = records.slice(0, PREVIEW_LIMIT);
@@ -6264,8 +6287,8 @@ function boardingQueueGroupHtml(title, records = []) {
       ? preview.map((record) => {
         const stay = boardingQueueStayForGroup(title, record) || boardingPrimaryStay(record) || {};
         const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
-        const kennel = boardingKennelLocationLabel(record, stay);
-        return `<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="${escapeHtml(record.id)}"${stayAttrs}><span>${escapeHtml(record.dogName || "Dog")}${kennel ? ` <small class="kennel-tag">${escapeHtml(kennel)}</small>` : ""}</span><small>${escapeHtml(boardingScheduleText(record, stay))}</small></button>`;
+        const metaFlags = [boardingQueueStayDateFlagsHtml(record, stay), boardingQueueKennelFlagHtml(record, stay)].filter(Boolean).join("");
+        return `<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="${escapeHtml(record.id)}"${stayAttrs}><span class="boarding-queue-item-content"><span class="boarding-queue-item-title"><span>${escapeHtml(record.dogName || "Dog")}</span></span>${metaFlags ? `<span class="boarding-queue-meta-row">${metaFlags}</span>` : ""}</span></button>`;
       }).join("")
       : `<p>No dogs in this group.</p>`
   }${overflowHtml}</article>`;

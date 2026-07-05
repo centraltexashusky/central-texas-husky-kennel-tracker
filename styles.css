@@ -3197,6 +3197,10 @@ textarea {
   min-width: 0;
 }
 
+.boarding-queue-item > .boarding-queue-item-content:first-child:last-child {
+  grid-column: 1 / -1;
+}
+
 .boarding-queue-item-title {
   align-items: center;
   display: flex;
@@ -3215,15 +3219,15 @@ textarea {
   align-items: center;
   background: rgba(125, 177, 213, 0.14);
   border: 1px solid rgba(125, 177, 213, 0.42);
-  border-radius: 7px;
+  border-radius: 999px;
   color: rgba(246, 250, 255, 0.92);
   display: inline-flex;
-  flex: 1 1 210px;
+  flex: 0 1 auto;
   gap: 5px;
   line-height: 1.15;
   max-width: 100%;
   min-width: 0;
-  padding: 4px 7px;
+  padding: 4px 8px;
 }
 
 .boarding-queue-flag span {
@@ -3240,13 +3244,14 @@ textarea {
   font-size: 0.73rem;
   font-weight: 850;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .boarding-queue-kennel-flag {
   background: rgba(219, 176, 74, 0.14);
   border-color: rgba(219, 176, 74, 0.46);
-  flex: 0 1 auto;
 }
 
 .boarding-service-only-chip {

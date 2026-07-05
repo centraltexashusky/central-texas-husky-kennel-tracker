@@ -2662,25 +2662,27 @@ function boardingServiceOnlyChipHtml(record = {}, stay = {}) {
   return '<span class="boarding-service-only-chip">SERVICE ONLY</span>';
 }
 
-function boardingQueueStayDateFlagHtml(record = {}, stay = {}) {
+function boardingQueueFlagHtml(label = "", value = "", className = "") {
+  if (!value) return "";
+  const classes = ["boarding-queue-flag", className].filter(Boolean).join(" ");
+  return \`<span class="\${escapeHtml(classes)}"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(value)}</strong></span>\`;
+}
+
+function boardingQueueStayDateFlagsHtml(record = {}, stay = {}) {
   const dropoff = formatDateTime(stay.dropoffTime || record.dropoffTime);
   const pickup = formatDateTime(stay.pickupTime || record.pickupTime);
-  let label = "";
   if (isServiceRequestStay(record, stay)) {
-    label = dropoff ? "Requested " + dropoff : "";
-  } else if (dropoff && pickup) {
-    label = dropoff + " - " + pickup;
-  } else if (dropoff) {
-    label = "From " + dropoff;
-  } else if (pickup) {
-    label = "To " + pickup;
+    return boardingQueueFlagHtml("Requested", dropoff, "boarding-queue-time-flag");
   }
-  return label ? \`<span class="boarding-queue-flag boarding-queue-date-flag"><span>Dates</span><strong>\${escapeHtml(label)}</strong></span>\` : "";
+  return [
+    boardingQueueFlagHtml("Drop-off", dropoff, "boarding-queue-time-flag"),
+    boardingQueueFlagHtml("Pick-up", pickup, "boarding-queue-time-flag"),
+  ].filter(Boolean).join("");
 }
 
 function boardingQueueKennelFlagHtml(record = {}, stay = {}) {
   const kennel = boardingKennelLocationLabel(record, stay);
-  return kennel ? \`<span class="boarding-queue-flag boarding-queue-kennel-flag"><span>Kennel</span><strong>\${escapeHtml(kennel)}</strong></span>\` : "";
+  return boardingQueueFlagHtml("Kennel", kennel, "boarding-queue-kennel-flag");
 }
 
 function boardingQueueGroupHtml(title, records = []) {
@@ -2691,7 +2693,7 @@ function boardingQueueGroupHtml(title, records = []) {
         const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
         const serviceOnly = isServiceRequestStay(record, stay);
         const itemClass = serviceOnly ? "boarding-queue-item is-service-only" : "boarding-queue-item";
-        const metaFlags = [boardingQueueStayDateFlagHtml(record, stay), boardingQueueKennelFlagHtml(record, stay)].filter(Boolean).join("");
+        const metaFlags = [boardingQueueStayDateFlagsHtml(record, stay), boardingQueueKennelFlagHtml(record, stay)].filter(Boolean).join("");
         return \`<button type="button" class="\${itemClass}" data-action="open-queue-stay-status" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${boardingDogThumbnailHtml(record, { className: "boarding-queue-photo" })}<span class="boarding-queue-item-content"><span class="boarding-queue-item-title"><span>\${escapeHtml(record.dogName || "Dog")}</span>\${boardingServiceOnlyChipHtml(record, stay)}</span>\${metaFlags ? \`<span class="boarding-queue-meta-row">\${metaFlags}</span>\` : ""}</span></button>\`;
       }).join("")
       : \`<p>No dogs in this group.</p>\`
@@ -3104,7 +3106,7 @@ function boardingQuickLengthFact(record = {}, stay = {}) {
   let elapsed = 0;
   if (dropoffDate && pickupDate) {
     if (today >= pickupDate) elapsed = days;
-    else if (today > dropoffDate) elapsed = Math.max(0, daysBetweenDates(dropoffDate, today) || 0);
+    else if (today >= dropoffDate) elapsed = Math.max(1, (daysBetweenDates(dropoffDate, today) || 0) + 1);
   }
   elapsed = Math.max(0, Math.min(days, elapsed));
   const remaining = Math.max(0, days - elapsed);
