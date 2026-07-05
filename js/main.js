@@ -2,7 +2,7 @@
 import "./shared.js?v=20260628-our-dogs-filter-info-boarding-rows-belongings-popup-20260705";
 import "./auth.js?v=20260628-impersonation-session-key-fix";
 import "./customer.js?v=20260626-stay-scheduler-fix";
-import "./boarding.js?v=20260628-our-dogs-filter-info-boarding-rows-belongings-popup-20260705";
+import "./boarding.js?v=20260628-our-dogs-filter-info-boarding-rows-mobile-schedule-flags-20260705";
 import "./daily.js?v=20260628-our-dogs-filter-info-boarding-rows-special-care-weekly-health";
 import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-task-scheduler-visibility-dedupe";
 import "./timesheet.js?v=20260625-staff-rls-fix";

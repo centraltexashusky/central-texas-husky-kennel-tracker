@@ -2680,6 +2680,20 @@ function boardingQueueStayDateFlagsHtml(record = {}, stay = {}) {
   ].filter(Boolean).join("");
 }
 
+function boardingMobileScheduleFlagsHtml(record = {}, stay = {}) {
+  const activeStay = stay?.id ? stay : boardingPrimaryStay(record) || {};
+  const dropoff = formatDateTime(activeStay.dropoffTime || record.dropoffTime);
+  const pickup = formatDateTime(activeStay.pickupTime || record.pickupTime);
+  const flags = isServiceRequestStay(record, activeStay)
+    ? [boardingQueueFlagHtml("Requested", dropoff, "boarding-queue-time-flag")]
+    : [
+        boardingQueueFlagHtml("Drop-off", dropoff, "boarding-queue-time-flag"),
+        boardingQueueFlagHtml("Pick-up", pickup, "boarding-queue-time-flag"),
+      ];
+  const html = flags.filter(Boolean).join("");
+  return html ? '<span class="boarding-mobile-schedule-line boarding-mobile-schedule-flags">' + html + '</span>' : "";
+}
+
 function boardingQueueKennelFlagHtml(record = {}, stay = {}) {
   const kennel = boardingKennelLocationLabel(record, stay);
   return boardingQueueFlagHtml("Kennel", kennel, "boarding-queue-kennel-flag");
@@ -3279,7 +3293,6 @@ function boardingDogThumbnailHtml(record = {}, options = {}) {
 
 function boardingQuickCardHtml(record = {}) {
   const stay = boardingPrimaryStay(record) || {};
-  const kennel = boardingKennelLocationLabel(record, stay);
   return \`
     <article class="record-card mobile-roster-card boarding-mobile-roster-card">
       <div class="mobile-roster-card-main boarding-mobile-card-main">
@@ -3288,8 +3301,7 @@ function boardingQuickCardHtml(record = {}) {
           <div class="boarding-card-title-row"><strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong>\${vaccinationStatusBadgeHtml(record)}</div>
           <div class="chip-row boarding-mobile-status-row">\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}\${boardingRecordStatusButtonHtml(record)}</div>
           \${boardingQuickFactsHtml(record, stay)}
-          <span class="boarding-mobile-schedule-line">\${escapeHtml(boardingScheduleText(record))}</span>
-          \${kennel ? \`<span class="boarding-kennel-label">\${escapeHtml(kennel)}</span>\` : ""}
+          \${boardingMobileScheduleFlagsHtml(record, stay)}
           <p class="boarding-mobile-owner-line">\${escapeHtml(record.ownerName || "No owner saved")}\${record.ownerPhone ? \` | \${phoneLinkHtml(record.ownerPhone)}\` : ""}</p>
         </div>
       </div>

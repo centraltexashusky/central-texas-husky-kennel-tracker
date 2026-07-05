@@ -5635,6 +5635,22 @@ button.boarding-mobile-fact {
   line-height: 1.3;
 }
 
+.boarding-mobile-schedule-flags {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.boarding-mobile-schedule-flags .boarding-queue-flag {
+  padding: 4px 8px;
+}
+
+.boarding-mobile-schedule-flags .boarding-queue-flag strong {
+  font-size: 0.72rem;
+}
+
 .boarding-mobile-owner-line {
   margin: 0;
 }
