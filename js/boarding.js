@@ -3032,6 +3032,63 @@ function boardingQuickSortTime(record = {}) {
   return Number.isNaN(date.getTime()) ? Number.MAX_SAFE_INTEGER : date.getTime();
 }
 
+function boardingListPriorityGroup(record = {}, date = new Date()) {
+  const stays = arrayValue(record.stays);
+  if (!stays.length) {
+    const status = normalizeBoardingStatus(record);
+    if (activeBoardingStayStatuses.includes(status)) return 0;
+    if (["Pending", "Approved"].includes(status) && !boardingStayPickupHasPassed(record, date)) return 1;
+    return 2;
+  }
+  if (stays.some((stay) => activeBoardingStayStatuses.includes(boardingStayDisplayStatus(record, stay)) && !stayHasActualPickupEvidence(stay))) return 0;
+  if (stays.some((stay) => {
+    const status = boardingStayDisplayStatus(record, stay);
+    return ["Pending", "Approved"].includes(status) && boardingStayIsCurrentOrUpcoming(record, stay, date);
+  })) return 1;
+  return 2;
+}
+
+function boardingListPriorityTime(record = {}, group = 2, date = new Date()) {
+  const stays = arrayValue(record.stays);
+  const candidates = stays.length ? stays : [record];
+  const matchingStays = candidates.filter((stay) => {
+    const status = stay === record ? normalizeBoardingStatus(record) : boardingStayDisplayStatus(record, stay);
+    if (group === 0) return activeBoardingStayStatuses.includes(status) && !stayHasActualPickupEvidence(stay);
+    if (group === 1) return ["Pending", "Approved"].includes(status) && !boardingStayPickupHasPassed(stay, date);
+    return true;
+  });
+  const sortedStays = [...(matchingStays.length ? matchingStays : candidates)].sort((a, b) => {
+    const aTime = new Date(group === 0 ? a.pickupTime || a.updatedAt || 0 : a.dropoffTime || a.updatedAt || 0).getTime();
+    const bTime = new Date(group === 0 ? b.pickupTime || b.updatedAt || 0 : b.dropoffTime || b.updatedAt || 0).getTime();
+    const safeA = Number.isNaN(aTime) ? Number.MAX_SAFE_INTEGER : aTime;
+    const safeB = Number.isNaN(bTime) ? Number.MAX_SAFE_INTEGER : bTime;
+    return safeA - safeB;
+  });
+  const stay = sortedStays[0] || {};
+  const value = group === 0
+    ? stay.pickupTime || record.pickupTime || stay.dropoffTime || record.dropoffTime
+    : group === 1
+      ? stay.dropoffTime || record.dropoffTime || stay.pickupTime || record.pickupTime
+      : record.updatedAt || stay.updatedAt || record.submittedAt || stay.dropoffTime || record.dropoffTime || stay.pickupTime || record.pickupTime;
+  const parsed = new Date(value || 0);
+  return Number.isNaN(parsed.getTime()) ? Number.MAX_SAFE_INTEGER : parsed.getTime();
+}
+
+function sortBoardingListRecords(records = []) {
+  const tableSortedRecords = sortRecordsForTable("boardingDog", records);
+  const hasTableSort = typeof readTableSort === "function" && Boolean(readTableSort()?.boardingDog?.key);
+  const date = new Date();
+  return [...tableSortedRecords].sort((a, b) => {
+    const leftGroup = boardingListPriorityGroup(a, date);
+    const rightGroup = boardingListPriorityGroup(b, date);
+    if (leftGroup !== rightGroup) return leftGroup - rightGroup;
+    if (hasTableSort) return 0;
+    const timeDelta = boardingListPriorityTime(a, leftGroup, date) - boardingListPriorityTime(b, rightGroup, date);
+    if (timeDelta) return timeDelta;
+    return String(a.dogName || "").localeCompare(String(b.dogName || ""), undefined, { numeric: true, sensitivity: "base" });
+  });
+}
+
 function boardingQuickActionButtons(record = {}) {
   const stay = boardingPrimaryStay(record) || {};
   const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
@@ -3900,13 +3957,9 @@ async function saveBoardingStayFromForm(formEl) {
 function renderBoardingQuickCards(records = []) {
   const container = $("#boardingDogQuickCards");
   if (!container) return;
-  const actionable = records
-    .filter((record) => !["Cancelled", "Checked Out"].includes(boardingDisplayStatus(record)))
-    .filter((record) => boardingRecordHasActionableStay(record))
-    .sort((a, b) => boardingQuickSortTime(a) - boardingQuickSortTime(b));
-  container.innerHTML = actionable.length
-    ? actionable.map(boardingQuickCardHtml).join("")
-    : \`<article class="record-card mobile-roster-card"><strong>No boarding actions</strong><p>No active check-ins or check-outs match this view.</p></article>\`;
+  container.innerHTML = records.length
+    ? records.map(boardingQuickCardHtml).join("")
+    : \`<article class="record-card mobile-roster-card"><strong>No boarding dogs</strong><p>No boarding dog records match this view.</p></article>\`;
   hydrateProfilePhotoElements(container);
 }
 
@@ -4377,7 +4430,9 @@ function renderBoardingDogs() {
     const filteredRecords = boardingDogPriorityFilter === "vaccines-expiring-soon"
       ? rosterRecords.filter((record) => vaccinationExpiresSoon(record, 30))
       : rosterRecords;
-    const records = sortRecordsForTable("boardingDog", filteredRecords);
+    const records = activeView === "list"
+      ? sortBoardingListRecords(filteredRecords)
+      : sortRecordsForTable("boardingDog", filteredRecords);
 
     if (activeView === "calendar") {
       renderBoardingCalendar(records);
