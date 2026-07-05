@@ -3113,6 +3113,24 @@ function boardingQuickTimeFact(record = {}, stay = {}) {
   return boardingQuickFactHtml(label, formatDateTime(time || stay.dropoffTime || stay.pickupTime));
 }
 
+function boardingSpecialCareInstruction(record = {}, stay = {}) {
+  const snapshot = stay.requestProfileSnapshot || record.requestProfileSnapshot || {};
+  const linked = typeof linkedCustomerDogForBoarding === "function" ? linkedCustomerDogForBoarding(record) || {} : {};
+  return String(
+    snapshot.specialCare
+      || record.specialCare
+      || linked.specialCare
+      || "",
+  ).trim();
+}
+
+function boardingQuickSpecialCareFact(record = {}, stay = {}) {
+  const care = boardingSpecialCareInstruction(record, stay);
+  return boardingQuickFactHtml("Special Care", care || "None", care ? "is-attention" : "is-muted", {
+    title: care ? "Special care: " + care : "Special care: none.",
+  });
+}
+
 function boardingQuickLengthFact(record = {}, stay = {}) {
   if (!stay?.id) return "";
   if (isServiceRequestStay(record, stay)) return boardingQuickFactHtml("Stay", "Service only");
@@ -3166,7 +3184,7 @@ function boardingQuickBelongingsFact(record = {}, stay = {}) {
 
 function boardingQuickFactsHtml(record = {}, stay = {}) {
   const facts = [
-    boardingQuickTimeFact(record, stay),
+    boardingQuickSpecialCareFact(record, stay),
     boardingQuickLengthFact(record, stay),
     boardingQuickServiceFact(record, stay),
     boardingQuickBelongingsFact(record, stay),
