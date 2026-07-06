@@ -4163,13 +4163,11 @@ button:disabled {
   --schedule-staff-border: rgba(42, 157, 143, 0.72);
   --schedule-staff-soft: rgba(42, 157, 143, 0.14);
   --schedule-staff-glow: rgba(42, 157, 143, 0.18);
-  background:
-    linear-gradient(135deg, var(--schedule-staff-soft), rgba(255, 255, 255, 0.02) 58%),
-    #fff;
+  background: #fff;
   border: 1px solid var(--schedule-staff-border);
   border-left: 5px solid var(--schedule-staff-color);
   border-radius: 8px;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 18px var(--schedule-staff-glow);
+  box-shadow: none;
   display: grid;
   gap: 3px;
   padding: 9px 10px;
@@ -4177,16 +4175,36 @@ button:disabled {
 }
 
 .schedule-shift-main {
-  background: transparent;
-  border: 0;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none !important;
   color: inherit;
   cursor: pointer;
   display: grid;
   font: inherit;
   gap: 3px;
+  line-height: 1.24;
+  min-height: 0;
   padding: 0;
   text-align: left;
+  transform: none !important;
   width: 100%;
+}
+
+.schedule-shift-main:hover,
+.schedule-shift-main:active {
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+.schedule-shift-main:focus-visible {
+  background: transparent !important;
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--schedule-staff-color) !important;
+  outline: 0;
 }
 
 .schedule-shift-card.is-warning {
@@ -4207,6 +4225,28 @@ button:disabled {
 .schedule-warning-list {
   color: var(--muted);
   font-size: 0.84rem;
+}
+
+.schedule-shift-card .record-actions {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.schedule-shift-card .record-actions .secondary-button {
+  border-radius: 7px;
+  box-shadow: none;
+  font-size: 0.72rem;
+  line-height: 1.05;
+  min-height: 26px;
+  padding: 4px 6px;
+  width: 100%;
+}
+
+.schedule-shift-card .record-actions .secondary-button:hover,
+.schedule-shift-card .record-actions .secondary-button:focus-visible {
+  box-shadow: none;
+  transform: none;
 }
 
 .schedule-warning-list {
@@ -5062,12 +5102,10 @@ option {
 }
 
 .schedule-shift-card[data-staff-color] {
-  background:
-    linear-gradient(135deg, var(--schedule-staff-soft), rgba(255, 255, 255, 0.04) 58%),
-    rgba(8, 17, 27, 0.66);
+  background: rgba(8, 17, 27, 0.66);
   border-color: var(--schedule-staff-border);
   border-left: 5px solid var(--schedule-staff-color);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 10px 22px var(--schedule-staff-glow);
+  box-shadow: var(--glass-specular);
 }
 
 .schedule-shift-card[data-staff-color].is-warning {
@@ -9312,12 +9350,10 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 }
 
 :root[data-theme="light"] body:not(.is-login-view) .schedule-shift-card[data-staff-color] {
-  background:
-    linear-gradient(135deg, var(--schedule-staff-soft), rgba(255, 255, 255, 0.96) 62%),
-    #FFFFFF !important;
+  background: #FFFFFF !important;
   border: 1px solid var(--schedule-staff-border) !important;
   border-left: 5px solid var(--schedule-staff-color) !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.82), 0 8px 20px var(--schedule-staff-glow) !important;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 18px rgba(23, 32, 51, 0.06) !important;
 }
 
 :root[data-theme="light"] body:not(.is-login-view) .schedule-shift-card[data-staff-color].is-warning {
