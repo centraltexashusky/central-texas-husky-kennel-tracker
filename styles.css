@@ -4159,10 +4159,17 @@ button:disabled {
 }
 
 .schedule-shift-card {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--teal);
+  --schedule-staff-color: var(--teal);
+  --schedule-staff-border: rgba(42, 157, 143, 0.72);
+  --schedule-staff-soft: rgba(42, 157, 143, 0.14);
+  --schedule-staff-glow: rgba(42, 157, 143, 0.18);
+  background:
+    linear-gradient(135deg, var(--schedule-staff-soft), rgba(255, 255, 255, 0.02) 58%),
+    #fff;
+  border: 1px solid var(--schedule-staff-border);
+  border-left: 5px solid var(--schedule-staff-color);
   border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 18px var(--schedule-staff-glow);
   display: grid;
   gap: 3px;
   padding: 9px 10px;
@@ -4183,11 +4190,13 @@ button:disabled {
 }
 
 .schedule-shift-card.is-warning {
-  border-left-color: var(--gold);
+  border-color: rgba(245, 197, 91, 0.76);
+  border-left-color: var(--schedule-staff-color);
 }
 
 .schedule-shift-card.is-conflict {
-  border-left-color: var(--red);
+  border-color: rgba(255, 105, 97, 0.78);
+  border-left-color: var(--schedule-staff-color);
 }
 
 .schedule-shift-card strong {
@@ -5050,6 +5059,25 @@ option {
 .notification-item {
   border-color: rgba(255, 255, 255, 0.16);
   box-shadow: var(--glass-specular);
+}
+
+.schedule-shift-card[data-staff-color] {
+  background:
+    linear-gradient(135deg, var(--schedule-staff-soft), rgba(255, 255, 255, 0.04) 58%),
+    rgba(8, 17, 27, 0.66);
+  border-color: var(--schedule-staff-border);
+  border-left: 5px solid var(--schedule-staff-color);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05), 0 10px 22px var(--schedule-staff-glow);
+}
+
+.schedule-shift-card[data-staff-color].is-warning {
+  border-color: rgba(245, 197, 91, 0.76);
+  border-left-color: var(--schedule-staff-color);
+}
+
+.schedule-shift-card[data-staff-color].is-conflict {
+  border-color: rgba(255, 105, 97, 0.78);
+  border-left-color: var(--schedule-staff-color);
 }
 
 .notification-item span,
@@ -9281,6 +9309,25 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   border-radius: 12px !important;
   box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04), 0 8px 22px rgba(23, 32, 51, 0.06) !important;
   color: var(--ink);
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .schedule-shift-card[data-staff-color] {
+  background:
+    linear-gradient(135deg, var(--schedule-staff-soft), rgba(255, 255, 255, 0.96) 62%),
+    #FFFFFF !important;
+  border: 1px solid var(--schedule-staff-border) !important;
+  border-left: 5px solid var(--schedule-staff-color) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.82), 0 8px 20px var(--schedule-staff-glow) !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .schedule-shift-card[data-staff-color].is-warning {
+  border-color: rgba(216, 154, 43, 0.82) !important;
+  border-left-color: var(--schedule-staff-color) !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .schedule-shift-card[data-staff-color].is-conflict {
+  border-color: rgba(194, 65, 58, 0.82) !important;
+  border-left-color: var(--schedule-staff-color) !important;
 }
 
 :root[data-theme="light"] :where(.form-section, .recent-submissions, .detail-dialog) {
