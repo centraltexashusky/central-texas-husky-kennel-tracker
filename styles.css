@@ -4276,6 +4276,28 @@ button:disabled {
   transform: none;
 }
 
+.schedule-color-field {
+  display: grid;
+  gap: 6px;
+}
+
+.schedule-color-control {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 34px minmax(0, 1fr);
+}
+
+.schedule-color-preview {
+  background: var(--schedule-selected-staff-color, var(--teal));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  display: block;
+  height: 34px;
+  width: 34px;
+}
+
 .schedule-warning-list {
   margin: 0;
   padding-left: 18px;

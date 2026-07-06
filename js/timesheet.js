@@ -495,6 +495,11 @@ function scheduleShiftRecordFromParts(parts = {}) {
   const now = new Date().toISOString();
   const weekStartValue = scheduleWeekStartString(parts.date || scheduleWeekStartString());
   const publishedWeek = weekIsPublished(weekStartValue);
+  const staffColor = scheduleShiftStaffColorValue({
+    ...parts,
+    staffName: parts.staffName || "Staff",
+    staffEmail: parts.staffEmail || "",
+  });
   return {
     type: "staffSchedule",
     id: parts.id || uid("staffSchedule"),
@@ -507,6 +512,8 @@ function scheduleShiftRecordFromParts(parts = {}) {
     role: parts.role || "Kennel Care",
     location: parts.location || "",
     notes: parts.notes || "",
+    staffColor,
+    staffColorUpdatedAt: parts.staffColorUpdatedAt || (staffColor ? now : ""),
     status: publishedWeek ? "Published" : "Draft",
     weekStart: weekStartValue,
     publishedAt: publishedWeek ? now : "",
@@ -589,23 +596,46 @@ async function saveScheduleRecordsBatch(records = [], options = {}) {
 }
 
 const scheduleStaffColorPalette = [
-  { color: "#38BDF8", border: "rgba(56, 189, 248, 0.78)", soft: "rgba(56, 189, 248, 0.18)", glow: "rgba(56, 189, 248, 0.22)", labelText: "#061321" },
-  { color: "#34D399", border: "rgba(52, 211, 153, 0.78)", soft: "rgba(52, 211, 153, 0.18)", glow: "rgba(52, 211, 153, 0.20)", labelText: "#061321" },
-  { color: "#FBBF24", border: "rgba(251, 191, 36, 0.82)", soft: "rgba(251, 191, 36, 0.18)", glow: "rgba(251, 191, 36, 0.20)", labelText: "#1f1603" },
-  { color: "#A78BFA", border: "rgba(167, 139, 250, 0.82)", soft: "rgba(167, 139, 250, 0.18)", glow: "rgba(167, 139, 250, 0.20)", labelText: "#100722" },
-  { color: "#FB7185", border: "rgba(251, 113, 133, 0.82)", soft: "rgba(251, 113, 133, 0.18)", glow: "rgba(251, 113, 133, 0.20)", labelText: "#23050b" },
-  { color: "#2DD4BF", border: "rgba(45, 212, 191, 0.78)", soft: "rgba(45, 212, 191, 0.18)", glow: "rgba(45, 212, 191, 0.20)", labelText: "#061321" },
-  { color: "#F97316", border: "rgba(249, 115, 22, 0.82)", soft: "rgba(249, 115, 22, 0.18)", glow: "rgba(249, 115, 22, 0.18)", labelText: "#220b02" },
-  { color: "#60A5FA", border: "rgba(96, 165, 250, 0.78)", soft: "rgba(96, 165, 250, 0.18)", glow: "rgba(96, 165, 250, 0.20)", labelText: "#061321" },
-  { color: "#C084FC", border: "rgba(192, 132, 252, 0.80)", soft: "rgba(192, 132, 252, 0.17)", glow: "rgba(192, 132, 252, 0.18)", labelText: "#160520" },
-  { color: "#F472B6", border: "rgba(244, 114, 182, 0.80)", soft: "rgba(244, 114, 182, 0.17)", glow: "rgba(244, 114, 182, 0.18)", labelText: "#240514" },
+  { name: "Sky", color: "#38BDF8", border: "rgba(56, 189, 248, 0.78)", soft: "rgba(56, 189, 248, 0.18)", glow: "rgba(56, 189, 248, 0.22)", labelText: "#061321" },
+  { name: "Mint", color: "#34D399", border: "rgba(52, 211, 153, 0.78)", soft: "rgba(52, 211, 153, 0.18)", glow: "rgba(52, 211, 153, 0.20)", labelText: "#061321" },
+  { name: "Gold", color: "#FBBF24", border: "rgba(251, 191, 36, 0.82)", soft: "rgba(251, 191, 36, 0.18)", glow: "rgba(251, 191, 36, 0.20)", labelText: "#1f1603" },
+  { name: "Lavender", color: "#A78BFA", border: "rgba(167, 139, 250, 0.82)", soft: "rgba(167, 139, 250, 0.18)", glow: "rgba(167, 139, 250, 0.20)", labelText: "#100722" },
+  { name: "Rose", color: "#FB7185", border: "rgba(251, 113, 133, 0.82)", soft: "rgba(251, 113, 133, 0.18)", glow: "rgba(251, 113, 133, 0.20)", labelText: "#23050b" },
+  { name: "Teal", color: "#2DD4BF", border: "rgba(45, 212, 191, 0.78)", soft: "rgba(45, 212, 191, 0.18)", glow: "rgba(45, 212, 191, 0.20)", labelText: "#061321" },
+  { name: "Orange", color: "#F97316", border: "rgba(249, 115, 22, 0.82)", soft: "rgba(249, 115, 22, 0.18)", glow: "rgba(249, 115, 22, 0.18)", labelText: "#220b02" },
+  { name: "Blue", color: "#60A5FA", border: "rgba(96, 165, 250, 0.78)", soft: "rgba(96, 165, 250, 0.18)", glow: "rgba(96, 165, 250, 0.20)", labelText: "#061321" },
+  { name: "Violet", color: "#C084FC", border: "rgba(192, 132, 252, 0.80)", soft: "rgba(192, 132, 252, 0.17)", glow: "rgba(192, 132, 252, 0.18)", labelText: "#160520" },
+  { name: "Pink", color: "#F472B6", border: "rgba(244, 114, 182, 0.80)", soft: "rgba(244, 114, 182, 0.17)", glow: "rgba(244, 114, 182, 0.18)", labelText: "#240514" },
 ];
+
+function normalizeScheduleStaffColor(value = "") {
+  const color = String(value || "").trim().toUpperCase();
+  if (!/^#[0-9A-F]{6}$/.test(color)) return "";
+  return color;
+}
 
 function scheduleShiftStaffColorKey(shift = {}) {
   return normalizeEmail(shift.staffEmail || shift.helperEmail || shift.email || "") || String(shift.staffName || shift.helperName || shift.name || "unassigned").trim().toLowerCase();
 }
 
-function scheduleShiftStaffColorIndex(shift = {}) {
+function scheduleStaffCustomColorMap() {
+  const map = new Map();
+  readRecords("staffSchedule").forEach((record) => {
+    if (!record || record.removed || record.status === "Cancelled") return;
+    const key = scheduleShiftStaffColorKey(record);
+    const color = normalizeScheduleStaffColor(record.staffColor);
+    if (!key || !color) return;
+    const timestamp = new Date(record.staffColorUpdatedAt || record.updatedAt || record.submittedAt || 0).getTime() || 0;
+    const existing = map.get(key);
+    if (!existing || timestamp >= existing.timestamp) map.set(key, { color, timestamp });
+  });
+  return map;
+}
+
+function scheduleShiftStaffColorIndex(shift = {}, colorMap = null) {
+  const staffColor = scheduleShiftStaffColorValue(shift, colorMap);
+  const paletteIndex = scheduleStaffColorPalette.findIndex((color) => color.color === staffColor);
+  if (paletteIndex >= 0) return paletteIndex;
   const key = scheduleShiftStaffColorKey(shift) || "unassigned";
   let hash = 0;
   for (let index = 0; index < key.length; index += 1) {
@@ -614,8 +644,34 @@ function scheduleShiftStaffColorIndex(shift = {}) {
   return hash % scheduleStaffColorPalette.length;
 }
 
-function scheduleShiftStaffColorStyle(shift = {}) {
-  const color = scheduleStaffColorPalette[scheduleShiftStaffColorIndex(shift)] || scheduleStaffColorPalette[0];
+function scheduleShiftStaffColorValue(shift = {}, colorMap = null) {
+  const key = scheduleShiftStaffColorKey(shift);
+  const staffColorMap = colorMap || scheduleStaffCustomColorMap();
+  const mappedColor = key ? staffColorMap?.get?.(key)?.color : "";
+  const ownColor = normalizeScheduleStaffColor(shift.staffColor);
+  const color = mappedColor || ownColor;
+  if (color) return color;
+  return scheduleStaffColorPalette[scheduleShiftStaffColorIndexFromKey(key)]?.color || scheduleStaffColorPalette[0].color;
+}
+
+function scheduleShiftStaffColorIndexFromKey(key = "unassigned") {
+  let hash = 0;
+  const normalizedKey = key || "unassigned";
+  for (let index = 0; index < normalizedKey.length; index += 1) {
+    hash = ((hash * 31) + normalizedKey.charCodeAt(index)) >>> 0;
+  }
+  return hash % scheduleStaffColorPalette.length;
+}
+
+function scheduleShiftStaffColorEntry(shift = {}, colorMap = null) {
+  const value = scheduleShiftStaffColorValue(shift, colorMap);
+  return scheduleStaffColorPalette.find((color) => color.color === value)
+    || scheduleStaffColorPalette[scheduleShiftStaffColorIndexFromKey(scheduleShiftStaffColorKey(shift))]
+    || scheduleStaffColorPalette[0];
+}
+
+function scheduleShiftStaffColorStyle(shift = {}, colorMap = null) {
+  const color = scheduleShiftStaffColorEntry(shift, colorMap);
   return [
     "--schedule-staff-color: " + color.color,
     "--schedule-staff-border: " + color.border,
@@ -625,12 +681,54 @@ function scheduleShiftStaffColorStyle(shift = {}) {
   ].join("; ");
 }
 
+function scheduleStaffColorSelectOptionsHtml(selectedColor = "") {
+  const selected = normalizeScheduleStaffColor(selectedColor) || scheduleStaffColorPalette[0].color;
+  return scheduleStaffColorPalette.map((color) => {
+    const isSelected = color.color === selected;
+    return '<option value="' + escapeHtml(color.color) + '"' + (isSelected ? " selected" : "") + '>' + escapeHtml(color.name) + '</option>';
+  }).join("");
+}
+
+function scheduleStaffColorPreviewStyle(colorValue = "") {
+  const color = scheduleStaffColorPalette.find((item) => item.color === normalizeScheduleStaffColor(colorValue)) || scheduleStaffColorPalette[0];
+  return "--schedule-selected-staff-color: " + color.color + "; --schedule-selected-staff-label-text: " + color.labelText;
+}
+
+function syncScheduleStaffColorFields(formEl, options = {}) {
+  if (!formEl?.elements?.staffColor) return;
+  const staff = selectedStaffFromSelect(formEl.elements.staffKey);
+  const staffColor = scheduleShiftStaffColorValue({ staffName: staff.name, staffEmail: staff.email });
+  if (options.useStaffDefault || !normalizeScheduleStaffColor(formEl.elements.staffColor.value)) {
+    formEl.elements.staffColor.value = staffColor;
+  }
+  const selectedColor = normalizeScheduleStaffColor(formEl.elements.staffColor.value) || staffColor;
+  const preview = formEl.querySelector(".schedule-color-preview");
+  if (preview) {
+    preview.setAttribute("style", scheduleStaffColorPreviewStyle(selectedColor));
+    const color = scheduleStaffColorPalette.find((item) => item.color === selectedColor);
+    preview.setAttribute("title", (color?.name || "Selected") + " schedule color");
+  }
+}
+
+function bindScheduleShiftFormColorControls(formEl) {
+  if (!formEl) return;
+  syncScheduleStaffColorFields(formEl);
+  formEl.addEventListener("change", (event) => {
+    if (event.target.closest('[name="staffKey"]')) {
+      syncScheduleStaffColorFields(formEl, { useStaffDefault: true });
+      return;
+    }
+    if (event.target.closest('[name="staffColor"]')) syncScheduleStaffColorFields(formEl);
+  });
+}
+
 function renderScheduleTab() {
   const grid = $("#scheduleWeekGrid");
   const summary = $("#scheduleSummaryGrid");
   if (!grid || !summary) return;
   const start = scheduleWeekStartString();
   const shifts = staffScheduleRecordsForWeek(start);
+  const staffColorMap = scheduleStaffCustomColorMap();
   const holidays = holidaysForRange(start, addDays(start, 7));
   const totalHours = shifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
   const published = weekIsPublished(start);
@@ -649,8 +747,8 @@ function renderScheduleTab() {
       \${holiday ? \`<div class="status-chip">\${escapeHtml(holiday.name || "Holiday")}</div>\` : ""}
       \${dayShifts.length ? dayShifts.map((shift) => {
         const warnings = scheduleWarningsForShift(shift);
-        const staffColorIndex = scheduleShiftStaffColorIndex(shift);
-        return \`<article class="schedule-shift-card \${warnings.length ? "is-warning" : ""}" data-staff-color="\${escapeHtml(String(staffColorIndex))}" style="\${escapeHtml(scheduleShiftStaffColorStyle(shift))}">
+        const staffColorIndex = scheduleShiftStaffColorIndex(shift, staffColorMap);
+        return \`<article class="schedule-shift-card \${warnings.length ? "is-warning" : ""}" data-staff-color="\${escapeHtml(String(staffColorIndex))}" style="\${escapeHtml(scheduleShiftStaffColorStyle(shift, staffColorMap))}">
           <button type="button" class="schedule-shift-main" data-action="edit-shift" data-id="\${escapeHtml(shift.id)}">
             <strong class="schedule-shift-staff">\${escapeHtml(shift.staffName || "Staff")}</strong>
             <span>\${escapeHtml(formatShiftTime(shift))}</span>
@@ -733,10 +831,12 @@ function scheduleShiftFormHtml(record = {}) {
   const start = scheduleWeekStartString();
   const date = record.date || start;
   const selected = selectedTimesheetStaff({ helperName: record.staffName, helperEmail: record.staffEmail });
+  const staffColor = scheduleShiftStaffColorValue({ ...record, staffName: selected.name, staffEmail: selected.email });
   const warnings = scheduleWarningsForShift({ ...record, staffName: selected.name, staffEmail: selected.email, date, startTime: record.startTime || "09:00", endTime: record.endTime || "12:00" });
   return \`<form id="scheduleShiftForm" class="tracker-form" data-id="\${escapeHtml(record.id || "")}">
     <div class="field-grid">
-      <label>Staff<select name="staffKey" required>\${staffOptionHtml(record)}</select></label>
+      <label>Staff<select name="staffKey" id="scheduleStaffSelect" required>\${staffOptionHtml(record)}</select></label>
+      <label class="schedule-color-field">Staff color<span class="schedule-color-control"><span class="schedule-color-preview" style="\${escapeHtml(scheduleStaffColorPreviewStyle(staffColor))}" aria-hidden="true"></span><select name="staffColor" id="scheduleStaffColorSelect">\${scheduleStaffColorSelectOptionsHtml(staffColor)}</select></span><small>Used for this staff member's schedule cards.</small></label>
       <label>Date<input type="date" name="date" value="\${escapeHtml(date)}" required /></label>
       <label>Start time<input type="time" name="startTime" value="\${escapeHtml(record.startTime || "09:00")}" required /></label>
       <label>End time<input type="time" name="endTime" value="\${escapeHtml(record.endTime || "12:00")}" required /></label>
@@ -838,6 +938,7 @@ async function saveBulkScheduleConfirmForm(formEl) {
 function openScheduleShiftPopup(record = {}) {
   if (!staffScheduleAdminRequired()) return;
   showDetailDialog(record.id ? "Edit Shift" : "Add Shift", scheduleShiftFormHtml(record));
+  bindScheduleShiftFormColorControls($("#scheduleShiftForm"));
 }
 
 async function saveScheduleShiftFromForm(formEl) {
@@ -848,6 +949,11 @@ async function saveScheduleShiftFromForm(formEl) {
   const weekStartValue = scheduleWeekStartString(data.date);
   const publishedWeek = weekIsPublished(weekStartValue);
   const changedAfterPublish = Boolean(existing?.publishedAt || publishedWeek);
+  const selectedColor = normalizeScheduleStaffColor(data.staffColor) || scheduleShiftStaffColorValue({ staffName: staff.name, staffEmail: staff.email });
+  const existingColor = normalizeScheduleStaffColor(existing?.staffColor);
+  const staffColorUpdatedAt = selectedColor && selectedColor !== existingColor
+    ? new Date().toISOString()
+    : existing?.staffColorUpdatedAt || (selectedColor ? new Date().toISOString() : "");
   const record = {
     ...(existing || {}),
     type: "staffSchedule",
@@ -861,6 +967,8 @@ async function saveScheduleShiftFromForm(formEl) {
     role: data.role || "Kennel Care",
     location: data.location || "",
     notes: data.notes || "",
+    staffColor: selectedColor,
+    staffColorUpdatedAt,
     status: publishedWeek ? "Published" : existing?.status || "Draft",
     weekStart: weekStartValue,
     publishedAt: existing?.publishedAt || (publishedWeek ? new Date().toISOString() : ""),
@@ -1185,6 +1293,8 @@ function currentWeekTemplateShifts(includeStaffAssignments = true) {
     dayOffset: Math.max(0, scheduleWeekDates(start).indexOf(shift.date)),
     staffName: includeStaffAssignments ? shift.staffName || "" : "",
     staffEmail: includeStaffAssignments ? shift.staffEmail || "" : "",
+    staffColor: includeStaffAssignments ? scheduleShiftStaffColorValue(shift) : "",
+    staffColorUpdatedAt: includeStaffAssignments ? shift.staffColorUpdatedAt || "" : "",
     startTime: shift.startTime || "09:00",
     endTime: shift.endTime || "12:00",
     role: shift.role || "Kennel Care",
@@ -1253,6 +1363,8 @@ function scheduleTemplateApplyRecords(template = {}, start = scheduleWeekStartSt
   return arrayValue(template.shifts).map((shift) => scheduleShiftRecordFromParts({
     staffName: shift.staffName || "Unassigned",
     staffEmail: shift.staffEmail || "",
+    staffColor: shift.staffColor || "",
+    staffColorUpdatedAt: shift.staffColorUpdatedAt || "",
     date: addDays(start, Number(shift.dayOffset || 0)),
     startTime: shift.startTime,
     endTime: shift.endTime,
