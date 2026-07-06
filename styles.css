@@ -4163,6 +4163,7 @@ button:disabled {
   --schedule-staff-border: rgba(42, 157, 143, 0.72);
   --schedule-staff-soft: rgba(42, 157, 143, 0.14);
   --schedule-staff-glow: rgba(42, 157, 143, 0.18);
+  --schedule-staff-label-text: #061321;
   background: #fff;
   border: 1px solid var(--schedule-staff-border);
   border-left: 5px solid var(--schedule-staff-color);
@@ -4207,6 +4208,23 @@ button:disabled {
   outline: 0;
 }
 
+.schedule-shift-staff {
+  align-self: start;
+  background: var(--schedule-staff-color);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 5px;
+  box-shadow: none;
+  color: var(--schedule-staff-label-text);
+  display: block;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.08;
+  margin: -2px -2px 3px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  padding: 5px 6px;
+}
+
 .schedule-shift-card.is-warning {
   border-color: rgba(245, 197, 91, 0.76);
   border-left-color: var(--schedule-staff-color);
@@ -4219,6 +4237,11 @@ button:disabled {
 
 .schedule-shift-card strong {
   font-size: 0.94rem;
+}
+
+.schedule-shift-card strong.schedule-shift-staff {
+  color: var(--schedule-staff-label-text);
+  font-size: 0.86rem;
 }
 
 .schedule-shift-card span,
@@ -4234,6 +4257,8 @@ button:disabled {
 }
 
 .schedule-shift-card .record-actions .secondary-button {
+  background: var(--schedule-staff-soft);
+  border-color: var(--schedule-staff-border);
   border-radius: 7px;
   box-shadow: none;
   font-size: 0.72rem;
@@ -4245,6 +4270,8 @@ button:disabled {
 
 .schedule-shift-card .record-actions .secondary-button:hover,
 .schedule-shift-card .record-actions .secondary-button:focus-visible {
+  background: var(--schedule-staff-soft);
+  border-color: var(--schedule-staff-color);
   box-shadow: none;
   transform: none;
 }

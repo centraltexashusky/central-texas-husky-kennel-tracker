@@ -589,16 +589,16 @@ async function saveScheduleRecordsBatch(records = [], options = {}) {
 }
 
 const scheduleStaffColorPalette = [
-  { color: "#38BDF8", border: "rgba(56, 189, 248, 0.78)", soft: "rgba(56, 189, 248, 0.18)", glow: "rgba(56, 189, 248, 0.22)" },
-  { color: "#34D399", border: "rgba(52, 211, 153, 0.78)", soft: "rgba(52, 211, 153, 0.18)", glow: "rgba(52, 211, 153, 0.20)" },
-  { color: "#FBBF24", border: "rgba(251, 191, 36, 0.82)", soft: "rgba(251, 191, 36, 0.18)", glow: "rgba(251, 191, 36, 0.20)" },
-  { color: "#A78BFA", border: "rgba(167, 139, 250, 0.82)", soft: "rgba(167, 139, 250, 0.18)", glow: "rgba(167, 139, 250, 0.20)" },
-  { color: "#FB7185", border: "rgba(251, 113, 133, 0.82)", soft: "rgba(251, 113, 133, 0.18)", glow: "rgba(251, 113, 133, 0.20)" },
-  { color: "#2DD4BF", border: "rgba(45, 212, 191, 0.78)", soft: "rgba(45, 212, 191, 0.18)", glow: "rgba(45, 212, 191, 0.20)" },
-  { color: "#F97316", border: "rgba(249, 115, 22, 0.82)", soft: "rgba(249, 115, 22, 0.18)", glow: "rgba(249, 115, 22, 0.18)" },
-  { color: "#60A5FA", border: "rgba(96, 165, 250, 0.78)", soft: "rgba(96, 165, 250, 0.18)", glow: "rgba(96, 165, 250, 0.20)" },
-  { color: "#C084FC", border: "rgba(192, 132, 252, 0.80)", soft: "rgba(192, 132, 252, 0.17)", glow: "rgba(192, 132, 252, 0.18)" },
-  { color: "#F472B6", border: "rgba(244, 114, 182, 0.80)", soft: "rgba(244, 114, 182, 0.17)", glow: "rgba(244, 114, 182, 0.18)" },
+  { color: "#38BDF8", border: "rgba(56, 189, 248, 0.78)", soft: "rgba(56, 189, 248, 0.18)", glow: "rgba(56, 189, 248, 0.22)", labelText: "#061321" },
+  { color: "#34D399", border: "rgba(52, 211, 153, 0.78)", soft: "rgba(52, 211, 153, 0.18)", glow: "rgba(52, 211, 153, 0.20)", labelText: "#061321" },
+  { color: "#FBBF24", border: "rgba(251, 191, 36, 0.82)", soft: "rgba(251, 191, 36, 0.18)", glow: "rgba(251, 191, 36, 0.20)", labelText: "#1f1603" },
+  { color: "#A78BFA", border: "rgba(167, 139, 250, 0.82)", soft: "rgba(167, 139, 250, 0.18)", glow: "rgba(167, 139, 250, 0.20)", labelText: "#100722" },
+  { color: "#FB7185", border: "rgba(251, 113, 133, 0.82)", soft: "rgba(251, 113, 133, 0.18)", glow: "rgba(251, 113, 133, 0.20)", labelText: "#23050b" },
+  { color: "#2DD4BF", border: "rgba(45, 212, 191, 0.78)", soft: "rgba(45, 212, 191, 0.18)", glow: "rgba(45, 212, 191, 0.20)", labelText: "#061321" },
+  { color: "#F97316", border: "rgba(249, 115, 22, 0.82)", soft: "rgba(249, 115, 22, 0.18)", glow: "rgba(249, 115, 22, 0.18)", labelText: "#220b02" },
+  { color: "#60A5FA", border: "rgba(96, 165, 250, 0.78)", soft: "rgba(96, 165, 250, 0.18)", glow: "rgba(96, 165, 250, 0.20)", labelText: "#061321" },
+  { color: "#C084FC", border: "rgba(192, 132, 252, 0.80)", soft: "rgba(192, 132, 252, 0.17)", glow: "rgba(192, 132, 252, 0.18)", labelText: "#160520" },
+  { color: "#F472B6", border: "rgba(244, 114, 182, 0.80)", soft: "rgba(244, 114, 182, 0.17)", glow: "rgba(244, 114, 182, 0.18)", labelText: "#240514" },
 ];
 
 function scheduleShiftStaffColorKey(shift = {}) {
@@ -621,6 +621,7 @@ function scheduleShiftStaffColorStyle(shift = {}) {
     "--schedule-staff-border: " + color.border,
     "--schedule-staff-soft: " + color.soft,
     "--schedule-staff-glow: " + color.glow,
+    "--schedule-staff-label-text: " + color.labelText,
   ].join("; ");
 }
 
@@ -651,7 +652,7 @@ function renderScheduleTab() {
         const staffColorIndex = scheduleShiftStaffColorIndex(shift);
         return \`<article class="schedule-shift-card \${warnings.length ? "is-warning" : ""}" data-staff-color="\${escapeHtml(String(staffColorIndex))}" style="\${escapeHtml(scheduleShiftStaffColorStyle(shift))}">
           <button type="button" class="schedule-shift-main" data-action="edit-shift" data-id="\${escapeHtml(shift.id)}">
-            <strong>\${escapeHtml(shift.staffName || "Staff")}</strong>
+            <strong class="schedule-shift-staff">\${escapeHtml(shift.staffName || "Staff")}</strong>
             <span>\${escapeHtml(formatShiftTime(shift))}</span>
             <span>\${escapeHtml([shift.role, shift.location, shift.status].filter(Boolean).join(" | "))}</span>
           </button>
