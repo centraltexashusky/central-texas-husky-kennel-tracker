@@ -9856,6 +9856,57 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
   color: #FFFFFF;
 }
 
+.sidebar-theme {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.sidebar-theme-label {
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-theme-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 4px;
+}
+
+.sidebar-theme-option {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.76rem;
+  min-height: 38px;
+  min-width: 0;
+  padding: 8px 6px;
+  white-space: nowrap;
+}
+
+.sidebar-theme-option:hover,
+.sidebar-theme-option:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.sidebar-theme-option.is-active,
+.sidebar-theme-option[aria-pressed="true"] {
+  background: #2F6FED;
+  border-color: #2F6FED;
+  color: #FFFFFF;
+}
+
 :root[data-theme="light"] .mobile-more-theme {
   border-top-color: var(--line);
 }
@@ -9877,6 +9928,38 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
 
 :root[data-theme="light"] .mobile-more-theme-option.is-active,
 :root[data-theme="light"] .mobile-more-theme-option[aria-pressed="true"] {
+  background: #315F85;
+  border-color: #315F85;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .sidebar-theme {
+  border-top-color: rgba(255, 255, 255, 0.14);
+}
+
+:root[data-theme="light"] .sidebar-theme-label {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+:root[data-theme="light"] .sidebar-theme-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-theme="light"] .sidebar-theme-option {
+  background: transparent;
+  border-color: transparent;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+:root[data-theme="light"] .sidebar-theme-option:hover,
+:root[data-theme="light"] .sidebar-theme-option:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+:root[data-theme="light"] .sidebar-theme-option.is-active,
+:root[data-theme="light"] .sidebar-theme-option[aria-pressed="true"] {
   background: #315F85;
   border-color: #315F85;
   color: #FFFFFF;

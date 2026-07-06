@@ -167,6 +167,12 @@ function saveCuddleStayTheme(theme) {
   saveCurrentUserThemePreference(normalizedTheme);
 }
 
+function handleThemeOptionClick(button = null) {
+  if (!button?.dataset?.themeOption || button.disabled) return false;
+  saveCuddleStayTheme(button.dataset.themeOption);
+  return true;
+}
+
 var form = $("#kennelForm");
 var modeLabel = $("#modeLabel");
 var daySelect = $("#dayOfWeek");
@@ -11259,11 +11265,8 @@ function initEvents() {
     if (button.dataset.page) switchPage(button.dataset.page, { history: "push" });
   });
   $("#mobileMoreMenuList").addEventListener("click", (event) => {
-    const themeButton = event.target.closest(".mobile-more-theme-option[data-theme-option]");
-    if (themeButton) {
-      saveCuddleStayTheme(themeButton.dataset.themeOption);
-      return;
-    }
+    const themeButton = event.target.closest("[data-theme-option]");
+    if (themeButton) return;
     const button = event.target.closest(".mobile-more-menu-item[data-page], .mobile-more-item[data-page]");
     if (!button) return;
     switchPage(button.dataset.page, { history: "push" });
@@ -11334,6 +11337,10 @@ function initEvents() {
       event.preventDefault();
       showServiceInfoTooltip(infoIcon);
     }
+  });
+  document.addEventListener("click", (event) => {
+    const themeButton = event.target.closest?.("[data-theme-option]");
+    if (themeButton) handleThemeOptionClick(themeButton);
   });
   $$(".nav-button").forEach((button) => {
     button.addEventListener("click", () => switchPage(button.dataset.page, { history: "push" }));
