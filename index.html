@@ -16,7 +16,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260628-our-dogs-filter-info-boarding-rows-staff-color-selector-20260706" />
+    <link rel="stylesheet" href="styles.css?v=20260628-our-dogs-filter-info-boarding-rows-staff-schedule-planner-20260706" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -766,21 +766,37 @@
           </div>
           <div class="helper-total-list" id="weeklyHelperTotals"></div>
         </section>
-        <section class="recent-submissions timesheet-tab-panel" id="timesheetSchedulePanel" data-timesheet-panel="schedule" hidden>
-          <div class="section-heading"><span>S</span><div><h2>Staff Schedule</h2><p>Plan the week, publish the schedule, and keep coverage visible.</p></div></div>
-          <div class="button-row timesheet-toolbar">
-            <button type="button" class="secondary-button" data-action="schedule-prev-week">Previous Week</button>
-            <button type="button" class="secondary-button" data-action="schedule-this-week">This Week</button>
-            <button type="button" class="secondary-button" data-action="schedule-next-week">Next Week</button>
-            <button type="button" id="copyLastWeekScheduleButton" class="secondary-button mobile-admin-only">Copy Last Week</button>
-            <button type="button" id="openBulkScheduleButton" class="secondary-button mobile-admin-only">Bulk Add</button>
-            <button type="button" id="copyScheduleDayButton" class="secondary-button mobile-admin-only">Copy Day</button>
+        <section class="recent-submissions timesheet-tab-panel task-scheduler-page staff-schedule-page" id="timesheetSchedulePanel" data-timesheet-panel="schedule" hidden>
+          <div class="section-heading task-scheduler-heading staff-schedule-heading"><span class="task-scheduler-heading-icon">S</span><div><h2>Staff Schedule</h2><p>Plan the week, publish the schedule, and keep coverage visible.</p></div></div>
+          <div class="task-scheduler-toolbar staff-schedule-toolbar">
+            <button type="button" class="secondary-button" id="staffScheduleTodayButton" data-action="schedule-this-week">Today</button>
+            <button type="button" class="secondary-button" id="staffSchedulePrevButton" data-action="schedule-prev-week" aria-label="Previous range">‹</button>
+            <strong id="staffScheduleRangeLabel"></strong>
+            <button type="button" class="secondary-button" id="staffScheduleNextButton" data-action="schedule-next-week" aria-label="Next range">›</button>
+            <div class="segmented-control" role="group" aria-label="Staff schedule view">
+              <button type="button" id="staffScheduleDayViewButton" data-staff-schedule-view="day">Day</button>
+              <button type="button" id="staffScheduleWeekViewButton" data-staff-schedule-view="week">Week</button>
+              <button type="button" id="staffScheduleMonthViewButton" data-staff-schedule-view="month">Month</button>
+            </div>
             <button type="button" id="openScheduleTemplatesButton" class="secondary-button mobile-admin-only">Templates</button>
             <button type="button" id="openScheduleShiftButton" class="mobile-admin-only">Add Shift</button>
             <button type="button" id="publishScheduleButton" class="mobile-admin-only">Publish Week</button>
+            <button type="button" id="copyLastWeekScheduleButton" class="secondary-button mobile-admin-only">Copy Last Week</button>
+            <button type="button" id="openBulkScheduleButton" class="secondary-button mobile-admin-only">Bulk Add</button>
+            <button type="button" id="copyScheduleDayButton" class="secondary-button mobile-admin-only">Copy Day</button>
           </div>
-          <div class="summary-grid" id="scheduleSummaryGrid"></div>
-          <div class="schedule-week-grid" id="scheduleWeekGrid"></div>
+          <div class="task-scheduler-layout staff-schedule-layout" id="staffScheduleLayout">
+            <aside class="task-scheduler-sidebar staff-schedule-sidebar">
+              <div class="task-scheduler-mini-calendar staff-schedule-mini-calendar" id="staffScheduleMiniCalendar"></div>
+              <div class="summary-grid staff-schedule-summary-grid" id="scheduleSummaryGrid"></div>
+              <div class="task-scheduler-legend staff-schedule-legend" id="staffScheduleLegend"></div>
+            </aside>
+            <div class="task-scheduler-board staff-schedule-board" id="scheduleWeekGrid" aria-live="polite"></div>
+            <aside class="task-scheduler-detail-panel staff-schedule-detail-panel" id="staffScheduleDetailPanel">
+              <p>Select a shift to see details.</p>
+            </aside>
+          </div>
+          <div class="task-scheduler-help-strip staff-schedule-help-strip">Drag shifts to adjust the schedule. Click a shift to review details or edit it.</div>
         </section>
         <section class="recent-submissions timesheet-tab-panel" id="timesheetTimeOffPanel" data-timesheet-panel="timeOff" hidden>
           <div class="section-heading"><span>O</span><div><h2>Time Off</h2><p>Staff can request days off. Admin can approve, deny, and watch schedule conflicts.</p></div></div>
@@ -1412,6 +1428,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260628-our-dogs-filter-info-boarding-rows-staff-color-selector-20260706"></script>
+  <script type="module" src="js/main.js?v=20260628-our-dogs-filter-info-boarding-rows-staff-schedule-planner-20260706"></script>
 </body>
 </html>

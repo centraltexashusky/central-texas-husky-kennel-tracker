@@ -368,6 +368,19 @@ function scheduleWeekDates(value = scheduleWeekDate) {
   return Array.from({ length: 7 }, (_, index) => addDays(start, index));
 }
 
+var staffScheduleView = "week";
+try {
+  staffScheduleView = localStorage.getItem("cth-staff-schedule-view") || "week";
+} catch (error) {
+  staffScheduleView = "week";
+}
+if (!["day", "week", "month"].includes(staffScheduleView)) staffScheduleView = "week";
+var staffScheduleSelectedShiftId = "";
+var staffScheduleDragShiftId = "";
+var STAFF_SCHEDULE_SLOT_MINUTES = 15;
+var STAFF_SCHEDULE_DEFAULT_START_HOUR = 6;
+var STAFF_SCHEDULE_DEFAULT_END_HOUR = 19;
+
 function timesheetTabAllowed(tab = "clock") {
   return tab !== "review" || currentRole() === "admin";
 }
@@ -722,46 +735,593 @@ function bindScheduleShiftFormColorControls(formEl) {
   });
 }
 
+function staffScheduleMonthDates(value = scheduleWeekDate) {
+  const source = dateOnly(value) || todayDate();
+  const firstOfMonth = new Date(source + "T12:00:00");
+  firstOfMonth.setDate(1);
+  const gridStart = weekStart(firstOfMonth).toISOString().slice(0, 10);
+  return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
+}
+
+function staffScheduleVisibleDates() {
+  if (staffScheduleView === "month") return staffScheduleMonthDates(scheduleWeekDate);
+  if (staffScheduleView === "day") return [dateOnly(scheduleWeekDate) || todayDate()];
+  return scheduleWeekDates(scheduleWeekDate);
+}
+
+function staffScheduleRangeLabel() {
+  const anchor = dateOnly(scheduleWeekDate) || todayDate();
+  if (staffScheduleView === "month") {
+    return new Date(anchor + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+  if (staffScheduleView === "day") {
+    return new Date(anchor + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  }
+  const start = scheduleWeekStartString(anchor);
+  return dateRangeText(start, addDays(start, 6));
+}
+
+function staffScheduleShiftAnchor(delta = 0) {
+  const anchor = dateOnly(scheduleWeekDate) || todayDate();
+  if (staffScheduleView === "month") return addMonths(anchor, delta);
+  if (staffScheduleView === "day") return addDays(anchor, delta);
+  return addDays(scheduleWeekStartString(anchor), delta * 7);
+}
+
+function setStaffScheduleView(view = "week") {
+  staffScheduleView = ["day", "week", "month"].includes(view) ? view : "week";
+  try {
+    localStorage.setItem("cth-staff-schedule-view", staffScheduleView);
+  } catch (error) {
+    // Ignore storage failures; the current render still updates.
+  }
+  renderTimesheet();
+}
+
+function staffScheduleRecordsForDates(dates = staffScheduleVisibleDates()) {
+  const dateSet = new Set(dates.filter(Boolean));
+  return staffScheduleRecords({ excludeCancelled: true })
+    .filter((record) => dateSet.has(record.date))
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+}
+
+function staffScheduleLongDateLabel(date = "") {
+  return date ? new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "";
+}
+
+function staffScheduleTimeFromMinutes(minutes = 0) {
+  const normalized = Math.max(0, Math.min(1439, Number(minutes) || 0));
+  const hours = Math.floor(normalized / 60);
+  const mins = normalized % 60;
+  return String(hours).padStart(2, "0") + ":" + String(mins).padStart(2, "0");
+}
+
+function staffScheduleShiftEndMinutes(shift = {}) {
+  const start = timeToMinutes(shift.startTime || "09:00");
+  const end = timeToMinutes(shift.endTime || "");
+  return end > start ? end : start + 60;
+}
+
+function staffScheduleShiftMinutes(shift = {}) {
+  return Math.max(STAFF_SCHEDULE_SLOT_MINUTES, staffScheduleShiftEndMinutes(shift) - timeToMinutes(shift.startTime || "09:00"));
+}
+
+function staffScheduleTimeGridRange(dates = []) {
+  const shifts = staffScheduleRecordsForDates(dates);
+  const minStart = shifts.reduce((value, shift) => Math.min(value, timeToMinutes(shift.startTime || "09:00")), STAFF_SCHEDULE_DEFAULT_START_HOUR * 60);
+  const maxEnd = shifts.reduce((value, shift) => Math.max(value, staffScheduleShiftEndMinutes(shift)), STAFF_SCHEDULE_DEFAULT_END_HOUR * 60);
+  const startHour = Math.max(0, Math.floor(minStart / 60));
+  const endHour = Math.min(24, Math.max(startHour + 1, Math.ceil(maxEnd / 60)));
+  return {
+    startMinutes: startHour * 60,
+    endMinutes: endHour * 60,
+    slotCount: Math.max(4, Math.ceil((endHour * 60 - startHour * 60) / STAFF_SCHEDULE_SLOT_MINUTES)),
+    hours: Array.from({ length: endHour - startHour }, (_, index) => startHour + index),
+  };
+}
+
+function staffScheduleShiftRow(shift = {}, range = staffScheduleTimeGridRange([shift.date || scheduleWeekDate])) {
+  return Math.max(2, 2 + Math.floor((timeToMinutes(shift.startTime || "09:00") - range.startMinutes) / STAFF_SCHEDULE_SLOT_MINUTES));
+}
+
+function staffScheduleShiftSpan(shift = {}) {
+  return Math.max(1, Math.ceil(staffScheduleShiftMinutes(shift) / STAFF_SCHEDULE_SLOT_MINUTES));
+}
+
+function staffScheduleOverlaps(left = {}, right = {}) {
+  const leftStart = timeToMinutes(left.startTime || "09:00");
+  const leftEnd = staffScheduleShiftEndMinutes(left);
+  const rightStart = timeToMinutes(right.startTime || "09:00");
+  const rightEnd = staffScheduleShiftEndMinutes(right);
+  return leftStart < rightEnd && rightStart < leftEnd;
+}
+
+function staffScheduleLayoutDateShifts(date = "", range = staffScheduleTimeGridRange([date])) {
+  const groups = [];
+  let activeGroup = null;
+  staffScheduleRecordsForDates([date])
+    .sort((a, b) => timeToMinutes(a.startTime || "09:00") - timeToMinutes(b.startTime || "09:00") || staffScheduleShiftEndMinutes(b) - staffScheduleShiftEndMinutes(a))
+    .forEach((shift) => {
+      const start = timeToMinutes(shift.startTime || "09:00");
+      const end = staffScheduleShiftEndMinutes(shift);
+      if (!activeGroup || start >= activeGroup.end) {
+        activeGroup = { end, shifts: [] };
+        groups.push(activeGroup);
+      }
+      activeGroup.shifts.push(shift);
+      activeGroup.end = Math.max(activeGroup.end, end);
+    });
+
+  return groups.flatMap((group) => {
+    const laneEnds = [];
+    const laidOut = group.shifts.map((shift) => {
+      const start = timeToMinutes(shift.startTime || "09:00");
+      const end = staffScheduleShiftEndMinutes(shift);
+      let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = end;
+      return {
+        shift,
+        laneIndex: lane,
+        row: staffScheduleShiftRow(shift, range),
+        span: staffScheduleShiftSpan(shift),
+      };
+    });
+    const laneCount = Math.max(1, laneEnds.length, ...laidOut.map((layout) => layout.laneIndex + 1));
+    return laidOut.map((layout) => ({ ...layout, laneCount }));
+  });
+}
+
+function staffScheduleMaxOverlap(dates = []) {
+  return Math.max(1, ...dates.map((date) => {
+    const shifts = staffScheduleRecordsForDates([date]);
+    return shifts.reduce((max, shift) => Math.max(max, shifts.filter((other) => staffScheduleOverlaps(shift, other)).length), 1);
+  }));
+}
+
+function staffScheduleDayMinWidth(dates = []) {
+  return Math.max(staffScheduleView === "day" ? 420 : 130, staffScheduleMaxOverlap(dates) * (staffScheduleView === "day" ? 190 : 118));
+}
+
+function staffScheduleStyleAttr(colorStyle = "", styles = {}) {
+  const css = [
+    colorStyle,
+    ...Object.entries(styles)
+      .filter(([, value]) => value !== undefined && value !== null && value !== "")
+      .map(([key, value]) => key + ": " + String(value)),
+  ].filter(Boolean).join("; ");
+  return css ? ' style="' + escapeHtml(css) + '"' : "";
+}
+
+function staffScheduleInitials(name = "Staff") {
+  return String(name || "Staff")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("") || "S";
+}
+
+function staffScheduleShiftCardHtml(shift = {}, layout = null, colorMap = null) {
+  const warnings = scheduleWarningsForShift(shift);
+  const colorValue = scheduleShiftStaffColorValue(shift, colorMap);
+  const positionedClass = layout ? " is-positioned" : "";
+  const warningClass = warnings.length ? " is-warning" : "";
+  const selectedClass = staffScheduleSelectedShiftId === shift.id ? " is-selected" : "";
+  const isAdmin = currentRole() === "admin";
+  const style = staffScheduleStyleAttr(scheduleShiftStaffColorStyle(shift, colorMap), {
+    "--task-color": colorValue,
+    ...(layout ? {
+      "grid-column": layout.column,
+      "grid-row": layout.row + " / span " + layout.span,
+      "--task-lane-count": layout.laneCount,
+      "--task-lane-index": layout.laneIndex,
+    } : {}),
+  });
+  const meta = [formatShiftTime(shift), shift.role || "", shift.location || "", shift.status || ""].filter(Boolean).join(" | ");
+  return '<button type="button" draggable="' + (isAdmin ? "true" : "false") + '" class="task-scheduler-card staff-schedule-card schedule-shift-card' + positionedClass + warningClass + selectedClass + '" data-action="select-schedule-shift" data-id="' + escapeHtml(shift.id) + '" data-staff-color="' + escapeHtml(String(scheduleShiftStaffColorIndex(shift, colorMap))) + '"' + style + '>' +
+    '<span class="task-scheduler-avatar staff-schedule-avatar" aria-hidden="true">' + escapeHtml(staffScheduleInitials(shift.staffName)) + '</span>' +
+    '<span class="task-scheduler-card-copy staff-schedule-card-copy">' +
+      '<strong class="schedule-shift-staff">' + escapeHtml(shift.staffName || "Staff") + '</strong>' +
+      '<span>' + escapeHtml(meta) + '</span>' +
+      (warnings.length ? '<span class="staff-schedule-warning-label">Needs review</span>' : "") +
+    '</span>' +
+  '</button>';
+}
+
+function staffScheduleHourLabel(hour) {
+  if (hour === 0) return "12 AM";
+  if (hour < 12) return hour + " AM";
+  if (hour === 12) return "12 PM";
+  return (hour - 12) + " PM";
+}
+
+function staffScheduleMonthShiftHtml(shift = {}, colorMap = null) {
+  const colorValue = scheduleShiftStaffColorValue(shift, colorMap);
+  const label = [shift.staffName || "Staff", formatShiftTime(shift), shift.role || ""].filter(Boolean).join(" ");
+  return '<button type="button" draggable="' + (currentRole() === "admin" ? "true" : "false") + '" class="task-scheduler-month-task staff-schedule-month-shift" data-action="select-schedule-shift" data-id="' + escapeHtml(shift.id) + '" title="' + escapeHtml(label) + '" aria-label="' + escapeHtml(label) + '"' + staffScheduleStyleAttr(scheduleShiftStaffColorStyle(shift, colorMap), { "--task-color": colorValue }) + '>' +
+    escapeHtml((shift.staffName || "Staff") + " " + formatShiftTime(shift)) +
+  '</button>';
+}
+
+function staffScheduleTimelineGridHtml(dates = [], className = "task-scheduler-week-grid staff-schedule-week-grid") {
+  const range = staffScheduleTimeGridRange(dates);
+  const dayMinWidth = staffScheduleDayMinWidth(dates);
+  const dayCount = Math.max(1, dates.length);
+  const staffColorMap = scheduleStaffCustomColorMap();
+  const slots = [];
+  for (let index = 0; index < range.slotCount; index += 1) {
+    const time = staffScheduleTimeFromMinutes(range.startMinutes + index * STAFF_SCHEDULE_SLOT_MINUTES);
+    dates.forEach((date, dateIndex) => {
+      slots.push('<div class="task-scheduler-slot staff-schedule-slot ' + (date === todayDate() ? "is-today" : "") + '" data-schedule-drop-date="' + escapeHtml(date) + '" data-schedule-drop-time="' + escapeHtml(time) + '" style="grid-column: ' + (dateIndex + 2) + '; grid-row: ' + (index + 2) + ';"></div>');
+    });
+  }
+  const shiftCards = dates.flatMap((date, dateIndex) =>
+    staffScheduleLayoutDateShifts(date, range).map((layout) => staffScheduleShiftCardHtml(layout.shift, { ...layout, column: dateIndex + 2 }, staffColorMap))
+  ).join("");
+  return '<div class="' + escapeHtml(className) + ' task-scheduler-time-grid staff-schedule-time-grid" style="--task-day-count: ' + dayCount + '; --task-slot-count: ' + range.slotCount + '; --task-day-min-width: ' + dayMinWidth + 'px; --task-grid-min-width: ' + (70 + dayCount * dayMinWidth) + 'px; --task-mobile-grid-min-width: ' + (52 + dayCount * dayMinWidth) + 'px;">' +
+    '<div class="task-scheduler-week-header task-scheduler-time-label">Time</div>' +
+    dates.map((date) => '<div class="task-scheduler-week-header ' + (date === todayDate() ? "is-today" : "") + '">' + '<strong>' + escapeHtml(new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short" })) + '</strong><span>' + escapeHtml(new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })) + '</span></div>').join("") +
+    range.hours.map((hour, index) => '<div class="task-scheduler-time-label" style="grid-column: 1; grid-row: ' + (index * 4 + 2) + ' / span 4;">' + escapeHtml(staffScheduleHourLabel(hour)) + '</div>').join("") +
+    slots.join("") +
+    shiftCards +
+  '</div>';
+}
+
+function staffScheduleMobileWeekStripHtml(dates = scheduleWeekDates(scheduleWeekDate), dayMinWidth = staffScheduleDayMinWidth(dates)) {
+  return '<div class="task-scheduler-mobile-week-strip staff-schedule-mobile-week-strip" style="--task-day-min-width: ' + dayMinWidth + 'px; --task-mobile-grid-min-width: ' + (52 + dates.length * dayMinWidth) + 'px;">' + dates.map((date) => {
+    const source = new Date(date + "T12:00:00");
+    const active = date === (dateOnly(scheduleWeekDate) || todayDate()) || date === todayDate();
+    return '<button type="button" data-action="staff-schedule-jump-date" data-date="' + escapeHtml(date) + '" class="' + (active ? "is-active" : "") + '">' +
+      '<span>' + escapeHtml(source.toLocaleDateString("en-US", { weekday: "short" })) + '</span>' +
+      '<strong>' + escapeHtml(String(source.getDate())) + '</strong>' +
+    '</button>';
+  }).join("") + '</div>';
+}
+
+function staffScheduleWeekHtml() {
+  const dates = scheduleWeekDates(scheduleWeekDate);
+  const dayMinWidth = staffScheduleDayMinWidth(dates);
+  return staffScheduleMobileWeekStripHtml(dates, dayMinWidth) + staffScheduleTimelineGridHtml(dates, "task-scheduler-week-grid staff-schedule-week-grid");
+}
+
+function staffScheduleDayBoardHeaderHtml(date = dateOnly(scheduleWeekDate) || todayDate()) {
+  return '<div class="task-scheduler-day-board-header staff-schedule-day-board-header">' +
+    '<span>Day schedule</span>' +
+    '<strong>' + escapeHtml(staffScheduleLongDateLabel(date)) + '</strong>' +
+  '</div>';
+}
+
+function staffScheduleDayHtml() {
+  const date = dateOnly(scheduleWeekDate) || todayDate();
+  return staffScheduleDayBoardHeaderHtml(date) + staffScheduleTimelineGridHtml([date], "task-scheduler-week-grid task-scheduler-day-grid staff-schedule-week-grid staff-schedule-day-grid");
+}
+
+function staffScheduleMonthWeekdayHeadersHtml() {
+  const weekdays = [["Sunday", "Sun"], ["Monday", "Mon"], ["Tuesday", "Tue"], ["Wednesday", "Wed"], ["Thursday", "Thu"], ["Friday", "Fri"], ["Saturday", "Sat"]];
+  return weekdays.map(([full, short]) =>
+    '<div class="task-scheduler-month-weekday"><span class="weekday-full">' + escapeHtml(full) + '</span><span class="weekday-short">' + escapeHtml(short) + '</span></div>'
+  ).join("");
+}
+
+function staffScheduleMonthHtml() {
+  const dates = staffScheduleMonthDates(scheduleWeekDate);
+  const anchorMonth = new Date((dateOnly(scheduleWeekDate) || todayDate()) + "T12:00:00").getMonth();
+  const staffColorMap = scheduleStaffCustomColorMap();
+  return '<div class="task-scheduler-month-grid staff-schedule-month-grid">' +
+    staffScheduleMonthWeekdayHeadersHtml() +
+    dates.map((date) => {
+      const dateObj = new Date(date + "T12:00:00");
+      const shifts = staffScheduleRecordsForDates([date]);
+      const outsideClass = dateObj.getMonth() === anchorMonth ? "" : " is-outside-month";
+      const todayClass = date === todayDate() ? " is-today" : "";
+      const holiday = holidayForDate(date);
+      return '<div class="task-scheduler-month-day staff-schedule-month-day' + outsideClass + todayClass + (holiday ? " has-holiday" : "") + '" data-schedule-drop-date="' + escapeHtml(date) + '" data-schedule-drop-time="09:00">' +
+        '<strong>' + escapeHtml(String(dateObj.getDate())) + '</strong>' +
+        (holiday ? '<span class="staff-schedule-holiday-chip">' + escapeHtml(holiday.name || "Holiday") + '</span>' : "") +
+        shifts.slice(0, 4).map((shift) => staffScheduleMonthShiftHtml(shift, staffColorMap)).join("") +
+        (shifts.length > 2 ? '<span class="task-scheduler-month-more is-mobile" aria-label="' + escapeHtml(String(shifts.length - 2)) + ' more shifts">...</span>' : "") +
+        (shifts.length > 4 ? '<span class="task-scheduler-month-more is-desktop" aria-label="' + escapeHtml(String(shifts.length - 4)) + ' more shifts">...</span>' : "") +
+      '</div>';
+    }).join("") +
+  '</div>';
+}
+
+function renderStaffScheduleMiniCalendar() {
+  const el = $("#staffScheduleMiniCalendar");
+  if (!el) return;
+  const anchor = dateOnly(scheduleWeekDate) || todayDate();
+  const dates = staffScheduleMonthDates(anchor);
+  el.innerHTML = '<div class="task-scheduler-mini-header"><button type="button" class="secondary-button" data-action="staff-schedule-mini-prev" aria-label="Previous month">‹</button><strong>' + escapeHtml(new Date(anchor + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" })) + '</strong><button type="button" class="secondary-button" data-action="staff-schedule-mini-next" aria-label="Next month">›</button></div>' +
+    '<div class="task-scheduler-mini-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>' +
+    '<div class="task-scheduler-mini-grid">' +
+    dates.map((date) => {
+      const count = staffScheduleRecordsForDates([date]).length;
+      return '<button type="button" data-action="staff-schedule-jump-date" data-date="' + escapeHtml(date) + '" class="' + (date === todayDate() ? "is-today" : "") + (date === anchor ? " is-selected" : "") + '">' +
+        escapeHtml(String(new Date(date + "T12:00:00").getDate())) +
+        (count ? '<small>' + count + '</small>' : "") +
+      '</button>';
+    }).join("") +
+    '</div>';
+}
+
+function renderStaffScheduleLegend(shifts = staffScheduleRecordsForDates(), colorMap = scheduleStaffCustomColorMap()) {
+  const el = $("#staffScheduleLegend");
+  if (!el) return;
+  const staff = [];
+  const seen = new Set();
+  shifts.forEach((shift) => {
+    const key = scheduleShiftStaffColorKey(shift) || shift.staffName || shift.id;
+    if (seen.has(key)) return;
+    seen.add(key);
+    staff.push(shift);
+  });
+  el.innerHTML = '<h3>Staff</h3>' + (staff.length ? staff.map((shift) =>
+    '<div class="task-scheduler-legend-item staff-schedule-legend-item"' + staffScheduleStyleAttr(scheduleShiftStaffColorStyle(shift, colorMap), { "--task-color": scheduleShiftStaffColorValue(shift, colorMap) }) + '>' +
+      '<i></i><span>' + escapeHtml(shift.staffName || "Staff") + '</span>' +
+    '</div>'
+  ).join("") : '<p>No staff scheduled in this view.</p>');
+}
+
+function staffScheduleDetailPanelHtml(shift = {}, colorMap = scheduleStaffCustomColorMap()) {
+  const warnings = scheduleWarningsForShift(shift);
+  const isAdmin = currentRole() === "admin";
+  return '<div class="task-scheduler-panel-header">' +
+    '<div><h3>' + escapeHtml(shift.staffName || "Shift Details") + '</h3><p>' + escapeHtml([staffScheduleLongDateLabel(shift.date), formatShiftTime(shift)].filter(Boolean).join(" | ")) + '</p></div>' +
+    '<button type="button" class="secondary-button task-scheduler-panel-close" data-action="close-staff-schedule-detail" aria-label="Close shift details">×</button>' +
+  '</div>' +
+  '<article class="task-scheduler-detail-card staff-schedule-detail-card">' +
+    '<div class="task-scheduler-detail-hero">' +
+      '<span class="task-scheduler-avatar staff-schedule-avatar is-large"' + staffScheduleStyleAttr(scheduleShiftStaffColorStyle(shift, colorMap), { "--task-color": scheduleShiftStaffColorValue(shift, colorMap) }) + '>' + escapeHtml(staffScheduleInitials(shift.staffName)) + '</span>' +
+      '<div><h4>' + escapeHtml(shift.staffName || "Staff") + '</h4><p>' + escapeHtml(shift.status || "Draft") + '</p></div>' +
+    '</div>' +
+    '<div class="task-scheduler-detail-row"><span>Date</span><strong>' + escapeHtml(staffScheduleLongDateLabel(shift.date)) + '</strong></div>' +
+    '<div class="task-scheduler-detail-row"><span>Time</span><strong>' + escapeHtml(formatShiftTime(shift)) + '</strong></div>' +
+    '<div class="task-scheduler-detail-row"><span>Role</span><strong>' + escapeHtml(shift.role || "Kennel Care") + '</strong></div>' +
+    '<div class="task-scheduler-detail-row"><span>Location</span><strong>' + escapeHtml(shift.location || "No location set") + '</strong></div>' +
+    (shift.notes ? '<div class="task-scheduler-detail-row is-notes"><span>Notes</span><p>' + escapeHtml(shift.notes) + '</p></div>' : "") +
+    '<section class="task-scheduler-status-card ' + (warnings.length ? "is-pending-confirmation" : "") + '"><strong>Status</strong><p>' + escapeHtml(warnings.length ? "Needs review" : shift.status || "Draft") + '</p>' + (warnings.length ? '<ul class="schedule-warning-list">' + warnings.map((warning) => '<li>' + escapeHtml(warning) + '</li>').join("") + '</ul>' : '<span>No schedule warnings.</span>') + '</section>' +
+    (isAdmin ? '<div class="task-scheduler-form-actions">' +
+      '<button type="button" class="secondary-button" data-action="edit-shift" data-id="' + escapeHtml(shift.id) + '">Edit Shift</button>' +
+      '<button type="button" class="secondary-button" data-action="duplicate-shift" data-id="' + escapeHtml(shift.id) + '">Duplicate</button>' +
+      '<button type="button" class="secondary-button" data-action="copy-shift-days" data-id="' + escapeHtml(shift.id) + '">Copy to Days</button>' +
+      '<button type="button" class="secondary-button danger-button" data-action="cancel-shift" data-id="' + escapeHtml(shift.id) + '">Cancel Shift</button>' +
+    '</div>' : "") +
+  '</article>';
+}
+
+function renderStaffScheduleDetail(shift = null, colorMap = scheduleStaffCustomColorMap()) {
+  const panel = $("#staffScheduleDetailPanel");
+  if (!panel) return;
+  const open = Boolean(shift?.id);
+  panel.classList.toggle("is-open", open);
+  panel.innerHTML = open
+    ? staffScheduleDetailPanelHtml(shift, colorMap)
+    : '<div class="task-scheduler-panel-header"><div><h3>Schedule Details</h3><p>Select a shift to see the staff member, time, notes, and edit tools.</p></div></div>';
+}
+
+function staffScheduleDropSlotFromPoint(event) {
+  const elements = typeof document.elementsFromPoint === "function" ? document.elementsFromPoint(event.clientX, event.clientY) : [];
+  const directSlot = elements.find((element) => element?.matches?.("[data-schedule-drop-date]"));
+  if (directSlot) return directSlot;
+  if (staffScheduleView === "month") return event.target.closest(".staff-schedule-month-day[data-schedule-drop-date]");
+  const grid = event.target.closest(".staff-schedule-time-grid") || $("#scheduleWeekGrid .staff-schedule-time-grid");
+  if (!grid) return null;
+  const dates = staffScheduleVisibleDates();
+  const range = staffScheduleTimeGridRange(dates);
+  const rect = grid.getBoundingClientRect();
+  const firstSlot = grid.querySelector(".staff-schedule-slot[data-schedule-drop-date]");
+  if (!firstSlot || event.clientY < firstSlot.getBoundingClientRect().top || event.clientY > rect.bottom) return null;
+  const timeColumn = grid.querySelector(".task-scheduler-time-label:not(.task-scheduler-week-header)");
+  const timeColumnWidth = timeColumn?.getBoundingClientRect().width || (window.innerWidth <= 900 ? 52 : 70);
+  if (event.clientX < rect.left + timeColumnWidth || event.clientX > rect.right) return null;
+  const dayWidth = Math.max(1, (rect.width - timeColumnWidth) / Math.max(1, dates.length));
+  const dateIndex = Math.max(0, Math.min(dates.length - 1, Math.floor((event.clientX - rect.left - timeColumnWidth) / dayWidth)));
+  const slotRect = firstSlot.getBoundingClientRect();
+  const slotHeight = slotRect.height || 20;
+  const slotIndex = Math.max(0, Math.min(range.slotCount - 1, Math.floor((event.clientY - slotRect.top) / slotHeight)));
+  const date = dates[dateIndex];
+  const time = staffScheduleTimeFromMinutes(range.startMinutes + slotIndex * STAFF_SCHEDULE_SLOT_MINUTES);
+  return Array.from(grid.querySelectorAll(".staff-schedule-slot[data-schedule-drop-date]"))
+    .find((slot) => slot.dataset.scheduleDropDate === date && slot.dataset.scheduleDropTime === time) || null;
+}
+
+function openStaffScheduleSlotDraft(slot) {
+  if (!slot || !staffScheduleAdminRequired()) return;
+  const startTime = slot.dataset.scheduleDropTime || "09:00";
+  openScheduleShiftPopup({
+    date: dateOnly(slot.dataset.scheduleDropDate) || dateOnly(scheduleWeekDate) || todayDate(),
+    startTime,
+    endTime: staffScheduleTimeFromMinutes(timeToMinutes(startTime) + 240),
+  });
+}
+
+async function moveStaffScheduleShift(id = "", date = "", startTime = "") {
+  if (!staffScheduleAdminRequired()) return null;
+  const shift = readRecords("staffSchedule").find((item) => item.id === id && !item.removed && item.status !== "Cancelled");
+  if (!shift) return null;
+  const targetDate = dateOnly(date) || shift.date;
+  const targetStartTime = startTime || shift.startTime || "09:00";
+  const duration = staffScheduleShiftMinutes(shift);
+  const weekStartValue = scheduleWeekStartString(targetDate);
+  const targetWeekPublished = weekIsPublished(weekStartValue);
+  const changedAfterPublish = Boolean(shift.publishedAt || targetWeekPublished || shift.status === "Published");
+  const updated = await saveAndNotify({
+    ...shift,
+    date: targetDate,
+    startTime: targetStartTime,
+    endTime: staffScheduleTimeFromMinutes(timeToMinutes(targetStartTime) + duration),
+    weekStart: weekStartValue,
+    status: targetWeekPublished ? "Published" : shift.status || "Draft",
+    changedAfterPublish,
+    updatedAt: new Date().toISOString(),
+  }, changedAfterPublish ? "scheduleChangedAfterPublish" : "");
+  staffScheduleSelectedShiftId = updated?.id || shift.id;
+  renderTimesheet();
+  showToast("Shift moved.");
+  return updated;
+}
+
+function ensureStaffSchedulePlannerBindings() {
+  const panel = $("#timesheetSchedulePanel");
+  if (!panel || panel.dataset.staffScheduleBound === "true") return;
+  panel.dataset.staffScheduleBound = "true";
+
+  panel.addEventListener("click", async (event) => {
+    const viewButton = event.target.closest("[data-staff-schedule-view]");
+    if (viewButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      setStaffScheduleView(viewButton.dataset.staffScheduleView || "week");
+      return;
+    }
+
+    const monthDay = event.target.closest(".staff-schedule-month-day[data-schedule-drop-date]");
+    if (staffScheduleView === "month" && monthDay && !event.target.closest("[data-action]")) {
+      event.preventDefault();
+      event.stopPropagation();
+      scheduleWeekDate = monthDay.dataset.scheduleDropDate || scheduleWeekDate;
+      setStaffScheduleView("day");
+      return;
+    }
+
+    const action = event.target.closest("[data-action]");
+    if (!action) return;
+
+    if (["schedule-prev-week", "schedule-this-week", "schedule-next-week", "staff-schedule-jump-date", "staff-schedule-mini-prev", "staff-schedule-mini-next", "select-schedule-shift", "close-staff-schedule-detail", "edit-shift", "duplicate-shift", "copy-shift-days", "cancel-shift"].includes(action.dataset.action)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    if (action.dataset.action === "schedule-prev-week") {
+      scheduleWeekDate = staffScheduleShiftAnchor(-1);
+      renderTimesheet();
+      return;
+    }
+    if (action.dataset.action === "schedule-this-week") {
+      scheduleWeekDate = todayDate();
+      renderTimesheet();
+      return;
+    }
+    if (action.dataset.action === "schedule-next-week") {
+      scheduleWeekDate = staffScheduleShiftAnchor(1);
+      renderTimesheet();
+      return;
+    }
+    if (action.dataset.action === "staff-schedule-jump-date") {
+      scheduleWeekDate = action.dataset.date || scheduleWeekDate;
+      renderTimesheet();
+      return;
+    }
+    if (action.dataset.action === "staff-schedule-mini-prev") {
+      scheduleWeekDate = addMonths(dateOnly(scheduleWeekDate) || todayDate(), -1);
+      renderTimesheet();
+      return;
+    }
+    if (action.dataset.action === "staff-schedule-mini-next") {
+      scheduleWeekDate = addMonths(dateOnly(scheduleWeekDate) || todayDate(), 1);
+      renderTimesheet();
+      return;
+    }
+    if (action.dataset.action === "select-schedule-shift") {
+      staffScheduleSelectedShiftId = action.dataset.id || "";
+      renderTimesheet();
+      return;
+    }
+    if (action.dataset.action === "close-staff-schedule-detail") {
+      staffScheduleSelectedShiftId = "";
+      renderTimesheet();
+      return;
+    }
+    if (action.dataset.action === "edit-shift") {
+      const record = readRecords("staffSchedule").find((item) => item.id === action.dataset.id && !item.removed);
+      if (record) openScheduleShiftPopup(record);
+      return;
+    }
+    if (action.dataset.action === "duplicate-shift") {
+      duplicateScheduleShift(action.dataset.id);
+      return;
+    }
+    if (action.dataset.action === "copy-shift-days") {
+      openCopyShiftToDaysPopup(action.dataset.id);
+      return;
+    }
+    if (action.dataset.action === "cancel-shift") {
+      const cancelled = await cancelScheduleShift(action.dataset.id);
+      if (cancelled) {
+        staffScheduleSelectedShiftId = "";
+        showToast("Shift cancelled.");
+      }
+      return;
+    }
+  });
+
+  panel.addEventListener("dblclick", (event) => {
+    const slot = event.target.closest("[data-schedule-drop-date]");
+    if (!slot || staffScheduleView === "month" || event.target.closest("[data-action]")) return;
+    event.preventDefault();
+    openStaffScheduleSlotDraft(slot);
+  });
+
+  panel.addEventListener("dragstart", (event) => {
+    const card = event.target.closest('[data-action="select-schedule-shift"]');
+    if (!card || currentRole() !== "admin") return;
+    staffScheduleDragShiftId = card.dataset.id || "";
+    event.dataTransfer?.setData("text/plain", staffScheduleDragShiftId);
+    card.classList.add("is-dragging");
+  });
+
+  panel.addEventListener("dragover", (event) => {
+    if (staffScheduleDragShiftId && staffScheduleDropSlotFromPoint(event)) event.preventDefault();
+  });
+
+  panel.addEventListener("drop", async (event) => {
+    const slot = staffScheduleDropSlotFromPoint(event);
+    if (!slot) return;
+    event.preventDefault();
+    const id = event.dataTransfer?.getData("text/plain") || staffScheduleDragShiftId;
+    staffScheduleDragShiftId = "";
+    await moveStaffScheduleShift(id, slot.dataset.scheduleDropDate, slot.dataset.scheduleDropTime || "09:00");
+  });
+
+  panel.addEventListener("dragend", (event) => {
+    staffScheduleDragShiftId = "";
+    event.target.closest(".staff-schedule-card")?.classList.remove("is-dragging");
+  });
+}
+
 function renderScheduleTab() {
   const grid = $("#scheduleWeekGrid");
   const summary = $("#scheduleSummaryGrid");
   if (!grid || !summary) return;
-  const start = scheduleWeekStartString();
-  const shifts = staffScheduleRecordsForWeek(start);
+  const dates = staffScheduleVisibleDates();
+  const shifts = staffScheduleRecordsForDates(dates);
   const staffColorMap = scheduleStaffCustomColorMap();
-  const holidays = holidaysForRange(start, addDays(start, 7));
-  const totalHours = shifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
-  const published = weekIsPublished(start);
+  const firstDate = dates[0] || dateOnly(scheduleWeekDate) || todayDate();
+  const lastDate = dates[dates.length - 1] || firstDate;
+  const holidays = holidaysForRange(firstDate, addDays(lastDate, 1));
+  const totalHours = shifts.reduce((sum, shift) => sum + staffScheduleShiftMinutes(shift) / 60, 0);
+  const visibleStaffCount = new Set(shifts.map((shift) => scheduleShiftStaffColorKey(shift) || shift.staffName || shift.id)).size;
   const isAdmin = currentRole() === "admin";
+  const label = $("#staffScheduleRangeLabel");
+  if (label) label.textContent = staffScheduleRangeLabel();
+  $("#staffScheduleDayViewButton")?.classList.toggle("is-active", staffScheduleView === "day");
+  $("#staffScheduleWeekViewButton")?.classList.toggle("is-active", staffScheduleView === "week");
+  $("#staffScheduleMonthViewButton")?.classList.toggle("is-active", staffScheduleView === "month");
   summary.innerHTML = [
-    ["Week", dateRangeText(start, addDays(start, 6)), published ? "Published" : "Draft"],
+    ["View", staffScheduleRangeLabel(), staffScheduleView.charAt(0).toUpperCase() + staffScheduleView.slice(1) + " planner"],
     ["Scheduled hours", totalHours.toFixed(2), "Across visible staff"],
-    ["Open days", scheduleWeekDates(start).filter((date) => !shifts.some((shift) => shift.date === date)).length, "No shift saved"],
-    ["Holiday flags", holidays.length, "This week"],
-  ].map(([label, value, note]) => \`<div class="summary-card"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(String(value))}</strong><p>\${escapeHtml(String(note))}</p></div>\`).join("");
-  grid.innerHTML = scheduleWeekDates(start).map((date) => {
-    const dayShifts = shifts.filter((shift) => shift.date === date).sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
-    const holiday = holidayForDate(date);
-    return \`<article class="schedule-day-card">
-      <header><strong>\${escapeHtml(new Date(\`\${date}T12:00:00\`).toLocaleDateString("en-US", { weekday: "short" }))}</strong><span>\${escapeHtml(date.slice(5))}</span></header>
-      \${holiday ? \`<div class="status-chip">\${escapeHtml(holiday.name || "Holiday")}</div>\` : ""}
-      \${dayShifts.length ? dayShifts.map((shift) => {
-        const warnings = scheduleWarningsForShift(shift);
-        const staffColorIndex = scheduleShiftStaffColorIndex(shift, staffColorMap);
-        return \`<article class="schedule-shift-card \${warnings.length ? "is-warning" : ""}" data-staff-color="\${escapeHtml(String(staffColorIndex))}" style="\${escapeHtml(scheduleShiftStaffColorStyle(shift, staffColorMap))}">
-          <button type="button" class="schedule-shift-main" data-action="edit-shift" data-id="\${escapeHtml(shift.id)}">
-            <strong class="schedule-shift-staff">\${escapeHtml(shift.staffName || "Staff")}</strong>
-            <span>\${escapeHtml(formatShiftTime(shift))}</span>
-            <span>\${escapeHtml([shift.role, shift.location, shift.status].filter(Boolean).join(" | "))}</span>
-          </button>
-          \${isAdmin ? \`<div class="record-actions">
-            <button type="button" class="secondary-button" data-action="duplicate-shift" data-id="\${escapeHtml(shift.id)}">Duplicate</button>
-            <button type="button" class="secondary-button" data-action="copy-shift-days" data-id="\${escapeHtml(shift.id)}">Copy to Days</button>
-          </div>\` : ""}
-        </article>\`;
-      }).join("") : \`<p>No shifts scheduled.</p>\`}
-    </article>\`;
-  }).join("");
+    ["Open days", dates.filter((date) => !shifts.some((shift) => shift.date === date)).length, "No shift saved"],
+    ["Staff", visibleStaffCount, "Scheduled in view"],
+    ["Holiday flags", holidays.length, staffScheduleView === "month" ? "Visible range" : "This range"],
+  ].map(([cardLabel, value, note]) => '<div class="summary-card"><span>' + escapeHtml(cardLabel) + '</span><strong>' + escapeHtml(String(value)) + '</strong><p>' + escapeHtml(String(note)) + '</p></div>').join("");
+  grid.innerHTML = staffScheduleView === "month" ? staffScheduleMonthHtml() : staffScheduleView === "day" ? staffScheduleDayHtml() : staffScheduleWeekHtml();
+  renderStaffScheduleMiniCalendar();
+  renderStaffScheduleLegend(shifts, staffColorMap);
+  const selected = shifts.find((shift) => shift.id === staffScheduleSelectedShiftId) || null;
+  if (!selected) staffScheduleSelectedShiftId = "";
+  $("#staffScheduleLayout")?.classList.toggle("has-panel-open", Boolean(selected));
+  renderStaffScheduleDetail(selected, staffColorMap);
   [
     "#openScheduleShiftButton",
     "#openBulkScheduleButton",
@@ -774,6 +1334,7 @@ function renderScheduleTab() {
     const el = $(selector);
     if (el) el.hidden = !isAdmin;
   });
+  ensureStaffSchedulePlannerBindings();
 }
 
 function renderTimeOffTab() {
