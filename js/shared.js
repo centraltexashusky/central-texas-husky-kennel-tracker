@@ -1640,7 +1640,7 @@ function remoteRecordTypesForPage(pageId = "") {
     maintenancePage: ["maintenance"],
     timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
     servicesPage: ["service"],
-    financialsPage: ["boardingDog", "service", "cfoNote"],
+    financialsPage: ["boardingDog", "service"],
     settingsUsersPage: ["settingsUser"],
     settingsKennelLocationsPage: ["kennelLocation", "kennelBuilding"],
     settingsHoursPage: ["operationHours", "operationDateOverride"],
@@ -1848,7 +1848,6 @@ function shouldSeedDefaultAdminConfigRecords() {
 function seedDefaultAdminConfigRecords() {
   if (!shouldSeedDefaultAdminConfigRecords()) return;
   if (typeof seedDefaultServices === "function") seedDefaultServices();
-  if (typeof seedDefaultCfoNotes === "function") seedDefaultCfoNotes();
   if (typeof seedDefaultKennelLocations === "function") seedDefaultKennelLocations();
   if (typeof seedDefaultKennelBuildings === "function") seedDefaultKennelBuildings();
   if (typeof seedDefaultOperationHours === "function") seedDefaultOperationHours();
@@ -4766,9 +4765,8 @@ function renderAfterRealtimeTypes(types = []) {
     updateTimeDisplays();
   }
   if (activePage === "servicesPage" && typeSet.has("service")) renderServices();
-  if (activePage === "financialsPage" && hasAny(["boardingDog", "service", "cfoNote"])) {
+  if (activePage === "financialsPage" && hasAny(["boardingDog", "service"])) {
     renderFinancials();
-    renderCfoNotes();
   }
   if (activePage === "settingsUsersPage" && typeSet.has("settingsUser")) renderSettingsUsers();
   if (activePage === "settingsKennelLocationsPage" && hasAny(["kennelLocation", "kennelBuilding"])) renderKennelLocations();
@@ -10746,7 +10744,7 @@ function renderActivePageRecords(pageId = activePageId()) {
     maintenancePage: () => renderMaintenance(),
     timesheetPage: () => renderTimesheet(),
     servicesPage: () => renderServices(),
-    financialsPage: () => { renderFinancials(); renderCfoNotes(); renderDemoSubmissions(); },
+    financialsPage: () => { renderFinancials(); renderDemoSubmissions(); },
     settingsUsersPage: () => renderSettingsUsers(),
     settingsKennelLocationsPage: () => renderKennelLocations(),
     settingsHoursPage: () => renderOperationHoursSettings(),
@@ -10780,7 +10778,6 @@ function renderAllRecords(options = {}) {
   renderTimesheet();
   renderServices();
   renderFinancials();
-  renderCfoNotes();
   renderSettingsUsers();
   renderKennelLocations();
   renderOperationHoursSettings();
@@ -14153,25 +14150,19 @@ function initEvents() {
   $("#confirmBookingRequestButton").addEventListener("click", submitPendingCustomerBooking);
   $("#resetCustomerBookingButton").addEventListener("click", resetCustomerBookingForm);
 
-  $("#cfoNoteForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (!validateForm(event.currentTarget)) return;
-    const payload = { type: "cfoNote", id: uid("cfoNote"), submittedAt: new Date().toISOString(), ...formPayload(event.currentTarget) };
-    const record = upsertRecord("cfoNote", payload);
-    await sendPayload(record);
-    event.currentTarget.reset();
-    renderCfoNotes();
-    showToast("CFO note added.");
-  });
-  $("#cfoNotesList").addEventListener("click", async (event) => {
-    const button = event.target.closest('[data-action="remove-cfo-note"]');
+  $("#financialPeriodControl")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-financial-period]");
     if (!button) return;
-    const note = readRecords("cfoNote").find((item) => item.id === button.dataset.id);
-    if (!note) return;
-    const updated = upsertRecord("cfoNote", { ...note, removed: true });
-    await sendPayload(updated);
-    renderCfoNotes();
-    showToast("CFO note removed.");
+    financialPeriodView = button.dataset.financialPeriod || "monthly";
+    renderFinancials();
+  });
+  $("#financialStartDate")?.addEventListener("change", renderFinancials);
+  $("#financialEndDate")?.addEventListener("change", renderFinancials);
+  $("#financialResetRangeButton")?.addEventListener("click", () => {
+    const range = financialCurrentYearRange();
+    if ($("#financialStartDate")) $("#financialStartDate").value = range.start;
+    if ($("#financialEndDate")) $("#financialEndDate").value = range.end;
+    renderFinancials();
   });
 
   $("#settingsUserForm")?.addEventListener("submit", async (event) => {

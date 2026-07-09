@@ -18,6 +18,8 @@ function serviceChipsHtml(service = {}) {
   return [serviceFlagChipsHtml(service.flags), serviceBoardingRateChipHtml(service), serviceDependencyChipHtml(service)].filter(Boolean).join(" ");
 }
 
+var financialPeriodView = "monthly";
+
 function readTableConfig() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.tableConfig) || "null") || {};
   const withDefaults = {};
@@ -751,36 +753,272 @@ function dashboardBoardingServiceCardHtml(item = {}) {
   </article>\`;
 }
 
-function renderFinancials() {
-  if (!$("#financialCards")) return;
-  if (currentRole() !== "admin") {
-    $("#financialCards").innerHTML = "";
-    return;
-  }
-  const services = readRecords("service");
-  const activeServices = services.filter((service) => (service.flags || []).includes("Active"));
-  const catalogValue = activeServices.reduce((total, service) => total + Number(service.basePrice || 0), 0);
-  const depositExposure = services.reduce((total, service) => total + Number(service.depositAmount || 0), 0);
-  const puppyServices = services.filter((service) => service.category === "Puppy placement");
-  const yardRental = services.find((service) => service.category === "Private yard rental");
-  const cards = [
-    ["Active service count", activeServices.length, "Editable services currently active."],
-    ["Catalog price total", money(catalogValue), "Sum of active base prices for quick review."],
-    ["Deposit settings total", money(depositExposure), "Deposits configured across services."],
-    ["Puppy price bands", puppyServices.length, "Placement options in the catalog."],
-    ["Yard rental rate", yardRental ? \`\${money(yardRental.basePrice)} \${yardRental.unit}\` : "Not set", "Suggested start: $10-$12 per dog/hour."],
-    ["Open revenue tasks", readRecords("request").filter((record) => !record.completed && /price|revenue|yard|service|deposit/i.test(JSON.stringify(record))).length, "Requests mentioning pricing/revenue/service."],
-  ];
-  $("#financialCards").innerHTML = cards.map(([label, value, note]) => \`<article class="dashboard-card"><span>\${label}</span><strong>\${value}</strong><p>\${note}</p></article>\`).join("");
+function financialCurrentYearRange() {
+  const year = new Date().getFullYear();
+  return { start: year + "-01-01", end: year + "-12-31" };
 }
 
-function renderCfoNotes() {
-  if (!$("#cfoNotesList")) return;
-  const notes = readRecords("cfoNote").filter((note) => !note.removed);
-  $("#cfoNotesList").innerHTML = notes.length
-    ? notes.map((note) => \`<article class="record-card"><strong>\${escapeHtml(note.title)}</strong><p>\${escapeHtml(note.note)}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="remove-cfo-note" data-id="\${escapeHtml(note.id)}">Remove</button></div></article>\`).join("")
-    : "<p>No CFO notes saved yet.</p>";
+function ensureFinancialRangeInputs() {
+  const fallback = financialCurrentYearRange();
+  if ($("#financialStartDate") && !$("#financialStartDate").value) $("#financialStartDate").value = fallback.start;
+  if ($("#financialEndDate") && !$("#financialEndDate").value) $("#financialEndDate").value = fallback.end;
 }
+
+function financialRangeValues() {
+  const fallback = financialCurrentYearRange();
+  const start = $("#financialStartDate")?.value || fallback.start;
+  const end = $("#financialEndDate")?.value || fallback.end;
+  return start <= end ? { start, end } : { start: end, end: start };
+}
+
+function financialDateFromKey(value = "") {
+  const raw = String(value || "");
+  if (!raw) return null;
+  const date = new Date(raw.includes("T") ? raw : raw + "T12:00:00");
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function financialEntryDate(record = {}, stay = {}) {
+  return dateOnly(stay.paidAt || record.paidAt || stay.checkedOutAt || record.checkedOutAt || stay.pickupTime || stay.dropoffTime || stay.createdAt || record.submittedAt || record.updatedAt);
+}
+
+function financialLineItemSum(snapshot = {}, predicate = () => false) {
+  return arrayValue(snapshot.lineItems).reduce((total, line) => total + (predicate(line) ? Number(line.amount || 0) : 0), 0);
+}
+
+function financialSingleEntryTotals(entry = {}) {
+  const record = entry.record || {};
+  const stay = entry.stay || {};
+  const snapshot = stay.pricingSnapshot || {};
+  const total = Number(stay.groupTotal ?? snapshot.groupTotal ?? boardingStayInvoiceTotal(record, stay) ?? 0) || 0;
+  const lineServiceTotal = financialLineItemSum(snapshot, (line) => line.type === "service");
+  const serviceSource = snapshot.serviceSubtotal !== undefined
+    ? snapshot.serviceSubtotal
+    : (lineServiceTotal > 0 ? lineServiceTotal : boardingStayRequestTotal(stay.requests || [], { user: boardingPricingUserForRecord(record), preferCatalogPricing: true }));
+  const services = Number(serviceSource || 0) || 0;
+  const lineBoardingTotal = financialLineItemSum(snapshot, (line) => ["boarding", "boarding-program"].includes(line.type));
+  const boardingSource = snapshot.boardingSubtotal !== undefined
+    ? snapshot.boardingSubtotal
+    : (lineBoardingTotal > 0 ? lineBoardingTotal : Math.max(0, total - services));
+  const boarding = isServiceRequestStay(record, stay) ? 0 : (Number(boardingSource || 0) || 0);
+  return { total: total || boarding + services, boarding, services };
+}
+
+function financialFamilyEntryTotals(entries = []) {
+  const snapshots = entries.map((entry) => entry.stay?.pricingSnapshot || {}).filter((snapshot) => snapshot && Object.keys(snapshot).length);
+  const groupSnapshot = snapshots.find((snapshot) => snapshot.groupBoardingSubtotal !== undefined || snapshot.groupServiceSubtotal !== undefined) || snapshots[0] || {};
+  const fallback = entries.reduce((totals, entry) => {
+    const single = financialSingleEntryTotals(entry);
+    totals.total += single.total;
+    totals.boarding += single.boarding;
+    totals.services += single.services;
+    return totals;
+  }, { total: 0, boarding: 0, services: 0 });
+  const boarding = Number(groupSnapshot.groupBoardingSubtotal ?? fallback.boarding) || 0;
+  const services = Number(groupSnapshot.groupServiceSubtotal ?? fallback.services) || 0;
+  const savedTotal = boardingFamilyGroupSavedTotal(entries);
+  const total = Number(groupSnapshot.groupTotal ?? (savedTotal || boarding + services || fallback.total)) || 0;
+  return { total, boarding, services };
+}
+
+function financialIncomeEntries() {
+  const records = consolidatedBoardingDogRecords(readRecords("boardingDog").filter((record) => !record.removed));
+  const entries = uniqueBoardingStayEntries(boardingStayEntries(records))
+    .filter((entry) => entry.stay?.id)
+    .filter((entry) => !["Cancelled"].includes(entry.status));
+  return boardingFamilyGroups(entries).map((group) => {
+    const groupEntries = group.type === "family" ? group.entries || [] : [group.entry].filter(Boolean);
+    const first = groupEntries[0] || {};
+    const record = first.record || {};
+    const stay = first.stay || {};
+    const totals = group.type === "family" ? financialFamilyEntryTotals(groupEntries) : financialSingleEntryTotals(first);
+    const key = group.type === "family"
+      ? group.groupKey || groupEntries.map((entry) => boardingStayEntryKey(entry)).join("|")
+      : boardingStayEntryKey(first);
+    return {
+      key,
+      date: financialEntryDate(record, stay),
+      label: group.type === "family" ? boardingFamilyName(record) + " family stay" : record.dogName || "Boarding stay",
+      status: first.status || "",
+      count: groupEntries.length,
+      total: totals.total,
+      boarding: totals.boarding,
+      services: totals.services,
+    };
+  }).filter((entry) => entry.date && entry.total > 0);
+}
+
+function financialWeekStartKey(dateKey = "") {
+  const date = financialDateFromKey(dateKey);
+  if (!date) return "";
+  const dayOffset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - dayOffset);
+  return localDateKey(date);
+}
+
+function financialPeriodKey(dateKey = "", period = financialPeriodView) {
+  if (!dateKey) return "";
+  if (period === "weekly") return financialWeekStartKey(dateKey);
+  if (period === "yearly") return dateKey.slice(0, 4);
+  return dateKey.slice(0, 7);
+}
+
+function financialNextPeriodKey(key = "", period = financialPeriodView) {
+  if (!key) return "";
+  if (period === "weekly") return addDays(key, 7);
+  if (period === "yearly") return String(Number(key || new Date().getFullYear()) + 1);
+  const parts = key.split("-").map(Number);
+  const date = new Date(parts[0], parts[1], 1, 12, 0, 0, 0);
+  return localDateKey(date).slice(0, 7);
+}
+
+function financialShortDateLabel(dateKey = "") {
+  const date = financialDateFromKey(dateKey);
+  return date ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : dateKey;
+}
+
+function financialPeriodLabel(key = "", period = financialPeriodView) {
+  if (period === "weekly") return financialShortDateLabel(key) + " - " + financialShortDateLabel(addDays(key, 6));
+  if (period === "yearly") return key;
+  const date = financialDateFromKey(key + "-01");
+  return date ? date.toLocaleDateString("en-US", { month: "short", year: "numeric" }) : key;
+}
+
+function financialRangeLabel(range = financialRangeValues()) {
+  return financialShortDateLabel(range.start) + ", " + range.start.slice(0, 4) + " to " + financialShortDateLabel(range.end) + ", " + range.end.slice(0, 4);
+}
+
+function financialBuildBuckets(entries = [], range = financialRangeValues(), period = financialPeriodView) {
+  const buckets = new Map();
+  let key = financialPeriodKey(range.start, period);
+  const endKey = financialPeriodKey(range.end, period);
+  let guard = 0;
+  while (key && guard < 260) {
+    buckets.set(key, { key, label: financialPeriodLabel(key, period), total: 0, boarding: 0, services: 0, count: 0 });
+    if (key === endKey) break;
+    key = financialNextPeriodKey(key, period);
+    guard += 1;
+  }
+  entries.forEach((entry) => {
+    if (entry.date < range.start || entry.date > range.end) return;
+    const entryKey = financialPeriodKey(entry.date, period);
+    if (!buckets.has(entryKey)) buckets.set(entryKey, { key: entryKey, label: financialPeriodLabel(entryKey, period), total: 0, boarding: 0, services: 0, count: 0 });
+    const bucket = buckets.get(entryKey);
+    bucket.total += Number(entry.total || 0);
+    bucket.boarding += Number(entry.boarding || 0);
+    bucket.services += Number(entry.services || 0);
+    bucket.count += Number(entry.count || 1);
+  });
+  return [...buckets.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)));
+}
+
+function financialCompactMoney(value = 0) {
+  const amount = Number(value || 0);
+  const absolute = Math.abs(amount);
+  if (absolute >= 1000000) return "$" + (amount / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  if (absolute >= 10000) return "$" + Math.round(amount / 1000) + "K";
+  return money(amount);
+}
+
+function financialChartPolyline(points = "", className = "") {
+  return points ? '<polyline class="' + className + '" points="' + points + '" />' : "";
+}
+
+function financialIncomeChartSvg(buckets = []) {
+  if (!buckets.length) return '<div class="financial-empty-state">No income found for this date range.</div>';
+  const width = 820;
+  const height = 300;
+  const left = 64;
+  const right = 24;
+  const top = 28;
+  const bottom = 54;
+  const maxValue = Math.max(1, ...buckets.flatMap((bucket) => [bucket.total, bucket.boarding, bucket.services]));
+  const xFor = (index) => buckets.length === 1
+    ? left + ((width - left - right) / 2)
+    : left + ((width - left - right) * index / Math.max(1, buckets.length - 1));
+  const yFor = (value) => top + (height - top - bottom) * (1 - (Number(value || 0) / maxValue));
+  const pointsFor = (field) => buckets.map((bucket, index) => xFor(index).toFixed(1) + "," + yFor(bucket[field]).toFixed(1)).join(" ");
+  const tickValues = [0, maxValue / 2, maxValue];
+  const tickLines = tickValues.map((value) => {
+    const y = yFor(value).toFixed(1);
+    return '<g><line class="chart-grid-line" x1="' + left + '" y1="' + y + '" x2="' + (width - right) + '" y2="' + y + '" /><text class="chart-axis-label" x="' + (left - 12) + '" y="' + (Number(y) + 4) + '" text-anchor="end">' + escapeHtml(financialCompactMoney(value)) + '</text></g>';
+  }).join("");
+  const labelEvery = Math.max(1, Math.ceil(buckets.length / 6));
+  const xLabels = buckets.map((bucket, index) => {
+    if (index !== 0 && index !== buckets.length - 1 && index % labelEvery !== 0) return "";
+    const x = xFor(index).toFixed(1);
+    return '<text class="chart-axis-label" x="' + x + '" y="' + (height - 18) + '" text-anchor="middle">' + escapeHtml(bucket.label) + '</text>';
+  }).join("");
+  const pointDots = buckets.length <= 20
+    ? buckets.map((bucket, index) => '<circle class="chart-point" cx="' + xFor(index).toFixed(1) + '" cy="' + yFor(bucket.total).toFixed(1) + '" r="4"><title>' + escapeHtml(bucket.label + ": " + money(bucket.total)) + '</title></circle>').join("")
+    : "";
+  return '<svg viewBox="0 0 ' + width + ' ' + height + '" aria-hidden="true" focusable="false">'
+    + tickLines
+    + '<line class="chart-axis-line" x1="' + left + '" y1="' + (height - bottom) + '" x2="' + (width - right) + '" y2="' + (height - bottom) + '" />'
+    + financialChartPolyline(pointsFor("services"), "chart-line is-service")
+    + financialChartPolyline(pointsFor("boarding"), "chart-line is-boarding")
+    + financialChartPolyline(pointsFor("total"), "chart-line is-total")
+    + pointDots
+    + xLabels
+    + '</svg>';
+}
+
+function financialSummaryCardHtml(label = "", value = "", note = "") {
+  return '<article class="dashboard-card financial-summary-card"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong><p>' + escapeHtml(note) + '</p></article>';
+}
+
+function financialBreakdownHtml(buckets = []) {
+  const activeBuckets = buckets.filter((bucket) => bucket.total || bucket.boarding || bucket.services);
+  if (!activeBuckets.length) return '<article class="financial-period-card"><strong>No income in range</strong><p>Adjust the dates or choose a different view.</p></article>';
+  return activeBuckets.map((bucket) => '<article class="financial-period-card">'
+    + '<span>' + escapeHtml(bucket.label) + '</span>'
+    + '<strong>' + escapeHtml(money(bucket.total)) + '</strong>'
+    + '<p><b>Boarding</b> ' + escapeHtml(money(bucket.boarding)) + '</p>'
+    + '<p><b>Services</b> ' + escapeHtml(money(bucket.services)) + '</p>'
+    + '<small>' + escapeHtml(String(bucket.count)) + ' stay' + (bucket.count === 1 ? "" : "s") + '</small>'
+    + '</article>').join("");
+}
+
+function renderFinancials() {
+  const cardsEl = $("#financialCards");
+  if (!cardsEl) return;
+  const chartEl = $("#financialIncomeChart");
+  const breakdownEl = $("#financialBreakdown");
+  if (currentRole() !== "admin") {
+    cardsEl.innerHTML = "";
+    if (chartEl) chartEl.innerHTML = "";
+    if (breakdownEl) breakdownEl.innerHTML = "";
+    return;
+  }
+  ensureFinancialRangeInputs();
+  const period = ["weekly", "monthly", "yearly"].includes(financialPeriodView) ? financialPeriodView : "monthly";
+  $$("#financialPeriodControl [data-financial-period]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.financialPeriod === period);
+  });
+  const range = financialRangeValues();
+  const entries = financialIncomeEntries().filter((entry) => entry.date >= range.start && entry.date <= range.end);
+  const buckets = financialBuildBuckets(entries, range, period);
+  const total = entries.reduce((sum, entry) => sum + Number(entry.total || 0), 0);
+  const boarding = entries.reduce((sum, entry) => sum + Number(entry.boarding || 0), 0);
+  const services = entries.reduce((sum, entry) => sum + Number(entry.services || 0), 0);
+  const peakBucket = buckets.reduce((best, bucket) => bucket.total > (best?.total || 0) ? bucket : best, null);
+  cardsEl.innerHTML = [
+    financialSummaryCardHtml("Total income", money(total), financialRangeLabel(range)),
+    financialSummaryCardHtml("Boarding income", money(boarding), "Overnight stays and boarding programs."),
+    financialSummaryCardHtml("Services income", money(services), "Stay add-ons and service-only requests."),
+    financialSummaryCardHtml("Stays counted", String(entries.reduce((sum, entry) => sum + Number(entry.count || 1), 0)), "Cancelled stays are excluded."),
+    financialSummaryCardHtml("Peak " + period.replace("ly", ""), peakBucket ? money(peakBucket.total) : money(0), peakBucket ? peakBucket.label : "No income yet."),
+  ].join("");
+  if ($("#financialChartTitle")) $("#financialChartTitle").textContent = period.charAt(0).toUpperCase() + period.slice(1) + " income trend";
+  if ($("#financialChartMeta")) $("#financialChartMeta").textContent = financialRangeLabel(range) + " | " + entries.length + " booking group" + (entries.length === 1 ? "" : "s");
+  if (chartEl) {
+    chartEl.innerHTML = financialIncomeChartSvg(buckets);
+    chartEl.setAttribute("aria-label", period + " income trend from " + range.start + " to " + range.end);
+  }
+  if (breakdownEl) breakdownEl.innerHTML = financialBreakdownHtml(buckets);
+}
+
+function renderCfoNotes() {}
 
 function settingsUserTabFor(user = {}) {
   if (user.role === "admin") return "admin";
