@@ -5949,6 +5949,17 @@ button.boarding-dog-photo-thumb {
   font-weight: 700;
 }
 
+.boarding-request-service-copy small {
+  background: rgba(125, 211, 252, 0.14);
+  border: 1px solid rgba(125, 211, 252, 0.28);
+  border-radius: 999px;
+  color: rgba(226, 242, 255, 0.88);
+  display: inline-flex;
+  line-height: 1.2;
+  padding: 2px 8px;
+  width: fit-content;
+}
+
 .boarding-status-service-summary {
   display: grid;
   gap: 8px;
@@ -11683,6 +11694,12 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 :root[data-theme="light"] #boardingRequestRecords .boarding-request-service-copy small,
 :root[data-theme="light"] #boardingRequestRecords .boarding-request-empty-services {
   color: #52647C;
+}
+
+:root[data-theme="light"] :where(#detailDialog, .detail-dialog) .boarding-request-service-copy small {
+  background: #EAF4FF;
+  border-color: #A9CEE8;
+  color: #25496A;
 }
 
 :root[data-theme="light"] #boardingRequestRecords .boarding-request-service-row {

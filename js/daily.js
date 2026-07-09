@@ -449,7 +449,7 @@ function setOwnedFormLocked(locked) {
   $("#ownedDogSaveButton").hidden = false;
   $("#ownedDogSaveButton").textContent = formEl.elements.id.value ? "Update" : "Save Dog";
   $("#editOwnedDogButton").hidden = true;
-  $("#deleteOwnedDogButton").hidden = !formEl.elements.id.value;
+  $("#deleteOwnedDogButton").hidden = !formEl.elements.id.value || currentRole() !== "admin";
   formEl.classList.toggle("is-readonly", locked);
 }
 
@@ -944,7 +944,7 @@ function openOwnedDog(record = {}) {
   syncOwnedDogTabAvailability(normalized);
   setOwnedDogActiveTab("Overview");
   setOwnedFormLocked(false);
-  $("#deleteOwnedDogButton").hidden = !record.id;
+  $("#deleteOwnedDogButton").hidden = !record.id || currentRole() !== "admin";
 }
 
 function setOwnedCareEntryVisibility(visible = false) {
@@ -1155,7 +1155,7 @@ function handleOwnedDogRosterAction(button) {
   if (button.dataset.action === "edit-owned") {
     openOwnedDog(record);
     setOwnedFormLocked(false);
-    $("#deleteOwnedDogButton").hidden = false;
+    $("#deleteOwnedDogButton").hidden = currentRole() !== "admin";
   }
   if (button.dataset.action === "log-owned-care") {
     openOwnedDogTimeline(record.id);

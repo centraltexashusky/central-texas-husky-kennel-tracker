@@ -12986,6 +12986,10 @@ function initEvents() {
   $("#closeOwnedDogDialogButton")?.addEventListener("click", closeOwnedDogModal);
   $("#cancelOwnedDogEdit").addEventListener("click", closeOwnedDogModal);
   $("#deleteOwnedDogButton").addEventListener("click", async () => {
+    if (currentRole() !== "admin") {
+      showToast("Admin access required to delete a dog profile.");
+      return;
+    }
     const dog = activeOwnedDog();
     if (!dog) return;
     if (!window.confirm(\`Remove \${dog.callName || dog.showName || "this dog"} from Our Dogs?\`)) return;
@@ -12997,7 +13001,7 @@ function initEvents() {
   });
   $("#editOwnedDogButton").addEventListener("click", () => {
     setOwnedFormLocked(false);
-    $("#deleteOwnedDogButton").hidden = false;
+    $("#deleteOwnedDogButton").hidden = currentRole() !== "admin";
     showToast("Dog record unlocked for editing.");
   });
   $("#ownedDogPhotoPicker").addEventListener("click", () => handleDogPhotoClick("owned"));
