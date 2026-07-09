@@ -19,6 +19,11 @@ function serviceChipsHtml(service = {}) {
 }
 
 var financialPeriodView = "monthly";
+var financialViewMode = "overview";
+var financialLineItemSearch = "";
+var financialStatusFilter = "all";
+var financialIncomeFilter = "all";
+var financialLineItemSort = "date-desc";
 
 function readTableConfig() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.tableConfig) || "null") || {};
@@ -790,6 +795,7 @@ function financialSingleEntryTotals(entry = {}) {
   const record = entry.record || {};
   const stay = entry.stay || {};
   const snapshot = stay.pricingSnapshot || {};
+  const hasSavedSnapshot = snapshot.total !== undefined || snapshot.groupTotal !== undefined || stay.groupTotal !== undefined;
   const total = Number(stay.groupTotal ?? snapshot.groupTotal ?? boardingStayInvoiceTotal(record, stay) ?? 0) || 0;
   const lineServiceTotal = financialLineItemSum(snapshot, (line) => line.type === "service");
   const serviceSource = snapshot.serviceSubtotal !== undefined
@@ -801,7 +807,14 @@ function financialSingleEntryTotals(entry = {}) {
     ? snapshot.boardingSubtotal
     : (lineBoardingTotal > 0 ? lineBoardingTotal : Math.max(0, total - services));
   const boarding = isServiceRequestStay(record, stay) ? 0 : (Number(boardingSource || 0) || 0);
-  return { total: total || boarding + services, boarding, services };
+  const finalTotal = total || boarding + services;
+  return {
+    total: finalTotal,
+    boarding,
+    services,
+    other: Math.max(0, finalTotal - boarding - services),
+    source: hasSavedSnapshot ? "Saved pricing snapshot" : "Current catalog fallback",
+  };
 }
 
 function financialFamilyEntryTotals(entries = []) {
@@ -816,9 +829,43 @@ function financialFamilyEntryTotals(entries = []) {
   }, { total: 0, boarding: 0, services: 0 });
   const boarding = Number(groupSnapshot.groupBoardingSubtotal ?? fallback.boarding) || 0;
   const services = Number(groupSnapshot.groupServiceSubtotal ?? fallback.services) || 0;
+  const hasSavedFamilyTotal = groupSnapshot.groupTotal !== undefined || entries.some((entry) => entry.stay?.groupTotal !== undefined || entry.stay?.pricingSnapshot?.groupTotal !== undefined);
   const savedTotal = boardingFamilyGroupSavedTotal(entries);
   const total = Number(groupSnapshot.groupTotal ?? (savedTotal || boarding + services || fallback.total)) || 0;
-  return { total, boarding, services };
+  return {
+    total,
+    boarding,
+    services,
+    other: Math.max(0, total - boarding - services),
+    source: hasSavedFamilyTotal ? "Saved family pricing" : "Current catalog fallback",
+  };
+}
+
+function financialUniqueText(values = []) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))].join(", ");
+}
+
+function financialStayDays(record = {}, stay = {}, entries = []) {
+  const snapshot = stay.pricingSnapshot || {};
+  const savedDays = Number(snapshot.billingDays ?? stay.billingDays ?? snapshot.dayCount ?? snapshot.unitCount ?? 0);
+  if (savedDays) return savedDays;
+  const entryDays = entries
+    .map((entry) => Number(entry.stay?.pricingSnapshot?.billingDays ?? entry.stay?.billingDays ?? 0))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (entryDays.length) return Math.max(...entryDays);
+  return isServiceRequestStay(record, stay) ? 0 : boardingDays(stay.dropoffTime || record.dropoffTime, stay.pickupTime || record.pickupTime);
+}
+
+function financialStayRange(record = {}, stay = {}) {
+  const dropoff = stay.dropoffTime || record.dropoffTime;
+  const pickup = stay.pickupTime || record.pickupTime;
+  if (isServiceRequestStay(record, stay)) return dropoff ? "Service request " + formatDateTime(dropoff) : "Service request date not saved";
+  if (dropoff && pickup) return formatDateTime(dropoff) + " to " + formatDateTime(pickup);
+  return formatDateTime(dropoff || pickup) || "Stay date not saved";
+}
+
+function financialServiceList(entries = []) {
+  return financialUniqueText(entries.flatMap((entry) => arrayValue(entry.stay?.requests).map((request) => boardingServiceTaskDisplayName(request))));
 }
 
 function financialIncomeEntries() {
@@ -832,6 +879,12 @@ function financialIncomeEntries() {
     const record = first.record || {};
     const stay = first.stay || {};
     const totals = group.type === "family" ? financialFamilyEntryTotals(groupEntries) : financialSingleEntryTotals(first);
+    const ownerName = financialUniqueText(groupEntries.map((entry) => entry.record?.ownerName || entry.record?.customerName));
+    const dogName = financialUniqueText(groupEntries.map((entry) => entry.record?.dogName));
+    const status = financialUniqueText(groupEntries.map((entry) => entry.status)) || first.status || "";
+    const requestCode = group.type === "family"
+      ? financialUniqueText(groupEntries.map((entry) => entry.requestCode || (entry.stay?.id ? boardingStayRequestCode(entry.record || {}, entry.stay || {}) : "")))
+      : first.requestCode || (stay.id ? boardingStayRequestCode(record, stay) : "");
     const key = group.type === "family"
       ? group.groupKey || groupEntries.map((entry) => boardingStayEntryKey(entry)).join("|")
       : boardingStayEntryKey(first);
@@ -839,13 +892,21 @@ function financialIncomeEntries() {
       key,
       date: financialEntryDate(record, stay),
       label: group.type === "family" ? boardingFamilyName(record) + " family stay" : record.dogName || "Boarding stay",
-      status: first.status || "",
+      ownerName,
+      dogName,
+      status,
+      stayRange: financialStayRange(record, stay),
+      requestCode,
+      days: financialStayDays(record, stay, groupEntries),
+      servicesList: financialServiceList(groupEntries),
+      calculationSource: totals.source,
       count: groupEntries.length,
       total: totals.total,
       boarding: totals.boarding,
       services: totals.services,
+      other: totals.other,
     };
-  }).filter((entry) => entry.date && entry.total > 0);
+  }).filter((entry) => entry.date);
 }
 
 function financialWeekStartKey(dateKey = "") {
@@ -979,18 +1040,122 @@ function financialBreakdownHtml(buckets = []) {
     + '</article>').join("");
 }
 
+function financialCalculationNoteHtml() {
+  return '<strong>How totals are calculated</strong>'
+    + '<p>Financials use every non-cancelled boarding stay in the selected date range. Saved pricing snapshots and saved family totals are used first; if a stay has no saved snapshot, the app falls back to the current Services & Pricing catalog. The reporting date uses paid date, check-out, pick-up, drop-off, created, then submitted date in that order.</p>';
+}
+
+function financialSyncViewState() {
+  const mode = financialViewMode === "lineItems" ? "lineItems" : "overview";
+  $$("#financialViewTabs [data-financial-view]").forEach((button) => {
+    const active = button.dataset.financialView === mode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  $$("[data-financial-panel]").forEach((panel) => {
+    const active = panel.dataset.financialPanel === mode;
+    panel.hidden = !active;
+    panel.classList.toggle("is-active", active);
+  });
+  $("#financialPeriodControl")?.closest(".financial-toolbar")?.classList.toggle("is-line-items", mode === "lineItems");
+}
+
+function financialLineItemSearchText(item = {}) {
+  return [
+    item.ownerName,
+    item.dogName,
+    item.status,
+    item.stayRange,
+    item.requestCode,
+    item.servicesList,
+    item.calculationSource,
+    item.total,
+    item.boarding,
+    item.services,
+  ].join(" ").toLowerCase();
+}
+
+function financialFilteredLineItems(entries = []) {
+  const search = String(financialLineItemSearch || "").trim().toLowerCase();
+  const status = financialStatusFilter || "all";
+  const income = financialIncomeFilter || "all";
+  return entries.filter((item) => {
+    if (search && !financialLineItemSearchText(item).includes(search)) return false;
+    if (status !== "all" && !String(item.status || "").includes(status)) return false;
+    if (income === "boarding" && !(Number(item.boarding || 0) > 0)) return false;
+    if (income === "services" && !(Number(item.services || 0) > 0)) return false;
+    if (income === "unpriced" && Number(item.total || 0) > 0) return false;
+    return true;
+  });
+}
+
+function financialSortedLineItems(items = []) {
+  const sort = financialLineItemSort || "date-desc";
+  return [...items].sort((a, b) => {
+    if (sort === "date-asc") return String(a.date || "").localeCompare(String(b.date || ""));
+    if (sort === "total-desc") return Number(b.total || 0) - Number(a.total || 0);
+    if (sort === "customer-asc") return String(a.ownerName || "").localeCompare(String(b.ownerName || ""));
+    if (sort === "dog-asc") return String(a.dogName || "").localeCompare(String(b.dogName || ""));
+    return String(b.date || "").localeCompare(String(a.date || ""));
+  });
+}
+
+function financialLineItemRowHtml(item = {}) {
+  const days = Number(item.days || 0);
+  const serviceText = item.servicesList || "No stay services";
+  const requestText = item.requestCode ? 'Request ' + item.requestCode : 'No request code';
+  return '<tr>'
+    + '<td class="financial-line-primary"><strong>' + escapeHtml(financialShortDateLabel(item.date) + ", " + String(item.date || "").slice(0, 4)) + '</strong><span>' + escapeHtml(item.stayRange || "Stay date not saved") + '</span><small>' + escapeHtml(requestText) + '</small></td>'
+    + '<td><strong>' + escapeHtml(item.ownerName || "Owner not saved") + '</strong></td>'
+    + '<td><strong>' + escapeHtml(item.dogName || "Dog not saved") + '</strong>' + (item.count > 1 ? '<span>' + escapeHtml(String(item.count) + " dogs") + '</span>' : "") + '</td>'
+    + '<td><span class="status-chip">' + escapeHtml(item.status || "No status") + '</span></td>'
+    + '<td><strong>' + escapeHtml(String(days || 0)) + '</strong></td>'
+    + '<td><strong>' + escapeHtml(money(item.boarding || 0)) + '</strong></td>'
+    + '<td><strong>' + escapeHtml(money(item.services || 0)) + '</strong><span>' + escapeHtml(serviceText) + '</span></td>'
+    + '<td><strong>' + escapeHtml(money(item.other || 0)) + '</strong></td>'
+    + '<td><strong>' + escapeHtml(money(item.total || 0)) + '</strong></td>'
+    + '<td><strong>' + escapeHtml(item.calculationSource || "Current catalog fallback") + '</strong><span>' + escapeHtml(item.date ? "Report date " + item.date : "Report date not saved") + '</span></td>'
+    + '</tr>';
+}
+
+function financialLineItemsHtml(items = []) {
+  return items.length
+    ? items.map(financialLineItemRowHtml).join("")
+    : '<tr><td colspan="10"><div class="financial-empty-state">No line items match the selected filters.</div></td></tr>';
+}
+
+function syncFinancialLineItemFilterControls() {
+  if ($("#financialLineItemSearch")) $("#financialLineItemSearch").value = financialLineItemSearch;
+  if ($("#financialStatusFilter")) $("#financialStatusFilter").value = financialStatusFilter;
+  if ($("#financialIncomeFilter")) $("#financialIncomeFilter").value = financialIncomeFilter;
+  if ($("#financialLineItemSort")) $("#financialLineItemSort").value = financialLineItemSort;
+}
+
+function renderFinancialLineItems(entries = [], range = financialRangeValues()) {
+  syncFinancialLineItemFilterControls();
+  const filtered = financialSortedLineItems(financialFilteredLineItems(entries));
+  const total = filtered.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  if ($("#financialLineItemsBody")) $("#financialLineItemsBody").innerHTML = financialLineItemsHtml(filtered);
+  if ($("#financialLineItemMeta")) $("#financialLineItemMeta").textContent = filtered.length + " of " + entries.length + " line item" + (entries.length === 1 ? "" : "s") + " | " + financialRangeLabel(range);
+  if ($("#financialLineItemTotal")) $("#financialLineItemTotal").textContent = money(total);
+}
+
 function renderFinancials() {
   const cardsEl = $("#financialCards");
   if (!cardsEl) return;
   const chartEl = $("#financialIncomeChart");
   const breakdownEl = $("#financialBreakdown");
+  const lineItemsEl = $("#financialLineItemsBody");
   if (currentRole() !== "admin") {
     cardsEl.innerHTML = "";
     if (chartEl) chartEl.innerHTML = "";
     if (breakdownEl) breakdownEl.innerHTML = "";
+    if (lineItemsEl) lineItemsEl.innerHTML = "";
     return;
   }
   ensureFinancialRangeInputs();
+  financialSyncViewState();
+  if ($("#financialCalculationNote")) $("#financialCalculationNote").innerHTML = financialCalculationNoteHtml();
   const period = ["weekly", "monthly", "yearly"].includes(financialPeriodView) ? financialPeriodView : "monthly";
   $$("#financialPeriodControl [data-financial-period]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.financialPeriod === period);
@@ -1016,6 +1181,7 @@ function renderFinancials() {
     chartEl.setAttribute("aria-label", period + " income trend from " + range.start + " to " + range.end);
   }
   if (breakdownEl) breakdownEl.innerHTML = financialBreakdownHtml(buckets);
+  renderFinancialLineItems(entries, range);
 }
 
 function renderCfoNotes() {}

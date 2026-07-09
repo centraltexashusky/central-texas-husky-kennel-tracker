@@ -16,7 +16,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260708-financial-income-overview" />
+    <link rel="stylesheet" href="styles.css?v=20260708-financial-line-items" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -1286,6 +1286,10 @@
       <section class="page-view" id="financialsPage">
         <section class="form-section financial-overview-section">
           <div class="section-heading"><span>F</span><div><h2>Financials</h2><p>Boarding and services income overview from saved stay and service request totals.</p></div></div>
+          <div class="financial-view-tabs" id="financialViewTabs" role="tablist" aria-label="Financial sections">
+            <button type="button" class="is-active" data-financial-view="overview" role="tab" aria-selected="true">Overview</button>
+            <button type="button" data-financial-view="lineItems" role="tab" aria-selected="false">Line items</button>
+          </div>
           <div class="financial-toolbar">
             <div class="segmented-control financial-period-control" id="financialPeriodControl" role="group" aria-label="Financial view">
               <button type="button" class="is-active" data-financial-period="weekly">Weekly</button>
@@ -1296,22 +1300,79 @@
             <label>End date<input type="date" id="financialEndDate" /></label>
             <button type="button" class="secondary-button" id="financialResetRangeButton">Current Year</button>
           </div>
-          <div class="dashboard-grid financial-summary-grid" id="financialCards"></div>
-          <section class="financial-chart-panel" aria-labelledby="financialChartTitle">
-            <div class="financial-chart-heading">
+          <article class="financial-calculation-note" id="financialCalculationNote"></article>
+          <div class="financial-panel is-active" data-financial-panel="overview">
+            <div class="dashboard-grid financial-summary-grid" id="financialCards"></div>
+            <section class="financial-chart-panel" aria-labelledby="financialChartTitle">
+              <div class="financial-chart-heading">
+                <div>
+                  <h3 id="financialChartTitle">Income trend</h3>
+                  <p id="financialChartMeta">Boarding and services grouped by selected view.</p>
+                </div>
+                <div class="financial-chart-legend" aria-label="Chart legend">
+                  <span><i class="is-total"></i>Total</span>
+                  <span><i class="is-boarding"></i>Boarding</span>
+                  <span><i class="is-service"></i>Services</span>
+                </div>
+              </div>
+              <div class="financial-income-chart" id="financialIncomeChart" role="img" aria-label="Income trend line chart"></div>
+            </section>
+            <div class="financial-breakdown-grid" id="financialBreakdown"></div>
+          </div>
+          <div class="financial-panel" data-financial-panel="lineItems" hidden>
+            <div class="financial-line-items-header">
               <div>
-                <h3 id="financialChartTitle">Income trend</h3>
-                <p id="financialChartMeta">Boarding and services grouped by selected view.</p>
+                <h3>Boarding line items</h3>
+                <p id="financialLineItemMeta">Each row is one boarding stay or same-family stay group.</p>
               </div>
-              <div class="financial-chart-legend" aria-label="Chart legend">
-                <span><i class="is-total"></i>Total</span>
-                <span><i class="is-boarding"></i>Boarding</span>
-                <span><i class="is-service"></i>Services</span>
-              </div>
+              <strong id="financialLineItemTotal">$0</strong>
             </div>
-            <div class="financial-income-chart" id="financialIncomeChart" role="img" aria-label="Income trend line chart"></div>
-          </section>
-          <div class="financial-breakdown-grid" id="financialBreakdown"></div>
+            <div class="financial-line-items-filters">
+              <input type="search" id="financialLineItemSearch" placeholder="Search customer, dog, stay, status, services, or request code" />
+              <label>Status<select id="financialStatusFilter">
+                <option value="all">All statuses</option>
+                <option value="Pending">Pending</option>
+                <option value="Approved">Approved</option>
+                <option value="Checked In">Checked In</option>
+                <option value="In Kennel">In Kennel</option>
+                <option value="Ready For Pickup">Ready For Pickup</option>
+                <option value="Checked Out">Checked Out</option>
+              </select></label>
+              <label>Income<select id="financialIncomeFilter">
+                <option value="all">All income</option>
+                <option value="boarding">Has boarding cost</option>
+                <option value="services">Has service cost</option>
+                <option value="unpriced">Missing price</option>
+              </select></label>
+              <label>Sort<select id="financialLineItemSort">
+                <option value="date-desc">Newest stay date</option>
+                <option value="date-asc">Oldest stay date</option>
+                <option value="total-desc">Highest total</option>
+                <option value="customer-asc">Customer A-Z</option>
+                <option value="dog-asc">Dog A-Z</option>
+              </select></label>
+              <button type="button" class="secondary-button" id="financialLineItemResetButton">Reset filters</button>
+            </div>
+            <div class="table-wrap financial-line-items-table-wrap">
+              <table class="data-table financial-line-items-table">
+                <thead>
+                  <tr>
+                    <th>Stay date</th>
+                    <th>Customer</th>
+                    <th>Dog</th>
+                    <th>Status</th>
+                    <th>Days</th>
+                    <th>Boarding</th>
+                    <th>Services</th>
+                    <th>Other</th>
+                    <th>Total</th>
+                    <th>Calculation</th>
+                  </tr>
+                </thead>
+                <tbody id="financialLineItemsBody"></tbody>
+              </table>
+            </div>
+          </div>
         </section>
       </section>
 
@@ -1442,6 +1503,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260708-financial-income-overview"></script>
+  <script type="module" src="js/main.js?v=20260708-financial-line-items"></script>
 </body>
 </html>

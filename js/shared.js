@@ -14156,12 +14156,41 @@ function initEvents() {
     financialPeriodView = button.dataset.financialPeriod || "monthly";
     renderFinancials();
   });
+  $("#financialViewTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-financial-view]");
+    if (!button) return;
+    financialViewMode = button.dataset.financialView || "overview";
+    renderFinancials();
+  });
   $("#financialStartDate")?.addEventListener("change", renderFinancials);
   $("#financialEndDate")?.addEventListener("change", renderFinancials);
   $("#financialResetRangeButton")?.addEventListener("click", () => {
     const range = financialCurrentYearRange();
     if ($("#financialStartDate")) $("#financialStartDate").value = range.start;
     if ($("#financialEndDate")) $("#financialEndDate").value = range.end;
+    renderFinancials();
+  });
+  $("#financialLineItemSearch")?.addEventListener("input", (event) => {
+    financialLineItemSearch = event.currentTarget.value || "";
+    renderFinancials();
+  });
+  $("#financialStatusFilter")?.addEventListener("change", (event) => {
+    financialStatusFilter = event.currentTarget.value || "all";
+    renderFinancials();
+  });
+  $("#financialIncomeFilter")?.addEventListener("change", (event) => {
+    financialIncomeFilter = event.currentTarget.value || "all";
+    renderFinancials();
+  });
+  $("#financialLineItemSort")?.addEventListener("change", (event) => {
+    financialLineItemSort = event.currentTarget.value || "date-desc";
+    renderFinancials();
+  });
+  $("#financialLineItemResetButton")?.addEventListener("click", () => {
+    financialLineItemSearch = "";
+    financialStatusFilter = "all";
+    financialIncomeFilter = "all";
+    financialLineItemSort = "date-desc";
     renderFinancials();
   });
 

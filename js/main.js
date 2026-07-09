@@ -6,7 +6,7 @@ import "./boarding.js?v=20260628-our-dogs-filter-info-boarding-rows-list-priorit
 import "./daily.js?v=20260628-our-dogs-filter-info-boarding-rows-special-care-weekly-health";
 import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-task-scheduler-visibility-dedupe";
 import "./timesheet.js?v=20260628-our-dogs-filter-info-boarding-rows-staff-schedule-planner-20260706";
-import "./settings.js?v=20260708-financial-income-overview";
+import "./settings.js?v=20260708-financial-line-items";
 import "./notifications.js?v=20260703-sync-next-pass";
 import "./search.js?v=20260623-efficiency-guardrails";
 
