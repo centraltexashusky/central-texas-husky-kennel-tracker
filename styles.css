@@ -11803,6 +11803,115 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   padding: 8px;
 }
 
+:root[data-theme="light"] body:not(.is-login-view) #customerPage > .form-section:has(#customerDogList) {
+  background:
+    linear-gradient(180deg, #FFFFFF, #F8FBFC) !important;
+  border: 1px solid #CFDDE7 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 2px 4px rgba(23, 32, 51, 0.04), 0 12px 26px rgba(49, 95, 133, 0.09) !important;
+  color: #172033;
+}
+
+:root[data-theme="light"] #customerPage > .form-section:has(#customerDogList) .section-heading span {
+  background: #EFF6FF;
+  border: 1px solid #C7DBEF;
+  color: #17324D;
+}
+
+:root[data-theme="light"] #customerPage > .form-section:has(#customerDogList) .section-heading h2 {
+  color: #13263D;
+}
+
+:root[data-theme="light"] #customerPage > .form-section:has(#customerDogList) .section-heading p {
+  color: #52647C;
+}
+
+:root[data-theme="light"] #customerPage .customer-progress-panel {
+  background: #FFFFFF;
+  border: 1px solid #D7E4EC;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.03);
+  padding: 12px;
+}
+
+:root[data-theme="light"] #customerPage .customer-progress-copy strong,
+:root[data-theme="light"] #customerPage .customer-flow-kicker {
+  color: #9A6818;
+}
+
+:root[data-theme="light"] #customerPage .customer-progress-copy span,
+:root[data-theme="light"] #customerPage .customer-flow-mobile-summary {
+  color: #52647C;
+}
+
+:root[data-theme="light"] #customerPage .customer-flow-step-list span {
+  background: #F7FAFC;
+  border-color: #D5E2EA;
+  color: #52647C;
+}
+
+:root[data-theme="light"] #customerPage .customer-flow-step-list i {
+  background: #E5EEF6;
+  color: #17324D;
+}
+
+:root[data-theme="light"] #customerPage .customer-flow-step-list span.is-active {
+  background: #EAF4FF;
+  border-color: #8DBFE8;
+  color: #17324D;
+}
+
+:root[data-theme="light"] #customerPage .customer-flow-step-list span.is-active i {
+  background: #2F6FED;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] #customerPage .customer-flow-step-list span.is-complete {
+  background: #ECFDF4;
+  border-color: #9FD9BA;
+  color: #165C38;
+}
+
+:root[data-theme="light"] #customerPage .customer-flow-step-list span.is-complete i {
+  background: #1FA463;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) #customerPage .customer-home-empty.customer-welcome-card {
+  background:
+    linear-gradient(180deg, #FFFFFF, #F6FAFE) !important;
+  border: 1px solid #C9DDEA !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 4px rgba(23, 32, 51, 0.04), 0 12px 24px rgba(49, 95, 133, 0.10) !important;
+  color: #172033;
+}
+
+:root[data-theme="light"] #customerPage .customer-welcome-logo {
+  filter: drop-shadow(0 6px 12px rgba(49, 95, 133, 0.18));
+}
+
+:root[data-theme="light"] #customerPage .customer-welcome-card h3 {
+  color: #13263D;
+}
+
+:root[data-theme="light"] #customerPage .customer-welcome-card p {
+  color: #52647C;
+}
+
+:root[data-theme="light"] #customerPage .customer-welcome-checklist span {
+  background: #F7FAFC;
+  border-color: #D5E2EA;
+  color: #41536A;
+}
+
+:root[data-theme="light"] #customerPage .customer-welcome-card button {
+  background:
+    linear-gradient(180deg, #17324D, #0F2A43);
+  border-color: #0F2A43;
+  box-shadow: 0 10px 20px rgba(15, 42, 67, 0.16);
+  color: #FFFFFF;
+}
+
 @media (max-width: 760px) {
   :root[data-theme="light"] .customer-sticky-book-now {
     box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24) !important;
