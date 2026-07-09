@@ -11645,3 +11645,166 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
     width: auto;
   }
 }
+
+/* Customer and boarding light-mode readability polish. */
+:root[data-theme="light"] body:not(.is-login-view) #boardingRequestRecords .boarding-request-card {
+  background:
+    linear-gradient(180deg, #FFFFFF, #F4FAFF) !important;
+  border: 1px solid #9DB9D7 !important;
+  box-shadow: 0 2px 4px rgba(23, 32, 51, 0.05), 0 12px 26px rgba(49, 95, 133, 0.12) !important;
+  color: #172033;
+}
+
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-card:hover,
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-card:focus-visible {
+  background:
+    linear-gradient(180deg, #FFFFFF, #EAF4FF) !important;
+  border-color: #2F6FED !important;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.16), 0 14px 28px rgba(49, 95, 133, 0.16) !important;
+}
+
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-dog-name,
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-service-copy strong,
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-total-row strong {
+  color: #13263D;
+}
+
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-date-row,
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-service-copy small,
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-empty-services {
+  color: #52647C;
+}
+
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-service-row {
+  border-top-color: #D5E4EF;
+}
+
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-service-quantity {
+  background: #E3F2FF;
+  border-color: #A9CEE8;
+  color: #18527D;
+}
+
+:root[data-theme="light"] #boardingRequestRecords .boarding-request-total-row {
+  background: #F7FBFF;
+  border-color: #C8DAEA;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .customer-dog-summary-card {
+  background:
+    linear-gradient(180deg, #FFFFFF, #F7FAFF) !important;
+  border: 1px solid #C5D8E8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 4px rgba(23, 32, 51, 0.05), 0 12px 26px rgba(49, 95, 133, 0.10) !important;
+  color: #172033;
+}
+
+:root[data-theme="light"] .customer-dog-summary-card h3,
+:root[data-theme="light"] .customer-dog-summary-card strong {
+  color: #13263D;
+}
+
+:root[data-theme="light"] .customer-dog-summary-card p,
+:root[data-theme="light"] .customer-current-stay p,
+:root[data-theme="light"] .customer-dog-summary-card .muted-text {
+  color: #52647C;
+}
+
+:root[data-theme="light"] .customer-current-stay {
+  border-top-color: #D9E5EC;
+}
+
+:root[data-theme="light"] .customer-current-stay .detail-row {
+  background: #FFFFFF !important;
+  border-color: #CFDDE7 !important;
+  color: #172033;
+}
+
+:root[data-theme="light"] .customer-dog-photo {
+  background: #F2F7FA;
+  border-color: #B9CAD7;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.06);
+}
+
+:root[data-theme="light"] .customer-dog-photo-initials {
+  background: #EAF4FF;
+  color: #17324D;
+}
+
+:root[data-theme="light"] .customer-dashboard-actions button,
+:root[data-theme="light"] .customer-next-action-buttons button,
+:root[data-theme="light"] .customer-wizard-actions button {
+  box-shadow: 0 6px 14px rgba(23, 32, 51, 0.08);
+}
+
+:root[data-theme="light"] .customer-sticky-book-now {
+  background:
+    linear-gradient(180deg, #0EA5E9, #2563EB) !important;
+  border: 1px solid #1D4ED8 !important;
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+  color: #FFFFFF !important;
+}
+
+:root[data-theme="light"] .customer-sticky-book-now:hover,
+:root[data-theme="light"] .customer-sticky-book-now:focus-visible {
+  background:
+    linear-gradient(180deg, #38BDF8, #1D4ED8) !important;
+  border-color: #1E40AF !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18), 0 16px 34px rgba(37, 99, 235, 0.32) !important;
+  color: #FFFFFF !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) #customerPage .customer-dog-modal:not([hidden]) {
+  background:
+    linear-gradient(180deg, #FFFFFF, #F7FAFF) !important;
+  border: 1px solid #C9D6D2 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 2px 4px rgba(23, 32, 51, 0.05), 0 16px 34px rgba(23, 32, 51, 0.10) !important;
+  color: #172033;
+}
+
+:root[data-theme="light"] #customerPage .customer-dog-modal .section-heading span,
+:root[data-theme="light"] #customerPage .customer-dog-modal .customer-form-step > strong,
+:root[data-theme="light"] #customerPage .customer-dog-modal label {
+  color: #172033;
+}
+
+:root[data-theme="light"] #customerPage .customer-dog-modal .section-heading p,
+:root[data-theme="light"] #customerPage .customer-dog-modal .dog-profile-editor p,
+:root[data-theme="light"] #customerPage .customer-dog-modal label small {
+  color: #52647C;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) #customerPage .dog-profile-editor {
+  background:
+    linear-gradient(180deg, #FFFFFF, #F4FAFF) !important;
+  border-color: #C5D8E8 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 4px rgba(23, 32, 51, 0.04) !important;
+}
+
+:root[data-theme="light"] #customerPage .dog-photo-button {
+  background:
+    linear-gradient(135deg, #EAF4FF, #FFF7E2);
+  border-color: #B9CAD7;
+  color: #17324D;
+}
+
+:root[data-theme="light"] #customerPage .customer-form-step {
+  background: #FFFFFF;
+  border-color: #D5E2EA;
+  color: #172033;
+}
+
+:root[data-theme="light"] #customerPage .customer-flow-stepper {
+  background: #F4FAFF;
+  border: 1px solid #D5E2EA;
+  border-radius: 12px;
+  padding: 8px;
+}
+
+@media (max-width: 760px) {
+  :root[data-theme="light"] .customer-sticky-book-now {
+    box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24) !important;
+  }
+}

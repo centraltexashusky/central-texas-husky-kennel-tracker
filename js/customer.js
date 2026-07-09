@@ -267,11 +267,25 @@ function customerDogsForCurrentUser() {
   return dogs;
 }
 
-function customerDogPhotoHtml(dog = {}) {
+function customerDogPhotoRecordForDisplay(dog = {}, fallbackRecord = {}) {
+  if (profilePhotoHasSource(dog)) return dog;
+  const linkedBoarding = fallbackRecord?.id ? fallbackRecord : boardingDogForCustomerDog(dog);
+  if (linkedBoarding && profilePhotoHasSource(linkedBoarding)) {
+    return {
+      ...linkedBoarding,
+      dogName: dog.dogName || linkedBoarding.dogName || "Dog",
+      type: linkedBoarding.type || "boardingDog",
+    };
+  }
+  return dog;
+}
+
+function customerDogPhotoHtml(dog = {}, options = {}) {
   const name = dog.dogName || "Dog";
-  const photo = profilePhotoDirectSource(dog);
-  if (profilePhotoHasSource(dog)) {
-    return \`<img class="customer-dog-photo"\${profilePhotoAccessAttrs(dog, dog.type || "customerDog")}\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span class="customer-dog-photo customer-dog-photo-initials" data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span>\`;
+  const photoRecord = options.photoRecord || dog;
+  const photo = profilePhotoDirectSource(photoRecord);
+  if (profilePhotoHasSource(photoRecord)) {
+    return \`<img class="customer-dog-photo"\${profilePhotoAccessAttrs(photoRecord, photoRecord.type || dog.type || "customerDog")}\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span class="customer-dog-photo customer-dog-photo-initials" data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span>\`;
   }
   return \`<span class="customer-dog-photo customer-dog-photo-initials">\${escapeHtml(avatarText(name))}</span>\`;
 }
@@ -1087,9 +1101,10 @@ function customerDogSummaryCardHtml(dog = {}) {
   const stayStatus = activeStay ? boardingStayDisplayStatus(record, stay) : "";
   const facts = [dog.breedDescription || dog.breed || "", dog.sex || "", dogAgeText(dog)].filter(Boolean).join(" | ");
   const vaccine = customerFacingVaccineStatus(dog);
+  const photoRecord = customerDogPhotoRecordForDisplay(dog, record);
   return \`<article class="customer-dog-summary-card">
     <div class="customer-dog-summary-main">
-      \${customerDogPhotoHtml(dog)}
+      \${customerDogPhotoHtml(dog, { photoRecord })}
       <div>
         <div class="customer-dog-summary-title">
           <h3>\${escapeHtml(dog.dogName || "Your dog")}</h3>
