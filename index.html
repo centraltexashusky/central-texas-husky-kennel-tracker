@@ -1145,7 +1145,7 @@
               <label>Food instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals"></textarea></label>
               <label>Special care instructions<textarea name="specialCare" rows="3" placeholder="Medication, feeding, handling, allergies, behavior concerns"></textarea></label>
               <label>Boarding history / notes<textarea name="boardingHistory" rows="3" placeholder="Prior stays, preferences, concerns, owner feedback"></textarea></label>
-              <div class="button-row dog-info-actions"><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" hidden>Delete Dog</button></div>
+              <div class="button-row dog-info-actions"><button type="button" class="secondary-button danger-button" id="deleteBoardingDogButton" data-roles="admin" hidden>Delete Dog</button></div>
             </section>
 
             <section class="boarding-profile-section" data-boarding-profile-section="Vaccination" hidden>
@@ -1504,6 +1504,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260709-staff-payroll-financials"></script>
+  <script type="module" src="js/main.js?v=20260709-admin-only-boarding-delete"></script>
 </body>
 </html>

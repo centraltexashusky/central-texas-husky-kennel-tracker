@@ -13326,6 +13326,10 @@ function initEvents() {
   $("#closeBoardingDogDialogButton")?.addEventListener("click", closeBoardingDogModal);
   $("#cancelBoardingDogEdit").addEventListener("click", closeBoardingDogModal);
   $("#deleteBoardingDogButton")?.addEventListener("click", () => {
+    if (currentRole() !== "admin") {
+      showToast("Admin access required to delete a boarding dog profile.");
+      return;
+    }
     const dog = activeBoardingDog();
     if (dog) openBoardingDogDeleteConfirm(dog);
   });
