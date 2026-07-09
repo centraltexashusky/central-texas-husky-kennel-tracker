@@ -16,7 +16,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260708-financial-line-items" />
+    <link rel="stylesheet" href="styles.css?v=20260709-staff-payroll-financials" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -1285,7 +1285,7 @@
 
       <section class="page-view" id="financialsPage">
         <section class="form-section financial-overview-section">
-          <div class="section-heading"><span>F</span><div><h2>Financials</h2><p>Boarding and services income overview from saved stay and service request totals.</p></div></div>
+          <div class="section-heading"><span>F</span><div><h2>Financials</h2><p>Boarding, services, and payroll overview from saved stays and clock records.</p></div></div>
           <div class="financial-view-tabs" id="financialViewTabs" role="tablist" aria-label="Financial sections">
             <button type="button" class="is-active" data-financial-view="overview" role="tab" aria-selected="true">Overview</button>
             <button type="button" data-financial-view="lineItems" role="tab" aria-selected="false">Line items</button>
@@ -1313,6 +1313,7 @@
                   <span><i class="is-total"></i>Total</span>
                   <span><i class="is-boarding"></i>Boarding</span>
                   <span><i class="is-service"></i>Services</span>
+                  <span><i class="is-payroll"></i>Payroll</span>
                 </div>
               </div>
               <div class="financial-income-chart" id="financialIncomeChart" role="img" aria-label="Income trend line chart"></div>
@@ -1388,7 +1389,7 @@
           </div>
           <div class="table-wrap">
             <table class="data-table">
-              <thead id="settingsUserTableHead"><tr><th data-settings-sort="name" tabindex="0">Name <span class="sort-indicator"></span></th><th data-settings-sort="email" tabindex="0">Email <span class="sort-indicator"></span></th><th data-settings-sort="role" tabindex="0">Role <span class="sort-indicator"></span></th><th data-settings-sort="password" tabindex="0">Password <span class="sort-indicator"></span></th><th>Action</th></tr></thead>
+              <thead id="settingsUserTableHead"><tr><th data-settings-sort="name" tabindex="0">Name <span class="sort-indicator"></span></th><th data-settings-sort="email" tabindex="0">Email <span class="sort-indicator"></span></th><th data-settings-sort="role" tabindex="0">Role <span class="sort-indicator"></span></th><th data-settings-sort="payRate" tabindex="0">Pay rate <span class="sort-indicator"></span></th><th data-settings-sort="password" tabindex="0">Password <span class="sort-indicator"></span></th><th>Action</th></tr></thead>
               <tbody id="settingsUserTableBody"></tbody>
             </table>
           </div>
@@ -1503,6 +1504,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260708-financial-family-total-fix"></script>
+  <script type="module" src="js/main.js?v=20260709-staff-payroll-financials"></script>
 </body>
 </html>

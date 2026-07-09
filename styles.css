@@ -1542,6 +1542,16 @@ body.owned-dog-modal-open {
   padding: 10px 12px;
 }
 
+.schedule-review-payroll {
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+}
+
+.schedule-review-payroll h3 {
+  margin: 0;
+}
+
 .login-panel {
   align-items: center;
   background: #f6f8f7;
@@ -12008,7 +12018,7 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .financial-summary-grid {
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .financial-summary-card strong {
@@ -12107,6 +12117,11 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   stroke: #1A9F63;
 }
 
+.financial-chart-legend .is-payroll,
+.financial-income-chart .chart-line.is-payroll {
+  stroke: #E05252;
+}
+
 .financial-chart-legend .is-total {
   background: #1B7CE8;
 }
@@ -12117,6 +12132,10 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 .financial-chart-legend .is-service {
   background: #1A9F63;
+}
+
+.financial-chart-legend .is-payroll {
+  background: #E05252;
 }
 
 .financial-income-chart {
@@ -12153,7 +12172,8 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .financial-income-chart .chart-line.is-boarding,
-.financial-income-chart .chart-line.is-service {
+.financial-income-chart .chart-line.is-service,
+.financial-income-chart .chart-line.is-payroll {
   stroke-width: 3;
 }
 

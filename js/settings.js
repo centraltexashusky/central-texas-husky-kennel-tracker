@@ -965,13 +965,13 @@ function financialRangeLabel(range = financialRangeValues()) {
   return financialShortDateLabel(range.start) + ", " + range.start.slice(0, 4) + " to " + financialShortDateLabel(range.end) + ", " + range.end.slice(0, 4);
 }
 
-function financialBuildBuckets(entries = [], range = financialRangeValues(), period = financialPeriodView) {
+function financialBuildBuckets(entries = [], range = financialRangeValues(), period = financialPeriodView, payrollEntries = []) {
   const buckets = new Map();
   let key = financialPeriodKey(range.start, period);
   const endKey = financialPeriodKey(range.end, period);
   let guard = 0;
   while (key && guard < 260) {
-    buckets.set(key, { key, label: financialPeriodLabel(key, period), total: 0, boarding: 0, services: 0, count: 0 });
+    buckets.set(key, { key, label: financialPeriodLabel(key, period), total: 0, boarding: 0, services: 0, payroll: 0, net: 0, count: 0 });
     if (key === endKey) break;
     key = financialNextPeriodKey(key, period);
     guard += 1;
@@ -979,14 +979,20 @@ function financialBuildBuckets(entries = [], range = financialRangeValues(), per
   entries.forEach((entry) => {
     if (entry.date < range.start || entry.date > range.end) return;
     const entryKey = financialPeriodKey(entry.date, period);
-    if (!buckets.has(entryKey)) buckets.set(entryKey, { key: entryKey, label: financialPeriodLabel(entryKey, period), total: 0, boarding: 0, services: 0, count: 0 });
+    if (!buckets.has(entryKey)) buckets.set(entryKey, { key: entryKey, label: financialPeriodLabel(entryKey, period), total: 0, boarding: 0, services: 0, payroll: 0, net: 0, count: 0 });
     const bucket = buckets.get(entryKey);
     bucket.total += Number(entry.total || 0);
     bucket.boarding += Number(entry.boarding || 0);
     bucket.services += Number(entry.services || 0);
     bucket.count += Number(entry.count || 1);
   });
-  return [...buckets.values()].sort((a, b) => String(a.key).localeCompare(String(b.key)));
+  payrollEntries.forEach((entry) => {
+    if (entry.date < range.start || entry.date > range.end) return;
+    const entryKey = financialPeriodKey(entry.date, period);
+    if (!buckets.has(entryKey)) buckets.set(entryKey, { key: entryKey, label: financialPeriodLabel(entryKey, period), total: 0, boarding: 0, services: 0, payroll: 0, net: 0, count: 0 });
+    buckets.get(entryKey).payroll += Number(entry.total || 0);
+  });
+  return [...buckets.values()].map((bucket) => ({ ...bucket, net: Number(bucket.total || 0) - Number(bucket.payroll || 0) })).sort((a, b) => String(a.key).localeCompare(String(b.key)));
 }
 
 function financialCompactMoney(value = 0) {
@@ -1009,7 +1015,7 @@ function financialIncomeChartSvg(buckets = []) {
   const right = 24;
   const top = 28;
   const bottom = 54;
-  const maxValue = Math.max(1, ...buckets.flatMap((bucket) => [bucket.total, bucket.boarding, bucket.services]));
+  const maxValue = Math.max(1, ...buckets.flatMap((bucket) => [bucket.total, bucket.boarding, bucket.services, bucket.payroll]));
   const xFor = (index) => buckets.length === 1
     ? left + ((width - left - right) / 2)
     : left + ((width - left - right) * index / Math.max(1, buckets.length - 1));
@@ -1034,6 +1040,7 @@ function financialIncomeChartSvg(buckets = []) {
     + '<line class="chart-axis-line" x1="' + left + '" y1="' + (height - bottom) + '" x2="' + (width - right) + '" y2="' + (height - bottom) + '" />'
     + financialChartPolyline(pointsFor("services"), "chart-line is-service")
     + financialChartPolyline(pointsFor("boarding"), "chart-line is-boarding")
+    + financialChartPolyline(pointsFor("payroll"), "chart-line is-payroll")
     + financialChartPolyline(pointsFor("total"), "chart-line is-total")
     + pointDots
     + xLabels
@@ -1045,20 +1052,22 @@ function financialSummaryCardHtml(label = "", value = "", note = "") {
 }
 
 function financialBreakdownHtml(buckets = []) {
-  const activeBuckets = buckets.filter((bucket) => bucket.total || bucket.boarding || bucket.services);
+  const activeBuckets = buckets.filter((bucket) => bucket.total || bucket.boarding || bucket.services || bucket.payroll);
   if (!activeBuckets.length) return '<article class="financial-period-card"><strong>No income in range</strong><p>Adjust the dates or choose a different view.</p></article>';
   return activeBuckets.map((bucket) => '<article class="financial-period-card">'
     + '<span>' + escapeHtml(bucket.label) + '</span>'
     + '<strong>' + escapeHtml(money(bucket.total)) + '</strong>'
     + '<p><b>Boarding</b> ' + escapeHtml(money(bucket.boarding)) + '</p>'
     + '<p><b>Services</b> ' + escapeHtml(money(bucket.services)) + '</p>'
+    + '<p><b>Payroll</b> ' + escapeHtml(payrollMoney(bucket.payroll)) + '</p>'
+    + '<p><b>Net after payroll</b> ' + escapeHtml(payrollMoney(bucket.net)) + '</p>'
     + '<small>' + escapeHtml(String(bucket.count)) + ' stay' + (bucket.count === 1 ? "" : "s") + '</small>'
     + '</article>').join("");
 }
 
 function financialCalculationNoteHtml() {
   return '<strong>How totals are calculated</strong>'
-    + '<p>Financials use every non-cancelled boarding stay in the selected date range. Saved pricing snapshots and saved family totals are used first; if a stay has no saved snapshot, the app falls back to the current Services & Pricing catalog. The reporting date uses paid date, check-out, pick-up, drop-off, created, then submitted date in that order.</p>';
+    + '<p>Financials use every non-cancelled boarding stay in the selected date range. Saved pricing snapshots and saved family totals are used first; if a stay has no saved snapshot, the app falls back to the current Services & Pricing catalog. Payroll uses completed clock records multiplied by the hourly rate saved on each Staff/Admin user profile. The reporting date uses paid date, check-out, pick-up, drop-off, created, then submitted date in that order.</p>';
 }
 
 function financialSyncViewState() {
@@ -1178,20 +1187,27 @@ function renderFinancials() {
   });
   const range = financialRangeValues();
   const entries = financialIncomeEntries().filter((entry) => entry.date >= range.start && entry.date <= range.end);
-  const buckets = financialBuildBuckets(entries, range, period);
+  const payrollSummary = staffPayrollSummaryForRange(range, { includeAll: true });
+  const buckets = financialBuildBuckets(entries, range, period, payrollSummary.entries);
   const total = entries.reduce((sum, entry) => sum + Number(entry.total || 0), 0);
   const boarding = entries.reduce((sum, entry) => sum + Number(entry.boarding || 0), 0);
   const services = entries.reduce((sum, entry) => sum + Number(entry.services || 0), 0);
+  const payroll = payrollSummary.totalPayroll;
+  const net = total - payroll;
+  const payrollPercent = total > 0 ? Math.round((payroll / total) * 100) + "%" : "0%";
   const peakBucket = buckets.reduce((best, bucket) => bucket.total > (best?.total || 0) ? bucket : best, null);
   cardsEl.innerHTML = [
     financialSummaryCardHtml("Total income", money(total), financialRangeLabel(range)),
     financialSummaryCardHtml("Boarding income", money(boarding), "Overnight stays and boarding programs."),
     financialSummaryCardHtml("Services income", money(services), "Stay add-ons and service-only requests."),
+    financialSummaryCardHtml("Payroll expense", payrollMoney(payroll), payrollSummary.totalHours.toFixed(2) + " completed clock hours."),
+    financialSummaryCardHtml("Net after payroll", payrollMoney(net), "Income minus estimated payroll."),
+    financialSummaryCardHtml("Payroll %", payrollPercent, payrollSummary.missingRateCount ? payrollSummary.missingRateCount + " staff rate" + (payrollSummary.missingRateCount === 1 ? "" : "s") + " missing." : "Payroll divided by income."),
     financialSummaryCardHtml("Stays counted", String(entries.reduce((sum, entry) => sum + Number(entry.count || 1), 0)), "Cancelled stays are excluded."),
     financialSummaryCardHtml("Peak " + period.replace("ly", ""), peakBucket ? money(peakBucket.total) : money(0), peakBucket ? peakBucket.label : "No income yet."),
   ].join("");
-  if ($("#financialChartTitle")) $("#financialChartTitle").textContent = period.charAt(0).toUpperCase() + period.slice(1) + " income trend";
-  if ($("#financialChartMeta")) $("#financialChartMeta").textContent = financialRangeLabel(range) + " | " + entries.length + " booking group" + (entries.length === 1 ? "" : "s");
+  if ($("#financialChartTitle")) $("#financialChartTitle").textContent = period.charAt(0).toUpperCase() + period.slice(1) + " income and payroll trend";
+  if ($("#financialChartMeta")) $("#financialChartMeta").textContent = financialRangeLabel(range) + " | " + entries.length + " booking group" + (entries.length === 1 ? "" : "s") + " | " + payrollSummary.entries.length + " payroll record" + (payrollSummary.entries.length === 1 ? "" : "s");
   if (chartEl) {
     chartEl.innerHTML = financialIncomeChartSvg(buckets);
     chartEl.setAttribute("aria-label", period + " income trend from " + range.start + " to " + range.end);
@@ -1217,6 +1233,10 @@ function settingsUserPasswordText(user = {}) {
   return user.passwordChangeRequired ? "Change required" : "Current";
 }
 
+function settingsUserPayRateText(user = {}) {
+  return isStaffRole(user.role || "") ? staffHourlyRateText(user) : "N/A";
+}
+
 function defaultSettingsUserForActiveTab() {
   if (settingsUserTab === "admin") return { role: "admin" };
   if (settingsUserTab === "staff") return { role: "helper" };
@@ -1228,6 +1248,7 @@ function settingsUserSortValue(user = {}, key = "name") {
   if (key === "email") return user.email || "";
   if (key === "role") return settingsUserDisplayRole(user);
   if (key === "password") return settingsUserPasswordText(user);
+  if (key === "payRate") return staffHourlyRate(user);
   return user.name || user.email || "";
 }
 
@@ -1285,12 +1306,12 @@ function renderSettingsUsers() {
   renderSettingsUserSortHeaders();
   $("#settingsUserTableBody").innerHTML = visibleUsers.length
     ? visibleUsers
-        .map((user) => \`<tr data-id="\${user.id}"><td>\${escapeHtml(user.name || "")}</td><td>\${escapeHtml(user.email || "")}</td><td>\${escapeHtml(settingsUserDisplayRole(user))}</td><td>\${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="\${user.id}">Remove</button></td></tr>\`)
+        .map((user) => \`<tr data-id="\${user.id}"><td>\${escapeHtml(user.name || "")}</td><td>\${escapeHtml(user.email || "")}</td><td>\${escapeHtml(settingsUserDisplayRole(user))}</td><td>\${escapeHtml(settingsUserPayRateText(user))}</td><td>\${user.passwordChangeRequired ? '<span class="status-chip warning-chip">Change required</span>' : '<span class="status-chip">Current</span>'}</td><td><button type="button" class="secondary-button" data-action="remove-settings-user" data-id="\${user.id}">Remove</button></td></tr>\`)
         .join("")
-    : \`<tr><td colspan="5">No \${escapeHtml(emptyLabel.toLowerCase())} users saved yet.</td></tr>\`;
+    : \`<tr><td colspan="6">No \${escapeHtml(emptyLabel.toLowerCase())} users saved yet.</td></tr>\`;
   if ($("#settingsUserCards")) {
     $("#settingsUserCards").innerHTML = visibleUsers.length
-      ? visibleUsers.map((user) => \`<button type="button" class="settings-user-card" data-action="view-settings-user" data-id="\${escapeHtml(user.id)}"><strong>\${escapeHtml(user.name || user.email || "User")}</strong><span>\${escapeHtml(user.email || "")}</span><small>\${escapeHtml(settingsUserDisplayRole(user))}\${user.passwordChangeRequired ? " | Password change required" : ""}</small></button>\`).join("")
+      ? visibleUsers.map((user) => \`<button type="button" class="settings-user-card" data-action="view-settings-user" data-id="\${escapeHtml(user.id)}"><strong>\${escapeHtml(user.name || user.email || "User")}</strong><span>\${escapeHtml(user.email || "")}</span><small>\${escapeHtml(settingsUserDisplayRole(user))}\${isStaffRole(user.role || "") ? " | " + settingsUserPayRateText(user) : ""}\${user.passwordChangeRequired ? " | Password change required" : ""}</small></button>\`).join("")
       : \`<article class="record-card"><strong>No \${escapeHtml(emptyLabel.toLowerCase())} users saved yet.</strong></article>\`;
   }
 }
@@ -1842,6 +1863,7 @@ function settingsUserPopupHtml(user = {}) {
         <label>Name<input type="text" name="name" required value="\${escapeHtml(user.name || "")}" /></label>
         <label>Email<input type="email" name="email" required value="\${escapeHtml(user.email || "")}" /></label>
         <label>Role<select name="role" required><option value="customer" \${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" \${user.role === "helper" || user.role === "staff" ? "selected" : ""}>Staff</option><option value="admin" \${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
+        <label>Hourly pay rate<input type="number" name="hourlyRate" min="0" step="0.01" value="\${escapeHtml(staffHourlyRate(user) || "")}" placeholder="Example: 18.50" /><small>Used for staff/admin payroll estimates.</small></label>
       </div>
       <label class="inline-check"><input type="checkbox" name="isMember" \${userMemberFlag(user) ? "checked" : ""} /> Member customer pricing</label>
       <div class="admin-password-panel">

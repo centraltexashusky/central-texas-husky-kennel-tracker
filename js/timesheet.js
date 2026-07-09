@@ -146,6 +146,88 @@ function timesheetRecordsForRange(range = timesheetActiveRange()) {
     .sort((a, b) => timesheetRecordTime(b) - timesheetRecordTime(a));
 }
 
+function staffHourlyRate(user = {}) {
+  const rate = Number(user.hourlyRate ?? user.payRate ?? user.staffHourlyRate ?? 0);
+  return Number.isFinite(rate) && rate > 0 ? rate : 0;
+}
+
+function staffHourlyRateText(user = {}) {
+  const rate = staffHourlyRate(user);
+  return rate
+    ? "$" + rate.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "/hr"
+    : "Not set";
+}
+
+function payrollMoney(value = 0) {
+  const number = Number(value || 0);
+  const prefix = number < 0 ? "-$" : "$";
+  return prefix + Math.abs(number).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function staffPayrollUserForRecord(record = {}, users = settingsUsers()) {
+  const recordEmail = normalizeEmail(record.helperEmail || record.staffEmail || "");
+  const recordName = normalizeHelperName(record.helperName || record.staffName || "");
+  return users.find((user) => recordEmail && normalizeEmail(user.email) === recordEmail)
+    || users.find((user) => recordName && normalizeHelperName(user.name || "") === recordName)
+    || {};
+}
+
+function staffPayrollRecordsForRange(range = timesheetActiveRange(), options = {}) {
+  const users = settingsUsers().filter((user) => isStaffRole(user.role || ""));
+  return readRecords("timesheet")
+    .filter((record) => !record.removed)
+    .filter((record) => options.includeAll || timesheetBelongsToCurrentUser(record))
+    .filter((record) => timesheetRecordInDateRange(record, range.start, range.end))
+    .filter((record) => Number(record.hours || 0) > 0 && record.clockOutTime)
+    .map((record) => {
+      const user = staffPayrollUserForRecord(record, users);
+      const rate = staffHourlyRate(user);
+      const hours = Number(record.hours || 0) || 0;
+      return {
+        id: record.id || "",
+        date: timesheetRecordDate(record),
+        staffName: record.helperName || user.name || "Staff",
+        staffEmail: record.helperEmail || user.email || "",
+        hours,
+        rate,
+        total: hours * rate,
+        missingRate: !rate,
+      };
+    })
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.staffName || "").localeCompare(String(b.staffName || "")));
+}
+
+function staffPayrollSummaryForRange(range = timesheetActiveRange(), options = {}) {
+  const entries = staffPayrollRecordsForRange(range, options);
+  const byStaff = new Map();
+  entries.forEach((entry) => {
+    const key = normalizeEmail(entry.staffEmail) || normalizeHelperName(entry.staffName) || entry.id;
+    const existing = byStaff.get(key) || {
+      staffName: entry.staffName,
+      staffEmail: entry.staffEmail,
+      hours: 0,
+      rate: entry.rate,
+      total: 0,
+      missingRate: false,
+      shifts: 0,
+    };
+    existing.hours += entry.hours;
+    existing.total += entry.total;
+    existing.rate = entry.rate || existing.rate;
+    existing.missingRate = existing.missingRate || entry.missingRate;
+    existing.shifts += 1;
+    byStaff.set(key, existing);
+  });
+  const staff = [...byStaff.values()].sort((a, b) => String(a.staffName || "").localeCompare(String(b.staffName || "")));
+  return {
+    entries,
+    staff,
+    totalHours: staff.reduce((sum, item) => sum + Number(item.hours || 0), 0),
+    totalPayroll: staff.reduce((sum, item) => sum + Number(item.total || 0), 0),
+    missingRateCount: staff.filter((item) => item.missingRate).length,
+  };
+}
+
 function syncTimesheetRangeUi(range = timesheetActiveRange()) {
   const startInput = $("#timesheetStartDate");
   const endInput = $("#timesheetEndDate");
@@ -1376,15 +1458,28 @@ function renderScheduleReviewTab() {
   const issues = reviewIssuesForWeek(start);
   const scheduledHours = shifts.reduce((sum, shift) => sum + shiftHours(shift), 0);
   const actualHours = timesheets.reduce((sum, record) => sum + Number(record.hours || 0), 0);
+  const payroll = staffPayrollSummaryForRange({ start, end: addDays(start, 6) }, { includeAll: true });
+  const payrollRows = payroll.staff.length
+    ? payroll.staff.map((item) => '<tr>'
+      + '<td><strong>' + escapeHtml(item.staffName || "Staff") + '</strong><span>' + escapeHtml(item.staffEmail || "") + '</span></td>'
+      + '<td><strong>' + escapeHtml(item.hours.toFixed(2)) + '</strong></td>'
+      + '<td><strong>' + escapeHtml(item.rate ? staffHourlyRateText({ hourlyRate: item.rate }) : "Missing") + '</strong></td>'
+      + '<td><strong>' + escapeHtml(payrollMoney(item.total || 0)) + '</strong></td>'
+      + '<td>' + escapeHtml(String(item.shifts || 0)) + '</td>'
+      + '</tr>').join("")
+    : '<tr><td colspan="5">No completed clock records for payroll this week.</td></tr>';
   summary.innerHTML = [
     ["Scheduled", scheduledHours.toFixed(2), "hours"],
     ["Actual", actualHours.toFixed(2), "hours"],
     ["Difference", (actualHours - scheduledHours).toFixed(2), "actual minus scheduled"],
+    ["Payroll", payrollMoney(payroll.totalPayroll), payroll.missingRateCount ? payroll.missingRateCount + " staff rate" + (payroll.missingRateCount === 1 ? "" : "s") + " missing" : "estimated from clock records"],
     ["Issues", issues.length, "need review"],
   ].map(([label, value, note]) => \`<div class="summary-card"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(String(value))}</strong><p>\${escapeHtml(note)}</p></div>\`).join("");
-  list.innerHTML = issues.length
+  const payrollTable = '<section class="schedule-review-payroll"><h3>Weekly payroll estimate</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>Staff</th><th>Hours</th><th>Rate</th><th>Payroll</th><th>Clock records</th></tr></thead><tbody>' + payrollRows + '</tbody></table></div></section>';
+  const issuesHtml = issues.length
     ? issues.map((issue) => \`<article class="record-card compact-record-card \${issue.priority === "urgent" ? "is-urgent" : ""}"><strong>\${escapeHtml(issue.title)}</strong><p>\${escapeHtml(issue.detail)}</p></article>\`).join("")
     : "<p>No schedule issues found for this week.</p>";
+  list.innerHTML = payrollTable + issuesHtml;
 }
 
 function scheduleShiftFormHtml(record = {}) {

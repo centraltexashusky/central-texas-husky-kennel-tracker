@@ -340,6 +340,10 @@ function settingsFormProfileData(formEl = activeSettingsUserForm()) {
   delete data.temporaryPasswordConfirm;
   delete data.requirePasswordChange;
   data.isMember = Boolean(formEl.elements.isMember?.checked);
+  const hourlyRate = Number(data.hourlyRate || 0);
+  data.hourlyRate = isStaffRole(data.role) && Number.isFinite(hourlyRate) && hourlyRate > 0
+    ? Number(hourlyRate.toFixed(2))
+    : "";
   return data;
 }
 
