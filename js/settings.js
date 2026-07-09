@@ -796,7 +796,8 @@ function financialSingleEntryTotals(entry = {}) {
   const stay = entry.stay || {};
   const snapshot = stay.pricingSnapshot || {};
   const hasSavedSnapshot = snapshot.total !== undefined || snapshot.groupTotal !== undefined || stay.groupTotal !== undefined;
-  const total = Number(stay.groupTotal ?? snapshot.groupTotal ?? boardingStayInvoiceTotal(record, stay) ?? 0) || 0;
+  const savedEntryTotal = snapshot.total !== undefined ? snapshot.total : undefined;
+  const total = Number(savedEntryTotal ?? boardingStayInvoiceTotal(record, stay) ?? 0) || 0;
   const lineServiceTotal = financialLineItemSum(snapshot, (line) => line.type === "service");
   const serviceSource = snapshot.serviceSubtotal !== undefined
     ? snapshot.serviceSubtotal
@@ -820,24 +821,39 @@ function financialSingleEntryTotals(entry = {}) {
 function financialFamilyEntryTotals(entries = []) {
   const snapshots = entries.map((entry) => entry.stay?.pricingSnapshot || {}).filter((snapshot) => snapshot && Object.keys(snapshot).length);
   const groupSnapshot = snapshots.find((snapshot) => snapshot.groupBoardingSubtotal !== undefined || snapshot.groupServiceSubtotal !== undefined) || snapshots[0] || {};
-  const fallback = entries.reduce((totals, entry) => {
-    const single = financialSingleEntryTotals(entry);
+  const singles = entries.map((entry) => financialSingleEntryTotals(entry));
+  const fallback = singles.reduce((totals, single) => {
     totals.total += single.total;
     totals.boarding += single.boarding;
     totals.services += single.services;
     return totals;
   }, { total: 0, boarding: 0, services: 0 });
-  const boarding = Number(groupSnapshot.groupBoardingSubtotal ?? fallback.boarding) || 0;
-  const services = Number(groupSnapshot.groupServiceSubtotal ?? fallback.services) || 0;
+  const largestSingleTotal = singles.reduce((largest, single) => Math.max(largest, single.total), 0);
+  const savedBoarding = Number(groupSnapshot.groupBoardingSubtotal ?? 0) || 0;
+  const savedServices = Number(groupSnapshot.groupServiceSubtotal ?? 0) || 0;
+  const savedGroupTotal = Number(groupSnapshot.groupTotal ?? 0) || 0;
+  const groupLooksUnderCounted = entries.length > 1
+    && fallback.total > 0
+    && savedGroupTotal > 0
+    && savedGroupTotal < fallback.total
+    && savedGroupTotal <= largestSingleTotal
+    && (savedBoarding <= fallback.boarding || savedServices <= fallback.services);
+  const boarding = groupLooksUnderCounted
+    ? Math.max(savedBoarding, fallback.boarding)
+    : Number(groupSnapshot.groupBoardingSubtotal ?? fallback.boarding) || 0;
+  const services = groupLooksUnderCounted
+    ? Math.max(savedServices, fallback.services)
+    : Number(groupSnapshot.groupServiceSubtotal ?? fallback.services) || 0;
   const hasSavedFamilyTotal = groupSnapshot.groupTotal !== undefined || entries.some((entry) => entry.stay?.groupTotal !== undefined || entry.stay?.pricingSnapshot?.groupTotal !== undefined);
   const savedTotal = boardingFamilyGroupSavedTotal(entries);
-  const total = Number(groupSnapshot.groupTotal ?? (savedTotal || boarding + services || fallback.total)) || 0;
+  const rawTotal = Number(groupSnapshot.groupTotal ?? (savedTotal || boarding + services || fallback.total)) || 0;
+  const total = groupLooksUnderCounted ? Math.max(rawTotal, fallback.total, boarding + services) : rawTotal;
   return {
     total,
     boarding,
     services,
     other: Math.max(0, total - boarding - services),
-    source: hasSavedFamilyTotal ? "Saved family pricing" : "Current catalog fallback",
+    source: groupLooksUnderCounted ? "Summed dog pricing snapshots" : hasSavedFamilyTotal ? "Saved family pricing" : "Current catalog fallback",
   };
 }
 
