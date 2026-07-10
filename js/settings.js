@@ -1851,6 +1851,10 @@ function settingsUserLastLoginText(user = {}) {
 function settingsUserPopupHtml(user = {}) {
   const isEdit = Boolean(user.id);
   const canImpersonate = isEdit && currentRole() === "admin" && normalizeEmail(user.email) !== normalizeEmail(currentUser?.email);
+  const latestAgreement = user.latestBoardingAgreement || {};
+  const agreementCard = isEdit && latestAgreement.signedAt
+    ? \`<article class="record-card compact-record-card settings-user-login-card"><span>Boarding Agreement</span><strong>Signed \${escapeHtml(formatDateTime(latestAgreement.signedAt) || latestAgreement.signedAt)}</strong><p>\${escapeHtml([latestAgreement.signerName || user.name || "", latestAgreement.agreementVersion ? "Version " + latestAgreement.agreementVersion : ""].filter(Boolean).join(" | "))}</p>\${latestAgreement.id ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="view-settings-user-agreement" data-id="\${escapeHtml(latestAgreement.id)}">Open Agreement</button></div>\` : ""}</article>\`
+    : "";
   return \`
     <form id="settingsUserPopupForm" class="tracker-form" data-user-id="\${escapeHtml(user.id || "")}">
       <input type="hidden" name="id" value="\${escapeHtml(user.id || "")}" />
@@ -1859,6 +1863,7 @@ function settingsUserPopupHtml(user = {}) {
         <strong>\${escapeHtml(isEdit ? settingsUserLastLoginText(user) : "Create access for a staff member, admin, customer, or member customer.")}</strong>
         <p>\${isEdit ? (user.loginCount ? \`\${Number(user.loginCount)} recorded login\${Number(user.loginCount) === 1 ? "" : "s"}.\` : "This updates after the user signs in through the app.") : "Save the user first, then set a temporary password or send a reset email when needed."}</p>
       </article>
+      \${agreementCard}
       <div class="field-grid">
         <label>Name<input type="text" name="name" required value="\${escapeHtml(user.name || "")}" /></label>
         <label>Email<input type="email" name="email" required value="\${escapeHtml(user.email || "")}" /></label>
@@ -1885,6 +1890,30 @@ function settingsUserPopupHtml(user = {}) {
 
 function openSettingsUserPopup(user = {}) {
   showDetailDialog(user.id ? \`\${user.name || user.email || "User"} Access\` : "Add User", settingsUserPopupHtml(user));
+}
+
+function openSettingsUserAgreement(id = "") {
+  if (!id || !["admin", "staff", "helper"].includes(currentRole())) {
+    showToast("This agreement could not be opened.");
+    return;
+  }
+  const record = readRecords("boardingAgreement").find((item) => item.id === id && !item.removed);
+  if (!record) {
+    showToast("This agreement could not be opened.");
+    return;
+  }
+  if (typeof customerAgreementDetailHtml === "function") {
+    showDetailDialog("Signed Boarding Agreement", customerAgreementDetailHtml(record));
+    return;
+  }
+  showDetailDialog("Signed Boarding Agreement", detailRows(record, [
+    ["Signer", "signerName"],
+    ["Email", "signerEmail"],
+    ["Signed", "signedAt"],
+    ["Version", "agreementVersion"],
+    ["Document hash", "documentHash"],
+    ["Signature hash", "signatureHash"],
+  ]));
 }
 
 function settingsUserRemoveConfirmHtml(user = {}, options = {}) {

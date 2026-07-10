@@ -14,6 +14,503 @@ var customerBookingWizardSteps = [
   { key: "visit", label: "Visit Info" },
   { key: "review", label: "Review" },
 ];
+var CUSTOMER_BOARDING_AGREEMENT_SOURCE = globalThis.CUDDLE_STAY_BOARDING_AGREEMENT || {};
+var CUSTOMER_BOARDING_AGREEMENT_VERSION = CUSTOMER_BOARDING_AGREEMENT_SOURCE.version || "2026-07-10-cuddle-stay-v1";
+var CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE = CUSTOMER_BOARDING_AGREEMENT_SOURCE.effectiveDate || "2026-07-10";
+var CUSTOMER_BOARDING_AGREEMENT_TITLE = CUSTOMER_BOARDING_AGREEMENT_SOURCE.title || "Cuddle Stay Boarding Services Agreement";
+var CUSTOMER_BOARDING_AGREEMENT_CONSENT_TEXT = CUSTOMER_BOARDING_AGREEMENT_SOURCE.electronicConsentText || "I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.";
+var CUSTOMER_BOARDING_AGREEMENT_INTENT_TEXT = CUSTOMER_BOARDING_AGREEMENT_SOURCE.signatureIntentText || "I have reviewed the Cuddle Stay Boarding Services Agreement and intend my electronic signature to have the same legal effect as a handwritten signature.";
+var CUSTOMER_BOARDING_AGREEMENT_MARKDOWN = String(CUSTOMER_BOARDING_AGREEMENT_SOURCE.markdown || "").trim();
+var customerAgreementSignaturePadInitialized = false;
+var customerAgreementSignatureDrawing = false;
+var customerAgreementSignatureHasInk = false;
+
+function customerAgreementAppliesToEstimate(estimate = customerEstimateDetails()) {
+  return !estimate?.isServiceRequest;
+}
+
+function customerAgreementFallbackClauses() {
+  return [
+    "I certify that I am the owner or authorized agent for the dog or dogs submitted for boarding.",
+    "I authorize Cuddle Stay and its staff to board, handle, feed, exercise, and provide routine care for my dog or dogs during the requested stay.",
+    "I confirm that the dog profile, vaccination information, medical history, behavior notes, feeding instructions, emergency contacts, and owner contact information I provided are accurate and complete to the best of my knowledge.",
+    "I understand that boarding includes normal animal-care risks, including stress, minor illness, injury, escape attempts, and interaction with other dogs, and I agree to disclose any known aggression, bite history, contagious illness, medication needs, or special handling requirements before drop-off.",
+    "I authorize Cuddle Stay to seek veterinary or emergency care if staff reasonably believes care is needed and I cannot be reached quickly. I accept financial responsibility for veterinary, medication, transportation, special handling, damage, late pickup, cancellation, and other approved charges related to my dog or dogs.",
+    "I understand that staff approval is required before a boarding request is confirmed and that estimated totals can change when staff reviews dates, services, vaccination status, member pricing, shared-crate eligibility, or special care needs.",
+    "I agree to follow drop-off, pickup, vaccine, payment, cancellation, and safety instructions provided by Cuddle Stay for the stay.",
+    "I agree that this electronic signature is attached to and logically associated with this boarding agreement and has the same intent as my handwritten signature for boarding requests submitted through Snuggle Stay.",
+  ];
+}
+
+function customerAgreementMarkdown(record = null) {
+  const source = String(record?.agreementMarkdown || record?.agreementText || CUSTOMER_BOARDING_AGREEMENT_MARKDOWN || "").trim();
+  if (source) return source;
+  return [
+    "# " + CUSTOMER_BOARDING_AGREEMENT_TITLE,
+    "",
+    ...customerAgreementFallbackClauses().map((clause, index) => String(index + 1) + ". " + clause),
+  ].join("\\n");
+}
+
+function customerAgreementClauses() {
+  const headings = String(CUSTOMER_BOARDING_AGREEMENT_MARKDOWN || "")
+    .split(/\\r?\\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^#\\s+/.test(line))
+    .map((line) => line.replace(/^#+\\s+/, ""))
+    .filter(Boolean);
+  return headings.length ? headings : customerAgreementFallbackClauses();
+}
+
+function customerAgreementText() {
+  return [
+    CUSTOMER_BOARDING_AGREEMENT_TITLE,
+    "Version: " + CUSTOMER_BOARDING_AGREEMENT_VERSION,
+    "Effective date: " + CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE,
+    customerAgreementMarkdown(),
+    "Electronic consent: " + CUSTOMER_BOARDING_AGREEMENT_CONSENT_TEXT,
+    "Signature intent: " + CUSTOMER_BOARDING_AGREEMENT_INTENT_TEXT,
+  ].join("\\n\\n");
+}
+
+function customerAgreementSimpleHash(value = "", length = 16) {
+  if (typeof shortStableHash === "function") return shortStableHash(value, length);
+  let hash = 2166136261;
+  String(value || "").split("").forEach((char) => {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  });
+  return Math.abs(hash >>> 0).toString(16).padStart(8, "0").slice(0, length);
+}
+
+function customerAgreementDocumentFingerprint() {
+  return "agreement-" + customerAgreementSimpleHash(customerAgreementText(), 24);
+}
+
+async function customerAgreementSha256Hex(value = "") {
+  if (globalThis.crypto?.subtle && globalThis.TextEncoder) {
+    const data = new TextEncoder().encode(String(value || ""));
+    const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+  return "fallback-" + customerAgreementSimpleHash(value, 32);
+}
+
+function customerAgreementFormatInline(value = "") {
+  return escapeHtml(value).replace(/\\*\\*([^*]+)\\*\\*/g, "<strong>$1</strong>");
+}
+
+function customerAgreementMarkdownToHtml(markdown = "") {
+  const lines = String(markdown || "").replace(/\\r\\n/g, "\\n").replace(/\\r/g, "\\n").split("\\n");
+  const html = [];
+  let openList = "";
+  const closeList = () => {
+    if (!openList) return;
+    html.push("</" + openList + ">");
+    openList = "";
+  };
+  const ensureList = (type) => {
+    if (openList === type) return;
+    closeList();
+    html.push("<" + type + ">");
+    openList = type;
+  };
+  lines.forEach((rawLine) => {
+    const line = String(rawLine || "").trim();
+    if (!line) {
+      closeList();
+      return;
+    }
+    if (/^-{3,}$/.test(line)) {
+      closeList();
+      html.push("<hr>");
+      return;
+    }
+    const heading = line.match(/^(#{1,3})\\s+(.+)$/);
+    if (heading) {
+      closeList();
+      const tag = heading[1].length === 1 ? "h4" : "h5";
+      html.push("<" + tag + ">" + customerAgreementFormatInline(heading[2]) + "</" + tag + ">");
+      return;
+    }
+    const ordered = line.match(/^\\d+\\.\\s+(.+)$/);
+    if (ordered) {
+      ensureList("ol");
+      html.push("<li>" + customerAgreementFormatInline(ordered[1]) + "</li>");
+      return;
+    }
+    const bullet = line.match(/^\\*\\s+(.+)$/);
+    if (bullet) {
+      ensureList("ul");
+      html.push("<li>" + customerAgreementFormatInline(bullet[1]) + "</li>");
+      return;
+    }
+    closeList();
+    html.push("<p>" + customerAgreementFormatInline(line) + "</p>");
+  });
+  closeList();
+  return html.join("");
+}
+
+function customerAgreementDocumentHtml(record = null) {
+  const version = record?.agreementVersion || CUSTOMER_BOARDING_AGREEMENT_VERSION;
+  const effectiveDate = record?.agreementEffectiveDate || CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE;
+  const title = record?.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE;
+  const markdown = customerAgreementMarkdown(record);
+  return "<article class=\\"customer-agreement-copy\\"><h3>" + escapeHtml(title) + "</h3><p>Version " + escapeHtml(version) + " | Effective " + escapeHtml(effectiveDate) + "</p><div class=\\"customer-agreement-markdown\\">" + customerAgreementMarkdownToHtml(markdown) + "</div></article>";
+}
+
+function customerAgreementSnapshotIsCurrent(record = {}) {
+  if (!record || record.removed) return false;
+  const signerEmail = normalizeEmail(record.signerEmail || record.ownerEmail || record.email);
+  const currentEmail = normalizeEmail(currentUser?.email);
+  return Boolean(
+    currentEmail
+      && signerEmail === currentEmail
+      && record.signedAt
+      && record.signatureHash
+      && record.agreementVersion === CUSTOMER_BOARDING_AGREEMENT_VERSION
+      && (!record.documentFingerprint || record.documentFingerprint === customerAgreementDocumentFingerprint()),
+  );
+}
+
+function customerAgreementProfileSnapshot(record = {}) {
+  return {
+    id: record.id || "",
+    agreementTitle: record.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE,
+    agreementVersion: record.agreementVersion || CUSTOMER_BOARDING_AGREEMENT_VERSION,
+    agreementEffectiveDate: record.agreementEffectiveDate || CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE,
+    documentFingerprint: record.documentFingerprint || customerAgreementDocumentFingerprint(),
+    documentHash: record.documentHash || "",
+    signatureHash: record.signatureHash || "",
+    signerName: record.signerName || "",
+    signerEmail: normalizeEmail(record.signerEmail || record.ownerEmail || ""),
+    signedAt: record.signedAt || "",
+    signatureMethod: record.signatureMethod || "drawn-signature-pad",
+    electronicConsentAccepted: record.electronicConsentAccepted === true,
+    agreementAccepted: record.agreementAccepted === true,
+  };
+}
+
+function customerBoardingAgreementsForCurrentUser() {
+  const email = normalizeEmail(currentUser?.email);
+  if (!email) return [];
+  return readRecords("boardingAgreement")
+    .filter((record) => !record.removed && normalizeEmail(record.signerEmail || record.ownerEmail) === email)
+    .sort((a, b) => new Date(b.signedAt || b.submittedAt || 0) - new Date(a.signedAt || a.submittedAt || 0));
+}
+
+function customerCurrentBoardingAgreement() {
+  const direct = customerBoardingAgreementsForCurrentUser().find(customerAgreementSnapshotIsCurrent);
+  if (direct) return direct;
+  const profile = savedUserFor(currentUser) || {};
+  const profileAgreement = profile.latestBoardingAgreement || profile.boardingAgreement || null;
+  return customerAgreementSnapshotIsCurrent(profileAgreement) ? profileAgreement : null;
+}
+
+function renderCustomerAgreementPanel(estimate = customerEstimateDetails()) {
+  const panel = $("#customerAgreementPanel");
+  if (!panel) return;
+  const applies = customerAgreementAppliesToEstimate(estimate);
+  panel.hidden = !applies;
+  if (!applies) return;
+  const currentAgreement = customerCurrentBoardingAgreement();
+  const signed = Boolean(currentAgreement);
+  const status = $("#customerAgreementStatus");
+  if (status) {
+    status.innerHTML = signed
+      ? "<strong>Boarding agreement signed</strong><p>Signed by " + escapeHtml(currentAgreement.signerName || currentUser?.name || "Owner") + " on " + escapeHtml(formatDateTime(currentAgreement.signedAt) || currentAgreement.signedAt || "file") + ".</p>"
+      : "<strong>Boarding agreement required</strong><p>Review and sign before submitting this boarding request.</p>";
+  }
+  const documentBody = $("#customerAgreementDocument");
+  if (documentBody) documentBody.innerHTML = customerAgreementDocumentHtml();
+  const details = $("#customerAgreementDetails");
+  if (details) details.open = !signed;
+  const block = $("#customerSignatureBlock");
+  if (block) block.hidden = signed;
+  const signerName = $("#customerAgreementSignerName");
+  if (signerName && !signerName.value) signerName.value = currentUser?.name || "";
+  window.setTimeout(() => initializeCustomerAgreementSignaturePad(), 0);
+}
+
+function customerSignatureCanvas() {
+  return $("#customerSignaturePad");
+}
+
+function resizeCustomerSignatureCanvas() {
+  const canvas = customerSignatureCanvas();
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  const width = Math.max(320, Math.round((rect.width || 720) * ratio));
+  const height = Math.max(140, Math.round((rect.height || 220) * ratio));
+  if (canvas.width === width && canvas.height === height) return;
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.lineWidth = 2.4;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.strokeStyle = "#102033";
+  canvas.classList.toggle("is-empty", !customerAgreementSignatureHasInk);
+}
+
+function customerSignaturePoint(event) {
+  const canvas = customerSignatureCanvas();
+  const rect = canvas.getBoundingClientRect();
+  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function updateCustomerSignatureData() {
+  const canvas = customerSignatureCanvas();
+  const dataField = $("#customerAgreementSignatureData");
+  if (!canvas || !dataField) return "";
+  dataField.value = customerAgreementSignatureHasInk ? canvas.toDataURL("image/png") : "";
+  canvas.classList.toggle("is-empty", !customerAgreementSignatureHasInk);
+  return dataField.value;
+}
+
+function clearCustomerSignaturePad() {
+  const canvas = customerSignatureCanvas();
+  const context = canvas?.getContext("2d");
+  if (canvas && context) context.clearRect(0, 0, canvas.width, canvas.height);
+  customerAgreementSignatureHasInk = false;
+  customerAgreementSignatureDrawing = false;
+  updateCustomerSignatureData();
+}
+
+function initializeCustomerAgreementSignaturePad() {
+  const canvas = customerSignatureCanvas();
+  if (!canvas) return;
+  resizeCustomerSignatureCanvas();
+  if (customerAgreementSignaturePadInitialized) return;
+  customerAgreementSignaturePadInitialized = true;
+  canvas.classList.add("is-empty");
+  canvas.addEventListener("pointerdown", (event) => {
+    if ($("#customerSignatureBlock")?.hidden) return;
+    resizeCustomerSignatureCanvas();
+    customerAgreementSignatureDrawing = true;
+    customerAgreementSignatureHasInk = true;
+    const context = canvas.getContext("2d");
+    const point = customerSignaturePoint(event);
+    context.fillStyle = "#102033";
+    context.beginPath();
+    context.arc(point.x, point.y, 1.2, 0, Math.PI * 2);
+    context.fill();
+    context.beginPath();
+    context.moveTo(point.x, point.y);
+    canvas.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (!customerAgreementSignatureDrawing) return;
+    const context = canvas.getContext("2d");
+    const point = customerSignaturePoint(event);
+    context.lineTo(point.x, point.y);
+    context.stroke();
+    event.preventDefault();
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((eventName) => {
+    canvas.addEventListener(eventName, (event) => {
+      if (!customerAgreementSignatureDrawing) return;
+      customerAgreementSignatureDrawing = false;
+      updateCustomerSignatureData();
+      canvas.releasePointerCapture?.(event.pointerId);
+    });
+  });
+  $("#clearCustomerSignatureButton")?.addEventListener("click", clearCustomerSignaturePad);
+  $("#printCustomerAgreementButton")?.addEventListener("click", () => window.print());
+  window.addEventListener("resize", () => {
+    if (!$("#customerSignatureBlock")?.hidden && !customerAgreementSignatureHasInk) resizeCustomerSignatureCanvas();
+  });
+}
+
+function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(), options = {}) {
+  if (!customerAgreementAppliesToEstimate(estimate)) return true;
+  if (customerCurrentBoardingAgreement()) return true;
+  renderCustomerAgreementPanel(estimate);
+  const signerName = $("#customerAgreementSignerName");
+  const electronicConsent = $("#customerAgreementElectronicConsent");
+  const accepted = $("#customerAgreementAccepted");
+  const signatureData = $("#customerAgreementSignatureData")?.value || "";
+  const signatureError = $("#customerAgreementSignatureError");
+  [signerName, electronicConsent, accepted].forEach((field) => field && clearFieldError(field));
+  if (signatureError) signatureError.hidden = true;
+  let firstInvalid = null;
+  if (!String(signerName?.value || "").trim()) {
+    if (signerName) setFieldError(signerName, "Legal name is required before signing.");
+    firstInvalid = firstInvalid || signerName;
+  }
+  if (!signatureData || !customerAgreementSignatureHasInk) {
+    if (signatureError) signatureError.hidden = false;
+    firstInvalid = firstInvalid || customerSignatureCanvas();
+  }
+  if (!electronicConsent?.checked) {
+    if (electronicConsent) setFieldError(electronicConsent, "Electronic records consent is required before signing.");
+    firstInvalid = firstInvalid || electronicConsent;
+  }
+  if (!accepted?.checked) {
+    if (accepted) setFieldError(accepted, "Agreement review confirmation is required before signing.");
+    firstInvalid = firstInvalid || accepted;
+  }
+  if (firstInvalid) {
+    $("#customerAgreementPanel")?.scrollIntoView({ behavior: options.behavior || "smooth", block: "center" });
+    if (typeof firstInvalid.focus === "function") firstInvalid.focus({ preventScroll: true });
+    showToast("Review and sign the boarding agreement before continuing.");
+    return false;
+  }
+  return true;
+}
+
+function customerAgreementRequestContext(estimate = {}) {
+  const dogs = uniqueCustomerBookingDogs(estimate.dogs || []);
+  return {
+    submissionId: estimate.submissionId || "",
+    requestGroupId: estimate.requestGroupId || "",
+    requestMode: estimate.isServiceRequest ? "service" : "boarding",
+    dogNames: dogs.map((dog) => dog.dogName || "Dog"),
+    dogIds: dogs.map((dog) => dog.id || dog.sourceBoardingDogId || "").filter(Boolean),
+    dropoffTime: estimate.dropoffTime || "",
+    pickupTime: estimate.pickupTime || "",
+    estimatedTotal: estimate.total || 0,
+  };
+}
+
+async function createCustomerBoardingAgreementRecord(estimate = {}) {
+  const signerName = String($("#customerAgreementSignerName")?.value || currentUser?.name || "").trim();
+  const signerEmail = normalizeEmail(currentUser?.email);
+  const signatureImageData = $("#customerAgreementSignatureData")?.value || "";
+  const signedAt = new Date().toISOString();
+  const agreementMarkdown = customerAgreementMarkdown();
+  const documentText = customerAgreementText();
+  const documentHash = await customerAgreementSha256Hex(documentText);
+  const signatureHash = await customerAgreementSha256Hex([signatureImageData, signerName, signerEmail, documentHash, signedAt].join("|"));
+  const userAgent = navigator.userAgent || "";
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  return {
+    type: "boardingAgreement",
+    id: uid("boardingAgreement"),
+    submittedAt: signedAt,
+    signedAt,
+    agreementTitle: CUSTOMER_BOARDING_AGREEMENT_TITLE,
+    agreementVersion: CUSTOMER_BOARDING_AGREEMENT_VERSION,
+    agreementEffectiveDate: CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE,
+    agreementClauses: customerAgreementClauses(),
+    agreementMarkdown,
+    agreementText: documentText,
+    documentFingerprint: customerAgreementDocumentFingerprint(),
+    documentHash,
+    signerName,
+    signerEmail,
+    ownerName: currentUser?.name || signerName,
+    ownerEmail: signerEmail,
+    signerUserId: currentUser?.key || currentUser?.authId || "",
+    signerAuthProvider: currentUser?.authProvider || "",
+    signerRole: currentRole(),
+    signatureMethod: "drawn-signature-pad",
+    signatureImageData,
+    signatureHash,
+    electronicConsentAccepted: true,
+    agreementAccepted: true,
+    electronicConsentText: CUSTOMER_BOARDING_AGREEMENT_CONSENT_TEXT,
+    signatureIntentText: CUSTOMER_BOARDING_AGREEMENT_INTENT_TEXT,
+    signedUserAgent: userAgent,
+    signedLocale: navigator.language || "",
+    signedTimezone: timezone,
+    signedLocationHref: location.href || "",
+    signedIpAddress: "",
+    ipAddressSource: "not-collected-client-side",
+    deviceAudit: {
+      platform: navigator.platform || "",
+      vendor: navigator.vendor || "",
+      maxTouchPoints: navigator.maxTouchPoints || 0,
+      viewportWidth: window.innerWidth || 0,
+      viewportHeight: window.innerHeight || 0,
+      screenWidth: window.screen?.width || 0,
+      screenHeight: window.screen?.height || 0,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    },
+    requestContext: customerAgreementRequestContext(estimate),
+    auditEvents: [
+      {
+        action: "viewed-and-signed",
+        at: signedAt,
+        signerEmail,
+        userId: currentUser?.key || currentUser?.authId || "",
+        documentFingerprint: customerAgreementDocumentFingerprint(),
+      },
+    ],
+    removed: false,
+  };
+}
+
+async function saveCustomerAgreementToProfile(record = {}) {
+  if (!currentUser?.email) return null;
+  const existing = savedUserFor(currentUser) || {};
+  const agreementSnapshot = customerAgreementProfileSnapshot(record);
+  const updatedProfile = upsertRecord("settingsUser", {
+    ...profileRecordForUser(currentUser),
+    ...existing,
+    latestBoardingAgreement: agreementSnapshot,
+    boardingAgreementSignedAt: agreementSnapshot.signedAt,
+    boardingAgreementVersion: agreementSnapshot.agreementVersion,
+    boardingAgreementRecordIds: mergeUniqueIds(existing.boardingAgreementRecordIds || [], [record.id]),
+    removed: false,
+  });
+  currentUser.latestBoardingAgreement = agreementSnapshot;
+  currentUser.boardingAgreementSignedAt = agreementSnapshot.signedAt;
+  currentUser.boardingAgreementVersion = agreementSnapshot.agreementVersion;
+  safeLocalStorageSetItem(stateKeys.session, JSON.stringify(currentUser), { quiet: true });
+  await sendPayload(updatedProfile);
+  return updatedProfile;
+}
+
+async function ensureCustomerBoardingAgreementForEstimate(estimate = {}) {
+  if (!customerAgreementAppliesToEstimate(estimate)) return null;
+  const existing = customerCurrentBoardingAgreement();
+  if (existing) return customerAgreementProfileSnapshot(existing);
+  if (!validateCustomerAgreementForBooking(estimate, { behavior: "auto" })) return null;
+  const payload = await createCustomerBoardingAgreementRecord(estimate);
+  const record = upsertRecord("boardingAgreement", payload);
+  await sendPayload(record);
+  await saveCustomerAgreementToProfile(record);
+  renderCustomerFiles();
+  renderCustomerAgreementPanel(estimate);
+  clearCustomerSignaturePad();
+  return customerAgreementProfileSnapshot(record);
+}
+
+function customerAgreementDetailHtml(record = {}) {
+  const rows = [
+    ["Signer", "signerName"],
+    ["Email", "signerEmail"],
+    ["Signed", "signedLabel"],
+    ["Version", "agreementVersion"],
+    ["Document hash", "documentHash"],
+    ["Signature hash", "signatureHash"],
+    ["Device", "deviceLabel"],
+  ];
+  const detailRecord = {
+    ...record,
+    signedLabel: formatDateTime(record.signedAt) || record.signedAt || "",
+    deviceLabel: [record.signedTimezone, record.signedLocale].filter(Boolean).join(" | "),
+  };
+  const signature = record.signatureImageData ? "<img class=\\"signed-agreement-signature\\" src=\\"" + escapeHtml(record.signatureImageData) + "\\" alt=\\"Saved signature\\" />" : "";
+  return customerAgreementDocumentHtml(record)
+    + "<section class=\\"signed-agreement-meta\\">" + detailRows(detailRecord, rows) + "</section>"
+    + signature;
+}
+
+function openCustomerAgreementDetail(id = "") {
+  const record = readRecords("boardingAgreement").find((item) => item.id === id && !item.removed);
+  if (!record || normalizeEmail(record.signerEmail || record.ownerEmail) !== normalizeEmail(currentUser?.email)) {
+    showToast("This agreement could not be opened.");
+    return;
+  }
+  showDetailDialog("Signed Boarding Agreement", customerAgreementDetailHtml(record));
+}
 
 function customerRequestStatusLabel(status = "") {
   const normalized = boardingLifecycleStatuses.includes(status) ? status : normalizeBoardingStatus({ boardingStatus: status, customerRequest: true });
@@ -380,7 +877,7 @@ function renderCustomerUpdates() {
 }
 
 function customerUploadedFileEntriesForCurrentUser() {
-  return customerDogsForCurrentUser().flatMap((dog) => {
+  const dogFiles = customerDogsForCurrentUser().flatMap((dog) => {
     const dogName = dog.dogName || "Dog";
     const entries = [];
     if (dog.profilePhotoUrl || dog.profilePhotoData || dog.profilePhotoPath) {
@@ -422,7 +919,18 @@ function customerUploadedFileEntriesForCurrentUser() {
       });
     }
     return entries;
-  }).sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+  });
+  const agreementFiles = customerBoardingAgreementsForCurrentUser().map((agreement) => ({
+    sourceRecordId: agreement.id || "",
+    sourceRecordType: "boardingAgreement",
+    dogName: "Owner profile",
+    fileName: agreement.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE,
+    fileType: "Signed boarding agreement",
+    savedAt: agreement.signedAt || agreement.submittedAt || "",
+    agreementRecord: agreement,
+    agreementVersion: agreement.agreementVersion || "",
+  }));
+  return [...dogFiles, ...agreementFiles].sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
 }
 
 function renderCustomerFiles() {
@@ -431,12 +939,14 @@ function renderCustomerFiles() {
   const files = customerUploadedFileEntriesForCurrentUser();
   list.innerHTML = files.length
     ? files.map((file) => {
-      const action = file.src || file.storagePath
+      const action = file.sourceRecordType === "boardingAgreement"
+        ? \`<button type="button" class="secondary-button" data-action="view-customer-agreement" data-id="\${escapeHtml(file.sourceRecordId || "")}">Open Agreement</button>\`
+        : file.src || file.storagePath
         ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(file.src || "")}" data-media-type="\${escapeHtml(file.mediaType || "")}" data-media-name="\${escapeHtml(file.fileName)}"\${mediaAccessAttrs(file, { sourceRecordId: file.sourceRecordId || "", sourceRecordType: file.sourceRecordType || "" })}>Open</button>\`
         : \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="" data-media-name="\${escapeHtml(file.fileName)}">View Name</button>\`;
       return \`<article class="record-card compact-record-card">
         <strong>\${escapeHtml(file.fileName)}</strong>
-        <span>\${escapeHtml(file.dogName)} | \${escapeHtml(file.fileType)}</span>
+        <span>\${escapeHtml(file.dogName)} | \${escapeHtml(file.fileType)}\${file.agreementVersion ? \` | Version \${escapeHtml(file.agreementVersion)}\` : ""}</span>
         \${file.savedAt ? \`<p>\${escapeHtml(formatDateTime(file.savedAt))}</p>\` : ""}
         <div class="record-actions">\${action}</div>
       </article>\`;
@@ -1750,7 +2260,15 @@ async function submitPendingCustomerBooking() {
   let savedCount = 0;
   let skippedCount = 0;
   const submittedDogKeys = new Set();
+  let boardingAgreement = null;
   try {
+    boardingAgreement = await ensureCustomerBoardingAgreementForEstimate(estimate);
+    if (customerAgreementAppliesToEstimate(estimate) && !boardingAgreement) {
+      customerBookingSubmitInProgress = false;
+      if (confirmButton) confirmButton.disabled = false;
+      $("#bookingConfirmDialog")?.close();
+      return;
+    }
     for (const dog of estimate.dogs) {
       const dogServices = customerServicesForDog(estimate, dog);
       const submittedDogKey = [customerBookingSelectionKey(dog), estimate.dropoffTime || "", estimate.pickupTime || "", customerBookingServiceKey(estimate, dog)].join("|");
@@ -1884,6 +2402,12 @@ async function submitPendingCustomerBooking() {
         pricingSnapshot,
         groupTotal: estimate.total,
         requestProfileSnapshot,
+        boardingAgreement,
+        boardingAgreementId: boardingAgreement?.id || "",
+        boardingAgreementVersion: boardingAgreement?.agreementVersion || "",
+        boardingAgreementSignedAt: boardingAgreement?.signedAt || "",
+        boardingAgreementSignatureHash: boardingAgreement?.signatureHash || "",
+        boardingAgreementDocumentHash: boardingAgreement?.documentHash || "",
         estimatedTotal: pricingSnapshot.total,
       };
       stay.bathPlan = bathPlanForStay(stay);
@@ -1949,6 +2473,12 @@ async function submitPendingCustomerBooking() {
         vaccinationRecords: dog.vaccinationRecords || [],
         vaccinationFiles: dog.vaccinationFiles || "",
         requestProfileSnapshot,
+        boardingAgreement,
+        boardingAgreementId: boardingAgreement?.id || "",
+        boardingAgreementVersion: boardingAgreement?.agreementVersion || "",
+        boardingAgreementSignedAt: boardingAgreement?.signedAt || "",
+        boardingAgreementSignatureHash: boardingAgreement?.signatureHash || "",
+        boardingAgreementDocumentHash: boardingAgreement?.documentHash || "",
         estimatedTotal: pricingSnapshot.total,
         stayType,
         billingDays: pricingSnapshot.billingDays,

@@ -16,7 +16,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260709-owned-delete-request-meta" />
+    <link rel="stylesheet" href="styles.css?v=20260710-boarding-agreement-signature-20260710-cuddle-stay-agreement" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -409,6 +409,28 @@
             </section>
             <section class="customer-booking-wizard-panel" data-customer-booking-step="review" hidden>
               <div class="estimate-box" id="customerEstimate">Select dog(s), dates, and services to see an estimate.</div>
+              <section class="customer-agreement-panel" id="customerAgreementPanel">
+                <div class="customer-agreement-status" id="customerAgreementStatus"></div>
+                <details class="customer-agreement-document" id="customerAgreementDetails">
+                  <summary>Boarding Agreement</summary>
+                  <div id="customerAgreementDocument"></div>
+                </details>
+                <div class="customer-signature-block" id="customerSignatureBlock">
+                  <div class="field-grid">
+                    <label>Legal name<input type="text" name="agreementSignerName" id="customerAgreementSignerName" autocomplete="name" /></label>
+                  </div>
+                  <label class="customer-signature-label" for="customerSignaturePad">Signature</label>
+                  <canvas id="customerSignaturePad" class="customer-signature-pad" width="720" height="220" aria-label="Draw signature"></canvas>
+                  <input type="hidden" name="agreementSignatureData" id="customerAgreementSignatureData" />
+                  <p id="customerAgreementSignatureError" class="form-error" hidden>Draw your signature before submitting.</p>
+                  <div class="button-row customer-signature-actions">
+                    <button type="button" class="secondary-button" id="clearCustomerSignatureButton">Clear Signature</button>
+                    <button type="button" class="secondary-button" id="printCustomerAgreementButton">Print Agreement</button>
+                  </div>
+                  <label class="inline-check"><input type="checkbox" name="agreementElectronicConsent" id="customerAgreementElectronicConsent" /> I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.</label>
+                  <label class="inline-check"><input type="checkbox" name="agreementAccepted" id="customerAgreementAccepted" /> I have reviewed the Cuddle Stay Boarding Services Agreement and intend my electronic signature to have the same legal effect as a handwritten signature.</label>
+                </div>
+              </section>
             </section>
             <div class="button-row customer-wizard-actions">
               <button type="button" class="secondary-button" id="customerBookingBackButton">Back</button>
@@ -1504,6 +1526,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260709-owned-delete-request-meta"></script>
+  <script type="module" src="js/main.js?v=20260628-our-dogs-filter-info-boarding-rows-20260710-boarding-agreement-signature-20260710-cuddle-stay-agreement"></script>
 </body>
 </html>

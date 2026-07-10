@@ -507,6 +507,7 @@ var stateKeys = {
   reservationCustomerUpdate: "cth-reservationCustomerUpdate-records",
   dogClaimRequest: "cth-dogClaimRequest-records",
   legacyDogLink: "cth-legacyDogLink-records",
+  boardingAgreement: "cth-boardingAgreement-records",
   settingsUser: "cth-settingsUser-records",
   cfoNote: "cth-cfoNote-records",
   calendarNote: "cth-calendarNote-records",
@@ -1614,7 +1615,7 @@ function initSupabaseClient() {
 function recordTypes() {
   return [
     "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "customerDog",
-    "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink",
+    "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink", "boardingAgreement",
     "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
   ];
 }
@@ -1641,15 +1642,15 @@ function remoteRecordTypesForPage(pageId = "") {
     timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
     servicesPage: ["service"],
     financialsPage: ["boardingDog", "service"],
-    settingsUsersPage: ["settingsUser"],
+    settingsUsersPage: ["settingsUser", "boardingAgreement"],
     settingsKennelLocationsPage: ["kennelLocation", "kennelBuilding"],
     settingsHoursPage: ["operationHours", "operationDateOverride"],
     settingsAlertsPage: ["notificationPreference", "notificationLog"],
     settingsAuditLogPage: ["auditLog"],
-    customerPage: ["customerDog", "boardingDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
-    customerRequestsPage: ["customerDog", "boardingDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    customerPage: ["customerDog", "boardingDog", "boardingAgreement", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    customerRequestsPage: ["customerDog", "boardingDog", "boardingAgreement", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
     customerUpdatesPage: ["boardingDog", "customerDog"],
-    customerFilesPage: ["boardingDog", "customerDog"],
+    customerFilesPage: ["boardingDog", "customerDog", "boardingAgreement"],
   };
   const normalizedPageId = normalizePageId(pageId || pageIdFromHash() || activePageId() || "");
   return uniqueRemoteRecordTypes([...coreTypes, ...(pageTypes[normalizedPageId] || [])]);
@@ -1715,6 +1716,7 @@ var REMOTE_STAFF_WRITE_RECORD_TYPES = new Set([
   "dogClaimRequest",
   "legacyDogLink",
   "userDogAccess",
+  "boardingAgreement",
   "notificationLog",
   "timeOffRequest",
 ]);
@@ -1722,6 +1724,7 @@ var REMOTE_STAFF_WRITE_RECORD_TYPES = new Set([
 var REMOTE_CUSTOMER_WRITE_RECORD_TYPES = new Set([
   "boardingDog",
   "customerDog",
+  "boardingAgreement",
   "request",
   "maintenance",
   "notificationLog",
@@ -4768,15 +4771,15 @@ function renderAfterRealtimeTypes(types = []) {
   if (activePage === "financialsPage" && hasAny(["boardingDog", "service"])) {
     renderFinancials();
   }
-  if (activePage === "settingsUsersPage" && typeSet.has("settingsUser")) renderSettingsUsers();
+  if (activePage === "settingsUsersPage" && hasAny(["settingsUser", "boardingAgreement"])) renderSettingsUsers();
   if (activePage === "settingsKennelLocationsPage" && hasAny(["kennelLocation", "kennelBuilding"])) renderKennelLocations();
   if (activePage === "settingsHoursPage" && hasAny(["operationHours", "operationDateOverride"])) renderOperationHoursSettings();
   if (activePage === "settingsAlertsPage" && hasAny(["notificationPreference", "notificationLog"])) renderSettingsAlerts();
   if (activePage === "settingsAuditLogPage" && typeSet.has("auditLog")) renderAuditLog();
   if (activePage === "customerPage" && hasAny(["customerDog", "boardingDog"])) renderCustomerDogs();
-  if (activePage === "customerRequestsPage" && boardingChanged) renderCustomerRequests();
+  if (activePage === "customerRequestsPage" && hasAny(["boardingDog", "boardingAgreement"])) renderCustomerRequests();
   if (activePage === "customerUpdatesPage" && hasAny(["boardingDog", "reservationCustomerUpdate"])) renderCustomerUpdates();
-  if (activePage === "customerFilesPage" && hasAny(["boardingDog", "customerDog"])) renderCustomerFiles();
+  if (activePage === "customerFilesPage" && hasAny(["boardingDog", "customerDog", "boardingAgreement"])) renderCustomerFiles();
 
   if (typeSet.has("notificationLog") || typeSet.has("notificationRead")) renderNotifications();
   renderSharedRecords();
@@ -6672,6 +6675,7 @@ function titleForRecord(type, record = {}) {
     service: \`Service: \${record.serviceName || "Record"}\`,
     dailyTask: \`Daily Report: \${record.date || "Record"}\`,
     customerDog: \`Customer Dog: \${record.dogName || "Record"}\`,
+    boardingAgreement: \`Boarding Agreement: \${record.signerName || record.signerEmail || "Record"}\`,
     settingsUser: \`User: \${record.name || record.email || "Record"}\`,
     cfoNote: \`CFO Note: \${record.title || "Record"}\`,
     calendarNote: \`Calendar Note: \${record.noteDate || "Record"}\`,
@@ -10472,6 +10476,9 @@ function resetCustomerBookingForm() {
   $("#requestBoardingButton").textContent = "Review Request";
   pendingCustomerBooking = null;
   customerBookingSubmitInProgress = false;
+  if (typeof clearCustomerSignaturePad === "function") clearCustomerSignaturePad();
+  if ($("#customerAgreementElectronicConsent")) $("#customerAgreementElectronicConsent").checked = false;
+  if ($("#customerAgreementAccepted")) $("#customerAgreementAccepted").checked = false;
   if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
   $("#bookingConfirmDialog")?.close();
   formEl.hidden = true;
@@ -10606,6 +10613,7 @@ function updateCustomerEstimate() {
   $("#customerEstimate").innerHTML = estimate.dogs.length
     ? \`<div class="estimate-heading"><strong>Reservation Summary</strong><span>Final approval comes from staff</span></div>\${pricingErrorHtml}\${dogSummary}\${staySummary}\${estimate.isServiceRequest ? "" : \`<h4>Boarding</h4><strong>\${escapeHtml(boardingBillingLabel(estimate))}</strong>\${boardingLine || \`<div class="estimate-line muted-estimate-line"><span>Boarding subtotal</span><span>Choose dates to estimate</span></div>\`}\`}<h4>\${estimate.isServiceRequest ? "Requested Services" : "Add-ons"}</h4>\${serviceLine}<div class="estimate-total"><strong>\${pricingErrors.length ? "Estimated total unavailable" : "Estimated total"}</strong><span>\${pricingErrors.length ? "Needs staff pricing" : money(estimate.total)}</span></div>\`
     : "Select dog(s), dates, and services to see an estimate.";
+  if (typeof renderCustomerAgreementPanel === "function") renderCustomerAgreementPanel(estimate);
   if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
 }
 
@@ -10625,6 +10633,7 @@ function showBookingConfirmDialog(estimate) {
     renderCustomerBookingAvailabilityMessages();
     return;
   }
+  if (typeof validateCustomerAgreementForBooking === "function" && !validateCustomerAgreementForBooking(estimate)) return;
   pendingCustomerBooking = { ...estimate, dogs: uniqueCustomerBookingDogs(estimate.dogs), submissionId: uid("customerBooking"), requestGroupId: estimate.requestGroupId || uid("requestGroup") };
   customerBookingSubmitInProgress = false;
   if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
@@ -10643,6 +10652,7 @@ function showBookingConfirmDialog(estimate) {
       <div><strong>\${pendingCustomerBooking.isServiceRequest ? "Requested time" : "Stay"}</strong><p>\${formatDateTime(pendingCustomerBooking.dropoffTime)}\${pendingCustomerBooking.isServiceRequest ? "" : \` to \${formatDateTime(pendingCustomerBooking.pickupTime)}\`}</p>\${pendingCustomerBooking.isServiceRequest ? "" : \`<p>\${boardingBillingLabel(pendingCustomerBooking)}\${pendingCustomerBooking.sharedCrateRequested ? " with shared-crate member pricing requested" : ""}</p><p>Boarding subtotal: \${money(pendingCustomerBooking.boardingCost)}</p>\`}</div>
       \${availabilityHtml ? \`<div class="operation-confirm-notices">\${availabilityHtml}</div>\` : ""}
       <div><strong>\${pendingCustomerBooking.isServiceRequest ? "Requested Services" : "Services"}</strong><ul>\${serviceList}</ul></div>
+      \${typeof customerAgreementAppliesToEstimate === "function" && customerAgreementAppliesToEstimate(pendingCustomerBooking) ? \`<div><strong>Agreement</strong><p>\${typeof customerCurrentBoardingAgreement === "function" && customerCurrentBoardingAgreement() ? "Current signed agreement on file." : "Signed agreement will be saved with this request."}</p></div>\` : ""}
       <div class="estimate-total"><strong>Estimated total</strong><span>\${money(pendingCustomerBooking.total)}</span></div>
       \${pendingCustomerBooking.requestNotes ? \`<div><strong>Notes</strong><p>\${escapeHtml(pendingCustomerBooking.requestNotes)}</p></div>\` : ""}
     </div>
@@ -12316,6 +12326,10 @@ function initEvents() {
     if (action.dataset.action === "popup-remove-user") {
       const user = readRecords("settingsUser").find((item) => item.id === action.dataset.id && !item.removed);
       if (user) openSettingsUserRemoveConfirm(user, { returnToUser: true });
+    }
+    if (action.dataset.action === "view-settings-user-agreement") {
+      if (typeof openSettingsUserAgreement === "function") openSettingsUserAgreement(action.dataset.id || "");
+      return;
     }
     if (action.dataset.action === "cancel-remove-settings-user") {
       const user = readRecords("settingsUser").find((item) => item.id === action.dataset.id && !item.removed);
@@ -14105,6 +14119,13 @@ function initEvents() {
     }
   });
   $("#customerRequestStatusFilter").addEventListener("change", renderCustomerRequests);
+  $("#customerFilesList")?.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="view-customer-agreement"]');
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof openCustomerAgreementDetail === "function") openCustomerAgreementDetail(button.dataset.id || "");
+  });
   $("#customerRequestList").addEventListener("click", async (event) => {
     const actionButton = event.target.closest("[data-action]");
     if (actionButton?.dataset.action === "edit-customer-request") {
