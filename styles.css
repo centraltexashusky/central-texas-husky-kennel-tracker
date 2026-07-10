@@ -2376,6 +2376,10 @@ button.is-loading {
   gap: 4px;
 }
 
+.customer-agreement-summary {
+  margin: 0 0 12px;
+}
+
 .customer-agreement-status strong,
 .customer-agreement-document h3,
 .customer-agreement-document h4,
@@ -11862,6 +11866,25 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #25496A;
 }
 
+:root[data-theme="light"] :where(#detailDialog, .detail-dialog) .boarding-decline-note {
+  background: #FFF7ED !important;
+  border: 1px solid #E8B789 !important;
+  box-shadow: inset 4px 0 0 #D97706 !important;
+  color: #172033 !important;
+}
+
+:root[data-theme="light"] :where(#detailDialog, .detail-dialog) .boarding-decline-note strong {
+  color: #8A3F12 !important;
+}
+
+:root[data-theme="light"] :where(#detailDialog, .detail-dialog) .boarding-decline-note span {
+  color: #52647C !important;
+}
+
+:root[data-theme="light"] :where(#detailDialog, .detail-dialog) .boarding-decline-note p {
+  color: #172033 !important;
+}
+
 :root[data-theme="light"] #boardingRequestRecords .boarding-request-service-row {
   border-top-color: #D5E4EF;
 }
@@ -11950,6 +11973,15 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #172033;
 }
 
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-request-modal:not([hidden]) {
+  background:
+    linear-gradient(180deg, #FFFFFF, #F8FBFF) !important;
+  border: 1px solid #C5D8E8 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 2px 4px rgba(23, 32, 51, 0.05), 0 16px 34px rgba(23, 32, 51, 0.10) !important;
+  color: #172033 !important;
+}
+
 :root[data-theme="light"] #customerPage .customer-dog-modal .section-heading span,
 :root[data-theme="light"] #customerPage .customer-dog-modal .customer-form-step > strong,
 :root[data-theme="light"] #customerPage .customer-dog-modal label {
@@ -11983,7 +12015,46 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #172033;
 }
 
-:root[data-theme="light"] #customerPage .customer-flow-stepper {
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-booking-time-box,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-dog-selection-step,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-additional-services,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-stay-program-step,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-crate-share-step {
+  background: #FFFFFF !important;
+  border: 1px solid #C9DDEA !important;
+  color: #172033 !important;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.03) !important;
+}
+
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-booking-time-box > strong,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-dog-selection-step > strong,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-additional-services > strong,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-stay-program-step > strong,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-crate-share-step > strong {
+  color: #13263D !important;
+}
+
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-booking-time-box > p,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-empty p,
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-note {
+  color: #52647C !important;
+}
+
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-agreement-summary {
+  background: #FFF7E6 !important;
+  border-color: #E4B763 !important;
+  color: #172033 !important;
+}
+
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-agreement-summary strong {
+  color: #7C4A05 !important;
+}
+
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-agreement-summary p {
+  color: #4F5F70 !important;
+}
+
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-stepper {
   background: #F4FAFF;
   border: 1px solid #D5E2EA;
   border-radius: 12px;
@@ -12031,35 +12102,35 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #52647C;
 }
 
-:root[data-theme="light"] #customerPage .customer-flow-step-list span {
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-step-list span {
   background: #F7FAFC;
   border-color: #D5E2EA;
   color: #52647C;
 }
 
-:root[data-theme="light"] #customerPage .customer-flow-step-list i {
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-step-list i {
   background: #E5EEF6;
   color: #17324D;
 }
 
-:root[data-theme="light"] #customerPage .customer-flow-step-list span.is-active {
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-step-list span.is-active {
   background: #EAF4FF;
   border-color: #8DBFE8;
   color: #17324D;
 }
 
-:root[data-theme="light"] #customerPage .customer-flow-step-list span.is-active i {
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-step-list span.is-active i {
   background: #2F6FED;
   color: #FFFFFF;
 }
 
-:root[data-theme="light"] #customerPage .customer-flow-step-list span.is-complete {
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-step-list span.is-complete {
   background: #ECFDF4;
   border-color: #9FD9BA;
   color: #165C38;
 }
 
-:root[data-theme="light"] #customerPage .customer-flow-step-list span.is-complete i {
+:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-step-list span.is-complete i {
   background: #1FA463;
   color: #FFFFFF;
 }

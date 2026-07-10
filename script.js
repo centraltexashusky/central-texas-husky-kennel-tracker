@@ -6877,6 +6877,13 @@ function renderCustomerAgreementPanel(estimate = customerEstimateDetails()) {
   if (!applies) return;
   const currentAgreement = customerCurrentBoardingAgreement();
   const signed = Boolean(currentAgreement);
+  const notice = $("#customerAgreementNotice");
+  if (notice) {
+    notice.hidden = !applies;
+    notice.innerHTML = signed
+      ? `<strong>Boarding agreement signed</strong><p>Current agreement on file for ${escapeHtml(currentAgreement.signerName || currentUser?.name || "this owner")}.</p>`
+      : "<strong>Boarding agreement required</strong><p>This owner must review and e-sign the agreement on the Review step before submitting a boarding request.</p>";
+  }
   const status = $("#customerAgreementStatus");
   if (status) {
     status.innerHTML = signed
