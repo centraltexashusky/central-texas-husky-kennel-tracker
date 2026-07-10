@@ -12040,17 +12040,17 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #52647C !important;
 }
 
-:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-agreement-summary {
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-agreement-status.customer-agreement-summary {
   background: #FFF7E6 !important;
   border-color: #E4B763 !important;
   color: #172033 !important;
 }
 
-:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-agreement-summary strong {
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-agreement-status.customer-agreement-summary strong {
   color: #7C4A05 !important;
 }
 
-:root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-agreement-summary p {
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-agreement-status.customer-agreement-summary p {
   color: #4F5F70 !important;
 }
 
