@@ -2450,6 +2450,85 @@ button.is-loading {
   gap: 12px;
 }
 
+.agreement-response-card {
+  background: rgba(8, 17, 27, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.agreement-response-card > strong,
+.agreement-choice-group legend,
+.agreement-dog-summary > strong {
+  color: rgba(255, 255, 255, 0.96);
+  font-weight: 900;
+}
+
+.agreement-response-card > p {
+  color: rgba(255, 255, 255, 0.72);
+  margin: -4px 0 0;
+}
+
+.agreement-dog-summary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.agreement-dog-summary ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agreement-dog-summary li {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+}
+
+.agreement-dog-summary li span,
+.agreement-dog-summary li small {
+  color: rgba(255, 255, 255, 0.68);
+  font-weight: 720;
+}
+
+.agreement-choice-group {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+}
+
+.agreement-choice-group legend {
+  padding: 0 6px;
+}
+
+.agreement-choice {
+  margin: 0;
+}
+
+.agreement-limit-input {
+  margin: 0;
+}
+
+.agreement-limit-input input:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
 .customer-signature-label {
   margin: 0;
 }
@@ -2496,14 +2575,46 @@ button.is-loading {
   margin: 0;
 }
 
+.signed-agreement-responses {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.signed-agreement-responses h4 {
+  color: rgba(255, 255, 255, 0.96);
+  margin: 0 0 10px;
+}
+
 :root[data-theme="light"] body:not(.is-login-view) :where(.customer-agreement-status, .customer-agreement-document, .customer-signature-block, .signed-agreement-card) {
   background: #ffffff !important;
   border-color: #dbe5e3 !important;
   color: #1f2d36 !important;
 }
 
+:root[data-theme="light"] body:not(.is-login-view) :where(.agreement-response-card, .agreement-dog-summary, .agreement-choice-group, .signed-agreement-responses) {
+  background: #F8FBFF !important;
+  border-color: #D5E2EA !important;
+  color: #172033 !important;
+}
+
 :root[data-theme="light"] body:not(.is-login-view) :where(.customer-agreement-status strong, .customer-agreement-document h3, .customer-agreement-document h4, .customer-agreement-document strong, .signed-agreement-card strong) {
   color: #1f2d36 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(.agreement-response-card > strong, .agreement-choice-group legend, .agreement-dog-summary > strong, .signed-agreement-responses h4, .agreement-dog-summary li strong) {
+  color: #172033 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(.agreement-response-card > p, .agreement-dog-summary li span, .agreement-dog-summary li small) {
+  color: #52647C !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .agreement-dog-summary li {
+  background: #FFFFFF !important;
+  border-color: #D5E2EA !important;
 }
 
 :root[data-theme="light"] body:not(.is-login-view) :where(.customer-agreement-document h5) {
@@ -12038,6 +12149,60 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 :root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-empty p,
 :root[data-theme="light"] :where(#customerPage, #customerRequestsPage) .customer-flow-note {
   color: #52647C !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu {
+  background: #FFFFFF !important;
+  border-color: #C9DDEA !important;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04) !important;
+  color: #172033 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu[open],
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu.has-selected-services {
+  border-color: #E4B763 !important;
+  box-shadow: 0 0 0 1px rgba(228, 183, 99, 0.22), 0 8px 18px rgba(23, 32, 51, 0.06) !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu > summary {
+  background: #F8FBFF !important;
+  color: #172033 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu > summary span,
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu > summary strong {
+  color: #13263D !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu > summary em,
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu > summary small {
+  color: #52647C !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-dog-service-menu-body {
+  background: #FFFFFF !important;
+  border-top-color: #D5E2EA !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-service-group {
+  background: #F8FBFF !important;
+  border-color: #D5E2EA !important;
+  color: #172033 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-service-group summary span,
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-service-group summary strong {
+  color: #13263D !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-service-group summary em,
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-service-group summary small {
+  color: #52647C !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-service-group-body {
+  background: #FFFFFF !important;
+  border-top-color: #D5E2EA !important;
 }
 
 :root[data-theme="light"] body:not(.is-login-view) :where(#customerPage, #customerRequestsPage) .customer-agreement-status.customer-agreement-summary {

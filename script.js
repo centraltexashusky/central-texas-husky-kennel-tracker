@@ -85,6 +85,7 @@ const CUSTOMER_BOARDING_AGREEMENT_CONSENT_TEXT = CUSTOMER_BOARDING_AGREEMENT_SOU
 const CUSTOMER_BOARDING_AGREEMENT_INTENT_TEXT = CUSTOMER_BOARDING_AGREEMENT_SOURCE.signatureIntentText || "I have reviewed the Cuddle Stay Boarding Services Agreement and intend my electronic signature to have the same legal effect as a handwritten signature.";
 const CUSTOMER_BOARDING_AGREEMENT_MARKDOWN = String(CUSTOMER_BOARDING_AGREEMENT_SOURCE.markdown || "").trim();
 let customerAgreementSignaturePadInitialized = false;
+let customerAgreementControlsInitialized = false;
 let customerAgreementSignatureDrawing = false;
 let customerAgreementSignatureHasInk = false;
 let authSessionSyncPromise = null;
@@ -6820,12 +6821,223 @@ function customerAgreementMarkdownToHtml(markdown = "") {
   return html.join("");
 }
 
+function customerAgreementTreatmentLabel(value = "") {
+  const labels = {
+    limit: "Treatment authorized up to the stated amount",
+    "no-limit": "All treatment reasonably necessary to stabilize or protect the dog is authorized without a preset financial limit",
+    "approval-required": "Non-life-saving treatment requires owner or emergency-contact approval",
+  };
+  return labels[value] || "";
+}
+
+function customerAgreementMediaLabel(value = "") {
+  const labels = {
+    authorized: "Promotional and public media use is authorized as stated in the agreement",
+    "opt-out": "Owner does not authorize promotional or public use of photographs or recordings of the dog",
+  };
+  return labels[value] || "";
+}
+
+function customerAgreementFieldValue(id = "") {
+  return String($(`#${id}`)?.value || "").trim();
+}
+
+function customerAgreementCheckedField(name = "") {
+  return document.querySelector(`#customerBookingForm input[name="${name}"]:checked`);
+}
+
+function customerAgreementCheckedValue(name = "") {
+  return customerAgreementCheckedField(name)?.value || "";
+}
+
+function customerAgreementFirstValue(records = [], keys = []) {
+  for (const record of records) {
+    for (const key of keys) {
+      const value = String(record?.[key] || "").trim();
+      if (value) return value;
+    }
+  }
+  return "";
+}
+
+function customerAgreementSelectedDogs(estimate = customerEstimateDetails()) {
+  const estimateDogs = uniqueCustomerBookingDogs(estimate?.dogs || []);
+  return estimateDogs.length ? estimateDogs : selectedCustomerDogs();
+}
+
+function customerAgreementDogInformation(estimate = customerEstimateDetails()) {
+  return customerAgreementSelectedDogs(estimate).map((dog) => ({
+    dogName: dog.dogName || "Dog",
+    breedDescription: dog.breedDescription || dog.breed || "",
+    dateOfBirth: dog.dateOfBirth || dog.birthday || "",
+    age: typeof dogAgeText === "function" ? dogAgeText(dog) : "",
+    spayNeuterStatus: dog.spayNeuterStatus || "",
+    emergencyName: dog.emergencyName || "",
+    emergencyPhone: dog.emergencyPhone || "",
+    veterinarianClinic: dog.vetInfo || dog.veterinarian || dog.vetClinic || "",
+    veterinarianPhone: dog.vetPhone || dog.vetPhoneNumber || dog.veterinarianPhone || "",
+  }));
+}
+
+function customerAgreementDogSummaryHtml(estimate = customerEstimateDetails()) {
+  const dogs = customerAgreementDogInformation(estimate);
+  if (!dogs.length) return "<p>No dog is selected for this agreement yet.</p>";
+  const rows = dogs.map((dog) => {
+    const details = [
+      dog.breedDescription,
+      dog.age || dog.dateOfBirth,
+      dog.spayNeuterStatus,
+    ].filter(Boolean).join(" | ");
+    return `<li><strong>${escapeHtml(dog.dogName || "Dog")}</strong>${details ? `<span>${escapeHtml(details)}</span>` : ""}</li>`;
+  }).join("");
+  return `<strong>Dog information included in this agreement</strong><ul>${rows}</ul>`;
+}
+
+function setCustomerAgreementFieldIfEmpty(id = "", value = "") {
+  const field = $(`#${id}`);
+  if (field && !String(field.value || "").trim() && String(value || "").trim()) {
+    field.value = String(value || "").trim();
+  }
+}
+
+function syncCustomerAgreementSignatureName() {
+  const source = $("#customerAgreementSignerName");
+  const target = $("#customerAgreementSignatureNameConfirm");
+  if (target) target.value = String(source?.value || "").trim();
+}
+
+function syncCustomerAgreementTreatmentAmount() {
+  const amountField = $("#customerAgreementTreatmentLimitAmount");
+  const limitSelected = customerAgreementCheckedValue("agreementEmergencyTreatmentChoice") === "limit";
+  if (!amountField) return;
+  amountField.disabled = !limitSelected;
+  amountField.required = limitSelected;
+  if (!limitSelected) clearFieldError(amountField);
+}
+
+function initializeCustomerAgreementControls() {
+  if (customerAgreementControlsInitialized) return;
+  customerAgreementControlsInitialized = true;
+  $("#customerAgreementSignerName")?.addEventListener("input", syncCustomerAgreementSignatureName);
+  $$('input[name="agreementEmergencyTreatmentChoice"]').forEach((field) => {
+    field.addEventListener("change", syncCustomerAgreementTreatmentAmount);
+  });
+}
+
+function prefillCustomerAgreementFields(estimate = customerEstimateDetails()) {
+  const dogs = customerAgreementSelectedDogs(estimate);
+  const profile = savedUserFor(currentUser) || {};
+  setCustomerAgreementFieldIfEmpty("customerAgreementSignerName", currentUser?.name || profile.name || "");
+  setCustomerAgreementFieldIfEmpty("customerAgreementOwnerEmail", normalizeEmail(currentUser?.email || profile.email || ""));
+  setCustomerAgreementFieldIfEmpty("customerAgreementOwnerPhone", profile.phone || profile.ownerPhone || customerAgreementFirstValue(dogs, ["ownerPhone", "customerPhone", "phone"]));
+  setCustomerAgreementFieldIfEmpty("customerAgreementOwnerAddress", profile.address || profile.mailingAddress || profile.ownerAddress || "");
+  setCustomerAgreementFieldIfEmpty("customerAgreementEmergencyName", customerAgreementFirstValue(dogs, ["emergencyName"]));
+  setCustomerAgreementFieldIfEmpty("customerAgreementEmergencyPhone", customerAgreementFirstValue(dogs, ["emergencyPhone"]));
+  setCustomerAgreementFieldIfEmpty("customerAgreementVetClinic", customerAgreementFirstValue(dogs, ["vetInfo", "veterinarian", "vetClinic"]));
+  setCustomerAgreementFieldIfEmpty("customerAgreementVetPhone", customerAgreementFirstValue(dogs, ["vetPhone", "vetPhoneNumber", "veterinarianPhone"]));
+  const dogSummary = $("#customerAgreementDogSummary");
+  if (dogSummary) dogSummary.innerHTML = customerAgreementDogSummaryHtml(estimate);
+  syncCustomerAgreementSignatureName();
+  syncCustomerAgreementTreatmentAmount();
+}
+
+function customerAgreementResponsePayload(estimate = customerEstimateDetails()) {
+  const emergencyTreatmentChoice = customerAgreementCheckedValue("agreementEmergencyTreatmentChoice");
+  const mediaPreference = customerAgreementCheckedValue("agreementMediaPreference") || "authorized";
+  const treatmentLimitRaw = customerAgreementFieldValue("customerAgreementTreatmentLimitAmount");
+  const treatmentLimitAmount = emergencyTreatmentChoice === "limit" ? treatmentLimitRaw : "";
+  return {
+    ownerLegalName: customerAgreementFieldValue("customerAgreementSignerName"),
+    ownerAddress: customerAgreementFieldValue("customerAgreementOwnerAddress"),
+    ownerPhone: customerAgreementFieldValue("customerAgreementOwnerPhone"),
+    ownerEmail: customerAgreementFieldValue("customerAgreementOwnerEmail") || normalizeEmail(currentUser?.email),
+    emergencyContactName: customerAgreementFieldValue("customerAgreementEmergencyName"),
+    emergencyContactPhone: customerAgreementFieldValue("customerAgreementEmergencyPhone"),
+    veterinarianClinic: customerAgreementFieldValue("customerAgreementVetClinic"),
+    veterinarianPhone: customerAgreementFieldValue("customerAgreementVetPhone"),
+    emergencyTreatmentChoice,
+    emergencyTreatmentLabel: customerAgreementTreatmentLabel(emergencyTreatmentChoice),
+    emergencyTreatmentLimitAmount: treatmentLimitAmount,
+    mediaPreference,
+    mediaPreferenceLabel: customerAgreementMediaLabel(mediaPreference),
+    mediaOptOut: mediaPreference === "opt-out",
+    dogInformation: customerAgreementDogInformation(estimate),
+  };
+}
+
+function customerAgreementCompletedFieldsText(responses = {}) {
+  const dogLines = (Array.isArray(responses.dogInformation) ? responses.dogInformation : []).map((dog, index) => [
+    `Dog ${index + 1}: ${dog.dogName || "Dog"}`,
+    `Breed: ${dog.breedDescription || ""}`,
+    `Age or DOB: ${[dog.age, dog.dateOfBirth].filter(Boolean).join(" / ") || ""}`,
+    `Emergency contact: ${[dog.emergencyName, dog.emergencyPhone].filter(Boolean).join(" | ") || ""}`,
+    `Veterinarian: ${[dog.veterinarianClinic, dog.veterinarianPhone].filter(Boolean).join(" | ") || ""}`,
+  ].join("\n"));
+  return [
+    "Completed Agreement Fields",
+    `Owner legal name: ${responses.ownerLegalName || ""}`,
+    `Owner address: ${responses.ownerAddress || ""}`,
+    `Owner phone: ${responses.ownerPhone || ""}`,
+    `Owner email: ${responses.ownerEmail || ""}`,
+    `Emergency contact name: ${responses.emergencyContactName || ""}`,
+    `Emergency contact phone: ${responses.emergencyContactPhone || ""}`,
+    `Veterinarian or clinic: ${responses.veterinarianClinic || ""}`,
+    `Veterinarian phone: ${responses.veterinarianPhone || ""}`,
+    `Emergency treatment spending authorization: ${responses.emergencyTreatmentLabel || ""}`,
+    `Emergency treatment limit amount: ${responses.emergencyTreatmentLimitAmount ? "$" + responses.emergencyTreatmentLimitAmount : ""}`,
+    `Media authorization: ${responses.mediaPreferenceLabel || ""}`,
+    `Booking or stay ID: ${responses.bookingOrStayId || ""}`,
+    `Completed at: ${responses.completedAt || ""}`,
+    dogLines.join("\n\n"),
+  ].filter((line) => String(line || "").trim()).join("\n");
+}
+
+function customerAgreementSignedDocumentText(responses = {}) {
+  return `${customerAgreementText()}\n\n---\n\n${customerAgreementCompletedFieldsText(responses)}`;
+}
+
+function customerAgreementCompletionHtml(record = {}) {
+  const responses = record?.agreementResponses || null;
+  if (!responses) return "";
+  const rows = [
+    ["Owner legal name", "ownerLegalName"],
+    ["Owner address", "ownerAddress"],
+    ["Owner phone", "ownerPhone"],
+    ["Owner email", "ownerEmail"],
+    ["Emergency contact", "emergencyContactName"],
+    ["Emergency phone", "emergencyContactPhone"],
+    ["Veterinarian or clinic", "veterinarianClinic"],
+    ["Veterinarian phone", "veterinarianPhone"],
+    ["Treatment authorization", "emergencyTreatmentLabel"],
+    ["Treatment amount", "treatmentLimitLabel"],
+    ["Media authorization", "mediaPreferenceLabel"],
+    ["Booking or stay ID", "bookingOrStayId"],
+  ];
+  const detailRecord = {
+    ...responses,
+    treatmentLimitLabel: responses.emergencyTreatmentLimitAmount ? `$${responses.emergencyTreatmentLimitAmount}` : "",
+  };
+  const dogs = (Array.isArray(responses.dogInformation) ? responses.dogInformation : []).map((dog) => {
+    const meta = [
+      dog.breedDescription,
+      dog.age || dog.dateOfBirth,
+      dog.spayNeuterStatus,
+    ].filter(Boolean).join(" | ");
+    const contacts = [
+      [dog.emergencyName, dog.emergencyPhone].filter(Boolean).join(" | "),
+      [dog.veterinarianClinic, dog.veterinarianPhone].filter(Boolean).join(" | "),
+    ].filter(Boolean).join(" / ");
+    return `<li><strong>${escapeHtml(dog.dogName || "Dog")}</strong>${meta ? `<span>${escapeHtml(meta)}</span>` : ""}${contacts ? `<small>${escapeHtml(contacts)}</small>` : ""}</li>`;
+  }).join("");
+  return `<section class="signed-agreement-responses"><h4>Completed agreement fields</h4><div class="signed-agreement-meta">${detailRows(detailRecord, rows)}</div>${dogs ? `<div class="agreement-dog-summary"><strong>Dog information</strong><ul>${dogs}</ul></div>` : ""}</section>`;
+}
+
 function customerAgreementDocumentHtml(record = null) {
   const version = record?.agreementVersion || CUSTOMER_BOARDING_AGREEMENT_VERSION;
   const effectiveDate = record?.agreementEffectiveDate || CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE;
   const title = record?.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE;
   const markdown = customerAgreementMarkdown(record);
-  return `<article class="customer-agreement-copy"><h3>${escapeHtml(title)}</h3><p>Version ${escapeHtml(version)} | Effective ${escapeHtml(effectiveDate)}</p><div class="customer-agreement-markdown">${customerAgreementMarkdownToHtml(markdown)}</div></article>`;
+  return `<article class="customer-agreement-copy"><h3>${escapeHtml(title)}</h3><p>Version ${escapeHtml(version)} | Effective ${escapeHtml(effectiveDate)}</p><div class="customer-agreement-markdown">${customerAgreementMarkdownToHtml(markdown)}</div></article>${customerAgreementCompletionHtml(record)}`;
 }
 
 function customerAgreementSnapshotIsCurrent(record = {}) {
@@ -6850,6 +7062,8 @@ function customerAgreementProfileSnapshot(record = {}) {
     signatureMethod: record.signatureMethod || "drawn-signature-pad",
     electronicConsentAccepted: record.electronicConsentAccepted === true,
     agreementAccepted: record.agreementAccepted === true,
+    arbitrationAccepted: record.arbitrationAccepted === true,
+    agreementResponses: record.agreementResponses || null,
   };
 }
 
@@ -6896,8 +7110,8 @@ function renderCustomerAgreementPanel(estimate = customerEstimateDetails()) {
   if (details) details.open = !signed;
   const block = $("#customerSignatureBlock");
   if (block) block.hidden = signed;
-  const signerName = $("#customerAgreementSignerName");
-  if (signerName && !signerName.value) signerName.value = currentUser?.name || "";
+  initializeCustomerAgreementControls();
+  prefillCustomerAgreementFields(estimate);
   window.setTimeout(() => initializeCustomerAgreementSignaturePad(), 0);
 }
 
@@ -7000,33 +7214,103 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
   if (customerCurrentBoardingAgreement()) return true;
   renderCustomerAgreementPanel(estimate);
   const signerName = $("#customerAgreementSignerName");
+  const ownerAddress = $("#customerAgreementOwnerAddress");
+  const ownerPhone = $("#customerAgreementOwnerPhone");
+  const ownerEmail = $("#customerAgreementOwnerEmail");
+  const emergencyName = $("#customerAgreementEmergencyName");
+  const emergencyPhone = $("#customerAgreementEmergencyPhone");
+  const vetClinic = $("#customerAgreementVetClinic");
+  const vetPhone = $("#customerAgreementVetPhone");
+  const treatmentChoice = customerAgreementCheckedField("agreementEmergencyTreatmentChoice");
+  const treatmentAmount = $("#customerAgreementTreatmentLimitAmount");
+  const mediaPreference = customerAgreementCheckedField("agreementMediaPreference");
   const electronicConsent = $("#customerAgreementElectronicConsent");
   const accepted = $("#customerAgreementAccepted");
+  const arbitrationAccepted = $("#customerAgreementArbitrationAccepted");
   const signatureData = $("#customerAgreementSignatureData")?.value || "";
   const signatureError = $("#customerAgreementSignatureError");
-  [signerName, electronicConsent, accepted].forEach((field) => field && clearFieldError(field));
-  if (signatureError) signatureError.hidden = true;
+  [
+    signerName,
+    ownerAddress,
+    ownerPhone,
+    ownerEmail,
+    emergencyName,
+    emergencyPhone,
+    vetClinic,
+    vetPhone,
+    treatmentAmount,
+    electronicConsent,
+    accepted,
+    arbitrationAccepted,
+    ...$$('input[name="agreementEmergencyTreatmentChoice"]'),
+    ...$$('input[name="agreementMediaPreference"]'),
+  ].forEach((field) => field && clearFieldError(field));
+  if (signatureError) {
+    signatureError.textContent = "Complete the required agreement fields before submitting.";
+    signatureError.hidden = true;
+  }
   let firstInvalid = null;
+  let message = "";
+  const requireText = (field, fieldMessage) => {
+    if (String(field?.value || "").trim()) return;
+    if (field) setFieldError(field, fieldMessage);
+    firstInvalid = firstInvalid || field;
+    message = message || fieldMessage;
+  };
   if (!String(signerName?.value || "").trim()) {
-    if (signerName) setFieldError(signerName, "Legal name is required before signing.");
-    firstInvalid = firstInvalid || signerName;
+    requireText(signerName, "Owner legal name is required before signing.");
+  }
+  requireText(ownerAddress, "Owner address is required before signing.");
+  requireText(ownerPhone, "Owner phone is required before signing.");
+  requireText(ownerEmail, "Owner email is required before signing.");
+  requireText(emergencyName, "Emergency contact name is required before signing.");
+  requireText(emergencyPhone, "Emergency contact phone is required before signing.");
+  requireText(vetClinic, "Veterinarian or clinic is required before signing.");
+  requireText(vetPhone, "Veterinarian phone is required before signing.");
+  if (!treatmentChoice) {
+    const firstTreatmentChoice = document.querySelector('#customerBookingForm input[name="agreementEmergencyTreatmentChoice"]');
+    if (firstTreatmentChoice) setFieldError(firstTreatmentChoice, "Select an emergency treatment authorization.");
+    firstInvalid = firstInvalid || firstTreatmentChoice;
+    message = message || "Select an emergency treatment authorization.";
+  }
+  if (treatmentChoice?.value === "limit" && (!String(treatmentAmount?.value || "").trim() || Number(treatmentAmount?.value || 0) <= 0)) {
+    if (treatmentAmount) setFieldError(treatmentAmount, "Enter the approved emergency treatment amount.");
+    firstInvalid = firstInvalid || treatmentAmount;
+    message = message || "Enter the approved emergency treatment amount.";
+  }
+  if (!mediaPreference) {
+    const firstMediaPreference = document.querySelector('#customerBookingForm input[name="agreementMediaPreference"]');
+    if (firstMediaPreference) setFieldError(firstMediaPreference, "Select a media authorization preference.");
+    firstInvalid = firstInvalid || firstMediaPreference;
+    message = message || "Select a media authorization preference.";
   }
   if (!signatureData || !customerAgreementSignatureHasInk) {
-    if (signatureError) signatureError.hidden = false;
+    message = message || "Draw your signature before submitting.";
     firstInvalid = firstInvalid || customerSignatureCanvas();
   }
   if (!electronicConsent?.checked) {
     if (electronicConsent) setFieldError(electronicConsent, "Electronic records consent is required before signing.");
     firstInvalid = firstInvalid || electronicConsent;
+    message = message || "Electronic records consent is required before signing.";
   }
   if (!accepted?.checked) {
-    if (accepted) setFieldError(accepted, "Agreement review confirmation is required before signing.");
+    if (accepted) setFieldError(accepted, "Agreement acceptance is required before signing.");
     firstInvalid = firstInvalid || accepted;
+    message = message || "Agreement acceptance is required before signing.";
+  }
+  if (!arbitrationAccepted?.checked) {
+    if (arbitrationAccepted) setFieldError(arbitrationAccepted, "Separate arbitration acceptance is required before signing.");
+    firstInvalid = firstInvalid || arbitrationAccepted;
+    message = message || "Separate arbitration acceptance is required before signing.";
   }
   if (firstInvalid) {
+    if (signatureError) {
+      signatureError.textContent = message || "Complete the required agreement fields before submitting.";
+      signatureError.hidden = false;
+    }
     $("#customerAgreementPanel")?.scrollIntoView({ behavior: options.behavior || "smooth", block: "center" });
     if (typeof firstInvalid.focus === "function") firstInvalid.focus({ preventScroll: true });
-    showToast("Review and sign the boarding agreement before continuing.");
+    showToast(message || "Review and sign the boarding agreement before continuing.");
     return false;
   }
   return true;
@@ -7052,7 +7336,12 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
   const signatureImageData = $("#customerAgreementSignatureData")?.value || "";
   const signedAt = new Date().toISOString();
   const agreementMarkdown = customerAgreementMarkdown();
-  const documentText = customerAgreementText();
+  const agreementResponses = {
+    ...customerAgreementResponsePayload(estimate),
+    completedAt: signedAt,
+    bookingOrStayId: estimate.submissionId || estimate.requestGroupId || estimate.id || "",
+  };
+  const documentText = customerAgreementSignedDocumentText(agreementResponses);
   const documentHash = await customerAgreementSha256Hex(documentText);
   const signatureHash = await customerAgreementSha256Hex([signatureImageData, signerName, signerEmail, documentHash, signedAt].join("|"));
   return {
@@ -7080,6 +7369,8 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
     signatureHash,
     electronicConsentAccepted: true,
     agreementAccepted: true,
+    arbitrationAccepted: true,
+    agreementResponses,
     electronicConsentText: CUSTOMER_BOARDING_AGREEMENT_CONSENT_TEXT,
     signatureIntentText: CUSTOMER_BOARDING_AGREEMENT_INTENT_TEXT,
     signedUserAgent: navigator.userAgent || "",
@@ -7146,10 +7437,19 @@ function customerAgreementDetailHtml(record = {}) {
     ["Email", "signerEmail"],
     ["Signed", "signedLabel"],
     ["Version", "agreementVersion"],
+    ["Electronic records consent", "electronicConsentAcceptedLabel"],
+    ["General agreement accepted", "agreementAcceptedLabel"],
+    ["Arbitration accepted", "arbitrationAcceptedLabel"],
     ["Document hash", "documentHash"],
     ["Signature hash", "signatureHash"],
   ];
-  const detailRecord = { ...record, signedLabel: formatDateTime(record.signedAt) || record.signedAt || "" };
+  const detailRecord = {
+    ...record,
+    signedLabel: formatDateTime(record.signedAt) || record.signedAt || "",
+    electronicConsentAcceptedLabel: record.electronicConsentAccepted ? "Yes" : "",
+    agreementAcceptedLabel: record.agreementAccepted ? "Yes" : "",
+    arbitrationAcceptedLabel: record.arbitrationAccepted ? "Yes" : "",
+  };
   const signature = record.signatureImageData ? `<img class="signed-agreement-signature" src="${escapeHtml(record.signatureImageData)}" alt="Saved signature" />` : "";
   return customerAgreementDocumentHtml(record) + `<section class="signed-agreement-meta">${detailRows(detailRecord, rows)}</section>` + signature;
 }
@@ -14158,6 +14458,9 @@ function resetCustomerBookingForm() {
   clearCustomerSignaturePad();
   if ($("#customerAgreementElectronicConsent")) $("#customerAgreementElectronicConsent").checked = false;
   if ($("#customerAgreementAccepted")) $("#customerAgreementAccepted").checked = false;
+  if ($("#customerAgreementArbitrationAccepted")) $("#customerAgreementArbitrationAccepted").checked = false;
+  if (typeof syncCustomerAgreementTreatmentAmount === "function") syncCustomerAgreementTreatmentAmount();
+  if (typeof syncCustomerAgreementSignatureName === "function") syncCustomerAgreementSignatureName();
   if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
   $("#bookingConfirmDialog")?.close();
   formEl.hidden = true;

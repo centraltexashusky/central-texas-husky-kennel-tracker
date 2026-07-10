@@ -10479,6 +10479,9 @@ function resetCustomerBookingForm() {
   if (typeof clearCustomerSignaturePad === "function") clearCustomerSignaturePad();
   if ($("#customerAgreementElectronicConsent")) $("#customerAgreementElectronicConsent").checked = false;
   if ($("#customerAgreementAccepted")) $("#customerAgreementAccepted").checked = false;
+  if ($("#customerAgreementArbitrationAccepted")) $("#customerAgreementArbitrationAccepted").checked = false;
+  if (typeof syncCustomerAgreementTreatmentAmount === "function") syncCustomerAgreementTreatmentAmount();
+  if (typeof syncCustomerAgreementSignatureName === "function") syncCustomerAgreementSignatureName();
   if ($("#confirmBookingRequestButton")) $("#confirmBookingRequestButton").disabled = false;
   $("#bookingConfirmDialog")?.close();
   formEl.hidden = true;

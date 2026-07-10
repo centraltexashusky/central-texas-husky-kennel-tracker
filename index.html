@@ -16,7 +16,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260710-boarding-agreement-signature-light-mode-visibility-notice" />
+    <link rel="stylesheet" href="styles.css?v=20260710-boarding-agreement-fields-light-card" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -417,8 +417,37 @@
                   <div id="customerAgreementDocument"></div>
                 </details>
                 <div class="customer-signature-block" id="customerSignatureBlock">
+                  <section class="agreement-response-card">
+                    <strong>Required agreement information</strong>
+                    <p>Complete the fields that become part of the signed agreement record.</p>
+                    <div class="field-grid">
+                      <label>Owner legal name<input type="text" name="agreementSignerName" id="customerAgreementSignerName" autocomplete="name" /></label>
+                      <label>Owner phone<input type="tel" name="agreementOwnerPhone" id="customerAgreementOwnerPhone" autocomplete="tel" /></label>
+                      <label>Owner email<input type="email" name="agreementOwnerEmail" id="customerAgreementOwnerEmail" autocomplete="email" readonly /></label>
+                      <label>Owner address<input type="text" name="agreementOwnerAddress" id="customerAgreementOwnerAddress" autocomplete="street-address" /></label>
+                    </div>
+                    <div class="agreement-dog-summary" id="customerAgreementDogSummary"></div>
+                    <div class="field-grid">
+                      <label>Emergency contact name<input type="text" name="agreementEmergencyName" id="customerAgreementEmergencyName" autocomplete="name" /></label>
+                      <label>Emergency contact phone<input type="tel" name="agreementEmergencyPhone" id="customerAgreementEmergencyPhone" autocomplete="tel" /></label>
+                      <label>Veterinarian or clinic<input type="text" name="agreementVetClinic" id="customerAgreementVetClinic" /></label>
+                      <label>Veterinarian phone<input type="tel" name="agreementVetPhone" id="customerAgreementVetPhone" autocomplete="tel" /></label>
+                    </div>
+                    <fieldset class="agreement-choice-group">
+                      <legend>Emergency treatment spending authorization</legend>
+                      <label class="inline-check agreement-choice"><input type="radio" name="agreementEmergencyTreatmentChoice" value="limit" /> I authorize treatment up to this amount.</label>
+                      <label class="agreement-limit-input">Approved amount<input type="number" name="agreementTreatmentLimitAmount" id="customerAgreementTreatmentLimitAmount" min="1" step="1" inputmode="numeric" placeholder="Amount in dollars" disabled /></label>
+                      <label class="inline-check agreement-choice"><input type="radio" name="agreementEmergencyTreatmentChoice" value="no-limit" /> I authorize all treatment reasonably necessary to stabilize or protect my dog, without a preset financial limit.</label>
+                      <label class="inline-check agreement-choice"><input type="radio" name="agreementEmergencyTreatmentChoice" value="approval-required" /> I decline non-life-saving treatment unless I or my emergency contact provides approval.</label>
+                    </fieldset>
+                    <fieldset class="agreement-choice-group">
+                      <legend>Media authorization</legend>
+                      <label class="inline-check agreement-choice"><input type="radio" name="agreementMediaPreference" value="authorized" checked /> I authorize promotional and public use of photos or recordings of my dog as stated in the agreement.</label>
+                      <label class="inline-check agreement-choice"><input type="radio" name="agreementMediaPreference" value="opt-out" /> I do not authorize promotional or public use of photographs or recordings of my dog.</label>
+                    </fieldset>
+                  </section>
                   <div class="field-grid">
-                    <label>Legal name<input type="text" name="agreementSignerName" id="customerAgreementSignerName" autocomplete="name" /></label>
+                    <label>Signature name<input type="text" name="agreementSignatureNameConfirm" id="customerAgreementSignatureNameConfirm" autocomplete="name" readonly /></label>
                   </div>
                   <label class="customer-signature-label" for="customerSignaturePad">Signature</label>
                   <canvas id="customerSignaturePad" class="customer-signature-pad" width="720" height="220" aria-label="Draw signature"></canvas>
@@ -429,7 +458,8 @@
                     <button type="button" class="secondary-button" id="printCustomerAgreementButton">Print Agreement</button>
                   </div>
                   <label class="inline-check"><input type="checkbox" name="agreementElectronicConsent" id="customerAgreementElectronicConsent" /> I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.</label>
-                  <label class="inline-check"><input type="checkbox" name="agreementAccepted" id="customerAgreementAccepted" /> I have reviewed the Cuddle Stay Boarding Services Agreement and intend my electronic signature to have the same legal effect as a handwritten signature.</label>
+                  <label class="inline-check"><input type="checkbox" name="agreementAccepted" id="customerAgreementAccepted" /> I have read and agree to the Cuddle Stay Boarding Services Agreement, including the assumption of risk, release of liability, indemnification, and ordinary-negligence release terms.</label>
+                  <label class="inline-check"><input type="checkbox" name="agreementArbitrationAccepted" id="customerAgreementArbitrationAccepted" /> I have read and agree to the mandatory individual binding arbitration provision and understand I am waiving covered court, judge, jury, class, collective, consolidated, coordinated, or representative-action rights.</label>
                 </div>
               </section>
             </section>
@@ -1527,6 +1557,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260628-our-dogs-filter-info-boarding-rows-20260710-boarding-agreement-light-mode-visibility"></script>
+  <script type="module" src="js/main.js?v=20260628-our-dogs-filter-info-boarding-rows-20260710-boarding-agreement-fields"></script>
 </body>
 </html>
