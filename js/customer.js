@@ -1046,7 +1046,7 @@ function customerDogsForCurrentUser() {
       const boardingPhotoPath = boarding ? profilePhotoStoragePath(boarding) : "";
       return (boardingPhoto || boardingPhotoPath) && !profilePhotoHasSource(dog) ? { ...dog, profilePhotoUrl: boardingPhoto, profilePhotoPath: boardingPhotoPath } : dog;
     }), email);
-  const seenCustomerIds = new Set(dogs.map((dog) => dog.id).filter(Boolean));
+  const seenCustomerIds = new Set(dogs.flatMap((dog) => [dog.id, ...(dog.duplicateCustomerDogIds || [])]).filter(Boolean));
   const seenIds = new Set(dogs.flatMap((dog) => [dog.linkedBoardingDogId, dog.sourceBoardingDogId].map(boardingDogIdFromCustomerDogValue)).filter(Boolean));
   const seenIdentityKeys = new Set(dogs.map((dog) => customerDogIdentityKey(dog, email)).filter(Boolean));
   consolidatedBoardingDogRecords(readRecords("boardingDog")
@@ -1057,6 +1057,15 @@ function customerDogsForCurrentUser() {
       if (seenIds.has(recordId)) return;
       const linkedDog = explicitLinkedCustomerDogForBoarding(record);
       if (linkedDog?.id && seenCustomerIds.has(linkedDog.id)) return;
+      const semanticLinkedDog = linkedCustomerDogForBoarding(record);
+      if (semanticLinkedDog?.id && seenCustomerIds.has(semanticLinkedDog.id)) {
+        seenIds.add(recordId);
+        return;
+      }
+      if (dogs.some((dog) => boardingRecordMatchesCustomerDog(record, dog))) {
+        seenIds.add(recordId);
+        return;
+      }
       const displayDog = customerDogFromBoardingDog(record, email);
       const identityKey = customerDogIdentityKey(displayDog, email);
       if (identityKey && seenIdentityKeys.has(identityKey)) return;
@@ -1892,11 +1901,15 @@ function boardingRecordMatchesCustomerDog(record = {}, dog = {}) {
   const customerBoardingIds = [dog.sourceBoardingDogId, dog.linkedBoardingDogId].map(boardingDogIdFromCustomerDogValue).filter(Boolean);
   if (record.linkedCustomerDogId && dog.id && record.linkedCustomerDogId === dog.id) return true;
   if (customerBoardingIds.includes(dogId)) return true;
-  const recordEmail = normalizeEmail(record.ownerEmail || record.customerEmail || record.linkedOwnerEmail);
-  const dogEmail = normalizeEmail(dog.ownerEmail || dog.customerEmail || currentUser?.email);
   const recordName = String(record.dogName || "").trim().toLowerCase();
   const dogName = String(dog.dogName || "").trim().toLowerCase();
-  return Boolean(recordEmail && dogEmail && recordEmail === dogEmail && recordName && dogName && recordName === dogName);
+  if (!recordName || !dogName || recordName !== dogName) return false;
+  const recordEmails = new Set(boardingOwnerEmails(record));
+  const dogEmails = uniqueEmails(dog.ownerEmail, dog.customerEmail, currentUser?.email);
+  if (dogEmails.some((email) => recordEmails.has(email))) return true;
+  const recordPhone = String(record.ownerPhone || record.customerPhone || record.requestedByPhone || "").replace(/\\D/g, "");
+  const dogPhone = String(dog.ownerPhone || dog.customerPhone || "").replace(/\\D/g, "");
+  return Boolean(recordPhone && dogPhone && recordPhone === dogPhone);
 }
 
 function activeCustomerStayForDog(dog = {}) {
