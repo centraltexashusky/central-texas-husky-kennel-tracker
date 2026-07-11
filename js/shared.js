@@ -7164,7 +7164,11 @@ var canonicalDogProfileFields = [
   "rabiesDuration",
   "dhppDuration",
   "profilePhotoUrl",
+  "profilePhotoPath",
   "profilePhotoData",
+  "profilePhotoMeta",
+  "profilePhotoSourceRecordId",
+  "profilePhotoSourceRecordType",
   "vaccinationRecords",
   "vaccinationFiles",
 ];
@@ -7964,7 +7968,11 @@ async function linkBoardingDogOwnerAccount(record = {}) {
     heartwormDate: record.heartwormDate || existingCustomerDog.heartwormDate || "",
     specialCare: record.specialCare || existingCustomerDog.specialCare || "",
     profilePhotoUrl: record.profilePhotoUrl || existingCustomerDog.profilePhotoUrl || "",
+    profilePhotoPath: profilePhotoStoragePath(record) || profilePhotoStoragePath(existingCustomerDog) || "",
     profilePhotoData: existingCustomerDog.profilePhotoData || record.profilePhotoData || "",
+    profilePhotoMeta: record.profilePhotoMeta || existingCustomerDog.profilePhotoMeta || {},
+    profilePhotoSourceRecordId: record.profilePhotoSourceRecordId || record.profilePhotoRecordId || record.sourceRecordId || record.id || existingCustomerDog.profilePhotoSourceRecordId || "",
+    profilePhotoSourceRecordType: record.profilePhotoSourceRecordType || record.profilePhotoRecordType || record.sourceRecordType || "boardingDog",
     linkedBoardingDogId: record.id,
     sourceBoardingDogId: record.id,
     sourceType: "boardingDog",
@@ -8230,7 +8238,7 @@ function mergeBoardingProfileGroup(records = []) {
     flags: mergePrimitiveList(records, "flags"),
   };
   [
-    "dogName", "breedDescription", "dateOfBirth", "profilePhotoUrl", "profilePhotoData", "sex", "spayNeuterStatus",
+    "dogName", "breedDescription", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "profilePhotoMeta", "profilePhotoSourceRecordId", "profilePhotoSourceRecordType", "sex", "spayNeuterStatus",
     "ownerName", "ownerPhone", "ownerEmail", "customerEmail", "linkedOwnerEmail", "secondaryOwnerEmail",
     "emergencyName", "emergencyPhone", "vetInfo", "foodInstructions", "specialCare", "boardingHistory",
     "rabiesDate", "dhppDate", "bordetellaDate", "heartwormDate", "vaccinationFiles",

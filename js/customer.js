@@ -1007,6 +1007,27 @@ function boardingDogProfilePhotoRecord(record = {}) {
   return profilePhotoHasSource(linked) ? profilePhotoSourceRecord(linked, linked.type || "customerDog") : {};
 }
 
+function canonicalDogMatchesCustomerDog(record = {}, dog = {}, email = currentUser?.email) {
+  if (!record?.id || record.removed) return false;
+  const customerDogIds = arrayValue(record.legacyCustomerDogIds);
+  if (dog.id && customerDogIds.includes(dog.id)) return true;
+  const boardingIds = arrayValue(record.legacyBoardingDogIds).map(boardingDogIdFromCustomerDogValue).filter(Boolean);
+  const dogBoardingIds = [dog.sourceBoardingDogId, dog.linkedBoardingDogId, dog.id].map(boardingDogIdFromCustomerDogValue).filter(Boolean);
+  if (boardingIds.length && dogBoardingIds.some((id) => boardingIds.includes(id))) return true;
+  const ownerEmail = normalizeEmail(email || dog.customerEmail || dog.ownerEmail);
+  const recordOwnerEmail = normalizeEmail(record.ownerEmail || record.customerEmail);
+  const recordName = String(record.dogName || record.name || "").trim().toLowerCase();
+  const dogName = String(dog.dogName || dog.name || "").trim().toLowerCase();
+  return Boolean(ownerEmail && recordOwnerEmail === ownerEmail && recordName && dogName && recordName === dogName);
+}
+
+function canonicalDogProfilePhotoRecordForCustomerDog(dog = {}, email = currentUser?.email) {
+  return readRecords("dog")
+    .filter((record) => canonicalDogMatchesCustomerDog(record, dog, email) && profilePhotoHasSource(record))
+    .sort((a, b) => itemSortTime(b) - itemSortTime(a))
+    .map((record) => profilePhotoSourceRecord({ ...record, type: "dog" }, "dog"))[0] || {};
+}
+
 function customerDogFromBoardingDog(record = {}, email = currentUser?.email, options = {}) {
   const linked = (options.explicitOnly ? explicitLinkedCustomerDogForBoarding(record) : linkedCustomerDogForBoarding(record)) || {};
   const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail);
@@ -1061,14 +1082,15 @@ function customerDogsForCurrentUser() {
     .map((dog) => {
       const boarding = boardingDogForCustomerDog(dog);
       const boardingPhotoRecord = boarding ? boardingDogProfilePhotoRecord(boarding) : {};
-      const boardingPhoto = profilePhotoDirectSource(boardingPhotoRecord);
-      const boardingPhotoPath = profilePhotoStoragePath(boardingPhotoRecord);
-      return (boardingPhoto || boardingPhotoPath) && !profilePhotoHasSource(dog) ? {
+      const fallbackPhotoRecord = profilePhotoHasSource(boardingPhotoRecord) ? boardingPhotoRecord : canonicalDogProfilePhotoRecordForCustomerDog(dog, email);
+      const fallbackPhoto = profilePhotoDirectSource(fallbackPhotoRecord);
+      const fallbackPhotoPath = profilePhotoStoragePath(fallbackPhotoRecord);
+      return (fallbackPhoto || fallbackPhotoPath) && !profilePhotoHasSource(dog) ? {
         ...dog,
-        profilePhotoUrl: boardingPhoto,
-        profilePhotoPath: boardingPhotoPath,
-        profilePhotoSourceRecordId: boardingPhotoRecord.id || "",
-        profilePhotoSourceRecordType: boardingPhotoRecord.type || "",
+        profilePhotoUrl: fallbackPhoto,
+        profilePhotoPath: fallbackPhotoPath,
+        profilePhotoSourceRecordId: fallbackPhotoRecord.id || "",
+        profilePhotoSourceRecordType: fallbackPhotoRecord.type || "",
       } : dog;
     }), email);
   const seenCustomerIds = new Set(dogs.flatMap((dog) => [dog.id, ...(dog.duplicateCustomerDogIds || [])]).filter(Boolean));
@@ -1105,6 +1127,7 @@ function customerDogsForCurrentUser() {
 function customerDogPhotoRecordForDisplay(dog = {}, fallbackRecord = {}) {
   const linkedBoarding = fallbackRecord?.id ? fallbackRecord : boardingDogForCustomerDog(dog);
   const linkedBoardingPhotoRecord = linkedBoarding ? boardingDogProfilePhotoRecord(linkedBoarding) : {};
+  const canonicalPhotoRecord = canonicalDogProfilePhotoRecordForCustomerDog(dog);
   if (profilePhotoHasSource(dog)) {
     const dogPath = profilePhotoStoragePath(dog);
     const linkedPath = profilePhotoStoragePath(linkedBoardingPhotoRecord);
@@ -1120,6 +1143,12 @@ function customerDogPhotoRecordForDisplay(dog = {}, fallbackRecord = {}) {
     return {
       ...linkedBoardingPhotoRecord,
       dogName: dog.dogName || linkedBoardingPhotoRecord.dogName || "Dog",
+    };
+  }
+  if (profilePhotoHasSource(canonicalPhotoRecord)) {
+    return {
+      ...canonicalPhotoRecord,
+      dogName: dog.dogName || canonicalPhotoRecord.dogName || "Dog",
     };
   }
   return dog;

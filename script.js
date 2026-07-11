@@ -2423,17 +2423,17 @@ async function durableDogPhoto(kind, existing, formData, photoInput, dogId) {
   const file = selectedPhotoFor(kind, photoInput);
   if (file) {
     const { url, error, storagePath } = await uploadDogPhotoToSupabase(file, dogId);
-    if (url) return { profilePhotoUrl: url, profilePhotoPath: storagePath || "", profilePhotoData: "", photoError: "" };
+    if (url || storagePath) return { profilePhotoUrl: url || "", profilePhotoPath: storagePath || "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
     resetSelectedDogPhoto(kind, {});
-    return { profilePhotoUrl: "", profilePhotoPath: "", profilePhotoData: "", photoError: error || "The profile photo could not be uploaded." };
+    return { profilePhotoUrl: "", profilePhotoPath: "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: error || "The profile photo could not be uploaded." };
   }
   if (formData.profilePhotoUrl) {
-    return { profilePhotoUrl: formData.profilePhotoUrl, profilePhotoPath: formData.profilePhotoPath || existing.profilePhotoPath || "", profilePhotoData: "", photoError: "" };
+    return { profilePhotoUrl: formData.profilePhotoUrl, profilePhotoPath: formData.profilePhotoPath || existing.profilePhotoPath || "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
   }
-  if (existing.profilePhotoUrl) {
-    return { profilePhotoUrl: existing.profilePhotoUrl, profilePhotoPath: existing.profilePhotoPath || "", profilePhotoData: "", photoError: "" };
+  if (existing.profilePhotoUrl || existing.profilePhotoPath || existing.profilePhotoData) {
+    return { profilePhotoUrl: existing.profilePhotoUrl || "", profilePhotoPath: existing.profilePhotoPath || "", profilePhotoData: existing.profilePhotoData || "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
   }
-  return { profilePhotoUrl: "", profilePhotoPath: "", profilePhotoData: "", photoError: "" };
+  return { profilePhotoUrl: "", profilePhotoPath: "", profilePhotoData: "", profilePhotoMeta: existing.profilePhotoMeta || {}, photoError: "" };
 }
 
 async function uploadMediaFiles(input, folder, options = {}) {
@@ -6531,6 +6531,27 @@ function boardingDogProfilePhotoRecord(record = {}) {
   return profilePhotoHasSource(linked) ? profilePhotoSourceRecord(linked, linked.type || "customerDog") : {};
 }
 
+function canonicalDogMatchesCustomerDog(record = {}, dog = {}, email = currentUser?.email) {
+  if (!record?.id || record.removed) return false;
+  const customerDogIds = arrayValue(record.legacyCustomerDogIds);
+  if (dog.id && customerDogIds.includes(dog.id)) return true;
+  const boardingIds = arrayValue(record.legacyBoardingDogIds).map(boardingDogIdFromCustomerDogValue).filter(Boolean);
+  const dogBoardingIds = [dog.sourceBoardingDogId, dog.linkedBoardingDogId, dog.id].map(boardingDogIdFromCustomerDogValue).filter(Boolean);
+  if (boardingIds.length && dogBoardingIds.some((id) => boardingIds.includes(id))) return true;
+  const ownerEmail = normalizeEmail(email || dog.customerEmail || dog.ownerEmail);
+  const recordOwnerEmail = normalizeEmail(record.ownerEmail || record.customerEmail);
+  const recordName = String(record.dogName || record.name || "").trim().toLowerCase();
+  const dogName = String(dog.dogName || dog.name || "").trim().toLowerCase();
+  return Boolean(ownerEmail && recordOwnerEmail === ownerEmail && recordName && dogName && recordName === dogName);
+}
+
+function canonicalDogProfilePhotoRecordForCustomerDog(dog = {}, email = currentUser?.email) {
+  return readRecords("dog")
+    .filter((record) => canonicalDogMatchesCustomerDog(record, dog, email) && profilePhotoHasSource(record))
+    .sort((a, b) => itemSortTime(b) - itemSortTime(a))
+    .map((record) => profilePhotoSourceRecord({ ...record, type: "dog" }, "dog"))[0] || {};
+}
+
 function customerDogFromBoardingDog(record = {}, email = currentUser?.email, options = {}) {
   const linked = (options.explicitOnly ? explicitLinkedCustomerDogForBoarding(record) : linkedCustomerDogForBoarding(record)) || {};
   const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail);
@@ -6585,14 +6606,15 @@ function customerDogsForCurrentUser() {
     .map((dog) => {
       const boarding = boardingDogForCustomerDog(dog);
       const boardingPhotoRecord = boarding ? boardingDogProfilePhotoRecord(boarding) : {};
-      const boardingPhoto = profilePhotoDirectSource(boardingPhotoRecord);
-      const boardingPhotoPath = profilePhotoStoragePath(boardingPhotoRecord);
-      return (boardingPhoto || boardingPhotoPath) && !profilePhotoHasSource(dog) ? {
+      const fallbackPhotoRecord = profilePhotoHasSource(boardingPhotoRecord) ? boardingPhotoRecord : canonicalDogProfilePhotoRecordForCustomerDog(dog, email);
+      const fallbackPhoto = profilePhotoDirectSource(fallbackPhotoRecord);
+      const fallbackPhotoPath = profilePhotoStoragePath(fallbackPhotoRecord);
+      return (fallbackPhoto || fallbackPhotoPath) && !profilePhotoHasSource(dog) ? {
         ...dog,
-        profilePhotoUrl: boardingPhoto,
-        profilePhotoPath: boardingPhotoPath,
-        profilePhotoSourceRecordId: boardingPhotoRecord.id || "",
-        profilePhotoSourceRecordType: boardingPhotoRecord.type || "",
+        profilePhotoUrl: fallbackPhoto,
+        profilePhotoPath: fallbackPhotoPath,
+        profilePhotoSourceRecordId: fallbackPhotoRecord.id || "",
+        profilePhotoSourceRecordType: fallbackPhotoRecord.type || "",
       } : dog;
     }), email);
   const seenCustomerIds = new Set(dogs.flatMap((dog) => [dog.id, ...(dog.duplicateCustomerDogIds || [])]).filter(Boolean));
@@ -6629,6 +6651,7 @@ function customerDogsForCurrentUser() {
 function customerDogPhotoRecordForDisplay(dog = {}, fallbackRecord = {}) {
   const linkedBoarding = fallbackRecord?.id ? fallbackRecord : boardingDogForCustomerDog(dog);
   const linkedBoardingPhotoRecord = linkedBoarding ? boardingDogProfilePhotoRecord(linkedBoarding) : {};
+  const canonicalPhotoRecord = canonicalDogProfilePhotoRecordForCustomerDog(dog);
   if (profilePhotoHasSource(dog)) {
     const dogPath = profilePhotoStoragePath(dog);
     const linkedPath = profilePhotoStoragePath(linkedBoardingPhotoRecord);
@@ -6644,6 +6667,12 @@ function customerDogPhotoRecordForDisplay(dog = {}, fallbackRecord = {}) {
     return {
       ...linkedBoardingPhotoRecord,
       dogName: dog.dogName || linkedBoardingPhotoRecord.dogName || "Dog",
+    };
+  }
+  if (profilePhotoHasSource(canonicalPhotoRecord)) {
+    return {
+      ...canonicalPhotoRecord,
+      dogName: dog.dogName || canonicalPhotoRecord.dogName || "Dog",
     };
   }
   return dog;
@@ -7647,7 +7676,10 @@ function boardingDraftFromCustomerDog(dog = {}) {
     heartwormDate: dog.heartwormDate || "",
     specialCare: dog.specialCare || "",
     profilePhotoUrl: dog.profilePhotoUrl || "",
+    profilePhotoPath: profilePhotoStoragePath(dog),
     profilePhotoData: dog.profilePhotoData || "",
+    profilePhotoSourceRecordId: dog.profilePhotoSourceRecordId || dog.profilePhotoRecordId || dog.sourceRecordId || dog.id || "",
+    profilePhotoSourceRecordType: dog.profilePhotoSourceRecordType || dog.profilePhotoRecordType || dog.sourceRecordType || dog.type || "customerDog",
     vaccinationRecords: dog.vaccinationRecords || [],
     vaccinationFiles: dog.vaccinationFiles || "",
     linkedCustomerDogId: dog.id || "",
@@ -7681,7 +7713,11 @@ const canonicalDogProfileFields = [
   "rabiesDuration",
   "dhppDuration",
   "profilePhotoUrl",
+  "profilePhotoPath",
   "profilePhotoData",
+  "profilePhotoMeta",
+  "profilePhotoSourceRecordId",
+  "profilePhotoSourceRecordType",
   "vaccinationRecords",
   "vaccinationFiles",
 ];
@@ -9182,7 +9218,11 @@ async function linkBoardingDogOwnerAccount(record = {}) {
     heartwormDate: record.heartwormDate || existingCustomerDog.heartwormDate || "",
     specialCare: record.specialCare || existingCustomerDog.specialCare || "",
     profilePhotoUrl: record.profilePhotoUrl || existingCustomerDog.profilePhotoUrl || "",
+    profilePhotoPath: profilePhotoStoragePath(record) || profilePhotoStoragePath(existingCustomerDog) || "",
     profilePhotoData: existingCustomerDog.profilePhotoData || record.profilePhotoData || "",
+    profilePhotoMeta: record.profilePhotoMeta || existingCustomerDog.profilePhotoMeta || {},
+    profilePhotoSourceRecordId: record.profilePhotoSourceRecordId || record.profilePhotoRecordId || record.sourceRecordId || record.id || existingCustomerDog.profilePhotoSourceRecordId || "",
+    profilePhotoSourceRecordType: record.profilePhotoSourceRecordType || record.profilePhotoRecordType || record.sourceRecordType || "boardingDog",
     linkedBoardingDogId: record.id,
     sourceBoardingDogId: record.id,
     sourceType: "boardingDog",
@@ -9644,7 +9684,7 @@ function mergeBoardingProfileGroup(records = []) {
     flags: mergePrimitiveList(records, "flags"),
   };
   [
-    "dogName", "breedDescription", "dateOfBirth", "profilePhotoUrl", "profilePhotoData", "sex", "spayNeuterStatus",
+    "dogName", "breedDescription", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "profilePhotoMeta", "profilePhotoSourceRecordId", "profilePhotoSourceRecordType", "sex", "spayNeuterStatus",
     "ownerName", "ownerPhone", "ownerEmail", "customerEmail", "linkedOwnerEmail", "secondaryOwnerEmail",
     "emergencyName", "emergencyPhone", "vetInfo", "foodInstructions", "specialCare", "boardingHistory",
     "rabiesDate", "dhppDate", "bordetellaDate", "heartwormDate", "vaccinationFiles",
