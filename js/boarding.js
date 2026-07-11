@@ -1668,11 +1668,15 @@ function boardingStayCanUseCurrentPricing(record = {}, stay = {}) {
 }
 
 function boardingCurrentDogRoleForStay(stay = {}, ratePlan = {}, options = {}) {
+  const requestedRole = normalizedBoardingRateRole(options.currentDogRole || "");
+  if (requestedRole === "shared-crate-additional") return "shared-crate-additional";
+  if (requestedRole === "non-member") return "non-member";
+  if (requestedRole === "primary") return ratePlan.isMemberPricing ? "primary" : "non-member";
   const stayProgram = options.stayProgram || stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
   if (stayProgram) return "boarding-program";
   if (!ratePlan.isMemberPricing) return "non-member";
-  const requestedRole = options.currentDogRole || stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.role || "";
-  return requestedRole === "shared-crate-additional" ? "shared-crate-additional" : "primary";
+  const savedRole = normalizedBoardingRateRole(stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.role || "");
+  return savedRole === "shared-crate-additional" ? "shared-crate-additional" : "primary";
 }
 
 function boardingCurrentPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
@@ -3805,17 +3809,21 @@ async function saveBoardingStayFromForm(formEl) {
   const stayType = payload.stayType || existingStay?.stayType || "Boarding";
   const isServiceRequest = stayType === "Service Request";
   const editRatePlan = boardingRatePlanForRecord(dog);
+  const boardingRateServiceField = formFieldByName(formEl, "boardingRateServiceId");
+  const boardingRateSelectionShown = !isServiceRequest && Boolean(boardingRateServiceField);
+  const selectedBoardingRateServiceId = boardingRateSelectionShown ? String(payload.boardingRateServiceId || "").trim() : "";
+  const defaultBoardingRateRole = editRatePlan.isMemberPricing ? "primary" : "non-member";
   const boardingRateRole = isServiceRequest ? "" : boardingCurrentDogRoleForStay(existingStay || {}, editRatePlan, {
-    currentDogRole: payload.boardingRateRole || existingStay?.pricingSnapshot?.currentDogRole || "",
+    currentDogRole: payload.boardingRateRole || (boardingRateSelectionShown ? defaultBoardingRateRole : existingStay?.pricingSnapshot?.currentDogRole || ""),
   });
-  const selectedBoardingRateService = isServiceRequest ? null : boardingRateServiceForSelection(dog, existingStay || {}, payload.boardingRateServiceId || "", {
+  const selectedBoardingRateService = isServiceRequest ? null : boardingRateServiceForSelection(dog, existingStay || {}, selectedBoardingRateServiceId, {
     currentDogRole: boardingRateRole || existingStay?.pricingSnapshot?.currentDogRole || "",
   });
   const selectedStayProgram = boardingStayProgramSnapshotFromService(selectedBoardingRateService);
   const selectedStandardBoardingRateService = selectedStayProgram ? null : selectedBoardingRateService;
   const effectiveStayProgram = isServiceRequest
     ? null
-    : selectedStayProgram || (!payload.boardingRateServiceId ? existingStay?.stayProgram || existingStay?.pricingSnapshot?.stayProgram || null : null);
+    : selectedStayProgram || (!boardingRateSelectionShown && !selectedBoardingRateServiceId ? existingStay?.stayProgram || existingStay?.pricingSnapshot?.stayProgram || null : null);
   const draftStay = {
     ...(existingStay || {}),
     dropoffTime: payload.dropoffTime,
@@ -3830,12 +3838,13 @@ async function saveBoardingStayFromForm(formEl) {
     belongings,
     checkIn: existingStay?.checkIn ? { ...existingStay.checkIn, belongings } : existingStay?.checkIn || null,
   };
+  const pricingBoardingRateRole = effectiveStayProgram ? "boarding-program" : boardingRateRole;
   const pricingSnapshot = boardingPricingSnapshotForStay(dog, draftStay, {
-    currentDogRole: boardingRateRole,
-    sharedCrateRequested: boardingRateRole === "shared-crate-additional",
+    currentDogRole: pricingBoardingRateRole,
+    sharedCrateRequested: pricingBoardingRateRole === "shared-crate-additional",
     stayProgram: effectiveStayProgram,
     boardingRateService: selectedStandardBoardingRateService,
-    boardingRateServiceId: selectedStandardBoardingRateService?.id || (!effectiveStayProgram ? payload.boardingRateServiceId || "" : ""),
+    boardingRateServiceId: selectedStandardBoardingRateService?.id || (!effectiveStayProgram ? selectedBoardingRateServiceId : ""),
   });
   const restoreCancelledStayPatch = shouldRestoreCancelledStay
     ? {
