@@ -5465,6 +5465,8 @@ function normalizeProfilePhotoVariant(value = "") {
 function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
   const direct = profilePhotoDirectSource(record);
   const storagePath = profilePhotoStoragePath(record);
+  const sourceRecordId = record.profilePhotoSourceRecordId || record.profilePhotoRecordId || record.sourceRecordId || record.id || "";
+  const sourceRecordType = record.profilePhotoSourceRecordType || record.profilePhotoRecordType || record.sourceRecordType || record.type || fallbackRecordType || "";
   const attrs = [];
   if (direct) attrs.push('data-src="' + escapeHtml(direct) + '"');
   if (storagePath) {
@@ -5472,8 +5474,8 @@ function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
     attrs.push('data-storage-path="' + escapeHtml(storagePath) + '"');
     attrs.push('data-profile-photo-variant="' + PROFILE_PHOTO_THUMBNAIL_VARIANT + '"');
   }
-  if (record.id) attrs.push('data-source-record-id="' + escapeHtml(record.id) + '"');
-  attrs.push('data-source-record-type="' + escapeHtml(record.type || fallbackRecordType || "") + '"');
+  if (sourceRecordId) attrs.push('data-source-record-id="' + escapeHtml(sourceRecordId) + '"');
+  attrs.push('data-source-record-type="' + escapeHtml(sourceRecordType) + '"');
   return attrs.length ? " " + attrs.join(" ") : "";
 }
 
@@ -7633,12 +7635,14 @@ async function syncLinkedCustomerDogPhotoFromBoarding(record = {}) {
   if (!record?.id || (!photoUrl && !photoPath && !photoData)) return null;
   const linked = linkedCustomerDogForBoarding(record);
   if (!linked?.id || linked.isSharedBoardingDog) return null;
-  if ((linked.profilePhotoUrl || "") === photoUrl && (linked.profilePhotoPath || "") === photoPath && (linked.profilePhotoData || "") === photoData) return linked;
+  if ((linked.profilePhotoUrl || "") === photoUrl && (linked.profilePhotoPath || "") === photoPath && (linked.profilePhotoData || "") === photoData && (linked.profilePhotoSourceRecordId || "") === record.id && (linked.profilePhotoSourceRecordType || "") === "boardingDog") return linked;
   const updated = upsertRecord("customerDog", {
     ...linked,
     profilePhotoUrl: photoUrl || linked.profilePhotoUrl || "",
     profilePhotoPath: photoPath || linked.profilePhotoPath || "",
     profilePhotoData: photoData || linked.profilePhotoData || "",
+    profilePhotoSourceRecordId: record.id,
+    profilePhotoSourceRecordType: "boardingDog",
     linkedBoardingDogId: record.id,
     updatedAt: new Date().toISOString(),
   });

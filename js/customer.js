@@ -992,10 +992,26 @@ function customerDogVisibleToCustomer(dog = {}, email = currentUser?.email) {
   return Boolean(normalizedEmail && uniqueEmails(dog.ownerEmail, dog.customerEmail).includes(normalizedEmail));
 }
 
+function profilePhotoSourceRecord(record = {}, fallbackRecordType = "") {
+  if (!profilePhotoHasSource(record)) return {};
+  return {
+    ...record,
+    id: record.profilePhotoSourceRecordId || record.profilePhotoRecordId || record.sourceRecordId || record.id || "",
+    type: record.profilePhotoSourceRecordType || record.profilePhotoRecordType || record.sourceRecordType || record.type || fallbackRecordType || "",
+  };
+}
+
+function boardingDogProfilePhotoRecord(record = {}) {
+  if (profilePhotoHasSource(record)) return profilePhotoSourceRecord({ ...record, type: "boardingDog" }, "boardingDog");
+  const linked = linkedCustomerDogForBoarding(record) || {};
+  return profilePhotoHasSource(linked) ? profilePhotoSourceRecord(linked, linked.type || "customerDog") : {};
+}
+
 function customerDogFromBoardingDog(record = {}, email = currentUser?.email, options = {}) {
   const linked = (options.explicitOnly ? explicitLinkedCustomerDogForBoarding(record) : linkedCustomerDogForBoarding(record)) || {};
   const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail);
   const currentEmail = normalizeEmail(email);
+  const photoRecord = boardingDogProfilePhotoRecord(record);
   return {
     ...linked,
     type: "customerDog",
@@ -1026,9 +1042,11 @@ function customerDogFromBoardingDog(record = {}, email = currentUser?.email, opt
     dhppDuration: record.dhppDuration || linked.dhppDuration || "",
     rabiesGoodThreeYears: record.rabiesGoodThreeYears || linked.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(record, "rabies") || vaccineDurationIsThreeYears(linked, "rabies") ? "Yes" : ""),
     dhppGoodThreeYears: record.dhppGoodThreeYears || linked.dhppGoodThreeYears || (vaccineDurationIsThreeYears(record, "dhpp") || vaccineDurationIsThreeYears(linked, "dhpp") ? "Yes" : ""),
-    profilePhotoUrl: boardingDogPhotoSource(record),
-    profilePhotoPath: profilePhotoStoragePath(record) || profilePhotoStoragePath(linked) || "",
-    profilePhotoData: record.profilePhotoData || linked.profilePhotoData || "",
+    profilePhotoUrl: profilePhotoDirectSource(photoRecord),
+    profilePhotoPath: profilePhotoStoragePath(photoRecord),
+    profilePhotoData: photoRecord.profilePhotoData || "",
+    profilePhotoSourceRecordId: photoRecord.id || "",
+    profilePhotoSourceRecordType: photoRecord.type || "",
     vaccinationRecords: record.vaccinationRecords || linked.vaccinationRecords || [],
     vaccinationFiles: record.vaccinationFiles || linked.vaccinationFiles || "",
   };
@@ -1042,9 +1060,16 @@ function customerDogsForCurrentUser() {
     .filter((dog) => !dog.removed && customerDogVisibleToCustomer(dog, email))
     .map((dog) => {
       const boarding = boardingDogForCustomerDog(dog);
-      const boardingPhoto = boarding ? boardingDogPhotoSource(boarding) : "";
-      const boardingPhotoPath = boarding ? profilePhotoStoragePath(boarding) : "";
-      return (boardingPhoto || boardingPhotoPath) && !profilePhotoHasSource(dog) ? { ...dog, profilePhotoUrl: boardingPhoto, profilePhotoPath: boardingPhotoPath } : dog;
+      const boardingPhotoRecord = boarding ? boardingDogProfilePhotoRecord(boarding) : {};
+      const boardingPhoto = profilePhotoDirectSource(boardingPhotoRecord);
+      const boardingPhotoPath = profilePhotoStoragePath(boardingPhotoRecord);
+      return (boardingPhoto || boardingPhotoPath) && !profilePhotoHasSource(dog) ? {
+        ...dog,
+        profilePhotoUrl: boardingPhoto,
+        profilePhotoPath: boardingPhotoPath,
+        profilePhotoSourceRecordId: boardingPhotoRecord.id || "",
+        profilePhotoSourceRecordType: boardingPhotoRecord.type || "",
+      } : dog;
     }), email);
   const seenCustomerIds = new Set(dogs.flatMap((dog) => [dog.id, ...(dog.duplicateCustomerDogIds || [])]).filter(Boolean));
   const seenIds = new Set(dogs.flatMap((dog) => [dog.linkedBoardingDogId, dog.sourceBoardingDogId].map(boardingDogIdFromCustomerDogValue)).filter(Boolean));
@@ -1078,13 +1103,23 @@ function customerDogsForCurrentUser() {
 }
 
 function customerDogPhotoRecordForDisplay(dog = {}, fallbackRecord = {}) {
-  if (profilePhotoHasSource(dog)) return dog;
   const linkedBoarding = fallbackRecord?.id ? fallbackRecord : boardingDogForCustomerDog(dog);
-  if (linkedBoarding && profilePhotoHasSource(linkedBoarding)) {
+  const linkedBoardingPhotoRecord = linkedBoarding ? boardingDogProfilePhotoRecord(linkedBoarding) : {};
+  if (profilePhotoHasSource(dog)) {
+    const dogPath = profilePhotoStoragePath(dog);
+    const linkedPath = profilePhotoStoragePath(linkedBoardingPhotoRecord);
+    if (dogPath && linkedPath && dogPath === linkedPath) {
+      return {
+        ...linkedBoardingPhotoRecord,
+        dogName: dog.dogName || linkedBoardingPhotoRecord.dogName || "Dog",
+      };
+    }
+    return dog;
+  }
+  if (linkedBoarding && profilePhotoHasSource(linkedBoardingPhotoRecord)) {
     return {
-      ...linkedBoarding,
-      dogName: dog.dogName || linkedBoarding.dogName || "Dog",
-      type: linkedBoarding.type || "boardingDog",
+      ...linkedBoardingPhotoRecord,
+      dogName: dog.dogName || linkedBoardingPhotoRecord.dogName || "Dog",
     };
   }
   return dog;

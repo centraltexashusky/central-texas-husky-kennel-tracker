@@ -4302,7 +4302,7 @@ function multilineHtml(value = "") {
 }
 
 function mediaAccessAttrs(item = {}, context = {}) {
-  const storagePath = item.storagePath || item.profilePhotoPath || "";
+  const storagePath = item.storagePath || item.profilePhotoPath || mediaStoragePathFromUrl(item.url || item.profilePhotoUrl) || "";
   const sourceRecordId = context.sourceRecordId || item.sourceRecordId || item.recordId || "";
   const sourceRecordType = context.sourceRecordType || item.sourceRecordType || item.recordType || "";
   const attrs = [];
@@ -4310,6 +4310,83 @@ function mediaAccessAttrs(item = {}, context = {}) {
   if (sourceRecordId) attrs.push(`data-source-record-id="${escapeHtml(sourceRecordId)}"`);
   if (sourceRecordType) attrs.push(`data-source-record-type="${escapeHtml(sourceRecordType)}"`);
   return attrs.length ? ` ${attrs.join(" ")}` : "";
+}
+
+function mediaStoragePathFromUrl(url = "") {
+  const value = String(url || "").trim();
+  if (!value) return "";
+  const pathFromText = (text = "") => {
+    const prefix = "/storage/v1/object/public/kennel-media/";
+    const signedPrefix = "/storage/v1/object/sign/kennel-media/";
+    const marker = text.includes(signedPrefix) ? signedPrefix : prefix;
+    const index = text.indexOf(marker);
+    if (index >= 0) return decodeURIComponent(text.slice(index + marker.length).split("?")[0].split("#")[0]);
+    return "";
+  };
+  try {
+    const parsed = new URL(value, window.location.href);
+    return pathFromText(parsed.pathname);
+  } catch (_error) {
+    return pathFromText(value);
+  }
+}
+
+function profilePhotoDirectSource(record = {}) {
+  return record.profilePhotoData || record.profilePhotoUrl || "";
+}
+
+function profilePhotoStoragePath(record = {}) {
+  return record.profilePhotoPath || mediaStoragePathFromUrl(record.profilePhotoUrl) || "";
+}
+
+function profilePhotoHasSource(record = {}) {
+  return Boolean(profilePhotoDirectSource(record) || profilePhotoStoragePath(record));
+}
+
+function profilePhotoAccessAttrs(record = {}, fallbackRecordType = "") {
+  const storagePath = profilePhotoStoragePath(record);
+  const sourceRecordId = record.profilePhotoSourceRecordId || record.profilePhotoRecordId || record.sourceRecordId || record.id || "";
+  const sourceRecordType = record.profilePhotoSourceRecordType || record.profilePhotoRecordType || record.sourceRecordType || record.type || fallbackRecordType || "";
+  const attrs = [];
+  if (storagePath) {
+    attrs.push(`data-profile-photo-path="${escapeHtml(storagePath)}"`);
+    attrs.push(`data-storage-path="${escapeHtml(storagePath)}"`);
+  }
+  if (sourceRecordId) attrs.push(`data-source-record-id="${escapeHtml(sourceRecordId)}"`);
+  attrs.push(`data-source-record-type="${escapeHtml(sourceRecordType)}"`);
+  return attrs.length ? ` ${attrs.join(" ")}` : "";
+}
+
+function profilePhotoInitialsForElement(element, img = null) {
+  return (element.matches("[data-profile-photo-initials]") ? element : element.parentElement?.querySelector("[data-profile-photo-initials]"))
+    || img?.parentElement?.querySelector?.("[data-profile-photo-initials]")
+    || null;
+}
+
+async function hydrateProfilePhotoElement(element) {
+  const storagePath = element?.dataset?.profilePhotoPath || element?.dataset?.storagePath || "";
+  const img = element?.matches?.("img") ? element : element?.querySelector?.("img");
+  if (!storagePath || !img || img.src) return;
+  try {
+    const src = await signedMediaUrlForPath(storagePath, {
+      sourceRecordId: element.dataset.sourceRecordId || "",
+      sourceRecordType: element.dataset.sourceRecordType || "",
+    });
+    if (!src) return;
+    img.onload = () => {
+      img.hidden = false;
+      profilePhotoInitialsForElement(element, img)?.setAttribute("hidden", "");
+    };
+    img.src = src;
+  } catch (error) {
+    console.warn("Profile photo hydration failed.", error);
+  }
+}
+
+function hydrateProfilePhotoElements(root = document) {
+  [...(root?.querySelectorAll?.("[data-profile-photo-path]") || [])].forEach((element) => {
+    hydrateProfilePhotoElement(element);
+  });
 }
 
 async function signedMediaUrlForPath(storagePath = "", context = {}) {
@@ -6439,10 +6516,26 @@ function customerDogVisibleToCustomer(dog = {}, email = currentUser?.email) {
   return Boolean(normalizedEmail && uniqueEmails(dog.ownerEmail, dog.customerEmail).includes(normalizedEmail));
 }
 
+function profilePhotoSourceRecord(record = {}, fallbackRecordType = "") {
+  if (!profilePhotoHasSource(record)) return {};
+  return {
+    ...record,
+    id: record.profilePhotoSourceRecordId || record.profilePhotoRecordId || record.sourceRecordId || record.id || "",
+    type: record.profilePhotoSourceRecordType || record.profilePhotoRecordType || record.sourceRecordType || record.type || fallbackRecordType || "",
+  };
+}
+
+function boardingDogProfilePhotoRecord(record = {}) {
+  if (profilePhotoHasSource(record)) return profilePhotoSourceRecord({ ...record, type: "boardingDog" }, "boardingDog");
+  const linked = linkedCustomerDogForBoarding(record) || {};
+  return profilePhotoHasSource(linked) ? profilePhotoSourceRecord(linked, linked.type || "customerDog") : {};
+}
+
 function customerDogFromBoardingDog(record = {}, email = currentUser?.email, options = {}) {
   const linked = (options.explicitOnly ? explicitLinkedCustomerDogForBoarding(record) : linkedCustomerDogForBoarding(record)) || {};
   const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail);
   const currentEmail = normalizeEmail(email);
+  const photoRecord = boardingDogProfilePhotoRecord(record);
   return {
     ...linked,
     type: "customerDog",
@@ -6473,8 +6566,11 @@ function customerDogFromBoardingDog(record = {}, email = currentUser?.email, opt
     dhppDuration: record.dhppDuration || linked.dhppDuration || "",
     rabiesGoodThreeYears: record.rabiesGoodThreeYears || linked.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(record, "rabies") || vaccineDurationIsThreeYears(linked, "rabies") ? "Yes" : ""),
     dhppGoodThreeYears: record.dhppGoodThreeYears || linked.dhppGoodThreeYears || (vaccineDurationIsThreeYears(record, "dhpp") || vaccineDurationIsThreeYears(linked, "dhpp") ? "Yes" : ""),
-    profilePhotoUrl: boardingDogPhotoSource(record),
-    profilePhotoData: record.profilePhotoData || linked.profilePhotoData || "",
+    profilePhotoUrl: profilePhotoDirectSource(photoRecord),
+    profilePhotoPath: profilePhotoStoragePath(photoRecord),
+    profilePhotoData: photoRecord.profilePhotoData || "",
+    profilePhotoSourceRecordId: photoRecord.id || "",
+    profilePhotoSourceRecordType: photoRecord.type || "",
     vaccinationRecords: record.vaccinationRecords || linked.vaccinationRecords || [],
     vaccinationFiles: record.vaccinationFiles || linked.vaccinationFiles || "",
   };
@@ -6488,8 +6584,16 @@ function customerDogsForCurrentUser() {
     .filter((dog) => !dog.removed && customerDogVisibleToCustomer(dog, email))
     .map((dog) => {
       const boarding = boardingDogForCustomerDog(dog);
-      const boardingPhoto = boarding ? boardingDogPhotoSource(boarding) : "";
-      return boardingPhoto && !dog.profilePhotoUrl && !dog.profilePhotoData ? { ...dog, profilePhotoUrl: boardingPhoto } : dog;
+      const boardingPhotoRecord = boarding ? boardingDogProfilePhotoRecord(boarding) : {};
+      const boardingPhoto = profilePhotoDirectSource(boardingPhotoRecord);
+      const boardingPhotoPath = profilePhotoStoragePath(boardingPhotoRecord);
+      return (boardingPhoto || boardingPhotoPath) && !profilePhotoHasSource(dog) ? {
+        ...dog,
+        profilePhotoUrl: boardingPhoto,
+        profilePhotoPath: boardingPhotoPath,
+        profilePhotoSourceRecordId: boardingPhotoRecord.id || "",
+        profilePhotoSourceRecordType: boardingPhotoRecord.type || "",
+      } : dog;
     }), email);
   const seenCustomerIds = new Set(dogs.flatMap((dog) => [dog.id, ...(dog.duplicateCustomerDogIds || [])]).filter(Boolean));
   const seenIds = new Set(dogs.flatMap((dog) => [dog.linkedBoardingDogId, dog.sourceBoardingDogId].map(boardingDogIdFromCustomerDogValue)).filter(Boolean));
@@ -6522,10 +6626,36 @@ function customerDogsForCurrentUser() {
   return dogs;
 }
 
-function customerDogPhotoHtml(dog = {}) {
+function customerDogPhotoRecordForDisplay(dog = {}, fallbackRecord = {}) {
+  const linkedBoarding = fallbackRecord?.id ? fallbackRecord : boardingDogForCustomerDog(dog);
+  const linkedBoardingPhotoRecord = linkedBoarding ? boardingDogProfilePhotoRecord(linkedBoarding) : {};
+  if (profilePhotoHasSource(dog)) {
+    const dogPath = profilePhotoStoragePath(dog);
+    const linkedPath = profilePhotoStoragePath(linkedBoardingPhotoRecord);
+    if (dogPath && linkedPath && dogPath === linkedPath) {
+      return {
+        ...linkedBoardingPhotoRecord,
+        dogName: dog.dogName || linkedBoardingPhotoRecord.dogName || "Dog",
+      };
+    }
+    return dog;
+  }
+  if (linkedBoarding && profilePhotoHasSource(linkedBoardingPhotoRecord)) {
+    return {
+      ...linkedBoardingPhotoRecord,
+      dogName: dog.dogName || linkedBoardingPhotoRecord.dogName || "Dog",
+    };
+  }
+  return dog;
+}
+
+function customerDogPhotoHtml(dog = {}, options = {}) {
   const name = dog.dogName || "Dog";
-  const photo = dog.profilePhotoUrl || dog.profilePhotoData || "";
-  if (photo) return `<img class="customer-dog-photo" src="${escapeHtml(photo)}" alt="${escapeHtml(name)}" />`;
+  const photoRecord = options.photoRecord || dog;
+  const photo = profilePhotoDirectSource(photoRecord);
+  if (profilePhotoHasSource(photoRecord)) {
+    return `<img class="customer-dog-photo"${profilePhotoAccessAttrs(photoRecord, photoRecord.type || dog.type || "customerDog")}${photo ? ` src="${escapeHtml(photo)}"` : ""} alt="${escapeHtml(name)}"${photo ? "" : " hidden"} /><span class="customer-dog-photo customer-dog-photo-initials" data-profile-photo-initials${photo ? " hidden" : ""}>${escapeHtml(avatarText(name))}</span>`;
+  }
   return `<span class="customer-dog-photo customer-dog-photo-initials">${escapeHtml(avatarText(name))}</span>`;
 }
 
@@ -8306,16 +8436,20 @@ function boardingDogPhotoSource(record = {}) {
 }
 
 async function syncLinkedCustomerDogPhotoFromBoarding(record = {}) {
-  const photoUrl = record.profilePhotoUrl || "";
+  const photoUrl = profilePhotoDirectSource(record) || "";
+  const photoPath = profilePhotoStoragePath(record) || "";
   const photoData = record.profilePhotoData || "";
-  if (!record?.id || (!photoUrl && !photoData)) return null;
+  if (!record?.id || (!photoUrl && !photoPath && !photoData)) return null;
   const linked = linkedCustomerDogForBoarding(record);
   if (!linked?.id || linked.isSharedBoardingDog) return null;
-  if ((linked.profilePhotoUrl || "") === photoUrl && (linked.profilePhotoData || "") === photoData) return linked;
+  if ((linked.profilePhotoUrl || "") === photoUrl && (linked.profilePhotoPath || "") === photoPath && (linked.profilePhotoData || "") === photoData && (linked.profilePhotoSourceRecordId || "") === record.id && (linked.profilePhotoSourceRecordType || "") === "boardingDog") return linked;
   const updated = upsertRecord("customerDog", {
     ...linked,
     profilePhotoUrl: photoUrl || linked.profilePhotoUrl || "",
+    profilePhotoPath: photoPath || linked.profilePhotoPath || "",
     profilePhotoData: photoData || linked.profilePhotoData || "",
+    profilePhotoSourceRecordId: record.id,
+    profilePhotoSourceRecordType: "boardingDog",
     linkedBoardingDogId: record.id,
     updatedAt: new Date().toISOString(),
   });
@@ -13736,6 +13870,7 @@ function renderCustomerDogs() {
   $("#customerDogList").innerHTML = dogs.length
     ? `${dogs.map(customerDogSummaryCardHtml).join("")}<div class="button-row"><button type="button" class="secondary-button" data-action="add-customer-dog-inline">Add Another Dog</button></div>`
     : customerDogWelcomeHtml();
+  hydrateProfilePhotoElements($("#customerDogList"));
   if ($("#customerBookingDogList")) {
     $("#customerBookingDogList").innerHTML = dogs.length
       ? dogs.map((dog) => `<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="${dog.id}" ${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>${escapeHtml(dog.dogName)}</strong><span>${escapeHtml(dog.breedDescription || "")}</span></label>`).join("")
@@ -13884,9 +14019,10 @@ function customerDogSummaryCardHtml(dog = {}) {
   const stayStatus = activeStay ? boardingStayDisplayStatus(record, stay) : "";
   const facts = [dog.breedDescription || dog.breed || "", dog.sex || "", dogAgeText(dog)].filter(Boolean).join(" | ");
   const vaccine = customerFacingVaccineStatus(dog);
+  const photoRecord = customerDogPhotoRecordForDisplay(dog, record);
   return `<article class="customer-dog-summary-card">
     <div class="customer-dog-summary-main">
-      ${customerDogPhotoHtml(dog)}
+      ${customerDogPhotoHtml(dog, { photoRecord })}
       <div>
         <div class="customer-dog-summary-title">
           <h3>${escapeHtml(dog.dogName || "Your dog")}</h3>
