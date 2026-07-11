@@ -5960,6 +5960,11 @@ function hydrateProfilePhotoElements(root = document) {
   const observer = ensureProfilePhotoHydrationObserver();
   elements.forEach((element) => {
     if (revealLoadedProfilePhotoElement(element)) return;
+    const img = element.matches("img") ? element : element.querySelector("img");
+    if (element.hidden || element.hasAttribute("hidden") || img?.hidden || img?.hasAttribute("hidden")) {
+      queueProfilePhotoHydration(element);
+      return;
+    }
     if (observer) observer.observe(element);
     else queueProfilePhotoHydration(element);
   });

@@ -1,6 +1,6 @@
 // === MODULE: MAIN ===
 import "./boarding-agreement.js?v=20260710-cuddle-stay-agreement";
-import "./shared.js?v=20260711-private-dog-photo-paths";
+import "./shared.js?v=20260711-hidden-profile-photo-hydration";
 import "./auth.js?v=20260709-staff-payroll-financials";
 import "./customer.js?v=20260711-private-dog-photo-paths";
 import "./boarding.js?v=20260711-private-dog-photo-paths";
