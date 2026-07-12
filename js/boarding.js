@@ -1553,9 +1553,11 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   const isServiceRequest = stayType === "Service Request";
   const billableDropoffTime = boardingBillableDropoffTime(stay);
   const days = isServiceRequest ? 0 : boardingDays(billableDropoffTime, stay.pickupTime);
-  const stayProgram = options.stayProgram || stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
-  const stayProgramName = stayProgram?.serviceName || stayProgram?.name || stay.stayProgramName || stay.pricingSnapshot?.stayProgramName || "";
-  const stayProgramRate = Number(stayProgram?.rate ?? stayProgram?.basePrice ?? stay.stayProgramRate ?? stay.pricingSnapshot?.stayProgramRate ?? 0);
+  const hasExplicitStayProgram = Object.prototype.hasOwnProperty.call(options, "stayProgram");
+  const stayProgram = hasExplicitStayProgram ? options.stayProgram : stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
+  const savedStayProgramName = hasExplicitStayProgram && !stayProgram ? "" : stay.stayProgramName || stay.pricingSnapshot?.stayProgramName || "";
+  const stayProgramName = stayProgram?.serviceName || stayProgram?.name || savedStayProgramName;
+  const stayProgramRate = Number(stayProgram?.rate ?? stayProgram?.basePrice ?? (stayProgram ? stay.stayProgramRate ?? stay.pricingSnapshot?.stayProgramRate : 0) ?? 0);
   const priorRole = stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.role || "";
   const role = options.currentDogRole || priorRole || (stayProgram ? "boarding-program" : ratePlan.isMemberPricing ? "primary" : "non-member");
   const defaultRateConfig = role === "shared-crate-additional" ? ratePlan.sharedCrateRateConfig : ratePlan.primaryRateConfig;
@@ -1700,7 +1702,8 @@ function boardingCurrentPricingSnapshotForStay(record = {}, stay = {}, options =
     if (familySnapshot) return familySnapshot;
   }
   const ratePlan = options.ratePlan || boardingRatePlanForRecord(record);
-  const stayProgram = options.stayProgram || stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
+  const hasExplicitStayProgram = Object.prototype.hasOwnProperty.call(options, "stayProgram");
+  const stayProgram = hasExplicitStayProgram ? options.stayProgram : stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
   const sharedCrateRequested = Boolean(options.sharedCrateRequested ?? (stay.pricingSnapshot?.sharedCrateRequested && ratePlan.isMemberPricing));
   return boardingPricingSnapshotForStay(record, stay, {
     ...options,

@@ -35,11 +35,20 @@ const checks = [
     message: "pricing snapshot must use the normalized selected boarding rate service id.",
   },
   {
-    pass: main.includes("20260711-clear-boarding-program-price"),
+    pass: boarding.includes('const hasExplicitStayProgram = Object.prototype.hasOwnProperty.call(options, "stayProgram");')
+      && boarding.includes('const stayProgram = hasExplicitStayProgram ? options.stayProgram : stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;'),
+    message: "pricing snapshot must honor an explicit null stayProgram instead of falling back to stale snapshot program data.",
+  },
+  {
+    pass: boarding.includes('const savedStayProgramName = hasExplicitStayProgram && !stayProgram ? "" : stay.stayProgramName || stay.pricingSnapshot?.stayProgramName || "";'),
+    message: "cleared stay programs must not reuse stale program names from saved snapshots.",
+  },
+  {
+    pass: main.includes("20260711-clear-boarding-program-snapshot"),
     message: "main module must import the cache-busted boarding module.",
   },
   {
-    pass: index.includes("20260711-clear-boarding-program-price"),
+    pass: index.includes("20260711-clear-boarding-program-snapshot"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];
