@@ -44,11 +44,16 @@ const checks = [
     message: "cleared stay programs must not reuse stale program names from saved snapshots.",
   },
   {
-    pass: main.includes("20260711-clear-boarding-program-snapshot"),
+    pass: boarding.includes("stayProgramId: stayProgram ? stayProgram.id || stayProgram.serviceId || \"\" : \"\",")
+      && boarding.includes("stayProgramRate: stayProgram ? stayProgramRate : 0,"),
+    message: "cleared stay programs must not preserve stale program ids or rates in pricing snapshots.",
+  },
+  {
+    pass: main.includes("20260711-clear-boarding-program-id"),
     message: "main module must import the cache-busted boarding module.",
   },
   {
-    pass: index.includes("20260711-clear-boarding-program-snapshot"),
+    pass: index.includes("20260711-clear-boarding-program-id"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];
