@@ -2528,6 +2528,10 @@ button.is-loading {
   margin: 0;
 }
 
+.agreement-required-checks .agreement-choice {
+  border-color: var(--red);
+}
+
 .agreement-limit-input {
   margin: 0;
 }
@@ -2635,6 +2639,10 @@ button.is-loading {
 
 :root[data-theme="light"] body:not(.is-login-view) .customer-agreement-markdown hr {
   border-top-color: #dbe5e3 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .agreement-required-checks .agreement-choice {
+  border-color: #BF4E45 !important;
 }
 
 .customer-sticky-book-now {

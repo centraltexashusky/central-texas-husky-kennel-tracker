@@ -12,7 +12,7 @@ const requiredSnippets = [
   [main, "20260712-cuddle-stay-agreement-copy"],
   [main, "20260712-agreement-copy-and-checks"],
   [index, "20260712-agreement-copy-and-checks"],
-  [index, "styles.css?v=20260712-agreement-numbering-checks"],
+  [index, "styles.css?v=20260712-agreement-red-check-borders"],
   [index, "agreement-required-checks"],
   [index, 'id="customerAgreementElectronicConsent"'],
   [index, 'id="customerAgreementAccepted"'],
@@ -22,6 +22,8 @@ const requiredSnippets = [
   [customer, 'signerLegalName: customerAgreementFieldValue("customerAgreementSignatureNameConfirm")'],
   [styles, "padding-left: 28px;"],
   [styles, ".customer-agreement-document li::marker"],
+  [styles, ".agreement-required-checks .agreement-choice"],
+  [styles, "border-color: #BF4E45 !important;"],
 ];
 
 const forbiddenAgreementSnippets = [
