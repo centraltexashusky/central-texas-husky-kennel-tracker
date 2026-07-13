@@ -16,7 +16,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260710-boarding-agreement-fields-light-card" />
+    <link rel="stylesheet" href="styles.css?v=20260712-agreement-numbering-checks" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -418,21 +418,8 @@
                 </details>
                 <div class="customer-signature-block" id="customerSignatureBlock">
                   <section class="agreement-response-card">
-                    <strong>Required agreement information</strong>
-                    <p>Complete the fields that become part of the signed agreement record.</p>
-                    <div class="field-grid">
-                      <label>Owner legal name<input type="text" name="agreementSignerName" id="customerAgreementSignerName" autocomplete="name" /></label>
-                      <label>Owner phone<input type="tel" name="agreementOwnerPhone" id="customerAgreementOwnerPhone" autocomplete="tel" /></label>
-                      <label>Owner email<input type="email" name="agreementOwnerEmail" id="customerAgreementOwnerEmail" autocomplete="email" readonly /></label>
-                      <label>Owner address<input type="text" name="agreementOwnerAddress" id="customerAgreementOwnerAddress" autocomplete="street-address" /></label>
-                    </div>
-                    <div class="agreement-dog-summary" id="customerAgreementDogSummary"></div>
-                    <div class="field-grid">
-                      <label>Emergency contact name<input type="text" name="agreementEmergencyName" id="customerAgreementEmergencyName" autocomplete="name" /></label>
-                      <label>Emergency contact phone<input type="tel" name="agreementEmergencyPhone" id="customerAgreementEmergencyPhone" autocomplete="tel" /></label>
-                      <label>Veterinarian or clinic<input type="text" name="agreementVetClinic" id="customerAgreementVetClinic" /></label>
-                      <label>Veterinarian phone<input type="tel" name="agreementVetPhone" id="customerAgreementVetPhone" autocomplete="tel" /></label>
-                    </div>
+                    <strong>Agreement selections</strong>
+                    <p>Select the agreement options that must be captured with this signature.</p>
                     <fieldset class="agreement-choice-group">
                       <legend>Emergency treatment spending authorization</legend>
                       <label class="inline-check agreement-choice"><input type="radio" name="agreementEmergencyTreatmentChoice" value="limit" /> I authorize treatment up to this amount.</label>
@@ -447,7 +434,7 @@
                     </fieldset>
                   </section>
                   <div class="field-grid">
-                    <label>Signature name<input type="text" name="agreementSignatureNameConfirm" id="customerAgreementSignatureNameConfirm" autocomplete="name" readonly /></label>
+                    <label>Signer full legal name<input type="text" name="agreementSignatureNameConfirm" id="customerAgreementSignatureNameConfirm" autocomplete="name" /></label>
                   </div>
                   <label class="customer-signature-label" for="customerSignaturePad">Signature</label>
                   <canvas id="customerSignaturePad" class="customer-signature-pad" width="720" height="220" aria-label="Draw signature"></canvas>
@@ -457,9 +444,12 @@
                     <button type="button" class="secondary-button" id="clearCustomerSignatureButton">Clear Signature</button>
                     <button type="button" class="secondary-button" id="printCustomerAgreementButton">Print Agreement</button>
                   </div>
-                  <label class="inline-check"><input type="checkbox" name="agreementElectronicConsent" id="customerAgreementElectronicConsent" /> I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.</label>
-                  <label class="inline-check"><input type="checkbox" name="agreementAccepted" id="customerAgreementAccepted" /> I have read and agree to the Cuddle Stay Boarding Services Agreement, including the assumption of risk, release of liability, indemnification, and ordinary-negligence release terms.</label>
-                  <label class="inline-check"><input type="checkbox" name="agreementArbitrationAccepted" id="customerAgreementArbitrationAccepted" /> I have read and agree to the mandatory individual binding arbitration provision and understand I am waiving covered court, judge, jury, class, collective, consolidated, coordinated, or representative-action rights.</label>
+                  <fieldset class="agreement-choice-group agreement-required-checks">
+                    <legend>Required acknowledgements</legend>
+                    <label class="inline-check agreement-choice"><input type="checkbox" name="agreementElectronicConsent" id="customerAgreementElectronicConsent" /> I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.</label>
+                    <label class="inline-check agreement-choice"><input type="checkbox" name="agreementAccepted" id="customerAgreementAccepted" /> I have read and agree to the Cuddle Stay Boarding Services Agreement, including the assumption of risk, release of liability, indemnification, and ordinary-negligence release terms.</label>
+                    <label class="inline-check agreement-choice"><input type="checkbox" name="agreementArbitrationAccepted" id="customerAgreementArbitrationAccepted" /> I have read and agree to the mandatory individual binding arbitration provision and understand I am waiving covered court, judge, jury, class, collective, consolidated, coordinated, or representative-action rights.</label>
+                  </fieldset>
                 </div>
               </section>
             </section>
@@ -1557,6 +1547,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260628-our-dogs-filter-info-boarding-rows-20260711-clear-boarding-program-id"></script>
+  <script type="module" src="js/main.js?v=20260628-our-dogs-filter-info-boarding-rows-20260712-agreement-copy-and-checks"></script>
 </body>
 </html>

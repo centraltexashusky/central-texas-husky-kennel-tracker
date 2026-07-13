@@ -1,8 +1,8 @@
 // === MODULE: MAIN ===
-import "./boarding-agreement.js?v=20260710-cuddle-stay-agreement";
+import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
 import "./shared.js?v=20260711-hidden-profile-photo-hydration";
 import "./auth.js?v=20260709-staff-payroll-financials";
-import "./customer.js?v=20260711-private-dog-photo-paths";
+import "./customer.js?v=20260712-agreement-copy-and-checks";
 import "./boarding.js?v=20260711-clear-boarding-program-id";
 import "./daily.js?v=20260709-owned-delete-admin-only";
 import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-task-scheduler-visibility-dedupe";

@@ -2442,7 +2442,15 @@ button.is-loading {
   display: grid;
   gap: 8px;
   margin: 10px 0 0;
-  padding-left: 20px;
+  padding-left: 28px;
+}
+
+.customer-agreement-document ol {
+  list-style-position: outside;
+}
+
+.customer-agreement-document li::marker {
+  font-weight: 800;
 }
 
 .customer-signature-block {

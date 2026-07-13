@@ -1,8 +1,8 @@
 // === MODULE: BOARDING AGREEMENT ===
 (function () {
   const agreement = {
-    version: "2026-07-10-cuddle-stay-v1",
-    effectiveDate: "2026-07-10",
+    version: "2026-07-12-cuddle-stay-v2",
+    effectiveDate: "2026-07-12",
     title: "Cuddle Stay Boarding Services Agreement",
     electronicConsentText: "I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.",
     signatureIntentText: "I have reviewed the Cuddle Stay Boarding Services Agreement and intend my electronic signature to have the same legal effect as a handwritten signature.",
@@ -818,68 +818,6 @@ The version accepted for each booking will govern that booking.
 18. Owner intends the electronic signature to have the same legal effect as a handwritten signature.
 19. Owner consents to conducting this transaction electronically and receiving an electronic copy of the Agreement.
 20. Owner represents that all information provided concerning the dog is complete and accurate.
-
----
-
-# REQUIRED GENERAL ACCEPTANCE
-
-☐ **I HAVE READ AND AGREE TO THE CUDDLE STAY BOARDING SERVICES AGREEMENT, ASSUMPTION OF RISK, RELEASE OF LIABILITY, INDEMNIFICATION AGREEMENT, AND BINDING ARBITRATION AGREEMENT. I UNDERSTAND THAT IT INCLUDES AN EXPRESS RELEASE OF CLAIMS ARISING FROM THE ORDINARY NEGLIGENCE OF CUDDLE STAY AND THE OTHER RELEASED PARTIES.**
-
----
-
-# REQUIRED SEPARATE ARBITRATION ACCEPTANCE
-
-☐ **I HAVE READ AND AGREE TO THE MANDATORY INDIVIDUAL BINDING ARBITRATION PROVISION. I UNDERSTAND THAT I AM WAIVING MY RIGHT TO PURSUE COVERED CLAIMS THROUGH A LAWSUIT, JUDGE, OR JURY AND THAT I MAY NOT PARTICIPATE IN A CLASS, COLLECTIVE, CONSOLIDATED, COORDINATED, OR REPRESENTATIVE ACTION.**
-
----
-
-# OWNER AND DOG INFORMATION
-
-**Owner’s Full Legal Name:**
-
----
-
-**Owner’s Address:**
-
----
-
----
-
-**Owner’s Phone Number:**
-
----
-
-**Owner’s Email Address:**
-
----
-
-**Dog’s Name:**
-
----
-
-**Dog’s Breed:**
-
----
-
-**Dog’s Age or Date of Birth:**
-
----
-
-**Emergency Contact Name:**
-
----
-
-**Emergency Contact Phone Number:**
-
----
-
-**Veterinarian or Veterinary Clinic:**
-
----
-
-**Veterinarian Phone Number:**
-
----
 
 ---
 
