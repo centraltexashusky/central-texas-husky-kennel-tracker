@@ -2532,6 +2532,10 @@ button.is-loading {
   border-color: var(--red);
 }
 
+#customerSignatureBlock > label.inline-check {
+  border-color: var(--red);
+}
+
 .agreement-limit-input {
   margin: 0;
 }
@@ -2643,6 +2647,17 @@ button.is-loading {
 
 :root[data-theme="light"] body:not(.is-login-view) .agreement-required-checks .agreement-choice {
   border-color: #BF4E45 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) #customerSignatureBlock > label.inline-check {
+  border-color: #BF4E45 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .form-error {
+  background: #FFF4F2 !important;
+  border-color: #D45145 !important;
+  color: #8F241C !important;
+  box-shadow: none !important;
 }
 
 .customer-sticky-book-now {
