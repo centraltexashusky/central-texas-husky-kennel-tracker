@@ -4666,7 +4666,9 @@ function boardingFamilyStayKey(stay = {}) {
 
 function boardingFamilyExplicitGroupKey(entry = {}) {
   const explicitGroupId = String(entry.stay?.requestGroupId || entry.stay?.reservationGroupId || entry.stay?.familyReservationId || entry.record?.requestGroupId || entry.record?.reservationGroupId || entry.record?.familyReservationId || "").trim();
-  return explicitGroupId ? \`group:\${explicitGroupId}\` : "";
+  if (!explicitGroupId) return "";
+  const stayKey = boardingFamilyStayKey(entry.stay || {});
+  return \`group:\${explicitGroupId}\${stayKey ? \`::\${stayKey}\` : ""}\`;
 }
 
 function boardingFamilyHouseholdStayKeys(entry = {}) {
