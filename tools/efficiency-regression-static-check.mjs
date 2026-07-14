@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260714-dog-show-mobile-groups",
+    mustInclude: "20260714-dog-show-packing-remove",
     message: "production cache keys must be bumped.",
   },
   {

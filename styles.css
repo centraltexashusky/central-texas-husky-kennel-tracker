@@ -12203,7 +12203,7 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   width: 100%;
 }
 
-.dog-show-remove-packing {
+#dogShowPage button.dog-show-remove-packing {
   align-items: center;
   appearance: none;
   background: transparent;
@@ -12218,6 +12218,8 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   justify-content: center;
   line-height: 1;
   margin: 0;
+  min-height: 0;
+  min-width: 0;
   padding: 0;
   position: absolute;
   right: 8px;
@@ -12226,11 +12228,16 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   width: 28px;
 }
 
-.dog-show-remove-packing:hover,
-.dog-show-remove-packing:focus-visible {
+#dogShowPage button.dog-show-remove-packing:hover,
+#dogShowPage button.dog-show-remove-packing:focus-visible {
   background: transparent;
   border: 0;
+  box-shadow: none;
   color: #9F2D28;
+  filter: none;
+  outline: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .dog-show-more-backdrop,
