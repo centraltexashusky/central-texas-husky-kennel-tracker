@@ -11558,6 +11558,77 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   font-size: 0.76rem;
 }
 
+.dog-show-calendar-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.dog-show-calendar-range {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.dog-show-calendar-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  margin-top: 12px;
+}
+
+.dog-show-calendar-day {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-height: 132px;
+  overflow: hidden;
+}
+
+.dog-show-calendar-day > header {
+  align-items: baseline;
+  background: rgba(16, 40, 63, 0.06);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 7px;
+  justify-content: space-between;
+  padding: 9px 10px;
+}
+
+.dog-show-calendar-day > header span,
+.dog-show-calendar-empty {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.dog-show-calendar-activities {
+  display: grid;
+  gap: 6px;
+  padding: 7px;
+}
+
+.dog-show-calendar-activity {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid #2F668F;
+  border-radius: 6px;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px;
+  text-align: left;
+}
+
+.dog-show-calendar-activity:hover { border-color: #2F668F; }
+.dog-show-calendar-activity.is-social { border-left-color: #8CC5A5; background: #F4FAF7; }
+.dog-show-calendar-activity.is-task { border-left-color: #D89A2B; }
+.dog-show-calendar-activity > span,
+.dog-show-calendar-activity small { color: var(--muted); font-size: 0.68rem; }
+.dog-show-calendar-activity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dog-show-calendar-empty { margin: 4px 2px; }
+
 .dog-show-schedule-row {
   align-items: stretch;
   appearance: none;
@@ -12167,6 +12238,11 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
     grid-template-columns: 68px minmax(0, 1fr) 48px;
     padding: 9px;
   }
+
+  .dog-show-calendar-panel { padding: 11px; }
+  .dog-show-calendar-grid { display: flex; overflow-x: auto; scroll-snap-type: x proximity; }
+  .dog-show-calendar-day { flex: 0 0 min(78vw, 280px); scroll-snap-align: start; }
+  .dog-show-calendar-range { max-width: 42%; text-align: right; }
 
   .dog-show-time-line i {
     width: 12px;

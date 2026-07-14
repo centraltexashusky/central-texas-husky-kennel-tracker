@@ -282,6 +282,43 @@ function dogShowDogsHtml(event) {
   </div>`;
 }
 
+function dogShowShowDays(event = {}) {
+  const start = event.startDate ? new Date(`${event.startDate}T12:00:00`) : new Date();
+  const end = event.endDate ? new Date(`${event.endDate}T12:00:00`) : new Date(start);
+  const days = [];
+  for (let cursor = new Date(start); cursor <= end && days.length < 14; cursor.setDate(cursor.getDate() + 1)) {
+    days.push(new Date(cursor));
+  }
+  return days.length ? days : [start];
+}
+
+function dogShowCalendarHtml(event) {
+  const days = dogShowShowDays(event);
+  const entries = dogShowEntries(event);
+  const tasks = dogShowTasks(event);
+  const dayKey = (date) => date.toISOString().slice(0, 10);
+  const activitiesForDay = (date) => {
+    const key = dayKey(date);
+    const activities = [];
+    entries.forEach((entry) => {
+      if (entry.ringDate === key && entry.attendanceRole === "Showing") {
+        const prep = dogShowPrepTimes(entry);
+        activities.push({ time: prep.start, label: `Prep · ${dogShowEntryName(entry)}`, meta: prep.start ? `Ready ${dogShowFormatTime(prep.ready)} · Ring ${dogShowFormatTime(prep.ring)}` : "Prep time missing", action: "open-show-dog", id: entry.id, kind: "show" });
+      } else if (entry.attendanceRole !== "Showing" && (entry.socializationDate || event.startDate) === key) {
+        activities.push({ time: null, label: `Socialization · ${dogShowEntryName(entry)}`, meta: dogShowStaffLabel(entry.helperEmail || entry.handlerEmail), action: "open-show-dog", id: entry.id, kind: "social" });
+      }
+    });
+    tasks.filter((task) => task.status !== "Completed" && task.dueAt && dayKey(new Date(task.dueAt)) === key).forEach((task) => {
+      activities.push({ time: new Date(task.dueAt), label: task.title || "Show task", meta: `${task.taskType || "Task"} · ${dogShowStaffLabel(task.assignedEmail)}`, action: "edit-show-task", id: task.id, kind: "task" });
+    });
+    return activities.sort((a, b) => (a.time?.getTime() || Infinity) - (b.time?.getTime() || Infinity));
+  };
+  return `<section class="dog-show-calendar-panel"><div class="dog-show-panel-heading"><div><h3>Weekend Calendar</h3><p>See prep, rings, socialization, and show tasks by day.</p></div><span class="dog-show-calendar-range">${escapeHtml(`${dogShowFormatDate(event.startDate)} – ${dogShowFormatDate(event.endDate || event.startDate)}`)}</span></div><div class="dog-show-calendar-grid">${days.map((date) => {
+    const activities = activitiesForDay(date);
+    return `<section class="dog-show-calendar-day"><header><strong>${escapeHtml(date.toLocaleDateString(undefined, { weekday: "short" }))}</strong><span>${escapeHtml(date.toLocaleDateString(undefined, { month: "short", day: "numeric" }))}</span></header><div class="dog-show-calendar-activities">${activities.length ? activities.map((activity) => `<button type="button" class="dog-show-calendar-activity is-${activity.kind}" data-action="${activity.action}" data-id="${escapeHtml(activity.id)}"><span>${activity.time ? escapeHtml(dogShowFormatTime(activity.time)) : "All day"}</span><strong>${escapeHtml(activity.label)}</strong><small>${escapeHtml(activity.meta)}</small></button>`).join("") : `<p class="dog-show-calendar-empty">No activities</p>`}</div></section>`;
+  }).join("")}</div></section>`;
+}
+
 function dogShowScheduleHtml(event) {
   const conflicts = dogShowConflictEntryIds();
   const entries = dogShowEntries(event).sort((a, b) => (dogShowPrepTimes(a).start?.getTime() || Infinity) - (dogShowPrepTimes(b).start?.getTime() || Infinity));
@@ -298,6 +335,7 @@ function dogShowScheduleHtml(event) {
     </button>`;
   }).join("");
   return `<div class="dog-show-view dog-show-schedule-view">
+    ${dogShowCalendarHtml(event)}
     <section class="dog-show-list-toolbar"><div><h3>Prep Schedule</h3><p>Preparation is counted backward from each ring time.</p></div><button type="button" data-action="add-show-dogs">Add Dogs</button></section>
     ${conflicts.size ? `<div class="dog-show-alert"><strong>${conflicts.size} dogs have a handler/helper overlap.</strong><span>Open the highlighted schedule rows to reassign coverage.</span></div>` : ""}
     <div class="dog-show-schedule-list">${rows || dogShowRenderEmpty("No schedule yet", "Add dogs, then enter ring time and preparation duration.", "add-show-dogs", "Add Dogs")}</div>
