@@ -496,6 +496,11 @@ var stateKeys = {
   dailyTaskCompletion: "cth-dailyTaskCompletion-records",
   careLog: "cth-careLog-records",
   scheduledCareTask: "cth-scheduledCareTask-records",
+  showEvent: "cth-showEvent-records",
+  showEntry: "cth-showEntry-records",
+  showDayTask: "cth-showDayTask-records",
+  showCareLog: "cth-showCareLog-records",
+  showResult: "cth-showResult-records",
   customerDog: "cth-customerDog-records",
   dog: "cth-dog-records",
   userDogAccess: "cth-userDogAccess-records",
@@ -1614,7 +1619,7 @@ function initSupabaseClient() {
 
 function recordTypes() {
   return [
-    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "customerDog",
+    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "customerDog",
     "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink", "boardingAgreement",
     "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
   ];
@@ -1635,6 +1640,7 @@ function remoteRecordTypesForPage(pageId = "") {
     dashboardPage: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", "careLog", "calendarNote", "notificationLog"],
     dailyPage: ["dailyTask", "careLog", "ownedDog", "boardingDog", "calendarNote"],
     taskSchedulerPage: ["scheduledCareTask", "ownedDog", "boardingDog", "customerDog", "service", "dailyTask", "careLog"],
+    dogShowPage: ["showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "ownedDog", "boardingDog", "customerDog", "settingsUser"],
     ourDogsPage: ["ownedDog", "careLog", "customerDog", "boardingDog"],
     boardingDogsPage: ["boardingDog", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
     requestsPage: ["request"],
@@ -1708,6 +1714,11 @@ var REMOTE_STAFF_WRITE_RECORD_TYPES = new Set([
   "dailyTask",
   "careLog",
   "scheduledCareTask",
+  "showEvent",
+  "showEntry",
+  "showDayTask",
+  "showCareLog",
+  "showResult",
   "calendarNote",
   "dogVaccination",
   "dogInternalNote",
@@ -10768,6 +10779,7 @@ function renderActivePageRecords(pageId = activePageId()) {
     dashboardPage: () => renderDashboard(),
     dailyPage: () => renderDailyTaskLists(),
     taskSchedulerPage: () => renderTaskScheduler(),
+    dogShowPage: () => renderDogShow(),
     ourDogsPage: () => renderOwnedDogs(),
     boardingDogsPage: () => { renderBoardingDogs(); renderBoardingRequests(); },
     requestsPage: () => renderRequests(),
@@ -10799,6 +10811,7 @@ function renderAllRecords(options = {}) {
   }
   renderDailyTaskLists();
   renderTaskScheduler();
+  if (activePageId() === "dogShowPage") renderDogShow();
   renderDashboard();
   renderOwnedDogs();
   renderBoardingDogs();
@@ -11306,6 +11319,7 @@ function initEvents() {
     if (button) openGlobalSearchResult(button);
   });
   if (typeof setupTaskSchedulerEventListeners === "function") setupTaskSchedulerEventListeners();
+  if (typeof setupDogShowEventListeners === "function") setupDogShowEventListeners();
   $("#exportBoardingQueueButton")?.addEventListener("click", exportBoardingQueue);
   $("#exportTimesheetButton")?.addEventListener("click", exportTimesheet);
   $("#viewTimesheetButton")?.addEventListener("click", openTimesheetViewPopup);
@@ -14425,6 +14439,7 @@ function switchPage(pageId, options = {}) {
     handleBoardingViewToggle(boardingViewMode);
   }
   syncMobileNavigationActive(pageId);
+  if (typeof syncDogShowShell === "function") syncDogShowShell(pageId);
   setMobileMoreOpen(false);
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
   if (helperIsLoggedIn() && pageId !== "loginPage") {

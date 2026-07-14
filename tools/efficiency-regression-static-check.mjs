@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260628-our-dogs-filter-info-boarding-rows",
+    mustInclude: "20260714-dog-show-workspace",
     message: "production cache keys must be bumped.",
   },
   {
