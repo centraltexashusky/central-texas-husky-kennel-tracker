@@ -11590,6 +11590,48 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   align-items: center;
 }
 
+.dog-show-calendar-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dog-show-calendar-view-toggle {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: inline-flex;
+  padding: 2px;
+}
+
+.dog-show-calendar-view-toggle button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: var(--ink);
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.dog-show-calendar-view-toggle button.is-active {
+  background: #315F85;
+  color: #FFFFFF;
+}
+
+.dog-show-calendar-nav {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink);
+  display: inline-flex;
+  font-size: 1.2rem;
+  height: 34px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0;
+  width: 34px;
+}
+
 .dog-show-calendar-toolbar h3,
 .dog-show-calendar-toolbar p {
   margin: 0;
@@ -11691,10 +11733,10 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-calendar-all-day-item.is-social { border-left-color: #8CC5A5; background: #F4FAF7; }
 .dog-show-calendar-all-day-item.is-unscheduled { border-left-color: #D89A2B; }
 .dog-show-calendar-all-day-item span,
-.dog-show-calendar-event > span,
-.dog-show-calendar-event small { color: var(--muted); font-size: 0.64rem; }
+.dog-show-calendar-event-copy > span,
+.dog-show-calendar-event-copy small { color: var(--muted); font-size: 0.64rem; }
 .dog-show-calendar-all-day-item strong,
-.dog-show-calendar-event strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dog-show-calendar-event-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .dog-show-calendar-time {
   align-items: flex-start;
@@ -11719,14 +11761,17 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .dog-show-calendar-slot:hover,
-.dog-show-calendar-slot:focus-visible {
+.dog-show-calendar-slot:focus-visible,
+.dog-show-calendar-slot.is-drop-target {
   background: #F0F6FF;
   box-shadow: inset 0 0 0 1px #7EA2C0;
 }
 
 .dog-show-calendar-event {
+  align-items: start;
   align-self: stretch;
   border-left-color: #2F668F;
+  grid-template-columns: auto minmax(0, 1fr);
   margin-left: calc((100% / var(--lane-count)) * var(--lane-index));
   position: relative;
   width: calc(100% / var(--lane-count));
@@ -11734,14 +11779,135 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .dog-show-calendar-event.is-task {
-  background: #FFF8E8;
-  border-left-color: #D89A2B;
+  background: color-mix(in srgb, var(--task-color) 12%, var(--panel));
+  border-color: color-mix(in srgb, var(--task-color) 58%, var(--line));
+  border-left-color: var(--task-color);
+  cursor: grab;
+}
+
+.dog-show-calendar-event.is-task:active {
+  cursor: grabbing;
+}
+
+.dog-show-calendar-event.is-dragging {
+  opacity: 0.45;
+}
+
+.dog-show-calendar-event.is-completed {
+  background: #EFFAF3;
+  border: 2px solid #35A35F;
+  cursor: pointer;
+}
+
+.dog-show-calendar-check {
+  align-items: center;
+  background: #35A35F;
+  border-radius: 50%;
+  color: #FFFFFF !important;
+  display: inline-flex;
+  font-size: 0.7rem !important;
+  font-weight: 900;
+  height: 20px;
+  justify-content: center;
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  width: 20px;
+  z-index: 2;
+}
+
+.dog-show-calendar-event-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dog-show-calendar-photo {
+  align-self: start;
+  background: var(--tint-blue);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  flex: 0 0 auto;
+  height: 30px;
+  justify-items: center;
+  overflow: hidden;
+  width: 30px;
+}
+
+.dog-show-calendar-photo img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.dog-show-calendar-photo.is-initials {
+  align-items: center;
+  color: #315F85;
+  font-size: 0.58rem;
+  font-weight: 800;
 }
 
 .dog-show-calendar-event:hover,
 .dog-show-calendar-event:focus-visible {
   border-color: #2F668F;
   z-index: 6;
+}
+
+.dog-show-calendar-event.is-task:hover,
+.dog-show-calendar-event.is-task:focus-visible {
+  border-color: var(--task-color);
+}
+
+.dog-show-task-color-field > span {
+  align-items: center;
+  display: flex;
+  gap: 9px;
+}
+
+.dog-show-task-color-field input[type="color"] {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  height: 42px;
+  padding: 3px;
+  width: 58px;
+}
+
+.dog-show-task-color-field output {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.dog-show-calendar-task-detail {
+  align-items: center;
+  background: color-mix(in srgb, var(--task-color) 10%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--task-color) 55%, var(--line));
+  border-left: 5px solid var(--task-color);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 12px;
+}
+
+.dog-show-calendar-task-detail > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dog-show-calendar-task-detail span,
+.dog-show-calendar-task-detail small {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.dog-show-task-completion {
+  color: #247A45;
+  font-size: 0.76rem;
+  font-weight: 800;
+  margin: 4px 0 0;
 }
 
 .dog-show-schedule-row {

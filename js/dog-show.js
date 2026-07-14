@@ -1,7 +1,21 @@
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
 const DOG_SHOW_EVENT_KEY = "cth-dog-show-active-event";
+const DOG_SHOW_CALENDAR_VIEW_KEY = "cth-dog-show-calendar-view";
+const DOG_SHOW_CALENDAR_DATE_KEY = "cth-dog-show-calendar-date";
 const DOG_SHOW_STALE_MINUTES = 60;
+const DOG_SHOW_TASK_COLORS = {
+  Grooming: "#7C5CBF",
+  Potty: "#B7791F",
+  Water: "#2F6F9F",
+  Feeding: "#D56A3A",
+  Packing: "#4B7A67",
+  Paperwork: "#64748B",
+  Travel: "#287F87",
+  "Ring Prep": "#B4557A",
+  "Owner Update": "#3B6FC4",
+  General: "#315F85",
+};
 const DOG_SHOW_DEFAULT_PACKING = [
   "Crates and crate cards",
   "Grooming kit and dryer",
@@ -18,6 +32,9 @@ let dogShowDogFilter = "all";
 let dogShowDogQuery = "";
 let dogShowTaskFilter = "open";
 let dogShowSelectedTaskIds = new Set();
+let dogShowCalendarView = ["weekend", "day"].includes(localStorage.getItem(DOG_SHOW_CALENDAR_VIEW_KEY)) ? localStorage.getItem(DOG_SHOW_CALENDAR_VIEW_KEY) : "weekend";
+let dogShowCalendarDate = localStorage.getItem(DOG_SHOW_CALENDAR_DATE_KEY) || "";
+let dogShowCalendarDragTaskId = "";
 
 function dogShowRecords(type, eventId = "") {
   return readRecords(type).filter((record) => !record.removed && (!eventId || record.showEventId === eventId));
@@ -92,6 +109,10 @@ function dogShowBreed(entry = {}) {
 
 function dogShowNameWithBreed(entry = {}) {
   return [dogShowEntryName(entry), dogShowBreed(entry)].filter(Boolean).join(" - ");
+}
+
+function dogShowTaskColor(task = {}) {
+  return task.color || DOG_SHOW_TASK_COLORS[task.taskType] || DOG_SHOW_TASK_COLORS.General;
 }
 
 function dogShowDateTime(date = "", time = "") {
@@ -306,10 +327,23 @@ function dogShowDateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function dogShowCalendarDays(event = {}) {
+  const eventDays = dogShowShowDays(event);
+  const eventKeys = eventDays.map(dogShowDateKey);
+  if (!eventKeys.includes(dogShowCalendarDate)) dogShowCalendarDate = eventKeys[0] || todayDate();
+  localStorage.setItem(DOG_SHOW_CALENDAR_DATE_KEY, dogShowCalendarDate);
+  return dogShowCalendarView === "day" ? eventDays.filter((date) => dogShowDateKey(date) === dogShowCalendarDate) : eventDays;
+}
+
+function dogShowCalendarTaskEntry(task = {}, entries = dogShowEntries()) {
+  return entries.find((entry) => entry.id === task.showEntryId || (entry.dogId === task.dogId && entry.dogType === task.dogType)) || null;
+}
+
 function dogShowCalendarHtml(event) {
-  const days = dogShowShowDays(event);
+  const days = dogShowCalendarDays(event);
+  const eventDays = dogShowShowDays(event);
   const entries = dogShowEntries(event);
-  const tasks = dogShowTasks(event).filter((task) => task.status !== "Completed" && task.source !== "auto-ring-prep");
+  const tasks = dogShowTasks(event).filter((task) => task.source !== "auto-ring-prep");
   const startHour = 6;
   const endHour = 22;
   const slotsPerHour = 2;
@@ -328,13 +362,14 @@ function dogShowCalendarHtml(event) {
       allDayByDate.get(key).push({ kind: "unscheduled", title: `Prep · ${dogShowEntryName(entry)}`, meta: "Ring time needed", action: "open-show-dog", id: entry.id });
       return;
     }
-    timedActivities.push({ date: dogShowDateKey(prep.start), time: prep.start, duration: Math.max(30, Number(entry.prepMinutes || 45)), kind: "show", title: `Prep · ${dogShowEntryName(entry)}`, meta: `Ready ${dogShowFormatTime(prep.ready)} · Ring ${dogShowFormatTime(prep.ring)}`, action: "open-show-dog", id: entry.id });
+    timedActivities.push({ date: dogShowDateKey(prep.start), time: prep.start, duration: Math.max(30, Number(entry.prepMinutes || 45)), kind: "show", title: `Prep · ${dogShowEntryName(entry)}`, meta: `Ready ${dogShowFormatTime(prep.ready)} · Ring ${dogShowFormatTime(prep.ring)}`, action: "open-show-dog", id: entry.id, entry });
   });
   tasks.forEach((task) => {
     const due = new Date(task.dueAt || "");
     const key = dogShowDateKey(due);
     if (!allDayByDate.has(key) || Number.isNaN(due.getTime())) return;
-    timedActivities.push({ date: key, time: due, duration: 60, kind: "task", title: task.title || "Show task", meta: `${task.taskType || "Task"} · ${dogShowStaffLabel(task.assignedEmail)}`, action: "edit-show-task", id: task.id });
+    const entry = dogShowCalendarTaskEntry(task, entries);
+    timedActivities.push({ date: key, time: due, duration: 60, kind: "task", title: task.title || "Show task", meta: task.status === "Completed" ? `Completed by ${task.completedBy || "Staff"} · ${dogShowFormatDateTime(task.completedAt)}` : `${task.taskType || "Task"} · ${dogShowStaffLabel(task.assignedEmail)}`, action: "open-calendar-task", id: task.id, entry, task, color: dogShowTaskColor(task) });
   });
   timedActivities.forEach((activity) => {
     const minutes = activity.time.getHours() * 60 + activity.time.getMinutes();
@@ -359,9 +394,13 @@ function dogShowCalendarHtml(event) {
   const activityCards = timedActivities.map((activity) => {
     const dayIndex = days.findIndex((date) => dogShowDateKey(date) === activity.date);
     const span = Math.max(2, Math.ceil(activity.duration / 30));
-    return `<button type="button" class="dog-show-calendar-event is-${activity.kind}" data-action="${activity.action}" data-id="${escapeHtml(activity.id)}" style="grid-column:${dayIndex + 2};grid-row:${activity.slot + 3}/span ${span};--lane-count:${activity.laneCount};--lane-index:${activity.laneIndex}"><span>${escapeHtml(dogShowFormatTime(activity.time))}</span><strong>${escapeHtml(activity.title)}</strong><small>${escapeHtml(activity.meta)}</small></button>`;
+    const completed = activity.task?.status === "Completed";
+    const photo = activity.entry ? dogShowPhotoHtml(activity.entry, "dog-show-calendar-photo") : "";
+    return `<button type="button" class="dog-show-calendar-event is-${activity.kind}${completed ? " is-completed" : ""}" data-action="${activity.action}" data-id="${escapeHtml(activity.id)}"${activity.kind === "task" && !completed ? ` draggable="true" data-calendar-task-id="${escapeHtml(activity.id)}"` : ""} style="grid-column:${dayIndex + 2};grid-row:${activity.slot + 3}/span ${span};--lane-count:${activity.laneCount};--lane-index:${activity.laneIndex};--task-color:${escapeHtml(activity.color || "#315F85")}">${completed ? '<span class="dog-show-calendar-check" aria-hidden="true">✓</span>' : ""}${photo}<span class="dog-show-calendar-event-copy"><span>${escapeHtml(dogShowFormatTime(activity.time))}</span><strong>${escapeHtml(activity.title)}</strong><small>${escapeHtml(activity.meta)}</small></span></button>`;
   }).join("");
-  return `<section class="dog-show-calendar-panel"><div class="dog-show-calendar-toolbar"><div><h3>Weekend Calendar</h3><p>Click an open time to add a show task.</p></div><div><span class="dog-show-calendar-range">${escapeHtml(`${dogShowFormatDate(event.startDate)} – ${dogShowFormatDate(event.endDate || event.startDate)}`)}</span><button type="button" data-action="new-show-task" data-due-at="${escapeHtml(`${event.startDate || todayDate()}T09:00`)}">New Task</button></div></div><div class="dog-show-calendar-board"><div class="dog-show-calendar-timeline" style="--dog-show-day-count:${days.length};--dog-show-slot-count:${slotCount};--dog-show-grid-width:${68 + days.length * 210}px"><div class="dog-show-calendar-corner" style="grid-column:1;grid-row:1">Time</div><div class="dog-show-calendar-all-day-label" style="grid-column:1;grid-row:2">All day</div>${headers}${allDay}${timeLabels}${slots}${activityCards}</div></div></section>`;
+  const selectedIndex = eventDays.findIndex((date) => dogShowDateKey(date) === dogShowCalendarDate);
+  const defaultTaskDate = dogShowCalendarView === "day" ? dogShowCalendarDate : event.startDate || todayDate();
+  return `<section class="dog-show-calendar-panel"><div class="dog-show-calendar-toolbar"><div><h3>${dogShowCalendarView === "day" ? "Day Calendar" : "Weekend Calendar"}</h3><p>Click an open time to add a task. Drag open tasks to reschedule.</p></div><div class="dog-show-calendar-controls"><div class="dog-show-calendar-view-toggle" role="group" aria-label="Calendar view"><button type="button" data-calendar-view="weekend" class="${dogShowCalendarView === "weekend" ? "is-active" : ""}">Weekend</button><button type="button" data-calendar-view="day" class="${dogShowCalendarView === "day" ? "is-active" : ""}">Day</button></div>${dogShowCalendarView === "day" ? `<button type="button" class="dog-show-calendar-nav" data-calendar-day-offset="-1" aria-label="Previous show day"${selectedIndex <= 0 ? " disabled" : ""}>‹</button><span class="dog-show-calendar-range">${escapeHtml(dogShowFormatDate(dogShowCalendarDate))}</span><button type="button" class="dog-show-calendar-nav" data-calendar-day-offset="1" aria-label="Next show day"${selectedIndex >= eventDays.length - 1 ? " disabled" : ""}>›</button>` : `<span class="dog-show-calendar-range">${escapeHtml(`${dogShowFormatDate(event.startDate)} – ${dogShowFormatDate(event.endDate || event.startDate)}`)}</span>`}<button type="button" data-action="new-show-task" data-due-at="${escapeHtml(`${defaultTaskDate}T09:00`)}">New Task</button></div></div><div class="dog-show-calendar-board"><div class="dog-show-calendar-timeline" style="--dog-show-day-count:${days.length};--dog-show-slot-count:${slotCount};--dog-show-grid-width:${68 + days.length * 210}px"><div class="dog-show-calendar-corner" style="grid-column:1;grid-row:1">Time</div><div class="dog-show-calendar-all-day-label" style="grid-column:1;grid-row:2">All day</div>${headers}${allDay}${timeLabels}${slots}${activityCards}</div></div></section>`;
 }
 
 function dogShowScheduleHtml(event) {
@@ -410,7 +449,7 @@ function dogShowTasksHtml(event) {
       const entry = dogShowEntries(event).find((item) => item.id === task.showEntryId);
       return `<article class="dog-show-task-row${task.status === "Completed" ? " is-complete" : ""}">
         <input type="checkbox" data-show-task-select="${escapeHtml(task.id)}" aria-label="Select ${escapeHtml(task.title || "task")}"${dogShowSelectedTaskIds.has(task.id) ? " checked" : ""}${task.status === "Completed" ? " disabled" : ""}/>
-        <button type="button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}"><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>${task.status === "Completed" ? `Completed ${dogShowFormatDateTime(task.completedAt)}` : `Due ${dogShowFormatDateTime(task.dueAt)}`}</small></button>
+        <button type="button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}"><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>${task.status === "Completed" ? `Completed by ${escapeHtml(task.completedBy || "Staff")} · ${dogShowFormatDateTime(task.completedAt)}` : `Due ${dogShowFormatDateTime(task.dueAt)}`}</small></button>
         ${task.status === "Completed" ? `<span class="dog-show-task-done">Done</span>` : `<button type="button" class="secondary-button dog-show-complete-button" data-action="complete-show-task" data-id="${escapeHtml(task.id)}">Complete</button>`}
       </article>`;
     }).join("") : dogShowRenderEmpty("No tasks in this view", "Add a team task or create a water round for every dog.", "new-show-task", "New Task")}</div>
@@ -626,6 +665,7 @@ function openDogShowResultForm(entry) {
 
 function openDogShowTaskForm(task = {}) {
   const entries = dogShowEntries();
+  const color = dogShowTaskColor(task);
   openDogShowDialog(task.id ? "Edit Show Task" : "New Show Task", `<form id="dogShowTaskForm" class="tracker-form" data-id="${escapeHtml(task.id || "")}">
     <div class="field-grid">
       <label>Task<input name="title" value="${escapeHtml(task.title || "")}" required placeholder="Coat touch-up"/></label>
@@ -634,10 +674,18 @@ function openDogShowTaskForm(task = {}) {
       <label>Assigned to<select name="assignedEmail">${dogShowStaffOptions(task.assignedEmail || currentUser?.email || "")}</select></label>
       <label>Due date / time<input type="datetime-local" name="dueAt" value="${escapeHtml(task.dueAt ? task.dueAt.slice(0, 16) : new Date(Date.now() + 30 * 60000).toISOString().slice(0, 16))}" required/></label>
       <label>Status<select name="status"><option${task.status !== "Completed" ? " selected" : ""}>Open</option><option${task.status === "Completed" ? " selected" : ""}>Completed</option></select></label>
+      <label class="dog-show-task-color-field">Task color<span><input type="color" name="color" value="${escapeHtml(color)}" aria-label="Task color"/><output>${escapeHtml(color.toUpperCase())}</output></span></label>
     </div>
     <label>Notes<textarea name="notes" rows="3">${escapeHtml(task.notes || "")}</textarea></label>
     <div class="button-row"><button type="submit">Save Task</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
   </form>`);
+}
+
+function openDogShowCalendarTask(task = {}) {
+  if (!task.id) return;
+  const entry = dogShowCalendarTaskEntry(task);
+  const completed = task.status === "Completed";
+  openDogShowDialog(task.title || "Show Task", `<div class="dog-show-calendar-task-detail" style="--task-color:${escapeHtml(dogShowTaskColor(task))}">${entry ? dogShowPhotoHtml(entry, "dog-show-detail-photo") : ""}<div><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>Scheduled ${escapeHtml(dogShowFormatDateTime(task.dueAt))}</small>${completed ? `<p class="dog-show-task-completion">✓ Completed by ${escapeHtml(task.completedBy || "Staff")} · ${escapeHtml(dogShowFormatDateTime(task.completedAt))}</p>` : ""}</div></div><div class="button-row">${completed ? "" : `<button type="button" data-action="complete-show-task" data-id="${escapeHtml(task.id)}">Complete Task</button>`}<button type="button" class="secondary-button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}">Edit Task</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>`);
 }
 
 async function saveDogShowRecord(type, payload) {
@@ -735,7 +783,7 @@ async function saveDogShowTask(form) {
   const data = formPayload(form);
   const entry = dogShowEntries().find((item) => item.id === data.showEntryId);
   const completed = data.status === "Completed";
-  await saveDogShowRecord("showDayTask", { ...existing, ...data, id: existing.id || uid("showDayTask"), showEventId: dogShowActiveEvent()?.id || "", dogId: entry?.dogId || "", dogType: entry?.dogType || "", dueAt: new Date(data.dueAt).toISOString(), completedAt: completed ? existing.completedAt || new Date().toISOString() : "", completedBy: completed ? currentUser?.name || "Staff" : "", submittedAt: existing.submittedAt || new Date().toISOString(), helperEmail: currentUser?.email || "" });
+  await saveDogShowRecord("showDayTask", { ...existing, ...data, id: existing.id || uid("showDayTask"), showEventId: dogShowActiveEvent()?.id || "", dogId: entry?.dogId || "", dogType: entry?.dogType || "", dueAt: new Date(data.dueAt).toISOString(), color: data.color || dogShowTaskColor({ ...existing, taskType: data.taskType }), completedAt: completed ? existing.completedAt || new Date().toISOString() : "", completedBy: completed ? existing.completedBy || currentUser?.name || "Staff" : "", completedEmail: completed ? existing.completedEmail || currentUser?.email || "" : "", submittedAt: existing.submittedAt || new Date().toISOString(), helperEmail: currentUser?.email || "" });
   document.getElementById("dogShowDialog")?.close();
   renderDogShow();
   showToast("Show task saved.");
@@ -748,6 +796,14 @@ async function completeDogShowTasks(ids = []) {
   completed.forEach((task) => dogShowSelectedTaskIds.delete(task.id));
   renderDogShow();
   if (completed.length) showToast(`${completed.length} task${completed.length === 1 ? "" : "s"} completed.`);
+}
+
+async function moveDogShowCalendarTask(taskId, dueAt) {
+  const task = dogShowTasks().find((item) => item.id === taskId);
+  if (!task || task.status === "Completed" || !dueAt) return;
+  await saveDogShowRecord("showDayTask", { ...task, dueAt: new Date(dueAt).toISOString(), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || "Staff", updatedEmail: currentUser?.email || "" });
+  renderDogShow();
+  showToast(`${task.title || "Task"} moved to ${dogShowFormatDateTime(dueAt)}.`);
 }
 
 async function createDogShowWaterRound() {
@@ -843,6 +899,12 @@ function setupDogShowEventListeners() {
     });
   });
 
+  dialog?.addEventListener("input", (event) => {
+    if (!event.target.matches('#dogShowTaskForm input[name="color"]')) return;
+    const output = event.target.closest("label")?.querySelector("output");
+    if (output) output.textContent = String(event.target.value || "").toUpperCase();
+  });
+
   page.addEventListener("change", async (event) => {
     if (event.target.matches("[data-show-task-select]")) {
       if (event.target.checked) dogShowSelectedTaskIds.add(event.target.dataset.showTaskSelect);
@@ -863,6 +925,25 @@ function setupDogShowEventListeners() {
     if (filter) { dogShowDogFilter = filter.dataset.dogFilter; renderDogShow(); return; }
     const taskFilter = event.target.closest("[data-task-filter]");
     if (taskFilter) { dogShowTaskFilter = taskFilter.dataset.taskFilter; renderDogShow(); return; }
+    const calendarView = event.target.closest("[data-calendar-view]");
+    if (calendarView) {
+      dogShowCalendarView = calendarView.dataset.calendarView === "day" ? "day" : "weekend";
+      localStorage.setItem(DOG_SHOW_CALENDAR_VIEW_KEY, dogShowCalendarView);
+      renderDogShow();
+      return;
+    }
+    const dayOffset = event.target.closest("[data-calendar-day-offset]");
+    if (dayOffset) {
+      const days = dogShowShowDays(dogShowActiveEvent());
+      const index = days.findIndex((date) => dogShowDateKey(date) === dogShowCalendarDate);
+      const next = days[index + Number(dayOffset.dataset.calendarDayOffset || 0)];
+      if (next) {
+        dogShowCalendarDate = dogShowDateKey(next);
+        localStorage.setItem(DOG_SHOW_CALENDAR_DATE_KEY, dogShowCalendarDate);
+        renderDogShow();
+      }
+      return;
+    }
     const action = event.target.closest("[data-action]");
     if (!action) return;
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
@@ -873,6 +954,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "edit-show-entry" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "new-show-task") openDogShowTaskForm({ dueAt: action.dataset.dueAt || "" });
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
+    if (action.dataset.action === "open-calendar-task") openDogShowCalendarTask(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "complete-show-task") await completeDogShowTasks([action.dataset.id]);
     if (action.dataset.action === "complete-selected-show-tasks") await completeDogShowTasks([...dogShowSelectedTaskIds]);
     if (action.dataset.action === "select-visible-show-tasks") {
@@ -884,6 +966,38 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "show-result-summary") openDogShowResultSummary();
     if (action.dataset.action === "remove-packing-item") await removeDogShowPackingItem(action.dataset.id);
     if (action.dataset.action === "return-boarding-dashboard") switchPage("dashboardPage", { history: "push" });
+  });
+
+  page.addEventListener("dragstart", (event) => {
+    const card = event.target.closest("[data-calendar-task-id]");
+    if (!card) return;
+    dogShowCalendarDragTaskId = card.dataset.calendarTaskId || "";
+    card.classList.add("is-dragging");
+    event.dataTransfer?.setData("text/plain", dogShowCalendarDragTaskId);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+  });
+
+  page.addEventListener("dragover", (event) => {
+    const slot = event.target.closest(".dog-show-calendar-slot[data-due-at]");
+    if (!slot || !dogShowCalendarDragTaskId) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    page.querySelectorAll(".dog-show-calendar-slot.is-drop-target").forEach((item) => item.classList.remove("is-drop-target"));
+    slot.classList.add("is-drop-target");
+  });
+
+  page.addEventListener("drop", async (event) => {
+    const slot = event.target.closest(".dog-show-calendar-slot[data-due-at]");
+    if (!slot || !dogShowCalendarDragTaskId) return;
+    event.preventDefault();
+    const taskId = dogShowCalendarDragTaskId;
+    dogShowCalendarDragTaskId = "";
+    await moveDogShowCalendarTask(taskId, slot.dataset.dueAt);
+  });
+
+  page.addEventListener("dragend", () => {
+    dogShowCalendarDragTaskId = "";
+    page.querySelectorAll(".is-dragging, .is-drop-target").forEach((item) => item.classList.remove("is-dragging", "is-drop-target"));
   });
 
   document.getElementById("dogShowMoreBackdrop")?.addEventListener("click", () => setDogShowMoreMenuOpen(false));
@@ -911,6 +1025,11 @@ function setupDogShowEventListeners() {
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
     if (action.dataset.action === "close-show-dialog") dialog.close();
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
+    if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
+    if (action.dataset.action === "complete-show-task") {
+      await completeDogShowTasks([action.dataset.id]);
+      dialog.close();
+    }
     if (action.dataset.action === "back-to-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "quick-show-log" && entry) {
