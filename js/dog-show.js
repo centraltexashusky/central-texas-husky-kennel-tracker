@@ -112,6 +112,10 @@ function dogShowNameWithBreed(entry = {}) {
   return [dogShowEntryName(entry), dogShowBreed(entry)].filter(Boolean).join(" - ");
 }
 
+function dogShowCalendarRingTitle(entry = {}, schedule = {}) {
+  return `Ring ${schedule.ringNumber || "--"} - ${dogShowBreed(entry) || "Breed not listed"}`;
+}
+
 function dogShowTaskColor(task = {}) {
   return task.color || DOG_SHOW_TASK_COLORS[task.taskType] || DOG_SHOW_TASK_COLORS.General;
 }
@@ -124,7 +128,7 @@ function dogShowTaskColorStyle(task = {}) {
   const red = (value >> 16) & 255;
   const green = (value >> 8) & 255;
   const blue = value & 255;
-  return `--task-color:${color};--task-tint:rgba(${red},${green},${blue},0.2);--task-border:rgba(${red},${green},${blue},0.78)`;
+  return `--task-color:${color};--task-tint:rgba(${red},${green},${blue},0.3);--task-border:rgba(${red},${green},${blue},0.82)`;
 }
 
 function dogShowDateTimeInputValue(value) {
@@ -440,14 +444,13 @@ function dogShowCalendarHtml(event) {
       const key = schedule.ringDate || event.startDate;
       if (!allDayByDate.has(key)) return;
       const prep = dogShowPrepTimes(entry, schedule);
-      const ringLabel = schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring number needed";
-      const breedLabel = dogShowBreed(entry) || "Breed not listed";
+      const calendarTitle = dogShowCalendarRingTitle(entry, schedule);
       if (!prep.start) {
-        allDayByDate.get(key).push({ kind: "unscheduled", title: `Prep · ${dogShowEntryName(entry)}`, meta: `${breedLabel} · ${ringLabel} · Ring time needed`, action: "open-show-dog", id: entry.id });
+        allDayByDate.get(key).push({ kind: "unscheduled", title: calendarTitle, meta: `${dogShowEntryName(entry)} · ${schedule.classEntered || "Class not listed"} · Ring time needed`, action: "open-show-dog", id: entry.id });
         return;
       }
       if (dogShowPrepTaskFor(entry, schedule, event)) return;
-      timedActivities.push({ date: dogShowDateKey(prep.start), time: prep.start, duration: Math.max(30, Number(schedule.prepMinutes || 45)), kind: "show", title: `Prep · ${dogShowEntryName(entry)}`, meta: `${breedLabel} · ${ringLabel} · Ready ${dogShowFormatTime(prep.ready)} · Ring ${dogShowFormatTime(prep.ring)}`, action: "open-show-prep", id: entry.id, scheduleId: schedule.id, entry });
+      timedActivities.push({ date: dogShowDateKey(prep.start), time: prep.start, duration: Math.max(30, Number(schedule.prepMinutes || 45)), kind: "show", title: calendarTitle, meta: `${dogShowEntryName(entry)} · Ready ${dogShowFormatTime(prep.ready)} · Ring ${dogShowFormatTime(prep.ring)}`, action: "open-show-prep", id: entry.id, scheduleId: schedule.id, entry });
     });
   });
   tasks.forEach((task) => {
@@ -457,10 +460,10 @@ function dogShowCalendarHtml(event) {
     const entry = dogShowCalendarTaskEntry(task, entries);
     const schedule = task.source === "auto-ring-prep" ? dogShowScheduleForPrepTask(task, entry) : null;
     const prep = schedule ? dogShowPrepTimes(entry, schedule) : null;
-    const title = schedule && entry ? `Prep · ${dogShowEntryName(entry)}` : task.title || "Show task";
+    const title = schedule && entry ? dogShowCalendarRingTitle(entry, schedule) : task.title || "Show task";
     const duration = schedule ? Math.max(30, Number(schedule.prepMinutes || 45)) : dogShowTaskDurationMinutes(task);
     const openMeta = schedule
-      ? `${schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring"} · Ready ${prep?.ready ? dogShowFormatTime(prep.ready) : "--"} · Ring ${prep?.ring ? dogShowFormatTime(prep.ring) : "--"}`
+      ? `${dogShowEntryName(entry)} · Ready ${prep?.ready ? dogShowFormatTime(prep.ready) : "--"} · Ring ${prep?.ring ? dogShowFormatTime(prep.ring) : "--"}`
       : `${duration} min · ${task.taskType || "Task"} · ${dogShowStaffLabel(task.assignedEmail)}`;
     timedActivities.push({ date: key, time: due, duration, kind: "task", title, meta: task.status === "Completed" ? `Completed by ${task.completedBy || "Staff"} · ${dogShowFormatDateTime(task.completedAt)}` : openMeta, action: "open-calendar-task", id: task.id, entry, task });
   });

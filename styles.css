@@ -11779,10 +11779,11 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .dog-show-calendar-event.is-task {
-  background: var(--task-tint, rgba(49, 95, 133, 0.2));
+  background: linear-gradient(90deg, var(--task-color) 0 8px, var(--task-tint, rgba(49, 95, 133, 0.3)) 8px 100%) !important;
   border-color: var(--task-border, rgba(49, 95, 133, 0.78));
   border-left-color: var(--task-color);
   cursor: grab;
+  padding-left: 13px;
 }
 
 .dog-show-calendar-event.is-task:active {
@@ -11794,7 +11795,7 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .dog-show-calendar-event.is-completed {
-  background: #EFFAF3;
+  background: linear-gradient(90deg, var(--task-color) 0 8px, #EFFAF3 8px 100%) !important;
   border: 2px solid #35A35F;
   box-shadow: inset 5px 0 0 var(--task-color);
   cursor: pointer;
@@ -11955,14 +11956,14 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .dog-show-schedule-row.is-social {
-  background: #F3FAF6;
-  border: 2px solid #86BFA5;
+  background: #FFFBEB;
+  border: 2px solid #E3B341;
   grid-template-columns: 88px 48px minmax(0, 1fr);
 }
 
 .dog-show-schedule-row.is-social:hover {
-  background: #EDF7F1;
-  border-color: #6EAE90;
+  background: #FFF7D6;
+  border-color: #C99218;
 }
 
 .dog-show-schedule-time,
