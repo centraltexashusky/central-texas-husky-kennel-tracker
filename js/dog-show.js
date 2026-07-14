@@ -847,14 +847,12 @@ function openDogShowPrepTask(entry = {}, schedule = {}) {
 
 function openDuplicateDogShowTask(task = {}) {
   if (!task.id) return;
-  const dueAt = new Date(task.dueAt || Date.now());
-  dueAt.setMinutes(dueAt.getMinutes() + DOG_SHOW_CALENDAR_SLOT_MINUTES);
   openDogShowTaskForm({
     title: task.title || "",
     taskType: task.taskType || "General",
     showEntryId: task.showEntryId || "",
     assignedEmail: task.assignedEmail || "",
-    dueAt: dogShowDateTimeInputValue(dueAt),
+    dueAt: task.dueAt || "",
     status: "Open",
     color: dogShowTaskColor(task),
     notes: task.notes || "",

@@ -35,7 +35,8 @@ const required = [
   ["js/dog-show.js", "DOG_SHOW_CALENDAR_SLOT_MINUTES = 15", "Show calendar does not use 15-minute intervals."],
   ["js/dog-show.js", "dogShowTaskColorStyle", "Show task colors are not converted into visible calendar tints."],
   ["js/dog-show.js", 'data-action="duplicate-show-task"', "Show tasks cannot be duplicated from the task dialog."],
-  ["js/dog-show.js", "openDuplicateDogShowTask", "Duplicate show tasks are not prefilled for a new time."],
+  ["js/dog-show.js", "openDuplicateDogShowTask", "Duplicate show tasks are not supported."],
+  ["js/dog-show.js", 'dueAt: task.dueAt || ""', "Duplicate show tasks do not preserve the original date and time."],
   ["js/dog-show.js", 'data-action="delete-show-task"', "The show task editor is missing a delete action."],
   ["js/dog-show.js", "removeDogShowTask", "Show tasks cannot be soft deleted."],
   ["js/dog-show.js", "currentRole() !== \"admin\"", "Admin-only dog show log removal is not enforced in the handler."],
@@ -74,6 +75,8 @@ for (const [path, needle, message] of required) {
   if (!read(path).includes(needle)) failures.push(message);
 }
 const dogShowSource = read("js/dog-show.js");
+const duplicateTaskSource = dogShowSource.slice(dogShowSource.indexOf("function openDuplicateDogShowTask"), dogShowSource.indexOf("async function saveDogShowRecord"));
+if (duplicateTaskSource.includes("setMinutes")) failures.push("Duplicate show tasks must not change the original date and time.");
 for (const [needle, message] of forbidden) {
   if (dogShowSource.includes(needle)) failures.push(message);
 }
