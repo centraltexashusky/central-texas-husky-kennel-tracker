@@ -134,6 +134,17 @@ function dogShowDateTimeInputValue(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function dogShowTaskDurationMinutes(task = {}, fallback = 60) {
+  const duration = Number(task.durationMinutes);
+  return Math.max(15, Math.min(720, Number.isFinite(duration) && duration > 0 ? duration : fallback));
+}
+
+function dogShowTaskEndAt(task = {}, fallback = 60) {
+  const start = new Date(task.dueAt || "");
+  if (Number.isNaN(start.getTime())) return null;
+  return new Date(start.getTime() + dogShowTaskDurationMinutes(task, fallback) * 60000);
+}
+
 function dogShowDateTime(date = "", time = "") {
   if (!date || !time) return null;
   const value = new Date(`${date}T${time}`);
@@ -447,10 +458,11 @@ function dogShowCalendarHtml(event) {
     const schedule = task.source === "auto-ring-prep" ? dogShowScheduleForPrepTask(task, entry) : null;
     const prep = schedule ? dogShowPrepTimes(entry, schedule) : null;
     const title = schedule && entry ? `Prep · ${dogShowEntryName(entry)}` : task.title || "Show task";
+    const duration = schedule ? Math.max(30, Number(schedule.prepMinutes || 45)) : dogShowTaskDurationMinutes(task);
     const openMeta = schedule
       ? `${schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring"} · Ready ${prep?.ready ? dogShowFormatTime(prep.ready) : "--"} · Ring ${prep?.ring ? dogShowFormatTime(prep.ring) : "--"}`
-      : `${task.taskType || "Task"} · ${dogShowStaffLabel(task.assignedEmail)}`;
-    timedActivities.push({ date: key, time: due, duration: schedule ? Math.max(30, Number(schedule.prepMinutes || 45)) : 60, kind: "task", title, meta: task.status === "Completed" ? `Completed by ${task.completedBy || "Staff"} · ${dogShowFormatDateTime(task.completedAt)}` : openMeta, action: "open-calendar-task", id: task.id, entry, task });
+      : `${duration} min · ${task.taskType || "Task"} · ${dogShowStaffLabel(task.assignedEmail)}`;
+    timedActivities.push({ date: key, time: due, duration, kind: "task", title, meta: task.status === "Completed" ? `Completed by ${task.completedBy || "Staff"} · ${dogShowFormatDateTime(task.completedAt)}` : openMeta, action: "open-calendar-task", id: task.id, entry, task });
   });
   timedActivities.forEach((activity) => {
     const minutes = activity.time.getHours() * 60 + activity.time.getMinutes();
@@ -499,7 +511,7 @@ function dogShowCalendarHtml(event) {
   }).join("")).join("");
   const activityCards = timedActivities.map((activity) => {
     const dayIndex = days.findIndex((date) => dogShowDateKey(date) === activity.date);
-    const span = Math.max(2, Math.ceil(activity.duration / DOG_SHOW_CALENDAR_SLOT_MINUTES));
+    const span = Math.max(1, Math.min(slotCount - activity.slot, Math.ceil(activity.duration / DOG_SHOW_CALENDAR_SLOT_MINUTES)));
     const completed = activity.task?.status === "Completed";
     const photo = activity.entry ? dogShowPhotoHtml(activity.entry, "dog-show-calendar-photo") : "";
     return `<button type="button" class="dog-show-calendar-event is-${activity.kind}${completed ? " is-completed" : ""}" data-action="${activity.action}" data-id="${escapeHtml(activity.id)}"${activity.scheduleId ? ` data-ring-schedule-id="${escapeHtml(activity.scheduleId)}"` : ""}${activity.kind === "task" && !completed ? ` draggable="true" data-calendar-task-id="${escapeHtml(activity.id)}"` : ""} style="grid-column:${dayIndex + 2};grid-row:${activity.slot + 3}/span ${span};--lane-count:${activity.laneCount};--lane-index:${activity.laneIndex};${activity.task ? dogShowTaskColorStyle(activity.task) : "--task-color:#315F85"}">${completed ? '<span class="dog-show-calendar-check" aria-hidden="true">✓</span>' : ""}${photo}<span class="dog-show-calendar-event-copy"><span>${escapeHtml(dogShowFormatTime(activity.time))}</span><strong>${escapeHtml(activity.title)}</strong><small>${escapeHtml(activity.meta)}</small></span></button>`;
@@ -557,9 +569,11 @@ function dogShowTasksHtml(event) {
     <div class="dog-show-task-batch"><label><input type="checkbox" data-action="select-visible-show-tasks" /> Select visible</label><button type="button" class="secondary-button" data-action="complete-selected-show-tasks"${dogShowSelectedTaskIds.size ? "" : " disabled"}>Complete selected (${dogShowSelectedTaskIds.size})</button></div>
     <div class="dog-show-task-list">${tasks.length ? tasks.map((task) => {
       const entry = dogShowEntries(event).find((item) => item.id === task.showEntryId);
+      const schedule = task.source === "auto-ring-prep" ? dogShowScheduleForPrepTask(task, entry) : null;
+      const duration = dogShowTaskDurationMinutes(task, schedule ? Math.max(30, Number(schedule.prepMinutes || 45)) : 60);
       return `<article class="dog-show-task-row${task.status === "Completed" ? " is-complete" : ""}">
         <input type="checkbox" data-show-task-select="${escapeHtml(task.id)}" aria-label="Select ${escapeHtml(task.title || "task")}"${dogShowSelectedTaskIds.has(task.id) ? " checked" : ""}${task.status === "Completed" ? " disabled" : ""}/>
-        <button type="button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}"><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>${task.status === "Completed" ? `Completed by ${escapeHtml(task.completedBy || "Staff")} · ${dogShowFormatDateTime(task.completedAt)}` : `Due ${dogShowFormatDateTime(task.dueAt)}`}</small></button>
+        <button type="button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}"><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", `${duration} min`, dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>${task.status === "Completed" ? `Completed by ${escapeHtml(task.completedBy || "Staff")} · ${dogShowFormatDateTime(task.completedAt)}` : `Due ${dogShowFormatDateTime(task.dueAt)}`}</small></button>
         ${task.status === "Completed" ? `<span class="dog-show-task-done">Done</span>` : `<button type="button" class="secondary-button dog-show-complete-button" data-action="complete-show-task" data-id="${escapeHtml(task.id)}">Complete</button>`}
       </article>`;
     }).join("") : dogShowRenderEmpty("No tasks in this view", "Add a team task or create a water round for every dog.", "new-show-task", "New Task")}</div>
@@ -823,6 +837,7 @@ function openDogShowTaskForm(task = {}) {
       <label>Dog<select name="showEntryId"><option value="">Team task</option>${entries.map((entry) => `<option value="${escapeHtml(entry.id)}"${entry.id === task.showEntryId ? " selected" : ""}>${escapeHtml(dogShowEntryName(entry))}</option>`).join("")}</select></label>
       <label>Assigned to<select name="assignedEmail">${dogShowStaffOptions(task.assignedEmail || currentUser?.email || "")}</select></label>
       <label>Due date / time<input type="datetime-local" name="dueAt" step="900" value="${escapeHtml(dogShowDateTimeInputValue(task.dueAt || new Date(Date.now() + 30 * 60000)))}" required/></label>
+      <label>Duration (minutes)<input type="number" name="durationMinutes" min="15" max="720" step="15" value="${dogShowTaskDurationMinutes(task)}" required/></label>
       <label>Status<select name="status"><option${task.status !== "Completed" ? " selected" : ""}>Open</option><option${task.status === "Completed" ? " selected" : ""}>Completed</option></select></label>
       <label class="dog-show-task-color-field">Task color<span><input type="color" name="color" value="${escapeHtml(color)}" aria-label="Task color"/><output>${escapeHtml(color.toUpperCase())}</output></span></label>
     </div>
@@ -835,7 +850,10 @@ function openDogShowCalendarTask(task = {}) {
   if (!task.id) return;
   const entry = dogShowCalendarTaskEntry(task);
   const completed = task.status === "Completed";
-  openDogShowDialog(task.title || "Show Task", `<div class="dog-show-calendar-task-detail" style="${dogShowTaskColorStyle(task)}">${entry ? dogShowPhotoHtml(entry, "dog-show-detail-photo") : ""}<div><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>Scheduled ${escapeHtml(dogShowFormatDateTime(task.dueAt))}</small>${completed ? `<p class="dog-show-task-completion">✓ Completed by ${escapeHtml(task.completedBy || "Staff")} · ${escapeHtml(dogShowFormatDateTime(task.completedAt))}</p>` : ""}</div></div><div class="button-row">${completed ? "" : `<button type="button" data-action="complete-show-task" data-id="${escapeHtml(task.id)}">Complete Task</button>`}<button type="button" class="secondary-button" data-action="duplicate-show-task" data-id="${escapeHtml(task.id)}">Duplicate</button><button type="button" class="secondary-button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}">Edit Task</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>`);
+  const schedule = task.source === "auto-ring-prep" ? dogShowScheduleForPrepTask(task, entry) : null;
+  const duration = dogShowTaskDurationMinutes(task, schedule ? Math.max(30, Number(schedule.prepMinutes || 45)) : 60);
+  const endAt = dogShowTaskEndAt(task, duration);
+  openDogShowDialog(task.title || "Show Task", `<div class="dog-show-calendar-task-detail" style="${dogShowTaskColorStyle(task)}">${entry ? dogShowPhotoHtml(entry, "dog-show-detail-photo") : ""}<div><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>Scheduled ${escapeHtml(dogShowFormatDateTime(task.dueAt))}${endAt ? ` - ${escapeHtml(dogShowFormatTime(endAt))}` : ""} · ${duration} min</small>${completed ? `<p class="dog-show-task-completion">✓ Completed by ${escapeHtml(task.completedBy || "Staff")} · ${escapeHtml(dogShowFormatDateTime(task.completedAt))}</p>` : ""}</div></div><div class="button-row">${completed ? "" : `<button type="button" data-action="complete-show-task" data-id="${escapeHtml(task.id)}">Complete Task</button>`}<button type="button" class="secondary-button" data-action="duplicate-show-task" data-id="${escapeHtml(task.id)}">Duplicate</button><button type="button" class="secondary-button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}">Edit Task</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>`);
 }
 
 function openDogShowPrepTask(entry = {}, schedule = {}) {
@@ -853,6 +871,7 @@ function openDuplicateDogShowTask(task = {}) {
     showEntryId: task.showEntryId || "",
     assignedEmail: task.assignedEmail || "",
     dueAt: task.dueAt || "",
+    durationMinutes: dogShowTaskDurationMinutes(task),
     status: "Open",
     color: dogShowTaskColor(task),
     notes: task.notes || "",
@@ -920,6 +939,7 @@ async function syncDogShowPrepTask(entry) {
       title: `Ring prep: ${dogShowEntryName(entry)}${schedule.ringNumber ? ` - Ring ${schedule.ringNumber}` : ""}`,
       taskType: "Ring Prep",
       dueAt: prep.start.toISOString(),
+      durationMinutes: Math.max(30, Number(schedule.prepMinutes || 45)),
       assignedEmail: entry.helperEmail || entry.handlerEmail || "",
       status: existing?.status === "Completed" ? "Completed" : "Open",
       source: "auto-ring-prep",
@@ -997,7 +1017,7 @@ async function saveDogShowTask(form) {
   const data = formPayload(form);
   const entry = dogShowEntries().find((item) => item.id === data.showEntryId);
   const completed = data.status === "Completed";
-  await saveDogShowRecord("showDayTask", { ...existing, ...data, id: existing.id || uid("showDayTask"), showEventId: dogShowActiveEvent()?.id || "", dogId: entry?.dogId || "", dogType: entry?.dogType || "", dueAt: new Date(data.dueAt).toISOString(), color: data.color || dogShowTaskColor({ ...existing, taskType: data.taskType }), completedAt: completed ? existing.completedAt || new Date().toISOString() : "", completedBy: completed ? existing.completedBy || currentUser?.name || "Staff" : "", completedEmail: completed ? existing.completedEmail || currentUser?.email || "" : "", submittedAt: existing.submittedAt || new Date().toISOString(), helperEmail: currentUser?.email || "" });
+  await saveDogShowRecord("showDayTask", { ...existing, ...data, id: existing.id || uid("showDayTask"), showEventId: dogShowActiveEvent()?.id || "", dogId: entry?.dogId || "", dogType: entry?.dogType || "", dueAt: new Date(data.dueAt).toISOString(), durationMinutes: dogShowTaskDurationMinutes(data), color: data.color || dogShowTaskColor({ ...existing, taskType: data.taskType }), completedAt: completed ? existing.completedAt || new Date().toISOString() : "", completedBy: completed ? existing.completedBy || currentUser?.name || "Staff" : "", completedEmail: completed ? existing.completedEmail || currentUser?.email || "" : "", submittedAt: existing.submittedAt || new Date().toISOString(), helperEmail: currentUser?.email || "" });
   document.getElementById("dogShowDialog")?.close();
   renderDogShow();
   showToast("Show task saved.");

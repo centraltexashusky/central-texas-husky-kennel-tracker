@@ -40,12 +40,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260714-dog-show-duplicate-time",
+    includes: "20260714-dog-show-task-duration",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260714-dog-show-duplicate-time",
+    includes: "20260714-dog-show-task-duration",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

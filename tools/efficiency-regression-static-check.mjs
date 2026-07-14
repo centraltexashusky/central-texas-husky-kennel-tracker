@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260714-dog-show-duplicate-time",
+    mustInclude: "20260714-dog-show-task-duration",
     message: "production cache keys must be bumped.",
   },
   {
