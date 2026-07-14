@@ -40,12 +40,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260714-dog-show-packing-remove",
+    includes: "20260714-dog-show-mobile-dialog",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260714-dog-show-packing-remove",
+    includes: "20260714-dog-show-mobile-dialog",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];
