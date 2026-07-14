@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260714-dog-show-calendar-colors",
+    mustInclude: "20260714-dog-show-date-groups",
     message: "production cache keys must be bumped.",
   },
   {

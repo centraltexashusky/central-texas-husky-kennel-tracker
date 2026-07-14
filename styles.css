@@ -11357,6 +11357,42 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   gap: 8px;
 }
 
+.dog-show-schedule-groups,
+.dog-show-schedule-day {
+  display: grid;
+}
+
+.dog-show-schedule-groups {
+  gap: 18px;
+}
+
+.dog-show-schedule-day {
+  gap: 8px;
+}
+
+.dog-show-schedule-day-header {
+  align-items: center;
+  border-bottom: 2px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 2px 7px;
+}
+
+.dog-show-schedule-day-header strong {
+  color: var(--ink);
+  font-size: 0.94rem;
+}
+
+.dog-show-schedule-day-header span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.dog-show-schedule-day.is-social-group .dog-show-schedule-day-header {
+  border-bottom-color: #E3B341;
+}
+
 .dog-show-dog-row {
   align-items: center;
   appearance: none;
@@ -11788,6 +11824,10 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 .dog-show-calendar-event.is-task:active {
   cursor: grabbing;
+}
+
+.dog-show-calendar-event.is-fallback-prep {
+  cursor: pointer;
 }
 
 .dog-show-calendar-event.is-dragging {
