@@ -11358,19 +11358,25 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .dog-show-schedule-groups,
-.dog-show-schedule-day {
+.dog-show-schedule-day,
+.dog-show-task-groups,
+.dog-show-task-day {
   display: grid;
+  min-width: 0;
 }
 
-.dog-show-schedule-groups {
+.dog-show-schedule-groups,
+.dog-show-task-groups {
   gap: 18px;
 }
 
-.dog-show-schedule-day {
+.dog-show-schedule-day,
+.dog-show-task-day {
   gap: 8px;
 }
 
-.dog-show-schedule-day-header {
+.dog-show-schedule-day-header,
+.dog-show-task-day-header {
   align-items: center;
   border-bottom: 2px solid var(--line);
   display: flex;
@@ -11378,12 +11384,14 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   padding: 0 2px 7px;
 }
 
-.dog-show-schedule-day-header strong {
+.dog-show-schedule-day-header strong,
+.dog-show-task-day-header strong {
   color: var(--ink);
   font-size: 0.94rem;
 }
 
-.dog-show-schedule-day-header span {
+.dog-show-schedule-day-header span,
+.dog-show-task-day-header span {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 800;
@@ -11599,6 +11607,9 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: var(--shadow);
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
   padding: 14px;
 }
 
@@ -11687,7 +11698,12 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-calendar-board {
   border: 1px solid var(--line);
   border-radius: 8px;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
+  width: 100%;
 }
 
 .dog-show-calendar-timeline {
@@ -11965,6 +11981,9 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   gap: 12px;
   grid-template-columns: 88px 48px minmax(0, 1fr) 66px;
   min-height: 82px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 11px;
   text-align: left;
   width: 100%;
@@ -12753,21 +12772,39 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   }
 
   .dog-show-schedule-row {
-    gap: 8px;
-    grid-template-columns: 68px 42px minmax(0, 1fr) 48px;
-    padding: 9px;
+    gap: 6px;
+    grid-template-columns: 60px 38px minmax(0, 1fr) 42px;
+    padding: 8px;
   }
 
   .dog-show-schedule-row.is-social {
-    grid-template-columns: 68px 42px minmax(0, 1fr);
+    grid-template-columns: 60px 38px minmax(0, 1fr);
   }
 
   .dog-show-schedule-photo {
-    height: 42px;
-    width: 42px;
+    height: 38px;
+    width: 38px;
   }
 
-  .dog-show-calendar-panel { padding: 10px; }
+  .dog-show-schedule-main small {
+    overflow-wrap: anywhere;
+  }
+
+  .dog-show-time-line {
+    flex-wrap: wrap;
+  }
+
+  .dog-show-calendar-panel { max-width: 100%; min-width: 0; padding: 10px; }
+  .dog-show-calendar-board {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: scroll;
+    padding-bottom: 8px;
+    scrollbar-color: #7EA2C0 #E6EEEA;
+    scrollbar-width: auto;
+  }
+  .dog-show-calendar-board::-webkit-scrollbar { height: 9px; }
+  .dog-show-calendar-board::-webkit-scrollbar-track { background: #E6EEEA; border-radius: 6px; }
+  .dog-show-calendar-board::-webkit-scrollbar-thumb { background: #7EA2C0; border: 2px solid #E6EEEA; border-radius: 6px; }
   .dog-show-calendar-toolbar { align-items: stretch; flex-direction: column; }
   .dog-show-calendar-toolbar > div:last-child { justify-content: space-between; }
   .dog-show-calendar-range { max-width: 62%; }
