@@ -11955,13 +11955,14 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .dog-show-schedule-row.is-social {
-  background: #F4FAF7;
-  border-color: #B9DCC9;
+  background: #F3FAF6;
+  border: 2px solid #86BFA5;
+  grid-template-columns: 88px 48px minmax(0, 1fr);
 }
 
 .dog-show-schedule-row.is-social:hover {
-  background: #ECF7F0;
-  border-color: #9CCBB2;
+  background: #EDF7F1;
+  border-color: #6EAE90;
 }
 
 .dog-show-schedule-time,
@@ -12145,14 +12146,17 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-remove-packing {
   align-items: center;
   appearance: none;
-  background: #FFF1EF;
-  border: 1px solid #E7A69D;
-  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   color: #C2413A;
   display: flex;
-  font-size: 1.2rem;
+  font-size: 1rem;
+  font-weight: 400;
   height: 28px;
   justify-content: center;
+  line-height: 1;
   margin: 0;
   padding: 0;
   position: absolute;
@@ -12164,9 +12168,9 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 .dog-show-remove-packing:hover,
 .dog-show-remove-packing:focus-visible {
-  background: #FFF3F0;
-  border-color: #E9B6AA;
-  color: #A8312C;
+  background: transparent;
+  border: 0;
+  color: #9F2D28;
 }
 
 .dog-show-more-backdrop,
@@ -12388,13 +12392,41 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   border-left: 3px solid var(--gold);
   display: grid;
   gap: 2px;
-  padding: 3px 0 3px 10px;
+  padding: 3px 34px 3px 10px;
+  position: relative;
 }
 
 .dog-show-log-timeline span,
 .dog-show-log-timeline small {
   color: var(--muted);
   font-size: 0.73rem;
+}
+
+.dog-show-remove-log {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: #C2413A;
+  display: inline-flex;
+  font-size: 0.95rem;
+  font-weight: 400;
+  height: 26px;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0;
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+}
+
+.dog-show-remove-log:hover,
+.dog-show-remove-log:focus-visible {
+  background: transparent;
+  color: #9F2D28;
 }
 
 .dog-show-check-grid {
@@ -12683,6 +12715,10 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
     gap: 8px;
     grid-template-columns: 68px 42px minmax(0, 1fr) 48px;
     padding: 9px;
+  }
+
+  .dog-show-schedule-row.is-social {
+    grid-template-columns: 68px 42px minmax(0, 1fr);
   }
 
   .dog-show-schedule-photo {

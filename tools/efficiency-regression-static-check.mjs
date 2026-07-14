@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260714-dog-show-15-minute-tasks",
+    mustInclude: "20260714-dog-show-operations",
     message: "production cache keys must be bumped.",
   },
   {

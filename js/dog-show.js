@@ -188,6 +188,12 @@ function dogShowFormatDate(value = "") {
   return date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 }
 
+function dogShowFormatMonthDay(value = "") {
+  const date = value ? new Date(`${value}T12:00:00`) : null;
+  if (!date || Number.isNaN(date.getTime())) return "--/--";
+  return `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function dogShowFormatDateTime(value = "") {
   const date = new Date(value || 0);
   if (Number.isNaN(date.getTime())) return "No log";
@@ -227,7 +233,10 @@ function dogShowStaffOptions(selected = "", includeBlank = true) {
 function dogShowEventOptions(active = dogShowActiveEvent()) {
   const events = dogShowEvents();
   if (!events.length) return `<option value="">No shows yet</option>`;
-  return events.map((event) => `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(event.name || "Untitled Show")}${event.status === "Completed" ? " - Completed" : ""}</option>`).join("");
+  return events.map((event) => {
+    const weekend = `${dogShowFormatMonthDay(event.startDate)} - ${dogShowFormatMonthDay(event.endDate || event.startDate)}`;
+    return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${event.name || "Untitled Show"} · ${weekend}`)}${event.status === "Completed" ? " - Completed" : ""}</option>`;
+  }).join("");
 }
 
 function dogShowAvatarText(name = "Dog") {
@@ -384,11 +393,24 @@ function dogShowCalendarTaskEntry(task = {}, entries = dogShowEntries()) {
   return entries.find((entry) => entry.id === task.showEntryId || (entry.dogId === task.dogId && entry.dogType === task.dogType)) || null;
 }
 
+function dogShowPrepTaskFor(entry = {}, schedule = {}, event = dogShowActiveEvent()) {
+  const tasks = dogShowTasks(event).filter((task) => task.source === "auto-ring-prep" && task.showEntryId === entry.id);
+  return tasks.find((task) => task.ringScheduleId === schedule.id)
+    || (dogShowRingSchedules(entry)[0]?.id === schedule.id ? tasks.find((task) => !task.ringScheduleId) : null)
+    || null;
+}
+
+function dogShowScheduleForPrepTask(task = {}, entry = dogShowCalendarTaskEntry(task)) {
+  if (!entry) return null;
+  const schedules = dogShowRingSchedules(entry || {});
+  return schedules.find((schedule) => schedule.id === task.ringScheduleId) || schedules[0] || null;
+}
+
 function dogShowCalendarHtml(event) {
   const days = dogShowCalendarDays(event);
   const eventDays = dogShowShowDays(event);
   const entries = dogShowEntries(event);
-  const tasks = dogShowTasks(event).filter((task) => task.source !== "auto-ring-prep");
+  const tasks = dogShowTasks(event);
   const startHour = 6;
   const endHour = 22;
   const slotsPerHour = 60 / DOG_SHOW_CALENDAR_SLOT_MINUTES;
@@ -413,7 +435,8 @@ function dogShowCalendarHtml(event) {
         allDayByDate.get(key).push({ kind: "unscheduled", title: `Prep · ${dogShowEntryName(entry)}`, meta: `${breedLabel} · ${ringLabel} · Ring time needed`, action: "open-show-dog", id: entry.id });
         return;
       }
-      timedActivities.push({ date: dogShowDateKey(prep.start), time: prep.start, duration: Math.max(30, Number(schedule.prepMinutes || 45)), kind: "show", title: `Prep · ${dogShowEntryName(entry)}`, meta: `${breedLabel} · ${ringLabel} · ${schedule.classEntered || "Class not listed"} · Ring ${dogShowFormatTime(prep.ring)}`, action: "open-show-dog", id: entry.id, entry });
+      if (dogShowPrepTaskFor(entry, schedule, event)) return;
+      timedActivities.push({ date: dogShowDateKey(prep.start), time: prep.start, duration: Math.max(30, Number(schedule.prepMinutes || 45)), kind: "show", title: `Prep · ${dogShowEntryName(entry)}`, meta: `${breedLabel} · ${ringLabel} · Ready ${dogShowFormatTime(prep.ready)} · Ring ${dogShowFormatTime(prep.ring)}`, action: "open-show-prep", id: entry.id, scheduleId: schedule.id, entry });
     });
   });
   tasks.forEach((task) => {
@@ -421,7 +444,13 @@ function dogShowCalendarHtml(event) {
     const key = dogShowDateKey(due);
     if (!allDayByDate.has(key) || Number.isNaN(due.getTime())) return;
     const entry = dogShowCalendarTaskEntry(task, entries);
-    timedActivities.push({ date: key, time: due, duration: 60, kind: "task", title: task.title || "Show task", meta: task.status === "Completed" ? `Completed by ${task.completedBy || "Staff"} · ${dogShowFormatDateTime(task.completedAt)}` : `${task.taskType || "Task"} · ${dogShowStaffLabel(task.assignedEmail)}`, action: "open-calendar-task", id: task.id, entry, task, color: dogShowTaskColor(task) });
+    const schedule = task.source === "auto-ring-prep" ? dogShowScheduleForPrepTask(task, entry) : null;
+    const prep = schedule ? dogShowPrepTimes(entry, schedule) : null;
+    const title = schedule && entry ? `Prep · ${dogShowEntryName(entry)}` : task.title || "Show task";
+    const openMeta = schedule
+      ? `${schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring"} · Ready ${prep?.ready ? dogShowFormatTime(prep.ready) : "--"} · Ring ${prep?.ring ? dogShowFormatTime(prep.ring) : "--"}`
+      : `${task.taskType || "Task"} · ${dogShowStaffLabel(task.assignedEmail)}`;
+    timedActivities.push({ date: key, time: due, duration: schedule ? Math.max(30, Number(schedule.prepMinutes || 45)) : 60, kind: "task", title, meta: task.status === "Completed" ? `Completed by ${task.completedBy || "Staff"} · ${dogShowFormatDateTime(task.completedAt)}` : openMeta, action: "open-calendar-task", id: task.id, entry, task });
   });
   timedActivities.forEach((activity) => {
     const minutes = activity.time.getHours() * 60 + activity.time.getMinutes();
@@ -473,7 +502,7 @@ function dogShowCalendarHtml(event) {
     const span = Math.max(2, Math.ceil(activity.duration / DOG_SHOW_CALENDAR_SLOT_MINUTES));
     const completed = activity.task?.status === "Completed";
     const photo = activity.entry ? dogShowPhotoHtml(activity.entry, "dog-show-calendar-photo") : "";
-    return `<button type="button" class="dog-show-calendar-event is-${activity.kind}${completed ? " is-completed" : ""}" data-action="${activity.action}" data-id="${escapeHtml(activity.id)}"${activity.kind === "task" && !completed ? ` draggable="true" data-calendar-task-id="${escapeHtml(activity.id)}"` : ""} style="grid-column:${dayIndex + 2};grid-row:${activity.slot + 3}/span ${span};--lane-count:${activity.laneCount};--lane-index:${activity.laneIndex};${activity.task ? dogShowTaskColorStyle(activity.task) : "--task-color:#315F85"}">${completed ? '<span class="dog-show-calendar-check" aria-hidden="true">✓</span>' : ""}${photo}<span class="dog-show-calendar-event-copy"><span>${escapeHtml(dogShowFormatTime(activity.time))}</span><strong>${escapeHtml(activity.title)}</strong><small>${escapeHtml(activity.meta)}</small></span></button>`;
+    return `<button type="button" class="dog-show-calendar-event is-${activity.kind}${completed ? " is-completed" : ""}" data-action="${activity.action}" data-id="${escapeHtml(activity.id)}"${activity.scheduleId ? ` data-ring-schedule-id="${escapeHtml(activity.scheduleId)}"` : ""}${activity.kind === "task" && !completed ? ` draggable="true" data-calendar-task-id="${escapeHtml(activity.id)}"` : ""} style="grid-column:${dayIndex + 2};grid-row:${activity.slot + 3}/span ${span};--lane-count:${activity.laneCount};--lane-index:${activity.laneIndex};${activity.task ? dogShowTaskColorStyle(activity.task) : "--task-color:#315F85"}">${completed ? '<span class="dog-show-calendar-check" aria-hidden="true">✓</span>' : ""}${photo}<span class="dog-show-calendar-event-copy"><span>${escapeHtml(dogShowFormatTime(activity.time))}</span><strong>${escapeHtml(activity.title)}</strong><small>${escapeHtml(activity.meta)}</small></span></button>`;
   }).join("");
   const selectedIndex = eventDays.findIndex((date) => dogShowDateKey(date) === dogShowCalendarDate);
   const defaultTaskDate = dogShowCalendarView === "day" ? dogShowCalendarDate : event.startDate || todayDate();
@@ -491,7 +520,7 @@ function dogShowScheduleHtml(event) {
   const rows = appearances.map(({ entry, schedule, prep }) => {
     const conflict = conflicts.has(entry.id);
     if (entry.attendanceRole !== "Showing") {
-      return `<button type="button" class="dog-show-schedule-row is-social" data-action="edit-show-entry" data-id="${escapeHtml(entry.id)}"><span class="dog-show-schedule-time">Flexible</span>${dogShowPhotoHtml(entry, "dog-show-schedule-photo")}<span class="dog-show-schedule-main"><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><small>Socialization<br>${escapeHtml(dogShowStaffLabel(entry.helperEmail || entry.handlerEmail))}</small></span><span class="dog-show-role-chip">Social</span></button>`;
+      return `<button type="button" class="dog-show-schedule-row is-social" data-action="edit-show-entry" data-id="${escapeHtml(entry.id)}"><span class="dog-show-schedule-time">Social</span>${dogShowPhotoHtml(entry, "dog-show-schedule-photo")}<span class="dog-show-schedule-main"><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><small>Socialization<br>${escapeHtml(dogShowStaffLabel(entry.helperEmail || entry.handlerEmail))}</small></span></button>`;
     }
     return `<button type="button" class="dog-show-schedule-row${conflict ? " has-conflict" : ""}" data-action="edit-show-entry" data-id="${escapeHtml(entry.id)}">
       <span class="dog-show-schedule-time"><strong>${prep.start ? dogShowFormatTime(prep.start) : "--"}</strong><small>Prep start</small></span>
@@ -734,6 +763,7 @@ function openDogShowEntryForm(entry = {}) {
   const savedSchedules = dogShowRingSchedules(entry);
   const ringSchedules = savedSchedules.length ? savedSchedules : [{ id: uid("showRing"), ringDate: event?.startDate || todayDate(), prepMinutes: Number(entry.prepMinutes ?? 45), readyBufferMinutes: Number(entry.readyBufferMinutes ?? 15) }];
   const logs = dogShowLogs(event).filter((log) => log.showEntryId === entry.id).sort((a, b) => new Date(b.loggedAt || 0) - new Date(a.loggedAt || 0)).slice(0, 10);
+  const canRemoveLogs = currentRole() === "admin";
   const result = dogShowResultForEntry(entry, event);
   openDogShowDialog(dogShowEntryName(entry), `<div class="dog-show-detail-header">${dogShowPhotoHtml(entry, "dog-show-detail-photo")}<div><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><span>${escapeHtml([entry.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog", entry.attendanceRole, savedSchedules.length ? `${savedSchedules.length} ring appearance${savedSchedules.length === 1 ? "" : "s"}` : "Ring schedule needed"].filter(Boolean).join(" · "))}</span><small>Last attended: ${escapeHtml(dogShowLastLog(entry) ? dogShowFormatDateTime(dogShowLastLog(entry).loggedAt) : "No log")}</small></div></div>
     <section class="dog-show-dialog-section"><h3>Quick Log</h3><div class="dog-show-quick-grid">
@@ -755,7 +785,7 @@ function openDogShowEntryForm(entry = {}) {
       <label>Show notes<textarea name="notes" rows="2">${escapeHtml(entry.notes || "")}</textarea></label>
       <div class="button-row"><button type="submit">Save Dog</button><button type="button" class="secondary-button" data-action="remove-show-entry" data-id="${escapeHtml(entry.id)}">Remove From Show</button></div>
     </form>
-    <section class="dog-show-dialog-section"><h3>Show Timeline</h3><div class="dog-show-log-timeline">${logs.length ? logs.map((log) => `<article><strong>${escapeHtml(log.activityType || "Care")}</strong><span>${escapeHtml(log.note || "Logged")}</span><small>${escapeHtml(dogShowFormatDateTime(log.loggedAt || log.updatedAt))} · ${escapeHtml(log.helperName || dogShowStaffLabel(log.helperEmail))}${log.customerVisible ? " · Owner visible" : ""}</small></article>`).join("") : "<p>No show care logged yet.</p>"}</div></section>`);
+    <section class="dog-show-dialog-section"><h3>Show Timeline</h3><div class="dog-show-log-timeline">${logs.length ? logs.map((log) => `<article><strong>${escapeHtml(log.activityType || "Care")}</strong><span>${escapeHtml(log.note || "Logged")}</span><small>${escapeHtml(dogShowFormatDateTime(log.loggedAt || log.updatedAt))} · ${escapeHtml(log.helperName || dogShowStaffLabel(log.helperEmail))}${log.customerVisible ? " · Owner visible" : ""}</small>${canRemoveLogs ? `<button type="button" class="dog-show-remove-log" data-action="remove-show-log" data-id="${escapeHtml(log.id)}" data-entry-id="${escapeHtml(entry.id)}" aria-label="Remove ${escapeHtml(log.activityType || "care")} log" title="Remove logged item">×</button>` : ""}</article>`).join("") : "<p>No show care logged yet.</p>"}</div></section>`);
 }
 
 function openDogShowNoteForm(entry, logType) {
@@ -797,7 +827,7 @@ function openDogShowTaskForm(task = {}) {
       <label class="dog-show-task-color-field">Task color<span><input type="color" name="color" value="${escapeHtml(color)}" aria-label="Task color"/><output>${escapeHtml(color.toUpperCase())}</output></span></label>
     </div>
     <label>Notes<textarea name="notes" rows="3">${escapeHtml(task.notes || "")}</textarea></label>
-    <div class="button-row"><button type="submit">Save Task</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+    <div class="button-row"><button type="submit">Save Task</button>${task.id ? `<button type="button" class="secondary-button danger-button" data-action="delete-show-task" data-id="${escapeHtml(task.id)}">Delete Task</button>` : ""}<button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
   </form>`);
 }
 
@@ -806,6 +836,13 @@ function openDogShowCalendarTask(task = {}) {
   const entry = dogShowCalendarTaskEntry(task);
   const completed = task.status === "Completed";
   openDogShowDialog(task.title || "Show Task", `<div class="dog-show-calendar-task-detail" style="${dogShowTaskColorStyle(task)}">${entry ? dogShowPhotoHtml(entry, "dog-show-detail-photo") : ""}<div><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>Scheduled ${escapeHtml(dogShowFormatDateTime(task.dueAt))}</small>${completed ? `<p class="dog-show-task-completion">✓ Completed by ${escapeHtml(task.completedBy || "Staff")} · ${escapeHtml(dogShowFormatDateTime(task.completedAt))}</p>` : ""}</div></div><div class="button-row">${completed ? "" : `<button type="button" data-action="complete-show-task" data-id="${escapeHtml(task.id)}">Complete Task</button>`}<button type="button" class="secondary-button" data-action="duplicate-show-task" data-id="${escapeHtml(task.id)}">Duplicate</button><button type="button" class="secondary-button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}">Edit Task</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>`);
+}
+
+function openDogShowPrepTask(entry = {}, schedule = {}) {
+  const existing = dogShowPrepTaskFor(entry, schedule);
+  if (existing) return openDogShowCalendarTask(existing);
+  const prep = dogShowPrepTimes(entry, schedule);
+  openDogShowDialog(`Prep: ${dogShowEntryName(entry)}`, `<div class="dog-show-calendar-task-detail" style="${dogShowTaskColorStyle({ taskType: "Ring Prep" })}">${dogShowPhotoHtml(entry, "dog-show-detail-photo")}<div><strong>${escapeHtml(`Prep · ${dogShowEntryName(entry)}`)}</strong><span>${escapeHtml([dogShowBreed(entry), schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring", schedule.classEntered].filter(Boolean).join(" · "))}</span><small>Ready ${prep.ready ? escapeHtml(dogShowFormatTime(prep.ready)) : "--"} · Ring ${prep.ring ? escapeHtml(dogShowFormatTime(prep.ring)) : "--"}</small></div></div><div class="button-row"><button type="button" data-action="complete-show-prep" data-id="${escapeHtml(entry.id)}" data-ring-schedule-id="${escapeHtml(schedule.id || "")}">Complete Prep</button><button type="button" class="secondary-button" data-action="open-show-dog" data-id="${escapeHtml(entry.id)}">Edit Dog Details</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>`);
 }
 
 function openDuplicateDogShowTask(task = {}) {
@@ -924,9 +961,9 @@ async function saveDogShowEntry(form) {
     helperEmailUpdatedBy: currentUser?.email || "",
   });
   await syncDogShowPrepTask(saved);
-  openDogShowEntryForm(saved);
+  document.getElementById("dogShowDialog")?.close();
   renderDogShow();
-  showToast("Dog show details saved.");
+  showToast(`${dogShowEntryName(saved)} updated and saved.`);
 }
 
 async function createDogShowLog(entry, activityType, note = "Logged", options = {}) {
@@ -966,6 +1003,42 @@ async function saveDogShowTask(form) {
   document.getElementById("dogShowDialog")?.close();
   renderDogShow();
   showToast("Show task saved.");
+}
+
+async function removeDogShowTask(id = "") {
+  const task = dogShowTasks().find((item) => item.id === id);
+  if (!task || !window.confirm(`Delete ${task.title || "this show task"}?`)) return;
+  const removed = await saveDogShowRecord("showDayTask", { ...task, removed: true, removedAt: new Date().toISOString(), removedBy: currentUser?.name || "Staff", removedEmail: currentUser?.email || "" });
+  dogShowSelectedTaskIds.delete(task.id);
+  if (typeof addAuditLog === "function") await addAuditLog("Deleted dog show task", "showDayTask", removed, task.title || "Show task");
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast("Show task deleted.");
+}
+
+async function removeDogShowLog(id = "", entryId = "") {
+  if (currentRole() !== "admin") return showToast("Admin access required to remove a logged item.");
+  const log = dogShowLogs().find((item) => item.id === id);
+  if (!log || !window.confirm(`Remove this ${log.activityType || "care"} log?`)) return;
+  const removed = await saveDogShowRecord("showCareLog", { ...log, removed: true, removedAt: new Date().toISOString(), removedBy: currentUser?.name || "Admin", removedEmail: currentUser?.email || "" });
+  if (typeof addAuditLog === "function") await addAuditLog("Removed dog show care log", "showCareLog", removed, `${log.dogName || "Dog"} · ${log.activityType || "Care"}`);
+  renderDogShow();
+  const entry = dogShowEntries().find((item) => item.id === (entryId || log.showEntryId));
+  if (entry) openDogShowEntryForm(entry);
+  else document.getElementById("dogShowDialog")?.close();
+  showToast("Logged item removed.");
+}
+
+async function completeDogShowPrep(entryId = "", scheduleId = "") {
+  const entry = dogShowEntries().find((item) => item.id === entryId);
+  if (!entry) return;
+  const schedule = dogShowRingSchedules(entry).find((item) => item.id === scheduleId);
+  if (!schedule) return showToast("Ring preparation schedule was not found.");
+  await syncDogShowPrepTask(entry);
+  const task = dogShowPrepTaskFor(entry, schedule);
+  if (!task) return showToast("Ring preparation task could not be created.");
+  await completeDogShowTasks([task.id]);
+  document.getElementById("dogShowDialog")?.close();
 }
 
 async function completeDogShowTasks(ids = []) {
@@ -1133,6 +1206,10 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "add-show-dogs") openDogShowAddDogsForm();
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "edit-show-entry" && entry) openDogShowEntryForm(entry);
+    if (action.dataset.action === "open-show-prep" && entry) {
+      const schedule = dogShowRingSchedules(entry).find((item) => item.id === action.dataset.ringScheduleId);
+      if (schedule) openDogShowPrepTask(entry, schedule);
+    }
     if (action.dataset.action === "new-show-task") openDogShowTaskForm({ dueAt: action.dataset.dueAt || "" });
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "open-calendar-task") openDogShowCalendarTask(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
@@ -1221,6 +1298,9 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "duplicate-show-task") openDuplicateDogShowTask(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
+    if (action.dataset.action === "delete-show-task") await removeDogShowTask(action.dataset.id);
+    if (action.dataset.action === "remove-show-log") await removeDogShowLog(action.dataset.id, action.dataset.entryId);
+    if (action.dataset.action === "complete-show-prep") await completeDogShowPrep(action.dataset.id, action.dataset.ringScheduleId);
     if (action.dataset.action === "complete-show-task") {
       await completeDogShowTasks([action.dataset.id]);
       dialog.close();
