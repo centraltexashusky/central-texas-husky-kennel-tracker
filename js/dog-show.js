@@ -340,16 +340,15 @@ function dogShowMoreHtml(event) {
   const packing = Array.isArray(event.packingItems) && event.packingItems.length ? event.packingItems : DOG_SHOW_DEFAULT_PACKING.map((label, index) => ({ id: `default-${index}`, label, completed: false }));
   const helperEmails = Array.isArray(event.helperEmails) ? event.helperEmails : [];
   return `<div class="dog-show-view dog-show-more-view">
-    <section class="dog-show-list-toolbar"><div><h3>Show Operations</h3><p>Setup, packing, helpers, results, and the return to kennel operations.</p></div></section>
+    <section class="dog-show-list-toolbar"><div><h3>Show Operations</h3><p>Setup, packing, helpers, and results.</p></div><button type="button" class="secondary-button" data-action="return-boarding-dashboard">Boarding Dashboard</button></section>
     <div class="dog-show-more-grid">
       <button type="button" data-action="edit-show-event"><span>S</span><strong>Show Setup</strong><small>Venue, dates, links, and notes</small></button>
       <button type="button" data-action="add-show-dogs"><span>D</span><strong>Add Dogs</strong><small>Our Dogs or Boarding Dogs</small></button>
       <button type="button" data-action="show-helper-summary"><span>H</span><strong>Helpers</strong><small>${helperEmails.length} assigned to this weekend</small></button>
       <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${results.length} of ${entries.filter((entry) => entry.attendanceRole === "Showing").length} showing dogs logged</small></button>
-      <button type="button" data-action="return-boarding-dashboard"><span>K</span><strong>Boarding Dashboard</strong><small>Return to kennel operations</small></button>
     </div>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Packing List</h3><p>${packing.filter((item) => item.completed).length} of ${packing.length} packed</p></div></div>
-      <div class="dog-show-packing-list">${packing.map((item) => `<label><input type="checkbox" data-packing-id="${escapeHtml(item.id)}"${item.completed ? " checked" : ""}/><span>${escapeHtml(item.label)}</span></label>`).join("")}</div>
+      <div class="dog-show-packing-list">${packing.map((item) => `<div class="dog-show-packing-item"><label><input type="checkbox" data-packing-id="${escapeHtml(item.id)}"${item.completed ? " checked" : ""}/><span>${escapeHtml(item.label)}</span></label><button type="button" class="dog-show-remove-packing" data-action="remove-packing-item" data-id="${escapeHtml(item.id)}" aria-label="Remove ${escapeHtml(item.label)}" title="Remove item">×</button></div>`).join("")}</div>
       <form id="dogShowPackingForm" class="dog-show-inline-form"><input type="text" name="label" placeholder="Add packing item" required/><button type="submit">Add</button></form>
     </section>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Weekend Helpers</h3><p>${helperEmails.length ? helperEmails.map(dogShowStaffLabel).join(" · ") : "No weekend helper list selected yet."}</p></div><button type="button" class="secondary-button" data-action="edit-show-event">Edit</button></div></section>
@@ -682,6 +681,14 @@ async function addDogShowPackingItem(form) {
   renderDogShow();
 }
 
+async function removeDogShowPackingItem(id) {
+  const event = dogShowActiveEvent();
+  if (!event || !window.confirm("Remove this packing item?")) return;
+  const items = (Array.isArray(event.packingItems) && event.packingItems.length ? event.packingItems : DOG_SHOW_DEFAULT_PACKING.map((label, index) => ({ id: `default-${index}`, label, completed: false }))).filter((item) => item.id !== id);
+  await saveDogShowRecord("showEvent", { ...event, packingItems: items });
+  renderDogShow();
+}
+
 function openDogShowHelperSummary() {
   const event = dogShowActiveEvent();
   const emails = Array.isArray(event?.helperEmails) ? event.helperEmails : [];
@@ -769,6 +776,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "create-water-round") await createDogShowWaterRound();
     if (action.dataset.action === "show-helper-summary") openDogShowHelperSummary();
     if (action.dataset.action === "show-result-summary") openDogShowResultSummary();
+    if (action.dataset.action === "remove-packing-item") await removeDogShowPackingItem(action.dataset.id);
     if (action.dataset.action === "return-boarding-dashboard") switchPage("dashboardPage", { history: "push" });
   });
 
