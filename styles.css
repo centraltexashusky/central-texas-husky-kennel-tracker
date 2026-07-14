@@ -12312,6 +12312,76 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   font-size: 0.76rem;
 }
 
+.dog-show-ring-schedules {
+  display: grid;
+  gap: 10px;
+}
+
+.dog-show-ring-schedules-toolbar,
+.dog-show-ring-schedule-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.dog-show-ring-schedules-toolbar h3,
+.dog-show-ring-schedules-toolbar p {
+  margin: 0;
+}
+
+.dog-show-ring-schedules-toolbar p,
+.dog-show-ring-schedule-heading small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+#dogShowRingScheduleRows {
+  display: grid;
+  gap: 10px;
+}
+
+.dog-show-ring-schedule-row {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.dog-show-ring-schedule-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dog-show-remove-ring {
+  align-items: center;
+  background: #FFF1F0;
+  border: 1px solid #E7A7A2;
+  border-radius: 6px;
+  color: #B42318;
+  display: inline-flex;
+  flex: 0 0 34px;
+  font-size: 1.2rem;
+  height: 34px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0;
+  width: 34px;
+}
+
+.dog-show-remove-ring:hover,
+.dog-show-remove-ring:focus-visible {
+  background: #FEE4E2;
+  border-color: #B42318;
+  color: #912018;
+}
+
+.dog-show-ring-schedule-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .dog-show-log-timeline article {
   border-left: 3px solid var(--gold);
   display: grid;
@@ -12656,6 +12726,15 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
   .dog-show-dialog .detail-dialog-body {
     max-height: calc(94vh - 70px);
+  }
+
+  .dog-show-ring-schedules-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dog-show-ring-schedules-toolbar button {
+    width: 100%;
   }
 }
 

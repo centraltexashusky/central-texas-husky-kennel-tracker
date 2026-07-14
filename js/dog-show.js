@@ -121,15 +121,37 @@ function dogShowDateTime(date = "", time = "") {
   return Number.isNaN(value.getTime()) ? null : value;
 }
 
-function dogShowRingDateTime(entry = {}) {
-  return dogShowDateTime(entry.ringDate, entry.ringTime);
+function dogShowRingSchedules(entry = {}) {
+  const stored = Array.isArray(entry.ringSchedules) ? entry.ringSchedules.filter((schedule) => schedule && !schedule.removed) : [];
+  const legacyExists = [entry.ringDate, entry.ringTime, entry.ringNumber, entry.classEntered].some(Boolean);
+  const source = stored.length ? stored : legacyExists ? [{
+    id: `${entry.id || "entry"}-ring-1`,
+    ringDate: entry.ringDate || "",
+    ringTime: entry.ringTime || "",
+    ringNumber: entry.ringNumber || "",
+    classEntered: entry.classEntered || "",
+    armbandNumber: entry.armbandNumber || "",
+    judge: entry.judge || "",
+    prepMinutes: entry.prepMinutes,
+    readyBufferMinutes: entry.readyBufferMinutes,
+  }] : [];
+  return source.map((schedule, index) => ({
+    ...schedule,
+    id: schedule.id || `${entry.id || "entry"}-ring-${index + 1}`,
+    prepMinutes: Number(schedule.prepMinutes ?? entry.prepMinutes ?? 45),
+    readyBufferMinutes: Number(schedule.readyBufferMinutes ?? entry.readyBufferMinutes ?? 15),
+  }));
 }
 
-function dogShowPrepTimes(entry = {}) {
-  const ring = dogShowRingDateTime(entry);
+function dogShowRingDateTime(entry = {}, schedule = dogShowRingSchedules(entry)[0] || {}) {
+  return dogShowDateTime(schedule.ringDate || entry.ringDate, schedule.ringTime || entry.ringTime);
+}
+
+function dogShowPrepTimes(entry = {}, schedule = dogShowRingSchedules(entry)[0] || {}) {
+  const ring = dogShowRingDateTime(entry, schedule);
   if (!ring) return { ring: null, ready: null, start: null };
-  const buffer = Math.max(0, Number(entry.readyBufferMinutes || 15));
-  const duration = Math.max(0, Number(entry.prepMinutes || 45));
+  const buffer = Math.max(0, Number(schedule.readyBufferMinutes ?? entry.readyBufferMinutes ?? 15));
+  const duration = Math.max(0, Number(schedule.prepMinutes ?? entry.prepMinutes ?? 45));
   const ready = new Date(ring.getTime() - buffer * 60000);
   const start = new Date(ready.getTime() - duration * 60000);
   return { ring, ready, start };
@@ -209,17 +231,17 @@ function dogShowResultForEntry(entry = {}, event = dogShowActiveEvent()) {
 
 function dogShowConflictEntryIds(entries = dogShowEntries()) {
   const conflicts = new Set();
-  const showing = entries.filter((entry) => entry.attendanceRole === "Showing" && dogShowRingDateTime(entry));
-  showing.forEach((left, index) => {
-    const leftTimes = dogShowPrepTimes(left);
-    const leftPeople = [left.handlerEmail, left.helperEmail].filter(Boolean).map(normalizeEmail);
-    showing.slice(index + 1).forEach((right) => {
-      const rightTimes = dogShowPrepTimes(right);
-      const sharedPerson = [right.handlerEmail, right.helperEmail].filter(Boolean).map(normalizeEmail).some((email) => leftPeople.includes(email));
+  const appearances = entries.filter((entry) => entry.attendanceRole === "Showing").flatMap((entry) => dogShowRingSchedules(entry).map((schedule) => ({ entry, schedule, times: dogShowPrepTimes(entry, schedule) })).filter((item) => item.times.ring));
+  appearances.forEach((left, index) => {
+    const leftPeople = [left.entry.handlerEmail, left.entry.helperEmail].filter(Boolean).map(normalizeEmail);
+    appearances.slice(index + 1).forEach((right) => {
+      const sharedPerson = [right.entry.handlerEmail, right.entry.helperEmail].filter(Boolean).map(normalizeEmail).some((email) => leftPeople.includes(email));
+      const leftTimes = left.times;
+      const rightTimes = right.times;
       const overlaps = leftTimes.start < rightTimes.ring && rightTimes.start < leftTimes.ring;
       if (sharedPerson && overlaps) {
-        conflicts.add(left.id);
-        conflicts.add(right.id);
+        conflicts.add(left.entry.id);
+        conflicts.add(right.entry.id);
       }
     });
   });
@@ -229,12 +251,13 @@ function dogShowConflictEntryIds(entries = dogShowEntries()) {
 function dogShowEntryRowHtml(entry = {}, options = {}) {
   const state = dogShowAttentionState(entry);
   const lastLog = dogShowLastLog(entry);
-  const prep = dogShowPrepTimes(entry);
+  const schedule = dogShowRingSchedules(entry)[0] || {};
+  const prep = dogShowPrepTimes(entry, schedule);
   const showing = entry.attendanceRole === "Showing";
   const timestamp = lastLog ? dogShowFormatTime(lastLog.loggedAt || lastLog.updatedAt) : "No log";
   const timestampTitle = lastLog ? dogShowFormatDateTime(lastLog.loggedAt || lastLog.updatedAt) : "No care has been logged at this show.";
   const meta = showing
-    ? [entry.dogType === "boardingDog" ? "Boarding" : "Our Dog", entry.ringNumber ? `Ring ${entry.ringNumber}` : "Ring missing", entry.ringTime ? dogShowFormatTime(prep.ring) : "Time missing", dogShowStaffLabel(entry.handlerEmail)].join(" · ")
+    ? [entry.dogType === "boardingDog" ? "Boarding" : "Our Dog", schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring missing", schedule.ringTime ? dogShowFormatTime(prep.ring) : "Time missing", dogShowRingSchedules(entry).length > 1 ? `${dogShowRingSchedules(entry).length} appearances` : "", dogShowStaffLabel(entry.handlerEmail)].filter(Boolean).join(" · ")
     : [entry.dogType === "boardingDog" ? "Boarding" : "Our Dog", "Socialization", dogShowStaffLabel(entry.helperEmail || entry.handlerEmail)].join(" · ");
   return `<button type="button" class="dog-show-dog-row is-${state}${options.conflict ? " has-conflict" : ""}" data-action="open-show-dog" data-id="${escapeHtml(entry.id)}">
     ${dogShowPhotoHtml(entry)}
@@ -255,10 +278,12 @@ function dogShowHomeHtml(event) {
   const needCare = entries.filter((entry) => dogShowAttentionState(entry) !== "current");
   const openTasks = tasks.filter((task) => task.status !== "Completed");
   const showing = entries.filter((entry) => entry.attendanceRole === "Showing");
-  const nextRing = showing.map((entry) => ({ entry, time: dogShowRingDateTime(entry) })).filter((item) => item.time && item.time >= new Date()).sort((a, b) => a.time - b.time)[0];
+  const nextRing = showing.flatMap((entry) => dogShowRingSchedules(entry).map((schedule) => ({ entry, schedule, time: dogShowRingDateTime(entry, schedule) }))).filter((item) => item.time && item.time >= new Date()).sort((a, b) => a.time - b.time)[0];
   const nextActions = [...entries].sort((a, b) => {
     const careDiff = ["missing", "stale", "current"].indexOf(dogShowAttentionState(a)) - ["missing", "stale", "current"].indexOf(dogShowAttentionState(b));
-    return careDiff || (dogShowPrepTimes(a).start?.getTime() || Infinity) - (dogShowPrepTimes(b).start?.getTime() || Infinity);
+    const aStart = dogShowRingSchedules(a).map((schedule) => dogShowPrepTimes(a, schedule).start?.getTime() || Infinity).sort((left, right) => left - right)[0] || Infinity;
+    const bStart = dogShowRingSchedules(b).map((schedule) => dogShowPrepTimes(b, schedule).start?.getTime() || Infinity).sort((left, right) => left - right)[0] || Infinity;
+    return careDiff || aStart - bStart;
   }).slice(0, 10);
   const coverage = new Map();
   entries.forEach((entry) => {
@@ -285,7 +310,8 @@ function dogShowDogsHtml(event) {
   const conflicts = dogShowConflictEntryIds();
   const entries = dogShowEntries(event).filter((entry) => {
     const query = dogShowDogQuery.toLowerCase();
-    const matchesQuery = !query || [dogShowEntryName(entry), entry.classEntered, entry.ringNumber, dogShowStaffLabel(entry.handlerEmail), dogShowStaffLabel(entry.helperEmail)].join(" ").toLowerCase().includes(query);
+    const scheduleSearch = dogShowRingSchedules(entry).flatMap((schedule) => [schedule.classEntered, schedule.ringNumber, schedule.ringDate, schedule.ringTime]);
+    const matchesQuery = !query || [dogShowEntryName(entry), dogShowBreed(entry), ...scheduleSearch, dogShowStaffLabel(entry.handlerEmail), dogShowStaffLabel(entry.helperEmail)].join(" ").toLowerCase().includes(query);
     const state = dogShowAttentionState(entry);
     const matchesFilter = dogShowDogFilter === "all"
       || (dogShowDogFilter === "need" && state !== "current")
@@ -351,18 +377,25 @@ function dogShowCalendarHtml(event) {
   const timedActivities = [];
   const allDayByDate = new Map(days.map((date) => [dogShowDateKey(date), []]));
   entries.forEach((entry) => {
-    const key = entry.ringDate || event.startDate;
-    if (!allDayByDate.has(key)) return;
     if (entry.attendanceRole !== "Showing") {
+      const key = event.startDate;
+      if (!allDayByDate.has(key)) return;
       allDayByDate.get(key).push({ kind: "social", title: `Socialization · ${dogShowEntryName(entry)}`, meta: dogShowStaffLabel(entry.helperEmail || entry.handlerEmail), action: "open-show-dog", id: entry.id });
       return;
     }
-    const prep = dogShowPrepTimes(entry);
-    if (!prep.start) {
-      allDayByDate.get(key).push({ kind: "unscheduled", title: `Prep · ${dogShowEntryName(entry)}`, meta: "Ring time needed", action: "open-show-dog", id: entry.id });
-      return;
-    }
-    timedActivities.push({ date: dogShowDateKey(prep.start), time: prep.start, duration: Math.max(30, Number(entry.prepMinutes || 45)), kind: "show", title: `Prep · ${dogShowEntryName(entry)}`, meta: `Ready ${dogShowFormatTime(prep.ready)} · Ring ${dogShowFormatTime(prep.ring)}`, action: "open-show-dog", id: entry.id, entry });
+    const schedules = dogShowRingSchedules(entry);
+    (schedules.length ? schedules : [{ id: `${entry.id}-ring-needed`, ringDate: event.startDate, prepMinutes: Number(entry.prepMinutes ?? 45), readyBufferMinutes: Number(entry.readyBufferMinutes ?? 15) }]).forEach((schedule) => {
+      const key = schedule.ringDate || event.startDate;
+      if (!allDayByDate.has(key)) return;
+      const prep = dogShowPrepTimes(entry, schedule);
+      const ringLabel = schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring number needed";
+      const breedLabel = dogShowBreed(entry) || "Breed not listed";
+      if (!prep.start) {
+        allDayByDate.get(key).push({ kind: "unscheduled", title: `Prep · ${dogShowEntryName(entry)}`, meta: `${breedLabel} · ${ringLabel} · Ring time needed`, action: "open-show-dog", id: entry.id });
+        return;
+      }
+      timedActivities.push({ date: dogShowDateKey(prep.start), time: prep.start, duration: Math.max(30, Number(schedule.prepMinutes || 45)), kind: "show", title: `Prep · ${dogShowEntryName(entry)}`, meta: `${breedLabel} · ${ringLabel} · ${schedule.classEntered || "Class not listed"} · Ring ${dogShowFormatTime(prep.ring)}`, action: "open-show-dog", id: entry.id, entry });
+    });
   });
   tasks.forEach((task) => {
     const due = new Date(task.dueAt || "");
@@ -405,17 +438,21 @@ function dogShowCalendarHtml(event) {
 
 function dogShowScheduleHtml(event) {
   const conflicts = dogShowConflictEntryIds();
-  const entries = dogShowEntries(event).sort((a, b) => (dogShowPrepTimes(a).start?.getTime() || Infinity) - (dogShowPrepTimes(b).start?.getTime() || Infinity));
-  const rows = entries.map((entry) => {
-    const prep = dogShowPrepTimes(entry);
+  const entries = dogShowEntries(event);
+  const appearances = entries.flatMap((entry) => {
+    if (entry.attendanceRole !== "Showing") return [{ entry, schedule: null, prep: { start: null, ready: null, ring: null } }];
+    const schedules = dogShowRingSchedules(entry);
+    return (schedules.length ? schedules : [{ id: `${entry.id}-ring-needed`, ringDate: event.startDate, prepMinutes: Number(entry.prepMinutes ?? 45), readyBufferMinutes: Number(entry.readyBufferMinutes ?? 15) }]).map((schedule) => ({ entry, schedule, prep: dogShowPrepTimes(entry, schedule) }));
+  }).sort((a, b) => (a.prep.start?.getTime() || Infinity) - (b.prep.start?.getTime() || Infinity));
+  const rows = appearances.map(({ entry, schedule, prep }) => {
     const conflict = conflicts.has(entry.id);
     if (entry.attendanceRole !== "Showing") {
       return `<button type="button" class="dog-show-schedule-row is-social" data-action="edit-show-entry" data-id="${escapeHtml(entry.id)}"><span class="dog-show-schedule-time">Flexible</span>${dogShowPhotoHtml(entry, "dog-show-schedule-photo")}<span class="dog-show-schedule-main"><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><small>Socialization<br>${escapeHtml(dogShowStaffLabel(entry.helperEmail || entry.handlerEmail))}</small></span><span class="dog-show-role-chip">Social</span></button>`;
     }
     return `<button type="button" class="dog-show-schedule-row${conflict ? " has-conflict" : ""}" data-action="edit-show-entry" data-id="${escapeHtml(entry.id)}">
       <span class="dog-show-schedule-time"><strong>${prep.start ? dogShowFormatTime(prep.start) : "--"}</strong><small>Prep start</small></span>
-      ${dogShowPhotoHtml(entry, "dog-show-schedule-photo")}<span class="dog-show-schedule-main"><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><small>${escapeHtml([entry.classEntered || "Class missing", entry.ringNumber ? `Ring ${entry.ringNumber}` : "Ring missing", dogShowStaffLabel(entry.handlerEmail)].join(" · "))}</small><span class="dog-show-time-line">Ready ${prep.ready ? dogShowFormatTime(prep.ready) : "--"} <i></i> Ring ${prep.ring ? dogShowFormatTime(prep.ring) : "--"}</span></span>
-      <span class="dog-show-schedule-duration">${Number(entry.prepMinutes || 45)}m${conflict ? "<small>Conflict</small>" : "<small>Prep</small>"}</span>
+      ${dogShowPhotoHtml(entry, "dog-show-schedule-photo")}<span class="dog-show-schedule-main"><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><small>${escapeHtml([dogShowFormatDate(schedule.ringDate), schedule.classEntered || "Class missing", schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring missing", dogShowStaffLabel(entry.handlerEmail)].join(" · "))}</small><span class="dog-show-time-line">Ready ${prep.ready ? dogShowFormatTime(prep.ready) : "--"} <i></i> Ring ${prep.ring ? dogShowFormatTime(prep.ring) : "--"}</span></span>
+      <span class="dog-show-schedule-duration">${Number(schedule.prepMinutes || 45)}m${conflict ? "<small>Conflict</small>" : "<small>Prep</small>"}</span>
     </button>`;
   }).join("");
   return `<div class="dog-show-view dog-show-schedule-view">
@@ -602,12 +639,59 @@ function openDogShowAddDogsForm() {
   </form>`);
 }
 
+function dogShowRingScheduleRowHtml(schedule = {}, index = 0) {
+  const prep = dogShowPrepTimes({}, schedule);
+  return `<article class="dog-show-ring-schedule-row" data-ring-schedule-row data-schedule-id="${escapeHtml(schedule.id || uid("showRing"))}">
+    <div class="dog-show-ring-schedule-heading"><div><strong>Ring appearance ${index + 1}</strong><small data-ring-schedule-summary>${escapeHtml([dogShowFormatDate(schedule.ringDate), schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring not set"].join(" · "))}</small></div><button type="button" class="dog-show-remove-ring" data-action="remove-ring-schedule" aria-label="Remove ring appearance" title="Remove ring appearance">×</button></div>
+    <div class="field-grid dog-show-ring-schedule-grid">
+      <label>Ring date<input type="date" name="ringDate" value="${escapeHtml(schedule.ringDate || "")}"/></label>
+      <label>Ring time<input type="time" name="ringTime" value="${escapeHtml(schedule.ringTime || "")}"/></label>
+      <label>Ring number<input name="ringNumber" value="${escapeHtml(schedule.ringNumber || "")}" placeholder="14"/></label>
+      <label>Class entered<input name="classEntered" value="${escapeHtml(schedule.classEntered || "")}" placeholder="Open Bitch"/></label>
+      <label>Prep minutes<input type="number" name="prepMinutes" min="0" max="240" step="5" value="${Number(schedule.prepMinutes ?? 45)}"/></label>
+      <label>Ready-before-ring buffer<input type="number" name="readyBufferMinutes" min="0" max="60" step="5" value="${Number(schedule.readyBufferMinutes ?? 15)}"/></label>
+      <label>Armband<input name="armbandNumber" value="${escapeHtml(schedule.armbandNumber || "")}"/></label>
+      <label>Judge<input name="judge" value="${escapeHtml(schedule.judge || "")}"/></label>
+    </div>
+    <div class="dog-show-prep-preview" data-ring-schedule-preview><strong>Prep starts ${prep.start ? dogShowFormatTime(prep.start) : "after ring time is entered"}</strong><span>Ready ${prep.ready ? dogShowFormatTime(prep.ready) : "--"} · Ring ${prep.ring ? dogShowFormatTime(prep.ring) : "--"}</span></div>
+  </article>`;
+}
+
+function dogShowRingScheduleFromRow(row) {
+  const value = (name) => row.querySelector(`[name="${name}"]`)?.value?.trim() || "";
+  return {
+    id: row.dataset.scheduleId || uid("showRing"),
+    ringDate: value("ringDate"),
+    ringTime: value("ringTime"),
+    ringNumber: value("ringNumber"),
+    classEntered: value("classEntered"),
+    armbandNumber: value("armbandNumber"),
+    judge: value("judge"),
+    prepMinutes: Number(value("prepMinutes") || 0),
+    readyBufferMinutes: Number(value("readyBufferMinutes") || 0),
+  };
+}
+
+function refreshDogShowRingScheduleRows(form) {
+  form?.querySelectorAll("[data-ring-schedule-row]").forEach((row, index) => {
+    const schedule = dogShowRingScheduleFromRow(row);
+    const prep = dogShowPrepTimes({}, schedule);
+    const heading = row.querySelector(".dog-show-ring-schedule-heading strong");
+    const summary = row.querySelector("[data-ring-schedule-summary]");
+    const preview = row.querySelector("[data-ring-schedule-preview]");
+    if (heading) heading.textContent = `Ring appearance ${index + 1}`;
+    if (summary) summary.textContent = [dogShowFormatDate(schedule.ringDate), schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring not set"].join(" · ");
+    if (preview) preview.innerHTML = `<strong>Prep starts ${prep.start ? dogShowFormatTime(prep.start) : "after ring time is entered"}</strong><span>Ready ${prep.ready ? dogShowFormatTime(prep.ready) : "--"} · Ring ${prep.ring ? dogShowFormatTime(prep.ring) : "--"}</span>`;
+  });
+}
+
 function openDogShowEntryForm(entry = {}) {
   const event = dogShowActiveEvent();
-  const prep = dogShowPrepTimes(entry);
+  const savedSchedules = dogShowRingSchedules(entry);
+  const ringSchedules = savedSchedules.length ? savedSchedules : [{ id: uid("showRing"), ringDate: event?.startDate || todayDate(), prepMinutes: Number(entry.prepMinutes ?? 45), readyBufferMinutes: Number(entry.readyBufferMinutes ?? 15) }];
   const logs = dogShowLogs(event).filter((log) => log.showEntryId === entry.id).sort((a, b) => new Date(b.loggedAt || 0) - new Date(a.loggedAt || 0)).slice(0, 10);
   const result = dogShowResultForEntry(entry, event);
-  openDogShowDialog(dogShowEntryName(entry), `<div class="dog-show-detail-header">${dogShowPhotoHtml(entry, "dog-show-detail-photo")}<div><strong>${escapeHtml(dogShowEntryName(entry))}</strong><span>${escapeHtml([entry.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog", entry.attendanceRole, entry.classEntered].filter(Boolean).join(" · "))}</span><small>Last attended: ${escapeHtml(dogShowLastLog(entry) ? dogShowFormatDateTime(dogShowLastLog(entry).loggedAt) : "No log")}</small></div></div>
+  openDogShowDialog(dogShowEntryName(entry), `<div class="dog-show-detail-header">${dogShowPhotoHtml(entry, "dog-show-detail-photo")}<div><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><span>${escapeHtml([entry.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog", entry.attendanceRole, savedSchedules.length ? `${savedSchedules.length} ring appearance${savedSchedules.length === 1 ? "" : "s"}` : "Ring schedule needed"].filter(Boolean).join(" · "))}</span><small>Last attended: ${escapeHtml(dogShowLastLog(entry) ? dogShowFormatDateTime(dogShowLastLog(entry).loggedAt) : "No log")}</small></div></div>
     <section class="dog-show-dialog-section"><h3>Quick Log</h3><div class="dog-show-quick-grid">
       <button type="button" data-action="quick-show-log" data-log-type="Potty" data-id="${escapeHtml(entry.id)}">Potty</button>
       <button type="button" data-action="quick-show-log" data-log-type="Water" data-id="${escapeHtml(entry.id)}">Water</button>
@@ -619,19 +703,11 @@ function openDogShowEntryForm(entry = {}) {
     <form id="dogShowEntryForm" class="tracker-form" data-id="${escapeHtml(entry.id)}">
       <div class="field-grid">
         <label>Attendance role<select name="attendanceRole"><option${entry.attendanceRole === "Showing" ? " selected" : ""}>Showing</option><option${entry.attendanceRole !== "Showing" ? " selected" : ""}>Socialization</option></select></label>
-        <label>Class entered<input name="classEntered" value="${escapeHtml(entry.classEntered || "")}" placeholder="Open Bitch"/></label>
-        <label>Ring date<input type="date" name="ringDate" value="${escapeHtml(entry.ringDate || event?.startDate || todayDate())}"/></label>
-        <label>Ring time<input type="time" name="ringTime" value="${escapeHtml(entry.ringTime || "")}"/></label>
-        <label>Ring number<input name="ringNumber" value="${escapeHtml(entry.ringNumber || "")}"/></label>
-        <label>Prep minutes<input type="number" name="prepMinutes" min="0" max="240" step="5" value="${Number(entry.prepMinutes || 45)}"/></label>
-        <label>Ready-before-ring buffer<input type="number" name="readyBufferMinutes" min="0" max="60" step="5" value="${Number(entry.readyBufferMinutes || 15)}"/></label>
         <label>Handler<select name="handlerEmail">${dogShowStaffOptions(entry.handlerEmail || "")}</select></label>
         <label>Care helper<select name="helperEmail">${dogShowStaffOptions(entry.helperEmail || "")}</select></label>
-        <label>Armband<input name="armbandNumber" value="${escapeHtml(entry.armbandNumber || "")}"/></label>
-        <label>Judge<input name="judge" value="${escapeHtml(entry.judge || "")}"/></label>
         <label>Entry status<select name="status">${["Considering", "Entered", "Confirmed", "Scratched", "Completed"].map((status) => `<option${status === (entry.status || "Confirmed") ? " selected" : ""}>${status}</option>`).join("")}</select></label>
       </div>
-      <div class="dog-show-prep-preview"><strong>Prep starts ${prep.start ? dogShowFormatTime(prep.start) : "after ring time is entered"}</strong><span>Ready ${prep.ready ? dogShowFormatTime(prep.ready) : "--"} · Ring ${prep.ring ? dogShowFormatTime(prep.ring) : "--"}</span></div>
+      <section class="dog-show-ring-schedules"><div class="dog-show-ring-schedules-toolbar"><div><h3>Ring Appearances</h3><p>Add a separate assignment for each show day, ring, or class.</p></div><button type="button" class="secondary-button" data-action="add-ring-schedule">Add Ring Appearance</button></div><div id="dogShowRingScheduleRows">${ringSchedules.map(dogShowRingScheduleRowHtml).join("")}</div></section>
       <label>Show notes<textarea name="notes" rows="2">${escapeHtml(entry.notes || "")}</textarea></label>
       <div class="button-row"><button type="submit">Save Dog</button><button type="button" class="secondary-button" data-action="remove-show-entry" data-id="${escapeHtml(entry.id)}">Remove From Show</button></div>
     </form>
@@ -728,22 +804,65 @@ async function saveDogShowDogs(form) {
 }
 
 async function syncDogShowPrepTask(entry) {
-  const prep = dogShowPrepTimes(entry);
-  const existing = dogShowTasks().find((task) => task.source === "auto-ring-prep" && task.showEntryId === entry.id);
-  if (entry.attendanceRole !== "Showing" || !prep.start) {
-    if (existing && existing.status !== "Completed") await saveDogShowRecord("showDayTask", { ...existing, removed: true, removedAt: new Date().toISOString() });
-    return;
+  const existingTasks = dogShowTasks().filter((task) => task.source === "auto-ring-prep" && task.showEntryId === entry.id);
+  const schedules = entry.attendanceRole === "Showing"
+    ? dogShowRingSchedules(entry).map((schedule) => ({ schedule, prep: dogShowPrepTimes(entry, schedule) })).filter((item) => item.prep.start)
+    : [];
+  const keptTaskIds = new Set();
+
+  for (const [index, item] of schedules.entries()) {
+    const { schedule, prep } = item;
+    const existing = existingTasks.find((task) => task.ringScheduleId === schedule.id)
+      || (index === 0 ? existingTasks.find((task) => !task.ringScheduleId) : null);
+    const saved = await saveDogShowRecord("showDayTask", {
+      ...(existing || {}),
+      id: existing?.id || uid("showDayTask"),
+      showEventId: entry.showEventId,
+      showEntryId: entry.id,
+      ringScheduleId: schedule.id,
+      dogId: entry.dogId,
+      dogType: entry.dogType,
+      title: `Ring prep: ${dogShowEntryName(entry)}${schedule.ringNumber ? ` - Ring ${schedule.ringNumber}` : ""}`,
+      taskType: "Ring Prep",
+      dueAt: prep.start.toISOString(),
+      assignedEmail: entry.helperEmail || entry.handlerEmail || "",
+      status: existing?.status === "Completed" ? "Completed" : "Open",
+      source: "auto-ring-prep",
+      submittedAt: existing?.submittedAt || new Date().toISOString(),
+      helperEmail: currentUser?.email || "",
+      removed: false,
+      removedAt: "",
+    });
+    keptTaskIds.add(saved.id);
   }
-  await saveDogShowRecord("showDayTask", {
-    ...(existing || {}), id: existing?.id || uid("showDayTask"), showEventId: entry.showEventId, showEntryId: entry.id, dogId: entry.dogId, dogType: entry.dogType, title: `Ring prep: ${dogShowEntryName(entry)}`, taskType: "Ring Prep", dueAt: prep.start.toISOString(), assignedEmail: entry.helperEmail || entry.handlerEmail || "", status: existing?.status === "Completed" ? "Completed" : "Open", source: "auto-ring-prep", submittedAt: existing?.submittedAt || new Date().toISOString(), helperEmail: currentUser?.email || "",
-  });
+
+  for (const task of existingTasks) {
+    if (!keptTaskIds.has(task.id) && task.status !== "Completed") {
+      await saveDogShowRecord("showDayTask", { ...task, removed: true, removedAt: new Date().toISOString() });
+    }
+  }
 }
 
 async function saveDogShowEntry(form) {
   const entry = dogShowEntries().find((item) => item.id === form.dataset.id);
   if (!entry) return;
   const data = formPayload(form);
-  const saved = await saveDogShowRecord("showEntry", { ...entry, ...data, prepMinutes: Number(data.prepMinutes || 0), readyBufferMinutes: Number(data.readyBufferMinutes || 0), helperEmailUpdatedBy: currentUser?.email || "" });
+  const ringSchedules = [...form.querySelectorAll("[data-ring-schedule-row]")].map(dogShowRingScheduleFromRow);
+  const firstSchedule = ringSchedules[0] || {};
+  const saved = await saveDogShowRecord("showEntry", {
+    ...entry,
+    ...data,
+    ringSchedules,
+    ringDate: firstSchedule.ringDate || "",
+    ringTime: firstSchedule.ringTime || "",
+    ringNumber: firstSchedule.ringNumber || "",
+    classEntered: firstSchedule.classEntered || "",
+    armbandNumber: firstSchedule.armbandNumber || "",
+    judge: firstSchedule.judge || "",
+    prepMinutes: Number(firstSchedule.prepMinutes ?? entry.prepMinutes ?? 45),
+    readyBufferMinutes: Number(firstSchedule.readyBufferMinutes ?? entry.readyBufferMinutes ?? 15),
+    helperEmailUpdatedBy: currentUser?.email || "",
+  });
   await syncDogShowPrepTask(saved);
   openDogShowEntryForm(saved);
   renderDogShow();
@@ -900,9 +1019,11 @@ function setupDogShowEventListeners() {
   });
 
   dialog?.addEventListener("input", (event) => {
-    if (!event.target.matches('#dogShowTaskForm input[name="color"]')) return;
-    const output = event.target.closest("label")?.querySelector("output");
-    if (output) output.textContent = String(event.target.value || "").toUpperCase();
+    if (event.target.matches('#dogShowTaskForm input[name="color"]')) {
+      const output = event.target.closest("label")?.querySelector("output");
+      if (output) output.textContent = String(event.target.value || "").toUpperCase();
+    }
+    if (event.target.closest("[data-ring-schedule-row]")) refreshDogShowRingScheduleRows(event.target.closest("form"));
   });
 
   page.addEventListener("change", async (event) => {
@@ -1023,6 +1144,19 @@ function setupDogShowEventListeners() {
     const action = event.target.closest("[data-action]");
     if (!action) return;
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
+    if (action.dataset.action === "add-ring-schedule") {
+      const rows = dialog.querySelector("#dogShowRingScheduleRows");
+      const schedule = { id: uid("showRing"), ringDate: dogShowActiveEvent()?.startDate || todayDate(), prepMinutes: 45, readyBufferMinutes: 15 };
+      rows?.insertAdjacentHTML("beforeend", dogShowRingScheduleRowHtml(schedule, rows.children.length));
+      refreshDogShowRingScheduleRows(action.closest("form"));
+      rows?.lastElementChild?.querySelector('input[name="ringDate"]')?.focus();
+      return;
+    }
+    if (action.dataset.action === "remove-ring-schedule") {
+      action.closest("[data-ring-schedule-row]")?.remove();
+      refreshDogShowRingScheduleRows(action.closest("form"));
+      return;
+    }
     if (action.dataset.action === "close-show-dialog") dialog.close();
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
