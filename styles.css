@@ -11657,7 +11657,7 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-calendar-timeline {
   display: grid;
   grid-template-columns: 68px repeat(var(--dog-show-day-count), minmax(210px, 1fr));
-  grid-template-rows: 52px minmax(40px, auto) repeat(var(--dog-show-slot-count), 24px);
+  grid-template-rows: 52px minmax(40px, auto) repeat(var(--dog-show-slot-count), 20px);
   min-width: max(100%, var(--dog-show-grid-width));
   position: relative;
 }
@@ -11752,12 +11752,12 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   border-bottom: 1px solid rgba(203, 213, 225, 0.62);
   border-left: 1px solid var(--line);
   border-radius: 0;
-  min-height: 24px;
+  min-height: 20px;
   padding: 0;
 }
 
-.dog-show-calendar-slot:nth-of-type(2n) {
-  border-bottom-color: rgba(226, 232, 240, 0.5);
+.dog-show-calendar-slot.is-hour-end {
+  border-bottom-color: var(--line);
 }
 
 .dog-show-calendar-slot:hover,
@@ -11779,8 +11779,8 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 .dog-show-calendar-event.is-task {
-  background: color-mix(in srgb, var(--task-color) 12%, var(--panel));
-  border-color: color-mix(in srgb, var(--task-color) 58%, var(--line));
+  background: var(--task-tint, rgba(49, 95, 133, 0.2));
+  border-color: var(--task-border, rgba(49, 95, 133, 0.78));
   border-left-color: var(--task-color);
   cursor: grab;
 }
@@ -11796,7 +11796,9 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-calendar-event.is-completed {
   background: #EFFAF3;
   border: 2px solid #35A35F;
+  box-shadow: inset 5px 0 0 var(--task-color);
   cursor: pointer;
+  padding-left: 10px;
 }
 
 .dog-show-calendar-check {
@@ -11881,8 +11883,8 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 .dog-show-calendar-task-detail {
   align-items: center;
-  background: color-mix(in srgb, var(--task-color) 10%, var(--panel));
-  border: 1px solid color-mix(in srgb, var(--task-color) 55%, var(--line));
+  background: var(--task-tint, rgba(49, 95, 133, 0.2));
+  border: 1px solid var(--task-border, rgba(49, 95, 133, 0.78));
   border-left: 5px solid var(--task-color);
   border-radius: 8px;
   display: grid;

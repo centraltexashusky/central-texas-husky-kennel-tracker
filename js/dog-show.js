@@ -3,6 +3,7 @@ const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
 const DOG_SHOW_EVENT_KEY = "cth-dog-show-active-event";
 const DOG_SHOW_CALENDAR_VIEW_KEY = "cth-dog-show-calendar-view";
 const DOG_SHOW_CALENDAR_DATE_KEY = "cth-dog-show-calendar-date";
+const DOG_SHOW_CALENDAR_SLOT_MINUTES = 15;
 const DOG_SHOW_STALE_MINUTES = 60;
 const DOG_SHOW_TASK_COLORS = {
   Grooming: "#7C5CBF",
@@ -113,6 +114,24 @@ function dogShowNameWithBreed(entry = {}) {
 
 function dogShowTaskColor(task = {}) {
   return task.color || DOG_SHOW_TASK_COLORS[task.taskType] || DOG_SHOW_TASK_COLORS.General;
+}
+
+function dogShowTaskColorStyle(task = {}) {
+  const color = dogShowTaskColor(task);
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return `--task-color:${escapeHtml(color)}`;
+  const value = Number.parseInt(match[1], 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+  return `--task-color:${color};--task-tint:rgba(${red},${green},${blue},0.2);--task-border:rgba(${red},${green},${blue},0.78)`;
+}
+
+function dogShowDateTimeInputValue(value) {
+  const date = value instanceof Date ? value : new Date(value || "");
+  if (Number.isNaN(date.getTime())) return String(value || "").slice(0, 16);
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function dogShowDateTime(date = "", time = "") {
@@ -372,7 +391,7 @@ function dogShowCalendarHtml(event) {
   const tasks = dogShowTasks(event).filter((task) => task.source !== "auto-ring-prep");
   const startHour = 6;
   const endHour = 22;
-  const slotsPerHour = 2;
+  const slotsPerHour = 60 / DOG_SHOW_CALENDAR_SLOT_MINUTES;
   const slotCount = (endHour - startHour) * slotsPerHour;
   const timedActivities = [];
   const allDayByDate = new Map(days.map((date) => [dogShowDateKey(date), []]));
@@ -406,10 +425,35 @@ function dogShowCalendarHtml(event) {
   });
   timedActivities.forEach((activity) => {
     const minutes = activity.time.getHours() * 60 + activity.time.getMinutes();
-    activity.slot = Math.max(0, Math.min(slotCount - 1, Math.floor((minutes - startHour * 60) / 30)));
-    const peers = timedActivities.filter((item) => item.date === activity.date && Math.max(0, Math.min(slotCount - 1, Math.floor((item.time.getHours() * 60 + item.time.getMinutes() - startHour * 60) / 30))) === activity.slot);
-    activity.laneCount = peers.length;
-    activity.laneIndex = peers.indexOf(activity);
+    activity.slot = Math.max(0, Math.min(slotCount - 1, Math.floor((minutes - startHour * 60) / DOG_SHOW_CALENDAR_SLOT_MINUTES)));
+    activity.endMinutes = minutes + Math.max(DOG_SHOW_CALENDAR_SLOT_MINUTES, Number(activity.duration || DOG_SHOW_CALENDAR_SLOT_MINUTES));
+  });
+  days.forEach((date) => {
+    const dateActivities = timedActivities.filter((activity) => activity.date === dogShowDateKey(date)).sort((left, right) => left.time - right.time || right.endMinutes - left.endMinutes);
+    let group = [];
+    let groupEnd = -Infinity;
+    const assignGroupLanes = () => {
+      const laneEnds = [];
+      group.forEach((activity) => {
+        const startMinutes = activity.time.getHours() * 60 + activity.time.getMinutes();
+        let laneIndex = laneEnds.findIndex((laneEnd) => laneEnd <= startMinutes);
+        if (laneIndex < 0) laneIndex = laneEnds.length;
+        laneEnds[laneIndex] = activity.endMinutes;
+        activity.laneIndex = laneIndex;
+      });
+      group.forEach((activity) => { activity.laneCount = Math.max(1, laneEnds.length); });
+    };
+    dateActivities.forEach((activity) => {
+      const startMinutes = activity.time.getHours() * 60 + activity.time.getMinutes();
+      if (group.length && startMinutes >= groupEnd) {
+        assignGroupLanes();
+        group = [];
+        groupEnd = -Infinity;
+      }
+      group.push(activity);
+      groupEnd = Math.max(groupEnd, activity.endMinutes);
+    });
+    if (group.length) assignGroupLanes();
   });
   const headers = days.map((date, index) => `<div class="dog-show-calendar-day-heading" style="grid-column:${index + 2};grid-row:1"><strong>${escapeHtml(date.toLocaleDateString(undefined, { weekday: "short" }))}</strong><span>${escapeHtml(date.toLocaleDateString(undefined, { month: "short", day: "numeric" }))}</span></div>`).join("");
   const allDay = days.map((date, index) => {
@@ -419,17 +463,17 @@ function dogShowCalendarHtml(event) {
   }).join("");
   const timeLabels = Array.from({ length: endHour - startHour }, (_, index) => `<div class="dog-show-calendar-time" style="grid-column:1;grid-row:${index * slotsPerHour + 3}/span ${slotsPerHour}">${escapeHtml(new Date(2000, 0, 1, startHour + index).toLocaleTimeString([], { hour: "numeric" }))}</div>`).join("");
   const slots = Array.from({ length: slotCount }, (_, slot) => days.map((date, dayIndex) => {
-    const minutes = startHour * 60 + slot * 30;
+    const minutes = startHour * 60 + slot * DOG_SHOW_CALENDAR_SLOT_MINUTES;
     const time = `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
     const dueAt = `${dogShowDateKey(date)}T${time}`;
-    return `<button type="button" class="dog-show-calendar-slot" data-action="new-show-task" data-due-at="${dueAt}" aria-label="Add task ${escapeHtml(dogShowFormatDate(dogShowDateKey(date)))} at ${escapeHtml(dogShowFormatTime(dueAt))}" style="grid-column:${dayIndex + 2};grid-row:${slot + 3}"></button>`;
+    return `<button type="button" class="dog-show-calendar-slot${(slot + 1) % slotsPerHour === 0 ? " is-hour-end" : ""}" data-action="new-show-task" data-due-at="${dueAt}" aria-label="Add task ${escapeHtml(dogShowFormatDate(dogShowDateKey(date)))} at ${escapeHtml(dogShowFormatTime(dueAt))}" style="grid-column:${dayIndex + 2};grid-row:${slot + 3}"></button>`;
   }).join("")).join("");
   const activityCards = timedActivities.map((activity) => {
     const dayIndex = days.findIndex((date) => dogShowDateKey(date) === activity.date);
-    const span = Math.max(2, Math.ceil(activity.duration / 30));
+    const span = Math.max(2, Math.ceil(activity.duration / DOG_SHOW_CALENDAR_SLOT_MINUTES));
     const completed = activity.task?.status === "Completed";
     const photo = activity.entry ? dogShowPhotoHtml(activity.entry, "dog-show-calendar-photo") : "";
-    return `<button type="button" class="dog-show-calendar-event is-${activity.kind}${completed ? " is-completed" : ""}" data-action="${activity.action}" data-id="${escapeHtml(activity.id)}"${activity.kind === "task" && !completed ? ` draggable="true" data-calendar-task-id="${escapeHtml(activity.id)}"` : ""} style="grid-column:${dayIndex + 2};grid-row:${activity.slot + 3}/span ${span};--lane-count:${activity.laneCount};--lane-index:${activity.laneIndex};--task-color:${escapeHtml(activity.color || "#315F85")}">${completed ? '<span class="dog-show-calendar-check" aria-hidden="true">✓</span>' : ""}${photo}<span class="dog-show-calendar-event-copy"><span>${escapeHtml(dogShowFormatTime(activity.time))}</span><strong>${escapeHtml(activity.title)}</strong><small>${escapeHtml(activity.meta)}</small></span></button>`;
+    return `<button type="button" class="dog-show-calendar-event is-${activity.kind}${completed ? " is-completed" : ""}" data-action="${activity.action}" data-id="${escapeHtml(activity.id)}"${activity.kind === "task" && !completed ? ` draggable="true" data-calendar-task-id="${escapeHtml(activity.id)}"` : ""} style="grid-column:${dayIndex + 2};grid-row:${activity.slot + 3}/span ${span};--lane-count:${activity.laneCount};--lane-index:${activity.laneIndex};${activity.task ? dogShowTaskColorStyle(activity.task) : "--task-color:#315F85"}">${completed ? '<span class="dog-show-calendar-check" aria-hidden="true">✓</span>' : ""}${photo}<span class="dog-show-calendar-event-copy"><span>${escapeHtml(dogShowFormatTime(activity.time))}</span><strong>${escapeHtml(activity.title)}</strong><small>${escapeHtml(activity.meta)}</small></span></button>`;
   }).join("");
   const selectedIndex = eventDays.findIndex((date) => dogShowDateKey(date) === dogShowCalendarDate);
   const defaultTaskDate = dogShowCalendarView === "day" ? dogShowCalendarDate : event.startDate || todayDate();
@@ -748,7 +792,7 @@ function openDogShowTaskForm(task = {}) {
       <label>Task type<select name="taskType">${["Grooming", "Potty", "Water", "Feeding", "Packing", "Paperwork", "Travel", "Ring Prep", "Owner Update", "General"].map((type) => `<option${type === task.taskType ? " selected" : ""}>${type}</option>`).join("")}</select></label>
       <label>Dog<select name="showEntryId"><option value="">Team task</option>${entries.map((entry) => `<option value="${escapeHtml(entry.id)}"${entry.id === task.showEntryId ? " selected" : ""}>${escapeHtml(dogShowEntryName(entry))}</option>`).join("")}</select></label>
       <label>Assigned to<select name="assignedEmail">${dogShowStaffOptions(task.assignedEmail || currentUser?.email || "")}</select></label>
-      <label>Due date / time<input type="datetime-local" name="dueAt" value="${escapeHtml(task.dueAt ? task.dueAt.slice(0, 16) : new Date(Date.now() + 30 * 60000).toISOString().slice(0, 16))}" required/></label>
+      <label>Due date / time<input type="datetime-local" name="dueAt" step="900" value="${escapeHtml(dogShowDateTimeInputValue(task.dueAt || new Date(Date.now() + 30 * 60000)))}" required/></label>
       <label>Status<select name="status"><option${task.status !== "Completed" ? " selected" : ""}>Open</option><option${task.status === "Completed" ? " selected" : ""}>Completed</option></select></label>
       <label class="dog-show-task-color-field">Task color<span><input type="color" name="color" value="${escapeHtml(color)}" aria-label="Task color"/><output>${escapeHtml(color.toUpperCase())}</output></span></label>
     </div>
@@ -761,7 +805,23 @@ function openDogShowCalendarTask(task = {}) {
   if (!task.id) return;
   const entry = dogShowCalendarTaskEntry(task);
   const completed = task.status === "Completed";
-  openDogShowDialog(task.title || "Show Task", `<div class="dog-show-calendar-task-detail" style="--task-color:${escapeHtml(dogShowTaskColor(task))}">${entry ? dogShowPhotoHtml(entry, "dog-show-detail-photo") : ""}<div><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>Scheduled ${escapeHtml(dogShowFormatDateTime(task.dueAt))}</small>${completed ? `<p class="dog-show-task-completion">✓ Completed by ${escapeHtml(task.completedBy || "Staff")} · ${escapeHtml(dogShowFormatDateTime(task.completedAt))}</p>` : ""}</div></div><div class="button-row">${completed ? "" : `<button type="button" data-action="complete-show-task" data-id="${escapeHtml(task.id)}">Complete Task</button>`}<button type="button" class="secondary-button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}">Edit Task</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>`);
+  openDogShowDialog(task.title || "Show Task", `<div class="dog-show-calendar-task-detail" style="${dogShowTaskColorStyle(task)}">${entry ? dogShowPhotoHtml(entry, "dog-show-detail-photo") : ""}<div><strong>${escapeHtml(task.title || "Show task")}</strong><span>${escapeHtml([entry ? dogShowEntryName(entry) : "Team task", task.taskType || "General", dogShowStaffLabel(task.assignedEmail)].join(" · "))}</span><small>Scheduled ${escapeHtml(dogShowFormatDateTime(task.dueAt))}</small>${completed ? `<p class="dog-show-task-completion">✓ Completed by ${escapeHtml(task.completedBy || "Staff")} · ${escapeHtml(dogShowFormatDateTime(task.completedAt))}</p>` : ""}</div></div><div class="button-row">${completed ? "" : `<button type="button" data-action="complete-show-task" data-id="${escapeHtml(task.id)}">Complete Task</button>`}<button type="button" class="secondary-button" data-action="duplicate-show-task" data-id="${escapeHtml(task.id)}">Duplicate</button><button type="button" class="secondary-button" data-action="edit-show-task" data-id="${escapeHtml(task.id)}">Edit Task</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>`);
+}
+
+function openDuplicateDogShowTask(task = {}) {
+  if (!task.id) return;
+  const dueAt = new Date(task.dueAt || Date.now());
+  dueAt.setMinutes(dueAt.getMinutes() + DOG_SHOW_CALENDAR_SLOT_MINUTES);
+  openDogShowTaskForm({
+    title: task.title || "",
+    taskType: task.taskType || "General",
+    showEntryId: task.showEntryId || "",
+    assignedEmail: task.assignedEmail || "",
+    dueAt: dogShowDateTimeInputValue(dueAt),
+    status: "Open",
+    color: dogShowTaskColor(task),
+    notes: task.notes || "",
+  });
 }
 
 async function saveDogShowRecord(type, payload) {
@@ -1160,6 +1220,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "close-show-dialog") dialog.close();
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
+    if (action.dataset.action === "duplicate-show-task") openDuplicateDogShowTask(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "complete-show-task") {
       await completeDogShowTasks([action.dataset.id]);
       dialog.close();
