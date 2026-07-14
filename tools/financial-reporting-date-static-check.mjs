@@ -10,33 +10,41 @@ function dateOnly(value) {
 }
 
 function financialEntryDate(record = {}, stay = {}) {
-  return dateOnly(stay.dropoffTime || record.dropoffTime || stay.paidAt || record.paidAt || stay.checkedOutAt || record.checkedOutAt || stay.pickupTime || stay.createdAt || record.submittedAt || record.updatedAt);
+  return dateOnly(stay.pickupTime || record.pickupTime || stay.paidAt || record.paidAt || stay.checkedOutAt || record.checkedOutAt || stay.dropoffTime || stay.createdAt || record.submittedAt || record.updatedAt);
 }
 
-const juneStayCheckedOutInJuly = financialEntryDate(
-  { checkedOutAt: "2026-07-05T15:30:00", submittedAt: "2026-06-24T10:30:00" },
-  { dropoffTime: "2026-06-24T10:30:00", pickupTime: "2026-06-29T15:30:00", checkedOutAt: "2026-07-05T15:30:00" },
+const juneDropoffJulyPickup = financialEntryDate(
+  { submittedAt: "2026-06-24T10:30:00" },
+  { dropoffTime: "2026-06-24T10:30:00", pickupTime: "2026-07-05T15:30:00" },
+);
+const julyDropoffAugustPickup = financialEntryDate(
+  { submittedAt: "2026-07-23T10:00:00" },
+  { dropoffTime: "2026-07-23T10:00:00", pickupTime: "2026-08-10T12:00:00" },
 );
 
 const checks = [
   {
-    pass: settingsSource.includes("return dateOnly(stay.dropoffTime || record.dropoffTime || stay.paidAt || record.paidAt || stay.checkedOutAt || record.checkedOutAt || stay.pickupTime"),
-    message: "financial reporting date must prefer the stay drop-off date before payment, checkout, or pickup dates.",
+    pass: settingsSource.includes("return dateOnly(stay.pickupTime || record.pickupTime || stay.paidAt || record.paidAt || stay.checkedOutAt || record.checkedOutAt || stay.dropoffTime"),
+    message: "financial reporting date must prefer the stay pickup date before payment, checkout, or drop-off dates.",
   },
   {
-    pass: settingsSource.includes("Financials use every non-cancelled boarding stay that starts in the selected date range."),
-    message: "financial calculation note must explain that the date range is based on stay start date.",
+    pass: settingsSource.includes("Financials use every non-cancelled boarding stay with a pickup date in the selected date range."),
+    message: "financial calculation note must explain that the date range is based on pickup date.",
   },
   {
-    pass: juneStayCheckedOutInJuly === "2026-06-24",
-    message: "a June boarding stay checked out in July must report in June financials.",
+    pass: juneDropoffJulyPickup === "2026-07-05",
+    message: "a June drop-off with a July pickup must report in July financials.",
   },
   {
-    pass: mainSource.includes("settings.js?v=20260713-financial-dropoff-reporting-date"),
+    pass: julyDropoffAugustPickup === "2026-08-10",
+    message: "a July drop-off with an August pickup must not report in a July-only range.",
+  },
+  {
+    pass: mainSource.includes("settings.js?v=20260713-financial-pickup-reporting-date"),
     message: "main module must import the cache-busted financial settings module.",
   },
   {
-    pass: indexSource.includes("js/main.js?v=20260713-financial-dropoff-reporting-date"),
+    pass: indexSource.includes("js/main.js?v=20260713-financial-pickup-reporting-date"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];

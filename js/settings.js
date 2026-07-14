@@ -784,7 +784,7 @@ function financialDateFromKey(value = "") {
 }
 
 function financialEntryDate(record = {}, stay = {}) {
-  return dateOnly(stay.dropoffTime || record.dropoffTime || stay.paidAt || record.paidAt || stay.checkedOutAt || record.checkedOutAt || stay.pickupTime || stay.createdAt || record.submittedAt || record.updatedAt);
+  return dateOnly(stay.pickupTime || record.pickupTime || stay.paidAt || record.paidAt || stay.checkedOutAt || record.checkedOutAt || stay.dropoffTime || stay.createdAt || record.submittedAt || record.updatedAt);
 }
 
 function financialLineItemSum(snapshot = {}, predicate = () => false) {
@@ -1067,7 +1067,7 @@ function financialBreakdownHtml(buckets = []) {
 
 function financialCalculationNoteHtml() {
   return '<strong>How totals are calculated</strong>'
-    + '<p>Financials use every non-cancelled boarding stay that starts in the selected date range. Saved pricing snapshots and saved family totals are used first; if a stay has no saved snapshot, the app falls back to the current Services & Pricing catalog. Payroll uses completed clock records multiplied by the hourly rate saved on each Staff/Admin user profile. Boarding income is reported by drop-off date so the stay appears in the month it begins.</p>';
+    + '<p>Financials use every non-cancelled boarding stay with a pickup date in the selected date range. Saved pricing snapshots and saved family totals are used first; if a stay has no saved snapshot, the app falls back to the current Services & Pricing catalog. Payroll uses completed clock records multiplied by the hourly rate saved on each Staff/Admin user profile. Boarding income is reported by pickup date so the stay appears in the month it ends.</p>';
 }
 
 function financialSyncViewState() {
