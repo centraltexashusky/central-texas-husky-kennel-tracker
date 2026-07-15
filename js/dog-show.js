@@ -289,11 +289,12 @@ function dogShowAvatarText(name = "Dog") {
 function dogShowPhotoHtml(entry = {}, className = "dog-show-dog-photo") {
   const dog = dogShowSourceDog(entry);
   const name = dogShowEntryName(entry);
+  const photoClass = [className, dogPhotoSexClass(dog)].filter(Boolean).join(" ");
   const photo = typeof profilePhotoDirectSource === "function" ? profilePhotoDirectSource(dog) : dog.profilePhotoUrl || "";
   const hasPhoto = typeof profilePhotoHasSource === "function" ? profilePhotoHasSource(dog) : Boolean(photo);
-  if (!hasPhoto) return `<span class="${className} is-initials">${escapeHtml(dogShowAvatarText(name))}</span>`;
+  if (!hasPhoto) return `<span class="${escapeHtml(photoClass)} is-initials">${escapeHtml(dogShowAvatarText(name))}</span>`;
   const attrs = typeof profilePhotoAccessAttrs === "function" ? profilePhotoAccessAttrs({ ...dog, type: entry.dogType }, entry.dogType) : "";
-  return `<span class="${className}"><img${photo ? ` src="${escapeHtml(photo)}"` : ""} alt="${escapeHtml(name)}"${attrs}${photo ? "" : " hidden"}/><span data-profile-photo-initials${photo ? " hidden" : ""}>${escapeHtml(dogShowAvatarText(name))}</span></span>`;
+  return `<span class="${escapeHtml(photoClass)}"><img${photo ? ` src="${escapeHtml(photo)}"` : ""} alt="${escapeHtml(name)}"${attrs}${photo ? "" : " hidden"}/><span data-profile-photo-initials${photo ? " hidden" : ""}>${escapeHtml(dogShowAvatarText(name))}</span></span>`;
 }
 
 function dogShowResultsForEntry(entry = {}, event = dogShowActiveEvent()) {

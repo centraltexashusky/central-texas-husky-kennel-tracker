@@ -3348,21 +3348,30 @@ function boardingDogPhotoRecord(record = {}) {
   return {};
 }
 
+function boardingDogPhotoSexClass(record = {}, photoRecord = boardingDogPhotoRecord(record)) {
+  return dogPhotoSexClass({
+    ...photoRecord,
+    sex: record.sex || photoRecord.sex || "",
+    spayNeuterStatus: record.spayNeuterStatus || photoRecord.spayNeuterStatus || "",
+  });
+}
+
 function boardingDogMobilePhotoHtml(record = {}) {
   const name = record.dogName || "Boarding dog";
   const photoRecord = boardingDogPhotoRecord(record);
   const photo = profilePhotoDirectSource(photoRecord);
+  const sexClass = boardingDogPhotoSexClass(record, photoRecord);
   if (profilePhotoHasSource(photoRecord)) {
-    return \`<button type="button" class="mobile-dog-photo-button" data-action="view-media" data-src="\${escapeHtml(photo)}" data-media-type="image/jpeg" data-media-name="\${escapeHtml(\`\${name} profile photo\`)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs({ ...photoRecord, id: photoRecord.id || record.id, type: photoRecord.type || record.type || "boardingDog" }, "boardingDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`;
+    return \`<button type="button" class="mobile-dog-photo-button \${escapeHtml(sexClass)}" data-action="view-media" data-src="\${escapeHtml(photo)}" data-media-type="image/jpeg" data-media-name="\${escapeHtml(\`\${name} profile photo\`)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs({ ...photoRecord, id: photoRecord.id || record.id, type: photoRecord.type || record.type || "boardingDog" }, "boardingDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`;
   }
-  return \`<div class="mobile-dog-photo-button mobile-dog-photo-initials" aria-hidden="true">\${escapeHtml(avatarText(name))}</div>\`;
+  return \`<div class="mobile-dog-photo-button mobile-dog-photo-initials \${escapeHtml(sexClass)}" aria-hidden="true">\${escapeHtml(avatarText(name))}</div>\`;
 }
 
 function boardingDogThumbnailHtml(record = {}, options = {}) {
   const name = record.dogName || "Boarding dog";
   const photoRecord = boardingDogPhotoRecord(record);
   const photo = profilePhotoDirectSource(photoRecord);
-  const className = ["boarding-dog-photo-thumb", options.className || ""].filter(Boolean).join(" ");
+  const className = ["boarding-dog-photo-thumb", boardingDogPhotoSexClass(record, photoRecord), options.className || ""].filter(Boolean).join(" ");
   const initials = \`<span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span>\`;
   const image = \`<img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} />\`;
   const recordWithFallback = { ...photoRecord, id: photoRecord.id || record.id, type: photoRecord.type || record.type || "boardingDog" };
@@ -5534,6 +5543,10 @@ function setBoardingFormLocked() {
     field.disabled = false;
   });
   $("#boardingDogPhotoPicker").disabled = false;
+  syncDogPhotoSexClass($("#boardingDogPhotoPicker"), {
+    sex: formEl.elements.sex?.value || "",
+    spayNeuterStatus: formEl.elements.spayNeuterStatus?.value || "",
+  });
   $("#boardingDogSaveButton").hidden = false;
   $("#deleteBoardingDogButton").hidden = !formEl.elements.id.value || currentRole() !== "admin";
   formEl.classList.remove("is-readonly");

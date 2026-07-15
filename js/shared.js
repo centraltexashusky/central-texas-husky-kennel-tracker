@@ -820,6 +820,20 @@ function sexFromCombinedDogSpayNeuterStatus(status = "") {
   return "";
 }
 
+function dogPhotoSexClass(record = {}) {
+  const sex = String(record.sex || sexFromCombinedDogSpayNeuterStatus(record.spayNeuterStatus || "") || "").trim().toLowerCase();
+  if (sex.includes("female")) return "dog-photo-sex-female";
+  if (sex.includes("male")) return "dog-photo-sex-male";
+  return "";
+}
+
+function syncDogPhotoSexClass(element, record = {}) {
+  if (!element) return;
+  element.classList.remove("dog-photo-sex-female", "dog-photo-sex-male");
+  const className = dogPhotoSexClass(record);
+  if (className) element.classList.add(className);
+}
+
 // Extracted to js/boarding.js: dogTypeBadgeHtml
 
 
@@ -13386,6 +13400,9 @@ function initEvents() {
     if (dog) openBoardingDogDeleteConfirm(dog);
   });
   $("#boardingDogPhotoPicker").addEventListener("click", () => handleDogPhotoClick("boarding"));
+  $("#boardingDogForm").elements.spayNeuterStatus?.addEventListener("change", (event) => {
+    syncDogPhotoSexClass($("#boardingDogPhotoPicker"), { spayNeuterStatus: event.target.value || "" });
+  });
   $("#boardingDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("boarding"));
   $("#addBoardingCustomerUpdateButton")?.addEventListener("click", addBoardingCustomerUpdate);
   $("#uploadBoardingDogFilesButton")?.addEventListener("click", async () => {

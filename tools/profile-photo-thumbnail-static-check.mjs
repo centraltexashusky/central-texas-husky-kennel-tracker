@@ -39,13 +39,43 @@ const checks = [
     message: "media-access must pass thumbnail transform options into signed URLs.",
   },
   {
+    path: "js/shared.js",
+    includes: "function dogPhotoSexClass",
+    message: "profile photos must resolve a shared sex-border class.",
+  },
+  {
+    path: "js/daily.js",
+    includes: "dogPhotoSexClass(dog)",
+    message: "Our Dogs roster photos must use the sex-border class.",
+  },
+  {
+    path: "js/boarding.js",
+    includes: "boardingDogPhotoSexClass",
+    message: "Boarding Dogs photos must use the sex-border class.",
+  },
+  {
+    path: "js/dog-show.js",
+    includes: "dogPhotoSexClass(dog)",
+    message: "Dog Show photos must use the sex-border class.",
+  },
+  {
+    path: "styles.css",
+    includes: ".dog-photo-sex-female",
+    message: "female profile photos are missing a distinct border.",
+  },
+  {
+    path: "styles.css",
+    includes: ".dog-photo-sex-male",
+    message: "male profile photos are missing a distinct border.",
+  },
+  {
     path: "js/main.js",
-    includes: "20260715-dog-show-appearance-results",
+    includes: "20260715-dog-sex-photo-borders",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260715-dog-show-appearance-results",
+    includes: "20260715-dog-sex-photo-borders",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

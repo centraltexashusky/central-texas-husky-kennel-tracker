@@ -1,12 +1,12 @@
 // === MODULE: MAIN ===
 import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
-import "./shared.js?v=20260711-hidden-profile-photo-hydration";
+import "./shared.js?v=20260715-dog-sex-photo-borders";
 import "./auth.js?v=20260709-staff-payroll-financials";
 import "./customer.js?v=20260712-agreement-copy-and-checks";
-import "./boarding.js?v=20260713-financial-family-stay-window";
-import "./daily.js?v=20260709-owned-delete-admin-only";
+import "./boarding.js?v=20260715-dog-sex-photo-borders";
+import "./daily.js?v=20260715-dog-sex-photo-borders";
 import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-task-scheduler-visibility-dedupe";
-import "./dog-show.js?v=20260715-dog-show-appearance-results";
+import "./dog-show.js?v=20260715-dog-sex-photo-borders";
 import "./timesheet.js?v=20260709-staff-payroll-financials";
 import "./settings.js?v=20260713-financial-pickup-reporting-date";
 import "./notifications.js?v=20260703-sync-next-pass";

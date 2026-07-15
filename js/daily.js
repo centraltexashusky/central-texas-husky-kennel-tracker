@@ -672,9 +672,10 @@ function ownedDogMobileCardHtml(record = {}) {
   const name = ownedDogDisplayName(dog) || "Dog";
   const photo = profilePhotoDirectSource(dog);
   const hasPhoto = profilePhotoHasSource(dog);
+  const sexClass = dogPhotoSexClass(dog);
   const photoHtml = hasPhoto
-    ? \`<button type="button" class="mobile-dog-photo-button" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs(dog, "ownedDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`
-    : \`<button type="button" class="mobile-dog-photo-button mobile-dog-photo-initials" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} profile">\${escapeHtml(avatarText(name))}</button>\`;
+    ? \`<button type="button" class="mobile-dog-photo-button \${escapeHtml(sexClass)}" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} photo"\${profilePhotoAccessAttrs(dog, "ownedDog")}><img\${photo ? \` src="\${escapeHtml(photo)}"\` : ""} alt="\${escapeHtml(name)}"\${photo ? "" : " hidden"} /><span data-profile-photo-initials\${photo ? " hidden" : ""}>\${escapeHtml(avatarText(name))}</span></button>\`
+    : \`<button type="button" class="mobile-dog-photo-button mobile-dog-photo-initials \${escapeHtml(sexClass)}" data-action="view-owned-photo" data-id="\${escapeHtml(dog.id)}" aria-label="View \${escapeHtml(name)} profile">\${escapeHtml(avatarText(name))}</button>\`;
   const heatAction = dog.sex === "Female" ? \`<button type="button" class="secondary-button" data-action="quick-owned-log" data-care-type="Heat Note" data-id="\${escapeHtml(dog.id)}">Heat Note</button>\` : "";
   const hasRosterAlert = ownedDogHasRosterAlert(dog);
   return \`
@@ -910,6 +911,7 @@ function setOwnedDogActiveTab(tabName = "Overview") {
 function syncOwnedDogTabAvailability(record = activeOwnedDog() || {}) {
   const sex = $("#ownedDogSex")?.value || record.sex || "";
   const female = sex === "Female";
+  syncDogPhotoSexClass($("#ownedDogPhotoPicker"), { ...record, sex });
   const heatButton = $('#ownedDogProfileTabs [data-owned-profile-tab="Heat Cycle"]');
   if (heatButton) heatButton.disabled = !female;
   if ($("#ownedMaleHeatNote")) $("#ownedMaleHeatNote").hidden = female;

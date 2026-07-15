@@ -11467,6 +11467,18 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   width: 100%;
 }
 
+.dog-photo-sex-female {
+  border: 3px solid #E58AAA !important;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1px rgba(229, 138, 170, 0.18);
+}
+
+.dog-photo-sex-male {
+  border: 3px solid #5B9BD5 !important;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1px rgba(91, 155, 213, 0.18);
+}
+
 .dog-show-dog-copy,
 .dog-show-dog-status {
   display: grid;

@@ -41,6 +41,7 @@ const required = [
   ["js/dog-show.js", "activity.task?.id", "Synthetic prep tasks can incorrectly enter the persisted-task drag flow."],
   ["js/dog-show.js", "await syncDogShowPrepTask(entry)", "Fallback prep cards do not become persisted tasks when opened."],
   ["js/dog-show.js", "scheduleProfilePhotoHydrationSweep(20)", "Dog detail photos are not hydrated when the dialog opens."],
+  ["js/dog-show.js", "dogPhotoSexClass(dog)", "Dog Show profile photos do not show sex-specific borders."],
   ["js/dog-show.js", 'data-action="new-show-task" data-due-at=', "Calendar time slots cannot create show tasks."],
   ["js/dog-show.js", "dogShowPrepTaskFor", "Calendar does not reuse generated ring prep tasks."],
   ["js/dog-show.js", "dogShowUniqueTasks", "Duplicate generated ring-prep tasks are not collapsed for display."],
