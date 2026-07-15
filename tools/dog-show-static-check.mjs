@@ -8,6 +8,8 @@ const required = [
   ["index.html", 'id="dogShowMobileNav"', "Missing Dog Show mobile menu."],
   ["index.html", 'id="dogShowMoreMenu"', "Missing Dog Show More action menu."],
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
+  ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
+  ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
@@ -87,6 +89,7 @@ const required = [
   ["js/dog-show.js", "customerVisible", "Owner-visible notes/results are not separated."],
   ["styles.css", "body.is-dog-show-mode #mobileBottomNav", "Regular boarding mobile navigation is not isolated from Dog Show mode."],
   ["styles.css", ".dog-show-mobile-nav", "Dog Show mobile navigation styling is missing."],
+  ["styles.css", ".dog-show-home-rosette", "Dog Show Home rosette sizing is missing."],
   ["styles.css", ".mobile-bottom-nav,\n  .dog-show-mobile-nav {", "Dog Show and boarding mobile navigation do not share the same base color scheme."],
   ["styles.css", ".mobile-bottom-nav-button,\n  .dog-show-mobile-nav button {", "Dog Show and boarding mobile buttons do not share the same base styling."],
   ["styles.css", ':root[data-theme="light"] .mobile-bottom-nav,\n:root[data-theme="light"] .dog-show-mobile-nav {', "Dog Show and boarding mobile navigation do not share the light-theme color scheme."],
@@ -120,6 +123,7 @@ const forbidden = [
 ];
 
 const failures = [];
+if (!fs.existsSync("assets/icons/bis-rosette.png")) failures.push("The Dog Show Home rosette asset is missing.");
 for (const [path, needle, message] of required) {
   if (!read(path).includes(needle)) failures.push(message);
 }

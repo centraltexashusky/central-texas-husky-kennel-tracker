@@ -12839,6 +12839,12 @@ details.dog-show-ring-schedules {
     width: 24px;
   }
 
+  .dog-show-home-rosette {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.28));
+    height: 30px;
+    width: 24px;
+  }
+
   .dog-show-mobile-nav span {
     font-size: 0.68rem;
     font-weight: 800;

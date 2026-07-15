@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260715-mobile-nav-color-match",
+    mustInclude: "20260715-dog-show-rosette-home",
     message: "production cache keys must be bumped.",
   },
   {
