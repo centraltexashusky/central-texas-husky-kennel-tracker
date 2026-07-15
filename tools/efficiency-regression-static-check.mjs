@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260715-dog-show-potty-detail",
+    mustInclude: "20260715-mobile-nav-color-match",
     message: "production cache keys must be bumped.",
   },
   {

@@ -1,12 +1,12 @@
 // === MODULE: MAIN ===
 import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
-import "./shared.js?v=20260715-dog-show-potty-detail";
+import "./shared.js?v=20260715-mobile-nav-color-match";
 import "./auth.js?v=20260709-staff-payroll-financials";
 import "./customer.js?v=20260712-agreement-copy-and-checks";
-import "./boarding.js?v=20260715-dog-show-potty-detail";
-import "./daily.js?v=20260715-dog-show-potty-detail";
+import "./boarding.js?v=20260715-mobile-nav-color-match";
+import "./daily.js?v=20260715-mobile-nav-color-match";
 import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-task-scheduler-visibility-dedupe";
-import "./dog-show.js?v=20260715-dog-show-potty-detail";
+import "./dog-show.js?v=20260715-mobile-nav-color-match";
 import "./timesheet.js?v=20260709-staff-payroll-financials";
 import "./settings.js?v=20260713-financial-pickup-reporting-date";
 import "./notifications.js?v=20260703-sync-next-pass";

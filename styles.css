@@ -7197,7 +7197,8 @@ button.is-loading {
     padding-bottom: calc(124px + env(safe-area-inset-bottom));
   }
 
-  .mobile-bottom-nav {
+  .mobile-bottom-nav,
+  .dog-show-mobile-nav {
     align-items: stretch;
     background:
       linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.05)),
@@ -7218,11 +7219,13 @@ button.is-loading {
     z-index: 40;
   }
 
-  .mobile-bottom-nav[hidden] {
+  .mobile-bottom-nav[hidden],
+  .dog-show-mobile-nav[hidden] {
     display: none !important;
   }
 
-  .mobile-bottom-nav-button {
+  .mobile-bottom-nav-button,
+  .dog-show-mobile-nav button {
     align-items: center;
     appearance: none;
     background: transparent;
@@ -7254,19 +7257,24 @@ button.is-loading {
   }
 
   .mobile-bottom-nav-button:hover,
-  .mobile-bottom-nav-button:focus-visible {
+  .mobile-bottom-nav-button:focus-visible,
+  .dog-show-mobile-nav button:hover,
+  .dog-show-mobile-nav button:focus-visible {
     background: rgba(255, 255, 255, 0.12);
     color: #fff;
     outline: 0;
   }
 
-  .mobile-bottom-nav-button.is-active {
+  .mobile-bottom-nav-button.is-active,
+  .dog-show-mobile-nav button.is-active,
+  .dog-show-mobile-nav button.is-menu-open {
     background: rgba(255, 255, 255, 0.20);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 8px 18px rgba(0, 0, 0, 0.18);
     color: #fff;
   }
 
-  .mobile-bottom-nav-button:active {
+  .mobile-bottom-nav-button:active,
+  .dog-show-mobile-nav button:active {
     transform: scale(0.98);
   }
 
@@ -7531,12 +7539,14 @@ button.is-loading {
   body:not(.is-login-view) .customer-request-modal:not([hidden]),
   body:not(.is-login-view) .detail-dialog[open],
   body:not(.is-login-view) .mobile-more-sheet,
-  body:not(.is-login-view) .mobile-bottom-nav {
+  body:not(.is-login-view) .mobile-bottom-nav,
+  body:not(.is-login-view) .dog-show-mobile-nav {
     background: rgba(7, 16, 29, 0.98) !important;
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.58), 0 14px 34px rgba(0, 0, 0, 0.34);
   }
 
-  body:not(.is-login-view) .mobile-bottom-nav {
+  body:not(.is-login-view) .mobile-bottom-nav,
+  body:not(.is-login-view) .dog-show-mobile-nav {
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
   }
 
@@ -10783,14 +10793,16 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: var(--muted);
 }
 
-:root[data-theme="light"] .mobile-bottom-nav {
+:root[data-theme="light"] .mobile-bottom-nav,
+:root[data-theme="light"] .dog-show-mobile-nav {
   background: #17324D !important;
   border-color: rgba(229, 237, 247, 0.16);
   box-shadow: 0 12px 28px rgba(23, 32, 51, 0.24) !important;
   color: #FFFFFF;
 }
 
-:root[data-theme="light"] .mobile-bottom-nav-button {
+:root[data-theme="light"] .mobile-bottom-nav-button,
+:root[data-theme="light"] .dog-show-mobile-nav button {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
@@ -10798,7 +10810,10 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active,
-:root[data-theme="light"] .mobile-bottom-nav-button:hover {
+:root[data-theme="light"] .mobile-bottom-nav-button:hover,
+:root[data-theme="light"] .dog-show-mobile-nav button.is-active,
+:root[data-theme="light"] .dog-show-mobile-nav button.is-menu-open,
+:root[data-theme="light"] .dog-show-mobile-nav button:hover {
   background: #315F85;
   box-shadow: none;
   color: #FFFFFF;
@@ -11137,23 +11152,29 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #65748B;
 }
 
-:root[data-theme="light"] .mobile-bottom-nav {
+:root[data-theme="light"] .mobile-bottom-nav,
+:root[data-theme="light"] .dog-show-mobile-nav {
   background: #10283F !important;
   border-color: rgba(248, 250, 247, 0.12);
   padding: 8px 10px 10px;
 }
 
-:root[data-theme="light"] .mobile-bottom-nav-button {
+:root[data-theme="light"] .mobile-bottom-nav-button,
+:root[data-theme="light"] .dog-show-mobile-nav button {
   border: 1px solid transparent;
   color: #D8E0E7;
 }
 
-:root[data-theme="light"] .mobile-bottom-nav-button:hover {
+:root[data-theme="light"] .mobile-bottom-nav-button:hover,
+:root[data-theme="light"] .dog-show-mobile-nav button:hover,
+:root[data-theme="light"] .dog-show-mobile-nav button:focus-visible {
   background: rgba(255, 255, 255, 0.12);
   color: #FFFFFF;
 }
 
-:root[data-theme="light"] .mobile-bottom-nav-button.is-active {
+:root[data-theme="light"] .mobile-bottom-nav-button.is-active,
+:root[data-theme="light"] .dog-show-mobile-nav button.is-active,
+:root[data-theme="light"] .dog-show-mobile-nav button.is-menu-open {
   background: #315F85;
   border-color: rgba(216, 154, 43, 0.78);
   border-radius: 24px;
@@ -11166,7 +11187,10 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 }
 
 :root[data-theme="light"] .mobile-bottom-nav-button.is-active .mobile-bottom-nav-icon,
-:root[data-theme="light"] .mobile-bottom-nav-button.is-active .mobile-bottom-nav-label {
+:root[data-theme="light"] .mobile-bottom-nav-button.is-active .mobile-bottom-nav-label,
+:root[data-theme="light"] .dog-show-mobile-nav button.is-active svg,
+:root[data-theme="light"] .dog-show-mobile-nav button.is-active .dog-show-mobile-nav-image,
+:root[data-theme="light"] .dog-show-mobile-nav button.is-active span {
   position: relative;
   z-index: 2;
 }
@@ -12738,59 +12762,12 @@ details.dog-show-ring-schedules {
   }
 
   .dog-show-mobile-nav {
-    align-items: stretch;
-    background: #10283F;
-    border: 1px solid rgba(248, 250, 247, 0.12);
-    border-radius: 24px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
     display: flex;
-    gap: 4px;
-    left: max(10px, env(safe-area-inset-left));
-    min-height: 76px;
-    padding: 8px 10px 10px;
-    position: fixed;
-    right: max(10px, env(safe-area-inset-right));
     z-index: 46;
   }
 
   .dog-show-mobile-nav[hidden] {
     display: none !important;
-  }
-
-  .dog-show-mobile-nav button {
-    align-items: center;
-    appearance: none;
-    background: transparent;
-    border: 1px solid transparent;
-    border-radius: 18px;
-    box-shadow: none;
-    color: #D8E0E7;
-    display: grid;
-    flex: 1 1 0;
-    gap: 4px;
-    justify-items: center;
-    min-height: 60px;
-    min-width: 0;
-    padding: 6px 2px;
-  }
-
-  .dog-show-mobile-nav button.is-active {
-    background: #315F85;
-    border-color: rgba(216, 154, 43, 0.78);
-    border-radius: 24px;
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-    color: #FFFFFF;
-    margin-top: -6px;
-    min-height: 68px;
-    padding-bottom: 10px;
-    padding-top: 8px;
-  }
-
-  .dog-show-mobile-nav button.is-menu-open {
-    background: #315F85;
-    border-color: rgba(216, 154, 43, 0.78);
-    color: #FFFFFF;
   }
 
   .dog-show-more-backdrop {
