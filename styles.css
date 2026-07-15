@@ -11301,6 +11301,13 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #D8E0E7;
 }
 
+.dog-show-event-summary small {
+  color: #B9C9D6;
+  display: block;
+  font-size: 0.74rem;
+  margin-top: 4px;
+}
+
 .dog-show-event-summary .secondary-button {
   border-color: rgba(255, 255, 255, 0.28);
   color: #FFFFFF;
@@ -12348,6 +12355,24 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   margin: 0;
 }
 
+.dog-show-field-wide {
+  grid-column: 1 / -1;
+}
+
+.dog-show-form-section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  min-width: 0;
+  padding: 14px;
+}
+
+.dog-show-form-section legend {
+  color: var(--ink);
+  font-weight: 800;
+  padding: 0 6px;
+}
+
 .dog-show-quick-grid {
   display: grid;
   gap: 7px;
@@ -12397,6 +12422,26 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   flex: 0 0 20px;
   height: 20px;
   justify-content: center;
+}
+
+.dog-show-result-context {
+  background: var(--tint-blue);
+  border: 1px solid rgba(49, 95, 133, 0.24);
+  border-left: 4px solid var(--gold);
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  padding: 11px 12px;
+}
+
+.dog-show-result-context span,
+.dog-show-result-appearance-list small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.dog-show-result-appearance-list > button {
+  border-left: 4px solid var(--gold);
 }
 
 .dog-show-prep-preview,

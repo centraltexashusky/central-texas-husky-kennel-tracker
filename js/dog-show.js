@@ -296,8 +296,31 @@ function dogShowPhotoHtml(entry = {}, className = "dog-show-dog-photo") {
   return `<span class="${className}"><img${photo ? ` src="${escapeHtml(photo)}"` : ""} alt="${escapeHtml(name)}"${attrs}${photo ? "" : " hidden"}/><span data-profile-photo-initials${photo ? " hidden" : ""}>${escapeHtml(dogShowAvatarText(name))}</span></span>`;
 }
 
-function dogShowResultForEntry(entry = {}, event = dogShowActiveEvent()) {
-  return dogShowResults(event).find((result) => result.showEntryId === entry.id) || null;
+function dogShowResultsForEntry(entry = {}, event = dogShowActiveEvent()) {
+  return dogShowResults(event).filter((result) => result.showEntryId === entry.id);
+}
+
+function dogShowResultForSchedule(entry = {}, schedule = null, event = dogShowActiveEvent(), results = dogShowResultsForEntry(entry, event)) {
+  if (!schedule) return results.find((result) => !result.ringScheduleId) || null;
+  const exact = results.find((result) => result.ringScheduleId === schedule.id);
+  if (exact) return exact;
+  const firstScheduleId = dogShowRingSchedules(entry)[0]?.id || "";
+  return schedule.id === firstScheduleId ? results.find((result) => !result.ringScheduleId) || null : null;
+}
+
+function dogShowResultProgress(event = dogShowActiveEvent(), entries = dogShowEntries(event)) {
+  const resultsByEntry = new Map();
+  dogShowResults(event).forEach((result) => {
+    if (!resultsByEntry.has(result.showEntryId)) resultsByEntry.set(result.showEntryId, []);
+    resultsByEntry.get(result.showEntryId).push(result);
+  });
+  const appearances = entries
+    .filter((entry) => entry.attendanceRole === "Showing")
+    .flatMap((entry) => dogShowRingSchedules(entry).map((schedule) => ({ entry, schedule })));
+  return {
+    logged: appearances.filter(({ entry, schedule }) => dogShowResultForSchedule(entry, schedule, event, resultsByEntry.get(entry.id) || [])).length,
+    total: appearances.length,
+  };
 }
 
 function dogShowOutcomeLabel(value = "") {
@@ -348,7 +371,7 @@ function dogShowRenderEmpty(title, copy, action = "new-show-event", label = "Cre
 function dogShowHomeHtml(event) {
   const entries = dogShowEntries(event);
   const tasks = dogShowTasks(event);
-  const results = dogShowResults(event);
+  const resultProgress = dogShowResultProgress(event, entries);
   const conflicts = dogShowConflictEntryIds(entries);
   const needCare = entries.filter((entry) => dogShowAttentionState(entry) !== "current");
   const openTasks = tasks.filter((task) => task.status !== "Completed");
@@ -362,13 +385,14 @@ function dogShowHomeHtml(event) {
   }).slice(0, 10);
   const assignedEntries = entries.filter((entry) => entry.handlerEmail || entry.helperEmail);
   const assignmentText = entries.length ? `${assignedEntries.length} of ${entries.length} dogs assigned to a handler or care helper` : "No dogs added to this show yet";
+  const staySummary = [event.stayType, event.stayName, event.stayAddress].filter(Boolean).join(" · ");
   return `<div class="dog-show-view dog-show-home-view">
-    <section class="dog-show-event-summary"><div><span>Dog Shows</span><h3>${escapeHtml(event.name || "Show Weekend")}</h3><p>${escapeHtml([dogShowFormatDate(event.startDate), event.venue, event.cityState].filter(Boolean).join(" · "))}</p></div><button type="button" class="secondary-button" data-action="edit-show-event">Show Setup</button></section>
+    <section class="dog-show-event-summary"><div><span>Dog Shows</span><h3>${escapeHtml(event.name || "Show Weekend")}</h3><p>${escapeHtml([dogShowFormatDate(event.startDate), event.venue, event.venueAddress || event.cityState].filter(Boolean).join(" · "))}</p>${staySummary ? `<small>Stay: ${escapeHtml(staySummary)}</small>` : ""}</div><button type="button" class="secondary-button" data-action="edit-show-event">Show Setup</button></section>
     <section class="dog-show-stat-grid">
       <article><span>Need care</span><strong>${needCare.length}</strong><small>stale or no log</small></article>
       <article><span>Next ring</span><strong>${nextRing ? dogShowFormatTime(nextRing.time) : "--"}</strong><small>${nextRing ? dogShowEntryName(nextRing.entry) : "No upcoming ring"}</small></article>
       <article><span>Open tasks</span><strong>${openTasks.length}</strong><small>${conflicts.size ? `${conflicts.size} schedule conflicts` : "team workload"}</small></article>
-      <article><span>Results</span><strong>${results.length}/${showing.length}</strong><small>showing dogs logged</small></article>
+      <article><span>Results</span><strong>${resultProgress.logged}/${resultProgress.total}</strong><small>ring appearances logged</small></article>
     </section>
     <section class="dog-show-section-band"><div><h3>Next Actions</h3><p>Care status first, then preparation time.</p></div><button type="button" class="secondary-button" data-dog-show-view="dogs">All Dogs</button></section>
     <div class="dog-show-roster-list">${nextActions.length ? nextActions.map((entry) => dogShowEntryRowHtml(entry, { conflict: conflicts.has(entry.id) })).join("") : dogShowRenderEmpty("No dogs added", "Add Our Dogs or Boarding Dogs to this show weekend.", "add-show-dogs", "Add Dogs")}</div>
@@ -635,16 +659,16 @@ function dogShowTasksHtml(event) {
 
 function dogShowMoreHtml(event) {
   const entries = dogShowEntries(event);
-  const results = dogShowResults(event);
+  const resultProgress = dogShowResultProgress(event, entries);
   const packing = Array.isArray(event.packingItems) && event.packingItems.length ? event.packingItems : DOG_SHOW_DEFAULT_PACKING.map((label, index) => ({ id: `default-${index}`, label, completed: false }));
   const helperEmails = Array.isArray(event.helperEmails) ? event.helperEmails : [];
   return `<div class="dog-show-view dog-show-more-view">
     <section class="dog-show-list-toolbar"><div><h3>Show Operations</h3><p>Setup, packing, helpers, and results.</p></div></section>
     <div class="dog-show-more-grid">
-      <button type="button" data-action="edit-show-event"><span>S</span><strong>Show Setup</strong><small>Venue, dates, links, and notes</small></button>
+      <button type="button" data-action="edit-show-event"><span>S</span><strong>Show Setup</strong><small>Venue, stay, dates, links, and notes</small></button>
       <button type="button" data-action="add-show-dogs"><span>D</span><strong>Add Dogs</strong><small>Our Dogs or Boarding Dogs</small></button>
       <button type="button" data-action="show-helper-summary"><span>H</span><strong>Helpers</strong><small>${helperEmails.length} assigned to this weekend</small></button>
-      <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${results.length} of ${entries.filter((entry) => entry.attendanceRole === "Showing").length} showing dogs logged</small></button>
+      <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${resultProgress.logged} of ${resultProgress.total} ring appearances logged</small></button>
     </div>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Packing List</h3><p>${packing.filter((item) => item.completed).length} of ${packing.length} packed</p></div></div>
       <div class="dog-show-packing-list">${packing.map((item) => `<div class="dog-show-packing-item"><label><input type="checkbox" data-packing-id="${escapeHtml(item.id)}"${item.completed ? " checked" : ""}/><span>${escapeHtml(item.label)}</span></label><button type="button" class="dog-show-remove-packing" data-action="remove-packing-item" data-id="${escapeHtml(item.id)}" aria-label="Remove ${escapeHtml(item.label)}" title="Remove item">×</button></div>`).join("")}</div>
@@ -728,6 +752,18 @@ function dogShowHelperCheckboxes(selected = []) {
   return users.length ? users.map((user) => `<label class="dog-show-check-option"><input type="checkbox" name="helperEmails" value="${escapeHtml(user.email || user.id)}"${selectedEmails.has(normalizeEmail(user.email || user.id)) ? " checked" : ""}/><span><strong>${escapeHtml(user.name || user.email || "Staff")}</strong><small>${escapeHtml(roleLabel(user.role || "helper"))}</small></span></label>`).join("") : `<p class="muted-copy">Add staff or helper accounts in Settings first.</p>`;
 }
 
+function dogShowStayTypeOptions(selected = "") {
+  const options = [
+    { value: "", label: "Not set" },
+    { value: "Hotel", label: "Hotel" },
+    { value: "Camper / RV site", label: "Camper / RV site" },
+    { value: "Dry camping at venue", label: "Dry camping at venue" },
+    { value: "Day trip / no overnight", label: "Day trip / no overnight" },
+    { value: "Other", label: "Other" },
+  ];
+  return options.map((option) => `<option value="${escapeHtml(option.value)}"${option.value === selected ? " selected" : ""}>${escapeHtml(option.label)}</option>`).join("");
+}
+
 function openDogShowEventForm(event = {}) {
   const helperEmails = Array.isArray(event.helperEmails) ? event.helperEmails : [];
   openDogShowDialog(event.id ? "Edit Show Weekend" : "New Show Weekend", `<form id="dogShowEventForm" class="tracker-form" data-id="${escapeHtml(event.id || "")}">
@@ -735,7 +771,7 @@ function openDogShowEventForm(event = {}) {
       <label>Show name<input name="name" value="${escapeHtml(event.name || "")}" required placeholder="Austin Kennel Club Weekend"/></label>
       <label>Club<input name="club" value="${escapeHtml(event.club || "")}" placeholder="Austin Kennel Club"/></label>
       <label>Venue<input name="venue" value="${escapeHtml(event.venue || "")}" placeholder="Expo Center"/></label>
-      <label>City / state<input name="cityState" value="${escapeHtml(event.cityState || "")}" placeholder="Austin, TX"/></label>
+      <label class="dog-show-field-wide">Full venue address<input name="venueAddress" value="${escapeHtml(event.venueAddress || event.cityState || "")}" placeholder="123 Show Drive, Austin, TX 78701" autocomplete="street-address"/></label>
       <label>Start date<input type="date" name="startDate" value="${escapeHtml(event.startDate || todayDate())}" required/></label>
       <label>End date<input type="date" name="endDate" value="${escapeHtml(event.endDate || event.startDate || todayDate())}" required/></label>
       <label>Entry closing date<input type="date" name="entryClosingDate" value="${escapeHtml(event.entryClosingDate || "")}"/></label>
@@ -745,6 +781,12 @@ function openDogShowEventForm(event = {}) {
       <label>Judging program URL<input type="url" name="judgingProgramUrl" value="${escapeHtml(event.judgingProgramUrl || "")}"/></label>
       <label>Status<select name="status"><option${event.status !== "Completed" ? " selected" : ""}>Active</option><option${event.status === "Completed" ? " selected" : ""}>Completed</option></select></label>
     </div>
+    <fieldset class="dog-show-form-section"><legend>Stay at show</legend><div class="field-grid">
+      <label>Stay type<select name="stayType">${dogShowStayTypeOptions(event.stayType || "")}</select></label>
+      <label>Hotel, campground, or site name<input name="stayName" value="${escapeHtml(event.stayName || "")}" placeholder="Hotel or campsite name"/></label>
+      <label class="dog-show-field-wide">Stay address<input name="stayAddress" value="${escapeHtml(event.stayAddress || "")}" placeholder="Full hotel, campground, or site address" autocomplete="street-address"/></label>
+      <label class="dog-show-field-wide">Reservation or campsite details<textarea name="stayDetails" rows="2" placeholder="Confirmation number, campsite, check-in, hookups, or arrival notes">${escapeHtml(event.stayDetails || "")}</textarea></label>
+    </div></fieldset>
     <label>Weekend notes<textarea name="notes" rows="3">${escapeHtml(event.notes || "")}</textarea></label>
     <fieldset><legend>Helpers attending</legend><div class="dog-show-check-grid">${dogShowHelperCheckboxes(helperEmails)}</div></fieldset>
     <div class="button-row"><button type="submit">Save Show</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
@@ -843,7 +885,11 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}) {
   const ringSchedules = savedSchedules.length ? savedSchedules : [{ id: uid("showRing"), ringDate: event?.startDate || todayDate(), prepMinutes: Number(entry.prepMinutes ?? 45), readyBufferMinutes: Number(entry.readyBufferMinutes ?? 15) }];
   const logs = dogShowLogs(event).filter((log) => log.showEntryId === entry.id).sort((a, b) => new Date(b.loggedAt || 0) - new Date(a.loggedAt || 0)).slice(0, 10);
   const canRemoveLogs = currentRole() === "admin";
-  const result = dogShowResultForEntry(entry, event);
+  const entryResults = dogShowResultsForEntry(entry, event);
+  const resultCount = savedSchedules.filter((schedule) => dogShowResultForSchedule(entry, schedule, event, entryResults)).length;
+  const resultButtonLabel = entry.attendanceRole === "Showing" && savedSchedules.length
+    ? `Results ${resultCount}/${savedSchedules.length}`
+    : entry.attendanceRole === "Showing" ? "Set Up Result" : entryResults.length ? "Edit Result" : "Log Result";
   const confirmedLogType = quickConfirmation.type || "";
   const quickConfirmationText = confirmedLogType ? `${confirmedLogType} logged at ${dogShowFormatTime(quickConfirmation.loggedAt)} by ${quickConfirmation.helperName || currentUser?.name || "Staff"}.` : "";
   openDogShowDialog(dogShowEntryName(entry), `<div class="dog-show-detail-header">${dogShowPhotoHtml(entry, "dog-show-detail-photo")}<div><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><span>${escapeHtml([entry.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog", entry.attendanceRole, savedSchedules.length ? `${savedSchedules.length} ring appearance${savedSchedules.length === 1 ? "" : "s"}` : "Ring schedule needed"].filter(Boolean).join(" · "))}</span><small>Last attended: ${escapeHtml(dogShowLastLog(entry) ? dogShowFormatDateTime(dogShowLastLog(entry).loggedAt) : "No log")}</small></div></div>
@@ -853,7 +899,7 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}) {
       <button type="button" class="${confirmedLogType === "Feeding" ? "is-logged" : ""}" data-action="quick-show-log" data-log-type="Feeding" data-id="${escapeHtml(entry.id)}">Feeding</button>
       <button type="button" data-action="open-show-note" data-log-type="Behavior / Medical" data-id="${escapeHtml(entry.id)}">Behavior / Medical</button>
       <button type="button" data-action="open-show-note" data-log-type="Owner Note" data-id="${escapeHtml(entry.id)}">Owner Note</button>
-      <button type="button" data-action="open-show-result" data-id="${escapeHtml(entry.id)}">${result ? "Edit Result" : "Log Result"}</button>
+      <button type="button" data-action="open-show-result" data-id="${escapeHtml(entry.id)}">${escapeHtml(resultButtonLabel)}</button>
     </div>${quickConfirmationText ? `<p class="dog-show-quick-confirmation" role="status"><span aria-hidden="true">✓</span>${escapeHtml(quickConfirmationText)}</p>` : ""}</section>
     <form id="dogShowEntryForm" class="tracker-form" data-id="${escapeHtml(entry.id)}">
       <details class="dog-show-collapsible-section" open><summary><span><strong>Show Assignment</strong><small data-show-assignment-summary>${escapeHtml([entry.attendanceRole || "Showing", entry.status === "Scratched" ? "Withdrawn" : entry.status || "Confirmed"].join(" · "))}</small></span></summary><div class="dog-show-collapsible-content"><div class="field-grid">
@@ -878,9 +924,44 @@ function openDogShowNoteForm(entry, logType) {
   </form>`);
 }
 
-function openDogShowResultForm(entry) {
-  const result = dogShowResultForEntry(entry) || {};
-  openDogShowDialog(`Result: ${dogShowEntryName(entry)}`, `<form id="dogShowResultForm" class="tracker-form" data-entry-id="${escapeHtml(entry.id)}" data-id="${escapeHtml(result.id || "")}">
+function dogShowRingAppearanceTitle(schedule = {}, index = 0) {
+  const ringDateTime = dogShowRingDateTime({}, schedule);
+  return [
+    dogShowFormatDate(schedule.ringDate) || `Appearance ${index + 1}`,
+    schedule.ringTime && ringDateTime ? dogShowFormatTime(ringDateTime) : "Time not set",
+  ].filter(Boolean).join(" · ");
+}
+
+function dogShowRingAppearanceMeta(schedule = {}) {
+  return [
+    schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring not set",
+    schedule.classEntered || "Class not set",
+    schedule.judge ? `Judge: ${schedule.judge}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+function openDogShowResultPicker(entry) {
+  const schedules = dogShowRingSchedules(entry);
+  const entryResults = dogShowResultsForEntry(entry);
+  if (!schedules.length) {
+    return openDogShowDialog(`Results: ${dogShowEntryName(entry)}`, `<section class="dog-show-dialog-section"><div class="dog-show-result-context"><strong>Ring appearance required</strong><span>Add the date, time, ring, and class before logging this dog's result.</span></div><div class="button-row"><button type="button" data-action="back-to-show-dog" data-id="${escapeHtml(entry.id)}">Add Ring Appearance</button></div></section>`);
+  }
+  openDogShowDialog(`Results: ${dogShowEntryName(entry)}`, `<section class="dog-show-dialog-section"><div><h3>Choose Ring Appearance</h3><p class="muted-copy">Log each show separately, including multiple shows on the same day.</p></div><div class="dog-show-summary-list dog-show-result-appearance-list">${schedules.map((schedule, index) => {
+    const result = dogShowResultForSchedule(entry, schedule, dogShowActiveEvent(), entryResults);
+    return `<button type="button" data-action="open-show-result" data-id="${escapeHtml(entry.id)}" data-ring-schedule-id="${escapeHtml(schedule.id)}"><strong>${escapeHtml(dogShowRingAppearanceTitle(schedule, index))}</strong><span>${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span><small>${result ? escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, result.awards].filter(Boolean).join(" · ") || "Result logged") : "No result logged"}</small></button>`;
+  }).join("")}</div><div class="button-row"><button type="button" class="secondary-button" data-action="back-to-show-dog" data-id="${escapeHtml(entry.id)}">Back to Dog</button></div></section>`);
+}
+
+function openDogShowResultForm(entry, ringScheduleId = "") {
+  const schedules = dogShowRingSchedules(entry);
+  const schedule = schedules.find((item) => item.id === ringScheduleId) || null;
+  const result = dogShowResultForSchedule(entry, schedule, dogShowActiveEvent(), dogShowResultsForEntry(entry)) || {};
+  const scheduleIndex = schedule ? schedules.findIndex((item) => item.id === schedule.id) : -1;
+  const resultContext = schedule
+    ? `<div class="dog-show-result-context"><strong>${escapeHtml(dogShowRingAppearanceTitle(schedule, scheduleIndex))}</strong><span>${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span></div>`
+    : `<div class="dog-show-result-context"><strong>General show result</strong><span>No ring appearance is assigned.</span></div>`;
+  openDogShowDialog(`Result: ${dogShowEntryName(entry)}`, `<form id="dogShowResultForm" class="tracker-form" data-entry-id="${escapeHtml(entry.id)}" data-ring-schedule-id="${escapeHtml(schedule?.id || "")}" data-id="${escapeHtml(result.id || "")}">
+    ${resultContext}
     <div class="field-grid">
       <label>Outcome<select name="outcome">${["Win", "Placement", "No placement", "Scratched", "Socialization only"].map((value) => `<option value="${value}"${value === result.outcome ? " selected" : ""}>${dogShowOutcomeLabel(value)}</option>`).join("")}</select></label>
       <label>Placement<input name="placement" value="${escapeHtml(result.placement || "")}" placeholder="1st Open Bitch"/></label>
@@ -890,7 +971,7 @@ function openDogShowResultForm(entry) {
     <label>Judge notes<textarea name="judgeNotes" rows="3">${escapeHtml(result.judgeNotes || "")}</textarea></label>
     <label>Owner-facing summary<textarea name="customerSummary" rows="3">${escapeHtml(result.customerSummary || "")}</textarea></label>
     <label class="inline-check"><input type="checkbox" name="customerVisible"${result.customerVisible ? " checked" : ""}/> Visible to owner/customer updates</label>
-    <div class="button-row"><button type="submit">Save Result</button><button type="button" class="secondary-button" data-action="back-to-show-dog" data-id="${escapeHtml(entry.id)}">Back</button></div>
+    <div class="button-row"><button type="submit">Save Result</button><button type="button" class="secondary-button" data-action="${schedule ? "back-to-show-results" : "back-to-show-dog"}" data-id="${escapeHtml(entry.id)}">Back</button></div>
   </form>`);
 }
 
@@ -1059,7 +1140,7 @@ async function saveDogShowEntry(form) {
 
 async function createDogShowLog(entry, activityType, note = "Logged", options = {}) {
   const record = await saveDogShowRecord("showCareLog", {
-    id: uid("showCareLog"), showEventId: entry.showEventId, showEntryId: entry.id, dogId: entry.dogId, dogType: entry.dogType, dogName: dogShowEntryName(entry), activityType, note, severity: options.severity || "", customerVisible: options.customerVisible === true, loggedAt: new Date().toISOString(), helperName: currentUser?.name || "Staff", helperEmail: currentUser?.email || "", submittedAt: new Date().toISOString(),
+    id: uid("showCareLog"), showEventId: entry.showEventId, showEntryId: entry.id, ringScheduleId: options.ringScheduleId || "", dogId: entry.dogId, dogType: entry.dogType, dogName: dogShowEntryName(entry), activityType, note, severity: options.severity || "", customerVisible: options.customerVisible === true, loggedAt: new Date().toISOString(), helperName: currentUser?.name || "Staff", helperEmail: currentUser?.email || "", submittedAt: new Date().toISOString(),
   });
   renderDogShow();
   return record;
@@ -1077,12 +1158,18 @@ async function saveDogShowNote(form) {
 async function saveDogShowResult(form) {
   const entry = dogShowEntries().find((item) => item.id === form.dataset.entryId);
   if (!entry) return;
+  const schedules = dogShowRingSchedules(entry);
+  const ringScheduleId = form.dataset.ringScheduleId || "";
+  const schedule = schedules.find((item) => item.id === ringScheduleId) || null;
+  if (entry.attendanceRole === "Showing" && !schedule) return showToast("Choose a ring appearance before logging the result.");
   const existing = form.dataset.id ? readRecords("showResult").find((result) => result.id === form.dataset.id) || {} : {};
   const data = formPayload(form);
-  await saveDogShowRecord("showResult", { ...existing, ...data, id: existing.id || uid("showResult"), showEventId: entry.showEventId, showEntryId: entry.id, dogId: entry.dogId, dogType: entry.dogType, dogName: dogShowEntryName(entry), customerVisible: Boolean(form.elements.customerVisible?.checked), loggedAt: existing.loggedAt || new Date().toISOString(), helperEmail: currentUser?.email || "", submittedAt: existing.submittedAt || new Date().toISOString() });
-  await createDogShowLog(entry, "Result", [dogShowOutcomeLabel(data.outcome), data.placement, data.awards].filter(Boolean).join(" · ") || "Result logged", { customerVisible: Boolean(form.elements.customerVisible?.checked) });
-  openDogShowEntryForm(entry);
-  showToast("Show result saved.");
+  const result = await saveDogShowRecord("showResult", { ...existing, ...data, id: existing.id || (schedule ? `showResult-${entry.id}-${schedule.id}` : uid("showResult")), showEventId: entry.showEventId, showEntryId: entry.id, ringScheduleId: schedule?.id || "", ringDate: schedule?.ringDate || "", ringTime: schedule?.ringTime || "", ringNumber: schedule?.ringNumber || "", classEntered: schedule?.classEntered || "", judge: schedule?.judge || "", dogId: entry.dogId, dogType: entry.dogType, dogName: dogShowEntryName(entry), customerVisible: Boolean(form.elements.customerVisible?.checked), loggedAt: existing.loggedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), helperEmail: currentUser?.email || "", submittedAt: existing.submittedAt || new Date().toISOString() });
+  const appearance = schedule ? dogShowRingAppearanceMeta(schedule) : "General show result";
+  await createDogShowLog(entry, "Result", [appearance, dogShowOutcomeLabel(data.outcome), data.placement, data.awards].filter(Boolean).join(" · ") || "Result logged", { customerVisible: Boolean(form.elements.customerVisible?.checked), ringScheduleId: result.ringScheduleId });
+  if (schedules.length) openDogShowResultPicker(entry);
+  else openDogShowEntryForm(entry);
+  showToast(schedule ? `Result saved for ${dogShowRingAppearanceTitle(schedule, schedules.indexOf(schedule))}.` : "Show result saved.");
 }
 
 async function saveDogShowTask(form) {
@@ -1201,7 +1288,14 @@ function openDogShowHelperSummary() {
 function openDogShowResultSummary() {
   const event = dogShowActiveEvent();
   const results = dogShowResults(event);
-  openDogShowDialog("Show Results", results.length ? `<div class="dog-show-summary-list">${results.map((result) => `<button type="button" data-action="open-show-dog" data-id="${escapeHtml(result.showEntryId)}"><strong>${escapeHtml(result.dogName || "Dog")}</strong><span>${escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, result.awards].filter(Boolean).join(" · ") || "Result logged")}</span></button>`).join("")}</div>` : dogShowRenderEmpty("No results logged", "Open a showing dog's card and choose Log Result.", "close-show-dialog", "Close"));
+  const entries = dogShowEntries(event);
+  openDogShowDialog("Show Results", results.length ? `<div class="dog-show-summary-list dog-show-result-appearance-list">${results.map((result) => {
+    const entry = entries.find((item) => item.id === result.showEntryId) || {};
+    const schedules = dogShowRingSchedules(entry);
+    const schedule = schedules.find((item) => item.id === result.ringScheduleId) || (!result.ringScheduleId ? schedules[0] : null);
+    const appearance = schedule ? dogShowRingAppearanceTitle(schedule, schedules.indexOf(schedule)) : "General result";
+    return `<button type="button" data-action="open-show-result" data-id="${escapeHtml(result.showEntryId)}" data-ring-schedule-id="${escapeHtml(schedule?.id || "")}"><strong>${escapeHtml(result.dogName || dogShowEntryName(entry) || "Dog")}</strong><span>${escapeHtml([appearance, schedule ? dogShowRingAppearanceMeta(schedule) : ""].filter(Boolean).join(" · "))}</span><small>${escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, result.awards].filter(Boolean).join(" · ") || "Result logged")}</small></button>`;
+  }).join("")}</div>` : dogShowRenderEmpty("No results logged", "Open a showing dog's card and choose a ring appearance to log its result.", "close-show-dialog", "Close"));
 }
 
 function setupDogShowEventListeners() {
@@ -1402,6 +1496,7 @@ function setupDogShowEventListeners() {
       dialog.close();
     }
     if (action.dataset.action === "back-to-show-dog" && entry) openDogShowEntryForm(entry);
+    if (action.dataset.action === "back-to-show-results" && entry) openDogShowResultPicker(entry);
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "quick-show-log" && entry) {
       const button = action;
@@ -1411,7 +1506,11 @@ function setupDogShowEventListeners() {
       showToast(`${action.dataset.logType} logged for ${dogShowEntryName(entry)}.`);
     }
     if (action.dataset.action === "open-show-note" && entry) openDogShowNoteForm(entry, action.dataset.logType || "Note");
-    if (action.dataset.action === "open-show-result" && entry) openDogShowResultForm(entry);
+    if (action.dataset.action === "open-show-result" && entry) {
+      const ringScheduleId = action.dataset.ringScheduleId || "";
+      if (ringScheduleId || entry.attendanceRole !== "Showing") openDogShowResultForm(entry, ringScheduleId);
+      else openDogShowResultPicker(entry);
+    }
     if (action.dataset.action === "remove-show-entry" && entry && window.confirm(`Remove ${dogShowEntryName(entry)} from this show?`)) {
       await saveDogShowRecord("showEntry", { ...entry, removed: true, removedAt: new Date().toISOString(), removedBy: currentUser?.email || "" });
       dialog.close();

@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260715-dog-show-prep-dedupe",
+    mustInclude: "20260715-dog-show-appearance-results",
     message: "production cache keys must be bumped.",
   },
   {
