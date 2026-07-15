@@ -60,8 +60,36 @@ function dogShowEntries(event = dogShowActiveEvent()) {
   return event ? dogShowRecords("showEntry", event.id) : [];
 }
 
+function dogShowPrepTaskLogicalKey(task = {}, entries = []) {
+  if (task.source !== "auto-ring-prep") {
+    return `task:${task.id || [task.showEntryId, task.taskType, task.dueAt, task.title].join(":")}`;
+  }
+  const entry = entries.find((item) => item.id === task.showEntryId || (item.dogId === task.dogId && item.dogType === task.dogType));
+  const firstScheduleId = entry ? dogShowRingSchedules(entry)[0]?.id || "" : "";
+  const entryKey = task.showEntryId || `${task.dogType || "dog"}:${task.dogId || "unknown"}`;
+  return `auto-ring-prep:${entryKey}:${task.ringScheduleId || firstScheduleId || task.dueAt || task.id}`;
+}
+
+function dogShowPreferredPrepTask(left = {}, right = {}) {
+  const completedDiff = Number(right.status === "Completed") - Number(left.status === "Completed");
+  if (completedDiff) return completedDiff > 0 ? right : left;
+  const updatedDiff = new Date(right.updatedAt || right.submittedAt || 0) - new Date(left.updatedAt || left.submittedAt || 0);
+  if (updatedDiff) return updatedDiff > 0 ? right : left;
+  return right.ringScheduleId && !left.ringScheduleId ? right : left;
+}
+
+function dogShowUniqueTasks(tasks = [], entries = []) {
+  const byKey = new Map();
+  tasks.forEach((task) => {
+    const key = dogShowPrepTaskLogicalKey(task, entries);
+    const existing = byKey.get(key);
+    byKey.set(key, existing && task.source === "auto-ring-prep" ? dogShowPreferredPrepTask(existing, task) : task);
+  });
+  return [...byKey.values()];
+}
+
 function dogShowTasks(event = dogShowActiveEvent()) {
-  return event ? dogShowRecords("showDayTask", event.id) : [];
+  return event ? dogShowUniqueTasks(dogShowRecords("showDayTask", event.id), dogShowEntries(event)) : [];
 }
 
 function dogShowLogs(event = dogShowActiveEvent()) {
@@ -963,7 +991,7 @@ async function saveDogShowDogs(form) {
 }
 
 async function syncDogShowPrepTask(entry) {
-  const existingTasks = dogShowTasks().filter((task) => task.source === "auto-ring-prep" && task.showEntryId === entry.id);
+  const existingTasks = dogShowRecords("showDayTask", entry.showEventId).filter((task) => task.source === "auto-ring-prep" && task.showEntryId === entry.id);
   const schedules = entry.attendanceRole === "Showing"
     ? dogShowRingSchedules(entry).map((schedule) => ({ schedule, prep: dogShowPrepTimes(entry, schedule) })).filter((item) => item.prep.start)
     : [];
@@ -971,11 +999,11 @@ async function syncDogShowPrepTask(entry) {
 
   for (const [index, item] of schedules.entries()) {
     const { schedule, prep } = item;
-    const existing = existingTasks.find((task) => task.ringScheduleId === schedule.id)
-      || (index === 0 ? existingTasks.find((task) => !task.ringScheduleId) : null);
+    const candidates = existingTasks.filter((task) => task.ringScheduleId === schedule.id || (index === 0 && !task.ringScheduleId));
+    const existing = candidates.reduce((preferred, task) => preferred ? dogShowPreferredPrepTask(preferred, task) : task, null);
     const saved = await saveDogShowRecord("showDayTask", {
       ...(existing || {}),
-      id: existing?.id || uid("showDayTask"),
+      id: existing?.id || `showDayTask-ring-prep-${entry.id}-${schedule.id}`,
       showEventId: entry.showEventId,
       showEntryId: entry.id,
       ringScheduleId: schedule.id,
@@ -998,7 +1026,7 @@ async function syncDogShowPrepTask(entry) {
 
   for (const task of existingTasks) {
     if (!keptTaskIds.has(task.id) && task.status !== "Completed") {
-      await saveDogShowRecord("showDayTask", { ...task, removed: true, removedAt: new Date().toISOString() });
+      await saveDogShowRecord("showDayTask", { ...task, removed: true, removedAt: new Date().toISOString(), removedBy: currentUser?.name || "Staff", removedEmail: currentUser?.email || "" });
     }
   }
 }
