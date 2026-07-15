@@ -74,6 +74,13 @@ const required = [
   ["js/dog-show.js", "createDogShowWaterRound", "Large-team water rounds are missing."],
   ["js/dog-show.js", "completeDogShowTasks", "Batch task completion is missing."],
   ["js/dog-show.js", "quick-show-log", "One-tap dog care logging is missing."],
+  ["js/dog-show.js", 'data-action="open-show-potty"', "Potty quick logging does not open an outcome picker."],
+  ["js/dog-show.js", 'data-potty-type="Pee"', "Potty quick logging cannot record pee."],
+  ["js/dog-show.js", 'data-potty-type="Poop"', "Potty quick logging cannot record poop."],
+  ["js/dog-show.js", 'data-potty-type="Pee + Poop"', "Potty quick logging cannot record both outcomes."],
+  ["js/dog-show.js", 'pottyType: options.pottyType || ""', "Dog show potty outcomes are not persisted as structured data."],
+  ["js/dog-show.js", "dogShowCareLogName", "Dog show potty outcomes are not available to log removal and audit labels."],
+  ["styles.css", ".dog-show-potty-grid", "The potty outcome picker is not styled for quick use."],
   ["js/dog-show.js", "dog-show-quick-confirmation", "Quick dog care logging does not provide an in-dialog confirmation."],
   ["js/dog-show.js", "dog-show-collapsible-section", "Dog assignment and ring appearance controls are not collapsible."],
   ["js/dog-show.js", "Dog Assignments", "The ambiguous Team Coverage summary is still present."],
@@ -100,6 +107,7 @@ const required = [
 ];
 
 const forbidden = [
+  ['data-action="quick-show-log" data-log-type="Potty"', "Potty must require a pee or poop outcome before logging."],
   ['upsertRecord("boardingDog"', "Dog Show module must not write boarding dog records."],
   ['saveDogShowRecord("boardingDog"', "Dog Show module must not save boarding dog records."],
   ['upsertRecord("careLog"', "Dog Show module must not write boarding/shared care logs."],

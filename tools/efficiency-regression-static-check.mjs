@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "index.html",
-    mustInclude: "20260715-dog-sex-photo-borders",
+    mustInclude: "20260715-dog-show-potty-detail",
     message: "production cache keys must be bumped.",
   },
   {

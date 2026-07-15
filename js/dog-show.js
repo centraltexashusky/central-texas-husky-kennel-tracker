@@ -96,6 +96,11 @@ function dogShowLogs(event = dogShowActiveEvent()) {
   return event ? dogShowRecords("showCareLog", event.id) : [];
 }
 
+function dogShowCareLogName(log = {}) {
+  const activityType = log.activityType || "Care";
+  return activityType === "Potty" && log.pottyType ? `${activityType} (${log.pottyType})` : activityType;
+}
+
 function dogShowResults(event = dogShowActiveEvent()) {
   return event ? dogShowRecords("showResult", event.id) : [];
 }
@@ -892,10 +897,11 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}) {
     ? `Results ${resultCount}/${savedSchedules.length}`
     : entry.attendanceRole === "Showing" ? "Set Up Result" : entryResults.length ? "Edit Result" : "Log Result";
   const confirmedLogType = quickConfirmation.type || "";
-  const quickConfirmationText = confirmedLogType ? `${confirmedLogType} logged at ${dogShowFormatTime(quickConfirmation.loggedAt)} by ${quickConfirmation.helperName || currentUser?.name || "Staff"}.` : "";
+  const confirmationLabel = quickConfirmation.label || confirmedLogType;
+  const quickConfirmationText = confirmedLogType ? `${confirmationLabel} logged at ${dogShowFormatTime(quickConfirmation.loggedAt)} by ${quickConfirmation.helperName || currentUser?.name || "Staff"}.` : "";
   openDogShowDialog(dogShowEntryName(entry), `<div class="dog-show-detail-header">${dogShowPhotoHtml(entry, "dog-show-detail-photo")}<div><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><span>${escapeHtml([entry.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog", entry.attendanceRole, savedSchedules.length ? `${savedSchedules.length} ring appearance${savedSchedules.length === 1 ? "" : "s"}` : "Ring schedule needed"].filter(Boolean).join(" · "))}</span><small>Last attended: ${escapeHtml(dogShowLastLog(entry) ? dogShowFormatDateTime(dogShowLastLog(entry).loggedAt) : "No log")}</small></div></div>
     <section class="dog-show-dialog-section"><h3>Quick Log</h3><div class="dog-show-quick-grid">
-      <button type="button" class="${confirmedLogType === "Potty" ? "is-logged" : ""}" data-action="quick-show-log" data-log-type="Potty" data-id="${escapeHtml(entry.id)}">Potty</button>
+      <button type="button" class="${confirmedLogType === "Potty" ? "is-logged" : ""}" data-action="open-show-potty" data-id="${escapeHtml(entry.id)}">Potty</button>
       <button type="button" class="${confirmedLogType === "Water" ? "is-logged" : ""}" data-action="quick-show-log" data-log-type="Water" data-id="${escapeHtml(entry.id)}">Water</button>
       <button type="button" class="${confirmedLogType === "Feeding" ? "is-logged" : ""}" data-action="quick-show-log" data-log-type="Feeding" data-id="${escapeHtml(entry.id)}">Feeding</button>
       <button type="button" data-action="open-show-note" data-log-type="Behavior / Medical" data-id="${escapeHtml(entry.id)}">Behavior / Medical</button>
@@ -913,7 +919,19 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}) {
       <label>Show notes<textarea name="notes" rows="2">${escapeHtml(entry.notes || "")}</textarea></label>
       <div class="button-row"><button type="submit">Save Dog</button><button type="button" class="secondary-button" data-action="remove-show-entry" data-id="${escapeHtml(entry.id)}">Remove From Show</button></div>
     </form>
-    <section class="dog-show-dialog-section"><h3>Show Timeline</h3><div class="dog-show-log-timeline">${logs.length ? logs.map((log) => `<article><strong>${escapeHtml(log.activityType || "Care")}</strong><span>${escapeHtml(log.note || "Logged")}</span><small>${escapeHtml(dogShowFormatDateTime(log.loggedAt || log.updatedAt))} · ${escapeHtml(log.helperName || dogShowStaffLabel(log.helperEmail))}${log.customerVisible ? " · Owner visible" : ""}</small>${canRemoveLogs ? `<button type="button" class="dog-show-remove-log" data-action="remove-show-log" data-id="${escapeHtml(log.id)}" data-entry-id="${escapeHtml(entry.id)}" aria-label="Remove ${escapeHtml(log.activityType || "care")} log" title="Remove logged item">×</button>` : ""}</article>`).join("") : "<p>No show care logged yet.</p>"}</div></section>`);
+    <section class="dog-show-dialog-section"><h3>Show Timeline</h3><div class="dog-show-log-timeline">${logs.length ? logs.map((log) => `<article><strong>${escapeHtml(log.activityType || "Care")}</strong><span>${escapeHtml(log.note || "Logged")}</span><small>${escapeHtml(dogShowFormatDateTime(log.loggedAt || log.updatedAt))} · ${escapeHtml(log.helperName || dogShowStaffLabel(log.helperEmail))}${log.customerVisible ? " · Owner visible" : ""}</small>${canRemoveLogs ? `<button type="button" class="dog-show-remove-log" data-action="remove-show-log" data-id="${escapeHtml(log.id)}" data-entry-id="${escapeHtml(entry.id)}" aria-label="Remove ${escapeHtml(dogShowCareLogName(log))} log" title="Remove logged item">×</button>` : ""}</article>`).join("") : "<p>No show care logged yet.</p>"}</div></section>`);
+}
+
+function openDogShowPottyPicker(entry) {
+  openDogShowDialog(`Potty: ${dogShowEntryName(entry)}`, `<section class="dog-show-dialog-section dog-show-potty-picker">
+    <div class="dog-show-result-context"><strong>What did ${escapeHtml(dogShowEntryName(entry))} do?</strong><span>The selected outcome will be logged with your name and the current time.</span></div>
+    <div class="dog-show-potty-grid" role="group" aria-label="Potty outcome">
+      <button type="button" data-action="quick-show-potty" data-potty-type="Pee" data-id="${escapeHtml(entry.id)}">Pee</button>
+      <button type="button" data-action="quick-show-potty" data-potty-type="Poop" data-id="${escapeHtml(entry.id)}">Poop</button>
+      <button type="button" data-action="quick-show-potty" data-potty-type="Pee + Poop" data-id="${escapeHtml(entry.id)}">Pee + Poop</button>
+    </div>
+    <div class="button-row"><button type="button" class="secondary-button" data-action="back-to-show-dog" data-id="${escapeHtml(entry.id)}">Back</button></div>
+  </section>`);
 }
 
 function openDogShowNoteForm(entry, logType) {
@@ -1141,7 +1159,7 @@ async function saveDogShowEntry(form) {
 
 async function createDogShowLog(entry, activityType, note = "Logged", options = {}) {
   const record = await saveDogShowRecord("showCareLog", {
-    id: uid("showCareLog"), showEventId: entry.showEventId, showEntryId: entry.id, ringScheduleId: options.ringScheduleId || "", dogId: entry.dogId, dogType: entry.dogType, dogName: dogShowEntryName(entry), activityType, note, severity: options.severity || "", customerVisible: options.customerVisible === true, loggedAt: new Date().toISOString(), helperName: currentUser?.name || "Staff", helperEmail: currentUser?.email || "", submittedAt: new Date().toISOString(),
+    id: uid("showCareLog"), showEventId: entry.showEventId, showEntryId: entry.id, ringScheduleId: options.ringScheduleId || "", dogId: entry.dogId, dogType: entry.dogType, dogName: dogShowEntryName(entry), activityType, pottyType: options.pottyType || "", note, severity: options.severity || "", customerVisible: options.customerVisible === true, loggedAt: new Date().toISOString(), helperName: currentUser?.name || "Staff", helperEmail: currentUser?.email || "", submittedAt: new Date().toISOString(),
   });
   renderDogShow();
   return record;
@@ -1198,9 +1216,9 @@ async function removeDogShowTask(id = "") {
 async function removeDogShowLog(id = "", entryId = "") {
   if (currentRole() !== "admin") return showToast("Admin access required to remove a logged item.");
   const log = dogShowLogs().find((item) => item.id === id);
-  if (!log || !window.confirm(`Remove this ${log.activityType || "care"} log?`)) return;
+  if (!log || !window.confirm(`Remove this ${dogShowCareLogName(log)} log?`)) return;
   const removed = await saveDogShowRecord("showCareLog", { ...log, removed: true, removedAt: new Date().toISOString(), removedBy: currentUser?.name || "Admin", removedEmail: currentUser?.email || "" });
-  if (typeof addAuditLog === "function") await addAuditLog("Removed dog show care log", "showCareLog", removed, `${log.dogName || "Dog"} · ${log.activityType || "Care"}`);
+  if (typeof addAuditLog === "function") await addAuditLog("Removed dog show care log", "showCareLog", removed, `${log.dogName || "Dog"} · ${dogShowCareLogName(log)}`);
   renderDogShow();
   const entry = dogShowEntries().find((item) => item.id === (entryId || log.showEntryId));
   if (entry) openDogShowEntryForm(entry);
@@ -1499,6 +1517,15 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "back-to-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "back-to-show-results" && entry) openDogShowResultPicker(entry);
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
+    if (action.dataset.action === "open-show-potty" && entry) openDogShowPottyPicker(entry);
+    if (action.dataset.action === "quick-show-potty" && entry) {
+      const pottyType = action.dataset.pottyType || "";
+      if (!pottyType) return;
+      action.disabled = true;
+      const createdLog = await createDogShowLog(entry, "Potty", pottyType, { pottyType });
+      openDogShowEntryForm(entry, { type: "Potty", label: pottyType, loggedAt: createdLog?.loggedAt || new Date().toISOString(), helperName: createdLog?.helperName || "" });
+      showToast(`${pottyType} logged for ${dogShowEntryName(entry)}.`);
+    }
     if (action.dataset.action === "quick-show-log" && entry) {
       const button = action;
       button.disabled = true;

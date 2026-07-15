@@ -70,12 +70,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260715-dog-sex-photo-borders",
+    includes: "20260715-dog-show-potty-detail",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260715-dog-sex-photo-borders",
+    includes: "20260715-dog-show-potty-detail",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

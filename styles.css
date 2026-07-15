@@ -12411,6 +12411,23 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #247A45;
 }
 
+.dog-show-potty-picker {
+  gap: 12px;
+}
+
+.dog-show-potty-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dog-show-potty-grid button {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  min-height: 52px;
+}
+
 .dog-show-quick-confirmation {
   align-items: center;
   background: #EFFAF3;
