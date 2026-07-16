@@ -78,6 +78,11 @@ const required = [
   ["js/dog-show.js", "createDogShowWaterRound", "Large-team water rounds are missing."],
   ["js/dog-show.js", "completeDogShowTasks", "Batch task completion is missing."],
   ["js/dog-show.js", "quick-show-log", "One-tap dog care logging is missing."],
+  ["js/dog-show.js", 'class="dog-show-card-quick-actions"', "Dog roster cards are missing visible quick care actions."],
+  ["js/dog-show.js", '>Food</button>', "Dog roster cards are missing the Food quick action."],
+  ["js/dog-show.js", '>Medical/Behavior</button>', "Dog roster cards are missing the Medical/Behavior quick action."],
+  ["js/dog-show.js", 'class="dog-show-ring-flag"', "Dog roster cards do not present ring and time as a flag."],
+  ["js/dog-show.js", 'quickActions: true', "Dog Show Dogs view does not enable card quick actions."],
   ["js/dog-show.js", 'data-action="open-show-potty"', "Potty quick logging does not open an outcome picker."],
   ["js/dog-show.js", 'data-potty-type="Pee"', "Potty quick logging cannot record pee."],
   ["js/dog-show.js", 'data-potty-type="Poop"', "Potty quick logging cannot record poop."],
@@ -85,6 +90,9 @@ const required = [
   ["js/dog-show.js", 'pottyType: options.pottyType || ""', "Dog show potty outcomes are not persisted as structured data."],
   ["js/dog-show.js", "dogShowCareLogName", "Dog show potty outcomes are not available to log removal and audit labels."],
   ["styles.css", ".dog-show-potty-grid", "The potty outcome picker is not styled for quick use."],
+  ["styles.css", ".dog-show-card-quick-actions", "Dog roster quick actions are not styled for mobile use."],
+  ["styles.css", ".dog-show-ring-flag", "Dog roster ring and time flags are not styled."],
+  ["styles.css", "overflow-wrap: anywhere;", "Dog roster details do not wrap complete information."],
   ["js/dog-show.js", "dog-show-quick-confirmation", "Quick dog care logging does not provide an in-dialog confirmation."],
   ["js/dog-show.js", "dog-show-collapsible-section", "Dog assignment and ring appearance controls are not collapsible."],
   ["js/dog-show.js", "Dog Assignments", "The ambiguous Team Coverage summary is still present."],
@@ -138,6 +146,12 @@ for (const [path, needle, message] of required) {
 const dogShowSource = read("js/dog-show.js");
 const duplicateTaskSource = dogShowSource.slice(dogShowSource.indexOf("function openDuplicateDogShowTask"), dogShowSource.indexOf("async function saveDogShowRecord"));
 if (duplicateTaskSource.includes("setMinutes")) failures.push("Duplicate show tasks must not change the original date and time.");
+const rosterRowSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowEntryRowHtml"), dogShowSource.indexOf("function dogShowRenderEmpty"));
+if (rosterRowSource.includes('entry.dogType === "boardingDog" ? "Boarding" : "Our Dog"')) failures.push("Dog roster quick-view details must not show the irrelevant record origin.");
+if (!rosterRowSource.includes('return `<article class="dog-show-dog-row')) failures.push("Dog roster cards must use a non-button container so quick actions remain valid controls.");
+const stylesSource = read("styles.css");
+const rosterCopyStyles = stylesSource.slice(stylesSource.indexOf(".dog-show-dog-copy strong"), stylesSource.indexOf(".dog-show-dog-status"));
+if (rosterCopyStyles.includes("text-overflow: ellipsis") || rosterCopyStyles.includes("white-space: nowrap")) failures.push("Dog roster quick-view text must wrap instead of truncating information.");
 for (const [needle, message] of forbidden) {
   if (dogShowSource.includes(needle)) failures.push(message);
 }

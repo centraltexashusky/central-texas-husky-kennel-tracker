@@ -356,18 +356,31 @@ function dogShowEntryRowHtml(entry = {}, options = {}) {
   const state = dogShowAttentionState(entry);
   const lastLog = dogShowLastLog(entry);
   const schedule = dogShowRingSchedules(entry)[0] || {};
+  const scheduleCount = dogShowRingSchedules(entry).length;
   const prep = dogShowPrepTimes(entry, schedule);
   const showing = entry.attendanceRole === "Showing";
   const timestamp = lastLog ? dogShowFormatTime(lastLog.loggedAt || lastLog.updatedAt) : "No log";
   const timestampTitle = lastLog ? dogShowFormatDateTime(lastLog.loggedAt || lastLog.updatedAt) : "No care has been logged at this show.";
+  const ringFlag = showing
+    ? `${schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring not set"} - ${schedule.ringTime ? dogShowFormatTime(prep.ring) : "Time not set"}`
+    : "";
   const meta = showing
-    ? [entry.dogType === "boardingDog" ? "Boarding" : "Our Dog", schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring missing", schedule.ringTime ? dogShowFormatTime(prep.ring) : "Time missing", dogShowRingSchedules(entry).length > 1 ? `${dogShowRingSchedules(entry).length} appearances` : "", dogShowStaffLabel(entry.handlerEmail)].filter(Boolean).join(" · ")
-    : [entry.dogType === "boardingDog" ? "Boarding" : "Our Dog", "Socialization", dogShowStaffLabel(entry.helperEmail || entry.handlerEmail)].join(" · ");
-  return `<button type="button" class="dog-show-dog-row is-${state}${options.conflict ? " has-conflict" : ""}" data-action="open-show-dog" data-id="${escapeHtml(entry.id)}">
-    ${dogShowPhotoHtml(entry)}
-    <span class="dog-show-dog-copy"><strong>${escapeHtml(dogShowEntryName(entry))}</strong><small>${escapeHtml(meta)}</small></span>
-    <span class="dog-show-dog-status"><span class="dog-show-time-chip is-${state}" title="${escapeHtml(timestampTitle)}">${escapeHtml(timestamp)}</span><span class="dog-show-role-chip">${showing ? "Show" : "Social"}</span></span>
-  </button>`;
+    ? [scheduleCount > 1 ? `${scheduleCount} appearances` : "", dogShowStaffLabel(entry.handlerEmail)].filter(Boolean).join(" · ")
+    : ["Socialization", dogShowStaffLabel(entry.helperEmail || entry.handlerEmail)].filter(Boolean).join(" · ");
+  const quickActions = options.quickActions ? `<div class="dog-show-card-quick-actions" role="group" aria-label="Quick care for ${escapeHtml(dogShowEntryName(entry))}">
+    <button type="button" data-action="open-show-potty" data-id="${escapeHtml(entry.id)}">Potty</button>
+    <button type="button" data-action="quick-show-log" data-log-type="Water" data-id="${escapeHtml(entry.id)}">Water</button>
+    <button type="button" data-action="quick-show-log" data-log-type="Feeding" data-id="${escapeHtml(entry.id)}">Food</button>
+    <button type="button" data-action="open-show-note" data-log-type="Behavior / Medical" data-id="${escapeHtml(entry.id)}">Medical/Behavior</button>
+  </div>` : "";
+  return `<article class="dog-show-dog-row is-${state}${options.conflict ? " has-conflict" : ""}">
+    <button type="button" class="dog-show-dog-primary" data-action="open-show-dog" data-id="${escapeHtml(entry.id)}">
+      ${dogShowPhotoHtml(entry)}
+      <span class="dog-show-dog-copy"><strong>${escapeHtml(dogShowEntryName(entry))}</strong><span class="dog-show-dog-meta">${ringFlag ? `<span class="dog-show-ring-flag">${escapeHtml(ringFlag)}</span>` : ""}<small>${escapeHtml(meta)}</small></span></span>
+      <span class="dog-show-dog-status"><span class="dog-show-time-chip is-${state}" title="${escapeHtml(timestampTitle)}">${escapeHtml(timestamp)}</span><span class="dog-show-role-chip">${showing ? "Show" : "Social"}</span></span>
+    </button>
+    ${quickActions}
+  </article>`;
 }
 
 function dogShowRenderEmpty(title, copy, action = "new-show-event", label = "Create Show") {
@@ -434,7 +447,7 @@ function dogShowDogsHtml(event) {
       <button type="button" data-dog-filter="social" class="${dogShowDogFilter === "social" ? "is-active" : ""}">Social ${all.filter((entry) => entry.attendanceRole !== "Showing").length}</button>
     </div>
     <div class="dog-show-count-strip"><strong>${entries.length} shown</strong><span>${needCount ? `${needCount} need attention` : "All dogs current"}</span></div>
-    <div class="dog-show-roster-list">${entries.length ? entries.map((entry) => dogShowEntryRowHtml(entry, { conflict: conflicts.has(entry.id) })).join("") : dogShowRenderEmpty("No matching dogs", "Change the filter or add dogs to this show.", "add-show-dogs", "Add Dogs")}</div>
+    <div class="dog-show-roster-list">${entries.length ? entries.map((entry) => dogShowEntryRowHtml(entry, { conflict: conflicts.has(entry.id), quickActions: true })).join("") : dogShowRenderEmpty("No matching dogs", "Change the filter or add dogs to this show.", "add-show-dogs", "Add Dogs")}</div>
   </div>`;
 }
 
@@ -1464,6 +1477,13 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "add-show-dogs") openDogShowAddDogsForm();
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
+    if (action.dataset.action === "open-show-potty" && entry) openDogShowPottyPicker(entry);
+    if (action.dataset.action === "quick-show-log" && entry) {
+      action.disabled = true;
+      await createDogShowLog(entry, action.dataset.logType, `${action.dataset.logType} logged`);
+      showToast(`${action.dataset.logType} logged for ${dogShowEntryName(entry)}.`);
+    }
+    if (action.dataset.action === "open-show-note" && entry) openDogShowNoteForm(entry, action.dataset.logType || "Note");
     if (action.dataset.action === "edit-show-entry" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "open-show-prep" && entry) {
       const schedule = dogShowRingSchedules(entry).find((item) => item.id === action.dataset.ringScheduleId);
