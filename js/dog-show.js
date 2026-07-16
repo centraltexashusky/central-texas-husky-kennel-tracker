@@ -3,6 +3,7 @@ const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
 const DOG_SHOW_EVENT_KEY = "cth-dog-show-active-event";
 const DOG_SHOW_CALENDAR_VIEW_KEY = "cth-dog-show-calendar-view";
 const DOG_SHOW_CALENDAR_DATE_KEY = "cth-dog-show-calendar-date";
+const DOG_SHOW_TASK_DAY_KEY = "cth-dog-show-task-expanded-day";
 const DOG_SHOW_CALENDAR_SLOT_MINUTES = 15;
 const DOG_SHOW_STALE_MINUTES = 60;
 const DOG_SHOW_TASK_COLORS = {
@@ -254,6 +255,33 @@ function dogShowLastLog(entry = {}, event = dogShowActiveEvent()) {
     .sort((a, b) => new Date(b.loggedAt || b.updatedAt || 0) - new Date(a.loggedAt || a.updatedAt || 0))[0] || null;
 }
 
+function dogShowLastActivityLog(entry = {}, activityType = "", event = dogShowActiveEvent()) {
+  return dogShowLogs(event)
+    .filter((log) => (log.showEntryId === entry.id || (log.dogId === entry.dogId && log.dogType === entry.dogType)) && log.activityType === activityType)
+    .sort((a, b) => new Date(b.loggedAt || b.updatedAt || 0) - new Date(a.loggedAt || a.updatedAt || 0))[0] || null;
+}
+
+function dogShowCarePriority(entry = {}, event = dogShowActiveEvent()) {
+  const careTypes = [
+    { key: "potty", activityType: "Potty", label: "Potty" },
+    { key: "water", activityType: "Water", label: "Water" },
+    { key: "food", activityType: "Feeding", label: "Food" },
+  ].map((careType) => ({ ...careType, log: dogShowLastActivityLog(entry, careType.activityType, event) }));
+  const missing = careTypes.find((careType) => !careType.log);
+  if (missing) return missing;
+  const oldest = careTypes.sort((left, right) => new Date(left.log.loggedAt || left.log.updatedAt || 0) - new Date(right.log.loggedAt || right.log.updatedAt || 0))[0];
+  return dogShowMinutesSince(oldest.log.loggedAt || oldest.log.updatedAt) >= DOG_SHOW_STALE_MINUTES
+    ? oldest
+    : { key: "current", activityType: "", label: "Care current", log: oldest.log };
+}
+
+function dogShowActivityTimeHtml(entry = {}, activityType = "") {
+  const log = dogShowLastActivityLog(entry, activityType);
+  const value = log ? dogShowFormatTime(log.loggedAt || log.updatedAt) : "No log";
+  const title = log ? `Last completed ${dogShowFormatDateTime(log.loggedAt || log.updatedAt)}` : "Not logged at this show";
+  return `<small title="${escapeHtml(title)}">${log ? "Last " : ""}${escapeHtml(value)}</small>`;
+}
+
 function dogShowMinutesSince(value = "") {
   const time = Date.parse(value || "");
   return Number.isFinite(time) ? Math.max(0, Math.floor((Date.now() - time) / 60000)) : Infinity;
@@ -354,6 +382,7 @@ function dogShowConflictEntryIds(entries = dogShowEntries()) {
 
 function dogShowEntryRowHtml(entry = {}, options = {}) {
   const state = dogShowAttentionState(entry);
+  const carePriority = dogShowCarePriority(entry);
   const lastLog = dogShowLastLog(entry);
   const schedule = dogShowRingSchedules(entry)[0] || {};
   const scheduleCount = dogShowRingSchedules(entry).length;
@@ -368,12 +397,12 @@ function dogShowEntryRowHtml(entry = {}, options = {}) {
     ? [scheduleCount > 1 ? `${scheduleCount} appearances` : "", dogShowStaffLabel(entry.handlerEmail)].filter(Boolean).join(" · ")
     : ["Socialization", dogShowStaffLabel(entry.helperEmail || entry.handlerEmail)].filter(Boolean).join(" · ");
   const quickActions = options.quickActions ? `<div class="dog-show-card-quick-actions" role="group" aria-label="Quick care for ${escapeHtml(dogShowEntryName(entry))}">
-    <button type="button" data-action="open-show-potty" data-id="${escapeHtml(entry.id)}">Potty</button>
-    <button type="button" data-action="quick-show-log" data-log-type="Water" data-id="${escapeHtml(entry.id)}">Water</button>
-    <button type="button" data-action="quick-show-log" data-log-type="Feeding" data-id="${escapeHtml(entry.id)}">Food</button>
-    <button type="button" data-action="open-show-note" data-log-type="Behavior / Medical" data-id="${escapeHtml(entry.id)}">Medical/Behavior</button>
+    <button type="button" data-action="open-show-potty" data-care-action="potty" data-id="${escapeHtml(entry.id)}"><strong>Potty</strong>${dogShowActivityTimeHtml(entry, "Potty")}</button>
+    <button type="button" data-action="quick-show-log" data-care-action="water" data-log-type="Water" data-id="${escapeHtml(entry.id)}"><strong>Water</strong>${dogShowActivityTimeHtml(entry, "Water")}</button>
+    <button type="button" data-action="quick-show-log" data-care-action="food" data-log-type="Feeding" data-id="${escapeHtml(entry.id)}"><strong>Food</strong>${dogShowActivityTimeHtml(entry, "Feeding")}</button>
+    <button type="button" data-action="open-show-note" data-care-action="medical" data-log-type="Behavior / Medical" data-id="${escapeHtml(entry.id)}"><strong>Medical/Behavior</strong>${dogShowActivityTimeHtml(entry, "Behavior / Medical")}</button>
   </div>` : "";
-  return `<article class="dog-show-dog-row is-${state}${options.conflict ? " has-conflict" : ""}">
+  return `<article class="dog-show-dog-row is-${state} care-priority-${carePriority.key}${options.conflict ? " has-conflict" : ""}" title="Care priority: ${escapeHtml(carePriority.label)}">
     <button type="button" class="dog-show-dog-primary" data-action="open-show-dog" data-id="${escapeHtml(entry.id)}">
       ${dogShowPhotoHtml(entry)}
       <span class="dog-show-dog-copy"><strong>${escapeHtml(dogShowEntryName(entry))}</strong><span class="dog-show-dog-meta">${ringFlag ? `<span class="dog-show-ring-flag">${escapeHtml(ringFlag)}</span>` : ""}<small>${escapeHtml(meta)}</small></span></span>
@@ -653,6 +682,32 @@ function dogShowTaskRowHtml(task = {}, event = dogShowActiveEvent()) {
   </article>`;
 }
 
+function dogShowTaskDayState(event = dogShowActiveEvent()) {
+  try {
+    return JSON.parse(localStorage.getItem(DOG_SHOW_TASK_DAY_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function dogShowTaskDayStateId(event = dogShowActiveEvent()) {
+  return `${event?.id || "no-event"}:${dogShowTaskFilter}`;
+}
+
+function dogShowExpandedTaskDay(event = dogShowActiveEvent(), dateKeys = []) {
+  const saved = dogShowTaskDayState()[dogShowTaskDayStateId(event)];
+  if (saved === "none") return "";
+  if (dateKeys.includes(saved)) return saved;
+  const today = todayDate();
+  return dateKeys.includes(today) ? today : dateKeys[0] || "";
+}
+
+function setDogShowExpandedTaskDay(event = dogShowActiveEvent(), dateKey = "") {
+  const state = dogShowTaskDayState(event);
+  state[dogShowTaskDayStateId(event)] = dateKey || "none";
+  localStorage.setItem(DOG_SHOW_TASK_DAY_KEY, JSON.stringify(state));
+}
+
 function dogShowTasksHtml(event) {
   const tasks = dogShowTasks(event).filter(dogShowTaskMatchesFilter).sort((a, b) => new Date(a.dueAt || 8640000000000000) - new Date(b.dueAt || 8640000000000000) || String(a.status === "Completed").localeCompare(String(b.status === "Completed")));
   const all = dogShowTasks(event);
@@ -662,7 +717,13 @@ function dogShowTasksHtml(event) {
     if (!tasksByDate.has(dateKey)) tasksByDate.set(dateKey, []);
     tasksByDate.get(dateKey).push(task);
   });
-  const taskGroups = [...tasksByDate.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([dateKey, items]) => `<section class="dog-show-task-day"><header class="dog-show-task-day-header"><strong>${escapeHtml(dateKey === "Date missing" ? dateKey : dogShowFormatDate(dateKey))}</strong><span>${items.length} task${items.length === 1 ? "" : "s"}</span></header><div class="dog-show-task-list">${items.map((task) => dogShowTaskRowHtml(task, event)).join("")}</div></section>`).join("");
+  const taskEntries = [...tasksByDate.entries()].sort(([left], [right]) => left.localeCompare(right));
+  const expandedDate = dogShowExpandedTaskDay(event, taskEntries.map(([dateKey]) => dateKey));
+  const taskGroups = taskEntries.map(([dateKey, items], index) => {
+    const expanded = dateKey === expandedDate;
+    const panelId = `dogShowTaskDay-${index}`;
+    return `<section class="dog-show-task-day${expanded ? " is-expanded" : " is-collapsed"}"><header class="dog-show-task-day-header"><button type="button" class="dog-show-task-day-toggle" data-task-day-toggle="${escapeHtml(dateKey)}" aria-expanded="${expanded}" aria-controls="${panelId}"><strong>${escapeHtml(dateKey === "Date missing" ? dateKey : dogShowFormatDate(dateKey))}</strong><span>${items.length} task${items.length === 1 ? "" : "s"}</span><i aria-hidden="true"></i></button></header><div class="dog-show-task-list" id="${panelId}"${expanded ? "" : " hidden"}>${items.map((task) => dogShowTaskRowHtml(task, event)).join("")}</div></section>`;
+  }).join("");
   return `<div class="dog-show-view dog-show-tasks-view">
     <section class="dog-show-list-toolbar"><div><h3>Show Tasks</h3><p>Assigned work stays separate from boarding daily tasks.</p></div><div class="button-row"><button type="button" class="secondary-button" data-action="create-water-round">Water Round</button><button type="button" data-action="new-show-task">New Task</button></div></section>
     <div class="dog-show-filter-row" role="group" aria-label="Task filters">
@@ -1451,6 +1512,12 @@ function setupDogShowEventListeners() {
     if (filter) { dogShowDogFilter = filter.dataset.dogFilter; renderDogShow(); return; }
     const taskFilter = event.target.closest("[data-task-filter]");
     if (taskFilter) { dogShowTaskFilter = taskFilter.dataset.taskFilter; renderDogShow(); return; }
+    const taskDayToggle = event.target.closest("[data-task-day-toggle]");
+    if (taskDayToggle) {
+      setDogShowExpandedTaskDay(dogShowActiveEvent(), taskDayToggle.getAttribute("aria-expanded") === "true" ? "" : taskDayToggle.dataset.taskDayToggle);
+      renderDogShow();
+      return;
+    }
     const calendarView = event.target.closest("[data-calendar-view]");
     if (calendarView) {
       dogShowCalendarView = calendarView.dataset.calendarView === "day" ? "day" : "weekend";
