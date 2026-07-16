@@ -1385,6 +1385,13 @@ function notificationEventConfig(eventName = "", record = {}) {
       channels: ["email", "inApp"],
       audienceEmails: customerStayUpdateAudienceEmails(record),
     },
+    dogShowResultPublished: {
+      title: \`\${record.resultIsUpdate ? "Updated dog show result" : "Dog show result"}: \${record.dogName || "Your dog"}\`,
+      message: \`\${record.dogName || "Your dog"} received \${record.outcome === "Scratched" ? "Withdrawn before judging" : record.outcome || "a new result"} at \${record.showName || "the dog show"}.\`,
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceEmails: [record.ownerEmail, record.customerEmail, record.linkedOwnerEmail, record.secondaryOwnerEmail].filter(Boolean),
+    },
   };
   return configs[eventName] || null;
 }

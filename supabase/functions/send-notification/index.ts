@@ -42,6 +42,7 @@ const ALLOWED_EVENT_NAMES = new Set([
   "customerBoardingRequestUpdated",
   "customerDogFileUploaded",
   "customerStayUpdateSent",
+  "dogShowResultPublished",
   "kennelRequestCreated",
   "maintenanceCreated",
   "scheduleChangedAfterPublish",
@@ -1753,6 +1754,58 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       sms: false,
     };
   }
+  if (eventName === "dogShowResultPublished") {
+    const dogName = String(record.dogName || "Your dog").trim();
+    const ownerName = String(record.ownerName || "").trim();
+    const showName = String(record.showName || "Dog Show").trim();
+    const rawOutcome = String(record.outcome || "Result recorded").trim();
+    const outcome = rawOutcome === "Scratched" ? "Withdrawn before judging" : rawOutcome;
+    const ringDate = formatEmailDateOnlyText(String(record.ringDate || ""), "long");
+    const ringTime = formatEmailTimeOnlyText(record.ringTime);
+    const appearance = [ringDate, ringTime].filter(Boolean).join(" at ");
+    const subject = `${record.resultIsUpdate ? "Updated dog show result" : "Dog show result"}: ${dogName} - ${outcome}`;
+    const body = [
+      `Hi ${ownerName || "there"},`,
+      "",
+      `We wanted to share ${dogName}'s result from ${showName} as soon as it was recorded.`,
+      "",
+      `Dog: ${dogName}`,
+      record.breed ? `Breed: ${record.breed}` : "",
+      `Show: ${showName}`,
+      record.showClub ? `Club: ${record.showClub}` : "",
+      record.showVenue ? `Venue: ${record.showVenue}` : "",
+      record.showLocation ? `Location: ${record.showLocation}` : "",
+      appearance ? `Ring appearance: ${appearance}` : "",
+      record.ringNumber ? `Ring: ${record.ringNumber}` : "",
+      record.classEntered ? `Class: ${record.classEntered}` : "",
+      `Outcome: ${outcome}`,
+      record.placement ? `Placement: ${record.placement}` : "",
+      record.awards ? `Awards: ${record.awards}` : "",
+      record.points ? `Points / major estimate: ${record.points}` : "",
+      record.judge ? `Judge: ${record.judge}` : "",
+      record.judgeNotes ? `Judge / handler notes: ${record.judgeNotes}` : "",
+      record.customerSummary ? `Update from the team: ${record.customerSummary}` : "",
+      "",
+      `Recorded by: ${record.helperName || record.helperEmail || "Central Texas Husky"}`,
+      "",
+      "We will continue to share each ring appearance separately so you receive results promptly.",
+    ].filter(Boolean).join("\n");
+    const rendered = renderPremiumTextEmail({
+      audience: "Dog owner",
+      body,
+      priority: "normal",
+      subject,
+    });
+    return {
+      subject,
+      body,
+      html: rendered.html,
+      priority: "normal",
+      template: rendered.template,
+      to: customerEmailsForRecord(record),
+      sms: false,
+    };
+  }
   return null;
 }
 
@@ -1944,6 +1997,7 @@ Deno.serve(async (req) => {
   }
   const staffOnlyCustomerEvents = new Set([
     "customerStayUpdateSent",
+    "dogShowResultPublished",
     "boardingCustomerRequestApproved",
     "boardingCustomerRequestDeclined",
     "boardingCustomerRequestCancelled",

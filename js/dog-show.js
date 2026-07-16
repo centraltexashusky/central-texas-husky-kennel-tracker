@@ -975,6 +975,9 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
   const schedules = dogShowRingSchedules(entry);
   const schedule = schedules.find((item) => item.id === ringScheduleId) || null;
   const result = dogShowResultForSchedule(entry, schedule, dogShowActiveEvent(), dogShowResultsForEntry(entry)) || {};
+  const sourceDog = dogShowSourceDog(entry);
+  const ownerEmailAvailable = [sourceDog.ownerEmail, sourceDog.customerEmail, sourceDog.linkedOwnerEmail, sourceDog.secondaryOwnerEmail].some(Boolean);
+  const emailOwner = result.id ? result.customerVisible === true : ownerEmailAvailable;
   const scheduleIndex = schedule ? schedules.findIndex((item) => item.id === schedule.id) : -1;
   const resultContext = schedule
     ? `<div class="dog-show-result-context"><strong>${escapeHtml(dogShowRingAppearanceTitle(schedule, scheduleIndex))}</strong><span>${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span></div>`
@@ -989,7 +992,7 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
     </div>
     <label>Judge notes<textarea name="judgeNotes" rows="3">${escapeHtml(result.judgeNotes || "")}</textarea></label>
     <label>Owner-facing summary<textarea name="customerSummary" rows="3">${escapeHtml(result.customerSummary || "")}</textarea></label>
-    <label class="inline-check"><input type="checkbox" name="customerVisible"${result.customerVisible ? " checked" : ""}/> Visible to owner/customer updates</label>
+    <label class="inline-check"><input type="checkbox" name="customerVisible"${emailOwner ? " checked" : ""}${ownerEmailAvailable ? "" : " disabled"}/> ${ownerEmailAvailable ? "Email owner immediately" : "Owner email unavailable"}</label>
     <div class="button-row"><button type="submit">Save Result</button><button type="button" class="secondary-button" data-action="${schedule ? "back-to-show-results" : "back-to-show-dog"}" data-id="${escapeHtml(entry.id)}">Back</button></div>
   </form>`);
 }
@@ -1177,18 +1180,65 @@ async function saveDogShowNote(form) {
 async function saveDogShowResult(form) {
   const entry = dogShowEntries().find((item) => item.id === form.dataset.entryId);
   if (!entry) return;
+  const event = dogShowActiveEvent() || {};
+  const sourceDog = dogShowSourceDog(entry);
   const schedules = dogShowRingSchedules(entry);
   const ringScheduleId = form.dataset.ringScheduleId || "";
   const schedule = schedules.find((item) => item.id === ringScheduleId) || null;
   if (entry.attendanceRole === "Showing" && !schedule) return showToast("Choose a ring appearance before logging the result.");
   const existing = form.dataset.id ? readRecords("showResult").find((result) => result.id === form.dataset.id) || {} : {};
   const data = formPayload(form);
-  const result = await saveDogShowRecord("showResult", { ...existing, ...data, id: existing.id || (schedule ? `showResult-${entry.id}-${schedule.id}` : uid("showResult")), showEventId: entry.showEventId, showEntryId: entry.id, ringScheduleId: schedule?.id || "", ringDate: schedule?.ringDate || "", ringTime: schedule?.ringTime || "", ringNumber: schedule?.ringNumber || "", classEntered: schedule?.classEntered || "", judge: schedule?.judge || "", dogId: entry.dogId, dogType: entry.dogType, dogName: dogShowEntryName(entry), customerVisible: Boolean(form.elements.customerVisible?.checked), loggedAt: existing.loggedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), helperEmail: currentUser?.email || "", submittedAt: existing.submittedAt || new Date().toISOString() });
+  const customerVisible = Boolean(form.elements.customerVisible?.checked);
+  const ownerEmails = [sourceDog.ownerEmail, sourceDog.customerEmail, sourceDog.linkedOwnerEmail, sourceDog.secondaryOwnerEmail]
+    .map(normalizeEmail)
+    .filter(Boolean);
+  const result = await saveDogShowRecord("showResult", {
+    ...existing,
+    ...data,
+    id: existing.id || (schedule ? `showResult-${entry.id}-${schedule.id}` : uid("showResult")),
+    showEventId: entry.showEventId,
+    showEntryId: entry.id,
+    ringScheduleId: schedule?.id || "",
+    ringDate: schedule?.ringDate || "",
+    ringTime: schedule?.ringTime || "",
+    ringNumber: schedule?.ringNumber || "",
+    classEntered: schedule?.classEntered || "",
+    judge: schedule?.judge || "",
+    dogId: entry.dogId,
+    dogType: entry.dogType,
+    dogName: dogShowEntryName(entry),
+    breed: dogShowBreed(entry),
+    ownerName: sourceDog.ownerName || sourceDog.customerName || "",
+    ownerEmail: sourceDog.ownerEmail || "",
+    customerEmail: sourceDog.customerEmail || "",
+    linkedOwnerEmail: sourceDog.linkedOwnerEmail || "",
+    secondaryOwnerEmail: sourceDog.secondaryOwnerEmail || "",
+    showName: event.name || "Dog Show",
+    showClub: event.club || "",
+    showVenue: event.venue || "",
+    showLocation: event.venueAddress || event.cityState || "",
+    resultIsUpdate: Boolean(existing.id && existing.customerVisible),
+    customerVisible,
+    loggedAt: existing.loggedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    helperName: currentUser?.name || "Staff",
+    helperEmail: currentUser?.email || "",
+    submittedAt: existing.submittedAt || new Date().toISOString(),
+  });
   const appearance = schedule ? dogShowRingAppearanceMeta(schedule) : "General show result";
-  await createDogShowLog(entry, "Result", [appearance, dogShowOutcomeLabel(data.outcome), data.placement, data.awards].filter(Boolean).join(" · ") || "Result logged", { customerVisible: Boolean(form.elements.customerVisible?.checked), ringScheduleId: result.ringScheduleId });
+  await createDogShowLog(entry, "Result", [appearance, dogShowOutcomeLabel(data.outcome), data.placement, data.awards].filter(Boolean).join(" · ") || "Result logged", { customerVisible, ringScheduleId: result.ringScheduleId });
+  const notification = customerVisible && ownerEmails.length
+    ? await notifyIfNeeded(result, "dogShowResultPublished")
+    : null;
   if (schedules.length) openDogShowResultPicker(entry);
   else openDogShowEntryForm(entry);
-  showToast(schedule ? `Result saved for ${dogShowRingAppearanceTitle(schedule, schedules.indexOf(schedule))}.` : "Show result saved.");
+  const savedMessage = schedule ? `Result saved for ${dogShowRingAppearanceTitle(schedule, schedules.indexOf(schedule))}.` : "Show result saved.";
+  const ownerMessage = customerVisible
+    ? ownerEmails.length
+      ? notification?.deliveryStatus === "sent" ? " Owner email sent." : " Owner notification queued."
+      : " No owner email is available for this dog."
+    : "";
+  showToast(`${savedMessage}${ownerMessage}`);
 }
 
 async function saveDogShowTask(form) {
