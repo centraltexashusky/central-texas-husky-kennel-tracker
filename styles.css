@@ -12392,13 +12392,29 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 .dog-show-task-row > button:not(.dog-show-complete-button) {
   appearance: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   background: transparent;
   border: 0;
+  border-radius: 0;
+  box-shadow: none;
   color: var(--ink);
   display: grid;
   gap: 3px;
+  min-height: 0;
   padding: 0;
   text-align: left;
+  width: 100%;
+}
+
+.dog-show-task-row > button:not(.dog-show-complete-button):hover,
+.dog-show-task-row > button:not(.dog-show-complete-button):focus-visible {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: none;
+  transform: none;
 }
 
 .dog-show-task-row span,
@@ -13008,6 +13024,232 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-summary-list span {
   color: var(--muted);
   font-size: 0.76rem;
+}
+
+/* Dog Show dark mode uses solid surfaces so operational details remain legible. */
+:root[data-theme="dark"] .dog-show-calendar-panel,
+:root[data-theme="dark"] .dog-show-dog-row,
+:root[data-theme="dark"] .dog-show-task-row,
+:root[data-theme="dark"] .dog-show-schedule-row,
+:root[data-theme="dark"] .dog-show-ring-schedule-row {
+  background: rgba(15, 31, 50, 0.96);
+  border-color: rgba(153, 190, 219, 0.38);
+}
+
+:root[data-theme="dark"] .dog-show-calendar-board {
+  background: #0A1828;
+  border-color: #557A98;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-corner,
+:root[data-theme="dark"] .dog-show-calendar-all-day-label,
+:root[data-theme="dark"] .dog-show-calendar-time {
+  background: #12263D;
+  border-color: rgba(157, 194, 223, 0.32);
+  color: #D5E5F2;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-day-heading {
+  background: #17304B;
+  border-color: rgba(157, 194, 223, 0.32);
+}
+
+:root[data-theme="dark"] .dog-show-calendar-day-heading strong,
+:root[data-theme="dark"] .dog-show-calendar-event-copy strong,
+:root[data-theme="dark"] .dog-show-calendar-all-day-item strong {
+  color: #F7FBFF;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-day-heading span,
+:root[data-theme="dark"] .dog-show-calendar-all-day-item span,
+:root[data-theme="dark"] .dog-show-calendar-event-copy > span,
+:root[data-theme="dark"] .dog-show-calendar-event-copy small {
+  color: #C5D8E8;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-all-day {
+  background: #0E2034;
+  border-color: rgba(157, 194, 223, 0.28);
+}
+
+:root[data-theme="dark"] .dog-show-calendar-all-day-item,
+:root[data-theme="dark"] .dog-show-calendar-event {
+  background: #1A3552;
+  border-color: #6489A8;
+  color: #F7FBFF;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-all-day-item.is-social {
+  background: rgba(54, 135, 93, 0.32);
+  border-color: #79CAA0;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-slot {
+  background: #0D1D30;
+  border-bottom-color: rgba(153, 190, 219, 0.25);
+  border-left-color: rgba(153, 190, 219, 0.28);
+}
+
+:root[data-theme="dark"] .dog-show-calendar-slot:hover,
+:root[data-theme="dark"] .dog-show-calendar-slot:focus-visible,
+:root[data-theme="dark"] .dog-show-calendar-slot.is-drop-target {
+  background: #183A5B;
+  box-shadow: inset 0 0 0 1px #79B9E8;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-event.is-task {
+  color: #FFFFFF;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-event.is-completed {
+  background: linear-gradient(90deg, var(--task-color) 0 8px, rgba(37, 104, 66, 0.72) 8px 100%) !important;
+  border-color: #65D48D;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-view-toggle {
+  background: #102238;
+  border-color: #557A98;
+}
+
+:root[data-theme="dark"] .dog-show-calendar-view-toggle button:not(.is-active) {
+  color: #D7E7F3;
+}
+
+:root[data-theme="dark"] .dog-show-dog-primary,
+:root[data-theme="dark"] .dog-show-dog-primary:hover,
+:root[data-theme="dark"] .dog-show-dog-primary:focus-visible {
+  color: #F7FBFF;
+}
+
+:root[data-theme="dark"] .dog-show-dog-copy small,
+:root[data-theme="dark"] .dog-show-schedule-main small,
+:root[data-theme="dark"] .dog-show-task-row span,
+:root[data-theme="dark"] .dog-show-task-row small {
+  color: #C8D9E7;
+}
+
+:root[data-theme="dark"] .dog-show-ring-flag {
+  background: rgba(64, 145, 207, 0.28);
+  border-color: #72B9EA;
+  color: #EAF7FF;
+}
+
+:root[data-theme="dark"] .dog-show-time-chip {
+  background: rgba(64, 145, 207, 0.24);
+  border-color: #72B9EA;
+  color: #EAF7FF;
+}
+
+:root[data-theme="dark"] .dog-show-time-chip.is-stale {
+  background: rgba(207, 145, 34, 0.24);
+  border-color: #E7B556;
+  color: #FFE2A3;
+}
+
+:root[data-theme="dark"] .dog-show-role-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(189, 213, 232, 0.34);
+  color: #D4E2ED;
+}
+
+:root[data-theme="dark"] .dog-show-card-quick-actions {
+  border-top-color: rgba(153, 190, 219, 0.3);
+}
+
+:root[data-theme="dark"] .dog-show-card-quick-actions button {
+  background: #162C45;
+  border-color: #5C7890;
+  color: #F5FAFE;
+}
+
+:root[data-theme="dark"] .dog-show-card-quick-actions button small {
+  color: #C4D6E4;
+}
+
+:root[data-theme="dark"] .dog-show-dog-row.care-priority-potty [data-care-action="potty"] {
+  background: rgba(197, 139, 36, 0.2);
+  color: #FFE2A3;
+}
+
+:root[data-theme="dark"] .dog-show-dog-row.care-priority-water [data-care-action="water"] {
+  background: rgba(47, 111, 159, 0.3);
+  color: #DDF2FF;
+}
+
+:root[data-theme="dark"] .dog-show-dog-row.care-priority-food [data-care-action="food"] {
+  background: rgba(201, 130, 43, 0.22);
+  color: #FFE2B8;
+}
+
+:root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-low {
+  background: rgba(214, 167, 0, 0.2);
+  border-color: #E8C547;
+  color: #FFF1AE;
+}
+
+:root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-medium {
+  background: rgba(217, 119, 6, 0.22);
+  border-color: #F2A34A;
+  color: #FFE1B8;
+}
+
+:root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-high {
+  background: rgba(194, 65, 58, 0.28);
+  border-color: #F07B75;
+  color: #FFE2DF;
+}
+
+:root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-low small,
+:root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-medium small,
+:root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-high small {
+  color: inherit;
+}
+
+:root[data-theme="dark"] .dog-show-prep-preview,
+:root[data-theme="dark"] .dog-show-form-note {
+  background: rgba(54, 116, 174, 0.3);
+  border-color: #6EACDA;
+  color: #EDF8FF;
+}
+
+:root[data-theme="dark"] .dog-show-prep-preview span {
+  color: #C8E0F1;
+}
+
+:root[data-theme="dark"] .dog-show-schedule-row.is-social {
+  background: rgba(158, 116, 25, 0.22);
+  border-color: #E3B341;
+}
+
+:root[data-theme="dark"] .dog-show-time-line {
+  color: #B9DCF4;
+}
+
+:root[data-theme="dark"] .dog-show-bulk-care button {
+  background: #173A58;
+  border-color: #6BADE0;
+  color: #F0F9FF;
+}
+
+:root[data-theme="dark"] .dog-show-quick-confirmation {
+  background: rgba(42, 130, 76, 0.28);
+  border-color: #63C787;
+  color: #DDFBE8;
+}
+
+@media (max-width: 620px) {
+  :root[data-theme="dark"] .dog-show-calendar-board {
+    scrollbar-color: #6FAED9 #10243A;
+  }
+
+  :root[data-theme="dark"] .dog-show-calendar-board::-webkit-scrollbar-track {
+    background: #10243A;
+  }
+
+  :root[data-theme="dark"] .dog-show-calendar-board::-webkit-scrollbar-thumb {
+    background: #6FAED9;
+    border-color: #10243A;
+  }
 }
 
 @media (max-width: 980px) {
