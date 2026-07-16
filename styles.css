@@ -11844,8 +11844,11 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 .dog-show-bulk-care button {
   align-items: center;
+  background: #EAF4FB;
+  border-color: #2F6F9F;
   border-radius: 8px;
   box-shadow: none;
+  color: #214B6E;
   display: grid;
   gap: 2px;
   justify-items: start;
@@ -11859,24 +11862,6 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-bulk-care button:focus-visible {
   box-shadow: none;
   transform: none;
-}
-
-.dog-show-bulk-care button.is-water {
-  background: #EAF4FB;
-  border-color: #2F6F9F;
-  color: #214B6E;
-}
-
-.dog-show-bulk-care button.is-potty {
-  background: #FFF9E8;
-  border-color: #C58B24;
-  color: #704A0B;
-}
-
-.dog-show-bulk-care button.is-food {
-  background: #FFF4E5;
-  border-color: #C9822B;
-  color: #75430E;
 }
 
 .dog-show-bulk-care small {
@@ -12838,6 +12823,10 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 details.dog-show-ring-schedules {
   display: block;
+}
+
+details.dog-show-ring-schedules[hidden] {
+  display: none;
 }
 
 .dog-show-ring-schedules-content {

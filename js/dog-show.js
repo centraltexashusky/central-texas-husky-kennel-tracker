@@ -970,11 +970,12 @@ function refreshDogShowRingScheduleRows(form) {
 
 function refreshDogShowAssignmentSummary(form) {
   const summary = form?.querySelector("[data-show-assignment-summary]");
-  if (!summary) return;
   const role = form.elements.attendanceRole?.value || "Showing";
   const statusField = form.elements.status;
   const status = statusField?.selectedOptions?.[0]?.textContent || statusField?.value || "Confirmed";
-  summary.textContent = `${role} · ${status}`;
+  if (summary) summary.textContent = `${role} · ${status}`;
+  const ringSchedules = form?.querySelector("[data-show-ring-appearances]");
+  if (ringSchedules) ringSchedules.hidden = role !== "Showing";
 }
 
 function dogShowEntryDialogViewState() {
@@ -1019,7 +1020,7 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}, viewState = {}
           <label>Care helper<select name="helperEmail">${dogShowStaffOptions(entry.helperEmail || "")}</select></label>
           <label>Entry status<select name="status">${[{ value: "Considering", label: "Considering" }, { value: "Entered", label: "Entered" }, { value: "Confirmed", label: "Confirmed" }, { value: "Scratched", label: "Withdrawn" }, { value: "Completed", label: "Completed" }].map((status) => `<option value="${status.value}"${status.value === (entry.status || "Confirmed") ? " selected" : ""}>${status.label}</option>`).join("")}</select></label>
         </div></div></details>
-      <details class="dog-show-collapsible-section dog-show-ring-schedules"${viewState.ringSchedulesOpen === false ? "" : " open"}><summary><span><strong>Ring Appearances</strong><small data-ring-appearance-count>${ringSchedules.length} scheduled</small></span></summary><div class="dog-show-collapsible-content dog-show-ring-schedules-content"><div class="dog-show-ring-schedules-toolbar"><p>Add a separate assignment for each show day, ring, or class.</p><button type="button" class="secondary-button" data-action="add-ring-schedule">Add Ring Appearance</button></div><div id="dogShowRingScheduleRows">${ringSchedules.map(dogShowRingScheduleRowHtml).join("")}</div></div></details>
+      <details class="dog-show-collapsible-section dog-show-ring-schedules" data-show-ring-appearances${entry.attendanceRole === "Showing" ? "" : " hidden"}${viewState.ringSchedulesOpen === false ? "" : " open"}><summary><span><strong>Ring Appearances</strong><small data-ring-appearance-count>${ringSchedules.length} scheduled</small></span></summary><div class="dog-show-collapsible-content dog-show-ring-schedules-content"><div class="dog-show-ring-schedules-toolbar"><p>Add a separate assignment for each show day, ring, or class.</p><button type="button" class="secondary-button" data-action="add-ring-schedule">Add Ring Appearance</button></div><div id="dogShowRingScheduleRows">${ringSchedules.map(dogShowRingScheduleRowHtml).join("")}</div></div></details>
       <label>Show notes<textarea name="notes" rows="2">${escapeHtml(entry.notes || "")}</textarea></label>
       <div class="button-row"><button type="submit">Save Dog</button><button type="button" class="secondary-button" data-action="remove-show-entry" data-id="${escapeHtml(entry.id)}">Remove From Show</button></div>
     </form>
