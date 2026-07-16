@@ -959,7 +959,19 @@ function refreshDogShowAssignmentSummary(form) {
   summary.textContent = `${role} · ${status}`;
 }
 
-function openDogShowEntryForm(entry = {}, quickConfirmation = {}) {
+function dogShowEntryDialogViewState() {
+  const body = document.getElementById("dogShowDialogBody");
+  const form = document.getElementById("dogShowEntryForm");
+  const assignment = form?.querySelector(".dog-show-collapsible-section:not(.dog-show-ring-schedules)");
+  const ringSchedules = form?.querySelector(".dog-show-ring-schedules");
+  return {
+    assignmentOpen: assignment ? assignment.open : true,
+    ringSchedulesOpen: ringSchedules ? ringSchedules.open : true,
+    scrollTop: body?.scrollTop || 0,
+  };
+}
+
+function openDogShowEntryForm(entry = {}, quickConfirmation = {}, viewState = {}) {
   const event = dogShowActiveEvent();
   const savedSchedules = dogShowRingSchedules(entry);
   const ringSchedules = savedSchedules.length ? savedSchedules : [{ id: uid("showRing"), ringDate: event?.startDate || todayDate(), prepMinutes: Number(entry.prepMinutes ?? 45), readyBufferMinutes: Number(entry.readyBufferMinutes ?? 15) }];
@@ -983,17 +995,23 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}) {
       <button type="button" data-action="open-show-result" data-id="${escapeHtml(entry.id)}">${escapeHtml(resultButtonLabel)}</button>
     </div>${quickConfirmationText ? `<p class="dog-show-quick-confirmation" role="status"><span aria-hidden="true">✓</span>${escapeHtml(quickConfirmationText)}</p>` : ""}</section>
     <form id="dogShowEntryForm" class="tracker-form" data-id="${escapeHtml(entry.id)}">
-      <details class="dog-show-collapsible-section" open><summary><span><strong>Show Assignment</strong><small data-show-assignment-summary>${escapeHtml([entry.attendanceRole || "Showing", entry.status === "Scratched" ? "Withdrawn" : entry.status || "Confirmed"].join(" · "))}</small></span></summary><div class="dog-show-collapsible-content"><div class="field-grid">
+      <details class="dog-show-collapsible-section"${viewState.assignmentOpen === false ? "" : " open"}><summary><span><strong>Show Assignment</strong><small data-show-assignment-summary>${escapeHtml([entry.attendanceRole || "Showing", entry.status === "Scratched" ? "Withdrawn" : entry.status || "Confirmed"].join(" · "))}</small></span></summary><div class="dog-show-collapsible-content"><div class="field-grid">
           <label>Attendance role<select name="attendanceRole"><option${entry.attendanceRole === "Showing" ? " selected" : ""}>Showing</option><option${entry.attendanceRole !== "Showing" ? " selected" : ""}>Socialization</option></select></label>
           <label>Handler<select name="handlerEmail">${dogShowStaffOptions(entry.handlerEmail || "")}</select></label>
           <label>Care helper<select name="helperEmail">${dogShowStaffOptions(entry.helperEmail || "")}</select></label>
           <label>Entry status<select name="status">${[{ value: "Considering", label: "Considering" }, { value: "Entered", label: "Entered" }, { value: "Confirmed", label: "Confirmed" }, { value: "Scratched", label: "Withdrawn" }, { value: "Completed", label: "Completed" }].map((status) => `<option value="${status.value}"${status.value === (entry.status || "Confirmed") ? " selected" : ""}>${status.label}</option>`).join("")}</select></label>
         </div></div></details>
-      <details class="dog-show-collapsible-section dog-show-ring-schedules" open><summary><span><strong>Ring Appearances</strong><small data-ring-appearance-count>${ringSchedules.length} scheduled</small></span></summary><div class="dog-show-collapsible-content dog-show-ring-schedules-content"><div class="dog-show-ring-schedules-toolbar"><p>Add a separate assignment for each show day, ring, or class.</p><button type="button" class="secondary-button" data-action="add-ring-schedule">Add Ring Appearance</button></div><div id="dogShowRingScheduleRows">${ringSchedules.map(dogShowRingScheduleRowHtml).join("")}</div></div></details>
+      <details class="dog-show-collapsible-section dog-show-ring-schedules"${viewState.ringSchedulesOpen === false ? "" : " open"}><summary><span><strong>Ring Appearances</strong><small data-ring-appearance-count>${ringSchedules.length} scheduled</small></span></summary><div class="dog-show-collapsible-content dog-show-ring-schedules-content"><div class="dog-show-ring-schedules-toolbar"><p>Add a separate assignment for each show day, ring, or class.</p><button type="button" class="secondary-button" data-action="add-ring-schedule">Add Ring Appearance</button></div><div id="dogShowRingScheduleRows">${ringSchedules.map(dogShowRingScheduleRowHtml).join("")}</div></div></details>
       <label>Show notes<textarea name="notes" rows="2">${escapeHtml(entry.notes || "")}</textarea></label>
       <div class="button-row"><button type="submit">Save Dog</button><button type="button" class="secondary-button" data-action="remove-show-entry" data-id="${escapeHtml(entry.id)}">Remove From Show</button></div>
     </form>
     <section class="dog-show-dialog-section"><h3>Show Timeline</h3><div class="dog-show-log-timeline">${logs.length ? logs.map((log) => `<article><strong>${escapeHtml(log.activityType || "Care")}</strong><span>${escapeHtml(log.note || "Logged")}</span><small>${escapeHtml(dogShowFormatDateTime(log.loggedAt || log.updatedAt))} · ${escapeHtml(log.helperName || dogShowStaffLabel(log.helperEmail))}${log.customerVisible ? " · Owner visible" : ""}</small>${canRemoveLogs ? `<button type="button" class="dog-show-remove-log" data-action="remove-show-log" data-id="${escapeHtml(log.id)}" data-entry-id="${escapeHtml(entry.id)}" aria-label="Remove ${escapeHtml(dogShowCareLogName(log))} log" title="Remove logged item">×</button>` : ""}</article>`).join("") : "<p>No show care logged yet.</p>"}</div></section>`);
+  if (Number.isFinite(viewState.scrollTop)) {
+    requestAnimationFrame(() => {
+      const body = document.getElementById("dogShowDialogBody");
+      if (body) body.scrollTop = viewState.scrollTop;
+    });
+  }
 }
 
 function openDogShowPottyPicker(entry) {
@@ -1339,13 +1357,14 @@ async function removeDogShowTask(id = "") {
 
 async function removeDogShowLog(id = "", entryId = "") {
   if (currentRole() !== "admin") return showToast("Admin access required to remove a logged item.");
+  const viewState = dogShowEntryDialogViewState();
   const log = dogShowLogs().find((item) => item.id === id);
   if (!log || !window.confirm(`Remove this ${dogShowCareLogName(log)} log?`)) return;
   const removed = await saveDogShowRecord("showCareLog", { ...log, removed: true, removedAt: new Date().toISOString(), removedBy: currentUser?.name || "Admin", removedEmail: currentUser?.email || "" });
   if (typeof addAuditLog === "function") await addAuditLog("Removed dog show care log", "showCareLog", removed, `${log.dogName || "Dog"} · ${dogShowCareLogName(log)}`);
   renderDogShow();
   const entry = dogShowEntries().find((item) => item.id === (entryId || log.showEntryId));
-  if (entry) openDogShowEntryForm(entry);
+  if (entry) openDogShowEntryForm(entry, {}, viewState);
   else document.getElementById("dogShowDialog")?.close();
   showToast("Logged item removed.");
 }

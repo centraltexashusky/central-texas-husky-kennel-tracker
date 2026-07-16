@@ -12697,10 +12697,16 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 .dog-show-collapsible-section {
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: 2px solid #B7C8D2;
   border-radius: 8px;
+  box-shadow: 0 3px 10px rgba(16, 40, 63, 0.08);
   min-width: 0;
   overflow: hidden;
+}
+
+.dog-show-collapsible-section[open] {
+  border-color: #7EA2C0;
+  box-shadow: 0 5px 14px rgba(49, 95, 133, 0.12);
 }
 
 .dog-show-collapsible-section > summary {
@@ -12711,6 +12717,12 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   list-style: none;
   min-height: 52px;
   padding: 10px 12px;
+}
+
+.dog-show-collapsible-section > summary:hover,
+.dog-show-collapsible-section > summary:focus-visible {
+  background: var(--glass-fill-soft);
+  outline: 0;
 }
 
 .dog-show-collapsible-section > summary::-webkit-details-marker {
@@ -12850,21 +12862,28 @@ details.dog-show-ring-schedules {
   display: inline-flex;
   font-size: 0.95rem;
   font-weight: 400;
-  height: 26px;
+  height: 34px;
   justify-content: center;
-  min-height: 26px;
+  min-height: 34px;
   padding: 0;
   position: absolute;
-  right: 2px;
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
-  width: 26px;
+  touch-action: manipulation;
+  width: 34px;
+  z-index: 2;
 }
 
 .dog-show-remove-log:hover,
-.dog-show-remove-log:focus-visible {
+.dog-show-remove-log:focus-visible,
+.dog-show-remove-log:active {
   background: transparent;
+  border: 0;
+  box-shadow: none;
   color: #9F2D28;
+  filter: none;
+  transform: translateY(-50%);
 }
 
 .dog-show-check-grid {
@@ -13098,14 +13117,14 @@ details.dog-show-ring-schedules {
 
   .dog-show-dog-primary {
     gap: 8px;
-    grid-template-columns: 42px minmax(0, 1fr) auto;
-    min-height: 68px;
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    min-height: 78px;
     padding: 8px;
   }
 
   .dog-show-dog-photo {
-    height: 42px;
-    width: 42px;
+    height: 56px;
+    width: 56px;
   }
 
   .dog-show-schedule-row {
