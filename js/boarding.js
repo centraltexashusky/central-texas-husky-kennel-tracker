@@ -3337,15 +3337,60 @@ function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
 }
 
 function boardingDogPhotoSource(record = {}) {
-  const linkedDog = linkedCustomerDogForBoarding(record) || {};
-  return profilePhotoDirectSource(record) || profilePhotoDirectSource(linkedDog) || "";
+  return profilePhotoDirectSource(boardingDogPhotoRecord(record));
+}
+
+function canonicalBoardingDogPhotoRecord(record = {}, linkedDog = linkedCustomerDogForBoarding(record) || {}) {
+  const canonicalDogs = readRecords("dog").filter((dog) => !dog.removed && profilePhotoHasSource(dog));
+  if (!canonicalDogs.length) return {};
+  const normalizeBoardingId = (value = "") => String(value || "").replace(/^boarding:/, "");
+  const boardingIds = new Set([
+    record.id,
+    ...arrayValue(record.sourceRecordIds),
+    ...arrayValue(record.duplicateProfileIds),
+    ...arrayValue(record.legacyBoardingDogIds),
+  ].filter(Boolean).map(normalizeBoardingId));
+  const customerDogIds = new Set([
+    record.linkedCustomerDogId,
+    linkedDog.id,
+    ...arrayValue(linkedDog.duplicateCustomerDogIds),
+    ...arrayValue(linkedDog.legacyCustomerDogIds),
+  ].filter(Boolean).map(String));
+  const canonicalIds = new Set([record.canonicalDogId, record.dogId].filter(Boolean).map(String));
+  const explicitMatch = canonicalDogs.find((dog) => canonicalIds.has(String(dog.id || "")))
+    || canonicalDogs.find((dog) => arrayValue(dog.legacyBoardingDogIds).some((id) => boardingIds.has(normalizeBoardingId(id))))
+    || canonicalDogs.find((dog) => arrayValue(dog.legacyCustomerDogIds).some((id) => customerDogIds.has(String(id))));
+  if (explicitMatch) return { ...explicitMatch, type: explicitMatch.type || "dog" };
+
+  const dogName = String(record.dogName || linkedDog.dogName || "").trim().toLowerCase();
+  if (!dogName) return {};
+  const ownerEmails = new Set([
+    record.ownerEmail,
+    record.customerEmail,
+    record.linkedOwnerEmail,
+    linkedDog.ownerEmail,
+    linkedDog.customerEmail,
+  ].map(normalizeEmail).filter(Boolean));
+  const ownerPhones = new Set([
+    record.ownerPhone,
+    record.phone,
+    linkedDog.ownerPhone,
+  ].map(normalizedPhoneToken).filter(Boolean));
+  const identityMatches = canonicalDogs.filter((dog) => {
+    if (String(dog.dogName || dog.name || "").trim().toLowerCase() !== dogName) return false;
+    const emailMatch = [dog.ownerEmail, dog.customerEmail].map(normalizeEmail).filter(Boolean).some((email) => ownerEmails.has(email));
+    const phoneMatch = [dog.ownerPhone, dog.phone].map(normalizedPhoneToken).filter(Boolean).some((phone) => ownerPhones.has(phone));
+    return emailMatch || phoneMatch;
+  });
+  if (identityMatches.length !== 1) return {};
+  return { ...identityMatches[0], type: identityMatches[0].type || "dog" };
 }
 
 function boardingDogPhotoRecord(record = {}) {
   const linkedDog = linkedCustomerDogForBoarding(record) || {};
-  if (profilePhotoHasSource(record)) return record;
-  if (profilePhotoHasSource(linkedDog)) return linkedDog;
-  return {};
+  if (profilePhotoHasSource(record)) return { ...record, type: record.type || "boardingDog" };
+  if (profilePhotoHasSource(linkedDog)) return { ...linkedDog, type: linkedDog.type || "customerDog" };
+  return canonicalBoardingDogPhotoRecord(record, linkedDog);
 }
 
 function boardingDogPhotoSexClass(record = {}, photoRecord = boardingDogPhotoRecord(record)) {

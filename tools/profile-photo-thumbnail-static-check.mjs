@@ -54,6 +54,21 @@ const checks = [
     message: "Boarding Dogs photos must use the sex-border class.",
   },
   {
+    path: "js/boarding.js",
+    includes: "function canonicalBoardingDogPhotoRecord",
+    message: "Boarding Dogs photos must fall back to canonical dog records.",
+  },
+  {
+    path: "js/boarding.js",
+    includes: "arrayValue(dog.legacyBoardingDogIds).some",
+    message: "Boarding Dogs photo fallback must honor canonical legacy boarding links.",
+  },
+  {
+    path: "js/shared.js",
+    includes: "const explicitlyLinked = customerDogs.find((dog) => dog.id === record.linkedCustomerDogId)",
+    message: "Boarding Dogs must resolve explicit customer links without requiring an owner email.",
+  },
+  {
     path: "js/dog-show.js",
     includes: "dogPhotoSexClass(dog)",
     message: "Dog Show photos must use the sex-border class.",
@@ -70,12 +85,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260715-dog-show-rosette-home",
+    includes: "20260715-boarding-photo-customer-contrast",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260715-dog-show-rosette-home",
+    includes: "20260715-boarding-photo-customer-contrast",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

@@ -1,9 +1,9 @@
 // === MODULE: MAIN ===
 import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
-import "./shared.js?v=20260715-dog-show-rosette-home";
+import "./shared.js?v=20260715-boarding-photo-customer-contrast";
 import "./auth.js?v=20260709-staff-payroll-financials";
 import "./customer.js?v=20260712-agreement-copy-and-checks";
-import "./boarding.js?v=20260715-dog-show-rosette-home";
+import "./boarding.js?v=20260715-boarding-photo-customer-contrast";
 import "./daily.js?v=20260715-dog-show-rosette-home";
 import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-task-scheduler-visibility-dedupe";
 import "./dog-show.js?v=20260715-dog-show-result-email";

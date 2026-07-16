@@ -7495,7 +7495,6 @@ button.is-loading {
   body:not(.is-login-view) .recent-submissions,
   body:not(.is-login-view) .inline-check,
   body:not(.is-login-view) .operation-calendar-day,
-  body:not(.is-login-view) .operation-availability-card,
   body:not(.is-login-view) .record-card,
   body:not(.is-login-view) .toggle-row,
   body:not(.is-login-view) .checklist label,
@@ -7569,6 +7568,19 @@ button.is-loading {
   body.boarding-dog-modal-open .page-view.is-active .form-section {
     background: rgba(7, 16, 29, 0.96) !important;
   }
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .operation-availability-card {
+  background: #eef8f5 !important;
+  border-color: #8fbcb3;
+  color: #17332f;
+  box-shadow: none;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .operation-availability-card.is-warning {
+  background: #fff3f1 !important;
+  border-color: #d99088;
+  color: #6d241d;
 }
 
 @media (max-width: 980px) and (orientation: landscape) {

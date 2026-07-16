@@ -7050,12 +7050,28 @@ function sameDateValue(value, date = todayDate()) {
 
 
 function linkedCustomerDogForBoarding(record = {}) {
+  const customerDogs = readRecords("customerDog").filter((dog) => !dog.removed);
+  if (record.linkedCustomerDogId) {
+    const explicitlyLinked = customerDogs.find((dog) => dog.id === record.linkedCustomerDogId);
+    if (explicitlyLinked) return explicitlyLinked;
+  }
+  const boardingIds = new Set([
+    record.id,
+    ...arrayValue(record.sourceRecordIds),
+    ...arrayValue(record.duplicateProfileIds),
+    ...arrayValue(record.legacyBoardingDogIds),
+  ].filter(Boolean).map((id) => String(id).replace(/^boarding:/, "")));
+  const linkedByBoardingId = customerDogs.find((dog) => [
+    dog.linkedBoardingDogId,
+    dog.sourceBoardingDogId,
+    ...arrayValue(dog.legacyBoardingDogIds),
+  ].filter(Boolean).some((id) => boardingIds.has(String(id).replace(/^boarding:/, ""))));
+  if (linkedByBoardingId) return linkedByBoardingId;
   const ownerEmails = boardingOwnerEmails(record);
   if (!ownerEmails.length) return null;
-  return readRecords("customerDog").find((dog) => {
-    if (dog.removed) return false;
-    if (record.linkedCustomerDogId && dog.id === record.linkedCustomerDogId) return true;
-    return dog.linkedBoardingDogId === record.id || (ownerEmails.includes(normalizeEmail(dog.ownerEmail || dog.customerEmail)) && String(dog.dogName || "").trim().toLowerCase() === String(record.dogName || "").trim().toLowerCase());
+  return customerDogs.find((dog) => {
+    return ownerEmails.includes(normalizeEmail(dog.ownerEmail || dog.customerEmail))
+      && String(dog.dogName || "").trim().toLowerCase() === String(record.dogName || "").trim().toLowerCase();
   }) || null;
 }
 
