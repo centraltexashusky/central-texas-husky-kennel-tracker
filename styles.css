@@ -13326,6 +13326,28 @@ details.dog-show-ring-schedules[hidden] {
     font-size: 0.72rem;
   }
 
+  :root[data-theme="dark"] .dog-show-more-menu {
+    background: #10243A;
+    border-color: #6C8DA8;
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  :root[data-theme="dark"] .dog-show-more-menu button {
+    background: #18334F;
+    border-color: #55758F;
+    color: #F5FAFE;
+  }
+
+  :root[data-theme="dark"] .dog-show-more-menu button span {
+    color: #C8D9E7;
+  }
+
+  :root[data-theme="dark"] .dog-show-more-menu button:hover,
+  :root[data-theme="dark"] .dog-show-more-menu button:focus-visible {
+    background: #214665;
+    border-color: #82B9E0;
+  }
+
   body.dog-show-more-menu-open {
     overflow: hidden;
   }
