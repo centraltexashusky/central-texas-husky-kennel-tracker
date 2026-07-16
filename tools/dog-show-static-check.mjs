@@ -10,12 +10,13 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
+  ["index.html", 'styles.css?v=20260716-dog-show-bulk-care-clean-cards', "Dog Show bulk care styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'dog-show.js?v=20260716-dog-show-dialog-stability-photo-size', "Dog Show dialog stability and mobile photo changes are not cache-busted."],
+  ["js/main.js", 'dog-show.js?v=20260716-dog-show-bulk-care-clean-cards', "Dog Show bulk care and clean roster cards are not cache-busted."],
   ["js/main.js", 'notifications.js?v=20260715-dog-show-result-email', "Dog Show notification changes are not cache-busted."],
   ["js/shared.js", 'dogShowPage: ["showEvent"', "Dog Show remote records are not page-scoped."],
   ["js/shared.js", 'dogShowPage: () => renderDogShow()', "Dog Show page renderer is not registered."],
@@ -78,6 +79,9 @@ const required = [
   ["js/dog-show.js", "createDogShowWaterRound", "Large-team water rounds are missing."],
   ["js/dog-show.js", "completeDogShowTasks", "Batch task completion is missing."],
   ["js/dog-show.js", "quick-show-log", "One-tap dog care logging is missing."],
+  ["js/dog-show.js", "createDogShowBulkCareLogs", "Bulk Water and Food logging is missing from the Dog Show roster."],
+  ["js/dog-show.js", 'data-action="bulk-show-log" data-log-type="Water"', "The Dog Show roster is missing the Water All Dogs action."],
+  ["js/dog-show.js", 'data-action="bulk-show-log" data-log-type="Feeding"', "The Dog Show roster is missing the Feed All Dogs action."],
   ["js/dog-show.js", 'class="dog-show-card-quick-actions"', "Dog roster cards are missing visible quick care actions."],
   ["js/dog-show.js", "dogShowLastActivityLog", "Dog roster quick actions do not show activity-specific completion times."],
   ["js/dog-show.js", "dogShowCarePriority", "Dog roster cards do not calculate a care-specific priority accent."],
@@ -97,6 +101,7 @@ const required = [
   ["js/dog-show.js", "dogShowCareLogName", "Dog show potty outcomes are not available to log removal and audit labels."],
   ["styles.css", ".dog-show-potty-grid", "The potty outcome picker is not styled for quick use."],
   ["styles.css", ".dog-show-card-quick-actions", "Dog roster quick actions are not styled for mobile use."],
+  ["styles.css", ".dog-show-bulk-care", "Bulk Dog Show care actions are not styled."],
   ["styles.css", ".dog-show-dog-row.care-priority-water", "Dog roster cards are missing care-specific full-card accents."],
   ["styles.css", ".dog-show-task-day-toggle", "Collapsible Dog Show task date headers are not styled."],
   ["styles.css", ".dog-show-collapsible-section[open]", "Open dog detail sections do not have a distinct boundary."],
@@ -160,6 +165,7 @@ const rosterRowSource = dogShowSource.slice(dogShowSource.indexOf("function dogS
 if (rosterRowSource.includes('entry.dogType === "boardingDog" ? "Boarding" : "Our Dog"')) failures.push("Dog roster quick-view details must not show the irrelevant record origin.");
 if (!rosterRowSource.includes('return `<article class="dog-show-dog-row')) failures.push("Dog roster cards must use a non-button container so quick actions remain valid controls.");
 const stylesSource = read("styles.css");
+if (stylesSource.includes(".dog-show-dog-row.has-conflict")) failures.push("Dog roster cards must not use the purple dashed conflict outline.");
 const rosterCopyStyles = stylesSource.slice(stylesSource.indexOf(".dog-show-dog-copy strong"), stylesSource.indexOf(".dog-show-dog-status"));
 if (rosterCopyStyles.includes("text-overflow: ellipsis") || rosterCopyStyles.includes("white-space: nowrap")) failures.push("Dog roster quick-view text must wrap instead of truncating information.");
 for (const [needle, message] of forbidden) {

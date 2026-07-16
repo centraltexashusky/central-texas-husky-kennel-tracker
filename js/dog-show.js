@@ -37,6 +37,7 @@ let dogShowSelectedTaskIds = new Set();
 let dogShowCalendarView = ["weekend", "day"].includes(localStorage.getItem(DOG_SHOW_CALENDAR_VIEW_KEY)) ? localStorage.getItem(DOG_SHOW_CALENDAR_VIEW_KEY) : "weekend";
 let dogShowCalendarDate = localStorage.getItem(DOG_SHOW_CALENDAR_DATE_KEY) || "";
 let dogShowCalendarDragTaskId = "";
+let dogShowBulkCarePending = false;
 
 function dogShowRecords(type, eventId = "") {
   return readRecords(type).filter((record) => !record.removed && (!eventId || record.showEventId === eventId));
@@ -476,6 +477,10 @@ function dogShowDogsHtml(event) {
       <button type="button" data-dog-filter="social" class="${dogShowDogFilter === "social" ? "is-active" : ""}">Social ${all.filter((entry) => entry.attendanceRole !== "Showing").length}</button>
     </div>
     <div class="dog-show-count-strip"><strong>${entries.length} shown</strong><span>${needCount ? `${needCount} need attention` : "All dogs current"}</span></div>
+    ${all.length ? `<div class="dog-show-bulk-care" role="group" aria-label="Log care for all show dogs">
+      <button type="button" class="is-water" data-action="bulk-show-log" data-log-type="Water"><strong>Water All Dogs</strong><small>Log now for ${all.length}</small></button>
+      <button type="button" class="is-food" data-action="bulk-show-log" data-log-type="Feeding"><strong>Feed All Dogs</strong><small>Log now for ${all.length}</small></button>
+    </div>` : ""}
     <div class="dog-show-roster-list">${entries.length ? entries.map((entry) => dogShowEntryRowHtml(entry, { conflict: conflicts.has(entry.id), quickActions: true })).join("") : dogShowRenderEmpty("No matching dogs", "Change the filter or add dogs to this show.", "add-show-dogs", "Add Dogs")}</div>
   </div>`;
 }
@@ -1260,6 +1265,46 @@ async function createDogShowLog(entry, activityType, note = "Logged", options = 
   return record;
 }
 
+async function createDogShowBulkCareLogs(activityType = "") {
+  if (dogShowBulkCarePending) return;
+  const event = dogShowActiveEvent();
+  const entries = dogShowEntries(event);
+  const normalizedType = activityType === "Feeding" ? "Feeding" : "Water";
+  const actionLabel = normalizedType === "Feeding" ? "food" : "water";
+  if (!event || !entries.length) return showToast("Add dogs before logging care for the team.");
+  if (!window.confirm(`Log ${actionLabel} now for all ${entries.length} dogs at ${event.name || "this show"}?`)) return;
+
+  dogShowBulkCarePending = true;
+  const loggedAt = new Date().toISOString();
+  const records = entries.map((entry) => upsertRecord("showCareLog", {
+    type: "showCareLog",
+    id: uid("showCareLog"),
+    showEventId: event.id,
+    showEntryId: entry.id,
+    ringScheduleId: "",
+    dogId: entry.dogId,
+    dogType: entry.dogType,
+    dogName: dogShowEntryName(entry),
+    activityType: normalizedType,
+    pottyType: "",
+    note: `${normalizedType} logged for all show dogs`,
+    severity: "",
+    customerVisible: false,
+    loggedAt,
+    helperName: currentUser?.name || "Staff",
+    helperEmail: currentUser?.email || "",
+    submittedAt: loggedAt,
+  }));
+
+  try {
+    await sendPayloadBatch(records);
+    renderDogShow();
+    showToast(`${normalizedType === "Feeding" ? "Food" : "Water"} logged for all ${records.length} dogs.`);
+  } finally {
+    dogShowBulkCarePending = false;
+  }
+}
+
 async function saveDogShowNote(form) {
   const entry = dogShowEntries().find((item) => item.id === form.dataset.id);
   if (!entry) return;
@@ -1564,6 +1609,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "add-show-dogs") openDogShowAddDogsForm();
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "open-show-potty" && entry) openDogShowPottyPicker(entry);
+    if (action.dataset.action === "bulk-show-log") await createDogShowBulkCareLogs(action.dataset.logType);
     if (action.dataset.action === "quick-show-log" && entry) {
       action.disabled = true;
       await createDogShowLog(entry, action.dataset.logType, `${action.dataset.logType} logged`);

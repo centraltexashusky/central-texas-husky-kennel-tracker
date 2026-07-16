@@ -11563,11 +11563,6 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   box-shadow: var(--shadow);
 }
 
-.dog-show-dog-row.has-conflict {
-  outline: 2px dashed #7C5CBF;
-  outline-offset: 1px;
-}
-
 .dog-show-schedule-row.has-conflict {
   box-shadow: inset 4px 0 0 var(--red), var(--shadow);
 }
@@ -11809,6 +11804,50 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-count-strip span {
   color: #D8E0E7;
   font-size: 0.76rem;
+}
+
+.dog-show-bulk-care {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dog-show-bulk-care button {
+  align-items: center;
+  border-radius: 8px;
+  box-shadow: none;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-height: 52px;
+  padding: 8px 11px;
+  text-align: left;
+  width: 100%;
+}
+
+.dog-show-bulk-care button:hover,
+.dog-show-bulk-care button:focus-visible {
+  box-shadow: none;
+  transform: none;
+}
+
+.dog-show-bulk-care button.is-water {
+  background: #EAF4FB;
+  border-color: #2F6F9F;
+  color: #214B6E;
+}
+
+.dog-show-bulk-care button.is-food {
+  background: #FFF4E5;
+  border-color: #C9822B;
+  color: #75430E;
+}
+
+.dog-show-bulk-care small {
+  color: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.82;
 }
 
 .dog-show-alert {
