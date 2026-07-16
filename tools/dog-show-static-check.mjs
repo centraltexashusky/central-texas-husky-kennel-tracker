@@ -10,13 +10,13 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'styles.css?v=20260716-dog-show-bulk-care-clean-cards', "Dog Show bulk care styles are not cache-busted."],
+  ["index.html", 'styles.css?v=20260716-dog-show-quick-care-bulk-potty-task-toggle-severity', "Dog Show task toggle, quick care, bulk potty, and severity styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'dog-show.js?v=20260716-dog-show-bulk-care-clean-cards', "Dog Show bulk care and clean roster cards are not cache-busted."],
+  ["js/main.js", 'dog-show.js?v=20260716-dog-show-quick-care-bulk-potty-task-toggle-severity', "Dog Show task toggle, quick care, bulk potty, and severity changes are not cache-busted."],
   ["js/main.js", 'notifications.js?v=20260715-dog-show-result-email', "Dog Show notification changes are not cache-busted."],
   ["js/shared.js", 'dogShowPage: ["showEvent"', "Dog Show remote records are not page-scoped."],
   ["js/shared.js", 'dogShowPage: () => renderDogShow()', "Dog Show page renderer is not registered."],
@@ -80,13 +80,20 @@ const required = [
   ["js/dog-show.js", "completeDogShowTasks", "Batch task completion is missing."],
   ["js/dog-show.js", "quick-show-log", "One-tap dog care logging is missing."],
   ["js/dog-show.js", "createDogShowBulkCareLogs", "Bulk Water and Food logging is missing from the Dog Show roster."],
+  ["js/dog-show.js", 'data-action="open-bulk-show-potty"', "The Dog Show roster is missing the Potty All Dogs action."],
+  ["js/dog-show.js", "openDogShowBulkPottyPicker", "Potty All Dogs is missing its outcome picker."],
+  ["js/dog-show.js", 'data-action="quick-show-bulk-potty"', "Bulk potty outcomes cannot be logged for all show dogs."],
+  ["js/dog-show.js", 'createDogShowBulkCareLogs("Potty", { pottyType })', "Bulk potty outcomes do not use the confirmed Dog Show care-log batch path."],
   ["js/dog-show.js", 'data-action="bulk-show-log" data-log-type="Water"', "The Dog Show roster is missing the Water All Dogs action."],
   ["js/dog-show.js", 'data-action="bulk-show-log" data-log-type="Feeding"', "The Dog Show roster is missing the Feed All Dogs action."],
   ["js/dog-show.js", 'class="dog-show-card-quick-actions"', "Dog roster cards are missing visible quick care actions."],
   ["js/dog-show.js", "dogShowLastActivityLog", "Dog roster quick actions do not show activity-specific completion times."],
   ["js/dog-show.js", "dogShowCarePriority", "Dog roster cards do not calculate a care-specific priority accent."],
+  ["js/dog-show.js", "dogShowMedicalSeverity", "Dog roster medical actions do not reflect the latest severity."],
   ["js/dog-show.js", 'data-task-day-toggle=', "Dog Show task date groups cannot be collapsed."],
   ["js/dog-show.js", 'aria-expanded="${expanded}"', "Dog Show task date groups do not expose their expanded state."],
+  ["js/dog-show.js", "Unselect visible", "Visible Dog Show tasks cannot be unselected as a group."],
+  ["js/dog-show.js", "unselectVisible", "Select visible does not toggle already-selected Dog Show tasks off."],
   ["js/dog-show.js", "dogShowEntryDialogViewState", "Dog detail sections do not preserve their state after log removal."],
   ["js/dog-show.js", "openDogShowEntryForm(entry, {}, viewState)", "Removing a dog show log resets the dog detail view."],
   ["js/dog-show.js", '<strong>Food</strong>', "Dog roster cards are missing the Food quick action."],
@@ -102,7 +109,11 @@ const required = [
   ["styles.css", ".dog-show-potty-grid", "The potty outcome picker is not styled for quick use."],
   ["styles.css", ".dog-show-card-quick-actions", "Dog roster quick actions are not styled for mobile use."],
   ["styles.css", ".dog-show-bulk-care", "Bulk Dog Show care actions are not styled."],
+  ["styles.css", ".dog-show-bulk-care button.is-potty", "Potty All Dogs is missing its distinct action styling."],
   ["styles.css", ".dog-show-dog-row.care-priority-water", "Dog roster cards are missing care-specific full-card accents."],
+  ["styles.css", '[data-care-action="medical"].severity-low', "Low medical severity is missing its yellow border."],
+  ["styles.css", '[data-care-action="medical"].severity-medium', "Medium medical severity is missing its orange border."],
+  ["styles.css", '[data-care-action="medical"].severity-high', "High medical severity is missing its red border."],
   ["styles.css", ".dog-show-task-day-toggle", "Collapsible Dog Show task date headers are not styled."],
   ["styles.css", ".dog-show-collapsible-section[open]", "Open dog detail sections do not have a distinct boundary."],
   ["styles.css", "grid-template-columns: 56px minmax(0, 1fr) auto;", "Dog Show mobile roster photos are still too small."],
@@ -164,6 +175,11 @@ if (duplicateTaskSource.includes("setMinutes")) failures.push("Duplicate show ta
 const rosterRowSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowEntryRowHtml"), dogShowSource.indexOf("function dogShowRenderEmpty"));
 if (rosterRowSource.includes('entry.dogType === "boardingDog" ? "Boarding" : "Our Dog"')) failures.push("Dog roster quick-view details must not show the irrelevant record origin.");
 if (!rosterRowSource.includes('return `<article class="dog-show-dog-row')) failures.push("Dog roster cards must use a non-button container so quick actions remain valid controls.");
+const pottyHandlerStart = dogShowSource.lastIndexOf('if (action.dataset.action === "quick-show-potty"');
+const pottyHandlerSource = dogShowSource.slice(pottyHandlerStart, dogShowSource.indexOf('if (action.dataset.action === "quick-show-log"', pottyHandlerStart));
+if (pottyHandlerSource.includes("openDogShowEntryForm")) failures.push("Potty quick logging must close instead of opening the main dog dialog.");
+const noteSaveSource = dogShowSource.slice(dogShowSource.indexOf("async function saveDogShowNote"), dogShowSource.indexOf("async function saveDogShowResult"));
+if (noteSaveSource.includes("openDogShowEntryForm")) failures.push("Saving a quick note must close instead of opening the main dog dialog.");
 const stylesSource = read("styles.css");
 if (stylesSource.includes(".dog-show-dog-row.has-conflict")) failures.push("Dog roster cards must not use the purple dashed conflict outline.");
 const rosterCopyStyles = stylesSource.slice(stylesSource.indexOf(".dog-show-dog-copy strong"), stylesSource.indexOf(".dog-show-dog-status"));

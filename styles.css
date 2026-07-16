@@ -11695,6 +11695,36 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   border-color: #C9822B;
 }
 
+.dog-show-card-quick-actions [data-care-action="medical"].severity-low {
+  background: #FFF9DB;
+  border-color: #D6A700;
+}
+
+.dog-show-card-quick-actions [data-care-action="medical"].severity-medium {
+  background: #FFF1DF;
+  border-color: #D97706;
+}
+
+.dog-show-card-quick-actions [data-care-action="medical"].severity-high {
+  background: #FDE8E6;
+  border-color: #C2413A;
+}
+
+.dog-show-card-quick-actions [data-care-action="medical"].severity-low:hover,
+.dog-show-card-quick-actions [data-care-action="medical"].severity-low:focus-visible {
+  border-color: #D6A700;
+}
+
+.dog-show-card-quick-actions [data-care-action="medical"].severity-medium:hover,
+.dog-show-card-quick-actions [data-care-action="medical"].severity-medium:focus-visible {
+  border-color: #D97706;
+}
+
+.dog-show-card-quick-actions [data-care-action="medical"].severity-high:hover,
+.dog-show-card-quick-actions [data-care-action="medical"].severity-high:focus-visible {
+  border-color: #C2413A;
+}
+
 .dog-show-card-quick-actions button:hover,
 .dog-show-card-quick-actions button:focus-visible {
   background: var(--tint-blue);
@@ -11809,7 +11839,7 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-bulk-care {
   display: grid;
   gap: 8px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .dog-show-bulk-care button {
@@ -11835,6 +11865,12 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   background: #EAF4FB;
   border-color: #2F6F9F;
   color: #214B6E;
+}
+
+.dog-show-bulk-care button.is-potty {
+  background: #FFF9E8;
+  border-color: #C58B24;
+  color: #704A0B;
 }
 
 .dog-show-bulk-care button.is-food {

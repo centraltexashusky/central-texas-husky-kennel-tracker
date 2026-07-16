@@ -283,6 +283,15 @@ function dogShowActivityTimeHtml(entry = {}, activityType = "") {
   return `<small title="${escapeHtml(title)}">${log ? "Last " : ""}${escapeHtml(value)}</small>`;
 }
 
+function dogShowMedicalSeverity(entry = {}) {
+  const log = dogShowLastActivityLog(entry, "Behavior / Medical");
+  const severity = String(log?.severity || "").trim();
+  if (severity === "Urgent") return { key: "high", label: "Urgent" };
+  if (severity === "Needs follow-up") return { key: "medium", label: "Needs follow-up" };
+  if (severity === "Observation") return { key: "low", label: "Observation" };
+  return { key: "", label: "" };
+}
+
 function dogShowMinutesSince(value = "") {
   const time = Date.parse(value || "");
   return Number.isFinite(time) ? Math.max(0, Math.floor((Date.now() - time) / 60000)) : Infinity;
@@ -389,6 +398,7 @@ function dogShowEntryRowHtml(entry = {}, options = {}) {
   const scheduleCount = dogShowRingSchedules(entry).length;
   const prep = dogShowPrepTimes(entry, schedule);
   const showing = entry.attendanceRole === "Showing";
+  const medicalSeverity = dogShowMedicalSeverity(entry);
   const timestamp = lastLog ? dogShowFormatTime(lastLog.loggedAt || lastLog.updatedAt) : "No log";
   const timestampTitle = lastLog ? dogShowFormatDateTime(lastLog.loggedAt || lastLog.updatedAt) : "No care has been logged at this show.";
   const ringFlag = showing
@@ -401,7 +411,7 @@ function dogShowEntryRowHtml(entry = {}, options = {}) {
     <button type="button" data-action="open-show-potty" data-care-action="potty" data-id="${escapeHtml(entry.id)}"><strong>Potty</strong>${dogShowActivityTimeHtml(entry, "Potty")}</button>
     <button type="button" data-action="quick-show-log" data-care-action="water" data-log-type="Water" data-id="${escapeHtml(entry.id)}"><strong>Water</strong>${dogShowActivityTimeHtml(entry, "Water")}</button>
     <button type="button" data-action="quick-show-log" data-care-action="food" data-log-type="Feeding" data-id="${escapeHtml(entry.id)}"><strong>Food</strong>${dogShowActivityTimeHtml(entry, "Feeding")}</button>
-    <button type="button" data-action="open-show-note" data-care-action="medical" data-log-type="Behavior / Medical" data-id="${escapeHtml(entry.id)}"><strong>Medical/Behavior</strong>${dogShowActivityTimeHtml(entry, "Behavior / Medical")}</button>
+    <button type="button"${medicalSeverity.key ? ` class="severity-${medicalSeverity.key}" title="Latest severity: ${escapeHtml(medicalSeverity.label)}"` : ""} data-action="open-show-note" data-care-action="medical" data-log-type="Behavior / Medical" data-id="${escapeHtml(entry.id)}"><strong>Medical/Behavior</strong>${dogShowActivityTimeHtml(entry, "Behavior / Medical")}</button>
   </div>` : "";
   return `<article class="dog-show-dog-row is-${state} care-priority-${carePriority.key}${options.conflict ? " has-conflict" : ""}" title="Care priority: ${escapeHtml(carePriority.label)}">
     <button type="button" class="dog-show-dog-primary" data-action="open-show-dog" data-id="${escapeHtml(entry.id)}">
@@ -478,6 +488,7 @@ function dogShowDogsHtml(event) {
     </div>
     <div class="dog-show-count-strip"><strong>${entries.length} shown</strong><span>${needCount ? `${needCount} need attention` : "All dogs current"}</span></div>
     ${all.length ? `<div class="dog-show-bulk-care" role="group" aria-label="Log care for all show dogs">
+      <button type="button" class="is-potty" data-action="open-bulk-show-potty"><strong>Potty All Dogs</strong><small>Choose outcome for ${all.length}</small></button>
       <button type="button" class="is-water" data-action="bulk-show-log" data-log-type="Water"><strong>Water All Dogs</strong><small>Log now for ${all.length}</small></button>
       <button type="button" class="is-food" data-action="bulk-show-log" data-log-type="Feeding"><strong>Feed All Dogs</strong><small>Log now for ${all.length}</small></button>
     </div>` : ""}
@@ -716,6 +727,8 @@ function setDogShowExpandedTaskDay(event = dogShowActiveEvent(), dateKey = "") {
 function dogShowTasksHtml(event) {
   const tasks = dogShowTasks(event).filter(dogShowTaskMatchesFilter).sort((a, b) => new Date(a.dueAt || 8640000000000000) - new Date(b.dueAt || 8640000000000000) || String(a.status === "Completed").localeCompare(String(b.status === "Completed")));
   const all = dogShowTasks(event);
+  const selectableTaskIds = tasks.filter((task) => task.status !== "Completed").map((task) => task.id);
+  const allVisibleSelected = selectableTaskIds.length > 0 && selectableTaskIds.every((id) => dogShowSelectedTaskIds.has(id));
   const tasksByDate = new Map();
   tasks.forEach((task) => {
     const dateKey = dogShowDateKey(new Date(task.dueAt || "")) || "Date missing";
@@ -737,7 +750,7 @@ function dogShowTasksHtml(event) {
       <button type="button" data-task-filter="completed" class="${dogShowTaskFilter === "completed" ? "is-active" : ""}">Done ${all.filter((task) => task.status === "Completed").length}</button>
       <button type="button" data-task-filter="all" class="${dogShowTaskFilter === "all" ? "is-active" : ""}">All ${all.length}</button>
     </div>
-    <div class="dog-show-task-batch"><label><input type="checkbox" data-action="select-visible-show-tasks" /> Select visible</label><button type="button" class="secondary-button" data-action="complete-selected-show-tasks"${dogShowSelectedTaskIds.size ? "" : " disabled"}>Complete selected (${dogShowSelectedTaskIds.size})</button></div>
+    <div class="dog-show-task-batch"><label><input type="checkbox" data-action="select-visible-show-tasks"${allVisibleSelected ? " checked" : ""}${selectableTaskIds.length ? "" : " disabled"} /> ${allVisibleSelected ? "Unselect visible" : "Select visible"}</label><button type="button" class="secondary-button" data-action="complete-selected-show-tasks"${dogShowSelectedTaskIds.size ? "" : " disabled"}>Complete selected (${dogShowSelectedTaskIds.size})</button></div>
     <div class="dog-show-task-groups">${taskGroups || dogShowRenderEmpty("No tasks in this view", "Add a team task or create a water round for every dog.", "new-show-task", "New Task")}</div>
   </div>`;
 }
@@ -1031,6 +1044,20 @@ function openDogShowPottyPicker(entry) {
   </section>`);
 }
 
+function openDogShowBulkPottyPicker() {
+  const entries = dogShowEntries();
+  if (!entries.length) return showToast("Add dogs before logging a potty outcome for the team.");
+  openDogShowDialog("Potty All Dogs", `<section class="dog-show-dialog-section dog-show-potty-picker">
+    <div class="dog-show-result-context"><strong>What did all ${entries.length} dogs do?</strong><span>Choose an outcome, then confirm before it is logged for every dog.</span></div>
+    <div class="dog-show-potty-grid" role="group" aria-label="Potty outcome for all show dogs">
+      <button type="button" data-action="quick-show-bulk-potty" data-potty-type="Pee">Pee</button>
+      <button type="button" data-action="quick-show-bulk-potty" data-potty-type="Poop">Poop</button>
+      <button type="button" data-action="quick-show-bulk-potty" data-potty-type="Pee + Poop">Pee + Poop</button>
+    </div>
+    <div class="button-row"><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+  </section>`);
+}
+
 function openDogShowNoteForm(entry, logType) {
   const ownerNote = logType === "Owner Note";
   openDogShowDialog(`${logType}: ${dogShowEntryName(entry)}`, `<form id="dogShowNoteForm" class="tracker-form" data-id="${escapeHtml(entry.id)}" data-log-type="${escapeHtml(logType)}">
@@ -1265,14 +1292,19 @@ async function createDogShowLog(entry, activityType, note = "Logged", options = 
   return record;
 }
 
-async function createDogShowBulkCareLogs(activityType = "") {
-  if (dogShowBulkCarePending) return;
+async function createDogShowBulkCareLogs(activityType = "", options = {}) {
+  if (dogShowBulkCarePending) return false;
   const event = dogShowActiveEvent();
   const entries = dogShowEntries(event);
-  const normalizedType = activityType === "Feeding" ? "Feeding" : "Water";
-  const actionLabel = normalizedType === "Feeding" ? "food" : "water";
-  if (!event || !entries.length) return showToast("Add dogs before logging care for the team.");
-  if (!window.confirm(`Log ${actionLabel} now for all ${entries.length} dogs at ${event.name || "this show"}?`)) return;
+  const normalizedType = activityType === "Feeding" ? "Feeding" : activityType === "Potty" ? "Potty" : "Water";
+  const pottyType = normalizedType === "Potty" ? String(options.pottyType || "") : "";
+  const actionLabel = pottyType || (normalizedType === "Feeding" ? "food" : "water");
+  if (!event || !entries.length) {
+    showToast("Add dogs before logging care for the team.");
+    return false;
+  }
+  if (normalizedType === "Potty" && !pottyType) return false;
+  if (!window.confirm(`Log ${actionLabel.toLowerCase()} now for all ${entries.length} dogs at ${event.name || "this show"}?`)) return false;
 
   dogShowBulkCarePending = true;
   const loggedAt = new Date().toISOString();
@@ -1286,8 +1318,8 @@ async function createDogShowBulkCareLogs(activityType = "") {
     dogType: entry.dogType,
     dogName: dogShowEntryName(entry),
     activityType: normalizedType,
-    pottyType: "",
-    note: `${normalizedType} logged for all show dogs`,
+    pottyType,
+    note: `${pottyType || normalizedType} logged for all show dogs`,
     severity: "",
     customerVisible: false,
     loggedAt,
@@ -1299,7 +1331,8 @@ async function createDogShowBulkCareLogs(activityType = "") {
   try {
     await sendPayloadBatch(records);
     renderDogShow();
-    showToast(`${normalizedType === "Feeding" ? "Food" : "Water"} logged for all ${records.length} dogs.`);
+    showToast(`${pottyType || (normalizedType === "Feeding" ? "Food" : "Water")} logged for all ${records.length} dogs.`);
+    return true;
   } finally {
     dogShowBulkCarePending = false;
   }
@@ -1309,9 +1342,10 @@ async function saveDogShowNote(form) {
   const entry = dogShowEntries().find((item) => item.id === form.dataset.id);
   if (!entry) return;
   const data = formPayload(form);
-  await createDogShowLog(entry, form.dataset.logType || "Note", data.note || "Logged", { severity: data.severity || "", customerVisible: Boolean(form.elements.customerVisible?.checked) });
-  openDogShowEntryForm(entry);
-  showToast("Show note saved.");
+  const logType = form.dataset.logType || "Note";
+  await createDogShowLog(entry, logType, data.note || "Logged", { severity: data.severity || "", customerVisible: Boolean(form.elements.customerVisible?.checked) });
+  document.getElementById("dogShowDialog")?.close();
+  showToast(`${logType} logged for ${dogShowEntryName(entry)}.`);
 }
 
 async function saveDogShowResult(form) {
@@ -1609,6 +1643,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "add-show-dogs") openDogShowAddDogsForm();
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "open-show-potty" && entry) openDogShowPottyPicker(entry);
+    if (action.dataset.action === "open-bulk-show-potty") openDogShowBulkPottyPicker();
     if (action.dataset.action === "bulk-show-log") await createDogShowBulkCareLogs(action.dataset.logType);
     if (action.dataset.action === "quick-show-log" && entry) {
       action.disabled = true;
@@ -1627,7 +1662,9 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "complete-show-task") await completeDogShowTasks([action.dataset.id]);
     if (action.dataset.action === "complete-selected-show-tasks") await completeDogShowTasks([...dogShowSelectedTaskIds]);
     if (action.dataset.action === "select-visible-show-tasks") {
-      dogShowTasks().filter(dogShowTaskMatchesFilter).filter((task) => task.status !== "Completed").forEach((task) => dogShowSelectedTaskIds.add(task.id));
+      const visibleTaskIds = dogShowTasks().filter(dogShowTaskMatchesFilter).filter((task) => task.status !== "Completed").map((task) => task.id);
+      const unselectVisible = visibleTaskIds.length > 0 && visibleTaskIds.every((id) => dogShowSelectedTaskIds.has(id));
+      visibleTaskIds.forEach((id) => unselectVisible ? dogShowSelectedTaskIds.delete(id) : dogShowSelectedTaskIds.add(id));
       renderDogShow();
     }
     if (action.dataset.action === "create-water-round") await createDogShowWaterRound();
@@ -1724,9 +1761,17 @@ function setupDogShowEventListeners() {
       const pottyType = action.dataset.pottyType || "";
       if (!pottyType) return;
       action.disabled = true;
-      const createdLog = await createDogShowLog(entry, "Potty", pottyType, { pottyType });
-      openDogShowEntryForm(entry, { type: "Potty", label: pottyType, loggedAt: createdLog?.loggedAt || new Date().toISOString(), helperName: createdLog?.helperName || "" });
+      await createDogShowLog(entry, "Potty", pottyType, { pottyType });
+      dialog.close();
       showToast(`${pottyType} logged for ${dogShowEntryName(entry)}.`);
+    }
+    if (action.dataset.action === "quick-show-bulk-potty") {
+      const pottyType = action.dataset.pottyType || "";
+      if (!pottyType) return;
+      action.disabled = true;
+      const logged = await createDogShowBulkCareLogs("Potty", { pottyType });
+      if (logged) dialog.close();
+      else action.disabled = false;
     }
     if (action.dataset.action === "quick-show-log" && entry) {
       const button = action;
