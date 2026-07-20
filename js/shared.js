@@ -10960,7 +10960,8 @@ async function notifyIfNeeded(record = {}, eventName = "") {
     renderNotifications();
     return updated;
   } catch (error) {
-    const failed = upsertRecord("notificationLog", { ...notification, deliveryStatus: "in-app only", deliveryError: error.message || String(error) });
+    const deliveryError = await edgeFunctionErrorMessage(error, "Notification delivery could not complete.");
+    const failed = upsertRecord("notificationLog", { ...notification, deliveryStatus: "in-app only", deliveryError });
     if (isStaffRole()) await sendPayload(failed);
     renderNotifications();
     return failed;
@@ -11981,8 +11982,12 @@ function initEvents() {
           reference,
         });
         if (updated) {
-          setOwnerUpdateSubmitState(ownerUpdateForm, "success", "Owner update saved.");
-          showDetailDialog("Owner Update Saved", \`<p>The owner update for \${escapeHtml(updated.dogName || "this dog")} was saved to Stay ID: \${escapeHtml(stay.id ? boardingStayRequestCode(updated, stay) : "")}.</p>\`);
+          const delivery = boardingCustomerUpdateDeliverySummary(updated.ownerUpdateNotification);
+          setOwnerUpdateSubmitState(ownerUpdateForm, delivery.sent ? "success" : "error", delivery.statusMessage);
+          showDetailDialog(
+            delivery.title,
+            \`<p>\${escapeHtml(delivery.message)}</p><p>Dog: \${escapeHtml(updated.dogName || "this dog")} | Stay ID: \${escapeHtml(stay.id ? boardingStayRequestCode(updated, stay) : "")}</p>\${delivery.reason ? \`<p>Reason: \${escapeHtml(delivery.reason)}</p>\` : ""}\`,
+          );
         } else {
           setOwnerUpdateSubmitState(ownerUpdateForm, "error", "Owner update was not saved. Add a note, photo, or video and try again.");
         }

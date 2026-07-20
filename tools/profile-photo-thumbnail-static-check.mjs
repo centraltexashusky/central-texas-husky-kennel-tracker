@@ -85,12 +85,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260715-boarding-photo-customer-contrast",
+    includes: "20260720-owner-update-email-delivery",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260715-boarding-photo-customer-contrast",
+    includes: "20260720-owner-update-email-delivery",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

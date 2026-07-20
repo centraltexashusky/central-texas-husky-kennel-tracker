@@ -5427,6 +5427,36 @@ async function removeBoardingDogFile(reference = {}) {
   return refreshBoardingDogFileViews(updated);
 }
 
+function boardingCustomerUpdateDeliverySummary(notification = {}) {
+  const status = String(notification?.deliveryStatus || "").trim().toLowerCase();
+  const emailResult = notification?.emailResult && typeof notification.emailResult === "object" ? notification.emailResult : {};
+  const reason = String(notification?.deliveryError || emailResult.reason || emailResult.error || emailResult.message || "").trim();
+  if (status === "sent") {
+    return {
+      sent: true,
+      title: "Owner Update Emailed",
+      message: "The owner update was saved and the email was sent.",
+      statusMessage: "Owner update emailed.",
+    };
+  }
+  if (["failed", "in-app only", "skipped", "sms sent; email failed", "sms sent; email skipped"].includes(status)) {
+    return {
+      sent: false,
+      title: "Owner Update Saved — Email Not Sent",
+      message: "The owner update was saved in the app, but the owner email was not sent.",
+      reason,
+      statusMessage: "Owner update saved in app, but the email was not sent.",
+    };
+  }
+  return {
+    sent: false,
+    title: "Owner Update Saved — Delivery Unconfirmed",
+    message: "The owner update was saved in the app, but email delivery was not confirmed.",
+    reason,
+    statusMessage: "Owner update saved; email delivery was not confirmed.",
+  };
+}
+
 async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options = {}) {
   const displayRecord = boardingDogRecordForDisplay(record.id) || record;
   const targetStay = stay?.id ? stay : ownerUpdateStayForRecord(displayRecord, options.reference || {});
@@ -5487,7 +5517,7 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
     updatedAt: timestamp,
   });
   await sendPayload(updated);
-  await notifyIfNeeded(updated, "customerStayUpdateSent");
+  const notification = await notifyIfNeeded(updated, "customerStayUpdateSent");
   await mirrorBoardingCustomerUpdateToCustomerDog(updated, update);
   await addAuditLog("Added customer boarding update", "boardingDog", updated, \`\${updated.dogName || "Dog"} | \${requestCode} | \${note || mediaItems.map((item) => item.name).join(", ")}\`);
   if (input) input.value = "";
@@ -5498,8 +5528,9 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
   renderCustomerRequests();
   renderCustomerUpdates();
   renderDashboard();
-  showToast("Customer update saved.");
-  return updated;
+  const delivery = boardingCustomerUpdateDeliverySummary(notification);
+  showToast(delivery.statusMessage);
+  return { ...updated, ownerUpdateNotification: notification };
 }
 
 async function addBoardingCustomerUpdate() {
