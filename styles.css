@@ -11680,6 +11680,54 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   margin-top: 4px;
 }
 
+.dog-show-potty-times {
+  display: grid;
+  gap: 2px;
+  margin-top: 3px;
+}
+
+.dog-show-potty-times small {
+  align-items: center;
+  display: flex !important;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 0 !important;
+  white-space: nowrap;
+}
+
+.dog-show-potty-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.dog-show-potty-icon.is-pee {
+  background: #4D9BD0;
+  border-radius: 65% 35% 60% 40%;
+  height: 9px;
+  transform: rotate(45deg);
+  width: 9px;
+}
+
+.dog-show-potty-icon.is-poop {
+  background: #8A6247;
+  border-radius: 6px 6px 4px 4px;
+  height: 6px;
+  margin-top: 3px;
+  width: 11px;
+}
+
+.dog-show-potty-icon.is-poop::before {
+  background: inherit;
+  border-radius: 50%;
+  content: "";
+  height: 6px;
+  left: 2px;
+  position: absolute;
+  top: -4px;
+  width: 7px;
+}
+
 .dog-show-dog-row.care-priority-potty [data-care-action="potty"] {
   background: rgba(197, 139, 36, 0.12);
   border-color: #C58B24;
@@ -12837,6 +12885,11 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   padding: 12px;
 }
 
+.dog-show-status-field select {
+  border-color: #5E86A5;
+  font-weight: 800;
+}
+
 details.dog-show-ring-schedules {
   display: block;
 }
@@ -12879,16 +12932,55 @@ details.dog-show-ring-schedules[hidden] {
   border: 1px solid var(--line);
   border-left: 4px solid var(--gold);
   border-radius: 8px;
-  display: grid;
-  gap: 10px;
+  display: block;
   max-width: 100%;
   min-width: 0;
+  overflow: hidden;
+}
+
+.dog-show-ring-schedule-heading {
+  cursor: pointer;
+  list-style: none;
+  min-height: 58px;
   padding: 12px;
 }
 
-.dog-show-ring-schedule-heading > div {
+.dog-show-ring-schedule-heading::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-ring-schedule-heading::after {
+  color: var(--muted);
+  content: "+";
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.dog-show-ring-schedule-row[open] > .dog-show-ring-schedule-heading {
+  background: var(--glass-fill-soft);
+  border-bottom: 1px solid var(--line);
+}
+
+.dog-show-ring-schedule-row[open] > .dog-show-ring-schedule-heading::after {
+  content: "-";
+}
+
+.dog-show-ring-schedule-heading > span {
   display: grid;
   gap: 2px;
+  min-width: 0;
+}
+
+.dog-show-ring-schedule-content {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.dog-show-ring-schedule-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .dog-show-remove-ring {
@@ -13194,15 +13286,28 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 :root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-high {
-  background: rgba(194, 65, 58, 0.28);
-  border-color: #F07B75;
-  color: #FFE2DF;
+  background: #5A2529;
+  border-color: #FF8F88;
+  color: #FFF7F5;
 }
 
 :root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-low small,
 :root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-medium small,
 :root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-high small {
   color: inherit;
+}
+
+:root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-high strong,
+:root[data-theme="dark"] .dog-show-card-quick-actions [data-care-action="medical"].severity-high small {
+  color: #FFF7F5;
+}
+
+:root[data-theme="dark"] .dog-show-potty-icon.is-pee {
+  background: #79C8F6;
+}
+
+:root[data-theme="dark"] .dog-show-potty-icon.is-poop {
+  background: #D2A17E;
 }
 
 :root[data-theme="dark"] .dog-show-prep-preview,
@@ -13540,7 +13645,13 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-ring-schedule-row {
-    padding: 10px;
+    padding: 0;
+  }
+
+  .dog-show-ring-schedule-heading,
+  .dog-show-ring-schedule-content {
+    padding-left: 10px;
+    padding-right: 10px;
   }
 
   .dog-show-ring-schedules-toolbar {

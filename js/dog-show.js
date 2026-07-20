@@ -4,6 +4,7 @@ const DOG_SHOW_EVENT_KEY = "cth-dog-show-active-event";
 const DOG_SHOW_CALENDAR_VIEW_KEY = "cth-dog-show-calendar-view";
 const DOG_SHOW_CALENDAR_DATE_KEY = "cth-dog-show-calendar-date";
 const DOG_SHOW_TASK_DAY_KEY = "cth-dog-show-task-expanded-day";
+const DOG_SHOW_RING_ROW_STATE_KEY = "cth-dog-show-ring-row-state";
 const DOG_SHOW_CALENDAR_SLOT_MINUTES = 15;
 const DOG_SHOW_STALE_MINUTES = 60;
 const DOG_SHOW_TASK_COLORS = {
@@ -262,6 +263,19 @@ function dogShowLastActivityLog(entry = {}, activityType = "", event = dogShowAc
     .sort((a, b) => new Date(b.loggedAt || b.updatedAt || 0) - new Date(a.loggedAt || a.updatedAt || 0))[0] || null;
 }
 
+function dogShowLogBelongsToEntry(log = {}, entry = {}) {
+  return log.showEntryId === entry.id || (log.dogId === entry.dogId && log.dogType === entry.dogType);
+}
+
+function dogShowLastPottyOutcomeLog(entry = {}, outcome = "", event = dogShowActiveEvent()) {
+  const target = String(outcome || "").toLowerCase();
+  return dogShowLogs(event)
+    .filter((log) => dogShowLogBelongsToEntry(log, entry)
+      && log.activityType === "Potty"
+      && String(log.pottyType || log.note || "").toLowerCase().includes(target))
+    .sort((a, b) => new Date(b.loggedAt || b.updatedAt || 0) - new Date(a.loggedAt || a.updatedAt || 0))[0] || null;
+}
+
 function dogShowCarePriority(entry = {}, event = dogShowActiveEvent()) {
   const careTypes = [
     { key: "potty", activityType: "Potty", label: "Potty" },
@@ -281,6 +295,19 @@ function dogShowActivityTimeHtml(entry = {}, activityType = "") {
   const value = log ? dogShowFormatTime(log.loggedAt || log.updatedAt) : "No log";
   const title = log ? `Last completed ${dogShowFormatDateTime(log.loggedAt || log.updatedAt)}` : "Not logged at this show";
   return `<small title="${escapeHtml(title)}">${log ? "Last " : ""}${escapeHtml(value)}</small>`;
+}
+
+function dogShowPottyTimesHtml(entry = {}) {
+  const outcomes = [
+    { key: "pee", label: "Pee" },
+    { key: "poop", label: "Poop" },
+  ];
+  return `<span class="dog-show-potty-times">${outcomes.map((outcome) => {
+    const log = dogShowLastPottyOutcomeLog(entry, outcome.key);
+    const value = log ? dogShowFormatTime(log.loggedAt || log.updatedAt) : "--";
+    const title = log ? `Last ${outcome.label.toLowerCase()} ${dogShowFormatDateTime(log.loggedAt || log.updatedAt)}` : `${outcome.label} not logged at this show`;
+    return `<small title="${escapeHtml(title)}"><i class="dog-show-potty-icon is-${outcome.key}" aria-hidden="true"></i><span>${escapeHtml(outcome.label)} ${escapeHtml(value)}</span></small>`;
+  }).join("")}</span>`;
 }
 
 function dogShowMedicalSeverity(entry = {}) {
@@ -408,7 +435,7 @@ function dogShowEntryRowHtml(entry = {}, options = {}) {
     ? [scheduleCount > 1 ? `${scheduleCount} appearances` : "", dogShowStaffLabel(entry.handlerEmail)].filter(Boolean).join(" · ")
     : ["Socialization", dogShowStaffLabel(entry.helperEmail || entry.handlerEmail)].filter(Boolean).join(" · ");
   const quickActions = options.quickActions ? `<div class="dog-show-card-quick-actions" role="group" aria-label="Quick care for ${escapeHtml(dogShowEntryName(entry))}">
-    <button type="button" data-action="open-show-potty" data-care-action="potty" data-id="${escapeHtml(entry.id)}"><strong>Potty</strong>${dogShowActivityTimeHtml(entry, "Potty")}</button>
+    <button type="button" data-action="open-show-potty" data-care-action="potty" data-id="${escapeHtml(entry.id)}"><strong>Potty</strong>${dogShowPottyTimesHtml(entry)}</button>
     <button type="button" data-action="quick-show-log" data-care-action="water" data-log-type="Water" data-id="${escapeHtml(entry.id)}"><strong>Water</strong>${dogShowActivityTimeHtml(entry, "Water")}</button>
     <button type="button" data-action="quick-show-log" data-care-action="food" data-log-type="Feeding" data-id="${escapeHtml(entry.id)}"><strong>Food</strong>${dogShowActivityTimeHtml(entry, "Feeding")}</button>
     <button type="button"${medicalSeverity.key ? ` class="severity-${medicalSeverity.key}" title="Latest severity: ${escapeHtml(medicalSeverity.label)}"` : ""} data-action="open-show-note" data-care-action="medical" data-log-type="Behavior / Medical" data-id="${escapeHtml(entry.id)}"><strong>Medical/Behavior</strong>${dogShowActivityTimeHtml(entry, "Behavior / Medical")}</button>
@@ -866,6 +893,7 @@ function openDogShowEventForm(event = {}) {
   const helperEmails = Array.isArray(event.helperEmails) ? event.helperEmails : [];
   openDogShowDialog(event.id ? "Edit Show Weekend" : "New Show Weekend", `<form id="dogShowEventForm" class="tracker-form" data-id="${escapeHtml(event.id || "")}">
     <div class="field-grid">
+      <label class="dog-show-field-wide dog-show-status-field">Status<select name="status"><option${event.status !== "Completed" ? " selected" : ""}>Active</option><option${event.status === "Completed" ? " selected" : ""}>Completed</option></select></label>
       <label>Show name<input name="name" value="${escapeHtml(event.name || "")}" required placeholder="Austin Kennel Club Weekend"/></label>
       <label>Club<input name="club" value="${escapeHtml(event.club || "")}" placeholder="Austin Kennel Club"/></label>
       <label>Venue<input name="venue" value="${escapeHtml(event.venue || "")}" placeholder="Expo Center"/></label>
@@ -877,7 +905,6 @@ function openDogShowEventForm(event = {}) {
       <label>Event source URL<input type="url" name="sourceUrl" value="${escapeHtml(event.sourceUrl || "")}"/></label>
       <label>Premium list URL<input type="url" name="premiumUrl" value="${escapeHtml(event.premiumUrl || "")}"/></label>
       <label>Judging program URL<input type="url" name="judgingProgramUrl" value="${escapeHtml(event.judgingProgramUrl || "")}"/></label>
-      <label>Status<select name="status"><option${event.status !== "Completed" ? " selected" : ""}>Active</option><option${event.status === "Completed" ? " selected" : ""}>Completed</option></select></label>
     </div>
     <fieldset class="dog-show-form-section"><legend>Stay at show</legend><div class="field-grid">
       <label>Stay type<select name="stayType">${dogShowStayTypeOptions(event.stayType || "")}</select></label>
@@ -919,10 +946,38 @@ function openDogShowAddDogsForm() {
   </form>`);
 }
 
+function dogShowRingRowState() {
+  try {
+    return JSON.parse(localStorage.getItem(DOG_SHOW_RING_ROW_STATE_KEY) || "{}") || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function dogShowRingRowIsOpen(scheduleId = "") {
+  return dogShowRingRowState()[scheduleId] === true;
+}
+
+function setDogShowRingRowOpen(scheduleId = "", open = false) {
+  if (!scheduleId) return;
+  const state = dogShowRingRowState();
+  state[scheduleId] = Boolean(open);
+  localStorage.setItem(DOG_SHOW_RING_ROW_STATE_KEY, JSON.stringify(state));
+}
+
+function removeDogShowRingRowState(scheduleId = "") {
+  if (!scheduleId) return;
+  const state = dogShowRingRowState();
+  delete state[scheduleId];
+  localStorage.setItem(DOG_SHOW_RING_ROW_STATE_KEY, JSON.stringify(state));
+}
+
 function dogShowRingScheduleRowHtml(schedule = {}, index = 0) {
   const prep = dogShowPrepTimes({}, schedule);
-  return `<article class="dog-show-ring-schedule-row" data-ring-schedule-row data-schedule-id="${escapeHtml(schedule.id || uid("showRing"))}">
-    <div class="dog-show-ring-schedule-heading"><div><strong>Ring appearance ${index + 1}</strong><small data-ring-schedule-summary>${escapeHtml([dogShowFormatDate(schedule.ringDate), schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring not set"].join(" · "))}</small></div><button type="button" class="dog-show-remove-ring" data-action="remove-ring-schedule" aria-label="Remove ring appearance" title="Remove ring appearance">×</button></div>
+  const scheduleId = schedule.id || uid("showRing");
+  return `<details class="dog-show-ring-schedule-row" data-ring-schedule-row data-schedule-id="${escapeHtml(scheduleId)}"${dogShowRingRowIsOpen(scheduleId) ? " open" : ""}>
+    <summary class="dog-show-ring-schedule-heading" data-action="toggle-ring-schedule"><span><strong>Ring appearance ${index + 1}</strong><small data-ring-schedule-summary>${escapeHtml([dogShowFormatDate(schedule.ringDate), schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring not set"].join(" · "))}</small></span></summary>
+    <div class="dog-show-ring-schedule-content"><div class="dog-show-ring-schedule-actions"><button type="button" class="dog-show-remove-ring" data-action="remove-ring-schedule" aria-label="Remove ring appearance" title="Remove ring appearance">×</button></div>
     <div class="field-grid dog-show-ring-schedule-grid">
       <label>Ring date<input type="date" name="ringDate" value="${escapeHtml(schedule.ringDate || "")}"/></label>
       <label>Ring time<input type="time" name="ringTime" value="${escapeHtml(schedule.ringTime || "")}"/></label>
@@ -934,7 +989,8 @@ function dogShowRingScheduleRowHtml(schedule = {}, index = 0) {
       <label>Judge<input name="judge" value="${escapeHtml(schedule.judge || "")}"/></label>
     </div>
     <div class="dog-show-prep-preview" data-ring-schedule-preview><strong>Prep starts ${prep.start ? dogShowFormatTime(prep.start) : "after ring time is entered"}</strong><span>Ready ${prep.ready ? dogShowFormatTime(prep.ready) : "--"} · Ring ${prep.ring ? dogShowFormatTime(prep.ring) : "--"}</span></div>
-  </article>`;
+    </div>
+  </details>`;
 }
 
 function dogShowRingScheduleFromRow(row) {
@@ -994,7 +1050,9 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}, viewState = {}
   const event = dogShowActiveEvent();
   const savedSchedules = dogShowRingSchedules(entry);
   const ringSchedules = savedSchedules.length ? savedSchedules : [{ id: uid("showRing"), ringDate: event?.startDate || todayDate(), prepMinutes: Number(entry.prepMinutes ?? 45), readyBufferMinutes: Number(entry.readyBufferMinutes ?? 15) }];
-  const logs = dogShowLogs(event).filter((log) => log.showEntryId === entry.id).sort((a, b) => new Date(b.loggedAt || 0) - new Date(a.loggedAt || 0)).slice(0, 10);
+  const logs = dogShowLogs(event)
+    .filter((log) => dogShowLogBelongsToEntry(log, entry))
+    .sort((a, b) => new Date(b.loggedAt || b.updatedAt || 0) - new Date(a.loggedAt || a.updatedAt || 0));
   const canRemoveLogs = currentRole() === "admin";
   const entryResults = dogShowResultsForEntry(entry, event);
   const resultCount = savedSchedules.filter((schedule) => dogShowResultForSchedule(entry, schedule, event, entryResults)).length;
@@ -1733,14 +1791,22 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "add-ring-schedule") {
       const rows = dialog.querySelector("#dogShowRingScheduleRows");
       const schedule = { id: uid("showRing"), ringDate: dogShowActiveEvent()?.startDate || todayDate(), prepMinutes: 45, readyBufferMinutes: 15 };
+      setDogShowRingRowOpen(schedule.id, true);
       rows?.insertAdjacentHTML("beforeend", dogShowRingScheduleRowHtml(schedule, rows.children.length));
       refreshDogShowRingScheduleRows(action.closest("form"));
       rows?.lastElementChild?.querySelector('input[name="ringDate"]')?.focus();
       return;
     }
     if (action.dataset.action === "remove-ring-schedule") {
-      action.closest("[data-ring-schedule-row]")?.remove();
+      const row = action.closest("[data-ring-schedule-row]");
+      removeDogShowRingRowState(row?.dataset.scheduleId || "");
+      row?.remove();
       refreshDogShowRingScheduleRows(action.closest("form"));
+      return;
+    }
+    if (action.dataset.action === "toggle-ring-schedule") {
+      const row = action.closest("[data-ring-schedule-row]");
+      requestAnimationFrame(() => setDogShowRingRowOpen(row?.dataset.scheduleId || "", Boolean(row?.open)));
       return;
     }
     if (action.dataset.action === "close-show-dialog") dialog.close();
