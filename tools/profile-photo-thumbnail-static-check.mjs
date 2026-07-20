@@ -90,7 +90,7 @@ const checks = [
   },
   {
     path: "index.html",
-    includes: "20260720-owner-update-email-delivery",
+    includes: "20260720-canonical-customer-profiles",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

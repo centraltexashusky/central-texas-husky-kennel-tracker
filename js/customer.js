@@ -2540,10 +2540,14 @@ async function submitPendingCustomerBooking() {
         skippedCount += 1;
         continue;
       }
-      const sharedBoardingRecord = dog.sourceBoardingDogId ? readRecords("boardingDog").find((record) => record.id === dog.sourceBoardingDogId && !record.removed) : null;
-      const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
+      const sharedBoardingRecord = dog.sourceBoardingDogId
+        ? boardingDogRecordForDisplay(dog.sourceBoardingDogId)
+        : consolidatedBoardingDogRecords().find((record) => record.linkedCustomerDogId === dog.id) || null;
+      const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1))
+        ? editingRecord
+        : sharedBoardingRecord;
       const useExisting = Boolean(existingTarget);
-      const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
+      const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : {};
       const existingStayRequestCode = existingStay && Object.keys(existingStay).length
         ? boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, existingStay)
         : "";

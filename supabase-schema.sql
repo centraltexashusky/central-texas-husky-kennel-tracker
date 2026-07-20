@@ -23,6 +23,19 @@ create index if not exists kennel_records_type_updated_idx
 create index if not exists kennel_records_settings_user_email_idx
   on public.kennel_records (type, (lower(coalesce(payload ->> 'email', ''))))
   where type = 'settingsUser';
+-- A login email has exactly one active settings profile. Role and membership
+-- changes update that row; historical merged rows remain soft-deleted.
+create unique index if not exists kennel_records_one_active_settings_user_email_idx
+  on public.kennel_records ((lower(trim(payload ->> 'email'))))
+  where type = 'settingsUser'
+    and coalesce(lower(payload ->> 'removed'), 'false') <> 'true'
+    and nullif(lower(trim(payload ->> 'email')), '') is not null;
+-- A customer dog has one active boarding profile with many stays/requests.
+create unique index if not exists kennel_records_one_active_boarding_profile_idx
+  on public.kennel_records ((payload ->> 'linkedCustomerDogId'))
+  where type = 'boardingDog'
+    and coalesce(lower(payload ->> 'removed'), 'false') <> 'true'
+    and nullif(payload ->> 'linkedCustomerDogId', '') is not null;
 
 alter table public.kennel_records enable row level security;
 

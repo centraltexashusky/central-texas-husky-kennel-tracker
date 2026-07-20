@@ -103,10 +103,14 @@ Deno.serve(async (req) => {
     .select("id,payload")
     .eq("type", "settingsUser")
     .filter("payload->>email", "eq", email)
-    .limit(1);
+    .limit(100);
   if (lookupError) return json({ error: lookupError.message }, 500);
 
-  const existing = existingRows?.[0];
+  const isRemoved = (row: { payload?: Record<string, unknown> }) => row.payload?.removed === true || row.payload?.removed === "true";
+  const activeRows = (existingRows || []).filter((row) => !isRemoved(row));
+  const existing = activeRows.find((row) => String(row.payload?.authId || "") === targetUserId)
+    || activeRows[0]
+    || existingRows?.[0];
   const recordId = existing?.id || `settingsUser-${email.replace(/[^a-z0-9]+/g, "-")}`;
   const existingPayload = (existing?.payload && typeof existing.payload === "object" ? existing.payload : {}) as Record<string, unknown>;
   const profilePayload = {
@@ -126,6 +130,28 @@ Deno.serve(async (req) => {
     removed: false,
   };
   delete profilePayload.pin;
+
+  const retiredAt = new Date().toISOString();
+  for (const duplicate of activeRows.filter((row) => row.id !== recordId)) {
+    const duplicatePayload = (duplicate.payload && typeof duplicate.payload === "object" ? duplicate.payload : {}) as Record<string, unknown>;
+    const { error: retireError } = await adminClient.from("kennel_records").upsert({
+      id: duplicate.id,
+      type: "settingsUser",
+      payload: {
+        ...duplicatePayload,
+        removed: true,
+        removedAt: duplicatePayload.removedAt || retiredAt,
+        removedBy: callerEmail,
+        mergedIntoId: recordId,
+        updatedAt: retiredAt,
+      },
+      helper_email: callerEmail,
+      user_id: caller.id,
+      submitted_at: String(duplicatePayload.submittedAt || retiredAt),
+      updated_at: retiredAt,
+    });
+    if (retireError) return json({ error: retireError.message }, 500);
+  }
 
   const { error: profileError } = await adminClient.from("kennel_records").upsert({
     id: recordId,

@@ -2046,7 +2046,8 @@ function mergeUniqueIds(...groups) {
 async function ensureCustomerAccessProfile(source = {}, options = {}) {
   const payload = customerProfilePayload(source);
   if (!payload) return null;
-  if (!options.allowRemovedRecreate && removedSettingsUserForEmail(payload.email)) return null;
+  const activeProfile = savedUserFor({ email: payload.email, key: payload.authId });
+  if (!options.allowRemovedRecreate && !activeProfile && removedSettingsUserForEmail(payload.email)) return null;
   const record = upsertRecord("settingsUser", payload);
   await sendPayload(record);
   return record;
@@ -2085,7 +2086,7 @@ async function syncMissingCustomerAccessProfiles() {
       }));
     for (const source of sources) {
       const email = normalizeEmail(source.email);
-      if (!email || removedSettingsUserForEmail(email)) continue;
+      if (!email || (!savedUserFor({ email }) && removedSettingsUserForEmail(email))) continue;
       await ensureCustomerAccessProfile(source);
     }
     await consolidateDuplicateSettingsUsersByEmail();
@@ -4610,6 +4611,26 @@ async function sendPayload(payload, options = {}) {
     modeLabel.textContent = "Local saved";
     console.warn("Skipped remote save for record type disallowed by this session.", payload?.type);
     return { ok: true, skippedRemote: true };
+  }
+  if (payload?.type === "settingsUser" && !payload.removed) {
+    const email = normalizeEmail(payload.email);
+    const retiredDuplicates = readRecords("settingsUser").filter((record) => (
+      record.id !== payload.id
+      && record.removed
+      && record.mergedIntoId === payload.id
+      && email
+      && normalizeEmail(record.email) === email
+    ));
+    if (retiredDuplicates.length) {
+      // Retire duplicate rows remotely before saving the canonical row. This keeps
+      // the database's one-active-profile constraint valid during role/member edits.
+      const result = await sendPayloadBatch([...retiredDuplicates, payload], {
+        ...options,
+        retryIndividually: false,
+      });
+      modeLabel.textContent = result.ok ? "Saved" : "Save failed";
+      return result;
+    }
   }
   try {
     const now = new Date().toISOString();
