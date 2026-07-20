@@ -5,6 +5,7 @@ const DOG_SHOW_CALENDAR_VIEW_KEY = "cth-dog-show-calendar-view";
 const DOG_SHOW_CALENDAR_DATE_KEY = "cth-dog-show-calendar-date";
 const DOG_SHOW_TASK_DAY_KEY = "cth-dog-show-task-expanded-day";
 const DOG_SHOW_RING_ROW_STATE_KEY = "cth-dog-show-ring-row-state";
+const DOG_SHOW_PROGRESS_TAB_KEY = "cth-dog-show-progress-tab";
 const DOG_SHOW_CALENDAR_SLOT_MINUTES = 15;
 const DOG_SHOW_STALE_MINUTES = 60;
 const DOG_SHOW_TASK_COLORS = {
@@ -28,7 +29,7 @@ const DOG_SHOW_DEFAULT_PACKING = [
   "First aid and cooling supplies",
 ];
 
-let dogShowView = ["home", "dogs", "schedule", "tasks", "more"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
+let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
   ? localStorage.getItem(DOG_SHOW_VIEW_KEY)
   : "home";
 let dogShowDogFilter = "all";
@@ -39,6 +40,9 @@ let dogShowCalendarView = ["weekend", "day"].includes(localStorage.getItem(DOG_S
 let dogShowCalendarDate = localStorage.getItem(DOG_SHOW_CALENDAR_DATE_KEY) || "";
 let dogShowCalendarDragTaskId = "";
 let dogShowBulkCarePending = false;
+let dogShowProgressTab = ["overview", "dogs", "judges"].includes(localStorage.getItem(DOG_SHOW_PROGRESS_TAB_KEY)) ? localStorage.getItem(DOG_SHOW_PROGRESS_TAB_KEY) : "overview";
+let dogShowProgressDogKey = "";
+let dogShowProgressJudge = "";
 
 function dogShowRecords(type, eventId = "") {
   return readRecords(type).filter((record) => !record.removed && (!eventId || record.showEventId === eventId));
@@ -396,6 +400,207 @@ function dogShowResultProgress(event = dogShowActiveEvent(), entries = dogShowEn
 
 function dogShowOutcomeLabel(value = "") {
   return value === "Scratched" ? "Withdrawn before judging" : value;
+}
+
+function dogShowProgressRecords(kind = "") {
+  return dogShowRecords("showResult").filter((record) => record.recordKind === kind);
+}
+
+function dogShowAppearanceResultsAll() {
+  return dogShowRecords("showResult").filter((record) => !record.recordKind || record.recordKind === "appearanceResult");
+}
+
+function dogShowDogIdentity(record = {}) {
+  const name = record.dogName || dogShowEntryName(record) || "Dog";
+  return `${record.dogType || "dog"}:${record.dogId || String(name).trim().toLowerCase()}`;
+}
+
+function dogShowProgressDogs() {
+  const entries = dogShowRecords("showEntry").filter((entry) => entry.showEventId);
+  const byDog = new Map();
+  entries.forEach((entry) => {
+    const key = dogShowDogIdentity(entry);
+    const current = byDog.get(key);
+    if (!current || new Date(entry.updatedAt || entry.submittedAt || 0) > new Date(current.updatedAt || current.submittedAt || 0)) byDog.set(key, entry);
+  });
+  dogShowAppearanceResultsAll().forEach((result) => {
+    const key = dogShowDogIdentity(result);
+    if (!byDog.has(key)) byDog.set(key, { ...result, id: result.showEntryId || result.id });
+  });
+  return [...byDog.entries()].map(([key, entry]) => ({ key, entry })).sort((left, right) => dogShowEntryName(left.entry).localeCompare(dogShowEntryName(right.entry)));
+}
+
+function dogShowCareerProfile(dogKey = "") {
+  return dogShowProgressRecords("careerProfile").find((profile) => profile.dogKey === dogKey || dogShowDogIdentity(profile) === dogKey) || {};
+}
+
+function dogShowPointValue(result = {}) {
+  const explicit = Number(result.pointsEarned);
+  if (Number.isFinite(explicit)) return Math.max(0, explicit);
+  const match = String(result.points || "").match(/\d+(?:\.\d+)?/);
+  return match ? Math.max(0, Number(match[0])) : 0;
+}
+
+function dogShowMajorValue(result = {}) {
+  return result.isMajor === true || result.isMajor === "true" || /\bmajor\b/i.test(String(result.points || "")) ? 1 : 0;
+}
+
+function dogShowResultHistoryForDog(dogKey = "") {
+  const entries = dogShowRecords("showEntry");
+  const events = new Map(dogShowEvents().map((event) => [event.id, event]));
+  const byAppearance = new Map();
+  dogShowAppearanceResultsAll().filter((result) => dogShowDogIdentity(result) === dogKey).forEach((result) => {
+    const key = result.ringScheduleId ? `${result.showEntryId}:${result.ringScheduleId}` : result.id;
+    const previous = byAppearance.get(key);
+    if (!previous || new Date(result.updatedAt || result.loggedAt || 0) > new Date(previous.updatedAt || previous.loggedAt || 0)) byAppearance.set(key, result);
+  });
+  return [...byAppearance.values()].map((result) => ({
+    result,
+    entry: entries.find((entry) => entry.id === result.showEntryId) || {},
+    event: events.get(result.showEventId) || {},
+  })).sort((left, right) => new Date(`${right.result.ringDate || right.event.startDate || "1900-01-01"}T${right.result.ringTime || "00:00"}`) - new Date(`${left.result.ringDate || left.event.startDate || "1900-01-01"}T${left.result.ringTime || "00:00"}`));
+}
+
+function dogShowDogProgress(dog = {}) {
+  const profile = dogShowCareerProfile(dog.key);
+  const history = dogShowResultHistoryForDog(dog.key);
+  const priorPoints = Math.max(0, Number(profile.startingPoints || 0));
+  const priorMajors = Math.max(0, Number(profile.startingMajors || 0));
+  const loggedPoints = history.reduce((total, item) => total + dogShowPointValue(item.result), 0);
+  const loggedMajors = history.reduce((total, item) => total + dogShowMajorValue(item.result), 0);
+  const targetPoints = Math.max(1, Number(profile.targetPoints || 15));
+  const targetMajors = Math.max(0, Number(profile.targetMajors ?? 2));
+  return {
+    ...dog,
+    profile,
+    history,
+    priorPoints,
+    priorMajors,
+    loggedPoints,
+    loggedMajors,
+    totalPoints: priorPoints + loggedPoints,
+    totalMajors: priorMajors + loggedMajors,
+    targetPoints,
+    targetMajors,
+  };
+}
+
+function dogShowProgressPercent(progress = {}) {
+  const pointRatio = progress.totalPoints / Math.max(1, progress.targetPoints);
+  const majorRatio = progress.targetMajors ? progress.totalMajors / progress.targetMajors : 1;
+  return Math.max(0, Math.min(100, Math.round(Math.min(pointRatio, majorRatio) * 100)));
+}
+
+function dogShowProgressBarHtml(progress = {}) {
+  const percent = dogShowProgressPercent(progress);
+  return `<div class="dog-show-title-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`;
+}
+
+function dogShowJudgeNotes() {
+  return dogShowProgressRecords("judgeNote").sort((left, right) => String(left.judgeName || "").localeCompare(String(right.judgeName || "")));
+}
+
+function dogShowJudgeNameKey(name = "") {
+  return String(name || "").trim().toLowerCase();
+}
+
+function dogShowObservedJudges() {
+  const names = new Map();
+  dogShowRecords("showEntry").forEach((entry) => dogShowRingSchedules(entry).forEach((schedule) => {
+    if (schedule.judge) names.set(dogShowJudgeNameKey(schedule.judge), schedule.judge.trim());
+  }));
+  dogShowAppearanceResultsAll().forEach((result) => {
+    if (result.judge) names.set(dogShowJudgeNameKey(result.judge), result.judge.trim());
+  });
+  dogShowJudgeNotes().forEach((note) => {
+    if (note.judgeName) names.set(dogShowJudgeNameKey(note.judgeName), note.judgeName.trim());
+  });
+  return [...names.values()].sort((left, right) => left.localeCompare(right));
+}
+
+function dogShowJudgeEvidence(name = "") {
+  const key = dogShowJudgeNameKey(name);
+  const results = dogShowAppearanceResultsAll().filter((result) => dogShowJudgeNameKey(result.judge) === key);
+  return {
+    results,
+    placements: results.filter((result) => ["Win", "Placement"].includes(result.outcome)).length,
+    points: results.reduce((total, result) => total + dogShowPointValue(result), 0),
+    majors: results.reduce((total, result) => total + dogShowMajorValue(result), 0),
+  };
+}
+
+function dogShowJudgeNote(name = "") {
+  const key = dogShowJudgeNameKey(name);
+  return dogShowJudgeNotes().find((note) => dogShowJudgeNameKey(note.judgeName) === key) || {};
+}
+
+function dogShowProgressNavHtml() {
+  return `<nav class="dog-show-progress-nav segmented-control" aria-label="Show progress views">${[
+    ["overview", "Overview"],
+    ["dogs", "Dogs"],
+    ["judges", "Judges"],
+  ].map(([value, label]) => `<button type="button" data-progress-tab="${value}" class="${dogShowProgressTab === value ? "is-active" : ""}" aria-pressed="${dogShowProgressTab === value}">${label}</button>`).join("")}</nav>`;
+}
+
+function dogShowProgressDogRowHtml(progress = {}, action = "select-progress-dog") {
+  const remainingPoints = Math.max(0, progress.targetPoints - progress.totalPoints);
+  const remainingMajors = Math.max(0, progress.targetMajors - progress.totalMajors);
+  const titleComplete = !remainingPoints && !remainingMajors;
+  return `<button type="button" class="dog-show-progress-dog-row" data-action="${action}" data-dog-key="${escapeHtml(progress.key)}">
+    ${dogShowPhotoHtml(progress.entry, "dog-show-progress-photo")}
+    <span class="dog-show-progress-dog-copy"><strong>${escapeHtml(dogShowNameWithBreed(progress.entry))}</strong><small>${progress.totalPoints} of ${progress.targetPoints} points · ${progress.totalMajors} of ${progress.targetMajors} majors</small>${dogShowProgressBarHtml(progress)}<em>${titleComplete ? "Title requirements reached" : `${remainingPoints} points · ${remainingMajors} majors needed`}</em></span>
+    <span class="dog-show-progress-total"><strong>${progress.totalPoints}</strong><small>points</small></span>
+  </button>`;
+}
+
+function dogShowProgressOverviewHtml() {
+  const dogs = dogShowProgressDogs().map(dogShowDogProgress);
+  const results = dogShowAppearanceResultsAll();
+  const totalPoints = dogs.reduce((total, dog) => total + dog.totalPoints, 0);
+  const totalMajors = dogs.reduce((total, dog) => total + dog.totalMajors, 0);
+  const titled = dogs.filter((dog) => dog.totalPoints >= dog.targetPoints && dog.totalMajors >= dog.targetMajors).length;
+  const judgeNotes = dogShowJudgeNotes();
+  return `<div class="dog-show-progress-overview">
+    <section class="dog-show-progress-summary"><div><span>Career points tracked</span><strong>${totalPoints}</strong><small>${dogs.reduce((total, dog) => total + dog.loggedPoints, 0)} earned in logged shows</small></div><div><span>Majors tracked</span><strong>${totalMajors}</strong><small>Prior and logged majors</small></div><div><span>Results logged</span><strong>${results.length}</strong><small>Unique ring appearances</small></div><div><span>Titles reached</span><strong>${titled}</strong><small>Based on each dog’s targets</small></div></section>
+    <section class="dog-show-progress-section"><header><div><h3>Dog Progress</h3><p>Prior totals remain separate from points earned in this dashboard.</p></div><button type="button" class="secondary-button" data-progress-tab="dogs">Review Dogs</button></header><div class="dog-show-progress-list">${dogs.length ? dogs.map((dog) => dogShowProgressDogRowHtml(dog)).join("") : dogShowRenderEmpty("No show history yet", "Add dogs and ring results to begin tracking progress.")}</div></section>
+    <section class="dog-show-progress-section"><header><div><h3>Judge Intelligence</h3><p>Internal notes help the team choose future entries.</p></div><button type="button" class="secondary-button" data-action="edit-judge-note">Add Judge Note</button></header><div class="dog-show-judge-snapshot">${judgeNotes.length ? judgeNotes.slice(0, 4).map((note) => `<button type="button" data-action="select-progress-judge" data-judge="${escapeHtml(note.judgeName)}"><span class="dog-show-judge-rating is-${escapeHtml(String(note.recommendation || "Watch").toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(note.recommendation || "Watch")}</span><strong>${escapeHtml(note.judgeName || "Judge")}</strong><small>${escapeHtml(note.preferenceTags || "No preferences noted")}</small></button>`).join("") : `<p class="muted-copy">No judge notes have been added.</p>`}</div></section>
+  </div>`;
+}
+
+function dogShowProgressHistoryHtml(progress = {}) {
+  if (!progress.history.length) return dogShowRenderEmpty("No ring results logged", "Results will appear here after they are saved for a ring appearance.");
+  return progress.history.map(({ result, event }) => {
+    const points = dogShowPointValue(result);
+    return `<button type="button" class="dog-show-progress-history-row" data-action="open-progress-result" data-result-id="${escapeHtml(result.id)}"><span class="dog-show-history-date">${escapeHtml(dogShowFormatDate(result.ringDate || event.startDate))}</span><span><strong>${escapeHtml(event.name || result.showName || "Dog Show")}</strong><small>${escapeHtml([result.ringNumber ? `Ring ${result.ringNumber}` : "Ring not set", result.classEntered || "Class not set", result.judge ? `Judge: ${result.judge}` : "Judge not set"].join(" · "))}</small><em>${escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, result.awards].filter(Boolean).join(" · ") || "Result logged")}</em></span><span class="dog-show-history-points"><strong>+${points}</strong><small>${dogShowMajorValue(result) ? "Major" : "points"}</small></span></button>`;
+  }).join("");
+}
+
+function dogShowProgressDogsHtml() {
+  const dogs = dogShowProgressDogs().map(dogShowDogProgress);
+  if (!dogShowProgressDogKey || !dogs.some((dog) => dog.key === dogShowProgressDogKey)) dogShowProgressDogKey = dogs[0]?.key || "";
+  const selected = dogs.find((dog) => dog.key === dogShowProgressDogKey);
+  if (!selected) return dogShowRenderEmpty("No show dogs yet", "Add a dog to a show weekend to create its progress profile.");
+  return `<div class="dog-show-progress-dogs-layout"><aside class="dog-show-progress-dog-selector" aria-label="Show dogs">${dogs.map((dog) => `<button type="button" data-action="select-progress-dog" data-dog-key="${escapeHtml(dog.key)}" class="${dog.key === selected.key ? "is-active" : ""}">${dogShowPhotoHtml(dog.entry, "dog-show-progress-photo")}<span><strong>${escapeHtml(dogShowEntryName(dog.entry))}</strong><small>${dog.totalPoints} points · ${dog.totalMajors} majors</small></span></button>`).join("")}</aside>
+    <div class="dog-show-progress-dog-detail"><section class="dog-show-progress-dog-hero">${dogShowPhotoHtml(selected.entry, "dog-show-progress-hero-photo")}<div><span>Career Progress</span><h3>${escapeHtml(dogShowNameWithBreed(selected.entry))}</h3><p>${selected.totalPoints} of ${selected.targetPoints} points · ${selected.totalMajors} of ${selected.targetMajors} majors</p>${dogShowProgressBarHtml(selected)}</div><button type="button" class="secondary-button" data-action="edit-career-baseline" data-dog-key="${escapeHtml(selected.key)}">Edit Prior Points</button></section>
+      <section class="dog-show-progress-breakdown"><div><span>Prior points</span><strong>${selected.priorPoints}</strong><small>${selected.priorMajors} prior majors</small></div><div><span>Logged here</span><strong>${selected.loggedPoints}</strong><small>${selected.loggedMajors} logged majors</small></div><div><span>Current total</span><strong>${selected.totalPoints}</strong><small>${Math.max(0, selected.targetPoints - selected.totalPoints)} points needed</small></div></section>
+      <section class="dog-show-progress-section"><header><div><h3>Show History</h3><p>Each result is tied to one ring appearance.</p></div></header><div class="dog-show-progress-history">${dogShowProgressHistoryHtml(selected)}</div></section>
+    </div></div>`;
+}
+
+function dogShowProgressJudgesHtml() {
+  const judges = dogShowObservedJudges();
+  if (!dogShowProgressJudge || !judges.some((judge) => dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge))) dogShowProgressJudge = judges[0] || "";
+  const note = dogShowJudgeNote(dogShowProgressJudge);
+  const evidence = dogShowJudgeEvidence(dogShowProgressJudge);
+  return `<div class="dog-show-progress-judges-layout"><aside class="dog-show-judge-selector"><button type="button" class="secondary-button" data-action="edit-judge-note">Add Judge</button>${judges.map((judge) => {
+    const judgeNote = dogShowJudgeNote(judge);
+    return `<button type="button" data-action="select-progress-judge" data-judge="${escapeHtml(judge)}" class="${dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge) ? "is-active" : ""}"><span class="dog-show-judge-rating is-${escapeHtml(String(judgeNote.recommendation || "Watch").toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(judgeNote.recommendation || "Watch")}</span><strong>${escapeHtml(judge)}</strong><small>${dogShowJudgeEvidence(judge).results.length} logged results</small></button>`;
+  }).join("")}</aside><div class="dog-show-judge-detail">${dogShowProgressJudge ? `<section class="dog-show-judge-hero"><div><span>Judge Intelligence</span><h3>${escapeHtml(dogShowProgressJudge)}</h3><p>${escapeHtml(note.preferenceTags || "No preference tags yet")}</p></div><button type="button" class="secondary-button" data-action="edit-judge-note" data-judge="${escapeHtml(dogShowProgressJudge)}">Edit Notes</button></section><section class="dog-show-progress-breakdown"><div><span>Entries logged</span><strong>${evidence.results.length}</strong><small>Under this judge</small></div><div><span>Placements</span><strong>${evidence.placements}</strong><small>Wins and placements</small></div><div><span>Points</span><strong>${evidence.points}</strong><small>${evidence.majors} majors</small></div></section><section class="dog-show-progress-section"><header><div><h3>Team Notes</h3><p>Internal observations only. Treat patterns as guidance, not guarantees.</p></div></header><dl class="dog-show-judge-notes"><div><dt>Recommendation</dt><dd>${escapeHtml(note.recommendation || "Watch")}</dd></div><div><dt>Best fit dogs</dt><dd>${escapeHtml(note.bestFitDogs || "Not recorded")}</dd></div><div><dt>Preferences</dt><dd>${escapeHtml(note.preferenceTags || "Not recorded")}</dd></div><div><dt>Notes</dt><dd>${escapeHtml(note.notes || "No internal notes yet")}</dd></div></dl></section>` : dogShowRenderEmpty("No judges found", "Add a judge note or enter judges on ring appearances.", "edit-judge-note", "Add Judge")}</div></div>`;
+}
+
+function dogShowProgressHtml() {
+  const content = dogShowProgressTab === "dogs" ? dogShowProgressDogsHtml() : dogShowProgressTab === "judges" ? dogShowProgressJudgesHtml() : dogShowProgressOverviewHtml();
+  return `<div class="dog-show-view dog-show-progress-view"><section class="dog-show-progress-heading"><div><span>SHOW RECORDS</span><h3>Show Progress</h3><p>Career points, ring results, and internal judge intelligence.</p></div></section>${dogShowProgressNavHtml()}${content}</div>`;
 }
 
 function dogShowConflictEntryIds(entries = dogShowEntries()) {
@@ -794,6 +999,7 @@ function dogShowMoreHtml(event) {
       <button type="button" data-action="add-show-dogs"><span>D</span><strong>Add Dogs</strong><small>Our Dogs or Boarding Dogs</small></button>
       <button type="button" data-action="show-helper-summary"><span>H</span><strong>Helpers</strong><small>${helperEmails.length} assigned to this weekend</small></button>
       <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${resultProgress.logged} of ${resultProgress.total} ring appearances logged</small></button>
+      <button type="button" data-action="open-show-progress"><span>P</span><strong>Show Progress</strong><small>Career points, show history, and judge notes</small></button>
     </div>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Packing List</h3><p>${packing.filter((item) => item.completed).length} of ${packing.length} packed</p></div></div>
       <div class="dog-show-packing-list">${packing.map((item) => `<div class="dog-show-packing-item"><label><input type="checkbox" data-packing-id="${escapeHtml(item.id)}"${item.completed ? " checked" : ""}/><span>${escapeHtml(item.label)}</span></label><button type="button" class="dog-show-remove-packing" data-action="remove-packing-item" data-id="${escapeHtml(item.id)}" aria-label="Remove ${escapeHtml(item.label)}" title="Remove item">×</button></div>`).join("")}</div>
@@ -810,12 +1016,13 @@ function renderDogShow() {
   const select = document.getElementById("dogShowEventSelect");
   if (select) select.innerHTML = dogShowEventOptions(event);
   document.querySelectorAll("[data-dog-show-view]").forEach((button) => {
-    const active = button.dataset.dogShowView === dogShowView;
+    const visibleView = dogShowView === "progress" ? "more" : dogShowView;
+    const active = button.dataset.dogShowView === visibleView;
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  if (!event) {
+  if (!event && dogShowView !== "progress") {
     content.innerHTML = dogShowRenderEmpty("Create the first show weekend", "Add the event once, then build the roster, prep schedule, helper tasks, and results.");
     return;
   }
@@ -825,13 +1032,14 @@ function renderDogShow() {
     schedule: dogShowScheduleHtml,
     tasks: dogShowTasksHtml,
     more: dogShowMoreHtml,
+    progress: dogShowProgressHtml,
   };
   content.innerHTML = renderers[dogShowView](event);
   if (typeof scheduleProfilePhotoHydrationSweep === "function") scheduleProfilePhotoHydrationSweep(40);
 }
 
 function setDogShowView(view = "home") {
-  if (!["home", "dogs", "schedule", "tasks", "more"].includes(view)) return;
+  if (!["home", "dogs", "schedule", "tasks", "more", "progress"].includes(view)) return;
   dogShowView = view;
   localStorage.setItem(DOG_SHOW_VIEW_KEY, view);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1162,6 +1370,7 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
   const ownerEmailAvailable = [sourceDog.ownerEmail, sourceDog.customerEmail, sourceDog.linkedOwnerEmail, sourceDog.secondaryOwnerEmail].some(Boolean);
   const emailOwner = result.id ? result.customerVisible === true : ownerEmailAvailable;
   const scheduleIndex = schedule ? schedules.findIndex((item) => item.id === schedule.id) : -1;
+  const pointsEarned = dogShowPointValue(result);
   const resultContext = schedule
     ? `<div class="dog-show-result-context"><strong>${escapeHtml(dogShowRingAppearanceTitle(schedule, scheduleIndex))}</strong><span>${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span></div>`
     : `<div class="dog-show-result-context"><strong>General show result</strong><span>No ring appearance is assigned.</span></div>`;
@@ -1171,12 +1380,47 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
       <label>Outcome<select name="outcome">${["Win", "Placement", "No placement", "Scratched", "Socialization only"].map((value) => `<option value="${value}"${value === result.outcome ? " selected" : ""}>${dogShowOutcomeLabel(value)}</option>`).join("")}</select></label>
       <label>Placement<input name="placement" value="${escapeHtml(result.placement || "")}" placeholder="1st Open Bitch"/></label>
       <label>Awards<input name="awards" value="${escapeHtml(result.awards || "")}" placeholder="Winners Bitch, Best of Winners"/></label>
-      <label>Points / major estimate<input name="points" value="${escapeHtml(result.points || "")}"/></label>
+      <label>Points earned<input type="number" name="pointsEarned" min="0" max="5" step="1" value="${pointsEarned}"/></label>
     </div>
+    <label class="inline-check"><input type="checkbox" name="isMajor"${dogShowMajorValue(result) ? " checked" : ""}/> This result earned a major</label>
     <label>Judge notes<textarea name="judgeNotes" rows="3">${escapeHtml(result.judgeNotes || "")}</textarea></label>
     <label>Owner-facing summary<textarea name="customerSummary" rows="3">${escapeHtml(result.customerSummary || "")}</textarea></label>
     <label class="inline-check"><input type="checkbox" name="customerVisible"${emailOwner ? " checked" : ""}${ownerEmailAvailable ? "" : " disabled"}/> ${ownerEmailAvailable ? "Email owner immediately" : "Owner email unavailable"}</label>
     <div class="button-row"><button type="submit">Save Result</button><button type="button" class="secondary-button" data-action="${schedule ? "back-to-show-results" : "back-to-show-dog"}" data-id="${escapeHtml(entry.id)}">Back</button></div>
+  </form>`);
+}
+
+function openDogShowCareerProfileForm(dogKey = "") {
+  const dog = dogShowProgressDogs().find((item) => item.key === dogKey);
+  if (!dog) return;
+  const profile = dogShowCareerProfile(dogKey);
+  openDogShowDialog(`Prior Points: ${dogShowEntryName(dog.entry)}`, `<form id="dogShowCareerProfileForm" class="tracker-form" data-dog-key="${escapeHtml(dogKey)}" data-id="${escapeHtml(profile.id || "")}">
+    <div class="dog-show-form-note"><strong>Career starting point</strong><span>Enter points and majors earned before this dashboard. These values stay separate from logged ring results.</span></div>
+    <div class="field-grid">
+      <label>Prior points<input type="number" name="startingPoints" min="0" step="1" value="${Math.max(0, Number(profile.startingPoints || 0))}" required/></label>
+      <label>Prior majors<input type="number" name="startingMajors" min="0" step="1" value="${Math.max(0, Number(profile.startingMajors || 0))}" required/></label>
+      <label>Title point target<input type="number" name="targetPoints" min="1" step="1" value="${Math.max(1, Number(profile.targetPoints || 15))}" required/></label>
+      <label>Title major target<input type="number" name="targetMajors" min="0" step="1" value="${Math.max(0, Number(profile.targetMajors ?? 2))}" required/></label>
+      <label>Effective date<input type="date" name="effectiveDate" value="${escapeHtml(profile.effectiveDate || todayDate())}"/></label>
+    </div>
+    <label>Source note<textarea name="sourceNote" rows="3" placeholder="AKC record, previous handler, owner records">${escapeHtml(profile.sourceNote || "")}</textarea></label>
+    <div class="button-row"><button type="submit">Save Prior Points</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+  </form>`);
+}
+
+function openDogShowJudgeNoteForm(judgeName = "") {
+  const note = dogShowJudgeNote(judgeName);
+  const dogs = dogShowProgressDogs();
+  openDogShowDialog(note.id ? `Judge Notes: ${note.judgeName}` : "Add Judge Note", `<form id="dogShowJudgeNoteForm" class="tracker-form" data-id="${escapeHtml(note.id || "")}">
+    <div class="dog-show-form-note"><strong>Internal team intelligence</strong><span>Keep observations factual and tied to repeated show experience.</span></div>
+    <div class="field-grid">
+      <label>Judge name<input name="judgeName" list="dogShowJudgeNames" value="${escapeHtml(note.judgeName || judgeName)}" required/><datalist id="dogShowJudgeNames">${dogShowObservedJudges().map((judge) => `<option value="${escapeHtml(judge)}"></option>`).join("")}</datalist></label>
+      <label>Recommendation<select name="recommendation">${["Show Under", "Watch", "Avoid"].map((value) => `<option${value === (note.recommendation || "Watch") ? " selected" : ""}>${value}</option>`).join("")}</select></label>
+    </div>
+    <label>Preference tags<input name="preferenceTags" value="${escapeHtml(note.preferenceTags || "")}" placeholder="Clean movement, balanced outline, confident temperament"/></label>
+    <label>Best fit dogs<input name="bestFitDogs" value="${escapeHtml(note.bestFitDogs || "")}" placeholder="${escapeHtml(dogs.slice(0, 3).map((dog) => dogShowEntryName(dog.entry)).join(", "))}"/></label>
+    <label>Internal notes<textarea name="notes" rows="5" placeholder="What the team observed, what was rewarded, and what to watch next time">${escapeHtml(note.notes || "")}</textarea></label>
+    <div class="button-row"><button type="submit">Save Judge Note</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
   </form>`);
 }
 
@@ -1419,12 +1663,17 @@ async function saveDogShowResult(form) {
   const existing = form.dataset.id ? readRecords("showResult").find((result) => result.id === form.dataset.id) || {} : {};
   const data = formPayload(form);
   const customerVisible = Boolean(form.elements.customerVisible?.checked);
+  const pointsEarned = Math.max(0, Number(data.pointsEarned || 0));
+  const isMajor = Boolean(form.elements.isMajor?.checked);
   const ownerEmails = [sourceDog.ownerEmail, sourceDog.customerEmail, sourceDog.linkedOwnerEmail, sourceDog.secondaryOwnerEmail]
     .map(normalizeEmail)
     .filter(Boolean);
   const result = await saveDogShowRecord("showResult", {
     ...existing,
     ...data,
+    recordKind: "appearanceResult",
+    pointsEarned,
+    isMajor,
     id: existing.id || (schedule ? `showResult-${entry.id}-${schedule.id}` : uid("showResult")),
     showEventId: entry.showEventId,
     showEntryId: entry.id,
@@ -1469,6 +1718,62 @@ async function saveDogShowResult(form) {
       : " No owner email is available for this dog."
     : "";
   showToast(`${savedMessage}${ownerMessage}`);
+}
+
+async function saveDogShowCareerProfile(form) {
+  const dogKey = form.dataset.dogKey || "";
+  const dog = dogShowProgressDogs().find((item) => item.key === dogKey);
+  if (!dog) return;
+  const existing = form.dataset.id ? readRecords("showResult").find((record) => record.id === form.dataset.id) || {} : {};
+  const data = formPayload(form);
+  await saveDogShowRecord("showResult", {
+    ...existing,
+    id: existing.id || `showCareerProfile-${dog.entry.dogType || "dog"}-${dog.entry.dogId || dog.entry.id}`,
+    recordKind: "careerProfile",
+    dogKey,
+    dogId: dog.entry.dogId || "",
+    dogType: dog.entry.dogType || "",
+    dogName: dogShowEntryName(dog.entry),
+    breed: dogShowBreed(dog.entry),
+    startingPoints: Math.max(0, Number(data.startingPoints || 0)),
+    startingMajors: Math.max(0, Number(data.startingMajors || 0)),
+    targetPoints: Math.max(1, Number(data.targetPoints || 15)),
+    targetMajors: Math.max(0, Number(data.targetMajors || 0)),
+    effectiveDate: data.effectiveDate || "",
+    sourceNote: data.sourceNote || "",
+    updatedBy: currentUser?.name || "Staff",
+    helperEmail: currentUser?.email || "",
+    submittedAt: existing.submittedAt || new Date().toISOString(),
+  });
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast(`Prior points saved for ${dogShowEntryName(dog.entry)}.`);
+}
+
+async function saveDogShowJudgeNote(form) {
+  const existing = form.dataset.id ? readRecords("showResult").find((record) => record.id === form.dataset.id) || {} : {};
+  const data = formPayload(form);
+  const judgeName = String(data.judgeName || "").trim();
+  if (!judgeName) return;
+  const matching = dogShowJudgeNote(judgeName);
+  await saveDogShowRecord("showResult", {
+    ...matching,
+    ...existing,
+    id: existing.id || matching.id || uid("showJudgeNote"),
+    recordKind: "judgeNote",
+    judgeName,
+    recommendation: data.recommendation || "Watch",
+    preferenceTags: data.preferenceTags || "",
+    bestFitDogs: data.bestFitDogs || "",
+    notes: data.notes || "",
+    updatedBy: currentUser?.name || "Staff",
+    helperEmail: currentUser?.email || "",
+    submittedAt: existing.submittedAt || matching.submittedAt || new Date().toISOString(),
+  });
+  dogShowProgressJudge = judgeName;
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast(`Judge notes saved for ${judgeName}.`);
 }
 
 async function saveDogShowTask(form) {
@@ -1665,6 +1970,13 @@ function setupDogShowEventListeners() {
   });
 
   page.addEventListener("click", async (event) => {
+    const progressTab = event.target.closest("[data-progress-tab]");
+    if (progressTab) {
+      dogShowProgressTab = progressTab.dataset.progressTab;
+      localStorage.setItem(DOG_SHOW_PROGRESS_TAB_KEY, dogShowProgressTab);
+      renderDogShow();
+      return;
+    }
     const filter = event.target.closest("[data-dog-filter]");
     if (filter) { dogShowDogFilter = filter.dataset.dogFilter; renderDogShow(); return; }
     const taskFilter = event.target.closest("[data-task-filter]");
@@ -1699,6 +2011,29 @@ function setupDogShowEventListeners() {
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
     if (action.dataset.action === "new-show-event") openDogShowEventForm();
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
+    if (action.dataset.action === "open-show-progress") setDogShowView("progress");
+    if (action.dataset.action === "select-progress-dog") {
+      dogShowProgressDogKey = action.dataset.dogKey || "";
+      dogShowProgressTab = "dogs";
+      localStorage.setItem(DOG_SHOW_PROGRESS_TAB_KEY, dogShowProgressTab);
+      renderDogShow();
+    }
+    if (action.dataset.action === "edit-career-baseline") openDogShowCareerProfileForm(action.dataset.dogKey || dogShowProgressDogKey);
+    if (action.dataset.action === "select-progress-judge") {
+      dogShowProgressJudge = action.dataset.judge || "";
+      dogShowProgressTab = "judges";
+      localStorage.setItem(DOG_SHOW_PROGRESS_TAB_KEY, dogShowProgressTab);
+      renderDogShow();
+    }
+    if (action.dataset.action === "edit-judge-note") openDogShowJudgeNoteForm(action.dataset.judge || dogShowProgressJudge);
+    if (action.dataset.action === "open-progress-result") {
+      const result = dogShowAppearanceResultsAll().find((item) => item.id === action.dataset.resultId);
+      if (result?.showEventId && result.showEntryId) {
+        localStorage.setItem(DOG_SHOW_EVENT_KEY, result.showEventId);
+        const resultEntry = dogShowEntries().find((item) => item.id === result.showEntryId);
+        if (resultEntry) openDogShowResultForm(resultEntry, result.ringScheduleId || "");
+      }
+    }
     if (action.dataset.action === "add-show-dogs") openDogShowAddDogsForm();
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "open-show-potty" && entry) openDogShowPottyPicker(entry);
@@ -1771,6 +2106,7 @@ function setupDogShowEventListeners() {
     if (!action) return;
     setDogShowMoreMenuOpen(false);
     if (action.dataset.dogShowMoreAction === "operations") setDogShowView("more");
+    if (action.dataset.dogShowMoreAction === "progress") setDogShowView("progress");
     if (action.dataset.dogShowMoreAction === "boarding") switchPage("dashboardPage", { history: "push" });
   });
 
@@ -1781,6 +2117,8 @@ function setupDogShowEventListeners() {
     if (event.target.id === "dogShowEntryForm") await saveDogShowEntry(event.target);
     if (event.target.id === "dogShowNoteForm") await saveDogShowNote(event.target);
     if (event.target.id === "dogShowResultForm") await saveDogShowResult(event.target);
+    if (event.target.id === "dogShowCareerProfileForm") await saveDogShowCareerProfile(event.target);
+    if (event.target.id === "dogShowJudgeNoteForm") await saveDogShowJudgeNote(event.target);
     if (event.target.id === "dogShowTaskForm") await saveDogShowTask(event.target);
   });
 

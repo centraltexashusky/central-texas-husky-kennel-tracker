@@ -13719,6 +13719,648 @@ details.dog-show-ring-schedules[hidden] {
   color: #FFFFFF;
 }
 
+/* Dog Show Progress keeps career totals separate from individual ring results. */
+.dog-show-progress-view {
+  display: grid;
+  gap: 14px;
+}
+
+.dog-show-progress-heading {
+  align-items: center;
+  background: #102E47;
+  border: 1px solid #244F6E;
+  border-radius: 8px;
+  color: #FFFFFF;
+  display: flex;
+  justify-content: space-between;
+  min-height: 98px;
+  padding: 18px;
+}
+
+.dog-show-progress-heading span,
+.dog-show-progress-dog-hero > div > span,
+.dog-show-judge-hero span {
+  color: #78D5A7;
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.dog-show-progress-heading h3,
+.dog-show-progress-dog-hero h3,
+.dog-show-judge-hero h3 {
+  font-size: 1.35rem;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+.dog-show-progress-heading p,
+.dog-show-progress-dog-hero p,
+.dog-show-judge-hero p {
+  color: #D4E0E9;
+  font-size: 0.8rem;
+  margin: 4px 0 0;
+}
+
+.dog-show-progress-nav {
+  justify-content: flex-start;
+  width: fit-content;
+}
+
+.dog-show-progress-summary,
+.dog-show-progress-breakdown {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dog-show-progress-summary > div,
+.dog-show-progress-breakdown > div {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 4px;
+  min-height: 88px;
+  padding: 13px;
+}
+
+.dog-show-progress-summary span,
+.dog-show-progress-breakdown span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-progress-summary strong,
+.dog-show-progress-breakdown strong {
+  color: var(--ink);
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.dog-show-progress-summary small,
+.dog-show-progress-breakdown small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.dog-show-progress-section {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.dog-show-progress-section > header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 11px;
+}
+
+.dog-show-progress-section h3 {
+  font-size: 1.02rem;
+  letter-spacing: 0;
+  margin: 0;
+}
+
+.dog-show-progress-section header p {
+  color: var(--muted);
+  font-size: 0.76rem;
+  margin: 3px 0 0;
+}
+
+.dog-show-progress-overview,
+.dog-show-progress-list,
+.dog-show-progress-history {
+  display: grid;
+  gap: 9px;
+}
+
+.dog-show-progress-dog-row {
+  align-items: center;
+  appearance: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 5px solid #2F6F9F;
+  border-radius: 8px;
+  color: var(--ink);
+  display: grid;
+  gap: 11px;
+  grid-template-columns: 52px minmax(0, 1fr) 64px;
+  min-height: 84px;
+  padding: 9px 12px 9px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.dog-show-progress-dog-row:hover,
+.dog-show-progress-dog-row:focus-visible {
+  border-color: #4D88B2;
+  border-left-color: #2F6F9F;
+  box-shadow: 0 8px 20px rgba(30, 72, 103, 0.12);
+  transform: none;
+}
+
+.dog-show-progress-photo,
+.dog-show-progress-hero-photo {
+  align-items: center;
+  background: #E7EEF2;
+  border: 3px solid #6AA8D4;
+  border-radius: 8px;
+  display: flex;
+  flex: 0 0 auto;
+  height: 52px;
+  justify-content: center;
+  overflow: hidden;
+  width: 52px;
+}
+
+.dog-show-progress-hero-photo {
+  height: 74px;
+  width: 74px;
+}
+
+.dog-show-progress-photo img,
+.dog-show-progress-hero-photo img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.dog-show-progress-dog-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dog-show-progress-dog-copy strong {
+  font-size: 0.94rem;
+}
+
+.dog-show-progress-dog-copy small,
+.dog-show-progress-dog-copy em {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
+.dog-show-progress-dog-copy em {
+  color: #315F85;
+  font-weight: 800;
+}
+
+.dog-show-title-progress {
+  background: #DCE6EC;
+  border-radius: 999px;
+  height: 7px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.dog-show-title-progress span {
+  background: #169B62;
+  display: block;
+  height: 100%;
+}
+
+.dog-show-progress-total {
+  display: grid;
+  justify-items: end;
+}
+
+.dog-show-progress-total strong {
+  color: #102E47;
+  font-size: 1.35rem;
+}
+
+.dog-show-progress-total small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.dog-show-progress-dogs-layout,
+.dog-show-progress-judges-layout {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+}
+
+.dog-show-progress-dog-selector,
+.dog-show-judge-selector {
+  align-content: start;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  max-height: 640px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.dog-show-progress-dog-selector > button,
+.dog-show-judge-selector > button:not(.secondary-button) {
+  align-items: center;
+  appearance: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 58px;
+  padding: 7px;
+  text-align: left;
+}
+
+.dog-show-progress-dog-selector > button.is-active,
+.dog-show-judge-selector > button.is-active {
+  background: rgba(49, 95, 133, 0.12);
+  border-color: #4D88B2;
+  box-shadow: inset 4px 0 #315F85;
+}
+
+.dog-show-progress-dog-selector .dog-show-progress-photo {
+  height: 42px;
+  width: 42px;
+}
+
+.dog-show-progress-dog-selector span,
+.dog-show-judge-selector > button span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dog-show-progress-dog-selector small,
+.dog-show-judge-selector small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.dog-show-progress-dog-detail,
+.dog-show-judge-detail {
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+}
+
+.dog-show-progress-dog-hero,
+.dog-show-judge-hero {
+  align-items: center;
+  background: #102E47;
+  border: 1px solid #244F6E;
+  border-radius: 8px;
+  color: #FFFFFF;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  min-height: 112px;
+  padding: 14px;
+}
+
+.dog-show-judge-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.dog-show-progress-dog-hero .secondary-button,
+.dog-show-judge-hero .secondary-button {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #FFFFFF;
+}
+
+.dog-show-progress-dog-hero .dog-show-title-progress {
+  margin-top: 8px;
+}
+
+.dog-show-progress-breakdown {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dog-show-progress-breakdown > div {
+  min-height: 78px;
+}
+
+.dog-show-progress-history-row {
+  align-items: center;
+  appearance: none;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 90px minmax(0, 1fr) 55px;
+  min-height: 76px;
+  padding: 10px;
+  text-align: left;
+}
+
+.dog-show-progress-history-row:hover,
+.dog-show-progress-history-row:focus-visible {
+  border-color: #4D88B2;
+  transform: none;
+}
+
+.dog-show-history-date {
+  color: #315F85;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.dog-show-progress-history-row > span:nth-child(2) {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-progress-history-row small,
+.dog-show-progress-history-row em {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-style: normal;
+}
+
+.dog-show-history-points {
+  display: grid;
+  justify-items: end;
+}
+
+.dog-show-history-points strong {
+  color: #178056;
+  font-size: 1.15rem;
+}
+
+.dog-show-judge-selector > button:not(.secondary-button) {
+  grid-template-columns: 74px minmax(0, 1fr);
+}
+
+.dog-show-judge-rating {
+  border: 1px solid #CE9B25;
+  border-radius: 999px;
+  color: #76530A;
+  display: inline-flex !important;
+  font-size: 0.64rem;
+  font-weight: 800;
+  justify-content: center;
+  padding: 4px 6px;
+}
+
+.dog-show-judge-rating.is-show-under {
+  border-color: #43A875;
+  color: #137345;
+}
+
+.dog-show-judge-rating.is-avoid {
+  border-color: #B86A72;
+  color: #8E333D;
+}
+
+.dog-show-judge-snapshot {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dog-show-judge-snapshot > button {
+  align-items: center;
+  appearance: none;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: grid;
+  gap: 5px 9px;
+  grid-template-columns: 80px minmax(0, 1fr);
+  padding: 10px;
+  text-align: left;
+}
+
+.dog-show-judge-snapshot > button strong,
+.dog-show-judge-snapshot > button small {
+  grid-column: 2;
+}
+
+.dog-show-judge-snapshot > button .dog-show-judge-rating {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.dog-show-judge-snapshot small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.dog-show-judge-notes {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.dog-show-judge-notes > div {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 120px minmax(0, 1fr);
+  padding: 11px 0;
+}
+
+.dog-show-judge-notes > div:last-child {
+  border-bottom: 0;
+}
+
+.dog-show-judge-notes dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-judge-notes dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+:root[data-theme="dark"] .dog-show-progress-section,
+:root[data-theme="dark"] .dog-show-progress-summary > div,
+:root[data-theme="dark"] .dog-show-progress-breakdown > div,
+:root[data-theme="dark"] .dog-show-progress-dog-row,
+:root[data-theme="dark"] .dog-show-progress-dog-selector,
+:root[data-theme="dark"] .dog-show-judge-selector,
+:root[data-theme="dark"] .dog-show-progress-dog-selector > button,
+:root[data-theme="dark"] .dog-show-judge-selector > button:not(.secondary-button),
+:root[data-theme="dark"] .dog-show-progress-history-row,
+:root[data-theme="dark"] .dog-show-judge-snapshot > button {
+  background: #13273D;
+  border-color: #4E6C84;
+}
+
+:root[data-theme="dark"] .dog-show-progress-heading,
+:root[data-theme="dark"] .dog-show-progress-dog-hero,
+:root[data-theme="dark"] .dog-show-judge-hero {
+  background: #071A2C;
+  border-color: #52738D;
+}
+
+:root[data-theme="dark"] .dog-show-progress-summary strong,
+:root[data-theme="dark"] .dog-show-progress-breakdown strong,
+:root[data-theme="dark"] .dog-show-progress-total strong,
+:root[data-theme="dark"] .dog-show-progress-dog-copy strong,
+:root[data-theme="dark"] .dog-show-progress-history-row,
+:root[data-theme="dark"] .dog-show-judge-notes dd {
+  color: #F5FAFE;
+}
+
+:root[data-theme="dark"] .dog-show-progress-dog-copy em,
+:root[data-theme="dark"] .dog-show-history-date {
+  color: #9ED2F5;
+}
+
+:root[data-theme="dark"] .dog-show-title-progress {
+  background: #304860;
+}
+
+:root[data-theme="dark"] .dog-show-judge-rating {
+  color: #F5D98A;
+}
+
+:root[data-theme="dark"] .dog-show-judge-rating.is-show-under {
+  color: #9DE2BC;
+}
+
+:root[data-theme="dark"] .dog-show-judge-rating.is-avoid {
+  color: #FFB3BA;
+}
+
+@media (max-width: 760px) {
+  .dog-show-progress-heading {
+    min-height: 86px;
+    padding: 14px;
+  }
+
+  .dog-show-progress-nav {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .dog-show-progress-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dog-show-progress-dogs-layout,
+  .dog-show-progress-judges-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-progress-dog-selector,
+  .dog-show-judge-selector {
+    display: flex;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .dog-show-progress-dog-selector > button,
+  .dog-show-judge-selector > button:not(.secondary-button) {
+    flex: 0 0 190px;
+  }
+
+  .dog-show-judge-selector > .secondary-button {
+    flex: 0 0 auto;
+  }
+
+  .dog-show-progress-dog-hero,
+  .dog-show-judge-hero {
+    align-items: start;
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .dog-show-judge-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-progress-hero-photo {
+    height: 64px;
+    width: 64px;
+  }
+
+  .dog-show-progress-dog-hero .secondary-button,
+  .dog-show-judge-hero .secondary-button {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+
+  .dog-show-progress-history-row {
+    grid-template-columns: minmax(0, 1fr) 50px;
+  }
+
+  .dog-show-history-date {
+    grid-column: 1 / -1;
+  }
+
+  .dog-show-judge-snapshot {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .dog-show-progress-summary,
+  .dog-show-progress-breakdown {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dog-show-progress-breakdown > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .dog-show-progress-section {
+    padding: 10px;
+  }
+
+  .dog-show-progress-section > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dog-show-progress-section > header .secondary-button {
+    align-self: flex-start;
+  }
+
+  .dog-show-progress-dog-row {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+
+  .dog-show-progress-dog-row .dog-show-progress-photo {
+    height: 48px;
+    width: 48px;
+  }
+
+  .dog-show-progress-total {
+    grid-column: 2;
+    grid-row: 2;
+    justify-items: start;
+  }
+
+  .dog-show-progress-total strong,
+  .dog-show-progress-total small {
+    display: inline;
+  }
+
+  .dog-show-judge-notes > div {
+    gap: 5px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 :root[data-theme="light"] button[type="submit"],
 :root[data-theme="light"] .complete-button,
 :root[data-theme="light"] .task-done-button:not(:disabled),
