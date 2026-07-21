@@ -171,7 +171,6 @@ as $$
 declare
   v_cached text;
   v_jwt_role text;
-  v_profile_removed text;
   v_profile_role text;
   v_role text;
 begin
@@ -186,22 +185,28 @@ begin
 
   -- Bootstrap admin access by inserting a settingsUser kennel_records row
   -- directly in Supabase Studio with payload.role = 'admin'.
-  select
-    lower(coalesce(kr.payload ->> 'role', '')),
-    lower(coalesce(kr.payload ->> 'removed', 'false'))
-  into v_profile_role, v_profile_removed
+  -- Active profiles must win over retired duplicates. Duplicate consolidation
+  -- can update both rows in one batch, so ordering all rows by timestamp alone
+  -- can otherwise select the retired row and revoke a valid staff session.
+  select lower(coalesce(kr.payload ->> 'role', ''))
+  into v_profile_role
   from public.kennel_records kr
   where kr.type = 'settingsUser'
     and lower(coalesce(kr.payload ->> 'email', '')) = public.kennel_auth_email()
-  order by kr.updated_at desc nulls last, kr.submitted_at desc nulls last
+    and lower(coalesce(kr.payload ->> 'removed', 'false')) <> 'true'
+  order by kr.updated_at desc nulls last, kr.submitted_at desc nulls last, kr.id desc
   limit 1;
 
   if found then
-    if v_profile_removed = 'true' then
-      v_role := '';
-    else
-      v_role := coalesce(v_profile_role, '');
-    end if;
+    v_role := coalesce(v_profile_role, '');
+  elsif exists (
+    select 1
+    from public.kennel_records kr
+    where kr.type = 'settingsUser'
+      and lower(coalesce(kr.payload ->> 'email', '')) = public.kennel_auth_email()
+  ) then
+    -- Profile history without an active row means the account was revoked.
+    v_role := '';
   else
     v_jwt_role := lower(coalesce(
       auth.jwt() -> 'app_metadata' ->> 'role',

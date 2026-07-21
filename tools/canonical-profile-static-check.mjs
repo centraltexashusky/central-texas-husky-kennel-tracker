@@ -7,6 +7,10 @@ const shared = fs.readFileSync(new URL("../js/shared.js", import.meta.url), "utf
 const customer = fs.readFileSync(new URL("../js/customer.js", import.meta.url), "utf8");
 const schema = fs.readFileSync(new URL("../supabase-schema.sql", import.meta.url), "utf8");
 const passwordFunction = fs.readFileSync(new URL("../supabase/functions/admin-set-password/index.ts", import.meta.url), "utf8");
+const roleResolver = schema.slice(
+  schema.indexOf("create or replace function kennel_private.kennel_user_role()"),
+  schema.indexOf("create or replace function kennel_private.kennel_is_admin()"),
+);
 
 assert.match(
   shared,
@@ -37,6 +41,16 @@ assert.match(
   schema,
   /create unique index if not exists kennel_records_one_active_boarding_profile_idx/,
   "the database must enforce one active boarding profile per customer dog",
+);
+assert.match(
+  roleResolver,
+  /payload ->> 'removed', 'false'\)\) <> 'true'/,
+  "staff role resolution must prefer active profiles over retired duplicates",
+);
+assert.match(
+  roleResolver,
+  /elsif exists \([\s\S]*Profile history without an active row means the account was revoked/,
+  "staff role resolution must preserve explicit account revocation",
 );
 assert.match(
   passwordFunction,
