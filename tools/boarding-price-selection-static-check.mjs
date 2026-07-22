@@ -49,11 +49,11 @@ const checks = [
     message: "cleared stay programs must not preserve stale program ids or rates in pricing snapshots.",
   },
   {
-    pass: main.includes('boarding.js?v=20260721-service-deadline-flag'),
+    pass: main.includes('boarding.js?v=20260722-service-deadline-hours'),
     message: "main module must import the cache-busted boarding module.",
   },
   {
-    pass: index.includes("20260721-dashboard-care-service-deadline"),
+    pass: index.includes("20260722-service-deadline-hours"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];

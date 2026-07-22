@@ -3235,8 +3235,7 @@ function boardingServiceCountdownLabel(dueInfo = null) {
   const hoursRemaining = Number(dueInfo.hoursRemaining);
   if (!Number.isFinite(hoursRemaining)) return dueInfo.className === "is-service-overdue" ? "Overdue" : "Before pickup";
   if (hoursRemaining <= 0) return "Overdue";
-  if (hoursRemaining < 24) return "Due in " + hoursRemaining + "h";
-  return "Due in " + Math.ceil(hoursRemaining / 24) + "d";
+  return "Due in " + hoursRemaining + "h";
 }
 
 function boardingQuickServiceFact(record = {}, stay = {}) {

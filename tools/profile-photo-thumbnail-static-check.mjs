@@ -90,7 +90,7 @@ const checks = [
   },
   {
     path: "index.html",
-    includes: "20260721-dashboard-care-service-deadline",
+    includes: "20260722-service-deadline-hours",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];
