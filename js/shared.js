@@ -12278,8 +12278,11 @@ function initEvents() {
     if (action.dataset.action === "complete-stay-service") {
       const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
       const alertFilter = action.closest("[data-dashboard-alert-popup]")?.dataset.dashboardAlertPopup || "";
-      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, boardingStayReferenceFromAction(action), action.dataset.taskId || "", "completed", action.dataset.taskKey || "", action.dataset.unitIndex || "");
-      if (updated) showStayServiceCompletionConfirmation(updated, boardingStayReferenceFromAction(action), action.dataset.taskId || "", action.dataset.taskKey || "", alertFilter);
+      const reference = boardingStayReferenceFromAction(action);
+      const refreshServicesPopup = Boolean(action.closest("[data-boarding-services-popup]"));
+      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, action.dataset.taskId || "", "completed", action.dataset.taskKey || "", action.dataset.unitIndex || "");
+      if (updated && refreshServicesPopup) openBoardingServicesPopup(updated, reference);
+      else if (updated) showStayServiceCompletionConfirmation(updated, reference, action.dataset.taskId || "", action.dataset.taskKey || "", alertFilter);
       return;
     }
     if (action.dataset.action === "confirm-ready-for-pickup") {
@@ -13666,6 +13669,14 @@ function initEvents() {
     }
     if (button.dataset.action === "open-boarding-belongings") {
       openBoardingBelongingsPopup(record, boardingStayReferenceFromAction(button));
+      return;
+    }
+    if (button.dataset.action === "open-boarding-special-care") {
+      openBoardingSpecialCarePopup(record, boardingStayReferenceFromAction(button));
+      return;
+    }
+    if (button.dataset.action === "open-boarding-services") {
+      openBoardingServicesPopup(record, boardingStayReferenceFromAction(button));
       return;
     }
     if (button.dataset.action === "open-mobile-stay-status-menu") {

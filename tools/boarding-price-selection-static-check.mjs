@@ -53,7 +53,7 @@ const checks = [
     message: "main module must import the cache-busted boarding module.",
   },
   {
-    pass: index.includes("20260720-canonical-customer-profiles"),
+    pass: index.includes("20260721-boarding-quick-fact-popups"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];

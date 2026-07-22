@@ -4240,6 +4240,30 @@ textarea {
   margin-top: 14px;
 }
 
+#detailDialog:has(.boarding-quick-popup) {
+  max-width: min(560px, calc(100% - 28px));
+}
+
+.boarding-quick-popup {
+  margin-top: 0;
+}
+
+.boarding-quick-popup-summary,
+.boarding-special-care-full {
+  min-width: 0;
+}
+
+.boarding-special-care-full p {
+  line-height: 1.5;
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.boarding-quick-popup .boarding-service-task-list {
+  margin-bottom: 0;
+}
+
 .dashboard-detail-summary {
   margin: 0;
 }
@@ -6607,6 +6631,17 @@ button.is-loading {
 .boarding-service-unit-row.is-service-complete {
   background: rgba(34, 197, 94, 0.12);
   border-color: rgba(34, 197, 94, 0.35);
+}
+
+@media (max-width: 560px) {
+  .boarding-quick-popup .boarding-service-unit-row {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .boarding-quick-popup .boarding-service-unit-row .record-actions {
+    justify-content: space-between;
+  }
 }
 
 .boarding-service-stack-alert {

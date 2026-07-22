@@ -3194,6 +3194,8 @@ function boardingSpecialCareInstruction(record = {}, stay = {}) {
 function boardingQuickSpecialCareFact(record = {}, stay = {}) {
   const care = boardingSpecialCareInstruction(record, stay);
   return boardingQuickFactHtml("Special Care", care || "None", care ? "is-attention" : "is-muted", {
+    action: care ? "open-boarding-special-care" : "",
+    attrs: care ? ' data-id="' + escapeHtml(record.id || "") + '"' + boardingStayDataAttrs(record, stay) : "",
     title: care ? "Special care: " + care : "Special care: none.",
   });
 }
@@ -3230,7 +3232,11 @@ function boardingQuickServiceFact(record = {}, stay = {}) {
   if (!stats.total) return "";
   const value = stats.completedTasks.length + "/" + stats.total + " done";
   const className = stats.completed ? "is-good" : "is-attention";
-  return boardingQuickFactHtml("Services", value, className);
+  return boardingQuickFactHtml("Services", value, className, {
+    action: "open-boarding-services",
+    attrs: ' data-id="' + escapeHtml(record.id || "") + '"' + boardingStayDataAttrs(record, stay),
+    title: "View and complete requested services for " + (record.dogName || "this dog") + ".",
+  });
 }
 
 function boardingQuickOwnerUpdateFact(record = {}, stay = {}) {
@@ -3280,6 +3286,59 @@ function openBoardingBelongingsPopup(record = {}, reference = {}) {
     return;
   }
   showDetailDialog("Saved Belongings", boardingBelongingsPopupHtml(displayRecord, stay));
+}
+
+function boardingQuickPopupSummaryHtml(record = {}, stay = {}) {
+  const requestCode = boardingStayRequestCode(record, stay);
+  const schedule = stayScheduleRangeLabel(record, stay);
+  return '<article class="record-card compact-record-card boarding-quick-popup-summary">'
+    + '<strong>' + escapeHtml(record.dogName || "Boarding dog") + '</strong>'
+    + (requestCode ? '<div class="chip-row">' + boardingStayRequestCodeChipHtml(record, stay) + boardingStayStatusChipHtml(record, stay) + '</div>' : "")
+    + (schedule ? '<p>' + escapeHtml(schedule) + '</p>' : "")
+    + '</article>';
+}
+
+function boardingSpecialCarePopupHtml(record = {}, stay = {}) {
+  const care = boardingSpecialCareInstruction(record, stay);
+  return '<section class="popup-record-section boarding-quick-popup" data-boarding-special-care-popup>'
+    + boardingQuickPopupSummaryHtml(record, stay)
+    + '<article class="record-card compact-record-card boarding-special-care-full">'
+    + '<strong>Special care instructions</strong>'
+    + '<p>' + escapeHtml(care || "No special care instructions are saved for this stay.").replace(/\\r?\\n/g, "<br>") + '</p>'
+    + '</article>'
+    + '</section>';
+}
+
+function openBoardingSpecialCarePopup(record = {}, reference = {}) {
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayByReference(displayRecord, reference) || activeBoardingStay(displayRecord) || currentOrNextStay(displayRecord) || {};
+  if (!displayRecord?.id || !stay?.id || !boardingSpecialCareInstruction(displayRecord, stay)) {
+    showToast("Special care instructions are not available for this stay.");
+    return;
+  }
+  showDetailDialog("Special Care", boardingSpecialCarePopupHtml(displayRecord, stay));
+}
+
+function boardingServicesPopupHtml(record = {}, stay = {}) {
+  const stats = boardingStayServiceStats(record, stay);
+  const completionMessage = stats.completed
+    ? '<p class="success-text">All requested services are completed.</p>'
+    : '<p class="service-warning-text">' + escapeHtml(stats.incompleteTasks.length + " service" + (stats.incompleteTasks.length === 1 ? "" : "s") + " still need completion.") + '</p>';
+  return '<section class="popup-record-section boarding-quick-popup" data-boarding-services-popup>'
+    + boardingQuickPopupSummaryHtml(record, stay)
+    + completionMessage
+    + boardingStayServiceTaskListHtml(record, stay, { actions: true })
+    + '</section>';
+}
+
+function openBoardingServicesPopup(record = {}, reference = {}) {
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stay = boardingStayByReference(displayRecord, reference) || activeBoardingStay(displayRecord) || currentOrNextStay(displayRecord) || {};
+  if (!displayRecord?.id || !stay?.id || !boardingStayServiceStats(displayRecord, stay).total) {
+    showToast("Requested services are not available for this stay.");
+    return;
+  }
+  showDetailDialog("Requested Services", boardingServicesPopupHtml(displayRecord, stay));
 }
 
 function boardingPickupReviewHtml(record = {}, options = {}) {
