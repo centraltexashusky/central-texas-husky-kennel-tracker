@@ -12,6 +12,7 @@ if (!boarding.includes('action: care ? "open-boarding-special-care" : ""')) fail
 if (!boarding.includes('action: "open-boarding-services"')) failures.push("Requested services are not wired as a clickable quick fact.");
 if (!boarding.includes('data-boarding-services-popup')) failures.push("Requested services popup marker is missing.");
 if (!boarding.includes('boardingStayServiceTaskListHtml(record, stay, { actions: true })')) failures.push("Requested services popup does not expose completion actions.");
+if (!boarding.includes('>Complete</button>')) failures.push("Requested service actions do not use the requested Complete label.");
 if (!shared.includes('button.dataset.action === "open-boarding-special-care"')) failures.push("Boarding card clicks do not open the special-care popup.");
 if (!shared.includes('button.dataset.action === "open-boarding-services"')) failures.push("Boarding card clicks do not open the services popup.");
 if (!shared.includes('action.closest("[data-boarding-services-popup]")')) failures.push("Completing a service does not preserve the services popup workflow.");

@@ -2153,7 +2153,7 @@ function boardingStayServiceTaskListHtml(record = {}, stay = {}, options = {}) {
           ? "Completed " + (formatDateTime(unit.completedAt) || "") + (unit.completedBy ? " by " + unit.completedBy : "")
           : "Needs completion before pickup";
         const action = !unitComplete && options.actions
-          ? \`<button type="button" class="secondary-button" data-action="complete-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id)}" data-task-key="\${escapeHtml(taskKey)}" data-unit-index="\${escapeHtml(unit.index)}">Mark Done</button>\`
+          ? \`<button type="button" class="secondary-button" data-action="complete-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id)}" data-task-key="\${escapeHtml(taskKey)}" data-unit-index="\${escapeHtml(unit.index)}">Complete</button>\`
           : "";
         return \`<div class="boarding-service-unit-row \${unitComplete ? "is-service-complete" : ""}">
           <div><strong>\${escapeHtml(unit.label || task.serviceName || "Service")}</strong><span>\${escapeHtml(unitMeta)}</span></div>
@@ -3323,7 +3323,7 @@ function boardingServicesPopupHtml(record = {}, stay = {}) {
   const stats = boardingStayServiceStats(record, stay);
   const completionMessage = stats.completed
     ? '<p class="success-text">All requested services are completed.</p>'
-    : '<p class="service-warning-text">' + escapeHtml(stats.incompleteTasks.length + " service" + (stats.incompleteTasks.length === 1 ? "" : "s") + " still need completion.") + '</p>';
+    : '<p class="service-warning-text">' + escapeHtml(stats.incompleteTasks.length + " service" + (stats.incompleteTasks.length === 1 ? " still needs" : "s still need") + " completion.") + '</p>';
   return '<section class="popup-record-section boarding-quick-popup" data-boarding-services-popup>'
     + boardingQuickPopupSummaryHtml(record, stay)
     + completionMessage
