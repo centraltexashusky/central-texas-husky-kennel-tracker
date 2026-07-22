@@ -1691,7 +1691,7 @@ function remoteRecordTypesForPage(pageId = "") {
     maintenancePage: ["maintenance"],
     timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
     servicesPage: ["service"],
-    financialsPage: ["boardingDog", "service"],
+    financialsPage: ["boardingDog", "service", "timesheet"],
     settingsUsersPage: ["settingsUser", "boardingAgreement"],
     settingsKennelLocationsPage: ["kennelLocation", "kennelBuilding"],
     settingsHoursPage: ["operationHours", "operationDateOverride"],
@@ -4876,7 +4876,7 @@ function renderAfterRealtimeTypes(types = []) {
     updateTimeDisplays();
   }
   if (activePage === "servicesPage" && typeSet.has("service")) renderServices();
-  if (activePage === "financialsPage" && hasAny(["boardingDog", "service"])) {
+  if (activePage === "financialsPage" && hasAny(["boardingDog", "service", "timesheet", "settingsUser"])) {
     renderFinancials();
   }
   if (activePage === "settingsUsersPage" && hasAny(["settingsUser", "boardingAgreement"])) renderSettingsUsers();

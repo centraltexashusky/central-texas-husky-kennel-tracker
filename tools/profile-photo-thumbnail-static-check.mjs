@@ -85,12 +85,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260722-authenticated-auto-task-sync",
+    includes: "20260722-financial-payroll-loading",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260722-authenticated-auto-task-sync",
+    includes: "20260722-payroll-compact-scheduler",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];
