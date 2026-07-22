@@ -1,9 +1,9 @@
 // === MODULE: MAIN ===
 import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
-import "./shared.js?v=20260721-boarding-quick-fact-popups";
+import "./shared.js?v=20260721-boarding-quick-fact-popups-v2";
 import "./auth.js?v=20260709-staff-payroll-financials";
 import "./customer.js?v=20260720-canonical-customer-profiles";
-import "./boarding.js?v=20260721-boarding-quick-fact-popups";
+import "./boarding.js?v=20260721-boarding-quick-fact-popups-v2";
 import "./daily.js?v=20260715-dog-show-rosette-home";
 import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-task-scheduler-visibility-dedupe";
 import "./dog-show.js?v=20260720-dog-show-progress";

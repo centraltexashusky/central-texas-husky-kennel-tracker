@@ -18,8 +18,8 @@ if (!shared.includes('button.dataset.action === "open-boarding-services"')) fail
 if (!shared.includes('action.closest("[data-boarding-services-popup]")')) failures.push("Completing a service does not preserve the services popup workflow.");
 if (!shared.includes('openBoardingServicesPopup(updated, reference)')) failures.push("Services popup is not refreshed after completion.");
 if (!styles.includes('#detailDialog:has(.boarding-quick-popup)')) failures.push("Quick-fact popups are not constrained to a compact width.");
-if (!main.includes('boarding.js?v=20260721-boarding-quick-fact-popups')) failures.push("Boarding module cache key was not updated.");
-if (!index.includes('js/main.js?v=20260721-boarding-quick-fact-popups')) failures.push("Application entrypoint cache key was not updated.");
+if (!main.includes('boarding.js?v=20260721-boarding-quick-fact-popups-v2')) failures.push("Boarding module cache key was not updated.");
+if (!index.includes('js/main.js?v=20260721-boarding-quick-fact-popups-v2')) failures.push("Application entrypoint cache key was not updated.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));
