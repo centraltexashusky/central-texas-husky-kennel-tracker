@@ -90,7 +90,7 @@ const checks = [
   },
   {
     path: "index.html",
-    includes: "20260722-payroll-compact-scheduler",
+    includes: "20260722-payroll-compact-scheduler-v2",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

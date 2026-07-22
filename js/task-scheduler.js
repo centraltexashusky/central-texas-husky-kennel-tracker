@@ -1816,7 +1816,7 @@ function taskSchedulerMaxOverlap(dates = []) {
 }
 
 function taskSchedulerDayMinWidth(dates = []) {
-  if (taskSchedulerView === "week") return 104;
+  if (taskSchedulerView === "week") return 90;
   return Math.min(640, Math.max(420, taskSchedulerMaxOverlap(dates) * 190));
 }
 

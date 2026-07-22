@@ -26,7 +26,7 @@ if (!shared.includes('openBoardingServicesPopup(updated, reference)')) failures.
 if (!styles.includes('#detailDialog:has(.boarding-quick-popup)')) failures.push("Quick-fact popups are not constrained to a compact width.");
 if (!styles.includes('.boarding-mobile-fact-flag')) failures.push("Requested services countdown badge is not styled.");
 if (!main.includes('boarding.js?v=20260722-service-deadline-72h')) failures.push("Boarding module cache key was not updated.");
-if (!index.includes('js/main.js?v=20260722-payroll-compact-scheduler')) failures.push("Application entrypoint cache key was not updated.");
+if (!index.includes('js/main.js?v=20260722-payroll-compact-scheduler-v2')) failures.push("Application entrypoint cache key was not updated.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

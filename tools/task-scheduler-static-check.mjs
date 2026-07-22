@@ -63,7 +63,7 @@ if (!dayWidthMatch) {
     "taskSchedulerMaxOverlap",
     `return (${dayWidthMatch[0]});`,
   )(view, () => overlap);
-  if (makeDayMinWidth("week", 12)([]) !== 104) failures.push("Busy tasks can still make every week column excessively wide.");
+  if (makeDayMinWidth("week", 12)([]) !== 90) failures.push("Busy tasks can still make every week column excessively wide.");
   if (makeDayMinWidth("day", 1)([]) !== 420) failures.push("Day view lost its readable minimum width.");
   if (makeDayMinWidth("day", 12)([]) !== 640) failures.push("Day view overlap width is not capped.");
 }

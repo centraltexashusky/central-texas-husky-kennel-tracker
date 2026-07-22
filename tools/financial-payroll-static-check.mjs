@@ -21,7 +21,7 @@ if (!timesheet.includes("total: hours * rate")) {
 if (!main.includes('shared.js?v=20260722-financial-payroll-loading')) {
   failures.push("The payroll record-loading fix is not cache-busted.");
 }
-if (!index.includes('js/main.js?v=20260722-payroll-compact-scheduler')) {
+if (!index.includes('js/main.js?v=20260722-payroll-compact-scheduler-v2')) {
   failures.push("The application entrypoint does not expose the payroll fix.");
 }
 
