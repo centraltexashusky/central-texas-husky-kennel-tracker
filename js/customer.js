@@ -1350,13 +1350,19 @@ function customerBookingAvailabilityForDateTime(value = "", label = "Selected ti
     };
   }
   const selectedMinutes = parsed.getHours() * 60 + parsed.getMinutes();
-  const openMinutes = timeToMinutes(window.openTime);
-  const closeMinutes = timeToMinutes(window.closeTime);
-  if (selectedMinutes < openMinutes || selectedMinutes > closeMinutes) {
+  const windows = Array.isArray(window.windows) && window.windows.length
+    ? window.windows
+    : [{ openTime: window.openTime, closeTime: window.closeTime }];
+  const inAvailableWindow = windows.some((availableWindow) => {
+    const openMinutes = timeToMinutes(availableWindow.openTime);
+    const closeMinutes = timeToMinutes(availableWindow.closeTime);
+    return selectedMinutes >= openMinutes && selectedMinutes <= closeMinutes;
+  });
+  if (!inAvailableWindow) {
     return {
       valid: false,
       fieldLabel: label,
-      message: \`\${label} must be between \${displayTime(window.openTime)} and \${displayTime(window.closeTime)} on \${operationDateLabel(date)}.\`,
+      message: \`\${label} must be within \${operationTimeWindowsText(windows)} on \${operationDateLabel(date)}.\`,
       notices,
       window,
     };

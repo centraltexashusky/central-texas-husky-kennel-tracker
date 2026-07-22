@@ -355,6 +355,7 @@ function defaultOperationHourRecords() {
     isOpen: true,
     openTime: defaultOperationOpenTime,
     closeTime: defaultOperationCloseTime,
+    windows: [{ id: "window-1", openTime: defaultOperationOpenTime, closeTime: defaultOperationCloseTime }],
     submittedAt: now,
     updatedAt: now,
     removed: false,
@@ -1503,6 +1504,62 @@ function normalizeOperationTime(value = "", fallback = defaultOperationOpenTime)
   return \`\${String(hour).padStart(2, "0")}:\${String(minute).padStart(2, "0")}\`;
 }
 
+function operationTimeWindows(record = {}) {
+  const source = Array.isArray(record.windows) && record.windows.length
+    ? record.windows
+    : [{ openTime: record.openTime || defaultOperationOpenTime, closeTime: record.closeTime || defaultOperationCloseTime }];
+  return source.map((window, index) => ({
+    id: window.id || \`window-\${index + 1}\`,
+    openTime: normalizeOperationTime(window.openTime, defaultOperationOpenTime),
+    closeTime: normalizeOperationTime(window.closeTime, defaultOperationCloseTime),
+  }));
+}
+
+function operationTimeWindowValidation(windows = []) {
+  if (!windows.length) return { valid: false, message: "needs at least one open and close time.", index: 0, windows: [] };
+  const normalized = windows.map((window, index) => ({
+    id: window.id || \`window-\${index + 1}\`,
+    openTime: normalizeOperationTime(window.openTime, ""),
+    closeTime: normalizeOperationTime(window.closeTime, ""),
+  }));
+  const missingIndex = normalized.findIndex((window) => !window.openTime || !window.closeTime);
+  if (missingIndex >= 0) return { valid: false, message: \`window \${missingIndex + 1} needs both an open and close time.\`, index: missingIndex, windows: normalized };
+  const invalidIndex = normalized.findIndex((window) => timeToMinutes(window.closeTime) <= timeToMinutes(window.openTime));
+  if (invalidIndex >= 0) return { valid: false, message: \`window \${invalidIndex + 1} close time must be after its open time.\`, index: invalidIndex, windows: normalized };
+  const sorted = normalized.slice().sort((a, b) => timeToMinutes(a.openTime) - timeToMinutes(b.openTime));
+  const overlapIndex = sorted.findIndex((window, index) => index > 0 && timeToMinutes(window.openTime) < timeToMinutes(sorted[index - 1].closeTime));
+  if (overlapIndex >= 0) return { valid: false, message: "open/close windows cannot overlap.", index: overlapIndex, windows: sorted };
+  return {
+    valid: true,
+    message: "",
+    index: -1,
+    windows: sorted.map((window, index) => ({ ...window, id: \`window-\${index + 1}\` })),
+  };
+}
+
+function operationTimeWindowsText(windows = []) {
+  const ranges = windows.map((window) => \`\${displayTime(window.openTime)} - \${displayTime(window.closeTime)}\`);
+  if (ranges.length <= 1) return ranges[0] || "No hours";
+  return \`\${ranges.slice(0, -1).join(", ")} and \${ranges[ranges.length - 1]}\`;
+}
+
+function operationTimeWindowRowHtml(window = {}, index = 0, open = true) {
+  const disabled = open ? "" : "disabled";
+  return \`<div class="operation-time-window-row" data-operation-window-row>
+    <strong data-operation-window-label>Window \${index + 1}</strong>
+    <label>Open time<input type="time" data-operation-open-time value="\${escapeHtml(window.openTime || "")}" \${disabled} /></label>
+    <label>Close time<input type="time" data-operation-close-time value="\${escapeHtml(window.closeTime || "")}" \${disabled} /></label>
+    \${index > 0 ? \`<button type="button" class="secondary-button danger-button operation-window-remove" data-action="remove-operation-window" data-operation-window-control \${disabled}>Remove</button>\` : '<span class="operation-window-primary-label">Primary</span>'}
+  </div>\`;
+}
+
+function syncOperationTimeWindowLabels(card) {
+  card?.querySelectorAll("[data-operation-window-row]").forEach((row, index) => {
+    const label = row.querySelector("[data-operation-window-label]");
+    if (label) label.textContent = \`Window \${index + 1}\`;
+  });
+}
+
 function operationHoursRecords() {
   const defaults = defaultOperationHourRecords();
   const recordsByWeekday = new Map(defaults.map((record) => [record.weekday, record]));
@@ -1512,10 +1569,13 @@ function operationHoursRecords() {
       const weekday = record.weekday || operationWeekdays.find((day) => day.dayIndex === Number(record.dayIndex))?.key;
       if (!weekday) return;
       const fallback = recordsByWeekday.get(weekday) || {};
-      recordsByWeekday.set(weekday, { ...fallback, ...record, weekday });
+      const merged = { ...fallback, ...record, weekday };
+      if (!Object.prototype.hasOwnProperty.call(record, "windows")) delete merged.windows;
+      recordsByWeekday.set(weekday, merged);
     });
   return operationWeekdays.map((day) => {
     const record = recordsByWeekday.get(day.key) || {};
+    const windows = operationTimeWindows(record);
     return {
       ...record,
       type: "operationHours",
@@ -1524,8 +1584,9 @@ function operationHoursRecords() {
       weekdayLabel: day.label,
       dayIndex: day.dayIndex,
       isOpen: operationBoolean(record.isOpen, true),
-      openTime: normalizeOperationTime(record.openTime, defaultOperationOpenTime),
-      closeTime: normalizeOperationTime(record.closeTime, defaultOperationCloseTime),
+      openTime: windows[0]?.openTime || defaultOperationOpenTime,
+      closeTime: windows[0]?.closeTime || defaultOperationCloseTime,
+      windows,
       removed: false,
     };
   });
@@ -1549,16 +1610,21 @@ function operationWindowForDate(date = "") {
   const dateKey = dateOnly(date);
   const weekly = operationHoursForDate(dateKey);
   const override = operationOverrideForDate(dateKey);
-  const openSource = override || weekly;
+  const openSource = override
+    ? { ...override, windows: Array.isArray(override.windows) ? override.windows : null, openTime: override.openTime || weekly.openTime, closeTime: override.closeTime || weekly.closeTime }
+    : weekly;
   const isOpen = operationBoolean(openSource.isOpen, true);
-  const openTime = normalizeOperationTime(openSource.openTime || weekly.openTime, weekly.openTime || defaultOperationOpenTime);
-  const closeTime = normalizeOperationTime(openSource.closeTime || weekly.closeTime, weekly.closeTime || defaultOperationCloseTime);
-  const invalidWindow = isOpen && timeToMinutes(closeTime) <= timeToMinutes(openTime);
+  const validation = operationTimeWindowValidation(operationTimeWindows(openSource));
+  const windows = validation.windows;
+  const openTime = windows[0]?.openTime || defaultOperationOpenTime;
+  const closeTime = windows[0]?.closeTime || defaultOperationCloseTime;
+  const invalidWindow = isOpen && !validation.valid;
   return {
     date: dateKey,
     isOpen: isOpen && !invalidWindow,
     openTime,
     closeTime,
+    windows,
     message: override?.customerMessage || "",
     override,
     weekly,
@@ -1569,7 +1635,7 @@ function operationWindowForDate(date = "") {
 function operationWindowText(window = {}) {
   if (!window.date) return "Choose a date to see available customer request hours.";
   if (!window.isOpen) return window.invalidWindow ? "Hours need review by the kennel before customers can request this day." : "Closed to customer drop-off and pick-up requests.";
-  return \`Available \${displayTime(window.openTime)} - \${displayTime(window.closeTime)}\`;
+  return \`Available \${operationTimeWindowsText(window.windows || [{ openTime: window.openTime, closeTime: window.closeTime }])}\`;
 }
 
 function operationDateLabel(date = "") {
@@ -1618,16 +1684,19 @@ function renderOperationHoursSettings() {
   ].map(([label, value, note]) => \`<div class="summary-card"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(String(value))}</strong><p>\${escapeHtml(note)}</p></div>\`).join("");
   list.innerHTML = hours.map((record) => {
     const open = operationBoolean(record.isOpen, true);
+    const windows = operationTimeWindows(record);
     return \`<article class="record-card operation-day-card" data-weekday="\${escapeHtml(record.weekday)}">
       <div class="operation-day-header">
         <strong>\${escapeHtml(record.weekdayLabel || record.weekday)}</strong>
         <label class="toggle-row"><input type="checkbox" data-operation-open \${open ? "checked" : ""} /> Open</label>
       </div>
-      <div class="field-grid">
-        <label>Open time<input type="time" data-operation-open-time value="\${escapeHtml(record.openTime || defaultOperationOpenTime)}" \${open ? "" : "disabled"} /></label>
-        <label>Close time<input type="time" data-operation-close-time value="\${escapeHtml(record.closeTime || defaultOperationCloseTime)}" \${open ? "" : "disabled"} /></label>
+      <div class="operation-time-window-list" data-operation-window-list>
+        \${windows.map((window, index) => operationTimeWindowRowHtml(window, index, open)).join("")}
       </div>
-      <p>\${open ? \`Customers can request drop-off and pick-up from \${escapeHtml(displayTime(record.openTime))} to \${escapeHtml(displayTime(record.closeTime))}.\` : "Customers cannot request drop-off or pick-up on this weekday."}</p>
+      <div class="operation-window-add-row">
+        <button type="button" class="secondary-button" data-action="add-operation-window" data-operation-window-control \${open ? "" : "disabled"}>+ Add Open/Close Time</button>
+      </div>
+      <p>\${open ? \`Customers can request drop-off and pick-up during \${escapeHtml(operationTimeWindowsText(windows))}.\` : "Customers cannot request drop-off or pick-up on this weekday."}</p>
     </article>\`;
   }).join("");
   const monthLabelEl = $("#operationCalendarMonthLabel");
@@ -1664,13 +1733,21 @@ async function saveOperationHoursSettings() {
     const day = operationWeekdays.find((item) => item.key === weekday);
     if (!day) continue;
     const isOpen = Boolean(card.querySelector("[data-operation-open]")?.checked);
-    const openTime = normalizeOperationTime(card.querySelector("[data-operation-open-time]")?.value, defaultOperationOpenTime);
-    const closeTime = normalizeOperationTime(card.querySelector("[data-operation-close-time]")?.value, defaultOperationCloseTime);
-    if (isOpen && timeToMinutes(closeTime) <= timeToMinutes(openTime)) {
-      showToast(\`\${day.label} close time must be after open time.\`);
-      card.querySelector("[data-operation-close-time]")?.focus();
+    const existing = readRecords("operationHours").find((record) => record.id === \`operationHours-\${day.key}\`);
+    const candidateWindows = [...card.querySelectorAll("[data-operation-window-row]")].map((row, index) => ({
+      id: \`window-\${index + 1}\`,
+      openTime: row.querySelector("[data-operation-open-time]")?.value || "",
+      closeTime: row.querySelector("[data-operation-close-time]")?.value || "",
+    }));
+    const validation = operationTimeWindowValidation(candidateWindows);
+    if (isOpen && !validation.valid) {
+      showToast(\`\${day.label} \${validation.message}\`);
+      card.querySelectorAll("[data-operation-window-row]")[Math.max(0, validation.index)]?.querySelector("[data-operation-close-time], [data-operation-open-time]")?.focus();
       return null;
     }
+    const windows = validation.valid ? validation.windows : operationTimeWindows(existing || {});
+    const openTime = windows[0]?.openTime || defaultOperationOpenTime;
+    const closeTime = windows[0]?.closeTime || defaultOperationCloseTime;
     records.push({
       type: "operationHours",
       id: \`operationHours-\${day.key}\`,
@@ -1680,7 +1757,8 @@ async function saveOperationHoursSettings() {
       isOpen,
       openTime,
       closeTime,
-      submittedAt: readRecords("operationHours").find((record) => record.id === \`operationHours-\${day.key}\`)?.submittedAt || now,
+      windows,
+      submittedAt: existing?.submittedAt || now,
       updatedAt: now,
       updatedBy: currentUser?.email || helperEmail?.value || "",
       removed: false,
@@ -1716,7 +1794,7 @@ function operationDateOverrideFormHtml(date = todayDate()) {
   return \`<form id="operationDateOverrideForm" class="tracker-form" data-date="\${escapeHtml(dateKey)}" data-id="\${escapeHtml(existing.id || "")}">
     <article class="record-card compact-record-card">
       <strong>\${escapeHtml(operationDateLabel(dateKey))}</strong>
-      <span>Weekly default: \${operationBoolean(weekly.isOpen, true) ? \`\${escapeHtml(displayTime(weekly.openTime))} - \${escapeHtml(displayTime(weekly.closeTime))}\` : "Closed"}</span>
+      <span>Weekly default: \${operationBoolean(weekly.isOpen, true) ? escapeHtml(operationTimeWindowsText(operationTimeWindows(weekly))) : "Closed"}</span>
     </article>
     <label class="toggle-row"><input type="checkbox" name="isOpen" \${open ? "checked" : ""} /> Open to customer drop-off and pick-up requests</label>
     <div class="field-grid">

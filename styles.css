@@ -5688,6 +5688,39 @@ option {
   justify-content: space-between;
 }
 
+.operation-time-window-list {
+  display: grid;
+  gap: 10px;
+}
+
+.operation-time-window-row {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(78px, 0.35fr) repeat(2, minmax(170px, 1fr)) minmax(88px, auto);
+}
+
+.operation-time-window-row > strong {
+  align-self: center;
+}
+
+.operation-window-primary-label {
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.operation-window-remove {
+  min-height: 42px;
+}
+
+.operation-window-add-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .operation-calendar-toolbar {
   align-items: center;
   display: flex;
@@ -7024,6 +7057,20 @@ button.is-loading {
 
   .operation-calendar-day {
     min-height: 78px;
+  }
+
+  .operation-time-window-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .operation-window-primary-label {
+    display: none;
+  }
+
+  .operation-window-add-row button,
+  .operation-window-remove {
+    width: 100%;
   }
 }
 

@@ -53,7 +53,7 @@ const checks = [
     message: "main module must import the cache-busted boarding module.",
   },
   {
-    pass: index.includes("20260722-payroll-compact-scheduler-v2"),
+    pass: index.includes("20260722-multi-operation-windows"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];

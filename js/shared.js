@@ -14650,9 +14650,26 @@ function initEvents() {
     const toggle = event.target.closest("[data-operation-open]");
     if (!toggle) return;
     const card = toggle.closest(".operation-day-card");
-    card?.querySelectorAll("[data-operation-open-time], [data-operation-close-time]").forEach((field) => {
-      field.disabled = !toggle.checked;
+    card?.querySelectorAll("[data-operation-open-time], [data-operation-close-time], [data-operation-window-control]").forEach((control) => {
+      control.disabled = !toggle.checked;
     });
+  });
+  $("#operationHoursList")?.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-action]");
+    if (!action) return;
+    const card = action.closest(".operation-day-card");
+    if (!card) return;
+    if (action.dataset.action === "add-operation-window") {
+      const list = card.querySelector("[data-operation-window-list]");
+      const index = list?.querySelectorAll("[data-operation-window-row]").length || 0;
+      list?.insertAdjacentHTML("beforeend", operationTimeWindowRowHtml({ openTime: "", closeTime: "" }, index, true));
+      list?.querySelectorAll("[data-operation-window-row]")[index]?.querySelector("[data-operation-open-time]")?.focus();
+      return;
+    }
+    if (action.dataset.action === "remove-operation-window") {
+      action.closest("[data-operation-window-row]")?.remove();
+      syncOperationTimeWindowLabels(card);
+    }
   });
   $("#saveOperationHoursButton")?.addEventListener("click", saveOperationHoursSettings);
   $("#resetOperationHoursButton")?.addEventListener("click", resetOperationHoursSettings);
