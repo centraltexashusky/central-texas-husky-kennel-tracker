@@ -13,13 +13,17 @@ if (!boarding.includes('action: "open-boarding-services"')) failures.push("Reque
 if (!boarding.includes('data-boarding-services-popup')) failures.push("Requested services popup marker is missing.");
 if (!boarding.includes('boardingStayServiceTaskListHtml(record, stay, { actions: true })')) failures.push("Requested services popup does not expose completion actions.");
 if (!boarding.includes('>Complete</button>')) failures.push("Requested service actions do not use the requested Complete label.");
+if (!boarding.includes('function boardingServiceCountdownLabel')) failures.push("Requested services do not calculate a pickup countdown label.");
+if (!boarding.includes('flag: countdown')) failures.push("Requested services do not expose the countdown on the boarding card.");
+if (!boarding.includes('boarding-service-popup-deadline')) failures.push("Requested services popup does not explain the service deadline.");
 if (!shared.includes('button.dataset.action === "open-boarding-special-care"')) failures.push("Boarding card clicks do not open the special-care popup.");
 if (!shared.includes('button.dataset.action === "open-boarding-services"')) failures.push("Boarding card clicks do not open the services popup.");
 if (!shared.includes('action.closest("[data-boarding-services-popup]")')) failures.push("Completing a service does not preserve the services popup workflow.");
 if (!shared.includes('openBoardingServicesPopup(updated, reference)')) failures.push("Services popup is not refreshed after completion.");
 if (!styles.includes('#detailDialog:has(.boarding-quick-popup)')) failures.push("Quick-fact popups are not constrained to a compact width.");
-if (!main.includes('boarding.js?v=20260721-boarding-quick-fact-popups-v2')) failures.push("Boarding module cache key was not updated.");
-if (!index.includes('js/main.js?v=20260721-dog-show-nav-user-profile')) failures.push("Application entrypoint cache key was not updated.");
+if (!styles.includes('.boarding-mobile-fact-flag')) failures.push("Requested services countdown badge is not styled.");
+if (!main.includes('boarding.js?v=20260721-service-deadline-flag')) failures.push("Boarding module cache key was not updated.");
+if (!index.includes('js/main.js?v=20260721-dashboard-care-service-deadline')) failures.push("Application entrypoint cache key was not updated.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

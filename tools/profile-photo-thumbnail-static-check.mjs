@@ -85,12 +85,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260721-dog-show-nav-user-profile",
+    includes: "20260721-dashboard-care-actions",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260721-dog-show-nav-user-profile",
+    includes: "20260721-dashboard-care-service-deadline",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

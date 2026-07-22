@@ -3158,7 +3158,7 @@ function boardingStayServiceSummary(record = {}, stayOverride = null) {
 
 function boardingQuickFactHtml(label = "", value = "", className = "", options = {}) {
   if (!value) return "";
-  const classes = ["boarding-mobile-fact", className, options.action ? "is-clickable" : ""].filter(Boolean).join(" ");
+  const classes = ["boarding-mobile-fact", className, options.action ? "is-clickable" : "", options.flag ? "has-flag" : ""].filter(Boolean).join(" ");
   const title = options.title ? ' title="' + escapeHtml(options.title) + '" aria-label="' + escapeHtml(options.title) + '"' : "";
   const attrs = options.attrs || "";
   const action = options.action ? ' data-action="' + escapeHtml(options.action) + '"' : "";
@@ -3169,7 +3169,10 @@ function boardingQuickFactHtml(label = "", value = "", className = "", options =
   const progress = Number.isFinite(progressPercent)
     ? '<span class="boarding-mobile-fact-progress" aria-hidden="true"><i style="width: ' + boundedProgressPercent + '%;' + (boundedProgressPercent > 0 ? " min-width: 4px;" : "") + '"></i></span>'
     : "";
-  return '<' + tagName + type + ' class="' + escapeHtml(classes) + '"' + action + attrs + title + '><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong>' + progress + '</' + tagName + '>';
+  const flag = options.flag
+    ? '<small class="boarding-mobile-fact-flag ' + escapeHtml(options.flagClass || "") + '">' + escapeHtml(options.flag) + '</small>'
+    : "";
+  return '<' + tagName + type + ' class="' + escapeHtml(classes) + '"' + action + attrs + title + '><span>' + escapeHtml(label) + '</span>' + flag + '<strong>' + escapeHtml(value) + '</strong>' + progress + '</' + tagName + '>';
 }
 
 function boardingQuickTimeFact(record = {}, stay = {}) {
@@ -3226,16 +3229,39 @@ function boardingQuickLengthFact(record = {}, stay = {}) {
   });
 }
 
+function boardingServiceCountdownLabel(dueInfo = null) {
+  if (!dueInfo) return "Due before pickup";
+  if (dueInfo.stats?.completed) return "Complete";
+  const hoursRemaining = Number(dueInfo.hoursRemaining);
+  if (!Number.isFinite(hoursRemaining)) return dueInfo.className === "is-service-overdue" ? "Overdue" : "Before pickup";
+  if (hoursRemaining <= 0) return "Overdue";
+  if (hoursRemaining < 24) return "Due in " + hoursRemaining + "h";
+  return "Due in " + Math.ceil(hoursRemaining / 24) + "d";
+}
+
 function boardingQuickServiceFact(record = {}, stay = {}) {
   if (!stay?.id) return "";
   const stats = boardingStayServiceStats(record, stay);
   if (!stats.total) return "";
+  const dueInfo = boardingStayServiceDueInfo(record, stay);
   const value = stats.completedTasks.length + "/" + stats.total + " done";
-  const className = stats.completed ? "is-good" : "is-attention";
+  const className = stats.completed
+    ? "is-good"
+    : dueInfo?.className === "is-service-overdue"
+      ? "is-alert"
+      : dueInfo?.className === "is-service-due"
+        ? "is-attention"
+        : "is-progress";
+  const countdown = boardingServiceCountdownLabel(dueInfo);
+  const openCount = stats.incompleteTasks.length;
   return boardingQuickFactHtml("Services", value, className, {
     action: "open-boarding-services",
     attrs: ' data-id="' + escapeHtml(record.id || "") + '"' + boardingStayDataAttrs(record, stay),
-    title: "View and complete requested services for " + (record.dogName || "this dog") + ".",
+    title: openCount
+      ? countdown + ". View and complete " + openCount + " requested service" + (openCount === 1 ? "" : "s") + " for " + (record.dogName || "this dog") + "."
+      : "All requested services are complete for " + (record.dogName || "this dog") + ".",
+    flag: countdown,
+    flagClass: dueInfo?.className || "is-service-pending",
   });
 }
 
@@ -3326,6 +3352,7 @@ function boardingServicesPopupHtml(record = {}, stay = {}) {
     : '<p class="service-warning-text">' + escapeHtml(stats.incompleteTasks.length + " service" + (stats.incompleteTasks.length === 1 ? " still needs" : "s still need") + " completion.") + '</p>';
   return '<section class="popup-record-section boarding-quick-popup" data-boarding-services-popup>'
     + boardingQuickPopupSummaryHtml(record, stay)
+    + '<div class="boarding-service-popup-deadline"><strong>Service deadline</strong>' + boardingStayServiceFlagHtml(record, stay) + '</div>'
     + completionMessage
     + boardingStayServiceTaskListHtml(record, stay, { actions: true })
     + '</section>';

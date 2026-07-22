@@ -9537,7 +9537,7 @@ function renderDashboard() {
     ["boardingServices", "Stay Services Due", metrics.boardingServiceDue.length, metrics.boardingServiceDue.length ? "Requested boarding stay services inside the 48-hour pickup window." : "No stay services due."],
     ["inHeat", "Females In Heat", metrics.inHeatDogs.length, metrics.inHeatDogs.map(ownedDogDisplayName).join(", ") || "None."],
     ["heatSoon", "Heat Expected Soon", metrics.heatSoonDogs.length, metrics.heatSoonDogs.map(ownedDogDisplayName).join(", ") || "None."],
-    ["careNotes", "Medical/Care Notes", metrics.medicalCareDogs.length, "Our Dogs with special care, medical, or behavior notes."],
+    ["careNotes", "Medical/Care Notes", metrics.medicalCareDogs.length, "Review care instructions, complete the listed care, and log today's outcome."],
     ["arrivals", "Arrivals today", metrics.arrivals.length, metrics.arrivals.join(", ") || "None scheduled."],
     ["departures", "Departures today", metrics.departures.length, metrics.departures.join(", ") || "None scheduled."],
     ["activeBoarders", "Active Boarders", metrics.currentBoarding.length, "Checked-in, in-kennel, ready for pickup, or current by stay dates."],
@@ -9771,6 +9771,40 @@ function dashboardOwnedDogNote(record = {}, category = "") {
   return record.generalCareNotes || record.notes || "";
 }
 
+function dashboardMedicalCareItems(record = {}) {
+  const candidates = [
+    ["Medical note", record.medicalNotes || record.medicalCareNotes, "Check the condition and record today's observation or treatment response."],
+    ["Behavior note", record.behaviorNotes, "Follow the handling guidance and record today's behavior."],
+    ["Special care", record.specialCare, "Complete the listed care instruction and record the outcome."],
+    ["General care", record.generalCareNotes || record.notes, "Review this instruction and record any change that the next handler needs to know."],
+  ];
+  const seen = new Set();
+  return candidates.filter(([, note]) => {
+    const key = String(note || "").trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function dashboardMedicalCareCardHtml(record = {}) {
+  const name = ownedDogDisplayName(record) || "Dog";
+  const items = dashboardMedicalCareItems(record);
+  const notes = items.length
+    ? items.map(([label, note, action]) => \`<div class="dashboard-care-note"><strong>\${escapeHtml(label)}</strong><p>\${escapeHtml(note)}</p><span>\${escapeHtml(action)}</span></div>\`).join("")
+    : '<div class="dashboard-care-note"><strong>Care review</strong><p>No detailed note is saved.</p><span>Confirm the dog\\'s current condition and log an update.</span></div>';
+  return \`<article class="record-card compact-record-card dashboard-detail-card dashboard-medical-care-card">
+    \${dashboardImagePreviewHtml(firstRecordImage(record), name)}
+    <div>
+      <strong>\${escapeHtml(name)}</strong>
+      <span>\${escapeHtml(record.careStatus || "Medical, behavior, or special-care review")}</span>
+      <div class="dashboard-care-note-list">\${notes}</div>
+      <div class="dashboard-care-next-step"><strong>Required follow-up</strong><span>Review the instructions, complete the applicable care, then log today's condition or response.</span></div>
+      <div class="record-actions"><button type="button" data-action="dashboard-log-medical-care" data-id="\${escapeHtml(record.id)}">Log Medical/Behavior Update</button></div>
+    </div>
+  </article>\`;
+}
+
 function dashboardOwnedDogCardHtml(record = {}, category = "Care") {
   const name = ownedDogDisplayName(record) || "Dog";
   return \`<article class="record-card compact-record-card clickable-card dashboard-detail-card" data-action="dashboard-open-owned" data-id="\${escapeHtml(record.id)}">
@@ -9875,6 +9909,7 @@ function dashboardDetailHtml(key) {
   if (key === "needsAction") return dashboardNeedsActionHtml(metrics);
   const records = dashboardDetailRecords(key);
   if (!records.length) return "<p>No open items in this category.</p>";
+  if (key === "careNotes") return records.map(dashboardMedicalCareCardHtml).join("");
   if (["exerciseDue", "trainingDue", "inHeat", "heatSoon", "careNotes", "vaccines"].includes(key)) {
     const categories = {
       exerciseDue: "Exercise",
@@ -12177,6 +12212,10 @@ function initEvents() {
     }
     if (action.dataset.action === "dashboard-quick-care") {
       openDashboardQuickCare(action.dataset.dogId, action.dataset.careType);
+      return;
+    }
+    if (action.dataset.action === "dashboard-log-medical-care") {
+      openDashboardQuickCare(action.dataset.id, "Medical/Behavior Note");
       return;
     }
     if (action.dataset.action === "view-medical-care") {
