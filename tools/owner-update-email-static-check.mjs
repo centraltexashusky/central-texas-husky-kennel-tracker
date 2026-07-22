@@ -22,7 +22,7 @@ if (!shared.includes('delivery.title')) failures.push("The owner-update popup do
 if (!shared.includes('delivery.reason')) failures.push("The owner-update popup does not display the delivery failure reason.");
 if (!main.includes('shared.js?v=20260722-scalable-record-loading')) failures.push("Shared notification handling is not cache-busted.");
 if (!main.includes('boarding.js?v=20260722-service-deadline-72h')) failures.push("Boarding owner-update handling is not cache-busted.");
-if (!index.includes('js/main.js?v=20260722-deterministic-auto-tasks')) failures.push("The production module entrypoint is not cache-busted.");
+if (!index.includes('js/main.js?v=20260722-authenticated-auto-task-sync')) failures.push("The production module entrypoint is not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

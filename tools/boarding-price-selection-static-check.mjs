@@ -53,7 +53,7 @@ const checks = [
     message: "main module must import the cache-busted boarding module.",
   },
   {
-    pass: index.includes("20260722-deterministic-auto-tasks"),
+    pass: index.includes("20260722-authenticated-auto-task-sync"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];

@@ -25,7 +25,7 @@ if (!main.includes('shared.js?v=20260722-scalable-record-loading')
   || !main.includes('auth.js?v=20260721-dog-show-nav-user-profile')
   || !main.includes('settings.js?v=20260721-dog-show-nav-user-profile')) failures.push("Changed user-profile modules are not cache-busted.");
 if (!index.includes('styles.css?v=20260721-dashboard-care-service-deadline')
-  || !index.includes('js/main.js?v=20260722-deterministic-auto-tasks')) failures.push("Production entry assets are not cache-busted.");
+  || !index.includes('js/main.js?v=20260722-authenticated-auto-task-sync')) failures.push("Production entry assets are not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

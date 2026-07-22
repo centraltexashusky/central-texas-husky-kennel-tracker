@@ -45,6 +45,17 @@ function scheduledCareAutoTaskId(sourceKey = "") {
     .replace(/=+$/g, "");
 }
 
+function scheduledCareTaskBackgroundSyncAllowed() {
+  if (localTestMode) return true;
+  return Boolean(
+    supabaseClient
+    && typeof helperIsLoggedIn === "function"
+    && helperIsLoggedIn()
+    && typeof isStaffRole === "function"
+    && isStaffRole()
+  );
+}
+
 var TASK_SCHEDULER_TYPES = [
   { key: "Bath", label: "Bath", className: "is-bath" },
   { key: "Treadmill", label: "Treadmill", className: "is-treadmill" },
@@ -182,6 +193,7 @@ async function completeScheduledCareTaskFromCareLog(task = {}, log = {}, dailyRe
 }
 
 async function syncScheduledCareTasksFromDailyRecord(record = {}, options = {}) {
+  if (!scheduledCareTaskBackgroundSyncAllowed()) return false;
   if (!record?.id || record.removed) return false;
   let changed = false;
   const logs = schedulerCareLogsForDailyRecord(record);
@@ -197,6 +209,7 @@ async function syncScheduledCareTasksFromDailyRecord(record = {}, options = {}) 
 }
 
 async function syncScheduledCareTasksFromDailyLogs(options = {}) {
+  if (!scheduledCareTaskBackgroundSyncAllowed()) return false;
   let changed = false;
   const records = readRecords("dailyTask")
     .filter((record) => !record.removed)
@@ -237,6 +250,7 @@ function dailyCareLogTaskCompletionSyncSourceSignature() {
 }
 
 function scheduleDailyCareLogTaskCompletionSync(renderAfterChange = true) {
+  if (!scheduledCareTaskBackgroundSyncAllowed()) return;
   const nextSignature = dailyCareLogTaskCompletionSyncSourceSignature();
   if (!dailyCareLogTaskCompletionSyncQueued && nextSignature && nextSignature === dailyCareLogTaskCompletionLastSignature) return;
   if (dailyCareLogTaskCompletionSyncQueued) return;
@@ -419,6 +433,7 @@ async function syncOwnedDogBathTask(dog = {}) {
 }
 
 async function syncOwnedDogBathTasks() {
+  if (!scheduledCareTaskBackgroundSyncAllowed()) return false;
   let changed = false;
   for (const dog of readRecords("ownedDog").filter((record) => !record.removed)) {
     changed = await syncOwnedDogBathTask(dog) || changed;
@@ -427,6 +442,7 @@ async function syncOwnedDogBathTasks() {
 }
 
 function scheduleOwnedDogBathTaskSync(renderAfterChange = true) {
+  if (!scheduledCareTaskBackgroundSyncAllowed()) return;
   const nextSignature = ownedDogBathTaskSyncSourceSignature();
   if (!ownedDogBathTaskSyncQueued && nextSignature && nextSignature === ownedDogBathTaskLastSyncSignature) return;
   if (ownedDogBathTaskSyncQueued) return;
@@ -1157,6 +1173,7 @@ async function syncBoardingServiceTasksForRecord(record = {}, options = {}) {
 }
 
 async function syncBoardingServiceTasks(options = {}) {
+  if (!scheduledCareTaskBackgroundSyncAllowed()) return false;
   let changed = false;
   const records = consolidatedBoardingDogRecords(readRecords("boardingDog").filter((record) => !record.removed));
   for (const record of records) {
@@ -1167,6 +1184,7 @@ async function syncBoardingServiceTasks(options = {}) {
 }
 
 function scheduleBoardingServiceTaskSync(renderAfterChange = true) {
+  if (!scheduledCareTaskBackgroundSyncAllowed()) return;
   const nextSignature = boardingServiceTaskSyncSourceSignature();
   if (!boardingServiceTaskSyncQueued && nextSignature && nextSignature === boardingServiceTaskLastSyncSignature) return;
   if (boardingServiceTaskSyncQueued) return;
