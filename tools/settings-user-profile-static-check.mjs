@@ -21,11 +21,11 @@ if (!shared.includes('record.name = requestedName;')) failures.push("Duplicate-p
 if (!shared.includes("settingsUserPayloadBelongsToCurrentSession(record)")) failures.push("Saving the signed-in user does not refresh the active session name.");
 if (!styles.includes(".dog-show-desktop-nav button {\n  background: #69788B;")) failures.push("Inactive desktop Dog Show tabs are not explicitly grey.");
 if (!styles.includes(".dog-show-desktop-nav button.is-active {\n  background: var(--tint-blue-strong);")) failures.push("The selected desktop Dog Show tab is not explicitly blue.");
-if (!main.includes('shared.js?v=20260721-dashboard-care-actions')
+if (!main.includes('shared.js?v=20260722-scalable-record-loading')
   || !main.includes('auth.js?v=20260721-dog-show-nav-user-profile')
   || !main.includes('settings.js?v=20260721-dog-show-nav-user-profile')) failures.push("Changed user-profile modules are not cache-busted.");
 if (!index.includes('styles.css?v=20260721-dashboard-care-service-deadline')
-  || !index.includes('js/main.js?v=20260722-service-deadline-hours')) failures.push("Production entry assets are not cache-busted.");
+  || !index.includes('js/main.js?v=20260722-deterministic-auto-tasks')) failures.push("Production entry assets are not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

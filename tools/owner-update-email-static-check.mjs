@@ -20,9 +20,9 @@ if (!boarding.includes("boardingCustomerUpdateDeliverySummary(notification)")) f
 if (!boarding.includes("ownerUpdateNotification: notification")) failures.push("Owner-update callers cannot inspect the email delivery result.");
 if (!shared.includes('delivery.title')) failures.push("The owner-update popup does not display the actual delivery outcome.");
 if (!shared.includes('delivery.reason')) failures.push("The owner-update popup does not display the delivery failure reason.");
-if (!main.includes('shared.js?v=20260721-dashboard-care-actions')) failures.push("Shared notification handling is not cache-busted.");
-if (!main.includes('boarding.js?v=20260722-service-deadline-hours')) failures.push("Boarding owner-update handling is not cache-busted.");
-if (!index.includes('js/main.js?v=20260722-service-deadline-hours')) failures.push("The production module entrypoint is not cache-busted.");
+if (!main.includes('shared.js?v=20260722-scalable-record-loading')) failures.push("Shared notification handling is not cache-busted.");
+if (!main.includes('boarding.js?v=20260722-service-deadline-72h')) failures.push("Boarding owner-update handling is not cache-busted.");
+if (!index.includes('js/main.js?v=20260722-deterministic-auto-tasks')) failures.push("The production module entrypoint is not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

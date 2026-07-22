@@ -85,12 +85,12 @@ const checks = [
   },
   {
     path: "js/main.js",
-    includes: "20260721-dashboard-care-actions",
+    includes: "20260722-deterministic-auto-tasks",
     message: "main module cache key must be bumped for profile thumbnail loading.",
   },
   {
     path: "index.html",
-    includes: "20260722-service-deadline-hours",
+    includes: "20260722-deterministic-auto-tasks",
     message: "top-level script cache key must include the latest deployment token.",
   },
 ];

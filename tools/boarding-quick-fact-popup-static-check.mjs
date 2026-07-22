@@ -15,6 +15,7 @@ if (!boarding.includes('boardingStayServiceTaskListHtml(record, stay, { actions:
 if (!boarding.includes('>Complete</button>')) failures.push("Requested service actions do not use the requested Complete label.");
 if (!boarding.includes('function boardingServiceCountdownLabel')) failures.push("Requested services do not calculate a pickup countdown label.");
 if (!boarding.includes('return "Due in " + hoursRemaining + "h";')) failures.push("Requested services do not keep pickup countdowns in hours.");
+if (!boarding.includes('if (hoursRemaining > 72) return "";')) failures.push("Future service countdowns are not hidden until the 72-hour action window.");
 if (boarding.includes('Math.ceil(hoursRemaining / 24) + "d"')) failures.push("Requested services still convert pickup countdowns to days.");
 if (!boarding.includes('flag: countdown')) failures.push("Requested services do not expose the countdown on the boarding card.");
 if (!boarding.includes('boarding-service-popup-deadline')) failures.push("Requested services popup does not explain the service deadline.");
@@ -24,8 +25,8 @@ if (!shared.includes('action.closest("[data-boarding-services-popup]")')) failur
 if (!shared.includes('openBoardingServicesPopup(updated, reference)')) failures.push("Services popup is not refreshed after completion.");
 if (!styles.includes('#detailDialog:has(.boarding-quick-popup)')) failures.push("Quick-fact popups are not constrained to a compact width.");
 if (!styles.includes('.boarding-mobile-fact-flag')) failures.push("Requested services countdown badge is not styled.");
-if (!main.includes('boarding.js?v=20260722-service-deadline-hours')) failures.push("Boarding module cache key was not updated.");
-if (!index.includes('js/main.js?v=20260722-service-deadline-hours')) failures.push("Application entrypoint cache key was not updated.");
+if (!main.includes('boarding.js?v=20260722-service-deadline-72h')) failures.push("Boarding module cache key was not updated.");
+if (!index.includes('js/main.js?v=20260722-deterministic-auto-tasks')) failures.push("Application entrypoint cache key was not updated.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

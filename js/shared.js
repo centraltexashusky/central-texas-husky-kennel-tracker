@@ -202,7 +202,9 @@ var impersonationSession = null;
 var supabaseClient = null;
 var recordCache = {};
 var recordRevision = {};
+var remoteTypesFullyLoadedInMemory = new Set();
 var localStorageQuotaCleanupAttempted = false;
+var memoryOnlyRecordCacheWarnings = new Set();
 var boardingDogConsolidationCache = { signature: "", result: [] };
 var remoteLoadPromise = null;
 var remoteLoadActiveTypes = new Set();
@@ -211,6 +213,13 @@ var remoteLoadQueuedRender = false;
 var remoteLoadQueuedPageId = "";
 var lastRemoteRecordsSignatureByRequest = new Map();
 var lastRemoteRecordFetchModesByType = new Map();
+var scheduledCareTaskRemoteWindowStart = "";
+var scheduledCareTaskRemoteWindowEnd = "";
+var scheduledCareTaskWindowRequestSequence = 0;
+var boardingDogFullHistoryLoaded = false;
+var boardingDogRemoteTotalCount = 0;
+var boardingDogHistoryLoadPromise = null;
+var boardingDogHistorySearchTimer = null;
 var remoteLoadRequestSequence = 0;
 var activePageRemoteLoadTimer = null;
 var activePageRemoteLoadLastKey = "";
@@ -1176,6 +1185,9 @@ function syncMetaForType(type = "") {
 
 function deltaSinceUpdatedAtForType(type = "", options = {}) {
   if (options.fullRefresh === true || options.delta === false) return "";
+  // Production record collections are intentionally memory-only. A delta is
+  // safe only after this tab has completed a full load for the record type.
+  if (!remoteTypesFullyLoadedInMemory.has(type)) return "";
   const lastRemoteUpdatedAt = normalizeIsoTimestamp(syncMetaForType(type).lastRemoteUpdatedAt || "");
   if (!lastRemoteUpdatedAt) return "";
   return new Date(Math.max(0, Date.parse(lastRemoteUpdatedAt) - SYNC_DELTA_OVERLAP_MS)).toISOString();
@@ -1278,6 +1290,7 @@ function readRecords(type) {
   const cached = recordCache[type];
   try {
     if (!key) return [];
+    if (cached?.memoryOnly && Array.isArray(cached.records)) return cached.records.map(cloneCachedRecord);
     let raw = "[]";
     try {
       raw = localStorage.getItem(key) || "[]";
@@ -1286,7 +1299,6 @@ function readRecords(type) {
       console.warn("Local browser storage read failed.", error);
       return [];
     }
-    if (cached?.memoryOnly && Array.isArray(cached.records)) return cached.records.map(cloneCachedRecord);
     if (cached?.raw === raw) return cached.records.map(cloneCachedRecord);
     let parsed = [];
     try {
@@ -1406,14 +1418,32 @@ function writeRecords(type, records) {
   const compactedRecords = compactRecordsForStorage(records, type);
   try {
     try {
-      const raw = JSON.stringify(compactedRecords);
-      const storageSaved = safeLocalStorageSetItem(stateKeys[type], raw, { quiet: true });
-      if (!storageSaved) {
-        console.warn(
-          "Record cache for " + type + " is using memory only because this device's browser storage is full.",
-        );
+      const productionMemoryOnly = Boolean(supabaseClient && !localTestMode);
+      const raw = productionMemoryOnly ? "" : JSON.stringify(compactedRecords);
+      let storageSaved = false;
+      if (productionMemoryOnly) {
+        // Supabase is the durable source of truth. Persisting complete record
+        // collections duplicated the database in localStorage and eventually
+        // exhausted the browser's small origin quota.
+        try {
+          localStorage.removeItem(stateKeys[type]);
+        } catch (error) {
+          console.warn("Could not remove a legacy local record cache.", error);
+        }
+      } else {
+        storageSaved = safeLocalStorageSetItem(stateKeys[type], raw, { quiet: true });
+        if (!storageSaved && !memoryOnlyRecordCacheWarnings.has(type)) {
+          memoryOnlyRecordCacheWarnings.add(type);
+          console.warn(
+            "Record cache for " + type + " is using memory only because this device's browser storage is full.",
+          );
+        }
       }
-      recordCache[type] = { raw, records: compactedRecords.map(cloneCachedRecord), memoryOnly: !storageSaved };
+      recordCache[type] = {
+        raw,
+        records: compactedRecords.map(cloneCachedRecord),
+        memoryOnly: productionMemoryOnly || !storageSaved,
+      };
       recordRevision[type] = (recordRevision[type] || 0) + 1;
       if (type === "boardingDog" || type === "customerDog") invalidateBoardingDogConsolidationCache();
       return compactedRecords;
@@ -2294,9 +2324,32 @@ function clearLocalRecordCaches() {
   lastRemoteRecordsSignature = null;
   lastRemoteRecordsSignatureByRequest.clear();
   lastRemoteRecordFetchModesByType.clear();
+  remoteTypesFullyLoadedInMemory.clear();
+  scheduledCareTaskRemoteWindowStart = "";
+  scheduledCareTaskRemoteWindowEnd = "";
+  boardingDogFullHistoryLoaded = false;
+  boardingDogRemoteTotalCount = 0;
   lastRemoteLoadFinishedAt = 0;
   lastSuccessfulRemoteLoadFinishedAt = 0;
   clearSyncMetaForCurrentScope();
+}
+
+function prepareProductionMemoryRecordCache() {
+  if (localTestMode || !supabaseClient) return;
+  boardingDogFullHistoryLoaded = false;
+  boardingDogRemoteTotalCount = 0;
+  uniqueRemoteRecordTypes([...recordTypes(), TASK_TEMPLATE_RECORD_TYPE]).forEach((type) => {
+    const key = stateKeys[type];
+    if (!key) return;
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn("Could not remove legacy " + type + " browser cache.", error);
+    }
+    if (recordCache[type]?.records) {
+      recordCache[type] = { ...recordCache[type], raw: "", memoryOnly: true };
+    }
+  });
 }
 
 async function clearLocalAppCache() {
@@ -2306,6 +2359,7 @@ async function clearLocalAppCache() {
     clearLocalRecordCaches();
     clearOptionalLocalStorageCaches();
     localStorageQuotaCleanupAttempted = false;
+    memoryOnlyRecordCacheWarnings.clear();
     renderAllRecords({ activeOnly: true });
     if (helperIsLoggedIn() && supabaseClient && !localTestMode) {
       await loadRemoteRecords({ render: true, pageId });
@@ -4852,6 +4906,43 @@ function scheduleRealtimeRender(types = []) {
   }, 250);
 }
 
+function scheduledCareTaskRemoteWindow(anchorDate = "") {
+  const anchor = dateOnly(anchorDate || (typeof taskSchedulerAnchorDate !== "undefined" ? taskSchedulerAnchorDate : "") || todayDate()) || todayDate();
+  return {
+    start: addDays(anchor, -45),
+    end: addDays(anchor, 62),
+  };
+}
+
+function scheduledCareTaskDateIsLoaded(date = "") {
+  const taskDate = dateOnly(date);
+  if (!taskDate || localTestMode || !supabaseClient) return true;
+  if (!scheduledCareTaskRemoteWindowStart || !scheduledCareTaskRemoteWindowEnd) return false;
+  return taskDate >= scheduledCareTaskRemoteWindowStart && taskDate <= scheduledCareTaskRemoteWindowEnd;
+}
+
+function scheduledCareTaskWindowCoversAnchor(anchorDate = "") {
+  const anchor = dateOnly(anchorDate);
+  if (!anchor || !scheduledCareTaskRemoteWindowStart || !scheduledCareTaskRemoteWindowEnd) return false;
+  return anchor >= addDays(scheduledCareTaskRemoteWindowStart, 14)
+    && anchor <= addDays(scheduledCareTaskRemoteWindowEnd, -14);
+}
+
+async function refreshScheduledCareTaskWindow(anchorDate = "") {
+  if (localTestMode || !supabaseClient || scheduledCareTaskWindowCoversAnchor(anchorDate)) return;
+  const requestId = ++scheduledCareTaskWindowRequestSequence;
+  if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
+  if (requestId !== scheduledCareTaskWindowRequestSequence) return;
+  return loadRemoteRecords({
+    types: ["scheduledCareTask"],
+    pageId: "taskSchedulerPage",
+    scheduledCareTaskAnchorDate: anchorDate,
+    fullRefresh: true,
+    showLoader: false,
+    quiet: true,
+  });
+}
+
 async function fetchRemoteRecordRowsForType(type, options = {}) {
   const mark = efficiencyPerfStart(\`fetchRemoteRecordRowsForType:\${type}\`, { minMs: 1 });
   const pageSize = 1000;
@@ -4859,6 +4950,34 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
   let from = 0;
   const sinceUpdatedAt = normalizeIsoTimestamp(options.sinceUpdatedAt || "");
   try {
+    if (type === "boardingDog" && options.boardingActiveOnly === true) {
+      const { data, error } = await supabaseClient.rpc("kennel_active_boarding_records", {
+        p_since_updated_at: sinceUpdatedAt || null,
+      });
+      if (error) throw error;
+      const scopedRows = data || [];
+      const reportedTotal = Number(scopedRows[0]?.total_count || 0);
+      if (Number.isFinite(reportedTotal)) boardingDogRemoteTotalCount = Math.max(boardingDogRemoteTotalCount, reportedTotal);
+      scopedRows.forEach((row) => {
+        if (row && Object.prototype.hasOwnProperty.call(row, "total_count")) delete row.total_count;
+      });
+      rows.push(...scopedRows);
+      lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "scoped-full");
+      return rows;
+    }
+    if (type === "scheduledCareTask") {
+      const windowBounds = scheduledCareTaskRemoteWindow(options.scheduledCareTaskAnchorDate || "");
+      const { data, error } = await supabaseClient.rpc("kennel_scheduled_care_tasks_window", {
+        p_start_date: windowBounds.start,
+        p_end_date: windowBounds.end,
+        p_since_updated_at: sinceUpdatedAt || null,
+      });
+      if (error) throw error;
+      rows.push(...(data || []));
+      scheduledCareTaskRemoteWindowStart = windowBounds.start;
+      scheduledCareTaskRemoteWindowEnd = windowBounds.end;
+      return rows;
+    }
     while (true) {
       let query = supabaseClient
         .from("kennel_records")
@@ -4871,7 +4990,13 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
         .range(from, from + pageSize - 1);
       if (error) throw error;
       rows.push(...(data || []));
-      if (!data || data.length < pageSize) return rows;
+      if (!data || data.length < pageSize) {
+        if (type === "boardingDog") {
+          boardingDogFullHistoryLoaded = true;
+          boardingDogRemoteTotalCount = rows.length;
+        }
+        return rows;
+      }
       from += pageSize;
     }
   } finally {
@@ -4896,7 +5021,14 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
       try {
         const sinceUpdatedAt = deltaSinceUpdatedAtForType(type, options);
         lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "full");
-        return await withTimeout(fetchRemoteRecordRowsForType(type, { sinceUpdatedAt }), REMOTE_TYPE_LOAD_TIMEOUT_MS, \`Remote \${type} records load\`);
+        return await withTimeout(fetchRemoteRecordRowsForType(type, {
+          sinceUpdatedAt,
+          scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
+          boardingActiveOnly: type === "boardingDog"
+            && options.pageId === "boardingDogsPage"
+            && options.boardingFullHistory !== true
+            && !boardingDogFullHistoryLoaded,
+        }), REMOTE_TYPE_LOAD_TIMEOUT_MS, \`Remote \${type} records load\`);
       } catch (error) {
         lastRemoteRecordFetchFailedTypes.add(type);
         console.warn(\`Remote \${type} records could not load.\`, error);
@@ -5036,6 +5168,33 @@ function remoteLoadShouldRenderActivePage(options = {}, loadedRemoteTypes = [], 
   return currentPageTypes.length > 0 && currentPageTypes.every((type) => loadedTypes.has(type));
 }
 
+async function loadBoardingDogHistoryRecords() {
+  if (localTestMode || !supabaseClient || boardingDogFullHistoryLoaded) return;
+  if (boardingDogHistoryLoadPromise) return boardingDogHistoryLoadPromise;
+  boardingDogHistoryLoadPromise = (async () => {
+    if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
+    if (boardingDogFullHistoryLoaded) return;
+    setAppPageLoading("boardingDogsPage", true, "Loading boarding history");
+    try {
+      await loadRemoteRecords({
+        types: ["boardingDog"],
+        pageId: "boardingDogsPage",
+        boardingFullHistory: true,
+        fullRefresh: true,
+        showLoader: false,
+        quiet: true,
+      });
+    } finally {
+      setAppPageLoading("boardingDogsPage", false);
+    }
+  })();
+  try {
+    return await boardingDogHistoryLoadPromise;
+  } finally {
+    boardingDogHistoryLoadPromise = null;
+  }
+}
+
 async function loadRemoteRecords(options = {}) {
   const mark = efficiencyPerfStart("loadRemoteRecords");
   if (localTestMode || !supabaseClient) {
@@ -5086,9 +5245,17 @@ async function loadRemoteRecords(options = {}) {
   let loadPromise = null;
   loadPromise = (async () => {
     try {
-      const data = await withTimeout(fetchRemoteRecordRows(requestedRemoteTypes, { delta: deltaLoad }), REMOTE_LOAD_STALE_MS, "Remote record load");
+      const data = await withTimeout(fetchRemoteRecordRows(requestedRemoteTypes, {
+        delta: deltaLoad,
+        pageId: loadingPageId,
+        boardingFullHistory: options.boardingFullHistory === true,
+        scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
+      }), REMOTE_LOAD_STALE_MS, "Remote record load");
       const failedRemoteTypes = new Set(lastRemoteRecordFetchFailedTypes || []);
       const loadedRemoteTypes = requestedRemoteTypes.filter((type) => !failedRemoteTypes.has(type));
+      loadedRemoteTypes.forEach((type) => {
+        if (["full", "scoped-full"].includes(lastRemoteRecordFetchModesByType.get(type))) remoteTypesFullyLoadedInMemory.add(type);
+      });
       if (!loadedRemoteTypes.length) {
         updateSyncMetaForLoad(requestedRemoteTypes, data || [], failedRemoteTypes, { delta: deltaLoad });
         throw appTimeoutError("Remote record load");
@@ -13378,13 +13545,24 @@ function initEvents() {
     await removeOwnedLog(button.dataset.id);
   });
 
-  $("#boardingDogSearch").addEventListener("input", renderBoardingDogs);
-  $("#boardingDogRosterTabs")?.addEventListener("click", (event) => {
+  $("#boardingDogSearch").addEventListener("input", () => {
+    renderBoardingDogs();
+    if (boardingDogHistorySearchTimer) window.clearTimeout(boardingDogHistorySearchTimer);
+    if (!$("#boardingDogSearch").value.trim() || boardingDogFullHistoryLoaded || localTestMode || !supabaseClient) return;
+    boardingDogHistorySearchTimer = window.setTimeout(() => {
+      boardingDogHistorySearchTimer = null;
+      loadBoardingDogHistoryRecords().catch((error) => console.warn("Boarding history search load failed.", error));
+    }, 350);
+  });
+  $("#boardingDogRosterTabs")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-boarding-filter]");
     if (!button) return;
     boardingDogRosterFilter = button.dataset.boardingFilter;
     boardingDogPriorityFilter = "";
     renderBoardingDogs();
+    if (boardingDogRosterFilter === "All Boarding Dogs" && !boardingDogFullHistoryLoaded) {
+      await loadBoardingDogHistoryRecords();
+    }
   });
   $("#boardingViewToggle")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-view]");
@@ -14548,7 +14726,9 @@ function switchPage(pageId, options = {}) {
     pageId = pageAllowed(fallback) ? fallback : "loginPage";
   }
   if (helperIsLoggedIn() && pageId !== "loginPage") {
-    localStorage.setItem(stateKeys.lastPage, pageId);
+    // Navigation must keep working when large record caches fill browser storage.
+    // Remembering the last page is optional, so fall back silently for this session.
+    safeLocalStorageSetItem(stateKeys.lastPage, pageId, { quiet: true });
     updateAppPageHistory(pageId, historyMode);
   } else if (pageId === "loginPage") {
     updateAppPageHistory(pageId, historyMode);

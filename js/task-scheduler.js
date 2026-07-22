@@ -31,6 +31,20 @@ var boardingServiceTaskLastSyncSignature = "";
 var dailyCareLogTaskCompletionSyncQueued = false;
 var dailyCareLogTaskCompletionLastSignature = "";
 
+function scheduledCareAutoTaskId(sourceKey = "") {
+  const value = String(sourceKey || "").trim();
+  if (!value) return uid("scheduledCareTask");
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return "scheduledCareTask-auto-" + btoa(binary)
+    .split("+").join("-")
+    .split("/").join("_")
+    .replace(/=+$/g, "");
+}
+
 var TASK_SCHEDULER_TYPES = [
   { key: "Bath", label: "Bath", className: "is-bath" },
   { key: "Treadmill", label: "Treadmill", className: "is-treadmill" },
@@ -284,10 +298,11 @@ function existingOwnedDogBathTaskOnDate(dog = {}, date = "", excludeId = "") {
 function ownedDogNextBathTaskPayload(dog = {}, existing = {}) {
   const { clean, lastBath, intervalDays, nextBathDate } = ownedDogNextBathTaskSchedule(dog);
   const now = new Date().toISOString();
+  const sourceKey = ownedDogNextBathTaskKey(clean);
   return {
     ...existing,
     type: "scheduledCareTask",
-    id: existing.id || uid("scheduledCareTask"),
+    id: existing.id || scheduledCareAutoTaskId(sourceKey),
     submittedAt: existing.submittedAt || now,
     createdAt: existing.createdAt || now,
     updatedAt: now,
@@ -317,7 +332,7 @@ function ownedDogNextBathTaskPayload(dog = {}, existing = {}) {
     source: OWNED_DOG_NEXT_BATH_TASK_SOURCE,
     sourceType: "ownedDog",
     sourceDogId: clean.id,
-    sourceKey: ownedDogNextBathTaskKey(clean),
+    sourceKey,
     sourceLastBath: lastBath,
     sourceBathIntervalDays: intervalDays,
     sourceBathDate: nextBathDate,
@@ -355,6 +370,7 @@ async function syncOwnedDogBathTask(dog = {}) {
   if (!nextBathDate || clean.removed) {
     return retireDuplicateOwnedDogNextBathTasks(clean, "");
   }
+  if (typeof scheduledCareTaskDateIsLoaded === "function" && !scheduledCareTaskDateIsLoaded(nextBathDate)) return false;
   if (existingAutoTask && lastBath && dateOnly(existingAutoTask.date || "") === dateOnly(lastBath)) {
     const bathLog = latestOwnedDogBathLogForDate(clean, lastBath) || {};
     await completeScheduledCareTaskFromCareLog(existingAutoTask, {
@@ -764,6 +780,7 @@ function boardingStayMilestoneCompletion(record = {}, stay = {}, milestone = {},
 function boardingStayMilestoneScheduledTaskPayload(record = {}, stay = {}, milestone = {}, existing = {}) {
   const now = new Date().toISOString();
   const requestCode = typeof boardingStayRequestCode === "function" ? boardingStayRequestCode(record, stay) : stay.requestCode || "";
+  const sourceKey = boardingStayMilestoneSourceKey(record, stay, milestone.type);
   const plannedDate = dateOnly(milestone.dateTime);
   const plannedStartTime = taskSchedulerTimeFromDateTime(milestone.dateTime, "09:00");
   const manual = Boolean(existing.sourceManualOverride);
@@ -777,7 +794,7 @@ function boardingStayMilestoneScheduledTaskPayload(record = {}, stay = {}, miles
   return {
     ...existing,
     type: "scheduledCareTask",
-    id: existing.id || uid("scheduledCareTask"),
+    id: existing.id || scheduledCareAutoTaskId(sourceKey),
     submittedAt: existing.submittedAt || now,
     createdAt: existing.createdAt || now,
     updatedAt: now,
@@ -811,7 +828,7 @@ function boardingStayMilestoneScheduledTaskPayload(record = {}, stay = {}, miles
     sourceRequestCode: requestCode,
     sourceMilestoneType: milestone.type,
     sourceMilestoneDateTime: milestone.dateTime || "",
-    sourceKey: boardingStayMilestoneSourceKey(record, stay, milestone.type),
+    sourceKey,
     sourceManualOverride: manual,
     confirmationStatus: "",
     pendingReason: "",
@@ -888,7 +905,7 @@ function boardingServiceScheduledTaskPayload(record = {}, stay = {}, serviceTask
   return {
     ...existing,
     type: "scheduledCareTask",
-    id: existing.id || uid("scheduledCareTask"),
+    id: existing.id || scheduledCareAutoTaskId(sourceKey),
     submittedAt: existing.submittedAt || now,
     createdAt: existing.createdAt || now,
     updatedAt: now,
@@ -1002,6 +1019,8 @@ async function syncBoardingStayMilestoneTasksForRecord(record = {}, options = {}
   arrayValue(displayRecord.stays).forEach((stay) => {
     if (!boardingServiceTaskStayIsSchedulable(displayRecord, stay)) return;
     boardingStayMilestoneDefinitions(displayRecord, stay).forEach((milestone) => {
+      const milestoneDate = dateOnly(milestone.dateTime);
+      if (typeof scheduledCareTaskDateIsLoaded === "function" && !scheduledCareTaskDateIsLoaded(milestoneDate)) return;
       const sourceKey = boardingStayMilestoneSourceKey(displayRecord, stay, milestone.type);
       if (!sourceKey) return;
       desiredKeys.add(sourceKey);
@@ -1073,6 +1092,8 @@ async function syncBoardingServiceTasksForRecord(record = {}, options = {}) {
           ? boardingServiceTaskUnitSourceKey(displayRecord, stay, serviceTask, unitIndex)
           : "";
         if (!sourceKey) return;
+        const plannedDate = boardingServiceTaskDateForUnit(displayRecord, stay, serviceTask, unitIndex);
+        if (typeof scheduledCareTaskDateIsLoaded === "function" && !scheduledCareTaskDateIsLoaded(plannedDate)) return;
         desiredKeys.add(sourceKey);
         const candidates = uniqueScheduledCareTasks([
           ...activeBoardingServiceAutoTasks(sourceKey),
@@ -2270,14 +2291,17 @@ function setupTaskSchedulerEventListeners() {
   $("#taskSchedulerTodayButton")?.addEventListener("click", () => {
     taskSchedulerAnchorDate = todayDate();
     renderTaskScheduler();
+    if (typeof refreshScheduledCareTaskWindow === "function") refreshScheduledCareTaskWindow(taskSchedulerAnchorDate);
   });
   $("#taskSchedulerPrevButton")?.addEventListener("click", () => {
     taskSchedulerAnchorDate = taskSchedulerView === "month" ? addMonths(taskSchedulerAnchorDate, -1) : addDays(taskSchedulerAnchorDate, taskSchedulerView === "day" ? -1 : -7);
     renderTaskScheduler();
+    if (typeof refreshScheduledCareTaskWindow === "function") refreshScheduledCareTaskWindow(taskSchedulerAnchorDate);
   });
   $("#taskSchedulerNextButton")?.addEventListener("click", () => {
     taskSchedulerAnchorDate = taskSchedulerView === "month" ? addMonths(taskSchedulerAnchorDate, 1) : addDays(taskSchedulerAnchorDate, taskSchedulerView === "day" ? 1 : 7);
     renderTaskScheduler();
+    if (typeof refreshScheduledCareTaskWindow === "function") refreshScheduledCareTaskWindow(taskSchedulerAnchorDate);
   });
 
   page.addEventListener("click", async (event) => {
@@ -2360,18 +2384,21 @@ function setupTaskSchedulerEventListeners() {
     if (action.dataset.action === "task-scheduler-jump-date") {
       taskSchedulerAnchorDate = action.dataset.date;
       renderTaskScheduler();
+      if (typeof refreshScheduledCareTaskWindow === "function") refreshScheduledCareTaskWindow(taskSchedulerAnchorDate);
       return;
     }
 
     if (action.dataset.action === "task-scheduler-mini-prev") {
       taskSchedulerAnchorDate = addMonths(taskSchedulerAnchorDate, -1);
       renderTaskScheduler();
+      if (typeof refreshScheduledCareTaskWindow === "function") refreshScheduledCareTaskWindow(taskSchedulerAnchorDate);
       return;
     }
 
     if (action.dataset.action === "task-scheduler-mini-next") {
       taskSchedulerAnchorDate = addMonths(taskSchedulerAnchorDate, 1);
       renderTaskScheduler();
+      if (typeof refreshScheduledCareTaskWindow === "function") refreshScheduledCareTaskWindow(taskSchedulerAnchorDate);
       return;
     }
 

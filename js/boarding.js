@@ -2622,6 +2622,9 @@ function renderBoardingRosterTabs(records = []) {
     acc[filter] = records.filter((record) => boardingDogMatchesRosterFilter(record, filter)).length;
     return acc;
   }, {});
+  if (!boardingDogFullHistoryLoaded && boardingDogRemoteTotalCount > counts["All Boarding Dogs"]) {
+    counts["All Boarding Dogs"] = boardingDogRemoteTotalCount;
+  }
   container.innerHTML = filters
     .map((filter) => {
       const active = filter === boardingDogRosterFilter;
@@ -3235,6 +3238,7 @@ function boardingServiceCountdownLabel(dueInfo = null) {
   const hoursRemaining = Number(dueInfo.hoursRemaining);
   if (!Number.isFinite(hoursRemaining)) return dueInfo.className === "is-service-overdue" ? "Overdue" : "Before pickup";
   if (hoursRemaining <= 0) return "Overdue";
+  if (hoursRemaining > 72) return "";
   return "Due in " + hoursRemaining + "h";
 }
 
@@ -3257,7 +3261,7 @@ function boardingQuickServiceFact(record = {}, stay = {}) {
     action: "open-boarding-services",
     attrs: ' data-id="' + escapeHtml(record.id || "") + '"' + boardingStayDataAttrs(record, stay),
     title: openCount
-      ? countdown + ". View and complete " + openCount + " requested service" + (openCount === 1 ? "" : "s") + " for " + (record.dogName || "this dog") + "."
+      ? (countdown ? countdown + ". " : "") + "View and complete " + openCount + " requested service" + (openCount === 1 ? "" : "s") + " for " + (record.dogName || "this dog") + "."
       : "All requested services are complete for " + (record.dogName || "this dog") + ".",
     flag: countdown,
     flagClass: dueInfo?.className || "is-service-pending",

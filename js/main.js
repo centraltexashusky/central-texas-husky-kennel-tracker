@@ -1,11 +1,11 @@
 // === MODULE: MAIN ===
 import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
-import "./shared.js?v=20260721-dashboard-care-actions";
+import "./shared.js?v=20260722-scalable-record-loading";
 import "./auth.js?v=20260721-dog-show-nav-user-profile";
 import "./customer.js?v=20260720-canonical-customer-profiles";
-import "./boarding.js?v=20260722-service-deadline-hours";
+import "./boarding.js?v=20260722-service-deadline-72h";
 import "./daily.js?v=20260715-dog-show-rosette-home";
-import "./task-scheduler.js?v=20260628-our-dogs-filter-info-boarding-rows-task-scheduler-visibility-dedupe";
+import "./task-scheduler.js?v=20260722-deterministic-auto-tasks";
 import "./dog-show.js?v=20260720-dog-show-progress";
 import "./timesheet.js?v=20260709-staff-payroll-financials";
 import "./settings.js?v=20260721-dog-show-nav-user-profile";
