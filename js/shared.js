@@ -2637,11 +2637,19 @@ function upsertRecord(type, payload) {
     const sameEmailUsers = records.filter((item) => !item.removed && normalizeEmail(item.email) === email);
     if (sameEmailUsers.length) {
       const explicitExistingUserEdit = Boolean(record.id && sameEmailUsers.some((item) => item.id === record.id));
+      const requestedName = String(record.name || "").trim();
       const requestedRole = record.role || "";
       const requestedMember = record.isMember;
+      const requestedHourlyRate = record.hourlyRate;
       record = mergeSettingsUserRecords(sameEmailUsers, record);
+      if (explicitExistingUserEdit && Object.prototype.hasOwnProperty.call(payload, "name")) {
+        record.name = requestedName;
+      }
       if (explicitExistingUserEdit && requestedRole) {
         record.role = requestedRole;
+      }
+      if (explicitExistingUserEdit && Object.prototype.hasOwnProperty.call(payload, "hourlyRate")) {
+        record.hourlyRate = isStaffRole(record.role) ? requestedHourlyRate : "";
       }
       if (explicitExistingUserEdit && Object.prototype.hasOwnProperty.call(payload, "isMember")) {
         record.isMember = requestedMember === true || requestedMember === "true" || requestedMember === "on";
@@ -11967,6 +11975,14 @@ function initEvents() {
       const record = await saveSettingsUserProfile({}, settingsPopupForm);
       if (record) {
         await addAuditLog(wasExisting ? "Updated user" : "Created user", "settingsUser", record, roleLabel(record.role));
+        if (settingsUserPayloadBelongsToCurrentSession(record)) {
+          setHelper({
+            ...currentUser,
+            ...record,
+            key: currentUser?.key || record.authId || record.id,
+            authProvider: currentUser?.authProvider || record.authProvider,
+          }, { switchAfterLogin: false });
+        }
         showDetailDialog("User Saved", \`<p>\${escapeHtml(record.name || record.email)} has been saved.</p>\`);
       }
       return;

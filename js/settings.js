@@ -1851,13 +1851,14 @@ function settingsUserLastLoginText(user = {}) {
 function settingsUserPopupHtml(user = {}) {
   const isEdit = Boolean(user.id);
   const canImpersonate = isEdit && currentRole() === "admin" && normalizeEmail(user.email) !== normalizeEmail(currentUser?.email);
+  const showPayrollFields = isStaffRole(user.role || "customer");
   const latestAgreement = user.latestBoardingAgreement || {};
   const agreementCard = isEdit && latestAgreement.signedAt
     ? \`<article class="record-card compact-record-card settings-user-login-card"><span>Boarding Agreement</span><strong>Signed \${escapeHtml(formatDateTime(latestAgreement.signedAt) || latestAgreement.signedAt)}</strong><p>\${escapeHtml([latestAgreement.signerName || user.name || "", latestAgreement.agreementVersion ? "Version " + latestAgreement.agreementVersion : ""].filter(Boolean).join(" | "))}</p>\${latestAgreement.id ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="view-settings-user-agreement" data-id="\${escapeHtml(latestAgreement.id)}">Open Agreement</button></div>\` : ""}</article>\`
     : "";
   return \`
     <form id="settingsUserPopupForm" class="tracker-form" data-user-id="\${escapeHtml(user.id || "")}">
-      <input type="hidden" name="id" value="\${escapeHtml(user.id || "")}" />
+      <input type="hidden" name="recordId" value="\${escapeHtml(user.id || "")}" />
       <article class="record-card compact-record-card settings-user-login-card">
         <span>\${isEdit ? "Last Login" : "New User"}</span>
         <strong>\${escapeHtml(isEdit ? settingsUserLastLoginText(user) : "Create access for a staff member, admin, customer, or member customer.")}</strong>
@@ -1868,7 +1869,7 @@ function settingsUserPopupHtml(user = {}) {
         <label>Name<input type="text" name="name" required value="\${escapeHtml(user.name || "")}" /></label>
         <label>Email<input type="email" name="email" required value="\${escapeHtml(user.email || "")}" /></label>
         <label>Role<select name="role" required><option value="customer" \${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" \${user.role === "helper" || user.role === "staff" ? "selected" : ""}>Staff</option><option value="admin" \${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
-        <label>Hourly pay rate<input type="number" name="hourlyRate" min="0" step="0.01" value="\${escapeHtml(staffHourlyRate(user) || "")}" placeholder="Example: 18.50" /><small>Used for staff/admin payroll estimates.</small></label>
+        <label class="settings-user-pay-field" \${showPayrollFields ? "" : "hidden"}>Hourly pay rate<input type="number" name="hourlyRate" min="0" step="0.01" value="\${escapeHtml(staffHourlyRate(user) || "")}" placeholder="Example: 18.50" \${showPayrollFields ? "" : "disabled"} /><small>Used for staff/admin payroll estimates.</small></label>
       </div>
       <label class="inline-check"><input type="checkbox" name="isMember" \${userMemberFlag(user) ? "checked" : ""} /> Member customer pricing</label>
       <div class="admin-password-panel">
@@ -1890,6 +1891,9 @@ function settingsUserPopupHtml(user = {}) {
 
 function openSettingsUserPopup(user = {}) {
   showDetailDialog(user.id ? \`\${user.name || user.email || "User"} Access\` : "Add User", settingsUserPopupHtml(user));
+  const formEl = activeSettingsUserForm();
+  syncSettingsUserRoleFields(formEl);
+  formEl?.elements.namedItem("role")?.addEventListener("change", () => syncSettingsUserRoleFields(formEl));
 }
 
 function openSettingsUserAgreement(id = "") {
@@ -1944,6 +1948,19 @@ async function removeSettingsUserById(id) {
 
 function activeSettingsUserForm() {
   return $("#settingsUserPopupForm") || $("#settingsUserForm");
+}
+
+function syncSettingsUserRoleFields(formEl = activeSettingsUserForm()) {
+  if (!formEl) return;
+  const roleField = formEl.elements.namedItem("role");
+  const payField = formEl.querySelector(".settings-user-pay-field");
+  const payInput = formEl.elements.namedItem("hourlyRate");
+  const showPayrollFields = isStaffRole(roleField?.value || "customer");
+  if (payField) payField.hidden = !showPayrollFields;
+  if (payInput) {
+    payInput.disabled = !showPayrollFields;
+    if (!showPayrollFields) payInput.value = "";
+  }
 }
 
 function serviceInfoTooltipText(icon) {

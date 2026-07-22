@@ -49,11 +49,11 @@ const checks = [
     message: "cleared stay programs must not preserve stale program ids or rates in pricing snapshots.",
   },
   {
-    pass: main.includes("20260713-financial-pickup-reporting-date"),
+    pass: main.includes('boarding.js?v=20260721-boarding-quick-fact-popups-v2'),
     message: "main module must import the cache-busted boarding module.",
   },
   {
-    pass: index.includes("20260721-boarding-quick-fact-popups-v2"),
+    pass: index.includes("20260721-dog-show-nav-user-profile"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];

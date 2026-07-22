@@ -11316,7 +11316,39 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   width: max-content;
 }
 
+.dog-show-desktop-nav button {
+  background: #69788B;
+  border-color: #7C8999;
+  color: #FFFFFF;
+}
+
+.dog-show-desktop-nav button:hover,
+.dog-show-desktop-nav button:focus-visible {
+  background: #768598;
+  border-color: #8B97A5;
+  color: #FFFFFF;
+}
+
 .dog-show-desktop-nav button.is-active {
+  background: var(--tint-blue-strong);
+  border-color: #78B8F5;
+  color: #FFFFFF;
+}
+
+:root[data-theme="light"] .dog-show-desktop-nav button {
+  background: #E1E6EB;
+  border-color: #C8D0D8;
+  color: #243447;
+}
+
+:root[data-theme="light"] .dog-show-desktop-nav button:hover,
+:root[data-theme="light"] .dog-show-desktop-nav button:focus-visible {
+  background: #D4DBE2;
+  border-color: #B8C2CC;
+  color: #172438;
+}
+
+:root[data-theme="light"] .dog-show-desktop-nav button.is-active {
   background: #315F85;
   border-color: #315F85;
   color: #FFFFFF;
