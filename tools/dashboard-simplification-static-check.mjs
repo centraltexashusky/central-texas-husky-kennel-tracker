@@ -30,15 +30,16 @@ for (const [label, source] of [["generated module", shared], ["legacy bundle", s
     if (renderDashboard.includes(removed)) failures.push(`${label} still renders removed card ${removed}.`);
   }
   if (renderDashboard.includes("renderDashboardPriorities(metrics)")) failures.push(`${label} still renders Today's Priorities.`);
-  if (renderDashboard.includes("renderDashboardTimeline()")) failures.push(`${label} still renders Daily Timeline.`);
+  if (!renderDashboard.includes("renderDashboardTimeline()")) failures.push(`${label} does not render the restored Daily Timeline.`);
   if (renderDashboard.includes("renderDashboardAlertTabs(alerts)")) failures.push(`${label} still renders dashboard alert filters.`);
 }
 
-for (const removedMarkup of ["dashboardPriorityCards", "dashboardTimelineSection", 'id="dashboardTimeline"', 'id="dashboardAlertTabs"', 'id="dashboardCards"']) {
+for (const removedMarkup of ["dashboardPriorityCards", 'id="dashboardAlertTabs"', 'id="dashboardCards"']) {
   if (index.includes(removedMarkup)) failures.push(`index.html still contains ${removedMarkup}.`);
 }
 
-if (!index.includes("js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify")) failures.push("index.html cache key was not updated.");
+if (!index.includes('id="dashboardTimelineSection"') || !index.includes('id="dashboardTimeline"')) failures.push("index.html is missing the restored Daily Timeline.");
+if (!index.includes("js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore")) failures.push("index.html cache key was not updated.");
 if (!shared.includes('$("#dashboardTimeline")?.addEventListener')) failures.push("Generated module timeline listener is not safe when the removed timeline is absent.");
 if (!script.includes('$("#dashboardTimeline")?.addEventListener')) failures.push("Legacy bundle timeline listener is not safe when the removed timeline is absent.");
 if (!shared.includes('$("#dashboardCards")?.addEventListener')) failures.push("Generated module dashboard card listener is not safe when the removed cards are absent.");

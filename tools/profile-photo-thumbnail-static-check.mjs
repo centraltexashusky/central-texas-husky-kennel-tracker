@@ -39,6 +39,11 @@ const checks = [
     message: "media-access must pass thumbnail transform options into signed URLs.",
   },
   {
+    path: "supabase/functions/media-access/index.ts",
+    includes: "return (data || []).some((row) => {",
+    message: "media-access staff authorization must tolerate duplicate profile-history rows.",
+  },
+  {
     path: "js/shared.js",
     includes: "function dogPhotoSexClass",
     message: "profile photos must resolve a shared sex-border class.",

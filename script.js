@@ -12183,10 +12183,12 @@ function renderDashboard() {
   const dashboardAlerts = $("#dashboardAlerts");
   if (!dashboardAlerts) {
     renderDashboardTaskCalendar();
+    renderDashboardTimeline();
     return;
   }
   dashboardAlerts.innerHTML = dashboardAlertsSummaryHtml(alerts);
   renderDashboardTaskCalendar();
+  renderDashboardTimeline();
 }
 
 function renderDashboardReminders(metrics = dashboardMetrics()) {

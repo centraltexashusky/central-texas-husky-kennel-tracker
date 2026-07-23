@@ -84,15 +84,21 @@ async function callerIsStaff(adminClient: ReturnType<typeof createClient>, email
   const normalized = normalizeEmail(email);
   if (!normalized) return false;
   if (adminEmails().map(normalizeEmail).includes(normalized) || normalized === "centraltexashusky@gmail.com" || normalized === "cthusky05@gmail.com") return true;
-  const { data } = await adminClient
+  const { data, error } = await adminClient
     .from("kennel_records")
     .select("payload")
     .eq("type", "settingsUser")
-    .filter("payload->>email", "eq", normalized)
-    .maybeSingle();
-  const payload = (data?.payload && typeof data.payload === "object" ? data.payload : {}) as Record<string, unknown>;
-  const role = String(payload.role || "").toLowerCase();
-  return ["admin", "helper", "staff"].includes(role) && String(payload.removed || "false").toLowerCase() !== "true";
+    .filter("payload->>email", "eq", normalized);
+  if (error) {
+    console.warn("Could not resolve media viewer role.", error.message);
+    return false;
+  }
+  return (data || []).some((row) => {
+    const payload = (row?.payload && typeof row.payload === "object" ? row.payload : {}) as Record<string, unknown>;
+    const role = String(payload.role || "").trim().toLowerCase();
+    const removed = payload.removed === true || String(payload.removed || "false").trim().toLowerCase() === "true";
+    return !removed && ["admin", "helper", "staff"].includes(role);
+  });
 }
 
 function safeStoragePath(value: unknown) {
