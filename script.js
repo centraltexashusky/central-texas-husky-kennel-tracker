@@ -4683,15 +4683,6 @@ function dailyDetailHtml(record) {
     : "";
   return `
     ${completedHtml}
-    ${detailRows(record, [
-      ["Date", "date"],
-      ["Staff", "helperName"],
-      ["Day", "dayOfWeek"],
-      ["Morning tasks", "dailyTasks"],
-      ["PM tasks", "pmTasks"],
-      ["Weekly tasks", "weeklyTasks"],
-      ["Tuesday tasks", "tuesdayTasks"],
-    ])}
     ${monthlyTasksHtml}
     ${boardingTasksGroupedHtml(record)}
     ${careLogHtml}

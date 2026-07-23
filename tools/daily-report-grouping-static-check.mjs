@@ -24,6 +24,9 @@ for (const [name, source] of [["daily", sources.daily], ["legacy", sources.legac
   if (!source.includes("function boardingTaskGroupsForDisplay")) {
     failures.push(`${name} daily reports do not group boarding work by dog.`);
   }
+  if (source.includes('["Date", "date"],') || source.includes('["Staff", "helperName"],') || source.includes('["Morning tasks", "dailyTasks"],')) {
+    failures.push(`${name} daily reports still render the redundant date, staff, day, or shift-summary block.`);
+  }
   if (!source.includes("boardingTaskGroups,")) {
     failures.push(`${name} daily report payloads do not preserve structured boarding-task groups.`);
   }
@@ -39,8 +42,8 @@ for (const [name, source] of [["shared", sources.shared], ["legacy", sources.leg
 }
 
 if (!sources.styles.includes(".daily-report-group-list")) failures.push("Daily report group styling is missing.");
-if (!sources.main.includes("task-edit-modal-daily-report-groups")) failures.push("The Daily Tasks module cache key was not updated.");
-if (!sources.index.includes("dashboard-timeline-restore-daily-report-groups")) failures.push("The application cache key was not updated.");
+if (!sources.main.includes("task-edit-modal-daily-report-groups-compact")) failures.push("The Daily Tasks module cache key was not updated.");
+if (!sources.index.includes("dashboard-timeline-restore-daily-report-groups-compact")) failures.push("The application cache key was not updated.");
 if (!sources.index.includes("task-edit-modal-daily-report-groups")) failures.push("The stylesheet cache key was not updated.");
 
 if (failures.length) {
