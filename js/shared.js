@@ -9684,7 +9684,6 @@ function renderDashboard() {
   if (!$("#dashboardCards")) return;
   $("#dashboardDate").value ||= todayDate();
   const metrics = dashboardMetrics();
-  renderDashboardPriorities(metrics);
   const needsActionCount =
     metrics.exerciseDueDogs.length +
     metrics.trainingDueDogs.length +
@@ -9701,16 +9700,7 @@ function renderDashboard() {
     ["exerciseDue", "Exercise Due", metrics.exerciseDueDogs.length, metrics.exerciseDueDogs.map(ownedDogDisplayName).join(", ") || "None due."],
     ["trainingDue", "Training Due", metrics.trainingDueDogs.length, metrics.trainingDueDogs.map(ownedDogDisplayName).join(", ") || "None due."],
     ["baths", "Baths Due", metrics.ownedBathDueDogs.length + metrics.boardingBathDue.length, [...metrics.ownedBathDueDogs.map(ownedDogDisplayName), ...metrics.boardingBathDue].join(", ") || "None due."],
-    ["boardingServices", "Stay Services Due", metrics.boardingServiceDue.length, metrics.boardingServiceDue.length ? "Requested boarding stay services inside the 48-hour pickup window." : "No stay services due."],
     ["inHeat", "Females In Heat", metrics.inHeatDogs.length, metrics.inHeatDogs.map(ownedDogDisplayName).join(", ") || "None."],
-    ["heatSoon", "Heat Expected Soon", metrics.heatSoonDogs.length, metrics.heatSoonDogs.map(ownedDogDisplayName).join(", ") || "None."],
-    ["careNotes", "Medical/Care Notes", metrics.medicalCareDogs.length, "Review care instructions, complete the listed care, and log today's outcome."],
-    ["arrivals", "Arrivals today", metrics.arrivals.length, metrics.arrivals.join(", ") || "None scheduled."],
-    ["departures", "Departures today", metrics.departures.length, metrics.departures.join(", ") || "None scheduled."],
-    ["activeBoarders", "Active Boarders", metrics.currentBoarding.length, "Checked-in, in-kennel, ready for pickup, or current by stay dates."],
-    ["ownerUpdates", "Owner updates needed", metrics.ownerUpdates, "Boarding records flagged for owner update."],
-    ["requests", "Open requests", metrics.openRequests, "Active supply/process requests."],
-    ["maintenance", "Open maintenance", metrics.openMaintenance, \`\${metrics.urgentMaintenance} urgent.\`],
   ].filter(([key]) => dashboardCardVisibleToCurrentRole(key));
   $("#dashboardCards").innerHTML = cards.map(([key, label, value, note]) => \`<article class="dashboard-card clickable-card" data-action="dashboard-detail" data-key="\${key}"><span>\${label}</span><strong>\${value}</strong><p>\${note}</p></article>\`).join("");
   renderDashboardReminders(metrics);
@@ -9719,12 +9709,10 @@ function renderDashboard() {
   const dashboardAlerts = $("#dashboardAlerts");
   if (!dashboardAlerts) {
     renderDashboardTaskCalendar();
-    renderDashboardTimeline();
     return;
   }
   dashboardAlerts.innerHTML = dashboardAlertsSummaryHtml(alerts);
   renderDashboardTaskCalendar();
-  renderDashboardTimeline();
 }
 
 function renderDashboardReminders(metrics = dashboardMetrics()) {
@@ -11669,7 +11657,7 @@ function initEvents() {
     if (!dashboardCardVisibleToCurrentRole(card.dataset.key)) return;
     showDashboardDetail(card.dataset.key);
   });
-  $("#dashboardTimeline").addEventListener("click", (event) => {
+  $("#dashboardTimeline")?.addEventListener("click", (event) => {
     const removeButton = event.target.closest('[data-action="remove-timeline-record"]');
     if (removeButton) {
       event.stopPropagation();
