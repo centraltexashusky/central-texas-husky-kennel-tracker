@@ -62,7 +62,7 @@ if (!main.includes('shared.js?v=20260723-profile-ux-fixes-v2')
   || !main.includes('customer.js?v=20260722-multi-operation-windows')
   || !main.includes('settings.js?v=20260722-multi-operation-windows')) failures.push("Changed operation-hour modules are not cache-busted.");
 if (!/styles\.css\?v=[^"']+/.test(index)
-  || !index.includes('js/main.js?v=20260723-profile-ux-fixes-v2')) failures.push("Operation-hours production assets are not cache-busted.");
+  || !index.includes('js/main.js?v=20260723-customer-file-view')) failures.push("Operation-hours production assets are not cache-busted.");
 
 const bookingMatch = customer.match(/function customerBookingAvailabilityForDateTime\(value = "", label = "Selected time"\) \{[\s\S]*?\n\}\n\nfunction customerBookingAvailabilityChecks/);
 if (!bookingMatch) {

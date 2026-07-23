@@ -1131,6 +1131,7 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   const source = recordOrNotification.sourceSnapshot ? notificationSourceSnapshot(recordOrNotification) : recordOrNotification;
   const name = eventName || recordOrNotification.eventName || "";
   const sourceType = recordOrNotification.sourceType || source.type || "";
+  if (name === "customerDogFileUploaded") return "View File";
   if (name === "customerBoardingRequestCreated" || name === "customerBoardingRequestUpdated" || recoveredBoardingRequestNotification(recordOrNotification)) return "Review Request";
   if (name === "boardingCustomerRequestApproved" || name === "boardingCustomerRequestDeclined" || name === "boardingCustomerRequestCancelled" || name === "boardingCustomerRequestUpdatedByStaff") return "Open Request";
   if (name === "serviceRequestReadyForPickup") return "Open Request";
@@ -1141,6 +1142,76 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   if (sourceType === "timesheet" || sourceType === "timeOffRequest" || name.includes("timeOff") || name.includes("schedule")) return "Open Staff Item";
   if (sourceType === "request" || name.includes("Request")) return "Open Request";
   return "Open Alert";
+}
+
+function customerDogFileNotificationRecord(notification = {}) {
+  const source = notificationSourceSnapshot(notification);
+  const sourceId = notification.sourceId || notification.actionTarget?.sourceId || source.id || "";
+  return readRecords("customerDog").find((item) => item.id === sourceId && !item.removed)
+    || (source.type === "customerDog" && source.id ? source : null);
+}
+
+function customerDogFileNotificationItems(notification = {}) {
+  const source = notificationSourceSnapshot(notification);
+  const record = customerDogFileNotificationRecord(notification) || source;
+  const notifiedItems = arrayValue(source.notificationFileItems);
+  const fallbackItems = [
+    ...arrayValue(record.vaccinationRecords),
+    ...arrayValue(record.documents),
+  ];
+  const photoSource = profilePhotoDirectSource(record);
+  const photoPath = profilePhotoStoragePath(record);
+  if (photoSource || photoPath) {
+    fallbackItems.push({
+      name: (record.dogName || "Customer dog") + " profile photo",
+      type: record.profilePhotoMeta?.type || "image/jpeg",
+      url: photoSource,
+      storagePath: photoPath,
+      savedAt: record.profilePhotoMeta?.savedAt || record.updatedAt || record.submittedAt || "",
+    });
+  }
+  const items = (notifiedItems.length ? notifiedItems : fallbackItems)
+    .map((item, index) => ({
+      ...item,
+      name: item.name || item.fileName || "Customer file " + (index + 1),
+      type: item.type || item.mediaType || "application/octet-stream",
+      url: item.url || item.src || "",
+      storagePath: item.storagePath || "",
+      savedAt: item.savedAt || item.createdAt || item.updatedAt || "",
+    }))
+    .filter((item, index, entries) => {
+      const key = item.storagePath || item.url || item.dataUrl || item.name;
+      return key && entries.findIndex((candidate) => (candidate.storagePath || candidate.url || candidate.dataUrl || candidate.name) === key) === index;
+    });
+  return items.sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+}
+
+function customerDogFileNotificationHtml(notification = {}) {
+  const source = notificationSourceSnapshot(notification);
+  const record = customerDogFileNotificationRecord(notification) || source;
+  const items = customerDogFileNotificationItems(notification);
+  const owner = record.ownerName || record.ownerEmail || record.customerEmail || notification.ownerName || "A customer";
+  const dogName = record.dogName || notification.dogName || "this dog";
+  const cards = items.map((item) => {
+    const src = item.url || item.dataUrl || "";
+    const actionLabel = mediaItemHasOpenableSource(item) ? "View File" : "View File Name";
+    return '<article class="record-card compact-record-card customer-file-notification-card">'
+      + '<strong>' + escapeHtml(item.name) + '</strong>'
+      + '<span>' + escapeHtml(item.type || "Customer uploaded file") + '</span>'
+      + (item.savedAt ? '<p>Uploaded ' + escapeHtml(formatDateTime(item.savedAt)) + '</p>' : "")
+      + '<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="' + escapeHtml(src) + '" data-media-type="' + escapeHtml(item.type || "application/octet-stream") + '" data-media-name="' + escapeHtml(item.name) + '"' + mediaAccessAttrs(item, { sourceRecordId: record.id || notification.sourceId || "", sourceRecordType: "customerDog" }) + '>' + actionLabel + '</button></div>'
+      + '</article>';
+  }).join("");
+  return '<p>' + escapeHtml(owner) + ' uploaded ' + (items.length === 1 ? "this file" : (items.length || "a") + " files") + ' for ' + escapeHtml(dogName) + '.</p>'
+    + '<section class="popup-record-section customer-file-notification-files">'
+    + '<h3>Customer Uploaded ' + (items.length === 1 ? "File" : "Files") + '</h3>'
+    + '<div class="record-grid compact-record-grid">' + (cards || "<p>The file record is no longer available. Open the customer dog profile to review current uploads.</p>") + '</div>'
+    + '</section>';
+}
+
+function openCustomerDogFileNotification(notification = {}) {
+  showDetailDialog(notificationDisplayTitle(notification), customerDogFileNotificationHtml(notification));
+  return true;
 }
 
 function notificationIsTimeOffReviewAlert(notification = {}) {
@@ -1758,6 +1829,11 @@ async function openNotification(id = "") {
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;
   const recoveredRequest = recoveredBoardingRequestNotification(notification);
+  if (notification.eventName === "customerDogFileUploaded") {
+    openCustomerDogFileNotification(notification);
+    renderDashboard();
+    return;
+  }
   if (
     recoveredRequest
     || (sourceType === "boardingDog" && ["customerBoardingRequestCreated", "customerBoardingRequestUpdated"].includes(notification.eventName))

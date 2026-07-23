@@ -21,7 +21,7 @@ if (!timesheet.includes("total: hours * rate")) {
 if (!main.includes('shared.js?v=20260723-profile-ux-fixes-v2')) {
   failures.push("The payroll record-loading fix is not cache-busted.");
 }
-if (!index.includes('js/main.js?v=20260723-profile-ux-fixes-v2')) {
+if (!index.includes('js/main.js?v=20260723-customer-file-view')) {
   failures.push("The application entrypoint does not expose the payroll fix.");
 }
 

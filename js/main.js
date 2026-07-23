@@ -9,7 +9,7 @@ import "./task-scheduler.js?v=20260722-compact-week-grid-fit";
 import "./dog-show.js?v=20260720-dog-show-progress";
 import "./timesheet.js?v=20260709-staff-payroll-financials";
 import "./settings.js?v=20260722-multi-operation-windows";
-import "./notifications.js?v=20260715-dog-show-result-email";
+import "./notifications.js?v=20260723-customer-file-view";
 import "./search.js?v=20260623-efficiency-guardrails";
 
 initializeApp().catch((error) => {

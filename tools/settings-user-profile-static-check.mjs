@@ -25,7 +25,7 @@ if (!main.includes('shared.js?v=20260723-profile-ux-fixes-v2')
   || !main.includes('auth.js?v=20260721-dog-show-nav-user-profile')
   || !main.includes('settings.js?v=20260722-multi-operation-windows')) failures.push("Changed user-profile modules are not cache-busted.");
 if (!index.includes('styles.css?v=20260723-profile-ux-fixes-v2')
-  || !index.includes('js/main.js?v=20260723-profile-ux-fixes-v2')) failures.push("Production entry assets are not cache-busted.");
+  || !index.includes('js/main.js?v=20260723-customer-file-view')) failures.push("Production entry assets are not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

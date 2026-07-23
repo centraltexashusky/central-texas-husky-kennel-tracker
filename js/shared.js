@@ -1338,6 +1338,9 @@ function compactNotificationSnapshotForStorage(snapshot = {}) {
   delete compact.careLogs;
   delete compact.statusHistory;
   delete compact.flags;
+  if (Array.isArray(compact.notificationFileItems)) {
+    compact.notificationFileItems = compactMediaItemsForStorage(compact.notificationFileItems.slice(0, 10), 300000);
+  }
   if (Array.isArray(compact.customerUpdates)) {
     compact.customerUpdates = compact.customerUpdates.slice(0, 3).map((update) => {
       const clean = { ...update };
@@ -14320,8 +14323,22 @@ function initEvents() {
           await sendPayload(linkedBoarding);
         }
       }
-      if (vaccinationUploads.length || (photo.profilePhotoUrl && photo.profilePhotoUrl !== (existing.profilePhotoUrl || ""))) {
-        await notifyIfNeeded(record, "customerDogFileUploaded");
+      if (vaccinationUploads.length
+        || (photo.profilePhotoUrl && photo.profilePhotoUrl !== (existing.profilePhotoUrl || ""))
+        || (photo.profilePhotoPath && photo.profilePhotoPath !== (existing.profilePhotoPath || ""))) {
+        const notificationFileItems = [
+          ...vaccinationUploads,
+          ...((photo.profilePhotoUrl && photo.profilePhotoUrl !== (existing.profilePhotoUrl || "")) || (photo.profilePhotoPath && photo.profilePhotoPath !== (existing.profilePhotoPath || ""))
+            ? [{
+              name: photo.profilePhotoMeta?.name || (record.dogName || "Customer dog") + " profile photo",
+              type: photo.profilePhotoMeta?.type || "image/jpeg",
+              url: photo.profilePhotoUrl || "",
+              storagePath: photo.profilePhotoPath || "",
+              savedAt: new Date().toISOString(),
+            }]
+            : []),
+        ];
+        await notifyIfNeeded({ ...record, notificationFileItems }, "customerDogFileUploaded");
       }
       await ensureCustomerAccessProfile({
         email: record.customerEmail || record.ownerEmail,
