@@ -1180,6 +1180,54 @@ function removeDogShowRingRowState(scheduleId = "") {
   localStorage.setItem(DOG_SHOW_RING_ROW_STATE_KEY, JSON.stringify(state));
 }
 
+function dogShowTimelineDateKey(log = {}) {
+  return dateOnly(log.loggedAt || log.updatedAt || "") || "Date missing";
+}
+
+function dogShowTimelineLogHtml(log = {}, entry = {}, canRemoveLogs = false) {
+  return `<article><strong>${escapeHtml(log.activityType || "Care")}</strong><span>${escapeHtml(log.note || "Logged")}</span><small>${escapeHtml(dogShowFormatDateTime(log.loggedAt || log.updatedAt))} · ${escapeHtml(log.helperName || dogShowStaffLabel(log.helperEmail))}${log.customerVisible ? " · Owner visible" : ""}</small>${canRemoveLogs ? `<button type="button" class="dog-show-remove-log" data-action="remove-show-log" data-id="${escapeHtml(log.id)}" data-entry-id="${escapeHtml(entry.id)}" aria-label="Remove ${escapeHtml(dogShowCareLogName(log))} log" title="Remove logged item">×</button>` : ""}</article>`;
+}
+
+function dogShowTimelineLogsForDate(entry = {}, dateKey = "") {
+  return dogShowLogs()
+    .filter((log) => dogShowLogBelongsToEntry(log, entry) && dogShowTimelineDateKey(log) === dateKey)
+    .sort((a, b) => new Date(b.loggedAt || b.updatedAt || 0) - new Date(a.loggedAt || a.updatedAt || 0));
+}
+
+function dogShowTimelineLogsHtml(logs = [], entry = {}, canRemoveLogs = false) {
+  return logs.map((log) => dogShowTimelineLogHtml(log, entry, canRemoveLogs)).join("");
+}
+
+function dogShowTimelineGroupsHtml(logs = [], entry = {}, canRemoveLogs = false, openDates = []) {
+  if (!logs.length) return "<p>No show care logged yet.</p>";
+  const groups = new Map();
+  logs.forEach((log) => {
+    const dateKey = dogShowTimelineDateKey(log);
+    if (!groups.has(dateKey)) groups.set(dateKey, []);
+    groups.get(dateKey).push(log);
+  });
+  const today = todayDate();
+  const requestedOpenDates = new Set(Array.isArray(openDates) ? openDates : []);
+  return `<div class="dog-show-timeline-groups">${[...groups.entries()].map(([dateKey, items], index) => {
+    const expanded = dateKey === today || requestedOpenDates.has(dateKey);
+    const label = dateKey === "Date missing" ? dateKey : dateKey === today ? `Today · ${dogShowFormatDate(dateKey)}` : dogShowFormatDate(dateKey);
+    const panelId = `dogShowTimelineDay-${index}`;
+    return `<details class="dog-show-timeline-day" data-show-timeline-day="${escapeHtml(dateKey)}"${expanded ? " open" : ""}><summary class="dog-show-timeline-day-heading" data-action="toggle-show-timeline-day" aria-controls="${panelId}"><span><strong>${escapeHtml(label)}</strong><small>${items.length} item${items.length === 1 ? "" : "s"}</small></span></summary><div class="dog-show-log-timeline" id="${panelId}" data-show-timeline-lazy data-entry-id="${escapeHtml(entry.id)}" data-date-key="${escapeHtml(dateKey)}" data-loaded="${expanded ? "true" : "false"}">${expanded ? dogShowTimelineLogsHtml(items, entry, canRemoveLogs) : ""}</div></details>`;
+  }).join("")}</div>`;
+}
+
+function hydrateDogShowTimelineDay(day) {
+  const container = day?.querySelector("[data-show-timeline-lazy]");
+  if (!container || container.dataset.loaded === "true") return;
+  const entry = dogShowEntries().find((item) => item.id === container.dataset.entryId);
+  if (!entry) return;
+  const logs = dogShowTimelineLogsForDate(entry, container.dataset.dateKey);
+  container.innerHTML = logs.length
+    ? dogShowTimelineLogsHtml(logs, entry, currentRole() === "admin")
+    : "<p>No show care logged for this date.</p>";
+  container.dataset.loaded = "true";
+}
+
 function dogShowRingScheduleRowHtml(schedule = {}, index = 0) {
   const prep = dogShowPrepTimes({}, schedule);
   const scheduleId = schedule.id || uid("showRing");
@@ -1250,6 +1298,7 @@ function dogShowEntryDialogViewState() {
   return {
     assignmentOpen: assignment ? assignment.open : true,
     ringSchedulesOpen: ringSchedules ? ringSchedules.open : true,
+    timelineOpenDates: Array.from(body?.querySelectorAll("[data-show-timeline-day][open]") || []).map((day) => day.dataset.showTimelineDay),
     scrollTop: body?.scrollTop || 0,
   };
 }
@@ -1286,11 +1335,11 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}, viewState = {}
           <label>Care helper<select name="helperEmail">${dogShowStaffOptions(entry.helperEmail || "")}</select></label>
           <label>Entry status<select name="status">${[{ value: "Considering", label: "Considering" }, { value: "Entered", label: "Entered" }, { value: "Confirmed", label: "Confirmed" }, { value: "Scratched", label: "Withdrawn" }, { value: "Completed", label: "Completed" }].map((status) => `<option value="${status.value}"${status.value === (entry.status || "Confirmed") ? " selected" : ""}>${status.label}</option>`).join("")}</select></label>
         </div></div></details>
-      <details class="dog-show-collapsible-section dog-show-ring-schedules" data-show-ring-appearances${entry.attendanceRole === "Showing" ? "" : " hidden"}${viewState.ringSchedulesOpen === false ? "" : " open"}><summary><span><strong>Ring Appearances</strong><small data-ring-appearance-count>${ringSchedules.length} scheduled</small></span></summary><div class="dog-show-collapsible-content dog-show-ring-schedules-content"><div class="dog-show-ring-schedules-toolbar"><p>Add a separate assignment for each show day, ring, or class.</p><button type="button" class="secondary-button" data-action="add-ring-schedule">Add Ring Appearance</button></div><div id="dogShowRingScheduleRows">${ringSchedules.map(dogShowRingScheduleRowHtml).join("")}</div></div></details>
+      <details class="dog-show-collapsible-section dog-show-ring-schedules" data-show-ring-appearances${entry.attendanceRole === "Showing" ? "" : " hidden"}${viewState.ringSchedulesOpen === false ? "" : " open"}><summary><span><strong>Ring Appearances</strong><small data-ring-appearance-count>${ringSchedules.length} scheduled</small></span></summary><div class="dog-show-collapsible-content dog-show-ring-schedules-content"><div class="dog-show-ring-schedules-toolbar"><p>Add a separate assignment for each show day, ring, or class.</p></div><div id="dogShowRingScheduleRows">${ringSchedules.map(dogShowRingScheduleRowHtml).join("")}</div><div class="dog-show-ring-schedules-footer"><button type="button" class="secondary-button" data-action="add-ring-schedule">Add Ring Appearance</button></div></div></details>
       <label>Show notes<textarea name="notes" rows="2">${escapeHtml(entry.notes || "")}</textarea></label>
       <div class="button-row"><button type="submit">Save Dog</button><button type="button" class="secondary-button" data-action="remove-show-entry" data-id="${escapeHtml(entry.id)}">Remove From Show</button></div>
     </form>
-    <section class="dog-show-dialog-section"><h3>Show Timeline</h3><div class="dog-show-log-timeline">${logs.length ? logs.map((log) => `<article><strong>${escapeHtml(log.activityType || "Care")}</strong><span>${escapeHtml(log.note || "Logged")}</span><small>${escapeHtml(dogShowFormatDateTime(log.loggedAt || log.updatedAt))} · ${escapeHtml(log.helperName || dogShowStaffLabel(log.helperEmail))}${log.customerVisible ? " · Owner visible" : ""}</small>${canRemoveLogs ? `<button type="button" class="dog-show-remove-log" data-action="remove-show-log" data-id="${escapeHtml(log.id)}" data-entry-id="${escapeHtml(entry.id)}" aria-label="Remove ${escapeHtml(dogShowCareLogName(log))} log" title="Remove logged item">×</button>` : ""}</article>`).join("") : "<p>No show care logged yet.</p>"}</div></section>`);
+    <section class="dog-show-dialog-section"><h3>Show Timeline</h3>${dogShowTimelineGroupsHtml(logs, entry, canRemoveLogs, viewState.timelineOpenDates)}</section>`);
   if (Number.isFinite(viewState.scrollTop)) {
     requestAnimationFrame(() => {
       const body = document.getElementById("dogShowDialogBody");
@@ -2145,6 +2194,13 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "toggle-ring-schedule") {
       const row = action.closest("[data-ring-schedule-row]");
       requestAnimationFrame(() => setDogShowRingRowOpen(row?.dataset.scheduleId || "", Boolean(row?.open)));
+      return;
+    }
+    if (action.dataset.action === "toggle-show-timeline-day") {
+      const day = action.closest("[data-show-timeline-day]");
+      requestAnimationFrame(() => {
+        if (day?.open) hydrateDogShowTimelineDay(day);
+      });
       return;
     }
     if (action.dataset.action === "close-show-dialog") dialog.close();

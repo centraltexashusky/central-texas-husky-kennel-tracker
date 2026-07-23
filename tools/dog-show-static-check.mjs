@@ -10,13 +10,14 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'styles.css?v=20260723-profile-ux-fixes-v2', "Dog Show styles are not cache-busted."],
+  ["index.html", 'styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'dog-show.js?v=20260720-dog-show-progress', "Dog Show progress changes are not cache-busted."],
+  ["js/main.js", 'dog-show.js?v=20260723-dog-show-timeline-groups-ring-footer', "Dog Show timeline changes are not cache-busted."],
+  ["index.html", 'js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["js/dog-show.js", 'recordKind: "careerProfile"', "Prior career points are not stored separately from ring results."],
   ["js/dog-show.js", "profile.dogKey === dogKey || dogShowDogIdentity(profile) === dogKey", "Imported career profiles cannot be matched without the newer dogKey field."],
@@ -111,6 +112,13 @@ const required = [
   ["js/dog-show.js", "unselectVisible", "Select visible does not toggle already-selected Dog Show tasks off."],
   ["js/dog-show.js", "dogShowEntryDialogViewState", "Dog detail sections do not preserve their state after log removal."],
   ["js/dog-show.js", "openDogShowEntryForm(entry, {}, viewState)", "Removing a dog show log resets the dog detail view."],
+  ["js/dog-show.js", "dogShowTimelineGroupsHtml", "Dog Show timeline logs are not grouped by date."],
+  ["js/dog-show.js", 'data-show-timeline-day="${escapeHtml(dateKey)}"', "Dog Show timeline date groups are not collapsible."],
+  ["js/dog-show.js", "data-show-timeline-lazy", "Collapsed Dog Show timeline dates do not defer their log content."],
+  ["js/dog-show.js", 'data-action="toggle-show-timeline-day"', "Dog Show timeline date groups cannot hydrate when expanded."],
+  ["js/dog-show.js", "hydrateDogShowTimelineDay", "Dog Show timeline lazy hydration is missing."],
+  ["styles.css", ".dog-show-timeline-day", "Dog Show timeline date groups are not styled."],
+  ["styles.css", ".dog-show-ring-schedules-footer", "The bottom Add Ring Appearance control is not styled."],
   ["js/dog-show.js", '<strong>Food</strong>', "Dog roster cards are missing the Food quick action."],
   ["js/dog-show.js", '<strong>Medical/Behavior</strong>', "Dog roster cards are missing the Medical/Behavior quick action."],
   ["js/dog-show.js", 'class="dog-show-ring-flag"', "Dog roster cards do not present ring and time as a flag."],
@@ -202,6 +210,11 @@ for (const [path, needle, message] of required) {
   if (!read(path).includes(needle)) failures.push(message);
 }
 const dogShowSource = read("js/dog-show.js");
+const dogEntryFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowEntryForm"), dogShowSource.indexOf("function openDogShowPottyPicker"));
+const ringRowsIndex = dogEntryFormSource.indexOf('id="dogShowRingScheduleRows"');
+const addRingIndex = dogEntryFormSource.indexOf('data-action="add-ring-schedule"');
+if (!(ringRowsIndex >= 0 && ringRowsIndex < addRingIndex)) failures.push("Add Ring Appearance must render after the existing ring appearance rows.");
+if (!dogShowSource.includes('expanded ? dogShowTimelineLogsHtml(items, entry, canRemoveLogs) : ""')) failures.push("Collapsed Dog Show timeline dates must not render their logs before expansion.");
 const duplicateTaskSource = dogShowSource.slice(dogShowSource.indexOf("function openDuplicateDogShowTask"), dogShowSource.indexOf("async function saveDogShowRecord"));
 if (duplicateTaskSource.includes("setMinutes")) failures.push("Duplicate show tasks must not change the original date and time.");
 const rosterRowSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowEntryRowHtml"), dogShowSource.indexOf("function dogShowRenderEmpty"));

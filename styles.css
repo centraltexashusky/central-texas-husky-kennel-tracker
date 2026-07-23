@@ -13328,6 +13328,15 @@ details.dog-show-ring-schedules[hidden] {
   font-size: 0.76rem;
 }
 
+.dog-show-ring-schedules-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dog-show-ring-schedules-footer button {
+  min-width: 220px;
+}
+
 #dogShowRingScheduleRows {
   display: grid;
   gap: 10px;
@@ -13414,6 +13423,63 @@ details.dog-show-ring-schedules[hidden] {
 
 .dog-show-ring-schedule-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dog-show-timeline-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.dog-show-timeline-day {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  border-radius: 8px;
+  display: block;
+  overflow: hidden;
+}
+
+.dog-show-timeline-day-heading {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 52px;
+  padding: 10px 12px;
+}
+
+.dog-show-timeline-day-heading::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-timeline-day-heading::after {
+  color: var(--muted);
+  content: "+";
+  flex: 0 0 auto;
+  font-size: 1.15rem;
+}
+
+.dog-show-timeline-day[open] > .dog-show-timeline-day-heading {
+  background: var(--glass-fill-soft);
+  border-bottom: 1px solid var(--line);
+}
+
+.dog-show-timeline-day[open] > .dog-show-timeline-day-heading::after {
+  content: "-";
+}
+
+.dog-show-timeline-day-heading > span {
+  display: grid;
+  gap: 2px;
+}
+
+.dog-show-timeline-day-heading small {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.dog-show-timeline-day > .dog-show-log-timeline {
+  padding: 10px 12px;
 }
 
 .dog-show-log-timeline article {
@@ -14066,6 +14132,11 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-ring-schedules-toolbar button {
+    width: 100%;
+  }
+
+  .dog-show-ring-schedules-footer button {
+    min-width: 0;
     width: 100%;
   }
 }

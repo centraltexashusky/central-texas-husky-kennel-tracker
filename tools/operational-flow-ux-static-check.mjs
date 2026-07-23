@@ -43,17 +43,20 @@ for (const source of [daily, legacy]) {
 }
 if (!index.includes('data-filter="Vaccine">Vaccine</button>')) failures.push("Our Dogs Vaccine button is missing.");
 
-for (const expected of [
-  'title === "Leaving in 48 Hours"',
-  'boardingStayLeavesWithinHours(stay, 48)',
-  '["Leaving in 48 Hours", records.filter',
-]) {
-  if (!boarding.includes(expected)) failures.push(`Boarding queue is missing: ${expected}`);
+for (const [sourceName, source] of [["active module", boarding], ["legacy bundle", legacy]]) {
+  const queueRenderer = source.match(/function renderBoardingQueueGroups[\s\S]*?\n\}/)?.[0] || "";
+  const tomorrowIndex = queueRenderer.indexOf('["Tomorrow Arrivals", records.filter');
+  const todayIndex = queueRenderer.indexOf('["Today Drop-offs", records.filter');
+  if (!(tomorrowIndex >= 0 && tomorrowIndex < todayIndex)) {
+    failures.push(`Tomorrow arrivals are not above today's drop-offs in the ${sourceName}.`);
+  }
+  if (queueRenderer.includes('["Leaving in 48 Hours", records.filter')) {
+    failures.push(`The duplicate Leaving in 48 Hours queue remains in the ${sourceName}.`);
+  }
+  if (!queueRenderer.includes("].filter(([, groupRecords]) => groupRecords.length);")) {
+    failures.push(`Zero-count boarding queues are not hidden in the ${sourceName}.`);
+  }
 }
-if (!boarding.includes('records.length ? "" : "is-empty"') || boarding.includes("No dogs in this group.")) {
-  failures.push("Zero-count boarding groups are not minimized.");
-}
-if (!styles.includes(".boarding-queue-card.is-empty")) failures.push("Minimized boarding groups are missing compact styling.");
 
 if (!scheduler.includes("return mobileWeek ? 220 : 130")) failures.push("Mobile week columns are not widened for a 2-3 day viewport.");
 if (!styles.includes("scroll-snap-type: x proximity") || !styles.includes("-webkit-overflow-scrolling: touch")) {
@@ -62,7 +65,7 @@ if (!styles.includes("scroll-snap-type: x proximity") || !styles.includes("-webk
 
 for (const expected of [
   "shared.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues",
-  "boarding.js?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues",
+  "boarding.js?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-board-queue-cleanup",
   "daily.js?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues",
   "notifications.js?v=20260723-customer-file-view-v2-dashboard-vaccine-queues",
   "task-scheduler.js?v=20260722-compact-week-grid-fit-operational-flow",
@@ -70,7 +73,7 @@ for (const expected of [
   if (!main.includes(expected)) failures.push(`Main module cache key is missing: ${expected}`);
 }
 if (!index.includes("styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues")) failures.push("Updated responsive styles are not cache-busted.");
-if (!index.includes("js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues")) failures.push("Updated operational modules are not exposed by the entrypoint.");
+if (!index.includes("js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup")) failures.push("Updated operational modules are not exposed by the entrypoint.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

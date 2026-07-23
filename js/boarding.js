@@ -2744,12 +2744,11 @@ function renderBoardingQueueGroups(records = []) {
   if (!container) return;
   const groups = [
     ["Pending Approval", records.filter((record) => boardingQueueRecordMatchesGroup("Pending Approval", record))],
-    ["Today Drop-offs", records.filter((record) => boardingQueueRecordMatchesGroup("Today Drop-offs", record))],
     ["Tomorrow Arrivals", records.filter((record) => boardingQueueRecordMatchesGroup("Tomorrow Arrivals", record))],
+    ["Today Drop-offs", records.filter((record) => boardingQueueRecordMatchesGroup("Today Drop-offs", record))],
     ["In Kennel", records.filter((record) => boardingQueueRecordMatchesGroup("In Kennel", record))],
-    ["Leaving in 48 Hours", records.filter((record) => boardingQueueRecordMatchesGroup("Leaving in 48 Hours", record))],
     ["Today Pickups", records.filter((record) => boardingQueueRecordMatchesGroup("Today Pickups", record))],
-  ];
+  ].filter(([, groupRecords]) => groupRecords.length);
   container.innerHTML = groups
     .map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords))
     .join("");
