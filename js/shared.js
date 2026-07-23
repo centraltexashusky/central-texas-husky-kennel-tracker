@@ -12331,6 +12331,12 @@ function initEvents() {
     }
     const action = event.target.closest("[data-action]");
     if (!action) return;
+    if (action.dataset.action === "open-customer-notification-file") {
+      event.preventDefault();
+      event.stopPropagation();
+      await openMediaFromButton(action);
+      return;
+    }
     if (action.dataset.action === "open-bulk-schedule") {
       event.preventDefault();
       openBulkSchedulePopup();

@@ -57,7 +57,7 @@ if (renderStays.includes("boardingStayServicesText(stay")) failures.push("Redund
 if (!styles.includes('#boardingStayHistory > .boarding-stay-card')) failures.push("Dark-mode boarding stay background is not explicitly styled.");
 if (!styles.includes("background: #E8F0F8 !important;")) failures.push("Light-mode boarding stay background is not visually distinct.");
 
-if (!main.includes('shared.js?v=20260723-profile-ux-fixes-v2')
+if (!main.includes('shared.js?v=20260723-customer-file-view')
   || !main.includes('boarding.js?v=20260723-profile-ux-fixes-v2')
   || !main.includes('daily.js?v=20260723-profile-ux-fixes-v2')) failures.push("Changed profile modules are not cache-busted.");
 if (!index.includes('styles.css?v=20260723-profile-ux-fixes-v2')

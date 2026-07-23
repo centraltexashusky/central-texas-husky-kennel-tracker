@@ -58,7 +58,7 @@ if (!customer.includes("windows.some((availableWindow)")) failures.push("Custome
 if (!customer.includes("operationTimeWindowsText(windows)")) failures.push("Customer booking errors do not list the valid windows.");
 if (!shared.includes('action.dataset.action === "add-operation-window"')) failures.push("The add-window interaction is not wired.");
 if (!styles.includes(".operation-time-window-row")) failures.push("Multi-window rows are not styled.");
-if (!main.includes('shared.js?v=20260723-profile-ux-fixes-v2')
+if (!main.includes('shared.js?v=20260723-customer-file-view')
   || !main.includes('customer.js?v=20260722-multi-operation-windows')
   || !main.includes('settings.js?v=20260722-multi-operation-windows')) failures.push("Changed operation-hour modules are not cache-busted.");
 if (!/styles\.css\?v=[^"']+/.test(index)

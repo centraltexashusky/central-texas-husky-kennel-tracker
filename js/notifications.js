@@ -1199,7 +1199,7 @@ function customerDogFileNotificationHtml(notification = {}) {
       + '<strong>' + escapeHtml(item.name) + '</strong>'
       + '<span>' + escapeHtml(item.type || "Customer uploaded file") + '</span>'
       + (item.savedAt ? '<p>Uploaded ' + escapeHtml(formatDateTime(item.savedAt)) + '</p>' : "")
-      + '<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="' + escapeHtml(src) + '" data-media-type="' + escapeHtml(item.type || "application/octet-stream") + '" data-media-name="' + escapeHtml(item.name) + '"' + mediaAccessAttrs(item, { sourceRecordId: record.id || notification.sourceId || "", sourceRecordType: "customerDog" }) + '>' + actionLabel + '</button></div>'
+      + '<div class="record-actions"><button type="button" class="secondary-button media-preview-button" data-action="open-customer-notification-file" data-src="' + escapeHtml(src) + '" data-media-type="' + escapeHtml(item.type || "application/octet-stream") + '" data-media-name="' + escapeHtml(item.name) + '"' + mediaAccessAttrs(item, { sourceRecordId: record.id || notification.sourceId || "", sourceRecordType: "customerDog" }) + '>' + actionLabel + '</button></div>'
       + '</article>';
   }).join("");
   return '<p>' + escapeHtml(owner) + ' uploaded ' + (items.length === 1 ? "this file" : (items.length || "a") + " files") + ' for ' + escapeHtml(dogName) + '.</p>'
