@@ -3853,6 +3853,49 @@ textarea {
   padding: 6px 12px;
 }
 
+.daily-report-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.daily-report-group-card {
+  display: grid;
+  gap: 8px;
+}
+
+.daily-report-group-card > strong {
+  font-size: 1rem;
+}
+
+.daily-report-group-list {
+  display: grid;
+  gap: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.daily-report-group-list li {
+  align-items: start;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 3px;
+  padding: 8px 0;
+}
+
+.daily-report-group-list li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.daily-report-group-list li:last-child {
+  padding-bottom: 0;
+}
+
+.daily-report-group-list small {
+  color: var(--muted);
+}
+
 .compact-task-edit-form {
   gap: 14px;
 }

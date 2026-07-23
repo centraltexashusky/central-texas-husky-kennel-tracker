@@ -3169,6 +3169,7 @@ function dailyWorkPayload(date = currentDailyDate(), updates = {}) {
   const now = new Date().toISOString();
   const completedTasks = updates.completedTasks || completedTasksForDate(date);
   const structuredCareLogs = updates.structuredCareLogs || structuredCareLogsForDate(date);
+  const boardingTaskGroups = upcomingBoardingTaskGroups();
   const taskArrays = taskArraysFromCompletions(completedTasks);
   const dayName = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "long" });
   return {
@@ -3192,7 +3193,8 @@ function dailyWorkPayload(date = currentDailyDate(), updates = {}) {
       alerts: structuredCareLogs.filter((log) => /heat|medical|behavior/i.test(log.careType || "")).length,
     },
     monthlyDeepCleanBuilding: taskArrays.monthlyTasks.length ? getDeepCleanBuilding(date) : existing.monthlyDeepCleanBuilding || "",
-    boardingTasks: upcomingBoardingTaskText(),
+    boardingTaskGroups,
+    boardingTasks: boardingTaskTextFromGroups(boardingTaskGroups),
   };
 }
 
@@ -3213,7 +3215,7 @@ function taskLabel(task, shift) {
   if (completed && showRemainingTasksOnly) return "";
   const adminTools =
     canManageTasks
-      ? `<span class="task-admin-tools"><span class="task-drag-handle" aria-hidden="true">Drag</span><button type="button" class="secondary-button task-edit-button" data-action="open-edit-task" data-shift="${shift}" data-id="${task.id}">Edit</button><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task"><span aria-hidden="true">&times;</span><span class="sr-only">Remove task</span></button></span>`
+      ? `<span class="task-admin-tools"><span class="task-drag-handle" aria-hidden="true">Drag</span><button type="button" class="secondary-button task-edit-button" data-action="open-edit-task" data-shift="${shift}" data-id="${task.id}">Edit</button><button type="button" class="remove-task-button" data-action="remove-task" data-shift="${shift}" data-id="${task.id}" title="Remove task" aria-label="Remove task"><span aria-hidden="true">&times;</span></button></span>`
       : "";
   const completedMeta = completed ? `<span class="task-completed-meta">Completed by ${escapeHtml(completed.completedBy || "staff")} at ${escapeHtml(formatDateTime(completed.completedAt))}</span>` : "";
   return `<div class="task-item ${completed ? "is-complete" : ""}" draggable="${canManageTasks && !completed}" data-shift="${shift}" data-id="${task.id}"><span class="task-text">${taskText}</span>${completedMeta}<button type="button" class="task-done-button" data-action="complete-task" data-shift="${shift}" data-id="${task.id}" data-task-text="${taskText}" ${completed ? "disabled" : ""}>${completed ? "Done" : "Done"}</button>${adminTools}</div>`;
@@ -4614,13 +4616,65 @@ function updateMediaZoom() {
   if (label) label.textContent = `${Math.round(mediaZoomLevel * 100)}%`;
 }
 
+function completedTaskGroupsForDisplay(completedTasks = []) {
+  const groups = new Map();
+  completedTasks.forEach((task) => {
+    const completedBy = String(task.completedBy || "Staff").trim() || "Staff";
+    const key = completedBy.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { completedBy, tasks: [] });
+    groups.get(key).tasks.push(task);
+  });
+  return [...groups.values()].sort((a, b) => a.completedBy.localeCompare(b.completedBy));
+}
+
+function completedTasksGroupedHtml(completedTasks = []) {
+  if (!completedTasks.length) return "";
+  return `<section class="popup-record-section daily-report-group-section"><h3>Completed tasks by staff</h3><div class="daily-report-groups">${completedTaskGroupsForDisplay(completedTasks).map((group) => `
+    <article class="record-card compact-record-card daily-report-group-card">
+      <strong>${escapeHtml(group.completedBy)}</strong>
+      <ul class="daily-report-group-list">${group.tasks.map((task) => `<li><span><b>${escapeHtml(task.shiftLabel || taskTabLabel(task.shift))}</b> ${escapeHtml(task.taskText || "Task")}</span>${task.completedAt ? `<small>${escapeHtml(formatDateTime(task.completedAt))}</small>` : ""}</li>`).join("")}</ul>
+    </article>`).join("")}</div></section>`;
+}
+
+function boardingTaskGroupsForDisplay(record = {}) {
+  if (Array.isArray(record.boardingTaskGroups) && record.boardingTaskGroups.length) {
+    return record.boardingTaskGroups
+      .map((group) => ({
+        dogName: String(group.dogName || "Dog").trim() || "Dog",
+        tasks: (Array.isArray(group.tasks) ? group.tasks : []).map((task) => String(task || "").trim()).filter(Boolean),
+      }))
+      .filter((group) => group.tasks.length);
+  }
+  const groups = new Map();
+  const rows = Array.isArray(record.boardingTasks)
+    ? record.boardingTasks
+    : String(record.boardingTasks || "").split(/\n+/);
+  rows.map((row) => String(row || "").trim()).filter(Boolean).forEach((row) => {
+    const match = row.match(/^(.+?)\s+((?:drop-off|pick-up)\s+scheduled\b.*|bath\s+requested\b.*)$/i);
+    const dogName = String(match?.[1] || "Other").trim() || "Other";
+    const taskText = String(match?.[2] || row).trim();
+    const key = dogName.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { dogName, tasks: [] });
+    groups.get(key).tasks.push(taskText);
+  });
+  return [...groups.values()];
+}
+
+function boardingTasksGroupedHtml(record = {}) {
+  const groups = boardingTaskGroupsForDisplay(record);
+  if (!groups.length) return "";
+  return `<section class="popup-record-section daily-report-group-section"><h3>Boarding tasks by dog</h3><div class="daily-report-groups">${groups.map((group) => `
+    <article class="record-card compact-record-card daily-report-group-card">
+      <strong>${escapeHtml(group.dogName)}</strong>
+      <ul class="daily-report-group-list">${group.tasks.map((task) => `<li><span>${escapeHtml(task)}</span></li>`).join("")}</ul>
+    </article>`).join("")}</div></section>`;
+}
+
 function dailyDetailHtml(record) {
   const careLogs = record.structuredCareLogs || record.careLogs || [];
   const completedTasks = completedTasksForRecord(record);
   const monthlyTasks = record.monthlyTasks || [];
-  const completedHtml = completedTasks.length
-    ? `<div class="detail-row"><strong>Completed tasks</strong><span>${completedTasks.map((task) => `${task.shiftLabel || taskTabLabel(task.shift)}: ${task.taskText} - ${task.completedBy || "Staff"}${task.completedAt ? ` at ${formatDateTime(task.completedAt)}` : ""}`).map(escapeHtml).join("<br>")}</span></div>`
-    : "";
+  const completedHtml = completedTasksGroupedHtml(completedTasks);
   const careLogHtml = careLogs.length
     ? `<div class="detail-row"><strong>Structured care logs</strong><span>${careLogs.map((log) => `${log.dogName || "Dog"} - ${log.careType || log.category || "Care"}${log.minutes ? ` (${log.minutes} min)` : ""}${log.note || log.notes ? `: ${log.note || log.notes}` : ""}`).map(escapeHtml).join("<br>")}</span></div>`
     : "";
@@ -4639,7 +4693,7 @@ function dailyDetailHtml(record) {
       ["Tuesday tasks", "tuesdayTasks"],
     ])}
     ${monthlyTasksHtml}
-    ${detailRows(record, [["Boarding tasks", "boardingTasks"]])}
+    ${boardingTasksGroupedHtml(record)}
     ${careLogHtml}
   `;
 }
@@ -5915,22 +5969,36 @@ async function syncBathDatesFromDailyReport(record) {
   await syncOwnedDogCareFromDailyReport(record);
 }
 
-function upcomingBoardingTaskText() {
+function upcomingBoardingTaskGroups() {
   const today = todayDate();
   const tomorrow = addDays(today, 1);
-  const tasks = [];
+  const groups = new Map();
+  const addTask = (dog, taskText) => {
+    const dogName = String(dog.dogName || dog.callName || "Dog").trim() || "Dog";
+    const key = dogName.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { dogId: dog.id || "", dogName, tasks: [] });
+    groups.get(key).tasks.push(taskText);
+  };
   readRecords("boardingDog").forEach((dog) => {
     (dog.stays || []).forEach((stay) => {
-      if (stay.dropoffTime?.slice(0, 10) === today) tasks.push(`${dog.dogName} drop-off scheduled at ${formatDateTime(stay.dropoffTime)}.`);
-      if (stay.pickupTime?.slice(0, 10) === today) tasks.push(`${dog.dogName} pick-up scheduled at ${formatDateTime(stay.pickupTime)}.`);
+      if (stay.dropoffTime?.slice(0, 10) === today) addTask(dog, `drop-off scheduled at ${formatDateTime(stay.dropoffTime)}.`);
+      if (stay.pickupTime?.slice(0, 10) === today) addTask(dog, `pick-up scheduled at ${formatDateTime(stay.pickupTime)}.`);
       if (boardingStayHasService(stay, "Bath")) {
         const pickupDate = stay.pickupTime?.slice(0, 10);
-        if (pickupDate === today) tasks.push(`${dog.dogName} bath requested. ${stay.bathPlan}`);
-        if (pickupDate === tomorrow) tasks.push(`${dog.dogName} bath requested for tomorrow pickup. Complete bath today if pickup is during busy kennel hours.`);
+        if (pickupDate === today) addTask(dog, `bath requested. ${stay.bathPlan}`);
+        if (pickupDate === tomorrow) addTask(dog, "bath requested for tomorrow pickup. Complete bath today if pickup is during busy kennel hours.");
       }
     });
   });
-  return tasks.join("\n");
+  return [...groups.values()];
+}
+
+function boardingTaskTextFromGroups(groups = []) {
+  return groups.flatMap((group) => (group.tasks || []).map((task) => `${group.dogName || "Dog"} ${task}`)).join("\n");
+}
+
+function upcomingBoardingTaskText() {
+  return boardingTaskTextFromGroups(upcomingBoardingTaskGroups());
 }
 
 function dailySubmissionDate(record = {}) {

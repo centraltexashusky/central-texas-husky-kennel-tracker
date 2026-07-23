@@ -6983,22 +6983,36 @@ async function syncBathDatesFromDailyReport(record) {
   await syncOwnedDogCareFromDailyReport(record);
 }
 
-function upcomingBoardingTaskText() {
+function upcomingBoardingTaskGroups() {
   const today = todayDate();
   const tomorrow = addDays(today, 1);
-  const tasks = [];
+  const groups = new Map();
+  const addTask = (dog, taskText) => {
+    const dogName = String(dog.dogName || dog.callName || "Dog").trim() || "Dog";
+    const key = dogName.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { dogId: dog.id || "", dogName, tasks: [] });
+    groups.get(key).tasks.push(taskText);
+  };
   readRecords("boardingDog").forEach((dog) => {
     (dog.stays || []).forEach((stay) => {
-      if (stay.dropoffTime?.slice(0, 10) === today) tasks.push(\`\${dog.dogName} drop-off scheduled at \${formatDateTime(stay.dropoffTime)}.\`);
-      if (stay.pickupTime?.slice(0, 10) === today) tasks.push(\`\${dog.dogName} pick-up scheduled at \${formatDateTime(stay.pickupTime)}.\`);
+      if (stay.dropoffTime?.slice(0, 10) === today) addTask(dog, \`drop-off scheduled at \${formatDateTime(stay.dropoffTime)}.\`);
+      if (stay.pickupTime?.slice(0, 10) === today) addTask(dog, \`pick-up scheduled at \${formatDateTime(stay.pickupTime)}.\`);
       if (boardingStayHasService(stay, "Bath")) {
         const pickupDate = stay.pickupTime?.slice(0, 10);
-        if (pickupDate === today) tasks.push(\`\${dog.dogName} bath requested. \${stay.bathPlan}\`);
-        if (pickupDate === tomorrow) tasks.push(\`\${dog.dogName} bath requested for tomorrow pickup. Complete bath today if pickup is during busy kennel hours.\`);
+        if (pickupDate === today) addTask(dog, \`bath requested. \${stay.bathPlan}\`);
+        if (pickupDate === tomorrow) addTask(dog, "bath requested for tomorrow pickup. Complete bath today if pickup is during busy kennel hours.");
       }
     });
   });
-  return tasks.join("\\n");
+  return [...groups.values()];
+}
+
+function boardingTaskTextFromGroups(groups = []) {
+  return groups.flatMap((group) => (group.tasks || []).map((task) => \`\${group.dogName || "Dog"} \${task}\`)).join("\\n");
+}
+
+function upcomingBoardingTaskText() {
+  return boardingTaskTextFromGroups(upcomingBoardingTaskGroups());
 }
 
 // Extracted to js/daily.js: dailySubmissionDate
