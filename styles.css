@@ -1891,6 +1891,73 @@ button:focus-visible {
   text-transform: uppercase;
 }
 
+.collapsed-activity-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.collapsed-activity-group {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(215, 228, 226, 0.18);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.activity-group-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  min-height: 50px;
+  padding: 10px 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.activity-group-toggle::after {
+  content: "+";
+  font-size: 1.25rem;
+  font-weight: 900;
+  margin-left: 10px;
+}
+
+.activity-group-toggle[aria-expanded="true"]::after {
+  content: "−";
+}
+
+.activity-group-toggle > span {
+  font-weight: 900;
+}
+
+.activity-group-toggle > strong {
+  background: rgba(96, 165, 250, 0.18);
+  border-radius: 999px;
+  color: #BFDBFE;
+  margin-left: auto;
+  min-width: 30px;
+  padding: 3px 8px;
+  text-align: center;
+}
+
+.activity-group-content {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.activity-group-content[hidden] {
+  display: none;
+}
+
+.section-help-text {
+  color: var(--muted);
+  margin-top: -4px;
+}
+
 .record-card {
   background: #f6f8f7;
   border: 1px solid var(--line);
@@ -3539,6 +3606,15 @@ textarea {
   color: var(--muted);
   font-size: 1.5rem;
   font-weight: 900;
+}
+
+.boarding-queue-card.is-leaving-soon {
+  border-color: rgba(245, 158, 11, 0.78);
+  box-shadow: inset 4px 0 0 rgba(245, 158, 11, 0.88), var(--glass-specular);
+}
+
+.boarding-queue-card.is-leaving-soon > strong {
+  color: #FCD34D;
 }
 
 .boarding-queue-item {
@@ -6010,6 +6086,29 @@ option {
 .special-care-dog-actions {
   gap: 6px;
   min-width: 0;
+}
+
+.special-care-alert-note {
+  background: rgba(216, 154, 43, 0.12);
+  border: 1px solid rgba(216, 154, 43, 0.48);
+  border-radius: 10px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.special-care-alert-note > span {
+  color: #FACC6B;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.special-care-alert-note > p {
+  color: var(--text);
+  font-weight: 800;
+  margin: 0;
 }
 
 .special-care-dog-actions button {
@@ -9679,7 +9778,10 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
     overflow-x: auto;
+    scroll-snap-type: x proximity;
   }
 
   .task-scheduler-mobile-week-strip {
@@ -9701,6 +9803,7 @@ body:has(#taskSchedulerPage.is-active) .app-shell {
     justify-items: center;
     min-height: 64px;
     padding: 0.35rem 0;
+    scroll-snap-align: start;
   }
 
   .task-scheduler-mobile-week-strip button span {
@@ -10867,6 +10970,33 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   background: #FFFFFF;
   border-color: #D89A2B;
   box-shadow: inset 4px 0 0 #D89A2B, 0 10px 24px rgba(23, 32, 51, 0.08);
+}
+
+:root[data-theme="light"] .special-care-alert-note {
+  background: #FFF8E8;
+  border-color: #E7C36D;
+}
+
+:root[data-theme="light"] .special-care-alert-note > span {
+  color: #8A5A00;
+}
+
+:root[data-theme="light"] .special-care-alert-note > p {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .collapsed-activity-group {
+  background: #F8FAF7;
+  border-color: #DDE5E2;
+}
+
+:root[data-theme="light"] .activity-group-toggle {
+  color: var(--ink);
+}
+
+:root[data-theme="light"] .activity-group-toggle > strong {
+  background: #EAF1FF;
+  color: #2559C7;
 }
 
 :root[data-theme="light"] .special-care-dog-box strong,

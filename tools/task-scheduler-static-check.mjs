@@ -58,12 +58,14 @@ const dayWidthMatch = scheduler.match(/function taskSchedulerDayMinWidth\(dates 
 if (!dayWidthMatch) {
   failures.push("Could not extract scheduler day-width calculation.");
 } else {
-  const makeDayMinWidth = (view, overlap) => Function(
+  const makeDayMinWidth = (view, overlap, mobile = false) => Function(
     "taskSchedulerView",
     "taskSchedulerMaxOverlap",
+    "window",
     `return (${dayWidthMatch[0]});`,
-  )(view, () => overlap);
-  if (makeDayMinWidth("week", 12)([]) !== 90) failures.push("Busy tasks can still make every week column excessively wide.");
+  )(view, () => overlap, { matchMedia: () => ({ matches: mobile }) });
+  if (makeDayMinWidth("week", 12)([]) !== 130) failures.push("Desktop week columns lost their readable width.");
+  if (makeDayMinWidth("week", 12, true)([]) !== 220) failures.push("Mobile week columns must show roughly 2-3 readable days at a time.");
   if (makeDayMinWidth("day", 1)([]) !== 420) failures.push("Day view lost its readable minimum width.");
   if (makeDayMinWidth("day", 12)([]) !== 640) failures.push("Day view overlap width is not capped.");
 }

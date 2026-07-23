@@ -779,10 +779,15 @@ function ownedDogSpecialCareLogClass(log = {}) {
 function ownedDogSpecialCareDogBoxHtml(record = {}) {
   const dog = normalizeOwnedDogCare(record);
   const name = ownedDogDisplayName(dog) || "Dog";
-  const meta = [dog.sex, dog.careStatus || ownedDogCareSummary(dog)].filter(Boolean).join(" | ");
+  const meta = [dog.sex, dog.careStatus].filter(Boolean).join(" | ");
+  const careAlert = ownedDogCareAlertNotes(dog) || (dog.careStatus ? \`Care status: \${dog.careStatus}\` : "Special care instructions need review.");
   return \`<div class="special-care-dog-box">
     <strong>\${escapeHtml(name)}</strong>
     \${meta ? \`<span>\${escapeHtml(meta)}</span>\` : ""}
+    <div class="special-care-alert-note">
+      <span>Special Care</span>
+      <p>\${multilineHtml(careAlert)}</p>
+    </div>
     <div class="record-actions special-care-dog-actions">
       <button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(dog.id)}">View</button>
       <button type="button" class="secondary-button" data-action="edit-owned" data-id="\${escapeHtml(dog.id)}">Edit</button>
@@ -984,6 +989,10 @@ function ownedDogActivityLogs(record = {}) {
   ].sort((a, b) => new Date(b.date || b.loggedAt || 0) - new Date(a.date || a.loggedAt || 0));
 }
 
+function ownedDogActivityLogCardHtml(log = {}, { removable = false } = {}) {
+  return \`<article class="record-card"><strong>\${escapeHtml(log.type)} - \${escapeHtml(log.date || "")}</strong><p>\${escapeHtml([log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ") || "No notes")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${removable ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="\${escapeHtml(log.id)}">Remove Entry</button></div>\` : ""}</article>\`;
+}
+
 function ownedDogActivityEntriesHtml(record = {}, filter = "All", { removable = false } = {}) {
   const logs = ownedDogActivityLogs(record).filter((log) => filter === "All" || filter === log.group || filter === log.type);
   const grouped = logs.reduce((groups, log) => {
@@ -994,8 +1003,31 @@ function ownedDogActivityEntriesHtml(record = {}, filter = "All", { removable = 
   }, {});
   return logs.length
     ? Object.entries(grouped)
-        .map(([group, items]) => \`<section class="activity-group"><h3>\${escapeHtml(group)}</h3>\${items.map((log) => \`<article class="record-card"><strong>\${escapeHtml(log.type)} - \${escapeHtml(log.date || "")}</strong><p>\${escapeHtml([log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ") || "No notes")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${removable ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="\${escapeHtml(log.id)}">Remove Entry</button></div>\` : ""}</article>\`).join("")}</section>\`)
+        .map(([group, items]) => \`<section class="activity-group"><h3>\${escapeHtml(group)}</h3>\${items.map((log) => ownedDogActivityLogCardHtml(log, { removable })).join("")}</section>\`)
         .join("")
+    : "<p>No activity or training entries yet.</p>";
+}
+
+function ownedDogActivityGroupEntriesHtml(record = {}, group = "") {
+  const logs = ownedDogActivityLogs(record).filter((log) => (log.group || "Activity") === group);
+  return logs.length ? logs.map((log) => ownedDogActivityLogCardHtml(log)).join("") : "<p>No entries in this group.</p>";
+}
+
+function ownedDogCollapsedActivityGroupsHtml(record = {}) {
+  const groups = ownedDogActivityLogs(record).reduce((items, log) => {
+    const group = log.group || "Activity";
+    items[group] = (items[group] || 0) + 1;
+    return items;
+  }, {});
+  const entries = Object.entries(groups);
+  return entries.length
+    ? \`<div class="collapsed-activity-groups">\${entries.map(([group, count]) => \`
+      <section class="activity-group collapsed-activity-group">
+        <button type="button" class="activity-group-toggle" data-action="toggle-owned-activity-group" data-id="\${escapeHtml(record.id || "")}" data-group="\${escapeHtml(group)}" aria-expanded="false">
+          <span>\${escapeHtml(group)}</span><strong>\${count}</strong>
+        </button>
+        <div class="activity-group-content" data-activity-group-content hidden></div>
+      </section>\`).join("")}</div>\`
     : "<p>No activity or training entries yet.</p>";
 }
 
@@ -1099,15 +1131,15 @@ function ownedDogOverviewPopupHtml(record = {}) {
     ["Last heartworm", dog.heartwormDate || "Not recorded"],
     ["Last Leptospirosis", dog.leptospirosisDate || "Not recorded"],
     ["Care status", ownedDogCareSummary(dog)],
-    ["Medical / care alert", ownedDogCareAlertNotes(dog)],
   ].filter(([, value]) => value);
   const quickButtons = ["Treadmill", "Scooter", "Yard Run", "Bath", "Training", "Medical/Behavior Note"]
     .map((type) => \`<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="\${escapeHtml(type)}" data-id="\${escapeHtml(dog.id)}">\${escapeHtml(type === "Medical/Behavior Note" ? "Medical/Behavior" : type)}</button>\`)
     .join("");
   const heatButton = dog.sex === "Female" ? \`<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="Heat Note" data-id="\${escapeHtml(dog.id)}">Heat Note</button>\` : "";
   return \`\${dashboardQuickCareSummaryHtml(dog, "Profile")}
+    <section class="popup-record-section popup-quick-care-actions"><h3>Quick Care Actions</h3><div class="quick-action-grid">\${quickButtons}\${heatButton}<button type="button" class="secondary-button" data-action="open-owned-timeline" data-id="\${escapeHtml(dog.id)}">Open Timeline</button></div></section>
     <section class="popup-record-section"><h3>Overview</h3>\${detailRows.map(([label, value]) => \`<div class="detail-row"><strong>\${escapeHtml(label)}</strong><span>\${escapeHtml(value)}</span></div>\`).join("")}</section>
-    <section class="popup-record-section"><h3>Care Timeline</h3><div class="quick-action-grid">\${quickButtons}\${heatButton}<button type="button" class="secondary-button" data-action="open-owned-timeline" data-id="\${escapeHtml(dog.id)}">Open Timeline</button></div>\${ownedDogActivityEntriesHtml(dog, "All")}</section>\`;
+    <section class="popup-record-section"><h3>Care Logs</h3><p class="section-help-text">Open a category to load its entries.</p>\${ownedDogCollapsedActivityGroupsHtml(dog)}</section>\`;
 }
 
 function openOwnedDogOverviewPopup(record = {}) {

@@ -2571,6 +2571,14 @@ function boardingStayPickupHasPassed(stay = {}, date = new Date()) {
   return !Number.isNaN(pickup.getTime()) && !Number.isNaN(reference.getTime()) && pickup < reference;
 }
 
+function boardingStayLeavesWithinHours(stay = {}, hours = 48, date = new Date()) {
+  const pickup = new Date(stay.pickupTime || stay.scheduledPickupTime || stay.requestedPickupTime || "");
+  const reference = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(pickup.getTime()) || Number.isNaN(reference.getTime())) return false;
+  const remaining = pickup.getTime() - reference.getTime();
+  return remaining >= 0 && remaining <= Math.max(1, Number(hours || 48)) * 60 * 60 * 1000;
+}
+
 function boardingStayIsCurrentOrUpcoming(record = {}, stay = {}, date = new Date()) {
   if (!stay?.id) return true;
   const status = boardingStayDisplayStatus(record, stay);
@@ -2645,6 +2653,7 @@ function boardingQueueStayMatchesGroup(title = "", record = {}, stay = {}) {
     const pickup = new Date(stay.pickupTime);
     return Number.isNaN(pickup.getTime()) || pickup >= new Date();
   }
+  if (title === "Leaving in 48 Hours") return ["Checked In", "In Kennel", "Ready For Pickup"].includes(status) && boardingStayLeavesWithinHours(stay, 48);
   if (title === "Today Pickups") return sameDateValue(stay.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
   return false;
 }
@@ -2663,6 +2672,7 @@ function boardingQueueRecordMatchesGroup(title = "", record = {}) {
   if (title === "Today Drop-offs") return sameDateValue(record.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
   if (title === "Tomorrow Arrivals") return sameDateValue(record.dropoffTime, tomorrow) && status === "Approved";
   if (title === "In Kennel") return status === "In Kennel";
+  if (title === "Leaving in 48 Hours") return ["Checked In", "In Kennel", "Ready For Pickup"].includes(status) && boardingStayLeavesWithinHours(record, 48);
   if (title === "Today Pickups") return sameDateValue(record.pickupTime, today) && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status);
   return false;
 }
@@ -2710,7 +2720,8 @@ function boardingQueueKennelFlagHtml(record = {}, stay = {}) {
 }
 
 function boardingQueueGroupHtml(title, records = []) {
-  return \`<article class="boarding-queue-card"><strong>\${escapeHtml(title)}</strong><span>\${records.length}</span>\${
+  const cardClass = title === "Leaving in 48 Hours" ? "boarding-queue-card is-leaving-soon" : "boarding-queue-card";
+  return \`<article class="\${cardClass}"><strong>\${escapeHtml(title)}</strong><span>\${records.length}</span>\${
     records.length
       ? records.map((record) => {
         const stay = boardingQueueStayForGroup(title, record) || boardingPrimaryStay(record) || {};
@@ -2732,9 +2743,10 @@ function renderBoardingQueueGroups(records = []) {
     ["Today Drop-offs", records.filter((record) => boardingQueueRecordMatchesGroup("Today Drop-offs", record))],
     ["Tomorrow Arrivals", records.filter((record) => boardingQueueRecordMatchesGroup("Tomorrow Arrivals", record))],
     ["In Kennel", records.filter((record) => boardingQueueRecordMatchesGroup("In Kennel", record))],
+    ["Leaving in 48 Hours", records.filter((record) => boardingQueueRecordMatchesGroup("Leaving in 48 Hours", record))],
     ["Today Pickups", records.filter((record) => boardingQueueRecordMatchesGroup("Today Pickups", record))],
   ];
-  const alwaysShowLanes = new Set(["Pending Approval", "Today Drop-offs", "In Kennel"]);
+  const alwaysShowLanes = new Set(["Pending Approval", "Today Drop-offs", "In Kennel", "Leaving in 48 Hours"]);
   container.innerHTML = groups
     .filter(([title, groupRecords]) => alwaysShowLanes.has(title) || groupRecords.length > 0)
     .map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords))

@@ -1816,7 +1816,10 @@ function taskSchedulerMaxOverlap(dates = []) {
 }
 
 function taskSchedulerDayMinWidth(dates = []) {
-  if (taskSchedulerView === "week") return 90;
+  if (taskSchedulerView === "week") {
+    const mobileWeek = typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)").matches;
+    return mobileWeek ? 220 : 130;
+  }
   return Math.min(640, Math.max(420, taskSchedulerMaxOverlap(dates) * 190));
 }
 

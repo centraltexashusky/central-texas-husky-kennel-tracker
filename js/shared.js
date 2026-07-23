@@ -12562,6 +12562,21 @@ function initEvents() {
     if (action.dataset.action === "popup-quick-care") {
       openDashboardQuickCare(action.dataset.id, action.dataset.careType);
     }
+    if (action.dataset.action === "toggle-owned-activity-group") {
+      const groupSection = action.closest(".collapsed-activity-group");
+      const content = groupSection?.querySelector("[data-activity-group-content]");
+      const expanded = action.getAttribute("aria-expanded") === "true";
+      if (!groupSection || !content) return;
+      if (!expanded && content.dataset.loaded !== "true") {
+        const dog = readRecords("ownedDog").find((record) => record.id === action.dataset.id && !record.removed);
+        content.innerHTML = dog ? ownedDogActivityGroupEntriesHtml(dog, action.dataset.group || "") : "<p>This dog record is no longer available.</p>";
+        content.dataset.loaded = "true";
+      }
+      action.setAttribute("aria-expanded", expanded ? "false" : "true");
+      content.hidden = expanded;
+      groupSection.classList.toggle("is-open", !expanded);
+      return;
+    }
     if (action.dataset.action === "open-customer-dog-editor") {
       openCustomerDogEditorForRequest(action.dataset.id);
       return;
