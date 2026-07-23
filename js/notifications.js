@@ -505,7 +505,7 @@ function dashboardAlertsSummaryHtml(alerts = []) {
   const missedNotesHtml = missedBoardingNotesCardHtml();
   if (!alerts.length) return missedNotesHtml || "<p>No action items today.</p>";
   const plural = alerts.length === 1 ? "item" : "items";
-  return missedNotesHtml + \`<article class="record-card compact-record-card clickable-card" data-action="open-dashboard-alert-popup" data-alert-filter="All"><strong>\${alerts.length} action \${plural} today</strong><p>Tap a category above to review and complete that list in a popup.</p><div class="record-actions"><button type="button" class="secondary-button">Open All</button></div></article>\`;
+  return missedNotesHtml + \`<article class="record-card compact-record-card clickable-card" data-action="open-dashboard-alert-popup" data-alert-filter="All"><strong>\${alerts.length} action \${plural} today</strong><p>Open the action list to review and complete today’s work.</p><div class="record-actions"><button type="button" class="secondary-button">Open All</button></div></article>\`;
 }
 
 function dashboardAlertPopupHtml(filter = "All", alerts = dashboardAlertsForMetrics()) {

@@ -17,7 +17,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow" />
+    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -516,7 +516,6 @@
             <label>Review date<input type="date" id="dashboardDate" /></label>
           </div>
           <section class="dashboard-action-panel" aria-label="Today action queue">
-            <div class="profile-tabs dashboard-alert-tabs" id="dashboardAlertTabs" role="tablist" aria-label="Dashboard alert filters"></div>
             <div class="record-grid compact-record-grid" id="dashboardAlerts"></div>
           </section>
           <div class="task-calendar" id="dashboardTaskCalendar" aria-label="Daily task calendar"></div>
@@ -532,7 +531,6 @@
             <div class="record-grid" id="calendarNotesList"></div>
           </div>
           <div class="reminder-panel" id="dashboardReminderPanel"></div>
-          <div class="dashboard-grid" id="dashboardCards"></div>
         </section>
       </section>
 
@@ -921,6 +919,7 @@
             <button type="button" class="secondary-button" data-filter="Bath Due">Bath Due</button>
             <button type="button" class="secondary-button" data-filter="Females">Females</button>
             <button type="button" class="secondary-button" data-filter="Males">Males</button>
+            <button type="button" class="secondary-button" data-filter="Vaccine">Vaccine</button>
             <button type="button" class="secondary-button" data-filter="Heat Watch">Heat Watch</button>
             <span class="special-care-filter-group">
               <button type="button" class="secondary-button" data-filter="Special Care">Special Care</button>
@@ -1595,6 +1594,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow"></script>
+  <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues"></script>
 </body>
 </html>

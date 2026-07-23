@@ -2720,7 +2720,11 @@ function boardingQueueKennelFlagHtml(record = {}, stay = {}) {
 }
 
 function boardingQueueGroupHtml(title, records = []) {
-  const cardClass = title === "Leaving in 48 Hours" ? "boarding-queue-card is-leaving-soon" : "boarding-queue-card";
+  const cardClass = [
+    "boarding-queue-card",
+    title === "Leaving in 48 Hours" ? "is-leaving-soon" : "",
+    records.length ? "" : "is-empty",
+  ].filter(Boolean).join(" ");
   return \`<article class="\${cardClass}"><strong>\${escapeHtml(title)}</strong><span>\${records.length}</span>\${
     records.length
       ? records.map((record) => {
@@ -2731,7 +2735,7 @@ function boardingQueueGroupHtml(title, records = []) {
         const metaFlags = [boardingQueueStayDateFlagsHtml(record, stay), boardingQueueKennelFlagHtml(record, stay)].filter(Boolean).join("");
         return \`<button type="button" class="\${itemClass}" data-action="open-queue-stay-status" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${boardingDogThumbnailHtml(record, { className: "boarding-queue-photo" })}<span class="boarding-queue-item-content"><span class="boarding-queue-item-title"><span>\${escapeHtml(record.dogName || "Dog")}</span>\${boardingServiceOnlyChipHtml(record, stay)}</span>\${metaFlags ? \`<span class="boarding-queue-meta-row">\${metaFlags}</span>\` : ""}</span></button>\`;
       }).join("")
-      : \`<p>No dogs in this group.</p>\`
+      : ""
   }</article>\`;
 }
 
@@ -2746,9 +2750,7 @@ function renderBoardingQueueGroups(records = []) {
     ["Leaving in 48 Hours", records.filter((record) => boardingQueueRecordMatchesGroup("Leaving in 48 Hours", record))],
     ["Today Pickups", records.filter((record) => boardingQueueRecordMatchesGroup("Today Pickups", record))],
   ];
-  const alwaysShowLanes = new Set(["Pending Approval", "Today Drop-offs", "In Kennel", "Leaving in 48 Hours"]);
   container.innerHTML = groups
-    .filter(([title, groupRecords]) => alwaysShowLanes.has(title) || groupRecords.length > 0)
     .map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords))
     .join("");
   hydrateProfilePhotoElements(container);

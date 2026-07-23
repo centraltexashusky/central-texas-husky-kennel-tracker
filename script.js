@@ -545,6 +545,33 @@ function ownedDogHasCareNote(record = {}) {
   );
 }
 
+function ownedDogVaccineReviewItems(record = {}, referenceDate = todayDate()) {
+  return ownedLoggedVaccinationConfig.map((loggedConfig, index) => {
+    const dueConfig = ownedHealthDueConfig[index] || {};
+    const loggedDate = dateOnly(record[loggedConfig.field]);
+    const dueDate = dateOnly(record[dueConfig.field]);
+    if (!loggedDate) {
+      return { field: loggedConfig.field, label: `No ${loggedConfig.label} Logged`, className: "is-red-warning" };
+    }
+    if (!dueDate) {
+      return { field: dueConfig.field, label: `${loggedConfig.label} renewal date missing`, className: "is-red-warning" };
+    }
+    const days = daysBetweenDates(referenceDate, dueDate);
+    if (days === null || days > 30) return null;
+    return {
+      field: dueConfig.field,
+      dueDate,
+      days,
+      label: ownedHealthDueText(loggedConfig.label, days, true),
+      className: days < 0 ? "is-red-warning" : "is-orange-warning",
+    };
+  }).filter(Boolean);
+}
+
+function ownedDogNeedsVaccineReview(record = {}, referenceDate = todayDate()) {
+  return ownedDogVaccineReviewItems(record, referenceDate).length > 0;
+}
+
 function ownedDogMatchesCareFilter(record = {}, filter = ownedDogCareFilter, date = todayDate()) {
   const heat = ownedDogHeatStatus(record, date);
   if (filter === "Exercise Due") return ownedDogExerciseDue(record, date);
@@ -552,6 +579,7 @@ function ownedDogMatchesCareFilter(record = {}, filter = ownedDogCareFilter, dat
   if (filter === "Bath Due") return ownedDogBathDue(record, date);
   if (filter === "Females") return record.sex === "Female";
   if (filter === "Males") return record.sex === "Male";
+  if (filter === "Vaccine") return ownedDogNeedsVaccineReview(record, date);
   if (filter === "Heat Watch") return record.sex === "Female" && (heat.inHeat || heat.expectedSoon || heat.overdue || heat.state === "unknown");
   if (filter === "Special Care") return ownedDogHasCareNote(record);
   return true;
@@ -6226,6 +6254,7 @@ function renderOwnedDogs() {
       const heat = ownedDogHeatStatus(dog);
       return heat.expectedSoon || heat.overdue;
     }).length,
+    vaccineReview: allDogs.filter((dog) => ownedDogNeedsVaccineReview(dog)).length,
     specialCare: allDogs.filter((dog) => ownedDogHasCareNote(dog)).length,
   };
   if ($("#ownedDogSummary")) {
@@ -6259,6 +6288,7 @@ function renderOwnedDogFilterCounts(summary = {}) {
     "Bath Due": summary.bathsDue || 0,
     Females: summary.females || 0,
     Males: summary.males || 0,
+    Vaccine: summary.vaccineReview || 0,
     "Heat Watch": (summary.femalesInHeat || 0) + (summary.heatExpectedSoon || 0),
     "Special Care": summary.specialCare || 0,
   };
@@ -6396,7 +6426,11 @@ function boardingQueueGroupHtml(title, records = []) {
   const overflowHtml = overflow > 0
     ? `<button type="button" class="boarding-queue-overflow" data-action="boarding-queue-show-more" data-filter="${escapeHtml(title)}">+${overflow} more - view all</button>`
     : "";
-  const cardClass = title === "Leaving in 48 Hours" ? "boarding-queue-card is-leaving-soon" : "boarding-queue-card";
+  const cardClass = [
+    "boarding-queue-card",
+    title === "Leaving in 48 Hours" ? "is-leaving-soon" : "",
+    records.length ? "" : "is-empty",
+  ].filter(Boolean).join(" ");
   return `<article class="${cardClass}"><strong>${escapeHtml(title)}</strong><span>${records.length}</span>${
     preview.length
       ? preview.map((record) => {
@@ -6405,7 +6439,7 @@ function boardingQueueGroupHtml(title, records = []) {
         const metaFlags = [boardingQueueStayDateFlagsHtml(record, stay), boardingQueueKennelFlagHtml(record, stay)].filter(Boolean).join("");
         return `<button type="button" class="boarding-queue-item" data-action="open-queue-stay-status" data-id="${escapeHtml(record.id)}"${stayAttrs}><span class="boarding-queue-item-content"><span class="boarding-queue-item-title"><span>${escapeHtml(record.dogName || "Dog")}</span></span>${metaFlags ? `<span class="boarding-queue-meta-row">${metaFlags}</span>` : ""}</span></button>`;
       }).join("")
-      : `<p>No dogs in this group.</p>`
+      : ""
   }${overflowHtml}</article>`;
 }
 
@@ -6420,9 +6454,7 @@ function renderBoardingQueueGroups(records = []) {
     ["Leaving in 48 Hours", records.filter((record) => boardingQueueRecordMatchesGroup("Leaving in 48 Hours", record))],
     ["Today Pickups", records.filter((record) => boardingQueueRecordMatchesGroup("Today Pickups", record))],
   ];
-  const alwaysShowLanes = new Set(["Pending Approval", "Today Drop-offs", "In Kennel", "Leaving in 48 Hours"]);
   container.innerHTML = groups
-    .filter(([title, groupRecords]) => alwaysShowLanes.has(title) || groupRecords.length > 0)
     .map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords))
     .join("");
 }
@@ -12107,7 +12139,7 @@ function dashboardFilteredAlerts(alerts = [], filter = dashboardAlertFilter) {
 function dashboardAlertsSummaryHtml(alerts = []) {
   if (!alerts.length) return "<p>No action items today.</p>";
   const plural = alerts.length === 1 ? "item" : "items";
-  return `<article class="record-card compact-record-card clickable-card" data-action="open-dashboard-alert-popup" data-alert-filter="All"><strong>${alerts.length} action ${plural} today</strong><p>Tap a category above to review and complete that list in a popup.</p><div class="record-actions"><button type="button" class="secondary-button">Open All</button></div></article>`;
+  return `<article class="record-card compact-record-card clickable-card" data-action="open-dashboard-alert-popup" data-alert-filter="All"><strong>${alerts.length} action ${plural} today</strong><p>Open the action list to review and complete today’s work.</p><div class="record-actions"><button type="button" class="secondary-button">Open All</button></div></article>`;
 }
 
 function dashboardAlertPopupHtml(filter = "All", alerts = dashboardAlertsForMetrics()) {
@@ -12133,31 +12165,11 @@ function openDashboardAlertPopup(filter = "All") {
 }
 
 function renderDashboard() {
-  if (!$("#dashboardCards")) return;
+  if (!$("#dashboardPage")) return;
   $("#dashboardDate").value ||= todayDate();
   const metrics = dashboardMetrics();
-  const needsActionCount =
-    metrics.exerciseDueDogs.length +
-    metrics.trainingDueDogs.length +
-    metrics.ownedBathDueDogs.length +
-    metrics.boardingServiceDue.length +
-    metrics.inHeatDogs.length +
-    metrics.heatSoonDogs.length +
-    metrics.medicalCareDogs.length +
-    metrics.ownerUpdates +
-    metrics.openRequests +
-    metrics.openMaintenance;
-  const cards = [
-    ["needsAction", "Needs Action Today", needsActionCount, "Care due, heat watch, owner updates, requests, and maintenance."],
-    ["exerciseDue", "Exercise Due", metrics.exerciseDueDogs.length, metrics.exerciseDueDogs.map(ownedDogDisplayName).join(", ") || "None due."],
-    ["trainingDue", "Training Due", metrics.trainingDueDogs.length, metrics.trainingDueDogs.map(ownedDogDisplayName).join(", ") || "None due."],
-    ["baths", "Baths Due", metrics.ownedBathDueDogs.length + metrics.boardingBathDue.length, [...metrics.ownedBathDueDogs.map(ownedDogDisplayName), ...metrics.boardingBathDue].join(", ") || "None due."],
-    ["inHeat", "Females In Heat", metrics.inHeatDogs.length, metrics.inHeatDogs.map(ownedDogDisplayName).join(", ") || "None."],
-  ];
-  $("#dashboardCards").innerHTML = cards.map(([key, label, value, note]) => `<article class="dashboard-card clickable-card" data-action="dashboard-detail" data-key="${key}"><span>${label}</span><strong>${value}</strong><p>${note}</p></article>`).join("");
   renderDashboardReminders(metrics);
   const alerts = dashboardAlertsForMetrics(metrics);
-  renderDashboardAlertTabs(alerts);
   const dashboardAlerts = $("#dashboardAlerts");
   if (!dashboardAlerts) {
     renderDashboardTaskCalendar();
@@ -16763,7 +16775,7 @@ function initEvents() {
     const button = event.target.closest("[data-action]");
     if (button) openDashboardPriority(button.dataset.action || "");
   });
-  $("#dashboardCards").addEventListener("click", (event) => {
+  $("#dashboardCards")?.addEventListener("click", (event) => {
     const card = event.target.closest('[data-action="dashboard-detail"]');
     if (card) showDashboardDetail(card.dataset.key);
   });

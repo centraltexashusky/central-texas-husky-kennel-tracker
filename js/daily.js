@@ -72,6 +72,33 @@ function ownedDogHasCareNote(record = {}) {
   return Boolean(ownedDogCareAlertNotes(record) || record.careStatus);
 }
 
+function ownedDogVaccineReviewItems(record = {}, referenceDate = todayDate()) {
+  return ownedLoggedVaccinationConfig.map((loggedConfig, index) => {
+    const dueConfig = ownedHealthDueConfig[index] || {};
+    const loggedDate = dateOnly(record[loggedConfig.field]);
+    const dueDate = dateOnly(record[dueConfig.field]);
+    if (!loggedDate) {
+      return { field: loggedConfig.field, label: \`No \${loggedConfig.label} Logged\`, className: "is-red-warning" };
+    }
+    if (!dueDate) {
+      return { field: dueConfig.field, label: \`\${loggedConfig.label} renewal date missing\`, className: "is-red-warning" };
+    }
+    const days = daysBetweenDates(referenceDate, dueDate);
+    if (days === null || days > 30) return null;
+    return {
+      field: dueConfig.field,
+      dueDate,
+      days,
+      label: ownedHealthDueText(loggedConfig.label, days, true),
+      className: days < 0 ? "is-red-warning" : "is-orange-warning",
+    };
+  }).filter(Boolean);
+}
+
+function ownedDogNeedsVaccineReview(record = {}, referenceDate = todayDate()) {
+  return ownedDogVaccineReviewItems(record, referenceDate).length > 0;
+}
+
 function ownedDogMatchesCareFilter(record = {}, filter = ownedDogCareFilter, date = todayDate()) {
   const heat = ownedDogHeatStatus(record, date);
   if (filter === "Exercise Due") return ownedDogExerciseDue(record, date);
@@ -79,6 +106,7 @@ function ownedDogMatchesCareFilter(record = {}, filter = ownedDogCareFilter, dat
   if (filter === "Bath Due") return ownedDogBathDue(record, date);
   if (filter === "Females") return record.sex === "Female";
   if (filter === "Males") return record.sex === "Male";
+  if (filter === "Vaccine") return ownedDogNeedsVaccineReview(record, date);
   if (filter === "Heat Watch") return record.sex === "Female" && (heat.inHeat || heat.expectedSoon || heat.overdue || heat.state === "unknown");
   if (filter === "Special Care") return ownedDogHasCareNote(record);
   return true;
@@ -658,7 +686,12 @@ function ownedDogHeatAlertItem(record = {}, referenceDate = todayDate()) {
 
 function ownedDogRosterAlertItems(record = {}, referenceDate = todayDate()) {
   const heatItem = ownedDogHeatAlertItem(record, referenceDate);
-  return [...(heatItem ? [heatItem] : []), ...ownedDogHealthDueItems(record, referenceDate)];
+  const heartwormItem = ownedDogHeartwormDueItem(record, referenceDate);
+  return [
+    ...(heatItem ? [heatItem] : []),
+    ...ownedDogVaccineReviewItems(record, referenceDate),
+    ...(heartwormItem ? [heartwormItem] : []),
+  ];
 }
 
 function ownedDogRosterAlertChipsHtml(record = {}, referenceDate = todayDate()) {
@@ -856,6 +889,7 @@ function renderOwnedDogs() {
       const heat = ownedDogHeatStatus(dog);
       return heat.expectedSoon || heat.overdue;
     }).length,
+    vaccineReview: allDogs.filter((dog) => ownedDogNeedsVaccineReview(dog)).length,
     specialCare: allDogs.filter((dog) => ownedDogHasCareNote(dog)).length,
   };
   if ($("#ownedDogSummary")) {
@@ -897,6 +931,7 @@ function renderOwnedDogFilterCounts(summary = {}) {
     "Bath Due": summary.bathsDue || 0,
     Females: summary.females || 0,
     Males: summary.males || 0,
+    Vaccine: summary.vaccineReview || 0,
     "Heat Watch": (summary.femalesInHeat || 0) + (summary.heatExpectedSoon || 0),
     "Special Care": summary.specialCare || 0,
   };

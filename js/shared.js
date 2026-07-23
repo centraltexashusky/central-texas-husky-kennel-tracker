@@ -9681,31 +9681,11 @@ function dashboardCardVisibleToCurrentRole(key = "") {
 }
 
 function renderDashboard() {
-  if (!$("#dashboardCards")) return;
+  if (!$("#dashboardPage")) return;
   $("#dashboardDate").value ||= todayDate();
   const metrics = dashboardMetrics();
-  const needsActionCount =
-    metrics.exerciseDueDogs.length +
-    metrics.trainingDueDogs.length +
-    metrics.ownedBathDueDogs.length +
-    metrics.boardingServiceDue.length +
-    metrics.inHeatDogs.length +
-    metrics.heatSoonDogs.length +
-    metrics.medicalCareDogs.length +
-    metrics.ownerUpdates +
-    metrics.openRequests +
-    metrics.openMaintenance;
-  const cards = [
-    ["needsAction", "Needs Action Today", needsActionCount, "Care due, heat watch, owner updates, requests, and maintenance."],
-    ["exerciseDue", "Exercise Due", metrics.exerciseDueDogs.length, metrics.exerciseDueDogs.map(ownedDogDisplayName).join(", ") || "None due."],
-    ["trainingDue", "Training Due", metrics.trainingDueDogs.length, metrics.trainingDueDogs.map(ownedDogDisplayName).join(", ") || "None due."],
-    ["baths", "Baths Due", metrics.ownedBathDueDogs.length + metrics.boardingBathDue.length, [...metrics.ownedBathDueDogs.map(ownedDogDisplayName), ...metrics.boardingBathDue].join(", ") || "None due."],
-    ["inHeat", "Females In Heat", metrics.inHeatDogs.length, metrics.inHeatDogs.map(ownedDogDisplayName).join(", ") || "None."],
-  ].filter(([key]) => dashboardCardVisibleToCurrentRole(key));
-  $("#dashboardCards").innerHTML = cards.map(([key, label, value, note]) => \`<article class="dashboard-card clickable-card" data-action="dashboard-detail" data-key="\${key}"><span>\${label}</span><strong>\${value}</strong><p>\${note}</p></article>\`).join("");
   renderDashboardReminders(metrics);
   const alerts = dashboardAlertsForMetrics(metrics);
-  renderDashboardAlertTabs(alerts);
   const dashboardAlerts = $("#dashboardAlerts");
   if (!dashboardAlerts) {
     renderDashboardTaskCalendar();
@@ -11651,7 +11631,7 @@ function initEvents() {
     const button = event.target.closest("[data-action]");
     if (button) openDashboardPriority(button.dataset.action || "");
   });
-  $("#dashboardCards").addEventListener("click", (event) => {
+  $("#dashboardCards")?.addEventListener("click", (event) => {
     const card = event.target.closest('[data-action="dashboard-detail"]');
     if (!card) return;
     if (!dashboardCardVisibleToCurrentRole(card.dataset.key)) return;

@@ -1,15 +1,15 @@
 // === MODULE: MAIN ===
 import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
-import "./shared.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow";
+import "./shared.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues";
 import "./auth.js?v=20260721-dog-show-nav-user-profile";
 import "./customer.js?v=20260722-multi-operation-windows";
-import "./boarding.js?v=20260723-profile-ux-fixes-v2-operational-flow";
-import "./daily.js?v=20260723-profile-ux-fixes-v2-operational-flow";
+import "./boarding.js?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues";
+import "./daily.js?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues";
 import "./task-scheduler.js?v=20260722-compact-week-grid-fit-operational-flow";
 import "./dog-show.js?v=20260720-dog-show-progress";
 import "./timesheet.js?v=20260709-staff-payroll-financials";
 import "./settings.js?v=20260722-multi-operation-windows";
-import "./notifications.js?v=20260723-customer-file-view-v2";
+import "./notifications.js?v=20260723-customer-file-view-v2-dashboard-vaccine-queues";
 import "./search.js?v=20260623-efficiency-guardrails";
 
 initializeApp().catch((error) => {
