@@ -4400,15 +4400,10 @@ function bindTaskListInteractions(listEl) {
   listEl.addEventListener("click", async (event) => {
     const control = event.target.closest("[data-action]");
     if (!control) return;
-    if (control.dataset.action === "edit-task") return;
     event.preventDefault();
+    if (control.dataset.action === "open-edit-task") openDailyTaskEditPopup(control.dataset.shift, control.dataset.id);
     if (control.dataset.action === "complete-task") await completeDailyTask(control);
     if (control.dataset.action === "remove-task") await removeTask(control.dataset.shift, control.dataset.id);
-  });
-  listEl.addEventListener("change", async (event) => {
-    const input = event.target.closest('[data-action="edit-task"]');
-    if (!input) return;
-    await editTask(input.dataset.shift, input.dataset.id, input.value, input);
   });
   listEl.addEventListener("dragstart", (event) => {
     const row = event.target.closest(".task-item[draggable='true']");
@@ -4451,10 +4446,6 @@ function inputForDailyTaskDraftKey(key = "") {
     const shift = key.slice("custom:".length);
     return $$("[data-custom-task-input]").find((input) => input.dataset.customTaskInput === shift) || null;
   }
-  if (key.startsWith("edit:")) {
-    const [, shift, id] = key.split(":");
-    return $$('[data-action="edit-task"]').find((input) => input.dataset.shift === shift && input.dataset.id === id) || null;
-  }
   if (key.startsWith("id:")) return document.getElementById(key.slice("id:".length));
   return null;
 }
@@ -4465,10 +4456,7 @@ function captureDailyTaskDraftState() {
   dailyTaskDraftInputs().forEach((input) => {
     const key = dailyTaskDraftInputKey(input);
     if (!key) return;
-    const isEditInput = input.dataset?.action === "edit-task";
-    if ((isEditInput && input === active) || (!isEditInput && (input.value || input === active))) {
-      values[key] = input.value;
-    }
+    if (input.value || input === active) values[key] = input.value;
   });
   const activeKey = dailyTaskDraftInputKey(active);
   return {
@@ -4599,15 +4587,18 @@ async function editTask(shift, id, text, sourceInput) {
   const trimmed = text.trim();
   if (!trimmed) {
     showToast("Task text cannot be blank.");
-    sourceInput.value = readTaskConfig()[shift]?.find((task) => task.id === id)?.text || "";
-    return;
+    if (sourceInput) sourceInput.value = readTaskConfig()[shift]?.find((task) => task.id === id)?.text || "";
+    return null;
   }
   const config = readTaskConfig();
   const task = config[shift]?.find((item) => item.id === id);
-  if (!task || task.text === trimmed) return;
+  if (!task) return null;
+  if (task.text === trimmed) return task;
   task.text = trimmed;
   await persistTaskConfig(config);
+  renderDailyTaskLists();
   showToast("Task text updated.");
+  return task;
 }
 
 function showTaskAddedStatus(input, message = "Task added.") {
@@ -11956,6 +11947,7 @@ function initEvents() {
     const holidayForm = event.target.closest("#holidayForm");
     const operationDateOverrideForm = event.target.closest("#operationDateOverrideForm");
     const taskTabForm = event.target.closest("#taskTabForm");
+    const dailyTaskEditForm = event.target.closest("#dailyTaskEditForm");
     const kennelBuildingTabForm = event.target.closest("#kennelBuildingTabForm");
     const ownedDogPhotoUploadForm = event.target.closest("#ownedDogPhotoUploadForm");
     const boardingCheckInForm = event.target.closest("#boardingCheckInForm");
@@ -11967,7 +11959,7 @@ function initEvents() {
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
     const boardingRequestFilterForm = event.target.closest("#boardingRequestFilterForm");
     const customerCancellationReasonForm = event.target.closest("#customerCancellationReasonForm");
-    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, holidayForm, operationDateOverrideForm, taskTabForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, boardingMedicalBehaviorNoteForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
+    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, holidayForm, operationDateOverrideForm, taskTabForm, dailyTaskEditForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, boardingMedicalBehaviorNoteForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
     if (!handledDetailForms.some(Boolean)) return;
     event.preventDefault();
     if (customerCancellationReasonForm) {
@@ -12118,6 +12110,17 @@ function initEvents() {
         $("#detailDialog").close();
         showToast("Task tab added.");
       }
+      return;
+    }
+    if (dailyTaskEditForm) {
+      if (!validateForm(dailyTaskEditForm)) return;
+      const updated = await editTask(
+        dailyTaskEditForm.dataset.shift,
+        dailyTaskEditForm.dataset.id,
+        dailyTaskEditForm.elements.taskText.value,
+        dailyTaskEditForm.elements.taskText,
+      );
+      if (updated) $("#detailDialog").close();
       return;
     }
     if (kennelBuildingTabForm) {
