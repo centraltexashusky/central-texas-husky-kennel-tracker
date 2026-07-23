@@ -18,10 +18,10 @@ if (!timesheet.includes('Number(record.hours || 0) > 0 && record.clockOutTime'))
 if (!timesheet.includes("total: hours * rate")) {
   failures.push("Payroll no longer multiplies completed hours by the saved hourly rate.");
 }
-if (!main.includes('shared.js?v=20260723-customer-file-view')) {
+if (!main.includes('shared.js?v=20260723-customer-file-view-v2')) {
   failures.push("The payroll record-loading fix is not cache-busted.");
 }
-if (!index.includes('js/main.js?v=20260723-customer-file-view')) {
+if (!index.includes('js/main.js?v=20260723-customer-file-view-v2')) {
   failures.push("The application entrypoint does not expose the payroll fix.");
 }
 

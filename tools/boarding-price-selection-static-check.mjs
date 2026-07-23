@@ -53,7 +53,7 @@ const checks = [
     message: "main module must import the cache-busted boarding module.",
   },
   {
-    pass: index.includes("20260723-customer-file-view"),
+    pass: index.includes("20260723-customer-file-view-v2"),
     message: "index.html must expose the latest main module cache key.",
   },
 ];

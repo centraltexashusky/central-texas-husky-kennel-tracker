@@ -25,8 +25,8 @@ if (!notifications.includes('if (name === "customerDogFileUploaded") return "Vie
 if (!shared.includes("compact.notificationFileItems = compactMediaItemsForStorage")) failures.push("Notification file references are not compacted safely for storage.");
 if (!shared.includes('notifyIfNeeded({ ...record, notificationFileItems }, "customerDogFileUploaded")')) failures.push("New customer upload alerts do not retain the exact uploaded files.");
 if (!shared.includes('action.dataset.action === "open-customer-notification-file"') || !shared.includes("await openMediaFromButton(action)")) failures.push("The customer notification file button is not handled inside the popup before event propagation.");
-if (!main.includes('notifications.js?v=20260723-customer-file-view')) failures.push("The notification module is not cache-busted.");
-if (!index.includes('js/main.js?v=20260723-customer-file-view')) failures.push("The application entrypoint is not cache-busted.");
+if (!main.includes('notifications.js?v=20260723-customer-file-view-v2')) failures.push("The notification module is not cache-busted.");
+if (!index.includes('js/main.js?v=20260723-customer-file-view-v2')) failures.push("The application entrypoint is not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

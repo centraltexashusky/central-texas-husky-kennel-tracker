@@ -32,7 +32,7 @@ const required = [
   ["styles.css", ':root[data-theme="dark"] .dog-show-progress-section', "Show Progress is not legible in dark mode."],
   ["styles.css", ':root[data-theme="dark"] .dog-show-more-menu {', "Dog Show More menu is still translucent in dark mode."],
   ["styles.css", ':root[data-theme="dark"] .dog-show-more-menu button {', "Dog Show More menu rows are still translucent in dark mode."],
-  ["js/main.js", 'notifications.js?v=20260723-customer-file-view', "Dog Show notification changes are not cache-busted."],
+  ["js/main.js", 'notifications.js?v=20260723-customer-file-view-v2', "Dog Show notification changes are not cache-busted."],
   ["js/shared.js", 'dogShowPage: ["showEvent"', "Dog Show remote records are not page-scoped."],
   ["js/shared.js", 'dogShowPage: () => renderDogShow()', "Dog Show page renderer is not registered."],
   ["js/shared.js", 'if (typeof setupDogShowEventListeners', "Dog Show event listeners are not initialized."],
