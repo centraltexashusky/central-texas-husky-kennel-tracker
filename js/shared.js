@@ -581,7 +581,7 @@ var tableColumns = {
     { key: "callName", label: "Call Name", value: (record) => record.callName || "" },
     { key: "sex", label: "Sex", value: (record) => record.sex || "" },
     { key: "careStatus", label: "Care Status", value: (record) => ownedDogCareSummary(record) },
-    { key: "specialCare", label: "Special Care Note", value: (record) => record.specialCare || "" },
+    { key: "specialCare", label: "Medical / Care Alert", value: (record) => ownedDogCareAlertNotes(record) },
     { key: "dateOfBirth", label: "DOB", value: (record) => record.dateOfBirth || "" },
     { key: "rabiesDate", label: "Rabies", value: (record) => record.rabiesDate || "" },
     { key: "lastBath", label: "Last Bath", value: (record) => record.lastBath || "" },
@@ -9528,10 +9528,7 @@ function dashboardQuickCareSummaryHtml(dog, careType) {
     ],
     "Medical/Care": [
       ["Care status", dog.careStatus || "Review notes"],
-      ["Medical notes", dog.medicalNotes || dog.medicalCareNotes || "No medical note saved"],
-      ["Behavior notes", dog.behaviorNotes || "No behavior note saved"],
-      ["Special care", dog.specialCare || "No special care note saved"],
-      ["General note", dog.generalCareNotes || dog.notes || "No general note saved"],
+      ["Medical / care alert", ownedDogCareAlertNotes(dog) || "No medical or care alert note saved"],
     ],
   };
   const exerciseRows = [
@@ -9933,17 +9930,14 @@ function dashboardOwnedDogNote(record = {}, category = "") {
   if (category === "Training") return record.trainingRoutine || record.trainingGoals || record.trainingSessionNotes || "Log a training session.";
   if (category === "Bath") return record.bathRoutine || record.bathProducts || record.coatNotes || "Bath is due.";
   if (category === "Heat") return record.heatCycleNotes || record.heatCycle || "Review heat cycle status.";
-  if (category === "Medical/Care") return record.medicalCareNotes || record.specialCare || record.behaviorNotes || "Review care notes.";
+  if (category === "Medical/Care") return ownedDogCareAlertNotes(record) || "Review care notes.";
   if (category === "Vaccine") return "Review and update vaccine date.";
   return record.generalCareNotes || record.notes || "";
 }
 
 function dashboardMedicalCareItems(record = {}) {
   const candidates = [
-    ["Medical note", record.medicalNotes || record.medicalCareNotes, "Check the condition and record today's observation or treatment response."],
-    ["Behavior note", record.behaviorNotes, "Follow the handling guidance and record today's behavior."],
-    ["Special care", record.specialCare, "Complete the listed care instruction and record the outcome."],
-    ["General care", record.generalCareNotes || record.notes, "Review this instruction and record any change that the next handler needs to know."],
+    ["Medical / care alert", ownedDogCareAlertNotes(record), "Review the instruction, complete the applicable care, and update the note when the alert is no longer active."],
   ];
   const seen = new Set();
   return candidates.filter(([, note]) => {
@@ -13443,6 +13437,9 @@ function initEvents() {
         removedBy: "",
         submittedAt: existing.submittedAt || new Date().toISOString(),
         ...formData,
+        medicalCareNotes: String(formData.medicalCareNotes || "").trim(),
+        specialCare: "",
+        generalCareNotes: "",
         rabiesGoodThreeYears: formEl.elements.rabiesGoodThreeYears?.checked ? "Yes" : "",
         exerciseFrequencyDays: nonNegativeNumberFrom(formData.exerciseFrequencyDays, nonNegativeNumberFrom(normalizedExisting.exerciseFrequencyDays, careDefaults.exerciseFrequencyDays)),
         trainingFrequencyDays: nonNegativeNumberFrom(formData.trainingFrequencyDays, nonNegativeNumberFrom(normalizedExisting.trainingFrequencyDays, careDefaults.trainingFrequencyDays)),
@@ -13532,10 +13529,6 @@ function initEvents() {
   $("#addTrainingLog").addEventListener("click", () => {
     addOwnedLog("Training", "", $("#ownedTrainingEntry").value);
     $("#ownedTrainingEntry").value = "";
-  });
-  $("#addCareNoteLog").addEventListener("click", () => {
-    addOwnedLog("Medical/Care", "", $("#ownedCareEntry").value);
-    $("#ownedCareEntry").value = "";
   });
   $("#ownedActivityFilter").addEventListener("change", () => renderOwnedActivity());
   $("#ownedActivityHistory").addEventListener("click", async (event) => {

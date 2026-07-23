@@ -10,7 +10,7 @@ if (!styles.includes(".calendar-report-count {\n  background: #2F6FED;")) {
 if (!styles.includes("min-width: 18px;") || !styles.includes("width: max-content;")) {
   failures.push("Dashboard calendar count badges do not have stable compact dimensions.");
 }
-if (!index.includes('styles.css?v=20260722-multi-operation-windows')) {
+if (!index.includes('styles.css?v=20260723-profile-ux-fixes-v2')) {
   failures.push("Dashboard calendar badge styles are not cache-busted.");
 }
 

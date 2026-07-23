@@ -17,7 +17,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260722-multi-operation-windows" />
+    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -775,7 +775,10 @@
             <div class="section-heading dog-show-heading">
               <span>S</span>
               <div>
-                <h2>Dog Show Dashboard</h2>
+                <div class="module-heading-title">
+                  <h2>Dog Show Dashboard</h2>
+                  <span class="service-info-icon module-info-icon" role="button" tabindex="0" aria-label="Dog Shows is a standalone show-operations workspace. Dogs are linked from Our Dogs or Boarding Dogs only when they are added to a show roster; show tasks do not belong in the boarding shift queue." title="Dog Shows is a standalone show-operations workspace. Dogs are linked from Our Dogs or Boarding Dogs only when they are added to a show roster; show tasks do not belong in the boarding shift queue." data-tooltip="Dog Shows is a standalone show-operations workspace. Dogs are linked from Our Dogs or Boarding Dogs only when they are added to a show roster; show tasks do not belong in the boarding shift queue."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>
+                </div>
                 <p>Run show weekends, dog care, prep timing, helper assignments, and results.</p>
               </div>
             </div>
@@ -908,7 +911,10 @@
           <div class="section-heading">
             <span>D</span>
             <div>
-              <h2>Our Dogs</h2>
+              <div class="module-heading-title">
+                <h2>Our Dogs</h2>
+                <span class="service-info-icon module-info-icon" role="button" tabindex="0" aria-label="Our Dogs is for dogs owned or managed by the business: health, feeding, exercise, training, breeding and heat-cycle care. Customer boarding reservations and kennel-shift work belong in Boarding Dogs." title="Our Dogs is for dogs owned or managed by the business: health, feeding, exercise, training, breeding and heat-cycle care. Customer boarding reservations and kennel-shift work belong in Boarding Dogs." data-tooltip="Our Dogs is for dogs owned or managed by the business: health, feeding, exercise, training, breeding and heat-cycle care. Customer boarding reservations and kennel-shift work belong in Boarding Dogs."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>
+              </div>
               <p>Track health, feeding, exercise, training, heat cycles, and special care for Central Texas Husky dogs.</p>
             </div>
           </div>
@@ -1072,13 +1078,7 @@
 
             <section class="owned-profile-section" data-owned-profile-section="Medical / Care Notes" hidden>
               <div class="section-heading compact-heading"><span>M</span><div><h2>Medical / Care Notes</h2><p>Medication, special handling, behavior watch, and care history.</p></div></div>
-              <label>Medication or special care notes (triggers Medical/Care Alert)<textarea name="specialCare" rows="3" placeholder="Medication, handling notes, injury watch, coat care, feeding changes"></textarea></label>
-              <label>Medical notes (triggers Medical/Care Alert)<textarea name="medicalCareNotes" rows="3" placeholder="Ongoing medical/care notes that staff should see"></textarea></label>
-              <label>General note (no Medical/Care Alert)<textarea name="generalCareNotes" rows="3" placeholder="Normal note that should not show as a medical or care alert"></textarea></label>
-              <div class="existing-only owned-tab-care-entry" data-owned-care-entry-panel hidden>
-                <label>Medical / behavior care entry<textarea id="ownedCareEntry" rows="3" placeholder="Medication, behavior, injury, appetite, or special care note"></textarea></label>
-                <button type="button" id="addCareNoteLog">Add Care Note</button>
-              </div>
+              <label>Medical / care alert notes<textarea name="medicalCareNotes" rows="6" placeholder="Medication, medical or behavior concerns, special handling, injury watch, coat care, feeding changes, or other instructions staff should see"></textarea><small>Any note saved here triggers the Medical/Care Alert until it is removed.</small></label>
             </section>
 
             <section class="owned-profile-section" data-owned-profile-section="Files" hidden>
@@ -1123,7 +1123,10 @@
           <div class="section-heading">
             <span>B</span>
             <div>
-              <h2>Boarding Dogs</h2>
+              <div class="module-heading-title">
+                <h2>Boarding Dogs</h2>
+                <span class="service-info-icon module-info-icon" role="button" tabindex="0" aria-label="Boarding Dogs is the customer-stay operations module: request review, check-in, kennel assignment, stay care and services, owner updates, pickup preparation, payment and checkout. Business-owned dog routines belong in Our Dogs." title="Boarding Dogs is the customer-stay operations module: request review, check-in, kennel assignment, stay care and services, owner updates, pickup preparation, payment and checkout. Business-owned dog routines belong in Our Dogs." data-tooltip="Boarding Dogs is the customer-stay operations module: request review, check-in, kennel assignment, stay care and services, owner updates, pickup preparation, payment and checkout. Business-owned dog routines belong in Our Dogs."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>
+              </div>
               <p>Track owner details, boarding schedule, health records, care requests, and daily updates.</p>
             </div>
           </div>
@@ -1131,7 +1134,13 @@
 
           <div class="table-toolbar">
             <input type="search" id="boardingDogSearch" placeholder="Search boarding dogs by dog, owner, phone, schedule, or notes" />
-            <button type="button" id="addBoardingDogButton">Add New Dog</button>
+            <button type="button" id="addBoardingDogButton">Add Dog Profile</button>
+            <span class="service-info-icon module-info-icon" role="button" tabindex="0" aria-label="Creates a reusable customer dog profile. For a returning dog, open the existing profile and add the new visit under Boarding and Request instead of creating another dog." title="Creates a reusable customer dog profile. For a returning dog, open the existing profile and add the new visit under Boarding and Request instead of creating another dog." data-tooltip="Creates a reusable customer dog profile. For a returning dog, open the existing profile and add the new visit under Boarding and Request instead of creating another dog."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>
+          </div>
+          <div class="operational-help-strip" aria-label="Boarding queue help">
+            <strong>Queue guide</strong>
+            <span class="service-info-icon module-info-icon" role="button" tabindex="0" aria-label="Active Dogs keeps current and upcoming stays in the working roster. Pending Approval needs a decision, Approved is ready for arrival, In Kennel is currently housed, and Ready for Pickup has finished required stay work. All Boarding Dogs includes historical profiles." title="Active Dogs keeps current and upcoming stays in the working roster. Pending Approval needs a decision, Approved is ready for arrival, In Kennel is currently housed, and Ready for Pickup has finished required stay work. All Boarding Dogs includes historical profiles." data-tooltip="Active Dogs keeps current and upcoming stays in the working roster. Pending Approval needs a decision, Approved is ready for arrival, In Kennel is currently housed, and Ready for Pickup has finished required stay work. All Boarding Dogs includes historical profiles."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>
+            <span>Hover, focus, or tap the info icon for status definitions.</span>
           </div>
           <div class="filter-toolbar boarding-roster-tabs" id="boardingDogRosterTabs" role="tablist" aria-label="Boarding dog filters">
             <button type="button" class="is-active" data-boarding-filter="Active dogs" role="tab" aria-selected="true">Active Dogs</button>
@@ -1184,7 +1193,7 @@
 
         <section class="form-section detail-panel boarding-dog-modal" id="boardingDogDetail" hidden aria-modal="true" role="dialog">
           <div class="section-heading"><span>E</span><div><h2 id="boardingDogDetailTitle">Add Boarding Dog</h2><p>Use the table action to view or edit an existing boarding dog.</p></div><button type="button" class="secondary-button" id="closeBoardingDogDialogButton">Close</button></div>
-          <div class="alert-banner">Required Update From Owner: use this when vaccines, owner instructions, or boarding details need to be refreshed.</div>
+          <div class="alert-banner operational-alert-help"><span><strong>Required Update From Owner:</strong> use this when vaccines, owner instructions, or boarding details need to be refreshed.</span><span class="service-info-icon module-info-icon" role="button" tabindex="0" aria-label="This flag means staff cannot safely rely on the current owner-supplied information. Keep it active until the requested vaccine, instruction, contact, or stay detail is received and verified." title="This flag means staff cannot safely rely on the current owner-supplied information. Keep it active until the requested vaccine, instruction, contact, or stay detail is received and verified." data-tooltip="This flag means staff cannot safely rely on the current owner-supplied information. Keep it active until the requested vaccine, instruction, contact, or stay detail is received and verified."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span></div>
           <form id="boardingDogForm" class="tracker-form">
             <input type="hidden" name="id" />
             <div class="dog-profile-editor boarding-profile-editor">
@@ -1218,12 +1227,6 @@
                 <label>Date of birth<input type="date" name="dateOfBirth" /></label>
                 <input type="hidden" name="sex" />
                 <label>Sex / Spayed-Neutered status<select name="spayNeuterStatus" required><option value="">Select status</option><option>Male Intact</option><option>Male Neutered</option><option>Male Unknown</option><option>Female Intact</option><option>Female Spayed</option><option>Female Unknown</option></select><small>Matches the customer dog profile selection.</small></label>
-                <label>Owner name<input type="text" name="ownerName" required /></label>
-                <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
-                <label>Owner email<input type="email" name="ownerEmail" /></label>
-                <label>Secondary owner email<input type="email" name="secondaryOwnerEmail" /></label>
-                <label>Emergency contact name<input type="text" name="emergencyName" /></label>
-                <label>Emergency contact phone<input type="tel" name="emergencyPhone" /></label>
                 <label>Veterinarian / clinic<input type="text" name="vetInfo" /></label>
               </div>
               <label>Food instructions<textarea name="foodInstructions" rows="3" placeholder="Food amount, feeding schedule, medication with meals"></textarea></label>
@@ -1250,14 +1253,20 @@
             </section>
 
             <section class="boarding-profile-section" data-boarding-profile-section="Uploaded Files" hidden>
-              <div class="field-grid">
-                <label>Upload dog files<input type="file" id="boardingDogUploadedFiles" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,.pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" multiple /></label>
-              </div>
-              <div class="button-row"><button type="button" class="secondary-button" id="uploadBoardingDogFilesButton">Upload Files</button></div>
+              <p class="profile-empty-note">Files provided by the customer, including vaccination records and dog documents, appear here.</p>
               <div id="boardingDogUploadedFileList" class="record-grid compact-record-grid"></div>
             </section>
 
             <section class="boarding-profile-section" data-boarding-profile-section="Customer Info" hidden>
+              <div class="section-heading compact-heading"><span>C</span><div><h2>Customer Information</h2><p>Owner and emergency contacts for this boarding dog.</p></div></div>
+              <div class="field-grid">
+                <label>Owner name<input type="text" name="ownerName" required /></label>
+                <label>Owner phone<input type="tel" name="ownerPhone" required /></label>
+                <label>Owner email<input type="email" name="ownerEmail" /></label>
+                <label>Secondary owner email<input type="email" name="secondaryOwnerEmail" /></label>
+                <label>Emergency contact name<input type="text" name="emergencyName" /></label>
+                <label>Emergency contact phone<input type="tel" name="emergencyPhone" /></label>
+              </div>
               <section class="existing-only owner-account-panel" id="boardingOwnerAccountPanel" hidden>
                 <div class="section-heading compact-heading"><span>A</span><div><h2>Customer Account Link</h2><p>Prepare customer access for manually entered boarding dogs when an owner email is available.</p></div></div>
                 <div id="boardingOwnerAccountContent" class="record-grid compact-record-grid"></div>
@@ -1595,6 +1604,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-  <script type="module" src="js/main.js?v=20260722-multi-operation-windows"></script>
+  <script type="module" src="js/main.js?v=20260723-profile-ux-fixes-v2"></script>
 </body>
 </html>

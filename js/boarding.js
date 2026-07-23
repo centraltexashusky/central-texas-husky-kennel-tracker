@@ -5322,19 +5322,7 @@ function boardingDogFileItem(item = {}, source, sourceLabel, options = {}) {
 }
 
 function boardingDogFileItems(record = {}) {
-  const files = [
-    ...boardingDogDocumentItems(record).map((file) => boardingDogFileItem(file, "boardingDocuments", "Staff uploaded file", { sourceRecordId: record.id, canRemove: true })),
-    ...arrayValue(record.vaccinationRecords).map((file) => boardingDogFileItem(file, "boardingVaccination", "Health record", { sourceRecordId: record.id, fallbackName: "Health record" })),
-    ...arrayValue(record.customerUpdates).flatMap((update) =>
-      arrayValue(update.mediaItems).map((file) =>
-        boardingDogFileItem(file, "boardingCustomerUpdate", "Customer update media", {
-          parentId: update.id || "",
-          sourceRecordId: record.id,
-          fallbackName: "Customer update media",
-        }),
-      ),
-    ),
-  ];
+  const files = [];
   const linkedDog = linkedCustomerDogForBoarding(record);
   if (linkedDog) {
     files.push(
@@ -5375,7 +5363,7 @@ function renderBoardingDogFiles(record = activeBoardingDog() || {}) {
         const openButton = mediaItemHasOpenableSource(file) ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(source)}" data-media-type="\${escapeHtml(file.type)}" data-media-name="\${escapeHtml(file.name)}"\${mediaAccessAttrs(file, { sourceRecordId: file.sourceRecordId || record.id || "", sourceRecordType: file.sourceRecordType || (file.source?.startsWith("customer") ? "customerDog" : "boardingDog") })}>Open</button>\` : "";
         return \`<article class="record-card compact-record-card dog-file-card" data-file-id="\${escapeHtml(file.id)}"><strong>\${escapeHtml(file.name)}</strong><span>\${escapeHtml(savedText)}</span>\${sourceText}\${noteText}\${renameInput}<div class="record-actions">\${openButton}\${renameButton}\${removeButton}</div></article>\`;
       }).join("")
-    : "<p>No uploaded files saved for this boarding dog yet.</p>";
+    : "<p>No customer-uploaded files are saved for this boarding dog yet.</p>";
 }
 
 async function updateBoardingDogFileName({ source, id, parentId = "", sourceRecordId = "", name = "" } = {}) {
@@ -5784,10 +5772,10 @@ function renderBoardingStays(record = activeBoardingDog()) {
       const requestCode = boardingStayRequestCode(displayRecord, stay);
       const ownerUpdateButton = boardingOwnerUpdateButtonHtml(displayRecord, stay);
       const serviceOnly = isServiceRequestStay(displayRecord, stay);
-      const articleClass = serviceOnly ? "record-card is-service-only-request" : "record-card";
+      const articleClass = serviceOnly ? "record-card boarding-stay-card is-service-only-request" : "record-card boarding-stay-card";
       const editLabel = serviceOnly ? "Edit Service" : "Edit Stay";
       const removeLabel = serviceOnly ? "Remove Service" : "Remove Stay";
-      return \`<article class="\${articleClass}"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingServiceOnlyChipHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div><p>\${escapeHtml(boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true }))}</p>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p>\${boardingStayBelongingsLineHtml(stay)}<p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${editLabel}</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${removeLabel}</button></div></article>\`;
+      return \`<article class="\${articleClass}"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingServiceOnlyChipHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p>\${boardingStayBelongingsLineHtml(stay)}<p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${editLabel}</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${removeLabel}</button></div></article>\`;
     }).join("")
     : "<p>No boarding stays logged yet.</p>";
 }

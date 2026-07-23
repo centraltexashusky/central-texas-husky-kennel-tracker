@@ -1670,6 +1670,57 @@ label {
   margin-left: auto;
 }
 
+.module-heading-title {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.module-heading-title h2 {
+  margin: 0;
+}
+
+.module-info-icon {
+  height: 24px;
+  min-height: 24px;
+  min-width: 24px;
+  width: 24px;
+}
+
+.module-info-icon img {
+  height: 24px;
+  width: 24px;
+}
+
+.operational-help-strip {
+  align-items: center;
+  background: color-mix(in srgb, var(--teal) 8%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--teal) 28%, var(--line));
+  border-radius: 10px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 12px;
+}
+
+.operational-help-strip strong {
+  color: var(--ink);
+}
+
+.operational-alert-help {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.operational-alert-help .module-info-icon {
+  flex: 0 0 24px;
+}
+
 .required-mark {
   color: var(--red);
   font-size: 1.1rem;
@@ -14717,9 +14768,15 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 :root[data-theme="light"] body:not(.is-login-view) #boardingSchedulePanel #boardingStayHistory > .record-card {
-  background: #FFFFFF !important;
-  border-color: #AFC2BB !important;
-  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.05), 0 8px 18px rgba(23, 32, 51, 0.10) !important;
+  background: #E8F0F8 !important;
+  border-color: #8EABC1 !important;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.06), 0 8px 18px rgba(49, 95, 133, 0.14) !important;
+}
+
+:root[data-theme="dark"] body:not(.is-login-view) #boardingSchedulePanel #boardingStayHistory > .boarding-stay-card {
+  background: rgba(24, 66, 101, 0.96) !important;
+  border-color: rgba(125, 190, 230, 0.66) !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.13) !important;
 }
 
 :root[data-theme="light"] .boarding-queue-card {

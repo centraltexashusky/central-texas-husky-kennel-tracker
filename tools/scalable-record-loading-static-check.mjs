@@ -17,7 +17,7 @@ if (!shared.includes("remoteTypesFullyLoadedInMemory.has(type)")) failures.push(
 if (!shared.includes('supabaseClient.rpc("kennel_scheduled_care_tasks_window"')) failures.push("Scheduled care tasks do not use the bounded database query.");
 if (!scheduler.includes("scheduledCareTaskDateIsLoaded(nextBathDate)")) failures.push("Owned-dog auto tasks can be duplicated outside the loaded date window.");
 if (!main.includes('task-scheduler.js?v=20260722-compact-week-grid-fit')) failures.push("Automatic task identity fix is not cache-busted.");
-if (!index.includes('js/main.js?v=20260722-multi-operation-windows')) failures.push("Application entrypoint does not expose the automatic task identity fix.");
+if (!index.includes('js/main.js?v=20260723-profile-ux-fixes-v2')) failures.push("Application entrypoint does not expose the automatic task identity fix.");
 if ((scheduler.match(/id: existing\.id \|\| scheduledCareAutoTaskId\(sourceKey\)/g) || []).length !== 3) failures.push("Every automatic task path must use a deterministic source-key ID.");
 if (!scheduler.includes("function scheduledCareTaskBackgroundSyncAllowed()")) failures.push("Background task sync has no authenticated staff guard.");
 if ((scheduler.match(/if \(!scheduledCareTaskBackgroundSyncAllowed\(\)\) return/g) || []).length < 7) failures.push("One or more background task sync entry points can run before staff authentication.");

@@ -25,8 +25,8 @@ if (!shared.includes('action.closest("[data-boarding-services-popup]")')) failur
 if (!shared.includes('openBoardingServicesPopup(updated, reference)')) failures.push("Services popup is not refreshed after completion.");
 if (!styles.includes('#detailDialog:has(.boarding-quick-popup)')) failures.push("Quick-fact popups are not constrained to a compact width.");
 if (!styles.includes('.boarding-mobile-fact-flag')) failures.push("Requested services countdown badge is not styled.");
-if (!main.includes('boarding.js?v=20260722-service-deadline-72h')) failures.push("Boarding module cache key was not updated.");
-if (!index.includes('js/main.js?v=20260722-multi-operation-windows')) failures.push("Application entrypoint cache key was not updated.");
+if (!main.includes('boarding.js?v=20260723-profile-ux-fixes-v2')) failures.push("Boarding module cache key was not updated.");
+if (!index.includes('js/main.js?v=20260723-profile-ux-fixes-v2')) failures.push("Application entrypoint cache key was not updated.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

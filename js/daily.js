@@ -55,14 +55,21 @@ function ownedDogCareSummary(record = {}, date = todayDate()) {
   return parts.join(", ") || "Current";
 }
 
+function ownedDogCareAlertNotes(record = {}) {
+  const seen = new Set();
+  return [record.medicalCareNotes, record.specialCare, record.generalCareNotes]
+    .map((note) => String(note || "").trim())
+    .filter((note) => {
+      const key = note.toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join("\\n\\n");
+}
+
 function ownedDogHasCareNote(record = {}) {
-  const manualCareHistory = arrayValue(record.careNotesHistory).some((log) => log.source !== "owned-profile-health-date");
-  return Boolean(
-    record.specialCare ||
-      record.medicalCareNotes ||
-      record.careStatus ||
-      manualCareHistory,
-  );
+  return Boolean(ownedDogCareAlertNotes(record) || record.careStatus);
 }
 
 function ownedDogMatchesCareFilter(record = {}, filter = ownedDogCareFilter, date = todayDate()) {
@@ -79,10 +86,8 @@ function ownedDogMatchesCareFilter(record = {}, filter = ownedDogCareFilter, dat
 
 function ownedDogSpecialCareInfoHtml() {
   const rows = [
-    ["Special care notes", "Any saved handling, medication, allergy, feeding, coat care, or other special-care instruction."],
-    ["Medical care notes", "Any saved ongoing medical or care note that staff should review."],
+    ["Medical / care alert notes", "Any saved medication, medical, behavior, handling, feeding, coat-care, or other instruction that staff should review."],
     ["Care status", "Care status set to Special Care, Medical Watch, Recovery, Behavior Watch, or Heat Watch."],
-    ["Manual care-note history", "Any manually logged care note on the dog timeline. Automatic health-date updates do not count."],
   ];
   return '<p>Dogs appear under Special Care when any of these are saved on the dog record:</p>' +
     '<div class="detail-list">' + rows.map(([label, value]) => '<div class="detail-row"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(value) + '</span></div>').join("") + '</div>';
@@ -937,6 +942,7 @@ function openOwnedDog(record = {}) {
   $("#ourDogForm").reset();
   const normalized = normalizeOwnedDogCare(record);
   setFormValues($("#ourDogForm"), normalized);
+  if ($("#ourDogForm").elements.medicalCareNotes) $("#ourDogForm").elements.medicalCareNotes.value = ownedDogCareAlertNotes(normalized);
   $("#ourDogForm").elements.id.value = record.id || "";
   setDogPhoto("owned", normalized);
   setOwnedCareEntryVisibility(Boolean(record.id));
@@ -1093,8 +1099,7 @@ function ownedDogOverviewPopupHtml(record = {}) {
     ["Last heartworm", dog.heartwormDate || "Not recorded"],
     ["Last Leptospirosis", dog.leptospirosisDate || "Not recorded"],
     ["Care status", ownedDogCareSummary(dog)],
-    ["Special care", dog.specialCare || dog.medicalCareNotes || dog.behaviorNotes || ""],
-    ["General note", dog.generalCareNotes || dog.notes || ""],
+    ["Medical / care alert", ownedDogCareAlertNotes(dog)],
   ].filter(([, value]) => value);
   const quickButtons = ["Treadmill", "Scooter", "Yard Run", "Bath", "Training", "Medical/Behavior Note"]
     .map((type) => \`<button type="button" class="secondary-button" data-action="popup-quick-care" data-care-type="\${escapeHtml(type)}" data-id="\${escapeHtml(dog.id)}">\${escapeHtml(type === "Medical/Behavior Note" ? "Medical/Behavior" : type)}</button>\`)
