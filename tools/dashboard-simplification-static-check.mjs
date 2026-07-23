@@ -39,6 +39,7 @@ for (const removedMarkup of ["dashboardPriorityCards", 'id="dashboardAlertTabs"'
 }
 
 if (!index.includes('id="dashboardTimelineSection"') || !index.includes('id="dashboardTimeline"')) failures.push("index.html is missing the restored Daily Timeline.");
+if (index.includes("Complete kennel records, track dog care, and review work across the team.")) failures.push("index.html still contains the removed page-header subtitle.");
 if (!index.includes("js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore")) failures.push("index.html cache key was not updated.");
 if (!shared.includes('$("#dashboardTimeline")?.addEventListener')) failures.push("Generated module timeline listener is not safe when the removed timeline is absent.");
 if (!script.includes('$("#dashboardTimeline")?.addEventListener')) failures.push("Legacy bundle timeline listener is not safe when the removed timeline is absent.");
