@@ -97,12 +97,21 @@ function panelJudge(title: unknown, label: string) {
   return clean((match?.[1] || "").replace(/<[^>]+>/g, " "));
 }
 
-function calendarPanelTitle(html: string, externalId: string) {
+function calendarShowHtml(html: string, externalId: string) {
   const markerIndex = html.indexOf(`showpop.php?shno=${externalId}`);
   if (markerIndex < 0) return "";
   const nextShowIndex = html.indexOf("showpop.php?shno=", markerIndex + 20);
-  const showHtml = html.slice(markerIndex, nextShowIndex > markerIndex ? nextShowIndex : markerIndex + 20_000);
+  return html.slice(markerIndex, nextShowIndex > markerIndex ? nextShowIndex : markerIndex + 20_000);
+}
+
+function calendarPanelTitle(showHtml: string) {
   return showHtml.match(/title="([^"]*Best-In-Show Judge:[^"]*)"/i)?.[1] || "";
+}
+
+function calendarAssignmentJudge(showHtml: string, assignment: string) {
+  const escapedAssignment = assignment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = showHtml.match(new RegExp(`<a\\b[^>]*title="${escapedAssignment}\\b[^"]*"[^>]*>([\\s\\S]*?)<\\/a>`, "i"));
+  return clean((match?.[1] || "").replace(/<[^>]+>/g, " "));
 }
 
 function parseShowRows(html: string, startDate: string, endDate: string, breedCode: string) {
@@ -143,7 +152,11 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
     const locationCellIndex = cells.findIndex((cell) => state && clean(cell.textContent).split(/\s+/).includes(state));
     const city = locationCellIndex > 0 ? clean(cells[locationCellIndex - 1]?.textContent) : "";
     const club = clean(showAnchor.textContent) || clean(cells.find((cell) => cell.contains(showAnchor))?.textContent);
-    const panelTitle = calendarPanelTitle(html, externalId);
+    const showHtml = calendarShowHtml(html, externalId);
+    const panelTitle = calendarPanelTitle(showHtml);
+    const judgeAnchors = anchors.filter((anchor) => /judpop\.php\?[^#]*jno=/i.test(anchor.getAttribute("href") || ""));
+    const judgeByAssignment = (assignment: RegExp) => clean(judgeAnchors.find((anchor) => assignment.test(anchor.getAttribute("title") || ""))?.textContent);
+    const breedJudge = calendarAssignmentJudge(showHtml, "Siberian Husky") || judgeByAssignment(/^Siberian Husky\b/i) || clean(judgeAnchors[0]?.textContent);
     const typeAnchor = anchors.find((anchor) => /(?:showtype|opWtype|type=)/i.test(anchor.getAttribute("href") || ""));
     const showType = clean(typeAnchor?.textContent) || (rowText.match(/\b(AB|SP|SWE|BPUP|FCAT|OB|RLY)\b/i)?.[1] || "");
     const nohs = /\bNOHS\b/i.test(rowText);
@@ -164,9 +177,9 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
       nohs,
       superintendent,
       entryClosingDate: closing ? dateNearShow(closing.month, closing.day, showDate) : "",
-      breedJudge: "",
-      groupJudge: panelJudge(panelTitle, "Working Group"),
-      bisJudge: panelJudge(panelTitle, "Best-In-Show Judge"),
+      breedJudge,
+      groupJudge: calendarAssignmentJudge(showHtml, "Working Group") || judgeByAssignment(/^Working Group\b/i) || panelJudge(panelTitle, "Working Group"),
+      bisJudge: calendarAssignmentJudge(showHtml, "Best In Show") || judgeByAssignment(/^Best In Show\b/i) || panelJudge(panelTitle, "Best-In-Show Judge"),
       sourceUrl: showUrl.toString(),
       panelUrl,
       source: "Canine Chronicle Show Calendar",
@@ -206,6 +219,8 @@ Deno.serve(async (req) => {
 
   const sourceUrl = new URL(CALENDAR_URL);
   sourceUrl.searchParams.set("month", "0");
+  sourceUrl.searchParams.set("fmt", "1");
+  sourceUrl.searchParams.set("brno", breedCode);
   sourceUrl.searchParams.append("breed[]", breedCode);
   states.forEach((state) => sourceUrl.searchParams.append("state[]", state));
   const controller = new AbortController();
