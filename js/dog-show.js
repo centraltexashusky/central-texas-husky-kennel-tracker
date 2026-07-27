@@ -1198,6 +1198,8 @@ async function saveDogShowPlanner(form) {
   if (!dogKeys.length) return showToast("Choose at least one dog.");
   if (!states.length) return showToast("Enter at least one two-letter state code.");
   if (data.endDate < data.startDate) return showToast("The end date must be after the start date.");
+  const rangeDays = Math.ceil((new Date(`${data.endDate}T12:00:00`).getTime() - new Date(`${data.startDate}T12:00:00`).getTime()) / 86_400_000);
+  if (rangeDays > 370) return showToast("Choose a date range of one year or less.");
   button.disabled = true;
   button.textContent = "Checking show calendars…";
   let response = null;
@@ -1205,7 +1207,14 @@ async function saveDogShowPlanner(form) {
   try {
     if (typeof supabaseClient === "undefined" || !supabaseClient?.functions) throw new Error("The show calendar service is unavailable.");
     const { data: functionData, error } = await supabaseClient.functions.invoke("show-calendar-scrape", { body: { startDate: data.startDate, endDate: data.endDate, states, breedCode: DOG_SHOW_PLANNER_BREED_CODE } });
-    if (error) throw error;
+    if (error) {
+      let functionMessage = "";
+      if (error.context && typeof error.context.json === "function") {
+        const payload = await error.context.json().catch(() => ({}));
+        functionMessage = payload?.error || payload?.message || "";
+      }
+      throw new Error(functionMessage || error.message || "Could not import show listings.");
+    }
     response = functionData;
   } catch (error) {
     errorMessage = error?.message || "Could not import show listings.";

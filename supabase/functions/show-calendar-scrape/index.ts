@@ -4,7 +4,7 @@ import { parseHTML } from "npm:linkedom@0.18.12";
 
 const CALENDAR_URL = "https://caninechronicleshowcalendar.com/K9shows.php";
 const SITE_URL = "https://caninechronicleshowcalendar.com/";
-const MAX_RANGE_DAYS = 120;
+const MAX_RANGE_DAYS = 370;
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -82,6 +82,29 @@ function queryArrayValue(url: URL, key: string) {
   return url.searchParams.get(key) || url.searchParams.get(`${key}[]`) || "";
 }
 
+function embeddedUrl(value: unknown, filePattern: RegExp) {
+  const match = clean(value).match(filePattern)?.[0] || "";
+  if (!match) return null;
+  try {
+    return new URL(match.replace(/&amp;/gi, "&"), SITE_URL);
+  } catch {
+    return null;
+  }
+}
+
+function panelJudge(title: unknown, label: string) {
+  const match = String(title || "").match(new RegExp(`${label}:<\\/td><td[^>]*>([\\s\\S]*?)<\\/td>`, "i"));
+  return clean((match?.[1] || "").replace(/<[^>]+>/g, " "));
+}
+
+function calendarPanelTitle(html: string, externalId: string) {
+  const markerIndex = html.indexOf(`showpop.php?shno=${externalId}`);
+  if (markerIndex < 0) return "";
+  const nextShowIndex = html.indexOf("showpop.php?shno=", markerIndex + 20);
+  const showHtml = html.slice(markerIndex, nextShowIndex > markerIndex ? nextShowIndex : markerIndex + 20_000);
+  return showHtml.match(/title="([^"]*Best-In-Show Judge:[^"]*)"/i)?.[1] || "";
+}
+
 function parseShowRows(html: string, startDate: string, endDate: string, breedCode: string) {
   const { document } = parseHTML(html);
   const shows = new Map<string, Record<string, unknown>>();
@@ -89,7 +112,8 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
     const anchors = [...row.querySelectorAll("a")];
     const showAnchor = anchors.find((anchor) => /showpop\.php\?[^#]*shno=/i.test(anchor.getAttribute("href") || ""));
     if (!showAnchor) return;
-    const showUrl = new URL(showAnchor.getAttribute("href") || "", SITE_URL);
+    const showUrl = embeddedUrl(showAnchor.getAttribute("href"), /showpop\.php\?[^"')\s]+/i);
+    if (!showUrl) return;
     const externalId = queryArrayValue(showUrl, "shno");
     if (!externalId) return;
 
@@ -119,18 +143,14 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
     const locationCellIndex = cells.findIndex((cell) => state && clean(cell.textContent).split(/\s+/).includes(state));
     const city = locationCellIndex > 0 ? clean(cells[locationCellIndex - 1]?.textContent) : "";
     const club = clean(showAnchor.textContent) || clean(cells.find((cell) => cell.contains(showAnchor))?.textContent);
-    const judgeNames = anchors
-      .filter((anchor) => /judpop\.php\?[^#]*jno=/i.test(anchor.getAttribute("href") || ""))
-      .map((anchor) => clean(anchor.textContent))
-      .filter(Boolean)
-      .filter((name, index, list) => list.indexOf(name) === index);
+    const panelTitle = calendarPanelTitle(html, externalId);
     const typeAnchor = anchors.find((anchor) => /(?:showtype|opWtype|type=)/i.test(anchor.getAttribute("href") || ""));
     const showType = clean(typeAnchor?.textContent) || (rowText.match(/\b(AB|SP|SWE|BPUP|FCAT|OB|RLY)\b/i)?.[1] || "");
     const nohs = /\bNOHS\b/i.test(rowText);
     const superintendent = ["Onofrio", "MB-F", "Rau", "Bradshaw", "BaRay", "Foy Trent", "Executive", "Show Secretary"]
       .find((name) => rowText.toLowerCase().includes(name.toLowerCase())) || "";
     const closing = dates.length > 1 ? dates[dates.length - 1] : null;
-    const panelUrl = new URL(`judpan.php?shno=${encodeURIComponent(externalId)}&brno=${encodeURIComponent(breedCode)}`, SITE_URL).toString();
+    const panelUrl = new URL(`judpan.php?code=&shno=${encodeURIComponent(externalId)}`, SITE_URL).toString();
     shows.set(externalId, {
       externalId,
       startDate: showDate,
@@ -144,9 +164,9 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
       nohs,
       superintendent,
       entryClosingDate: closing ? dateNearShow(closing.month, closing.day, showDate) : "",
-      breedJudge: judgeNames[0] || "",
-      groupJudge: judgeNames[1] || "",
-      bisJudge: judgeNames[2] || "",
+      breedJudge: "",
+      groupJudge: panelJudge(panelTitle, "Working Group"),
+      bisJudge: panelJudge(panelTitle, "Best-In-Show Judge"),
       sourceUrl: showUrl.toString(),
       panelUrl,
       source: "Canine Chronicle Show Calendar",
