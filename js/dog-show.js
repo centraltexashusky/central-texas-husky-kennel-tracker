@@ -6,6 +6,8 @@ const DOG_SHOW_CALENDAR_DATE_KEY = "cth-dog-show-calendar-date";
 const DOG_SHOW_TASK_DAY_KEY = "cth-dog-show-task-expanded-day";
 const DOG_SHOW_RING_ROW_STATE_KEY = "cth-dog-show-ring-row-state";
 const DOG_SHOW_PROGRESS_TAB_KEY = "cth-dog-show-progress-tab";
+const DOG_SHOW_PLANNER_RECORD_ID = "showPlanner-current";
+const DOG_SHOW_PLANNER_BREED_CODE = "346";
 const DOG_SHOW_CALENDAR_SLOT_MINUTES = 15;
 const DOG_SHOW_STALE_MINUTES = 60;
 const DOG_SHOW_TASK_COLORS = {
@@ -29,7 +31,7 @@ const DOG_SHOW_DEFAULT_PACKING = [
   "First aid and cooling supplies",
 ];
 
-let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
+let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
   ? localStorage.getItem(DOG_SHOW_VIEW_KEY)
   : "home";
 let dogShowDogFilter = "all";
@@ -406,6 +408,10 @@ function dogShowProgressRecords(kind = "") {
   return dogShowRecords("showResult").filter((record) => record.recordKind === kind);
 }
 
+function dogShowPlannerRecord() {
+  return dogShowProgressRecords("showPlanner").sort((left, right) => new Date(right.updatedAt || right.submittedAt || 0) - new Date(left.updatedAt || left.submittedAt || 0))[0] || {};
+}
+
 function dogShowAppearanceResultsAll() {
   return dogShowRecords("showResult").filter((record) => !record.recordKind || record.recordKind === "appearanceResult");
 }
@@ -551,6 +557,44 @@ function dogShowJudgeEvidence(name = "") {
   };
 }
 
+function dogShowJudgeEvidenceResults(name = "", kind = "entries") {
+  const evidence = dogShowJudgeEvidence(name);
+  if (kind === "placements") {
+    return evidence.results.filter((result) => ["Win", "Placement"].includes(result.outcome) || result.groupAward || result.bisAward || result.ohGroupAward || result.ohBisAward);
+  }
+  if (kind === "points") return evidence.results.filter((result) => dogShowPointValue(result) > 0 || dogShowMajorValue(result) > 0);
+  return evidence.results;
+}
+
+function dogShowJudgeRoleSummary(result = {}, judgeName = "") {
+  const key = dogShowJudgeNameKey(judgeName);
+  return [
+    [result.judge, "Breed"],
+    [result.groupJudge, "Regular Group"],
+    [result.bisJudge, "Regular BIS"],
+    [result.ohGroupJudge, "OH Group"],
+    [result.ohBisJudge, "OH BIS"],
+  ].filter(([name]) => dogShowJudgeNameKey(name) === key).map(([, role]) => role).join(", ");
+}
+
+function openDogShowJudgeEvidence(judgeName = "", kind = "entries") {
+  const labels = { entries: "Entries Logged", placements: "Placements", points: "Points" };
+  const results = dogShowJudgeEvidenceResults(judgeName, kind);
+  const events = new Map(dogShowEvents().map((event) => [event.id, event]));
+  const entries = new Map(dogShowRecords("showEntry").map((entry) => [entry.id, entry]));
+  const rows = results.map((result) => {
+    const event = events.get(result.showEventId) || {};
+    const entry = entries.get(result.showEntryId) || {};
+    const points = dogShowPointValue(result);
+    const summary = [dogShowOutcomeLabel(result.outcome), result.placement, dogShowResultAwardsSummary(result)].filter(Boolean).join(" · ") || "Result logged";
+    return `<button type="button" class="dog-show-judge-evidence-row" data-action="open-progress-result" data-result-id="${escapeHtml(result.id)}">
+      <span><strong>${escapeHtml(result.dogName || dogShowEntryName(entry) || "Dog")}</strong><small>${escapeHtml([event.name || result.showName || "Dog Show", dogShowFormatDate(result.ringDate || event.startDate), dogShowJudgeRoleSummary(result, judgeName)].filter(Boolean).join(" · "))}</small><em>${escapeHtml(summary)}</em></span>
+      <span class="dog-show-judge-evidence-points"><strong>${points ? `+${points}` : "—"}</strong><small>${dogShowMajorValue(result) ? "Major" : points ? "points" : "No points"}</small></span>
+    </button>`;
+  }).join("");
+  openDogShowDialog(`${labels[kind] || labels.entries}: ${judgeName}`, `<section class="dog-show-judge-evidence-dialog"><p>Logged ring results where this person was recorded as a breed, group, BIS, or owner-handled judge.</p><div class="dog-show-judge-evidence-list">${rows || dogShowRenderEmpty("No matching results", `There are no ${String(labels[kind] || labels.entries).toLowerCase()} to show for this judge.`)}</div></section>`);
+}
+
 function dogShowJudgeNote(name = "") {
   const key = dogShowJudgeNameKey(name);
   return dogShowJudgeNotes().find((note) => dogShowJudgeNameKey(note.judgeName) === key) || {};
@@ -616,8 +660,8 @@ function dogShowProgressJudgesHtml() {
   const evidence = dogShowJudgeEvidence(dogShowProgressJudge);
   return `<div class="dog-show-progress-judges-layout"><aside class="dog-show-judge-selector"><button type="button" class="secondary-button" data-action="edit-judge-note">Add Judge</button>${judges.map((judge) => {
     const judgeNote = dogShowJudgeNote(judge);
-    return `<button type="button" data-action="select-progress-judge" data-judge="${escapeHtml(judge)}" class="${dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge) ? "is-active" : ""}"><span class="dog-show-judge-rating is-${escapeHtml(String(judgeNote.recommendation || "Watch").toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(judgeNote.recommendation || "Watch")}</span><strong>${escapeHtml(judge)}</strong><small>${dogShowJudgeEvidence(judge).results.length} logged results</small></button>`;
-  }).join("")}</aside><div class="dog-show-judge-detail">${dogShowProgressJudge ? `<section class="dog-show-judge-hero"><div><span>Judge Intelligence</span><h3>${escapeHtml(dogShowProgressJudge)}</h3><p>${escapeHtml(note.preferenceTags || "No preference tags yet")}</p></div><button type="button" class="secondary-button" data-action="edit-judge-note" data-judge="${escapeHtml(dogShowProgressJudge)}">Edit Notes</button></section><section class="dog-show-progress-breakdown"><div><span>Entries logged</span><strong>${evidence.results.length}</strong><small>Under this judge</small></div><div><span>Placements</span><strong>${evidence.placements}</strong><small>Wins and placements</small></div><div><span>Points</span><strong>${evidence.points}</strong><small>${evidence.majors} majors</small></div></section><section class="dog-show-progress-section"><header><div><h3>Team Notes</h3><p>Internal observations only. Treat patterns as guidance, not guarantees.</p></div></header><dl class="dog-show-judge-notes"><div><dt>Recommendation</dt><dd>${escapeHtml(note.recommendation || "Watch")}</dd></div><div><dt>Best fit dogs</dt><dd>${escapeHtml(note.bestFitDogs || "Not recorded")}</dd></div><div><dt>Preferences</dt><dd>${escapeHtml(note.preferenceTags || "Not recorded")}</dd></div><div><dt>Notes</dt><dd>${escapeHtml(note.notes || "No internal notes yet")}</dd></div></dl></section>` : dogShowRenderEmpty("No judges found", "Add a judge note or enter judges on ring appearances.", "edit-judge-note", "Add Judge")}</div></div>`;
+    return `<button type="button" data-action="select-progress-judge" data-judge="${escapeHtml(judge)}" class="${dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge) ? "is-active" : ""}"><span class="dog-show-judge-rating is-${escapeHtml(String(judgeNote.recommendation || "Watch").toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(judgeNote.recommendation || "Watch")}</span><span class="dog-show-judge-selector-copy"><strong>${escapeHtml(judge)}</strong><small>${dogShowJudgeEvidence(judge).results.length} logged result${dogShowJudgeEvidence(judge).results.length === 1 ? "" : "s"}</small></span></button>`;
+  }).join("")}</aside><div class="dog-show-judge-detail">${dogShowProgressJudge ? `<section class="dog-show-judge-hero"><div><span>Judge Intelligence</span><h3>${escapeHtml(dogShowProgressJudge)}</h3><p>${escapeHtml(note.preferenceTags || "No preference tags yet")}</p></div><button type="button" class="secondary-button" data-action="edit-judge-note" data-judge="${escapeHtml(dogShowProgressJudge)}">Edit Notes</button></section><section class="dog-show-progress-breakdown dog-show-judge-metrics"><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="entries" aria-label="View entries logged under ${escapeHtml(dogShowProgressJudge)}"><span>Entries logged</span><strong>${evidence.results.length}</strong><small>View result details <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="placements" aria-label="View placements under ${escapeHtml(dogShowProgressJudge)}"><span>Placements</span><strong>${evidence.placements}</strong><small>View wins and placements <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="points" aria-label="View points earned under ${escapeHtml(dogShowProgressJudge)}"><span>Points</span><strong>${evidence.points}</strong><small>${evidence.majors} major${evidence.majors === 1 ? "" : "s"} <i aria-hidden="true">›</i></small></button></section><section class="dog-show-progress-section"><header><div><h3>Team Notes</h3><p>Internal observations only. Treat patterns as guidance, not guarantees.</p></div></header><dl class="dog-show-judge-notes"><div><dt>Recommendation</dt><dd>${escapeHtml(note.recommendation || "Watch")}</dd></div><div><dt>Best fit dogs</dt><dd>${escapeHtml(note.bestFitDogs || "Not recorded")}</dd></div><div><dt>Preferences</dt><dd>${escapeHtml(note.preferenceTags || "Not recorded")}</dd></div><div><dt>Notes</dt><dd>${escapeHtml(note.notes || "No internal notes yet")}</dd></div></dl></section>` : dogShowRenderEmpty("No judges found", "Add a judge note or enter judges on ring appearances.", "edit-judge-note", "Add Judge")}</div></div>`;
 }
 
 function dogShowProgressHtml() {
@@ -1021,6 +1065,7 @@ function dogShowMoreHtml(event) {
       <button type="button" data-action="add-show-dogs"><span>D</span><strong>Add Dogs</strong><small>Our Dogs or Boarding Dogs</small></button>
       <button type="button" data-action="show-helper-summary"><span>H</span><strong>Helpers</strong><small>${helperEmails.length} assigned to this weekend</small></button>
       <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${resultProgress.logged} of ${resultProgress.total} ring appearances logged</small></button>
+      <button type="button" data-action="open-show-planner"><span>F</span><strong>Find Shows</strong><small>Compare future panels against your dogs' history</small></button>
       <button type="button" data-action="open-show-progress"><span>P</span><strong>Show Progress</strong><small>Career points, show history, and judge notes</small></button>
     </div>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Packing List</h3><p>${packing.filter((item) => item.completed).length} of ${packing.length} packed</p></div></div>
@@ -1031,6 +1076,188 @@ function dogShowMoreHtml(event) {
   </div>`;
 }
 
+function dogShowPlannerDogs() {
+  const byKey = new Map(dogShowProgressDogs().map((dog) => [dog.key, dog]));
+  dogShowOwnedDogs().forEach((dog) => {
+    const entry = { ...dog, dogId: dog.id, dogType: "ownedDog", dogName: dogShowDogName(dog, "ownedDog") };
+    const key = dogShowDogIdentity(entry);
+    if (!byKey.has(key)) byKey.set(key, { key, entry });
+  });
+  return [...byKey.values()].sort((left, right) => dogShowEntryName(left.entry).localeCompare(dogShowEntryName(right.entry)));
+}
+
+function dogShowPlannerDogEvidence(judgeName = "", dogKeys = []) {
+  const selected = new Set(dogKeys);
+  const results = dogShowJudgeEvidenceResults(judgeName, "entries").filter((result) => !selected.size || selected.has(dogShowDogIdentity(result)));
+  return {
+    results,
+    placements: results.filter((result) => ["Win", "Placement"].includes(result.outcome) || result.groupAward || result.bisAward || result.ohGroupAward || result.ohBisAward),
+    points: results.reduce((total, result) => total + dogShowPointValue(result), 0),
+  };
+}
+
+function dogShowPlannerAssessment(show = {}, plan = {}) {
+  const dogKeys = Array.isArray(plan.dogKeys) ? plan.dogKeys : [];
+  const dogNames = new Map(dogShowPlannerDogs().map((dog) => [dog.key, dogShowEntryName(dog.entry)]));
+  const panel = [
+    ["breed", show.breedJudge || "", "Breed"],
+    ["group", show.groupJudge || "", "Group"],
+    ["bis", show.bisJudge || "", "BIS"],
+  ].filter(([, judge]) => judge);
+  let score = panel.length ? 50 : 35;
+  const reasons = [];
+  panel.forEach(([role, judge, label]) => {
+    const evidence = dogShowPlannerDogEvidence(judge, dogKeys);
+    const note = dogShowJudgeNote(judge);
+    const recommendation = String(note.recommendation || "Watch");
+    if (evidence.placements.length) {
+      score += role === "breed" ? Math.min(28, 14 + evidence.placements.length * 5) : Math.min(16, 8 + evidence.placements.length * 3);
+      const matchedDogs = [...new Set(evidence.placements.map((result) => dogNames.get(dogShowDogIdentity(result)) || result.dogName || "selected dog"))];
+      reasons.push(`${judge} has placed ${matchedDogs.join(", ")} in ${evidence.placements.length} logged result${evidence.placements.length === 1 ? "" : "s"}.`);
+    } else if (evidence.results.length) {
+      score += 4;
+      reasons.push(`${judge} has ${evidence.results.length} logged appearance${evidence.results.length === 1 ? "" : "s"} with the selected dog${dogKeys.length === 1 ? "" : "s"}.`);
+    }
+    if (recommendation === "Show Under") {
+      score += role === "breed" ? 16 : 8;
+      reasons.push(`${label} judge ${judge} is marked Show Under by the team.`);
+    }
+    if (recommendation === "Avoid") {
+      score -= role === "breed" ? 30 : 14;
+      reasons.push(`${label} judge ${judge} is marked Avoid by the team.`);
+    }
+  });
+  if (show.nohs) {
+    score += 3;
+    reasons.push("National Owner-Handled Series is offered.");
+  }
+  if (!panel.length) reasons.push("The judge panel is not published yet, so this show needs review later.");
+  if (!reasons.length) reasons.push("No prior result or team-note match was found for this panel.");
+  score = Math.max(0, Math.min(100, score));
+  const label = score >= 78 ? "Strong Match" : score >= 58 ? "Possible" : "Review";
+  return { score, label, reasons };
+}
+
+function dogShowPlannerDateRange(show = {}) {
+  const start = dogShowFormatDate(show.startDate);
+  const end = show.endDate && show.endDate !== show.startDate ? dogShowFormatDate(show.endDate) : "";
+  return end ? `${start} – ${end}` : start;
+}
+
+function dogShowPlannerHtml() {
+  const plan = dogShowPlannerRecord();
+  const shows = Array.isArray(plan.shows) ? [...plan.shows] : [];
+  const selectedDogNames = dogShowPlannerDogs().filter((dog) => (plan.dogKeys || []).includes(dog.key)).map((dog) => dogShowEntryName(dog.entry));
+  const ranked = shows.map((show) => ({ show, assessment: dogShowPlannerAssessment(show, plan) })).sort((left, right) => right.assessment.score - left.assessment.score || String(left.show.startDate || "").localeCompare(String(right.show.startDate || "")));
+  const fetchedLabel = plan.fetchedAt ? new Date(plan.fetchedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
+  return `<div class="dog-show-view dog-show-planner-view">
+    <section class="dog-show-planner-heading"><div><span>SHOW INTELLIGENCE</span><h3>Show Planner</h3><p>Compare future Siberian Husky panels with your dogs' logged results and internal judge notes.</p></div><button type="button" data-action="edit-show-plan">${plan.id ? "Update Search" : "Find Shows"}</button></section>
+    ${plan.id ? `<section class="dog-show-planner-criteria"><div><span>Dogs</span><strong>${escapeHtml(selectedDogNames.join(", ") || "All tracked show dogs")}</strong></div><div><span>Dates</span><strong>${escapeHtml(dogShowPlannerDateRange({ startDate: plan.startDate, endDate: plan.endDate }))}</strong></div><div><span>States</span><strong>${escapeHtml((plan.states || []).join(", ") || "All")}</strong></div><div><span>Last checked</span><strong>${escapeHtml(fetchedLabel || "Not available")}</strong></div></section>` : ""}
+    ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div><span class="dog-show-source-badge">${plan.localFixture ? "Local test data" : "Canine Chronicle calendar"}</span></header><div class="dog-show-planner-list">${ranked.map(({ show, assessment }) => `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}">
+      <header><div><span>${escapeHtml([show.state, show.showType, show.nohs ? "NOHS" : ""].filter(Boolean).join(" · "))}</span><h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
+      <div class="dog-show-planner-panel"><div><span>Breed Judge</span><strong>${escapeHtml(show.breedJudge || "Panel pending")}</strong></div><div><span>Group Judge</span><strong>${escapeHtml(show.groupJudge || "Panel pending")}</strong></div><div><span>BIS Judge</span><strong>${escapeHtml(show.bisJudge || "Panel pending")}</strong></div></div>
+      <ul>${assessment.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
+      <footer><div class="dog-show-planner-meta">${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}</div><div class="button-row">${show.sourceUrl && !plan.localFixture ? `<a class="secondary-button dog-show-source-link" href="${escapeHtml(show.sourceUrl)}" target="_blank" rel="noopener noreferrer">View Source</a>` : ""}<button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add to Schedule</button></div></footer>
+    </article>`).join("")}</div></section>` : dogShowRenderEmpty("Find the right show for your dogs", "Choose the dogs, dates, and states. The planner will import future shows and rank their published judge panels against your history.", "edit-show-plan", "Find Shows")}
+    <section class="dog-show-planner-source-note"><strong>Source and limitations</strong><p>Show listings and panels are imported from the Canine Chronicle Show Calendar. Verify the official premium list before entering; panels, dates, and assignments can change.</p></section>
+  </div>`;
+}
+
+function dogShowPlannerDateOffset(dateValue = todayDate(), days = 90) {
+  const date = new Date(`${dateValue}T12:00:00`);
+  date.setDate(date.getDate() + days);
+  return dogShowDateKey(date);
+}
+
+function openDogShowPlannerForm() {
+  const plan = dogShowPlannerRecord();
+  const dogs = dogShowPlannerDogs();
+  const selectedKeys = new Set(Array.isArray(plan.dogKeys) && plan.dogKeys.length ? plan.dogKeys : dogs.slice(0, 1).map((dog) => dog.key));
+  openDogShowDialog("Find Dog Shows", `<form id="dogShowPlannerForm" class="tracker-form">
+    <p class="dog-show-form-intro">Choose the dogs you may show. The ranking uses only their logged results plus your team's private judge notes.</p>
+    <fieldset class="dog-show-form-section"><legend>Dogs to evaluate</legend><div class="dog-show-planner-dog-options">${dogs.length ? dogs.map((dog) => `<label class="dog-show-check-option"><input type="checkbox" name="dogKeys" value="${escapeHtml(dog.key)}"${selectedKeys.has(dog.key) ? " checked" : ""}/>${dogShowPhotoHtml(dog.entry, "dog-show-planner-dog-photo")}<span><strong>${escapeHtml(dogShowEntryName(dog.entry))}</strong><small>${escapeHtml(dogShowBreed(dog.entry) || "Siberian Husky")}</small></span></label>`).join("") : `<p class="muted-copy">Add a dog in Our Dogs or to a show roster first.</p>`}</div></fieldset>
+    <div class="field-grid"><label>Start date<input type="date" name="startDate" value="${escapeHtml(plan.startDate || todayDate())}" required/></label><label>End date<input type="date" name="endDate" value="${escapeHtml(plan.endDate || dogShowPlannerDateOffset(todayDate(), 90))}" required/></label><label class="dog-show-field-wide">States<input name="states" value="${escapeHtml((plan.states || ["TX", "OK", "LA"]).join(", "))}" placeholder="TX, OK, LA" required/><small>Use two-letter state codes, separated by commas.</small></label></div>
+    <div class="dog-show-form-actions"><button type="submit"${dogs.length ? "" : " disabled"}>Find &amp; Rank Shows</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+  </form>`);
+}
+
+function dogShowPlannerLocalShows(startDate = todayDate()) {
+  const first = dogShowPlannerDateOffset(startDate, 14);
+  const second = dogShowPlannerDateOffset(startDate, 35);
+  return [
+    { externalId: "local-planner-1", startDate: first, endDate: dogShowPlannerDateOffset(first, 1), club: "Central Texas Kennel Club", cityState: "Belton, TX", state: "TX", showType: "AB", nohs: true, breedJudge: dogShowObservedJudges()[0] || "Panel pending", groupJudge: dogShowObservedJudges()[1] || "", bisJudge: dogShowObservedJudges()[2] || "", superintendent: "Sample Superintendent" },
+    { externalId: "local-planner-2", startDate: second, endDate: dogShowPlannerDateOffset(second, 2), club: "Red River Dog Show Cluster", cityState: "Shreveport, LA", state: "LA", showType: "AB", nohs: false, breedJudge: dogShowObservedJudges()[3] || "Panel pending", groupJudge: dogShowObservedJudges()[4] || "", bisJudge: dogShowObservedJudges()[5] || "", superintendent: "Sample Superintendent" },
+  ];
+}
+
+async function saveDogShowPlanner(form) {
+  const button = form.querySelector('button[type="submit"]');
+  const data = formPayload(form);
+  const dogKeys = [...form.querySelectorAll('input[name="dogKeys"]:checked')].map((input) => input.value);
+  const states = String(data.states || "").split(/[\s,]+/).map((state) => state.trim().toUpperCase()).filter((state) => /^[A-Z]{2}$/.test(state));
+  if (!dogKeys.length) return showToast("Choose at least one dog.");
+  if (!states.length) return showToast("Enter at least one two-letter state code.");
+  if (data.endDate < data.startDate) return showToast("The end date must be after the start date.");
+  button.disabled = true;
+  button.textContent = "Checking show calendars…";
+  let response = null;
+  let errorMessage = "";
+  try {
+    if (typeof supabaseClient === "undefined" || !supabaseClient?.functions) throw new Error("The show calendar service is unavailable.");
+    const { data: functionData, error } = await supabaseClient.functions.invoke("show-calendar-scrape", { body: { startDate: data.startDate, endDate: data.endDate, states, breedCode: DOG_SHOW_PLANNER_BREED_CODE } });
+    if (error) throw error;
+    response = functionData;
+  } catch (error) {
+    errorMessage = error?.message || "Could not import show listings.";
+  }
+  const localFixture = new URLSearchParams(window.location.search).get("localTest") === "1" && !Array.isArray(response?.shows);
+  const shows = localFixture ? dogShowPlannerLocalShows(data.startDate) : Array.isArray(response?.shows) ? response.shows : [];
+  if (!shows.length && !localFixture) {
+    button.disabled = false;
+    button.textContent = "Find & Rank Shows";
+    showToast(errorMessage || "No shows were found for that date and state range.");
+    return;
+  }
+  await saveDogShowRecord("showResult", {
+    id: DOG_SHOW_PLANNER_RECORD_ID,
+    recordKind: "showPlanner",
+    dogKeys,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    states,
+    breedCode: DOG_SHOW_PLANNER_BREED_CODE,
+    shows,
+    sourceUrl: response?.sourceUrl || "https://caninechronicleshowcalendar.com/K9shows.php",
+    fetchedAt: response?.fetchedAt || new Date().toISOString(),
+    localFixture,
+    submittedAt: dogShowPlannerRecord().submittedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    helperEmail: currentUser?.email || "",
+  });
+  document.getElementById("dogShowDialog")?.close();
+  setDogShowView("planner");
+  showToast(`${shows.length} show${shows.length === 1 ? "" : "s"} ranked for the selected dogs.`);
+}
+
+function openDogShowPlannedEvent(externalId = "") {
+  const show = (dogShowPlannerRecord().shows || []).find((item) => item.externalId === externalId);
+  if (!show) return;
+  openDogShowEventForm({
+    name: show.club || show.name || "Dog Show",
+    club: show.club || "",
+    venue: show.venue || "",
+    venueAddress: show.cityState || "",
+    cityState: show.cityState || "",
+    startDate: show.startDate || todayDate(),
+    endDate: show.endDate || show.startDate || todayDate(),
+    entryClosingDate: show.entryClosingDate || "",
+    superintendent: show.superintendent || "",
+    sourceUrl: show.sourceUrl || "",
+    notes: `Imported from the Canine Chronicle Show Calendar.${show.breedJudge ? `\nSiberian Husky judge: ${show.breedJudge}` : ""}${show.groupJudge ? `\nGroup judge: ${show.groupJudge}` : ""}${show.bisJudge ? `\nBIS judge: ${show.bisJudge}` : ""}`,
+    status: "Active",
+  });
+}
+
 function renderDogShow() {
   const content = document.getElementById("dogShowContent");
   if (!content) return;
@@ -1038,13 +1265,14 @@ function renderDogShow() {
   const select = document.getElementById("dogShowEventSelect");
   if (select) select.innerHTML = dogShowEventOptions(event);
   document.querySelectorAll("[data-dog-show-view]").forEach((button) => {
+    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner"].includes(dogShowView);
     const visibleView = dogShowView === "progress" ? "more" : dogShowView;
-    const active = button.dataset.dogShowView === visibleView;
+    const active = mobileMoreActive || button.dataset.dogShowView === visibleView;
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  if (!event && dogShowView !== "progress") {
+  if (!event && !["progress", "planner"].includes(dogShowView)) {
     content.innerHTML = dogShowRenderEmpty("Create the first show weekend", "Add the event once, then build the roster, prep schedule, helper tasks, and results.");
     return;
   }
@@ -1055,13 +1283,14 @@ function renderDogShow() {
     tasks: dogShowTasksHtml,
     more: dogShowMoreHtml,
     progress: dogShowProgressHtml,
+    planner: dogShowPlannerHtml,
   };
   content.innerHTML = renderers[dogShowView](event);
   if (typeof scheduleProfilePhotoHydrationSweep === "function") scheduleProfilePhotoHydrationSweep(40);
 }
 
 function setDogShowView(view = "home") {
-  if (!["home", "dogs", "schedule", "tasks", "more", "progress"].includes(view)) return;
+  if (!["home", "dogs", "schedule", "tasks", "more", "progress", "planner"].includes(view)) return;
   dogShowView = view;
   localStorage.setItem(DOG_SHOW_VIEW_KEY, view);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2017,6 +2246,14 @@ function openDogShowResultSummary() {
   }).join("")}</div>` : dogShowRenderEmpty("No results logged", "Open a showing dog's card and choose a ring appearance to log its result.", "close-show-dialog", "Close"));
 }
 
+function openDogShowProgressResult(resultId = "") {
+  const result = dogShowAppearanceResultsAll().find((item) => item.id === resultId);
+  if (!result?.showEventId || !result.showEntryId) return;
+  localStorage.setItem(DOG_SHOW_EVENT_KEY, result.showEventId);
+  const resultEntry = dogShowEntries().find((item) => item.id === result.showEntryId);
+  if (resultEntry) openDogShowResultForm(resultEntry, result.ringScheduleId || "");
+}
+
 function setupDogShowEventListeners() {
   const page = document.getElementById("dogShowPage");
   if (!page || page.dataset.dogShowBound === "true") return;
@@ -2126,6 +2363,10 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "new-show-event") openDogShowEventForm();
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "open-show-progress") setDogShowView("progress");
+    if (action.dataset.action === "open-show-planner") setDogShowView("planner");
+    if (action.dataset.action === "edit-show-plan") openDogShowPlannerForm();
+    if (action.dataset.action === "add-planned-show") openDogShowPlannedEvent(action.dataset.showId || "");
+    if (action.dataset.action === "open-judge-evidence") openDogShowJudgeEvidence(dogShowProgressJudge, action.dataset.evidenceKind || "entries");
     if (action.dataset.action === "select-progress-dog") {
       dogShowProgressDogKey = action.dataset.dogKey || "";
       dogShowProgressTab = "dogs";
@@ -2140,14 +2381,7 @@ function setupDogShowEventListeners() {
       renderDogShow();
     }
     if (action.dataset.action === "edit-judge-note") openDogShowJudgeNoteForm(action.dataset.judge || dogShowProgressJudge);
-    if (action.dataset.action === "open-progress-result") {
-      const result = dogShowAppearanceResultsAll().find((item) => item.id === action.dataset.resultId);
-      if (result?.showEventId && result.showEntryId) {
-        localStorage.setItem(DOG_SHOW_EVENT_KEY, result.showEventId);
-        const resultEntry = dogShowEntries().find((item) => item.id === result.showEntryId);
-        if (resultEntry) openDogShowResultForm(resultEntry, result.ringScheduleId || "");
-      }
-    }
+    if (action.dataset.action === "open-progress-result") openDogShowProgressResult(action.dataset.resultId || "");
     if (action.dataset.action === "add-show-dogs") openDogShowAddDogsForm();
     if (action.dataset.action === "open-show-dog" && entry) openDogShowEntryForm(entry);
     if (action.dataset.action === "open-show-potty" && entry) openDogShowPottyPicker(entry);
@@ -2221,6 +2455,7 @@ function setupDogShowEventListeners() {
     setDogShowMoreMenuOpen(false);
     if (action.dataset.dogShowMoreAction === "operations") setDogShowView("more");
     if (action.dataset.dogShowMoreAction === "progress") setDogShowView("progress");
+    if (action.dataset.dogShowMoreAction === "planner") setDogShowView("planner");
     if (action.dataset.dogShowMoreAction === "boarding") switchPage("dashboardPage", { history: "push" });
   });
 
@@ -2234,6 +2469,7 @@ function setupDogShowEventListeners() {
     if (event.target.id === "dogShowCareerProfileForm") await saveDogShowCareerProfile(event.target);
     if (event.target.id === "dogShowJudgeNoteForm") await saveDogShowJudgeNote(event.target);
     if (event.target.id === "dogShowTaskForm") await saveDogShowTask(event.target);
+    if (event.target.id === "dogShowPlannerForm") await saveDogShowPlanner(event.target);
   });
 
   dialog?.addEventListener("click", async (event) => {
@@ -2269,6 +2505,7 @@ function setupDogShowEventListeners() {
       return;
     }
     if (action.dataset.action === "close-show-dialog") dialog.close();
+    if (action.dataset.action === "open-progress-result") openDogShowProgressResult(action.dataset.resultId || "");
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "duplicate-show-task") openDuplicateDogShowTask(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
