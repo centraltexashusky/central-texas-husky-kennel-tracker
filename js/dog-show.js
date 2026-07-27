@@ -451,15 +451,21 @@ function dogShowResultAwardsSummary(result = {}) {
   const groupJudge = String(result.groupJudge || "").trim();
   const bisAward = String(result.bisAward || "").trim();
   const bisJudge = String(result.bisJudge || "").trim();
+  const ohGroupAward = String(result.ohGroupAward || "").trim();
+  const ohGroupJudge = String(result.ohGroupJudge || "").trim();
+  const ohBisAward = String(result.ohBisAward || "").trim();
+  const ohBisJudge = String(result.ohBisJudge || "").trim();
   return [
     breedAward ? `BOB/BOV: ${breedAward}` : "",
-    groupAward || groupJudge ? `Group: ${groupAward || "Award not set"}${groupJudge ? ` (Judge: ${groupJudge})` : ""}` : "",
-    bisAward || bisJudge ? `BIS: ${bisAward || "Award not set"}${bisJudge ? ` (Judge: ${bisJudge})` : ""}` : "",
+    groupAward || groupJudge ? `Regular Group: ${groupAward || "Award not set"}${groupJudge ? ` (Judge: ${groupJudge})` : ""}` : "",
+    bisAward || bisJudge ? `Regular BIS: ${bisAward || "Award not set"}${bisJudge ? ` (Judge: ${bisJudge})` : ""}` : "",
+    ohGroupAward || ohGroupJudge ? `OH Group: ${ohGroupAward || "Award not set"}${ohGroupJudge ? ` (Judge: ${ohGroupJudge})` : ""}` : "",
+    ohBisAward || ohBisJudge ? `OH BIS: ${ohBisAward || "Award not set"}${ohBisJudge ? ` (Judge: ${ohBisJudge})` : ""}` : "",
   ].filter(Boolean).join(" · ");
 }
 
 function dogShowResultJudgeNames(result = {}) {
-  return [result.judge, result.groupJudge, result.bisJudge].map((name) => String(name || "").trim()).filter(Boolean);
+  return [result.judge, result.groupJudge, result.bisJudge, result.ohGroupJudge, result.ohBisJudge].map((name) => String(name || "").trim()).filter(Boolean);
 }
 
 function dogShowResultHistoryForDog(dogKey = "") {
@@ -539,7 +545,7 @@ function dogShowJudgeEvidence(name = "") {
   const results = dogShowAppearanceResultsAll().filter((result) => dogShowResultJudgeNames(result).some((judge) => dogShowJudgeNameKey(judge) === key));
   return {
     results,
-    placements: results.filter((result) => ["Win", "Placement"].includes(result.outcome) || result.groupAward || result.bisAward).length,
+    placements: results.filter((result) => ["Win", "Placement"].includes(result.outcome) || result.groupAward || result.bisAward || result.ohGroupAward || result.ohBisAward).length,
     points: results.reduce((total, result) => total + dogShowPointValue(result), 0),
     majors: results.reduce((total, result) => total + dogShowMajorValue(result), 0),
   };
@@ -1436,6 +1442,8 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
   const emailOwner = result.id ? result.customerVisible === true : ownerEmailAvailable;
   const scheduleIndex = schedule ? schedules.findIndex((item) => item.id === schedule.id) : -1;
   const pointsEarned = dogShowPointValue(result);
+  const regularAwardsExpanded = [result.groupAward, result.groupJudge, result.bisAward, result.bisJudge].some(Boolean);
+  const ownerHandledAwardsExpanded = [result.ohGroupAward, result.ohGroupJudge, result.ohBisAward, result.ohBisJudge].some(Boolean);
   const resultContext = schedule
     ? `<div class="dog-show-result-context"><strong>${escapeHtml(dogShowRingAppearanceTitle(schedule, scheduleIndex))}</strong><span>${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span></div>`
     : `<div class="dog-show-result-context"><strong>General show result</strong><span>No ring appearance is assigned.</span></div>`;
@@ -1451,20 +1459,44 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
       </div>
       <label class="inline-check"><input type="checkbox" name="isMajor"${dogShowMajorValue(result) ? " checked" : ""}/> This result earned a major</label>
     </fieldset>
-    <fieldset class="dog-show-result-tier">
-      <legend>Group</legend>
-      <div class="field-grid">
-        <label>Group win / award<input name="groupAward" value="${escapeHtml(result.groupAward || "")}" placeholder="Group 1, Group 2, Group 3 or Group 4"/></label>
-        <label>Group judge<input name="groupJudge" value="${escapeHtml(result.groupJudge || "")}" placeholder="Judge name"/></label>
+    <details class="dog-show-result-award-section"${regularAwardsExpanded ? " open" : ""}>
+      <summary><span>Regular Group &amp; BIS</span><small>Group and Best in Show awards</small></summary>
+      <div class="dog-show-result-award-content">
+        <section class="dog-show-result-award-card">
+          <h3>Regular Group</h3>
+          <div class="field-grid">
+            <label>Group win / award<input name="groupAward" value="${escapeHtml(result.groupAward || "")}" placeholder="Group 1, Group 2, Group 3 or Group 4"/></label>
+            <label>Group judge<input name="groupJudge" value="${escapeHtml(result.groupJudge || "")}" placeholder="Judge name"/></label>
+          </div>
+        </section>
+        <section class="dog-show-result-award-card">
+          <h3>Regular Best in Show</h3>
+          <div class="field-grid">
+            <label>BIS award<input name="bisAward" value="${escapeHtml(result.bisAward || "")}" placeholder="BIS or RBIS"/></label>
+            <label>BIS judge<input name="bisJudge" value="${escapeHtml(result.bisJudge || "")}" placeholder="Judge name"/></label>
+          </div>
+        </section>
       </div>
-    </fieldset>
-    <fieldset class="dog-show-result-tier">
-      <legend>Best in Show</legend>
-      <div class="field-grid">
-        <label>BIS award<input name="bisAward" value="${escapeHtml(result.bisAward || "")}" placeholder="BIS, RBIS or NOHS BIS"/></label>
-        <label>BIS judge<input name="bisJudge" value="${escapeHtml(result.bisJudge || "")}" placeholder="Judge name"/></label>
+    </details>
+    <details class="dog-show-result-award-section"${ownerHandledAwardsExpanded ? " open" : ""}>
+      <summary><span>OH Group &amp; OH BIS</span><small>Owner-Handled Group and Best in Show awards</small></summary>
+      <div class="dog-show-result-award-content">
+        <section class="dog-show-result-award-card">
+          <h3>OH Group</h3>
+          <div class="field-grid">
+            <label>OH Group win / award<input name="ohGroupAward" value="${escapeHtml(result.ohGroupAward || "")}" placeholder="OH Group 1, 2, 3 or 4"/></label>
+            <label>OH Group judge<input name="ohGroupJudge" value="${escapeHtml(result.ohGroupJudge || "")}" placeholder="Judge name"/></label>
+          </div>
+        </section>
+        <section class="dog-show-result-award-card">
+          <h3>OH Best in Show</h3>
+          <div class="field-grid">
+            <label>OH BIS award<input name="ohBisAward" value="${escapeHtml(result.ohBisAward || "")}" placeholder="OH BIS or OH RBIS"/></label>
+            <label>OH BIS judge<input name="ohBisJudge" value="${escapeHtml(result.ohBisJudge || "")}" placeholder="Judge name"/></label>
+          </div>
+        </section>
       </div>
-    </fieldset>
+    </details>
     <label>Judge notes<textarea name="judgeNotes" rows="3">${escapeHtml(result.judgeNotes || "")}</textarea></label>
     <label>Owner-facing summary<textarea name="customerSummary" rows="3">${escapeHtml(result.customerSummary || "")}</textarea></label>
     <label class="inline-check"><input type="checkbox" name="customerVisible"${emailOwner ? " checked" : ""}${ownerEmailAvailable ? "" : " disabled"}/> ${ownerEmailAvailable ? "Email owner immediately" : "Owner email unavailable"}</label>

@@ -13269,6 +13269,71 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   padding: 0 8px;
 }
 
+.dog-show-result-award-section {
+  background: var(--glass-fill-soft);
+  border: 1px solid rgba(49, 95, 133, 0.35);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dog-show-result-award-section > summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  grid-template-columns: 1fr auto;
+  list-style: none;
+  padding: 13px 14px;
+}
+
+.dog-show-result-award-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-result-award-section > summary::after {
+  content: "+";
+  font-size: 1.15rem;
+  font-weight: 900;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.dog-show-result-award-section[open] > summary::after {
+  content: "−";
+}
+
+.dog-show-result-award-section > summary span {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.dog-show-result-award-section > summary small {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.dog-show-result-award-content {
+  border-top: 1px solid rgba(49, 95, 133, 0.24);
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.dog-show-result-award-card {
+  display: grid;
+  gap: 10px;
+}
+
+.dog-show-result-award-card + .dog-show-result-award-card {
+  border-top: 1px solid rgba(49, 95, 133, 0.2);
+  padding-top: 12px;
+}
+
+.dog-show-result-award-card h3 {
+  font-size: 0.86rem;
+  margin: 0;
+}
+
 .dog-show-result-appearance-list > button {
   border-left: 4px solid var(--gold);
 }
