@@ -445,6 +445,23 @@ function dogShowMajorValue(result = {}) {
   return result.isMajor === true || result.isMajor === "true" || /\bmajor\b/i.test(String(result.points || "")) ? 1 : 0;
 }
 
+function dogShowResultAwardsSummary(result = {}) {
+  const breedAward = String(result.awards || "").trim();
+  const groupAward = String(result.groupAward || "").trim();
+  const groupJudge = String(result.groupJudge || "").trim();
+  const bisAward = String(result.bisAward || "").trim();
+  const bisJudge = String(result.bisJudge || "").trim();
+  return [
+    breedAward ? `BOB/BOV: ${breedAward}` : "",
+    groupAward || groupJudge ? `Group: ${groupAward || "Award not set"}${groupJudge ? ` (Judge: ${groupJudge})` : ""}` : "",
+    bisAward || bisJudge ? `BIS: ${bisAward || "Award not set"}${bisJudge ? ` (Judge: ${bisJudge})` : ""}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+function dogShowResultJudgeNames(result = {}) {
+  return [result.judge, result.groupJudge, result.bisJudge].map((name) => String(name || "").trim()).filter(Boolean);
+}
+
 function dogShowResultHistoryForDog(dogKey = "") {
   const entries = dogShowRecords("showEntry");
   const events = new Map(dogShowEvents().map((event) => [event.id, event]));
@@ -487,13 +504,12 @@ function dogShowDogProgress(dog = {}) {
 
 function dogShowProgressPercent(progress = {}) {
   const pointRatio = progress.totalPoints / Math.max(1, progress.targetPoints);
-  const majorRatio = progress.targetMajors ? progress.totalMajors / progress.targetMajors : 1;
-  return Math.max(0, Math.min(100, Math.round(Math.min(pointRatio, majorRatio) * 100)));
+  return Math.max(0, Math.min(100, Math.round(pointRatio * 100)));
 }
 
 function dogShowProgressBarHtml(progress = {}) {
   const percent = dogShowProgressPercent(progress);
-  return `<div class="dog-show-title-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`;
+  return `<div class="dog-show-title-progress" role="progressbar" aria-label="${progress.totalPoints} of ${progress.targetPoints} championship points" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div>`;
 }
 
 function dogShowJudgeNotes() {
@@ -510,7 +526,7 @@ function dogShowObservedJudges() {
     if (schedule.judge) names.set(dogShowJudgeNameKey(schedule.judge), schedule.judge.trim());
   }));
   dogShowAppearanceResultsAll().forEach((result) => {
-    if (result.judge) names.set(dogShowJudgeNameKey(result.judge), result.judge.trim());
+    dogShowResultJudgeNames(result).forEach((judge) => names.set(dogShowJudgeNameKey(judge), judge));
   });
   dogShowJudgeNotes().forEach((note) => {
     if (note.judgeName) names.set(dogShowJudgeNameKey(note.judgeName), note.judgeName.trim());
@@ -520,10 +536,10 @@ function dogShowObservedJudges() {
 
 function dogShowJudgeEvidence(name = "") {
   const key = dogShowJudgeNameKey(name);
-  const results = dogShowAppearanceResultsAll().filter((result) => dogShowJudgeNameKey(result.judge) === key);
+  const results = dogShowAppearanceResultsAll().filter((result) => dogShowResultJudgeNames(result).some((judge) => dogShowJudgeNameKey(judge) === key));
   return {
     results,
-    placements: results.filter((result) => ["Win", "Placement"].includes(result.outcome)).length,
+    placements: results.filter((result) => ["Win", "Placement"].includes(result.outcome) || result.groupAward || result.bisAward).length,
     points: results.reduce((total, result) => total + dogShowPointValue(result), 0),
     majors: results.reduce((total, result) => total + dogShowMajorValue(result), 0),
   };
@@ -571,7 +587,7 @@ function dogShowProgressHistoryHtml(progress = {}) {
   if (!progress.history.length) return dogShowRenderEmpty("No ring results logged", "Results will appear here after they are saved for a ring appearance.");
   return progress.history.map(({ result, event }) => {
     const points = dogShowPointValue(result);
-    return `<button type="button" class="dog-show-progress-history-row" data-action="open-progress-result" data-result-id="${escapeHtml(result.id)}"><span class="dog-show-history-date">${escapeHtml(dogShowFormatDate(result.ringDate || event.startDate))}</span><span><strong>${escapeHtml(event.name || result.showName || "Dog Show")}</strong><small>${escapeHtml([result.ringNumber ? `Ring ${result.ringNumber}` : "Ring not set", result.classEntered || "Class not set", result.judge ? `Judge: ${result.judge}` : "Judge not set"].join(" · "))}</small><em>${escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, result.awards].filter(Boolean).join(" · ") || "Result logged")}</em></span><span class="dog-show-history-points"><strong>+${points}</strong><small>${dogShowMajorValue(result) ? "Major" : "points"}</small></span></button>`;
+    return `<button type="button" class="dog-show-progress-history-row" data-action="open-progress-result" data-result-id="${escapeHtml(result.id)}"><span class="dog-show-history-date">${escapeHtml(dogShowFormatDate(result.ringDate || event.startDate))}</span><span><strong>${escapeHtml(event.name || result.showName || "Dog Show")}</strong><small>${escapeHtml([result.ringNumber ? `Ring ${result.ringNumber}` : "Ring not set", result.classEntered || "Class not set", result.judge ? `Judge: ${result.judge}` : "Judge not set"].join(" · "))}</small><em>${escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, dogShowResultAwardsSummary(result)].filter(Boolean).join(" · ") || "Result logged")}</em></span><span class="dog-show-history-points"><strong>+${points}</strong><small>${dogShowMajorValue(result) ? "Major" : "points"}</small></span></button>`;
   }).join("");
 }
 
@@ -1407,7 +1423,7 @@ function openDogShowResultPicker(entry) {
   }
   openDogShowDialog(`Results: ${dogShowEntryName(entry)}`, `<section class="dog-show-dialog-section"><div><h3>Choose Ring Appearance</h3><p class="muted-copy">Log each show separately, including multiple shows on the same day.</p></div><div class="dog-show-summary-list dog-show-result-appearance-list">${schedules.map((schedule, index) => {
     const result = dogShowResultForSchedule(entry, schedule, dogShowActiveEvent(), entryResults);
-    return `<button type="button" data-action="open-show-result" data-id="${escapeHtml(entry.id)}" data-ring-schedule-id="${escapeHtml(schedule.id)}"><strong>${escapeHtml(dogShowRingAppearanceTitle(schedule, index))}</strong><span>${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span><small>${result ? escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, result.awards].filter(Boolean).join(" · ") || "Result logged") : "No result logged"}</small></button>`;
+    return `<button type="button" data-action="open-show-result" data-id="${escapeHtml(entry.id)}" data-ring-schedule-id="${escapeHtml(schedule.id)}"><strong>${escapeHtml(dogShowRingAppearanceTitle(schedule, index))}</strong><span>${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span><small>${result ? escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, dogShowResultAwardsSummary(result)].filter(Boolean).join(" · ") || "Result logged") : "No result logged"}</small></button>`;
   }).join("")}</div><div class="button-row"><button type="button" class="secondary-button" data-action="back-to-show-dog" data-id="${escapeHtml(entry.id)}">Back to Dog</button></div></section>`);
 }
 
@@ -1425,13 +1441,30 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
     : `<div class="dog-show-result-context"><strong>General show result</strong><span>No ring appearance is assigned.</span></div>`;
   openDogShowDialog(`Result: ${dogShowEntryName(entry)}`, `<form id="dogShowResultForm" class="tracker-form" data-entry-id="${escapeHtml(entry.id)}" data-ring-schedule-id="${escapeHtml(schedule?.id || "")}" data-id="${escapeHtml(result.id || "")}">
     ${resultContext}
-    <div class="field-grid">
-      <label>Outcome<select name="outcome">${["Win", "Placement", "No placement", "Scratched", "Socialization only"].map((value) => `<option value="${value}"${value === result.outcome ? " selected" : ""}>${dogShowOutcomeLabel(value)}</option>`).join("")}</select></label>
-      <label>Placement<input name="placement" value="${escapeHtml(result.placement || "")}" placeholder="1st Open Bitch"/></label>
-      <label>Awards<input name="awards" value="${escapeHtml(result.awards || "")}" placeholder="Winners Bitch, Best of Winners"/></label>
-      <label>Points earned<input type="number" name="pointsEarned" min="0" max="5" step="1" value="${pointsEarned}"/></label>
-    </div>
-    <label class="inline-check"><input type="checkbox" name="isMajor"${dogShowMajorValue(result) ? " checked" : ""}/> This result earned a major</label>
+    <label>Outcome<select name="outcome">${["Win", "Placement", "No placement", "Scratched", "Socialization only"].map((value) => `<option value="${value}"${value === result.outcome ? " selected" : ""}>${dogShowOutcomeLabel(value)}</option>`).join("")}</select></label>
+    <fieldset class="dog-show-result-tier dog-show-result-tier-breed">
+      <legend>Breed / Variety (BOB/BOV)</legend>
+      <div class="field-grid">
+        <label>Placement<input name="placement" value="${escapeHtml(result.placement || "")}" placeholder="1st Open Bitch"/></label>
+        <label>BOB/BOV &amp; breed awards<input name="awards" value="${escapeHtml(result.awards || "")}" placeholder="WD, BOW, BOB or BOV"/></label>
+        <label>Points earned<input type="number" name="pointsEarned" min="0" max="5" step="1" value="${pointsEarned}"/></label>
+      </div>
+      <label class="inline-check"><input type="checkbox" name="isMajor"${dogShowMajorValue(result) ? " checked" : ""}/> This result earned a major</label>
+    </fieldset>
+    <fieldset class="dog-show-result-tier">
+      <legend>Group</legend>
+      <div class="field-grid">
+        <label>Group win / award<input name="groupAward" value="${escapeHtml(result.groupAward || "")}" placeholder="Group 1, Group 2, Group 3 or Group 4"/></label>
+        <label>Group judge<input name="groupJudge" value="${escapeHtml(result.groupJudge || "")}" placeholder="Judge name"/></label>
+      </div>
+    </fieldset>
+    <fieldset class="dog-show-result-tier">
+      <legend>Best in Show</legend>
+      <div class="field-grid">
+        <label>BIS award<input name="bisAward" value="${escapeHtml(result.bisAward || "")}" placeholder="BIS, RBIS or NOHS BIS"/></label>
+        <label>BIS judge<input name="bisJudge" value="${escapeHtml(result.bisJudge || "")}" placeholder="Judge name"/></label>
+      </div>
+    </fieldset>
     <label>Judge notes<textarea name="judgeNotes" rows="3">${escapeHtml(result.judgeNotes || "")}</textarea></label>
     <label>Owner-facing summary<textarea name="customerSummary" rows="3">${escapeHtml(result.customerSummary || "")}</textarea></label>
     <label class="inline-check"><input type="checkbox" name="customerVisible"${emailOwner ? " checked" : ""}${ownerEmailAvailable ? "" : " disabled"}/> ${ownerEmailAvailable ? "Email owner immediately" : "Owner email unavailable"}</label>
@@ -1754,7 +1787,7 @@ async function saveDogShowResult(form) {
     submittedAt: existing.submittedAt || new Date().toISOString(),
   });
   const appearance = schedule ? dogShowRingAppearanceMeta(schedule) : "General show result";
-  await createDogShowLog(entry, "Result", [appearance, dogShowOutcomeLabel(data.outcome), data.placement, data.awards].filter(Boolean).join(" · ") || "Result logged", { customerVisible, ringScheduleId: result.ringScheduleId });
+  await createDogShowLog(entry, "Result", [appearance, dogShowOutcomeLabel(data.outcome), data.placement, dogShowResultAwardsSummary(result)].filter(Boolean).join(" · ") || "Result logged", { customerVisible, ringScheduleId: result.ringScheduleId });
   const notification = customerVisible && ownerEmails.length
     ? await notifyIfNeeded(result, "dogShowResultPublished")
     : null;
@@ -1948,7 +1981,7 @@ function openDogShowResultSummary() {
     const schedules = dogShowRingSchedules(entry);
     const schedule = schedules.find((item) => item.id === result.ringScheduleId) || (!result.ringScheduleId ? schedules[0] : null);
     const appearance = schedule ? dogShowRingAppearanceTitle(schedule, schedules.indexOf(schedule)) : "General result";
-    return `<button type="button" data-action="open-show-result" data-id="${escapeHtml(result.showEntryId)}" data-ring-schedule-id="${escapeHtml(schedule?.id || "")}"><strong>${escapeHtml(result.dogName || dogShowEntryName(entry) || "Dog")}</strong><span>${escapeHtml([appearance, schedule ? dogShowRingAppearanceMeta(schedule) : ""].filter(Boolean).join(" · "))}</span><small>${escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, result.awards].filter(Boolean).join(" · ") || "Result logged")}</small></button>`;
+    return `<button type="button" data-action="open-show-result" data-id="${escapeHtml(result.showEntryId)}" data-ring-schedule-id="${escapeHtml(schedule?.id || "")}"><strong>${escapeHtml(result.dogName || dogShowEntryName(entry) || "Dog")}</strong><span>${escapeHtml([appearance, schedule ? dogShowRingAppearanceMeta(schedule) : ""].filter(Boolean).join(" · "))}</span><small>${escapeHtml([dogShowOutcomeLabel(result.outcome), result.placement, dogShowResultAwardsSummary(result)].filter(Boolean).join(" · ") || "Result logged")}</small></button>`;
   }).join("")}</div>` : dogShowRenderEmpty("No results logged", "Open a showing dog's card and choose a ring appearance to log its result.", "close-show-dialog", "Close"));
 }
 

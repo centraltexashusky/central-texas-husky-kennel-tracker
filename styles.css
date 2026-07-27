@@ -13247,6 +13247,28 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   font-size: 0.76rem;
 }
 
+.dog-show-result-tier {
+  background: var(--glass-fill-soft);
+  border: 1px solid rgba(49, 95, 133, 0.35);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  min-width: 0;
+  padding: 12px;
+}
+
+.dog-show-result-tier-breed {
+  border-left: 4px solid var(--gold);
+}
+
+.dog-show-result-tier legend {
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 900;
+  padding: 0 8px;
+}
+
 .dog-show-result-appearance-list > button {
   border-left: 4px solid var(--gold);
 }
