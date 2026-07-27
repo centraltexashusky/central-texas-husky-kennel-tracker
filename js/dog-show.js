@@ -529,7 +529,13 @@ function dogShowJudgeNotes() {
 }
 
 function dogShowJudgeNameKey(name = "") {
-  return String(name || "").trim().toLowerCase();
+  return String(name || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\b(?:mr|mrs|ms|miss|dr|judge|col)\b\.?/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function dogShowObservedJudges() {
@@ -577,9 +583,10 @@ function dogShowJudgeRoleSummary(result = {}, judgeName = "") {
   ].filter(([name]) => dogShowJudgeNameKey(name) === key).map(([, role]) => role).join(", ");
 }
 
-function openDogShowJudgeEvidence(judgeName = "", kind = "entries") {
+function openDogShowJudgeEvidence(judgeName = "", kind = "entries", dogKeys = []) {
   const labels = { entries: "Entries Logged", placements: "Placements", points: "Points" };
-  const results = dogShowJudgeEvidenceResults(judgeName, kind);
+  const selectedDogs = new Set(Array.isArray(dogKeys) ? dogKeys : []);
+  const results = dogShowJudgeEvidenceResults(judgeName, kind).filter((result) => !selectedDogs.size || selectedDogs.has(dogShowDogIdentity(result)));
   const events = new Map(dogShowEvents().map((event) => [event.id, event]));
   const entries = new Map(dogShowRecords("showEntry").map((entry) => [entry.id, entry]));
   const rows = results.map((result) => {
@@ -592,7 +599,7 @@ function openDogShowJudgeEvidence(judgeName = "", kind = "entries") {
       <span class="dog-show-judge-evidence-points"><strong>${points ? `+${points}` : "—"}</strong><small>${dogShowMajorValue(result) ? "Major" : points ? "points" : "No points"}</small></span>
     </button>`;
   }).join("");
-  openDogShowDialog(`${labels[kind] || labels.entries}: ${judgeName}`, `<section class="dog-show-judge-evidence-dialog"><p>Logged ring results where this person was recorded as a breed, group, BIS, or owner-handled judge.</p><div class="dog-show-judge-evidence-list">${rows || dogShowRenderEmpty("No matching results", `There are no ${String(labels[kind] || labels.entries).toLowerCase()} to show for this judge.`)}</div></section>`);
+  openDogShowDialog(`${labels[kind] || labels.entries}: ${judgeName}`, `<section class="dog-show-judge-evidence-dialog"><p>Logged ring results where this person was recorded as a breed, group, BIS, or owner-handled judge${selectedDogs.size ? " for the dogs selected in this plan" : ""}.</p><div class="dog-show-judge-evidence-list">${rows || dogShowRenderEmpty("No matching results", `There are no ${String(labels[kind] || labels.entries).toLowerCase()} to show for this judge${selectedDogs.size ? " and the selected dogs" : ""}.`)}</div></section>`);
 }
 
 function dogShowJudgeNote(name = "") {
@@ -1096,6 +1103,35 @@ function dogShowPlannerDogEvidence(judgeName = "", dogKeys = []) {
   };
 }
 
+function dogShowPlannerJudgeAssessment(judgeName = "", dogKeys = []) {
+  if (!judgeName) return { score: null, label: "Panel pending", historyLabel: "No judge assignment published", recommendation: "", evidence: { results: [], placements: [], points: 0 } };
+  const evidence = dogShowPlannerDogEvidence(judgeName, dogKeys);
+  const note = dogShowJudgeNote(judgeName);
+  const recommendation = String(note.recommendation || "Watch");
+  let score = 50;
+  if (evidence.placements.length) score += Math.min(28, 12 + (evidence.placements.length * 5) + Math.min(8, evidence.points * 2));
+  else if (evidence.results.length) score += Math.min(12, evidence.results.length * 4);
+  if (recommendation === "Show Under") score += 18;
+  if (recommendation === "Avoid") score -= 30;
+  score = Math.max(0, Math.min(100, score));
+  const label = score >= 78 ? "Recommended" : score >= 60 ? "Positive" : score <= 35 ? "Caution" : "Neutral";
+  const historyLabel = evidence.results.length
+    ? `${evidence.results.length} prior result${evidence.results.length === 1 ? "" : "s"} · ${evidence.placements.length} placement${evidence.placements.length === 1 ? "" : "s"} · ${evidence.points} point${evidence.points === 1 ? "" : "s"}`
+    : `No logged history${dogKeys.length ? " for selected dogs" : ""}`;
+  return { score, label, historyLabel, recommendation, evidence, note };
+}
+
+function dogShowPlannerJudgeHtml(roleLabel = "", judgeName = "", plan = {}) {
+  if (!judgeName) return `<div class="dog-show-planner-judge is-pending"><span>${escapeHtml(roleLabel)} Judge</span><strong>Panel pending</strong><small>No judge assignment published</small></div>`;
+  const assessment = dogShowPlannerJudgeAssessment(judgeName, plan.dogKeys || []);
+  return `<button type="button" class="dog-show-planner-judge" data-action="open-planner-judge-history" data-judge="${escapeHtml(judgeName)}" aria-label="View ${escapeHtml(roleLabel)} judge history for ${escapeHtml(judgeName)}">
+    <span>${escapeHtml(roleLabel)} Judge</span>
+    <strong>${escapeHtml(judgeName)}</strong>
+    <span class="dog-show-planner-judge-score"><b>${assessment.score}</b><em>${escapeHtml(assessment.label)}</em></span>
+    <small>${escapeHtml(assessment.historyLabel)}</small>
+  </button>`;
+}
+
 function dogShowPlannerAssessment(show = {}, plan = {}) {
   const dogKeys = Array.isArray(plan.dogKeys) ? plan.dogKeys : [];
   const dogNames = new Map(dogShowPlannerDogs().map((dog) => [dog.key, dogShowEntryName(dog.entry)]));
@@ -1138,6 +1174,36 @@ function dogShowPlannerAssessment(show = {}, plan = {}) {
   return { score, label, reasons };
 }
 
+function openDogShowPlannerDecision(showId = "") {
+  const plan = dogShowPlannerRecord();
+  const show = (plan.shows || []).find((item) => String(item.externalId || "") === String(showId || ""));
+  if (!show) return showToast("The selected show could not be found.");
+  const assessment = dogShowPlannerAssessment(show, plan);
+  const selectedDogNames = dogShowPlannerDogs().filter((dog) => (plan.dogKeys || []).includes(dog.key)).map((dog) => dogShowEntryName(dog.entry));
+  const judges = [
+    ["Breed", show.breedJudge || ""],
+    ["Group", show.groupJudge || ""],
+    ["BIS", show.bisJudge || ""],
+  ];
+  const judgeRows = judges.map(([role, judge]) => {
+    if (!judge) return `<article class="dog-show-decision-judge is-pending"><header><span>${role} Judge</span><strong>Panel pending</strong></header><p>No assignment has been published.</p></article>`;
+    const judgeAssessment = dogShowPlannerJudgeAssessment(judge, plan.dogKeys || []);
+    return `<article class="dog-show-decision-judge">
+      <header><span>${role} Judge</span><strong>${escapeHtml(judge)}</strong><div><b>${judgeAssessment.score}</b><em>${escapeHtml(judgeAssessment.label)}</em></div></header>
+      <p>${escapeHtml(judgeAssessment.historyLabel)}</p>
+      <small>Team recommendation: ${escapeHtml(judgeAssessment.recommendation || "Watch")}</small>
+      <button type="button" class="secondary-button" data-action="open-planner-judge-history" data-judge="${escapeHtml(judge)}">View Judge History</button>
+    </article>`;
+  }).join("");
+  openDogShowDialog(`Show Decision: ${show.club || show.name || "Dog Show"}`, `<section class="dog-show-planner-decision">
+    <header class="dog-show-decision-summary"><div><span>${escapeHtml([show.state, show.showType, show.nohs ? "NOHS" : ""].filter(Boolean).join(" · "))}</span><h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
+    <div class="dog-show-decision-dogs"><span>Dogs evaluated</span><strong>${escapeHtml(selectedDogNames.join(", ") || "All tracked show dogs")}</strong></div>
+    <div class="dog-show-decision-judges">${judgeRows}</div>
+    <section class="dog-show-decision-reasons"><h3>Why this score</h3><ul>${assessment.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul></section>
+    <div class="button-row">${show.sourceUrl && !plan.localFixture ? `<a class="secondary-button dog-show-source-link" href="${escapeHtml(show.sourceUrl)}" target="_blank" rel="noopener noreferrer">View Source</a>` : ""}<button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>
+  </section>`);
+}
+
 function dogShowPlannerDateRange(show = {}) {
   const start = dogShowFormatDate(show.startDate);
   const end = show.endDate && show.endDate !== show.startDate ? dogShowFormatDate(show.endDate) : "";
@@ -1155,9 +1221,9 @@ function dogShowPlannerHtml() {
     ${plan.id ? `<section class="dog-show-planner-criteria"><div><span>Dogs</span><strong>${escapeHtml(selectedDogNames.join(", ") || "All tracked show dogs")}</strong></div><div><span>Dates</span><strong>${escapeHtml(dogShowPlannerDateRange({ startDate: plan.startDate, endDate: plan.endDate }))}</strong></div><div><span>States</span><strong>${escapeHtml((plan.states || []).join(", ") || "All")}</strong></div><div><span>Last checked</span><strong>${escapeHtml(fetchedLabel || "Not available")}</strong></div></section>` : ""}
     ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div><span class="dog-show-source-badge">${plan.localFixture ? "Local test data" : "Canine Chronicle calendar"}</span></header><div class="dog-show-planner-list">${ranked.map(({ show, assessment }) => `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}">
       <header><div><span>${escapeHtml([show.state, show.showType, show.nohs ? "NOHS" : ""].filter(Boolean).join(" · "))}</span><h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
-      <div class="dog-show-planner-panel"><div><span>Breed Judge</span><strong>${escapeHtml(show.breedJudge || "Panel pending")}</strong></div><div><span>Group Judge</span><strong>${escapeHtml(show.groupJudge || "Panel pending")}</strong></div><div><span>BIS Judge</span><strong>${escapeHtml(show.bisJudge || "Panel pending")}</strong></div></div>
+      <div class="dog-show-planner-panel">${dogShowPlannerJudgeHtml("Breed", show.breedJudge || "", plan)}${dogShowPlannerJudgeHtml("Group", show.groupJudge || "", plan)}${dogShowPlannerJudgeHtml("BIS", show.bisJudge || "", plan)}</div>
       <ul>${assessment.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-      <footer><div class="dog-show-planner-meta">${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}</div><div class="button-row">${show.sourceUrl && !plan.localFixture ? `<a class="secondary-button dog-show-source-link" href="${escapeHtml(show.sourceUrl)}" target="_blank" rel="noopener noreferrer">View Source</a>` : ""}<button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add to Schedule</button></div></footer>
+      <footer><div class="dog-show-planner-meta">${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}</div><div class="button-row"><button type="button" class="secondary-button" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}">View Show Decision</button>${show.sourceUrl && !plan.localFixture ? `<a class="secondary-button dog-show-source-link" href="${escapeHtml(show.sourceUrl)}" target="_blank" rel="noopener noreferrer">View Source</a>` : ""}<button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add to Schedule</button></div></footer>
     </article>`).join("")}</div></section>` : dogShowRenderEmpty("Find the right show for your dogs", "Choose the dogs, dates, and states. The planner will import future shows and rank their published judge panels against your history.", "edit-show-plan", "Find Shows")}
     <section class="dog-show-planner-source-note"><strong>Source and limitations</strong><p>Show listings and panels are imported from the Canine Chronicle Show Calendar. Verify the official premium list before entering; panels, dates, and assignments can change.</p></section>
   </div>`;
@@ -2374,6 +2440,8 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "open-show-progress") setDogShowView("progress");
     if (action.dataset.action === "open-show-planner") setDogShowView("planner");
     if (action.dataset.action === "edit-show-plan") openDogShowPlannerForm();
+    if (action.dataset.action === "view-show-decision") openDogShowPlannerDecision(action.dataset.showId || "");
+    if (action.dataset.action === "open-planner-judge-history") openDogShowJudgeEvidence(action.dataset.judge || "", "entries", dogShowPlannerRecord().dogKeys || []);
     if (action.dataset.action === "add-planned-show") openDogShowPlannedEvent(action.dataset.showId || "");
     if (action.dataset.action === "open-judge-evidence") openDogShowJudgeEvidence(dogShowProgressJudge, action.dataset.evidenceKind || "entries");
     if (action.dataset.action === "select-progress-dog") {
@@ -2514,6 +2582,7 @@ function setupDogShowEventListeners() {
       return;
     }
     if (action.dataset.action === "close-show-dialog") dialog.close();
+    if (action.dataset.action === "open-planner-judge-history") openDogShowJudgeEvidence(action.dataset.judge || "", "entries", dogShowPlannerRecord().dogKeys || []);
     if (action.dataset.action === "open-progress-result") openDogShowProgressResult(action.dataset.resultId || "");
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});

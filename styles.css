@@ -15257,19 +15257,66 @@ details.dog-show-ring-schedules[hidden] {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.dog-show-planner-panel > div {
+.dog-show-planner-panel > div,
+.dog-show-planner-panel > button {
   background: var(--glass-fill-soft);
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
   gap: 4px;
-  min-height: 58px;
+  min-height: 94px;
   padding: 10px;
 }
 
-.dog-show-planner-panel strong {
+.dog-show-planner-judge {
+  box-shadow: none;
+  color: inherit;
+  font-family: inherit;
+  justify-items: start;
+  margin: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.dog-show-planner-judge:not(.is-pending) {
+  cursor: pointer;
+}
+
+.dog-show-planner-judge:not(.is-pending):hover,
+.dog-show-planner-judge:not(.is-pending):focus-visible {
+  border-color: #4D88B2;
+  box-shadow: inset 0 0 0 1px #4D88B2;
+  transform: none;
+}
+
+.dog-show-planner-panel strong,
+.dog-show-planner-judge strong {
   font-size: 0.8rem;
   overflow-wrap: anywhere;
+}
+
+.dog-show-planner-judge-score {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.dog-show-planner-judge-score b {
+  color: #137345;
+  font-size: 1rem;
+}
+
+.dog-show-planner-judge-score em {
+  color: #315F85;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.dog-show-planner-judge small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
 }
 
 .dog-show-planner-card > ul {
@@ -15318,6 +15365,111 @@ details.dog-show-ring-schedules[hidden] {
   margin: 4px 0 0;
 }
 
+.dog-show-planner-decision {
+  display: grid;
+  gap: 14px;
+}
+
+.dog-show-decision-summary {
+  align-items: start;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.dog-show-decision-summary > div:first-child > span,
+.dog-show-decision-dogs > span,
+.dog-show-decision-judge header > span {
+  color: #315F85;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-decision-summary h3,
+.dog-show-decision-reasons h3 {
+  margin: 3px 0;
+}
+
+.dog-show-decision-summary p,
+.dog-show-decision-judge p {
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+
+.dog-show-decision-dogs {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+}
+
+.dog-show-decision-judges {
+  display: grid;
+  gap: 9px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dog-show-decision-judge {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+}
+
+.dog-show-decision-judge header {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-decision-judge header > div {
+  align-items: center;
+  display: flex;
+  gap: 7px;
+}
+
+.dog-show-decision-judge header > div b {
+  color: #137345;
+  font-size: 1.15rem;
+}
+
+.dog-show-decision-judge header > div em {
+  color: #315F85;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.dog-show-decision-judge > small {
+  color: var(--muted);
+}
+
+.dog-show-decision-judge > button {
+  margin-top: auto;
+  width: 100%;
+}
+
+.dog-show-decision-reasons {
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+}
+
+.dog-show-decision-reasons ul {
+  color: var(--muted);
+  display: grid;
+  gap: 5px;
+  margin-bottom: 0;
+  padding-left: 20px;
+}
+
 .dog-show-planner-dog-options {
   display: grid;
   gap: 8px;
@@ -15350,6 +15502,10 @@ details.dog-show-ring-schedules[hidden] {
 :root[data-theme="dark"] .dog-show-planner-card,
 :root[data-theme="dark"] .dog-show-planner-criteria > div,
 :root[data-theme="dark"] .dog-show-planner-panel > div,
+:root[data-theme="dark"] .dog-show-planner-panel > button,
+:root[data-theme="dark"] .dog-show-decision-summary,
+:root[data-theme="dark"] .dog-show-decision-dogs,
+:root[data-theme="dark"] .dog-show-decision-judge,
 :root[data-theme="dark"] .dog-show-planner-source-note {
   background: #13273D;
   border-color: #4E6C84;
@@ -15372,6 +15528,11 @@ details.dog-show-ring-schedules[hidden] {
 
 :root[data-theme="dark"] .dog-show-source-badge,
 :root[data-theme="dark"] .dog-show-planner-score span,
+:root[data-theme="dark"] .dog-show-planner-judge-score em,
+:root[data-theme="dark"] .dog-show-decision-summary > div:first-child > span,
+:root[data-theme="dark"] .dog-show-decision-dogs > span,
+:root[data-theme="dark"] .dog-show-decision-judge header > span,
+:root[data-theme="dark"] .dog-show-decision-judge header > div em,
 :root[data-theme="dark"] .dog-show-planner-card header > div:first-child > span {
   color: #9ED2F5;
 }
@@ -15382,6 +15543,10 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-planner-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-decision-judges {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -15419,6 +15584,15 @@ details.dog-show-ring-schedules[hidden] {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .dog-show-planner-card > footer [data-action="view-show-decision"] {
+    grid-column: 1 / -1;
+  }
+
+  .dog-show-decision-summary {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 
