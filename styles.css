@@ -16003,6 +16003,30 @@ details.dog-show-ring-schedules[hidden] {
   text-transform: uppercase;
 }
 
+.dog-show-planner-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.dog-show-planner-flags > span {
+  background: #E9F3FA;
+  border: 1px solid #72A7CA;
+  border-radius: 999px;
+  color: #214F70;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.dog-show-planner-flags > span.is-pending {
+  background: var(--glass-fill-soft);
+  border-color: var(--line);
+  color: var(--muted);
+}
+
 .dog-show-planner-card h3 {
   font-size: 1.08rem;
   letter-spacing: 0;
@@ -16138,6 +16162,25 @@ details.dog-show-ring-schedules[hidden] {
   display: inline-flex;
   justify-content: center;
   text-decoration: none;
+}
+
+.dog-show-judge-evidence-dialog {
+  display: grid;
+  gap: 10px;
+}
+
+.dog-show-judge-evidence-dialog > p {
+  margin: 0;
+}
+
+.dog-show-judge-directory-link {
+  justify-self: start;
+  text-decoration: none;
+}
+
+.dog-show-judge-directory-note {
+  color: var(--muted);
+  margin-top: -5px;
 }
 
 .dog-show-planner-source-note {
@@ -16443,6 +16486,18 @@ details.dog-show-ring-schedules[hidden] {
 
 :root[data-theme="dark"] .dog-show-planner-score strong {
   color: #9DE2BC;
+}
+
+:root[data-theme="dark"] .dog-show-planner-flags > span {
+  background: #173B55;
+  border-color: #6EA9D0;
+  color: #D8EEFC;
+}
+
+:root[data-theme="dark"] .dog-show-planner-flags > span.is-pending {
+  background: #13273D;
+  border-color: #4E6C84;
+  color: #AFC3D2;
 }
 
 :root[data-theme="dark"] .dog-show-source-badge,

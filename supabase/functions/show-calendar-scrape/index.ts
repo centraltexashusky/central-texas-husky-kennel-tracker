@@ -201,7 +201,9 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
     const breedJudge = calendarAssignmentJudge(showHtml, breedName) || judgeByAssignment(new RegExp(`^${escapedBreedName}\\b`, "i")) || clean(judgeAnchors[0]?.textContent);
     const groupPanel = showGroupPanel(showHtml, judgeAnchors);
     const typeAnchor = anchors.find((anchor) => /(?:showtype|opWtype|type=)/i.test(anchor.getAttribute("href") || ""));
-    const showType = clean(typeAnchor?.textContent) || (rowText.match(/\b(AB|SP|SWE|BPUP|FCAT|OB|RLY)\b/i)?.[1] || "");
+    const showType = clean(typeAnchor?.parentElement?.textContent)
+      || clean(typeAnchor?.textContent)
+      || (rowText.match(/\b(AB|SP|SWE|BPUP|FCAT|OB|RLY)\b/i)?.[1] || "");
     const nohs = /\bNOHS\b/i.test(rowText);
     const superintendent = ["Onofrio", "MB-F", "Rau", "Bradshaw", "BaRay", "Foy Trent", "Executive", "Show Secretary"]
       .find((name) => rowText.toLowerCase().includes(name.toLowerCase())) || "";

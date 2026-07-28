@@ -119,7 +119,13 @@ const required = [
   ["js/dog-show.js", "function dogShowPlannerJudgeAssessment", "Show Planner judge cards do not calculate match scores."],
   ["js/dog-show.js", 'data-action="view-show-decision"', "Show Planner cards do not expose the decision breakdown."],
   ["js/dog-show.js", 'data-action="open-planner-judge-history"', "Show Planner judge history cannot be opened."],
+  ["js/dog-show.js", "DOG_SHOW_AKC_JUDGE_SEARCH_URL", "Judge history is missing the official AKC Judges Directory link."],
+  ["js/dog-show.js", "function dogShowPlannerEventFlagLabels", "Show Planner cards do not translate event-format codes into readable flags."],
+  ["js/dog-show.js", '"Owner-Handled"', "Show Planner cards do not identify National Owner-Handled Series events."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "typeAnchor?.parentElement?.textContent", "The calendar scraper does not capture compound show formats such as AB/JS/BgP."],
+  ["index.html", "<h2>Dog Show Dashboard</h2>", "The Dog Show workspace heading is missing."],
   ["styles.css", ".dog-show-planner-decision", "Show Planner decision details are not styled."],
+  ["styles.css", ".dog-show-planner-flags", "Show Planner event-format flags are not styled."],
   ["styles.css", ".dog-show-planner-card", "Show Planner results are not styled."],
   ["styles.css", ".dog-show-potential-card", "Potential-show planning cards are not styled."],
   ["styles.css", ".dog-show-planner-mode-option", "The dog/breed planner mode choice is not styled."],
@@ -332,6 +338,7 @@ const forbidden = [
 
 const failures = [];
 if (!fs.existsSync("assets/icons/bis-rosette.png")) failures.push("The Dog Show Home rosette asset is missing.");
+if (read("index.html").includes("Run show weekends, dog care, prep timing, helper assignments, and results.")) failures.push("The removed Dog Show workspace description is still rendered.");
 for (const [path, needle, message] of required) {
   if (!read(path).includes(needle)) failures.push(message);
 }
