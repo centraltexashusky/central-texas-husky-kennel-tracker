@@ -693,8 +693,23 @@ function dogShowPlannerCandidates() {
 }
 
 function dogShowPlannerShowKey(show = {}) {
+  if (show.canonicalId) return `canonical:${show.canonicalId}`;
+  if (show.eventNumber) return `akc:${show.eventNumber}`;
   if (show.externalId) return `external:${show.externalId}`;
   return [show.startDate, show.club || show.name, show.cityState].map((value) => String(value || "").trim().toLowerCase()).join("|");
+}
+
+function dogShowPlannerShowMatchKeys(show = {}) {
+  const sourceIds = show.sourceIds && typeof show.sourceIds === "object" ? Object.values(show.sourceIds) : [];
+  const keys = [
+    dogShowPlannerShowKey(show),
+    show.canonicalId ? `canonical:${show.canonicalId}` : "",
+    show.eventNumber ? `akc:${show.eventNumber}` : "",
+    show.externalId ? `external:${show.externalId}` : "",
+    ...sourceIds.filter(Boolean).map((value) => `external:${value}`),
+    [show.startDate, show.club || show.name, show.cityState].map((value) => String(value || "").trim().toLowerCase()).join("|"),
+  ];
+  return [...new Set(keys.filter(Boolean))];
 }
 
 function dogShowPlannerTargets(plan = dogShowPlannerRecord()) {
@@ -1717,10 +1732,14 @@ function dogShowPlannerAssessment(show = {}, plan = {}) {
 function dogShowPlannerEventFlagLabels(show = {}) {
   const labelByCode = {
     AB: "All-Breed",
+    S: "Specialty",
+    PS: "Specialty",
+    DS: "Specialty",
     SP: "Specialty",
     SPEC: "Specialty",
     SPECIALTY: "Specialty",
     JS: "Junior Showmanship",
+    JSHW: "Junior Showmanship",
     BGP: "Beginner Puppy",
     BPUP: "Beginner Puppy",
     PUP: "Puppy Competition",
@@ -1742,6 +1761,22 @@ function dogShowPlannerEventFlagLabels(show = {}) {
     .map((value) => labelByCode[value.toUpperCase()] || value);
   if (show.nohs || show.ownerHandled) flags.push("Owner-Handled");
   return [...new Set(flags)];
+}
+
+function dogShowPlannerSourceLinksHtml(show = {}, options = {}) {
+  if (options.localFixture) return "";
+  const sources = Array.isArray(show.sources) ? show.sources : [];
+  const fallbackSources = [
+    show.akcSourceUrl ? { type: "akc", label: "AKC Event", url: show.akcSourceUrl } : null,
+    show.canineChronicleSourceUrl ? { type: "canine-chronicle", label: "Canine Chronicle", url: show.canineChronicleSourceUrl } : null,
+    show.superintendentUrl ? { type: "superintendent", label: "Superintendent", url: show.superintendentUrl } : null,
+    !sources.length && show.sourceUrl ? { type: "source", label: "View Source", url: show.sourceUrl } : null,
+  ].filter(Boolean);
+  const unique = new Map([...sources, ...fallbackSources].map((source) => [source.type || source.url, source]));
+  return [...unique.values()]
+    .filter((source) => source?.url)
+    .map((source) => `<a class="secondary-button dog-show-source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label || "View Source")}</a>`)
+    .join("");
 }
 
 function dogShowPlannerEventFlagsHtml(show = {}) {
@@ -1778,7 +1813,7 @@ function openDogShowPlannerDecision(showId = "") {
     <div class="dog-show-decision-dogs"><span>${plan.searchMode === "breed" ? "Breed evaluated" : "Dogs evaluated"}</span><strong>${escapeHtml(evaluatedLabel)}</strong></div>
     <div class="dog-show-decision-judges">${judgeRows}</div>
     <section class="dog-show-decision-reasons"><h3>Why this score</h3><ul>${assessment.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul></section>
-    <div class="button-row">${show.sourceUrl && !plan.localFixture ? `<a class="secondary-button dog-show-source-link" href="${escapeHtml(show.sourceUrl)}" target="_blank" rel="noopener noreferrer">View Source</a>` : ""}<button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>
+    <div class="button-row">${dogShowPlannerSourceLinksHtml(show, { localFixture: plan.localFixture })}<button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>
   </section>`);
 }
 
@@ -2023,9 +2058,9 @@ function dogShowPlannerHtml() {
       <header><div>${dogShowPlannerEventFlagsHtml(show)}<h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
       <div class="dog-show-planner-panel">${dogShowPlannerJudgeHtml("Breed", show.breedJudge || "", plan)}${dogShowPlannerJudgeHtml("Group", show.groupJudge || "", plan)}${dogShowPlannerJudgeHtml("BIS", show.bisJudge || "", plan)}</div>
       <ul>${assessment.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-      <footer><div class="dog-show-planner-meta">${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}</div><div class="button-row"><button type="button" class="secondary-button" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}">View Show Decision</button>${show.sourceUrl && !plan.localFixture ? `<a class="secondary-button dog-show-source-link" href="${escapeHtml(show.sourceUrl)}" target="_blank" rel="noopener noreferrer">View Source</a>` : ""}${dogShowPlannerPotentialButtonHtml(show, plan)}<button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add Show</button></div></footer>
+      <footer><div class="dog-show-planner-meta">${show.eventNumber ? `<span>AKC #${escapeHtml(show.eventNumber)}</span>` : ""}${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}${show.verifiedBy ? `<span>Verified by ${escapeHtml(show.verifiedBy)}</span>` : ""}</div><div class="button-row"><button type="button" class="secondary-button" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}">View Show Decision</button>${dogShowPlannerSourceLinksHtml(show, { localFixture: plan.localFixture })}${dogShowPlannerPotentialButtonHtml(show, plan)}<button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add Show</button></div></footer>
     </article>`).join("")}</div></section>` : dogShowRenderEmpty("Find the right show for your dogs", "Choose the dogs, dates, and states. The planner will import future shows and rank their published judge panels against your history.", "edit-show-plan", "Find Shows")}
-    <section class="dog-show-planner-source-note"><strong>Source and limitations</strong><p>Show listings and panels are imported from the Canine Chronicle Show Calendar. Verify the official premium list before entering; panels, dates, and assignments can change.</p></section>
+    <section class="dog-show-planner-source-note"><strong>Source and limitations</strong><p>Listings are combined and deduplicated using the AKC event number from AKC Event Search and Canine Chronicle. AKC event details and published superintendent documents enrich each show when available. Always confirm the latest premium list before entering because panels and assignments can change.</p></section>
   </div>`;
 }
 
@@ -2077,7 +2112,7 @@ function dogShowPlannerNeedsMetadataRefresh(plan = dogShowPlannerRecord()) {
   return Boolean(
     plan.id
     && !plan.localFixture
-    && Number(plan.metadataVersion || 0) < 3
+    && Number(plan.metadataVersion || 0) < 4
     && Array.isArray(plan.shows)
     && plan.shows.length
     && plan.startDate
@@ -2113,16 +2148,20 @@ async function refreshDogShowPlannerMetadata(plan = dogShowPlannerRecord()) {
     });
     if (error) throw error;
     const importedShows = Array.isArray(data?.shows) ? data.shows : [];
-    const importedByKey = new Map(importedShows.map((show) => [dogShowPlannerShowKey(show), show]));
-    const matchedShowCount = plan.shows.filter((show) => importedByKey.has(dogShowPlannerShowKey(show))).length;
+    const importedByKey = new Map();
+    importedShows.forEach((show) => dogShowPlannerShowMatchKeys(show).forEach((key) => importedByKey.set(key, show)));
+    const importedMatch = (show) => dogShowPlannerShowMatchKeys(show).map((key) => importedByKey.get(key)).find(Boolean);
+    const matchedShowCount = plan.shows.filter(importedMatch).length;
     if (!matchedShowCount) throw new Error("No saved planner shows matched the refreshed calendar results.");
-    const shows = plan.shows.map((show) => dogShowPlannerMergeMetadata(show, importedByKey.get(dogShowPlannerShowKey(show)) || {}));
+    const shows = plan.shows.map((show) => dogShowPlannerMergeMetadata(show, importedMatch(show) || {}));
     await saveDogShowRecord("showResult", {
       ...plan,
       shows,
       sourceUrl: data?.sourceUrl || plan.sourceUrl,
       fetchedAt: data?.fetchedAt || plan.fetchedAt,
-      metadataVersion: 3,
+      sourceUrls: data?.sourceUrls || plan.sourceUrls,
+      sourceCounts: data?.sourceCounts || plan.sourceCounts,
+      metadataVersion: 4,
       metadataRefreshedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       updatedBy: currentUser?.name || "Staff",
@@ -2130,7 +2169,7 @@ async function refreshDogShowPlannerMetadata(plan = dogShowPlannerRecord()) {
     });
     if (dogShowView === "planner") {
       renderDogShow();
-      showToast("Show formats, closing dates, and superintendent details refreshed.");
+      showToast("AKC identifiers, show details, and superintendent sources refreshed.");
     }
   } catch (error) {
     console.warn("Could not refresh saved Show Planner metadata.", error);
@@ -2199,8 +2238,13 @@ async function saveDogShowPlanner(form) {
     breedCode: response?.breedCode || (dogShowPlannerBreedMatches(resolvedBreedName, DOG_SHOW_PLANNER_DEFAULT_BREED) ? DOG_SHOW_PLANNER_BREED_CODE : ""),
     shows,
     sourceUrl: response?.sourceUrl || "https://caninechronicleshowcalendar.com/K9shows.php",
+    sourceUrls: response?.sourceUrls || {
+      akc: "https://webapps.akc.org/event-search/",
+      canineChronicle: "https://caninechronicleshowcalendar.com/K9shows.php",
+    },
+    sourceCounts: response?.sourceCounts || {},
     fetchedAt: response?.fetchedAt || new Date().toISOString(),
-    metadataVersion: 3,
+    metadataVersion: 4,
     metadataRefreshedAt: new Date().toISOString(),
     localFixture,
     submittedAt: dogShowPlannerRecord().submittedAt || new Date().toISOString(),
@@ -2272,21 +2316,21 @@ function openDogShowImportedEvent(show = {}, targets = [], options = {}) {
     name: show.club || show.name || "Dog Show",
     club: show.club || "",
     venue: show.venue || "",
-    venueAddress: show.cityState || "",
+    venueAddress: show.venueAddress || show.cityState || "",
     cityState: show.cityState || "",
     startDate: show.startDate || todayDate(),
     endDate: show.endDate || show.startDate || todayDate(),
     entryClosingDate: show.entryClosingDate || "",
     superintendent: show.superintendent || "",
-    sourceUrl: show.sourceUrl || "",
+    sourceUrl: show.akcSourceUrl || show.sourceUrl || "",
     premiumUrl: show.premiumUrl || "",
     judgingProgramUrl: show.judgingProgramUrl || "",
     showType: show.showType || "",
     nohs: Boolean(show.nohs || show.ownerHandled),
-    plannerExternalId: show.externalId || "",
+    plannerExternalId: show.canonicalId || show.externalId || "",
     plannerCandidateId: options.candidateId || "",
     breedName: show.breedName || selectedBreed,
-    notes: `Imported from the Canine Chronicle Show Calendar.${breeds.length ? `\nBreeds researched: ${breeds.join(", ")}` : ""}${dogs.length ? `\nDogs considered: ${dogs.join(", ")}` : ""}${panelNotes.length ? `\n${panelNotes.join("\n")}` : show.breedJudge ? `\n${selectedBreed} judge: ${show.breedJudge}` : ""}${show.groupJudge && !panelNotes.length ? `\n${show.groupName || "Group"} judge: ${show.groupJudge}` : ""}${show.bisJudge ? `\nBIS judge: ${show.bisJudge}` : ""}`,
+    notes: `Imported from AKC Event Search and Canine Chronicle.${show.eventNumber ? `\nAKC event number: ${show.eventNumber}` : ""}${breeds.length ? `\nBreeds researched: ${breeds.join(", ")}` : ""}${dogs.length ? `\nDogs considered: ${dogs.join(", ")}` : ""}${panelNotes.length ? `\n${panelNotes.join("\n")}` : show.breedJudge ? `\n${selectedBreed} judge: ${show.breedJudge}` : ""}${show.groupJudge && !panelNotes.length ? `\n${show.groupName || "Group"} judge: ${show.groupJudge}` : ""}${show.bisJudge ? `\nBIS judge: ${show.bisJudge}` : ""}${show.superintendentUrl ? `\nSuperintendent source: ${show.superintendentUrl}` : ""}`,
     status: "Active",
   });
 }
