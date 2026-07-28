@@ -143,6 +143,24 @@ const DOG_SHOW_EXPENSE_CATEGORIES = [
   "Supplies",
   "Other",
 ];
+const DOG_SHOW_INCOME_CATEGORIES = [
+  "Prize money",
+  "Group win reward",
+  "Best in Show reward",
+  "Handling bonus",
+  "Owner compensation",
+  "Reimbursement",
+  "Other income",
+];
+
+function dogShowFinanceCategoryOptions(entryType = "expense", selectedCategory = "") {
+  const categories = entryType === "income" ? DOG_SHOW_INCOME_CATEGORIES : DOG_SHOW_EXPENSE_CATEGORIES;
+  const fallback = entryType === "income" ? "Prize money" : "Other";
+  const selected = categories.includes(selectedCategory) ? selectedCategory : fallback;
+  return categories
+    .map((category) => `<option value="${escapeHtml(category)}"${category === selected ? " selected" : ""}>${escapeHtml(category)}</option>`)
+    .join("");
+}
 
 let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calculator", "expenses"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
   ? localStorage.getItem(DOG_SHOW_VIEW_KEY)
@@ -1301,7 +1319,7 @@ function dogShowMoreHtml(event) {
       <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${resultProgress.logged} of ${resultProgress.total} ring appearances logged</small></button>
       <button type="button" data-action="open-show-planner"><span>F</span><strong>Find Shows</strong><small>Compare future panels against your dogs' history</small></button>
       <button type="button" data-action="open-show-calculator"><span>C</span><strong>Calculator</strong><small>Estimate AKC breed points from the official schedule</small></button>
-      <button type="button" data-action="open-show-expenses"><span>$</span><strong>Expenses</strong><small>Track show costs by category</small></button>
+      <button type="button" data-action="open-show-expenses"><span>$</span><strong>Finances</strong><small>Track show costs, income, and rewards</small></button>
       <button type="button" data-action="open-show-progress"><span>P</span><strong>Show Progress</strong><small>Career points, show history, and judge notes</small></button>
     </div>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Packing List</h3><p>${packing.filter((item) => item.completed).length} of ${packing.length} packed</p></div></div>
@@ -1408,29 +1426,34 @@ function dogShowExpenses(event = dogShowActiveEvent()) {
 }
 
 function dogShowExpenseCurrency(value = 0) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.max(0, Number(value) || 0));
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(value) || 0);
 }
 
 function dogShowExpensesHtml(event) {
   const expenses = dogShowExpenses(event);
-  const total = expenses.reduce((sum, expense) => sum + Math.max(0, Number(expense.amount) || 0), 0);
-  const categories = new Set(expenses.map((expense) => expense.category || "Other"));
+  const expenseTotal = expenses
+    .filter((expense) => expense.entryType !== "income")
+    .reduce((sum, expense) => sum + Math.max(0, Number(expense.amount) || 0), 0);
+  const incomeTotal = expenses
+    .filter((expense) => expense.entryType === "income")
+    .reduce((sum, expense) => sum + Math.max(0, Number(expense.amount) || 0), 0);
+  const netTotal = incomeTotal - expenseTotal;
   const expenseRows = expenses.map((expense) => `<article class="dog-show-expense-row">
-        <div><strong>${escapeHtml(expense.category || "Other")}</strong><span>${escapeHtml(expense.description || expense.category || "Show expense")}</span><small>${escapeHtml(dogShowFormatDate(expense.incurredDate || String(expense.submittedAt || "").slice(0, 10)))}</small></div>
-        <strong>${dogShowExpenseCurrency(expense.amount)}</strong>
+        <div><span class="dog-show-finance-kind is-${expense.entryType === "income" ? "income" : "expense"}">${expense.entryType === "income" ? "Income / reward" : "Expense"}</span><strong>${escapeHtml(expense.category || "Other")}</strong><span>${escapeHtml(expense.description || expense.category || "Show transaction")}</span><small>${expense.dogName ? `${escapeHtml(expense.dogName)} · ` : ""}${escapeHtml(dogShowFormatDate(expense.incurredDate || String(expense.submittedAt || "").slice(0, 10)))}</small></div>
+        <strong class="${expense.entryType === "income" ? "is-income" : "is-expense"}">${expense.entryType === "income" ? "+" : "−"}${dogShowExpenseCurrency(expense.amount)}</strong>
         <div class="dog-show-expense-actions">
-          <button type="button" class="secondary-button" data-action="edit-show-expense" data-expense-id="${escapeHtml(expense.id)}" aria-label="Edit ${escapeHtml(expense.description || expense.category || "expense")}">Edit</button>
-          <button type="button" class="dog-show-remove-expense" data-action="remove-show-expense" data-expense-id="${escapeHtml(expense.id)}" aria-label="Remove ${escapeHtml(expense.description || expense.category || "expense")}" title="Remove expense">×</button>
+          <button type="button" class="secondary-button" data-action="edit-show-expense" data-expense-id="${escapeHtml(expense.id)}" aria-label="Edit ${escapeHtml(expense.description || expense.category || "transaction")}">Edit</button>
+          <button type="button" class="dog-show-remove-expense" data-action="remove-show-expense" data-expense-id="${escapeHtml(expense.id)}" aria-label="Remove ${escapeHtml(expense.description || expense.category || "transaction")}" title="Remove transaction">×</button>
         </div>
       </article>`).join("");
   return `<div class="dog-show-view dog-show-expenses-view">
-    <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Expenses</h3><p>Track costs for this show. Include a dog’s name in the description when the expense is dog-specific.</p></div><button type="button" data-action="new-show-expense">Add More Expense</button></section>
+    <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Income & Expenses</h3><p>Track show-wide costs and rewards. Assign a dog only when the transaction belongs to that dog.</p></div><button type="button" data-action="new-show-expense">Add Transaction</button></section>
     <div class="dog-show-expense-stats">
-      <article><span>Total expenses</span><strong>${dogShowExpenseCurrency(total)}</strong><small>${escapeHtml(event?.name || "Current show")}</small></article>
-      <article><span>Expense items</span><strong>${expenses.length}</strong><small>Across standard and custom costs</small></article>
-      <article><span>Categories used</span><strong>${categories.size}</strong><small>${categories.size ? [...categories].map((category) => escapeHtml(category)).join(" · ") : "No expenses recorded"}</small></article>
+      <article><span>Total expenses</span><strong>${dogShowExpenseCurrency(expenseTotal)}</strong><small>${expenses.filter((expense) => expense.entryType !== "income").length} cost item${expenses.filter((expense) => expense.entryType !== "income").length === 1 ? "" : "s"}</small></article>
+      <article><span>Income / rewards</span><strong class="is-income">${dogShowExpenseCurrency(incomeTotal)}</strong><small>${expenses.filter((expense) => expense.entryType === "income").length} reward item${expenses.filter((expense) => expense.entryType === "income").length === 1 ? "" : "s"}</small></article>
+      <article><span>Net</span><strong class="${netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(netTotal)}</strong><small>${escapeHtml(event?.name || "Current show")}</small></article>
     </div>
-    ${expenses.length ? `<section class="dog-show-expense-group"><header><div><h3>Show expenses</h3><p>${expenses.length} expense${expenses.length === 1 ? "" : "s"}</p></div><strong>${dogShowExpenseCurrency(total)}</strong></header><div>${expenseRows}</div></section>` : dogShowRenderEmpty("No show expenses yet", "Add entry fees, travel, lodging, grooming, food, or another show cost.", "new-show-expense", "Add Expense")}
+    ${expenses.length ? `<section class="dog-show-expense-group"><header><div><h3>Transactions</h3><p>${expenses.length} item${expenses.length === 1 ? "" : "s"}</p></div><strong class="${netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(netTotal)} net</strong></header><div>${expenseRows}</div></section>` : dogShowRenderEmpty("No show transactions yet", "Add an expense, an income or reward, and optionally assign it to a dog.", "new-show-expense", "Add Transaction")}
   </div>`;
 }
 
@@ -1441,16 +1464,19 @@ function openDogShowExpenseForm(expense = {}) {
     return;
   }
   const isEditing = Boolean(expense.id);
-  const category = DOG_SHOW_EXPENSE_CATEGORIES.includes(expense.category) ? expense.category : "Other";
-  const categoryOptions = DOG_SHOW_EXPENSE_CATEGORIES.map((option) => `<option value="${escapeHtml(option)}"${option === category ? " selected" : ""}>${escapeHtml(option)}</option>`).join("");
-  openDogShowDialog(isEditing ? "Edit Show Expense" : "Add Show Expense", `<form id="dogShowExpenseForm" class="dog-show-expense-form" data-expense-id="${escapeHtml(expense.id || "")}">
+  const entryType = expense.entryType === "income" ? "income" : "expense";
+  const categoryOptions = dogShowFinanceCategoryOptions(entryType, expense.category);
+  const dogOptions = dogShowEntries(event).map((entry) => `<option value="${escapeHtml(entry.id)}"${entry.id === expense.showEntryId ? " selected" : ""}>${escapeHtml(dogShowEntryName(entry))}</option>`).join("");
+  openDogShowDialog(isEditing ? "Edit Show Transaction" : "Add Show Transaction", `<form id="dogShowExpenseForm" class="dog-show-expense-form" data-expense-id="${escapeHtml(expense.id || "")}">
     <div class="field-grid">
-      <label>Expense type<select name="category" required>${categoryOptions}</select></label>
-      <label class="dog-show-field-wide">Brief description<input type="text" name="description" maxlength="120" placeholder="Bark-Vader Saturday entry, hotel deposit, fuel..." value="${escapeHtml(expense.description || "")}" required/></label>
-      <label>Cost<input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" value="${expense.amount ? escapeHtml(expense.amount) : ""}" required/></label>
-      <label>Expense date<input type="date" name="incurredDate" value="${escapeHtml(expense.incurredDate || todayDate())}" required/></label>
+      <label>Transaction type<select name="entryType" required><option value="expense"${entryType === "expense" ? " selected" : ""}>Expense</option><option value="income"${entryType === "income" ? " selected" : ""}>Income / reward</option></select></label>
+      <label>Dog (optional)<select name="showEntryId"><option value="">Show-wide / no dog</option>${dogOptions}</select></label>
+      <label>Category<select name="category" required>${categoryOptions}</select></label>
+      <label class="dog-show-field-wide">Brief description<input type="text" name="description" maxlength="120" placeholder="Bark-Vader Group 1 reward, hotel deposit, fuel..." value="${escapeHtml(expense.description || "")}" required/></label>
+      <label>Amount<input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" value="${expense.amount ? escapeHtml(expense.amount) : ""}" required/></label>
+      <label>Transaction date<input type="date" name="incurredDate" value="${escapeHtml(expense.incurredDate || todayDate())}" required/></label>
     </div>
-    <div class="button-row"><button type="submit">${isEditing ? "Update Expense" : "Save Expense"}</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+    <div class="button-row"><button type="submit">${isEditing ? "Update Transaction" : "Save Transaction"}</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
   </form>`);
 }
 
@@ -2370,13 +2396,19 @@ async function saveDogShowExpense(form) {
   const amount = Math.max(0, Number(data.amount) || 0);
   const description = String(data.description || "").trim();
   if (!description || amount <= 0) {
-    showToast("Enter a brief description and an expense greater than $0.");
+    showToast("Enter a brief description and an amount greater than $0.");
     return;
   }
+  const entryType = data.entryType === "income" ? "income" : "expense";
+  const allowedCategories = entryType === "income" ? DOG_SHOW_INCOME_CATEGORIES : DOG_SHOW_EXPENSE_CATEGORIES;
+  const entry = data.showEntryId
+    ? dogShowEntries(event).find((candidate) => candidate.id === data.showEntryId)
+    : null;
   const expense = {
     ...(existing || {}),
     id: existing?.id || uid("showExpense"),
-    category: DOG_SHOW_EXPENSE_CATEGORIES.includes(data.category) ? data.category : "Other",
+    entryType,
+    category: allowedCategories.includes(data.category) ? data.category : (entryType === "income" ? "Other income" : "Other"),
     description,
     amount: Math.round(amount * 100) / 100,
     incurredDate: data.incurredDate || todayDate(),
@@ -2387,10 +2419,17 @@ async function saveDogShowExpense(form) {
     updatedBy: currentUser?.name || "Staff",
     updatedEmail: currentUser?.email || "",
   };
-  delete expense.showEntryId;
-  delete expense.dogId;
-  delete expense.dogType;
-  delete expense.dogName;
+  if (entry) {
+    expense.showEntryId = entry.id;
+    expense.dogId = entry.dogId || "";
+    expense.dogType = entry.dogType || "";
+    expense.dogName = dogShowEntryName(entry);
+  } else {
+    delete expense.showEntryId;
+    delete expense.dogId;
+    delete expense.dogType;
+    delete expense.dogName;
+  }
   const nextExpenses = existing
     ? existingExpenses.map((candidate) => candidate.id === existing.id ? expense : candidate)
     : [...existingExpenses, expense];
@@ -2403,7 +2442,7 @@ async function saveDogShowExpense(form) {
   });
   document.getElementById("dogShowDialog")?.close();
   renderDogShow();
-  showToast(`${expense.category} ${existing ? "updated" : "saved"}.`);
+  showToast(`${entryType === "income" ? "Income / reward" : "Expense"} ${existing ? "updated" : "saved"}.`);
 }
 
 async function removeDogShowExpense(expenseId = "") {
@@ -2418,7 +2457,7 @@ async function removeDogShowExpense(expenseId = "") {
     updatedEmail: currentUser?.email || "",
   });
   renderDogShow();
-  showToast("Show expense removed.");
+  showToast("Show transaction removed.");
 }
 
 async function saveDogShowEvent(form) {
@@ -2916,6 +2955,10 @@ function setupDogShowEventListeners() {
     if (entryForm && event.target.matches('[name="attendanceRole"], [name="status"]')) refreshDogShowAssignmentSummary(entryForm);
     const resultForm = event.target.closest("#dogShowResultForm");
     if (resultForm && event.target.matches('[name="outcome"], [name="awards"], [name="pointScheduleState"], [name="groupPointsEarned"]')) refreshDogShowPointEstimate(resultForm);
+    const expenseForm = event.target.closest("#dogShowExpenseForm");
+    if (expenseForm && event.target.matches('[name="entryType"]')) {
+      expenseForm.elements.category.innerHTML = dogShowFinanceCategoryOptions(event.target.value);
+    }
   });
 
   page.addEventListener("change", async (event) => {

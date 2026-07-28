@@ -15311,6 +15311,31 @@ details.dog-show-ring-schedules[hidden] {
   color: var(--muted);
 }
 
+.dog-show-expense-row .dog-show-finance-kind {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  justify-self: start;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  text-transform: uppercase;
+}
+
+.dog-show-expense-row .dog-show-finance-kind.is-income,
+.dog-show-expense-row > strong.is-income,
+.dog-show-expense-stats strong.is-income,
+.dog-show-expense-group > header > strong.is-income {
+  color: #16835B;
+}
+
+.dog-show-expense-row .dog-show-finance-kind.is-expense,
+.dog-show-expense-row > strong.is-expense,
+.dog-show-expense-stats strong.is-expense,
+.dog-show-expense-group > header > strong.is-expense {
+  color: #B04A43;
+}
+
 .dog-show-expense-actions {
   align-items: center;
   display: flex;
@@ -15346,6 +15371,20 @@ details.dog-show-ring-schedules[hidden] {
   background: #412525;
   border-color: #81514D;
   color: #FFB5AE;
+}
+
+:root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-income,
+:root[data-theme="dark"] .dog-show-expense-row > strong.is-income,
+:root[data-theme="dark"] .dog-show-expense-stats strong.is-income,
+:root[data-theme="dark"] .dog-show-expense-group > header > strong.is-income {
+  color: #79DDB6;
+}
+
+:root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-expense,
+:root[data-theme="dark"] .dog-show-expense-row > strong.is-expense,
+:root[data-theme="dark"] .dog-show-expense-stats strong.is-expense,
+:root[data-theme="dark"] .dog-show-expense-group > header > strong.is-expense {
+  color: #FFAAA3;
 }
 
 @media (max-width: 720px) {

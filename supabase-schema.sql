@@ -612,21 +612,18 @@ on public.kennel_records
 for insert
 to authenticated
 with check (
-  public.kennel_customer_can_write(type, payload)
-  and (
-    kennel_private.kennel_is_staff_member()
-    or user_id = auth.uid()
+  (
+    public.kennel_customer_can_write(type, payload)
+    and (
+      kennel_private.kennel_is_staff_member()
+      or user_id = (select auth.uid())
+    )
   )
-);
-
-create policy "Kennel customers can insert own boarding agreements"
-on public.kennel_records
-for insert
-to authenticated
-with check (
-  type = 'boardingAgreement'
-  and user_id = auth.uid()
-  and public.kennel_customer_boarding_agreement_is_valid(payload)
+  or (
+    type = 'boardingAgreement'
+    and user_id = (select auth.uid())
+    and public.kennel_customer_boarding_agreement_is_valid(payload)
+  )
 );
 
 create policy "Kennel authenticated update records"
@@ -794,6 +791,7 @@ end;
 $$;
 
 revoke all on function public.complete_daily_task_atomic(date, text, text, text, text, text) from public;
+revoke all on function public.complete_daily_task_atomic(date, text, text, text, text, text) from anon;
 grant execute on function public.complete_daily_task_atomic(date, text, text, text, text, text) to authenticated;
 
 do $$

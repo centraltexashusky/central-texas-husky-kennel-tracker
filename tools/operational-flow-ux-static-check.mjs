@@ -75,6 +75,21 @@ for (const expected of [
 if (!index.includes("styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues")) failures.push("Updated responsive styles are not cache-busted.");
 if (!index.includes("js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup")) failures.push("Updated operational modules are not exposed by the entrypoint.");
 
+const inlineStatusHandler = shared.match(/async function handleInlineBoardingStatusClick[\s\S]*?\n\}/)?.[0] || "";
+if (!inlineStatusHandler.includes('["Checked In", "In Kennel", "Cancelled"].includes(nextStatus)')) {
+  failures.push("Inline boarding actions can bypass check-in, kennel-assignment, or decline safeguards.");
+}
+if (!inlineStatusHandler.includes("await handleBoardingTransition(record, nextStatus, options)")) {
+  failures.push("Guarded inline boarding actions do not use the canonical transition workflow.");
+}
+if (!shared.includes("const unitPrice = servicePriceValue(service)") || !shared.includes("money(service.lineTotal)")) {
+  failures.push("Customer confirmation does not distinguish service unit price from line total.");
+}
+const stayServiceText = boarding.match(/function boardingStayRequestDisplayText[\s\S]*?\n\}/)?.[0] || "";
+if (!stayServiceText.includes("quantity > 1") || !stayServiceText.includes("money(unitPrice * quantity)")) {
+  failures.push("Saved request cards do not distinguish service unit price from line total.");
+}
+
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));
   process.exit(1);

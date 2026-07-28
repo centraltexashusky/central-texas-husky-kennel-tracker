@@ -8655,6 +8655,14 @@ async function handleInlineBoardingStatusClick(button) {
     openCheckoutInvoicePopup(record, options);
     return;
   }
+  if (["Checked In", "In Kennel", "Cancelled"].includes(nextStatus)) {
+    if (nextStatus === "Checked In") {
+      options.allowEarly = true;
+      options.early = boardingTransitionIsEarly(record, nextStatus, options);
+    }
+    await handleBoardingTransition(record, nextStatus, options);
+    return;
+  }
   const optimisticRecord = withInlineBoardingStatusTransition(record, nextStatus, options);
   if (!optimisticRecord) {
     showToast("That boarding status transition is not allowed.");
@@ -10907,7 +10915,11 @@ function showBookingConfirmDialog(estimate) {
     return \`<li>\${escapeHtml(dog.dogName)}\${dog.breedDescription ? \` (\${escapeHtml(dog.breedDescription)})\` : ""}\${rateText}</li>\`;
   }).join("");
   const serviceList = pendingCustomerBooking.services.length
-    ? pendingCustomerBooking.services.map((service) => \`<li>\${escapeHtml(service.dogName || "Dog")}: \${escapeHtml(customerServiceDisplayName(service))} x\${Number(service.quantity || 1)} - \${money(service.lineTotal)} \${escapeHtml(service.unit || "")}</li>\`).join("")
+    ? pendingCustomerBooking.services.map((service) => {
+      const quantity = Number(service.quantity || 1);
+      const unitPrice = servicePriceValue(service);
+      return \`<li>\${escapeHtml(service.dogName || "Dog")}: \${escapeHtml(customerServiceDisplayName(service))} - \${quantity} x \${money(unitPrice)}\${service.unit ? \` \${escapeHtml(service.unit)}\` : ""} = \${money(service.lineTotal)}</li>\`;
+    }).join("")
     : "<li>No added services selected</li>";
   const availabilityHtml = customerBookingAvailabilityMessagesHtml(customerBookingEstimateAvailabilityChecks(pendingCustomerBooking));
   $("#bookingConfirmBody").innerHTML = \`

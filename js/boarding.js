@@ -938,7 +938,12 @@ function boardingStayRequestDisplayText(value = {}, options = {}) {
   const label = options.customerFacing ? customerFacingBoardingStayRequestLabel(value, quantity) : boardingStayRequestLabel(value);
   const unitPrice = boardingStayRequestUnitPrice(value, options);
   const unit = boardingStayRequestUnit(value, options);
-  const priceText = unitPrice ? \` - \${money(unitPrice * quantity)}\${unit ? \` \${unit}\` : ""}\` : "";
+  const unitText = unit ? \` \${unit}\` : "";
+  const priceText = unitPrice
+    ? quantity > 1
+      ? \` - \${quantity} x \${money(unitPrice)}\${unitText} = \${money(unitPrice * quantity)}\`
+      : \` - \${money(unitPrice)}\${unitText}\`
+    : "";
   return \`\${label}\${priceText}\`;
 }
 
