@@ -18,6 +18,7 @@ type CalendarRequest = {
   startDate?: string;
   endDate?: string;
   states?: string[];
+  eventTypes?: string[];
   breedCode?: string;
   breedName?: string;
 };
@@ -30,6 +31,17 @@ const json = (body: Record<string, unknown>, status = 200) =>
 
 const clean = (value: unknown) => String(value || "").replace(/\s+/g, " ").trim();
 const normalizeEmail = (value: unknown) => clean(value).toLowerCase();
+const SHOW_FORMAT_FILTERS = new Set([
+  "all-breed",
+  "specialty",
+  "owner-handled",
+  "junior-showmanship",
+  "beginner-puppy",
+  "group-show",
+  "limited-breed",
+  "open-show",
+  "sweepstakes",
+]);
 const calendarAttributeText = (value: unknown) =>
   String(value || "")
     .replace(/&nbsp;?/gi, " ")
@@ -48,6 +60,31 @@ function showFingerprint(show: Record<string, unknown>) {
     identityText(show.city),
     clean(show.state).toUpperCase(),
   ].join("|");
+}
+
+function showFormatKeys(show: Record<string, unknown>) {
+  const typeTokens = clean(show.showType)
+    .split(/[\/,|+]+/)
+    .map((value) => value.trim().toUpperCase())
+    .filter(Boolean);
+  const tokenSet = new Set(typeTokens);
+  const keys = new Set<string>();
+  if (tokenSet.has("AB") || typeTokens.some((value) => /ALL[\s-]*BREED/.test(value))) keys.add("all-breed");
+  if (typeTokens.some((value) => ["S", "PS", "DS", "SP", "SPEC", "SPECIALTY"].includes(value) || /SPECIALTY/.test(value))) keys.add("specialty");
+  if (show.nohs === true || show.ownerHandled === true || typeTokens.some((value) => ["NOHS", "OH"].includes(value) || /OWNER[\s-]*HANDLED/.test(value))) keys.add("owner-handled");
+  if (show.juniorShowmanship === true || typeTokens.some((value) => ["JS", "JSHW"].includes(value) || /JUNIOR SHOWMANSHIP/.test(value))) keys.add("junior-showmanship");
+  if (show.beginnerPuppy === true || typeTokens.some((value) => ["BGP", "BPUP"].includes(value) || /BEGINNER PUPPY/.test(value))) keys.add("beginner-puppy");
+  if (typeTokens.some((value) => ["GRP", "GROUP"].includes(value) || /GROUP SHOW/.test(value))) keys.add("group-show");
+  if (tokenSet.has("LB") || typeTokens.some((value) => /LIMITED[\s-]*BREED/.test(value))) keys.add("limited-breed");
+  if (typeTokens.some((value) => ["OS", "FSS"].includes(value) || /OPEN SHOW/.test(value))) keys.add("open-show");
+  if (typeTokens.some((value) => ["SWE", "SWEEPSTAKES"].includes(value))) keys.add("sweepstakes");
+  return keys;
+}
+
+function showMatchesEventTypes(show: Record<string, unknown>, eventTypes: string[]) {
+  if (!eventTypes.length) return true;
+  const showTypes = showFormatKeys(show);
+  return eventTypes.some((type) => showTypes.has(type));
 }
 
 function canonicalShowId(eventNumber: unknown, fallbackSource: string, fallbackId: unknown) {
@@ -322,7 +359,7 @@ function parseAkcEvents(payload: Record<string, unknown>, startDate: string, end
     .map((rawEvent) => rawEvent && typeof rawEvent === "object" ? rawEvent as Record<string, unknown> : {})
     .filter((event) => {
       const date = validDate(event.startDate);
-      return date && date >= startDate && date <= endDate && stateSet.has(clean(event.state).toUpperCase());
+      return date && date >= startDate && date <= endDate && (!stateSet.size || stateSet.has(clean(event.state).toUpperCase()));
     })
     .map((event) => {
       const items = (Array.isArray(event.items) ? event.items : [])
@@ -490,7 +527,7 @@ async function fetchAkcShows(startDate: string, endDate: string, states: string[
         eventSetting: { indoor: true, outdoor: true, outsideCovered: true },
         states: states.join(" "),
         radius: "any",
-        searchByState: true,
+        searchByState: Boolean(states.length),
         searchByCity: false,
         searchText: states.join(", "),
       },
@@ -531,11 +568,11 @@ Deno.serve(async (req) => {
   const endDate = validDate(body.endDate);
   let breedCode = /^\d{1,5}$/.test(clean(body.breedCode)) ? clean(body.breedCode) : "";
   let breedName = calendarBreedName(body.breedName || "Siberian Husky");
-  const states = [...new Set((Array.isArray(body.states) ? body.states : []).map((state) => clean(state).toUpperCase()).filter((state) => /^[A-Z]{2}$/.test(state)))].slice(0, 8);
+  const states = [...new Set((Array.isArray(body.states) ? body.states : []).map((state) => clean(state).toUpperCase()).filter((state) => /^[A-Z]{2}$/.test(state)))];
+  const eventTypes = [...new Set((Array.isArray(body.eventTypes) ? body.eventTypes : []).map((type) => clean(type).toLowerCase()).filter((type) => SHOW_FORMAT_FILTERS.has(type)))];
   if (!startDate || !endDate || endDate < startDate) return json({ error: "A valid startDate and endDate are required." }, 400);
   const rangeDays = Math.ceil((new Date(`${endDate}T12:00:00Z`).getTime() - new Date(`${startDate}T12:00:00Z`).getTime()) / 86_400_000);
   if (rangeDays > MAX_RANGE_DAYS) return json({ error: `Date range cannot exceed ${MAX_RANGE_DAYS} days.` }, 400);
-  if (!states.length) return json({ error: "At least one valid state is required." }, 400);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 28_000);
@@ -615,12 +652,13 @@ Deno.serve(async (req) => {
     if (!canineShows.length && !akcShows.length && sourceWarnings.length) {
       return json({ error: sourceWarnings.join(" ") }, 502);
     }
-    const shows = mergeShowRecords(akcShows, canineShows);
+    const shows = mergeShowRecords(akcShows, canineShows).filter((show) => showMatchesEventTypes(show, eventTypes));
     return json({
       shows,
       breedCode: canineBreedCode,
       akcBreedCode,
       breedName: akcBreedName || canineBreedName || breedName,
+      eventTypes,
       sourceUrl: canineSourceUrl.toString(),
       sourceUrls: {
         akc: "https://webapps.akc.org/event-search/",

@@ -14,15 +14,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'direct-judge-search-added-show-conflicts-profile-name', "Dog Show styles are not cache-busted."],
+  ["index.html", 'nationwide-format-filters', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'direct-judge-search-added-show-conflicts', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'direct-judge-search-added-show-conflicts-profile-name', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'nationwide-format-filters', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'nationwide-format-filters', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
@@ -128,7 +128,14 @@ const required = [
   ["js/dog-show.js", '"Owner-Handled"', "Show Planner cards do not identify National Owner-Handled Series events."],
   ["js/dog-show.js", "function dogShowPlannerNeedsMetadataRefresh", "Saved Show Planner searches are not checked for missing imported metadata."],
   ["js/dog-show.js", "function refreshDogShowPlannerMetadata", "Saved Show Planner searches cannot backfill show formats and event details."],
-  ["js/dog-show.js", "metadataVersion: 4", "Fresh Show Planner searches are not marked with the current multi-source metadata version."],
+  ["js/dog-show.js", "metadataVersion: 5", "Fresh Show Planner searches are not marked with the current nationwide-format metadata version."],
+  ["js/dog-show.js", 'placeholder="Leave blank for all states"', "The planner does not explain how to run a nationwide search."],
+  ["js/dog-show.js", 'name="eventTypes"', "The planner is missing show-format checkboxes."],
+  ["js/dog-show.js", "dogShowPlannerMatchesEventTypes", "Planner results are not filtered by the selected show formats."],
+  ["styles.css", ".dog-show-planner-format-options", "The planner show-format controls are not styled."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "searchByState: Boolean(states.length)", "The AKC importer does not switch to nationwide mode when states are blank."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "showMatchesEventTypes", "The calendar importer does not filter results by selected show formats."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "eventTypes,", "The calendar importer does not return its normalized show-format selection."],
   ["js/dog-show.js", "function dogShowPlannerLifecycleStatus", "Operational shows are not classified by lifecycle stage."],
   ["js/dog-show.js", "function dogShowPlannerLifecycleHtml", "The Planner is missing its unified show lifecycle board."],
   ["js/dog-show.js", '"In Process", "Active", "Going", "Potential Plan", "Completed"', "The show lifecycle board is missing one or more required stages."],
@@ -396,6 +403,10 @@ for (const [path, needle, message] of required) {
   if (!read(path).includes(needle)) failures.push(message);
 }
 const dogShowSource = read("js/dog-show.js");
+const calendarScraperSource = read("supabase/functions/show-calendar-scrape/index.ts");
+const plannerStateField = dogShowSource.match(/<label class="dog-show-field-wide">States[\s\S]*?<\/label>/)?.[0] || "";
+if (plannerStateField.includes("required")) failures.push("The Planner States field still blocks nationwide searches.");
+if (calendarScraperSource.includes("At least one valid state is required")) failures.push("The calendar importer still rejects nationwide searches.");
 if (!dogShowSource.includes('id="dogShowAkcJudgeSearchForm"') || !dogShowSource.includes("DOG_SHOW_AKC_JUDGE_RESULTS_URL")) failures.push("The AKC judge link does not submit the selected judge name to the official directory search.");
 if (!dogShowSource.includes('data-action="remove-planned-show"') || !dogShowSource.includes(">Remove Show</button>")) failures.push("Added planner shows do not expose a distinct Remove Show action.");
 if (!dogShowSource.includes("function dogShowPlannerConflictsForShow") || !dogShowSource.includes(">Date Conflict</span>")) failures.push("Planner cards do not identify overlapping added or potential shows.");

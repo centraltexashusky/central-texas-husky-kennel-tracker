@@ -15923,7 +15923,7 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-planner-criteria {
   display: grid;
   gap: 9px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .dog-show-planner-criteria > div {
@@ -16370,6 +16370,34 @@ details.dog-show-ring-schedules[hidden] {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dog-show-planner-format-section {
+  gap: 9px;
+}
+
+.dog-show-planner-format-section > p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.dog-show-planner-format-options {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dog-show-planner-format-options .dog-show-check-option {
+  cursor: pointer;
+  min-width: 0;
+}
+
+.dog-show-planner-format-options .dog-show-check-option > span {
+  min-width: 0;
+}
+
+.dog-show-planner-format-options .dog-show-check-option strong {
+  overflow-wrap: anywhere;
 }
 
 .dog-show-planner-search-section .dog-show-collapsible-content {
@@ -17230,6 +17258,10 @@ details.dog-show-ring-schedules[hidden] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dog-show-planner-format-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .dog-show-planner-panel {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -17267,7 +17299,8 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-planner-criteria,
-  .dog-show-planner-dog-options {
+  .dog-show-planner-dog-options,
+  .dog-show-planner-format-options {
     grid-template-columns: minmax(0, 1fr);
   }
 
