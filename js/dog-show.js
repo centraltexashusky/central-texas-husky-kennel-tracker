@@ -1301,7 +1301,7 @@ function dogShowMoreHtml(event) {
       <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${resultProgress.logged} of ${resultProgress.total} ring appearances logged</small></button>
       <button type="button" data-action="open-show-planner"><span>F</span><strong>Find Shows</strong><small>Compare future panels against your dogs' history</small></button>
       <button type="button" data-action="open-show-calculator"><span>C</span><strong>Calculator</strong><small>Estimate AKC breed points from the official schedule</small></button>
-      <button type="button" data-action="open-show-expenses"><span>$</span><strong>Expenses</strong><small>Track show costs by dog and category</small></button>
+      <button type="button" data-action="open-show-expenses"><span>$</span><strong>Expenses</strong><small>Track show costs by category</small></button>
       <button type="button" data-action="open-show-progress"><span>P</span><strong>Show Progress</strong><small>Career points, show history, and judge notes</small></button>
     </div>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Packing List</h3><p>${packing.filter((item) => item.completed).length} of ${packing.length} packed</p></div></div>
@@ -1412,57 +1412,45 @@ function dogShowExpenseCurrency(value = 0) {
 }
 
 function dogShowExpensesHtml(event) {
-  const entries = dogShowEntries(event);
   const expenses = dogShowExpenses(event);
   const total = expenses.reduce((sum, expense) => sum + Math.max(0, Number(expense.amount) || 0), 0);
-  const grouped = new Map();
-  expenses.forEach((expense) => {
-    const key = expense.showEntryId || `${expense.dogType || "dog"}:${expense.dogId || expense.dogName || "unknown"}`;
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key).push(expense);
-  });
-  const expenseGroups = [...grouped.entries()].map(([key, items]) => {
-    const entry = entries.find((candidate) => candidate.id === key || candidate.id === items[0]?.showEntryId);
-    const name = items[0]?.dogName || dogShowEntryName(entry || {}) || "Dog";
-    const subtotal = items.reduce((sum, expense) => sum + Math.max(0, Number(expense.amount) || 0), 0);
-    return `<section class="dog-show-expense-group">
-      <header><div><h3>${escapeHtml(name)}</h3><p>${items.length} expense${items.length === 1 ? "" : "s"}</p></div><strong>${dogShowExpenseCurrency(subtotal)}</strong></header>
-      <div>${items.map((expense) => `<article class="dog-show-expense-row">
+  const categories = new Set(expenses.map((expense) => expense.category || "Other"));
+  const expenseRows = expenses.map((expense) => `<article class="dog-show-expense-row">
         <div><strong>${escapeHtml(expense.category || "Other")}</strong><span>${escapeHtml(expense.description || expense.category || "Show expense")}</span><small>${escapeHtml(dogShowFormatDate(expense.incurredDate || String(expense.submittedAt || "").slice(0, 10)))}</small></div>
         <strong>${dogShowExpenseCurrency(expense.amount)}</strong>
-        <button type="button" data-action="remove-show-expense" data-expense-id="${escapeHtml(expense.id)}" aria-label="Remove ${escapeHtml(expense.description || expense.category || "expense")}" title="Remove expense">×</button>
-      </article>`).join("")}</div>
-    </section>`;
-  }).join("");
+        <div class="dog-show-expense-actions">
+          <button type="button" class="secondary-button" data-action="edit-show-expense" data-expense-id="${escapeHtml(expense.id)}" aria-label="Edit ${escapeHtml(expense.description || expense.category || "expense")}">Edit</button>
+          <button type="button" class="dog-show-remove-expense" data-action="remove-show-expense" data-expense-id="${escapeHtml(expense.id)}" aria-label="Remove ${escapeHtml(expense.description || expense.category || "expense")}" title="Remove expense">×</button>
+        </div>
+      </article>`).join("");
   return `<div class="dog-show-view dog-show-expenses-view">
-    <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Expenses</h3><p>Track each show cost under the dog it supports.</p></div><button type="button" data-action="new-show-expense"${entries.length ? "" : " disabled"}>Add More Expense</button></section>
+    <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Expenses</h3><p>Track costs for this show. Include a dog’s name in the description when the expense is dog-specific.</p></div><button type="button" data-action="new-show-expense">Add More Expense</button></section>
     <div class="dog-show-expense-stats">
       <article><span>Total expenses</span><strong>${dogShowExpenseCurrency(total)}</strong><small>${escapeHtml(event?.name || "Current show")}</small></article>
       <article><span>Expense items</span><strong>${expenses.length}</strong><small>Across standard and custom costs</small></article>
-      <article><span>Dogs tracked</span><strong>${grouped.size}</strong><small>${entries.length} dog${entries.length === 1 ? "" : "s"} on this show roster</small></article>
+      <article><span>Categories used</span><strong>${categories.size}</strong><small>${categories.size ? [...categories].map((category) => escapeHtml(category)).join(" · ") : "No expenses recorded"}</small></article>
     </div>
-    ${entries.length ? expenseGroups || dogShowRenderEmpty("No show expenses yet", "Add entry fees, travel, lodging, grooming, food, or another cost under a dog.", "new-show-expense", "Add Expense") : dogShowRenderEmpty("Add a dog before recording expenses", "Expenses are assigned to a dog on this show roster.", "add-show-dogs", "Add Dogs")}
+    ${expenses.length ? `<section class="dog-show-expense-group"><header><div><h3>Show expenses</h3><p>${expenses.length} expense${expenses.length === 1 ? "" : "s"}</p></div><strong>${dogShowExpenseCurrency(total)}</strong></header><div>${expenseRows}</div></section>` : dogShowRenderEmpty("No show expenses yet", "Add entry fees, travel, lodging, grooming, food, or another show cost.", "new-show-expense", "Add Expense")}
   </div>`;
 }
 
-function openDogShowExpenseForm() {
+function openDogShowExpenseForm(expense = {}) {
   const event = dogShowActiveEvent();
-  const entries = dogShowEntries(event);
-  if (!event || !entries.length) {
-    showToast("Add a dog to this show before recording an expense.");
+  if (!event) {
+    showToast("Choose a show before recording an expense.");
     return;
   }
-  const entryOptions = entries.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(dogShowEntryName(entry))}</option>`).join("");
-  const categoryOptions = DOG_SHOW_EXPENSE_CATEGORIES.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
-  openDogShowDialog("Add Show Expense", `<form id="dogShowExpenseForm" class="dog-show-expense-form">
+  const isEditing = Boolean(expense.id);
+  const category = DOG_SHOW_EXPENSE_CATEGORIES.includes(expense.category) ? expense.category : "Other";
+  const categoryOptions = DOG_SHOW_EXPENSE_CATEGORIES.map((option) => `<option value="${escapeHtml(option)}"${option === category ? " selected" : ""}>${escapeHtml(option)}</option>`).join("");
+  openDogShowDialog(isEditing ? "Edit Show Expense" : "Add Show Expense", `<form id="dogShowExpenseForm" class="dog-show-expense-form" data-expense-id="${escapeHtml(expense.id || "")}">
     <div class="field-grid">
-      <label>Dog<select name="showEntryId" required>${entryOptions}</select></label>
       <label>Expense type<select name="category" required>${categoryOptions}</select></label>
-      <label class="dog-show-field-wide">Brief description<input type="text" name="description" maxlength="120" placeholder="Entry for Saturday show, hotel deposit, fuel..." required/></label>
-      <label>Cost<input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required/></label>
-      <label>Expense date<input type="date" name="incurredDate" value="${todayDate()}" required/></label>
+      <label class="dog-show-field-wide">Brief description<input type="text" name="description" maxlength="120" placeholder="Bark-Vader Saturday entry, hotel deposit, fuel..." value="${escapeHtml(expense.description || "")}" required/></label>
+      <label>Cost<input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" value="${expense.amount ? escapeHtml(expense.amount) : ""}" required/></label>
+      <label>Expense date<input type="date" name="incurredDate" value="${escapeHtml(expense.incurredDate || todayDate())}" required/></label>
     </div>
-    <div class="button-row"><button type="submit">Save Expense</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+    <div class="button-row"><button type="submit">${isEditing ? "Update Expense" : "Save Expense"}</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
   </form>`);
 }
 
@@ -2375,36 +2363,47 @@ async function saveDogShowExpense(form) {
   const event = dogShowActiveEvent();
   if (!event) return;
   const data = formPayload(form);
-  const entry = dogShowEntries(event).find((candidate) => candidate.id === data.showEntryId);
+  const existingExpenses = dogShowExpenses(event);
+  const existing = form.dataset.expenseId
+    ? existingExpenses.find((candidate) => candidate.id === form.dataset.expenseId)
+    : null;
   const amount = Math.max(0, Number(data.amount) || 0);
-  if (!entry || amount <= 0) {
-    showToast("Choose a dog and enter an expense greater than $0.");
+  const description = String(data.description || "").trim();
+  if (!description || amount <= 0) {
+    showToast("Enter a brief description and an expense greater than $0.");
     return;
   }
   const expense = {
-    id: uid("showExpense"),
-    showEntryId: entry.id,
-    dogId: entry.dogId || "",
-    dogType: entry.dogType || "",
-    dogName: dogShowEntryName(entry),
+    ...(existing || {}),
+    id: existing?.id || uid("showExpense"),
     category: DOG_SHOW_EXPENSE_CATEGORIES.includes(data.category) ? data.category : "Other",
-    description: String(data.description || "").trim(),
+    description,
     amount: Math.round(amount * 100) / 100,
     incurredDate: data.incurredDate || todayDate(),
-    submittedAt: new Date().toISOString(),
-    submittedBy: currentUser?.name || "Staff",
-    submittedEmail: currentUser?.email || "",
+    submittedAt: existing?.submittedAt || new Date().toISOString(),
+    submittedBy: existing?.submittedBy || currentUser?.name || "Staff",
+    submittedEmail: existing?.submittedEmail || currentUser?.email || "",
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUser?.name || "Staff",
+    updatedEmail: currentUser?.email || "",
   };
+  delete expense.showEntryId;
+  delete expense.dogId;
+  delete expense.dogType;
+  delete expense.dogName;
+  const nextExpenses = existing
+    ? existingExpenses.map((candidate) => candidate.id === existing.id ? expense : candidate)
+    : [...existingExpenses, expense];
   await saveDogShowRecord("showEvent", {
     ...event,
-    expenses: [...dogShowExpenses(event), expense],
+    expenses: nextExpenses,
     updatedAt: new Date().toISOString(),
     updatedBy: currentUser?.name || "Staff",
     updatedEmail: currentUser?.email || "",
   });
   document.getElementById("dogShowDialog")?.close();
   renderDogShow();
-  showToast(`${expense.category} saved for ${expense.dogName}.`);
+  showToast(`${expense.category} ${existing ? "updated" : "saved"}.`);
 }
 
 async function removeDogShowExpense(expenseId = "") {
@@ -2996,6 +2995,10 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "open-show-calculator") setDogShowView("calculator");
     if (action.dataset.action === "open-show-expenses") setDogShowView("expenses");
     if (action.dataset.action === "new-show-expense") openDogShowExpenseForm();
+    if (action.dataset.action === "edit-show-expense") {
+      const expense = dogShowExpenses(dogShowActiveEvent()).find((candidate) => candidate.id === action.dataset.expenseId);
+      if (expense) openDogShowExpenseForm(expense);
+    }
     if (action.dataset.action === "remove-show-expense") await removeDogShowExpense(action.dataset.expenseId || "");
     if (action.dataset.action === "edit-show-plan") openDogShowPlannerForm();
     if (action.dataset.action === "view-show-decision") openDogShowPlannerDecision(action.dataset.showId || "");

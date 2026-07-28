@@ -15297,7 +15297,7 @@ details.dog-show-ring-schedules[hidden] {
   border-top: 1px solid var(--line);
   display: grid;
   gap: 14px;
-  grid-template-columns: minmax(0, 1fr) auto 34px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   padding: 13px 16px;
 }
 
@@ -15311,7 +15311,18 @@ details.dog-show-ring-schedules[hidden] {
   color: var(--muted);
 }
 
-.dog-show-expense-row > button {
+.dog-show-expense-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.dog-show-expense-actions .secondary-button {
+  min-height: 32px;
+  padding: 6px 12px;
+}
+
+.dog-show-expense-actions .dog-show-remove-expense {
   align-items: center;
   background: #FFF2F0;
   border: 1px solid #DFA9A3;
@@ -15331,7 +15342,7 @@ details.dog-show-ring-schedules[hidden] {
   gap: 16px;
 }
 
-:root[data-theme="dark"] .dog-show-expense-row > button {
+:root[data-theme="dark"] .dog-show-expense-actions .dog-show-remove-expense {
   background: #412525;
   border-color: #81514D;
   color: #FFB5AE;
@@ -15345,6 +15356,16 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-expense-stats {
     grid-template-columns: 1fr;
+  }
+
+  .dog-show-expense-row {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dog-show-expense-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 }
 
