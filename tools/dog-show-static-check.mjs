@@ -4,6 +4,10 @@ const read = (path) => fs.readFileSync(path, "utf8");
 
 const required = [
   ["index.html", 'data-page="dogShowPage"', "Missing Dog Shows top-level navigation."],
+  ["index.html", '<button type="button" data-dog-show-view="calendar">Calendar</button>', "Desktop Dog Show navigation does not expose Calendar directly."],
+  ["index.html", '<button type="button" data-dog-show-view="calculator">Calculator</button>', "Desktop Dog Show navigation does not expose Calculator directly."],
+  ["index.html", '<button type="button" data-dog-show-view="expenses">Finances</button>', "Desktop Dog Show navigation does not expose Finances directly."],
+  ["index.html", '<button type="button" data-dog-show-view="progress">Progress</button>', "Desktop Dog Show navigation does not expose Show Progress directly."],
   ["index.html", 'id="dogShowPage"', "Missing isolated Dog Show page."],
   ["index.html", 'id="dogShowMobileNav"', "Missing Dog Show mobile menu."],
   ["index.html", 'id="dogShowMoreMenu"', "Missing Dog Show More action menu."],

@@ -2316,8 +2316,7 @@ function renderDogShow() {
   if (select) select.innerHTML = dogShowEventOptions(event);
   document.querySelectorAll("[data-dog-show-view]").forEach((button) => {
     const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calendar", "calculator", "expenses"].includes(dogShowView);
-    const visibleView = ["progress", "calendar", "calculator", "expenses"].includes(dogShowView) ? "more" : dogShowView;
-    const active = mobileMoreActive || button.dataset.dogShowView === visibleView;
+    const active = mobileMoreActive || button.dataset.dogShowView === dogShowView;
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");

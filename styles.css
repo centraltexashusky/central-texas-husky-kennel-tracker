@@ -11693,14 +11693,18 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 .dog-show-desktop-nav {
   align-self: start;
-  display: inline-flex;
-  width: max-content;
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
 }
 
 .dog-show-desktop-nav button {
   background: #69788B;
   border-color: #7C8999;
   color: #FFFFFF;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-inline: 14px;
 }
 
 .dog-show-desktop-nav button:hover,
