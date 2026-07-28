@@ -14,18 +14,97 @@ const DOG_SHOW_AKC_POINT_SCHEDULES = {
   2026: {
     effectiveDate: "2026-05-12",
     divisions: {
+      1: {
+        states: ["CT", "ME", "MA", "NH", "RI", "VT"],
+        dogs: [2, 4, 5, 6, 9],
+        bitches: [2, 5, 8, 12, 19],
+      },
+      2: {
+        states: ["DE", "NJ", "NY", "PA"],
+        dogs: [2, 3, 4, 6, 10],
+        bitches: [2, 4, 6, 10, 16],
+      },
+      3: {
+        states: ["DC", "MD", "NC", "VA", "WV"],
+        dogs: [2, 4, 6, 9, 14],
+        bitches: [2, 5, 7, 10, 15],
+      },
+      4: {
+        states: ["FL", "GA", "SC"],
+        dogs: [2, 3, 4, 5, 7],
+        bitches: [2, 4, 5, 7, 10],
+      },
+      5: {
+        states: ["IN", "KY", "MI", "OH"],
+        dogs: [2, 3, 4, 5, 7],
+        bitches: [2, 4, 5, 7, 10],
+      },
+      6: {
+        states: ["CO", "NV", "UT"],
+        dogs: [2, 3, 4, 5, 6],
+        bitches: [2, 4, 5, 7, 10],
+      },
       7: {
         states: ["KS", "OK", "TX"],
         dogs: [2, 4, 5, 8, 13],
         bitches: [2, 4, 6, 10, 18],
+      },
+      8: {
+        states: ["OR", "WA"],
+        dogs: [2, 4, 5, 7, 11],
+        bitches: [2, 3, 4, 8, 14],
+      },
+      9: {
+        states: ["AZ", "CA"],
+        dogs: [2, 3, 4, 5, 6],
+        bitches: [2, 4, 5, 7, 10],
+      },
+      10: {
+        states: ["AK"],
+        dogs: [2, 3, 4, 5, 6],
+        bitches: [2, 3, 4, 5, 6],
+      },
+      11: {
+        states: ["HI"],
+        dogs: [2, 3, 4, 5, 6],
+        bitches: [2, 3, 4, 5, 6],
+      },
+      12: {
+        states: ["MX", "PR"],
+        dogs: [2, 3, 4, 5, 6],
+        bitches: [2, 3, 4, 5, 6],
+      },
+      13: {
+        states: ["ID", "MT", "NE", "NM", "ND", "SD", "WY"],
+        dogs: [2, 4, 6, 7, 8],
+        bitches: [2, 3, 4, 6, 9],
       },
       14: {
         states: ["AL", "AR", "LA", "MS", "TN"],
         dogs: [2, 4, 5, 6, 7],
         bitches: [2, 4, 6, 7, 10],
       },
+      15: {
+        states: ["IL", "IA", "MN", "MO", "WI"],
+        dogs: [2, 3, 4, 6, 11],
+        bitches: [2, 5, 7, 10, 15],
+      },
     },
   },
+};
+const DOG_SHOW_AKC_STATE_NAMES = {
+  AK: "Alaska", AL: "Alabama", AR: "Arkansas", AZ: "Arizona", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DC: "District of Columbia", DE: "Delaware",
+  FL: "Florida", GA: "Georgia", HI: "Hawaii", IA: "Iowa", ID: "Idaho",
+  IL: "Illinois", IN: "Indiana", KS: "Kansas", KY: "Kentucky", LA: "Louisiana",
+  MA: "Massachusetts", MD: "Maryland", ME: "Maine", MI: "Michigan", MN: "Minnesota",
+  MO: "Missouri", MS: "Mississippi", MT: "Montana", MX: "Mexico", NC: "North Carolina",
+  ND: "North Dakota", NE: "Nebraska", NH: "New Hampshire", NJ: "New Jersey",
+  NM: "New Mexico", NV: "Nevada", NY: "New York", OH: "Ohio", OK: "Oklahoma",
+  OR: "Oregon", PA: "Pennsylvania", PR: "Puerto Rico", RI: "Rhode Island",
+  SC: "South Carolina", SD: "South Dakota", TN: "Tennessee", TX: "Texas",
+  UT: "Utah", VA: "Virginia", VT: "Vermont", WA: "Washington", WI: "Wisconsin",
+  WV: "West Virginia", WY: "Wyoming",
 };
 const DOG_SHOW_TASK_COLORS = {
   Grooming: "#7C5CBF",
@@ -292,7 +371,7 @@ function dogShowBreedPointEstimate(entry = {}, schedule = {}, result = {}) {
   const event = dogShowEvents().find((item) => item.id === entry.showEventId) || dogShowActiveEvent() || {};
   const pointSchedule = dogShowPointSchedule(event, schedule, result.pointScheduleState);
   if (!dogShowEntryCountsEntered(schedule)) return { points: null, reason: "Enter the four breed counts to calculate points." };
-  if (!pointSchedule) return { points: null, reason: "Automatic Siberian Husky points are available for 2026 shows in AKC Divisions 7 and 14." };
+  if (!pointSchedule) return { points: null, reason: "Choose the 2026 show location to use its official AKC Siberian Husky schedule." };
   const sourceDog = dogShowSourceDog(entry);
   const sexValue = String(entry.sex || sourceDog.sex || sourceDog.gender || "").toLowerCase();
   const sex = sexValue.includes("female") || sexValue.includes("bitch") ? "bitch" : sexValue.includes("male") || sexValue.includes("dog") ? "dog" : "";
@@ -568,6 +647,7 @@ function dogShowResultAwardsSummary(result = {}) {
   const breedAward = String(result.awards || "").trim();
   const groupAward = String(result.groupAward || "").trim();
   const groupJudge = String(result.groupJudge || "").trim();
+  const groupPoints = dogShowManualGroupPoints(result);
   const bisAward = String(result.bisAward || "").trim();
   const bisJudge = String(result.bisJudge || "").trim();
   const ohGroupAward = String(result.ohGroupAward || "").trim();
@@ -576,7 +656,7 @@ function dogShowResultAwardsSummary(result = {}) {
   const ohBisJudge = String(result.ohBisJudge || "").trim();
   return [
     breedAward ? `BOB/BOV: ${breedAward}` : "",
-    groupAward || groupJudge ? `Regular Group: ${groupAward || "Award not set"}${groupJudge ? ` (Judge: ${groupJudge})` : ""}` : "",
+    groupAward || groupJudge || Number.isFinite(groupPoints) ? `Regular Group: ${groupAward || "Award not set"}${groupJudge ? ` (Judge: ${groupJudge})` : ""}${Number.isFinite(groupPoints) ? ` · ${groupPoints} manual point${groupPoints === 1 ? "" : "s"}` : ""}` : "",
     bisAward || bisJudge ? `Regular BIS: ${bisAward || "Award not set"}${bisJudge ? ` (Judge: ${bisJudge})` : ""}` : "",
     ohGroupAward || ohGroupJudge ? `OH Group: ${ohGroupAward || "Award not set"}${ohGroupJudge ? ` (Judge: ${ohGroupJudge})` : ""}` : "",
     ohBisAward || ohBisJudge ? `OH BIS: ${ohBisAward || "Award not set"}${ohBisJudge ? ` (Judge: ${ohBisJudge})` : ""}` : "",
@@ -1870,20 +1950,28 @@ function openDogShowResultPicker(entry) {
 }
 
 function dogShowPointStateOptions(selected = "") {
-  const supportedStates = [
-    ["TX", "Texas"], ["OK", "Oklahoma"], ["KS", "Kansas"],
-    ["LA", "Louisiana"], ["AR", "Arkansas"], ["AL", "Alabama"],
-    ["MS", "Mississippi"], ["TN", "Tennessee"],
-  ];
-  return `<option value="">Choose state</option>${supportedStates.map(([value, label]) => `<option value="${value}"${value === selected ? " selected" : ""}>${label}</option>`).join("")}`;
+  const supportedStates = Object.entries(DOG_SHOW_AKC_STATE_NAMES).sort((left, right) => left[1].localeCompare(right[1]));
+  return `<option value="">Choose location</option>${supportedStates.map(([value, label]) => `<option value="${value}"${value === selected ? " selected" : ""}>${label}</option>`).join("")}`;
+}
+
+function dogShowManualGroupPoints(result = {}) {
+  if (result.groupPointsEarned === "" || result.groupPointsEarned == null) return null;
+  const value = Number(result.groupPointsEarned);
+  return Number.isFinite(value) ? Math.min(5, Math.max(0, value)) : null;
+}
+
+function dogShowChampionshipPoints(estimate = {}, result = {}) {
+  const breedPoints = Number.isFinite(estimate.points) ? estimate.points : 0;
+  const groupPoints = dogShowManualGroupPoints(result);
+  return Math.max(breedPoints, Number.isFinite(groupPoints) ? groupPoints : 0);
 }
 
 function dogShowPointEstimateHtml(entry = {}, schedule = {}, result = {}) {
   const estimate = dogShowBreedPointEstimate(entry, schedule, result);
   const hasEstimate = Number.isFinite(estimate.points);
   return `<div class="dog-show-point-estimate${hasEstimate ? " has-estimate" : ""}" data-dog-show-point-estimate>
-    <div><span>AKC breed point estimate</span><strong data-point-estimate-value>${hasEstimate ? `${estimate.points} point${estimate.points === 1 ? "" : "s"}${estimate.isMajor ? " · Major" : ""}` : "Needs more information"}</strong><small data-point-estimate-reason>${escapeHtml(estimate.reason || "")}</small></div>
-    <button type="button" class="secondary-button" data-action="apply-point-estimate"${hasEstimate ? "" : " hidden"}>Use Estimate</button>
+    <div><span>AKC breed point estimate</span><strong data-point-estimate-value>${hasEstimate ? `${estimate.points} point${estimate.points === 1 ? "" : "s"}${estimate.isMajor ? " · Major" : ""}` : "Needs more information"}</strong><small data-point-estimate-reason>${escapeHtml(estimate.reason || "")}</small><small class="dog-show-point-source"><a href="https://www.akc.org/sports/conformation/resources/points-schedule/" target="_blank" rel="noopener">2026 AKC schedule</a> · <a href="https://www.akc.org/sports/conformation/resources/counting-points/" target="_blank" rel="noopener">Counting rules</a></small></div>
+    <button type="button" class="secondary-button" data-action="apply-point-estimate"${hasEstimate ? "" : " hidden"}>Use Best Value</button>
   </div>`;
 }
 
@@ -1907,8 +1995,11 @@ function refreshDogShowPointEstimate(form, forcePoints = false) {
   if (reason) reason.textContent = estimate.reason || "";
   if (applyButton) applyButton.hidden = !hasEstimate;
   if (hasEstimate && (forcePoints || form.dataset.pointEstimateAuto === "true")) {
-    form.elements.pointsEarned.value = String(estimate.points);
-    form.elements.isMajor.checked = estimate.isMajor;
+    const points = dogShowChampionshipPoints(estimate, {
+      groupPointsEarned: form.elements.groupPointsEarned?.value ?? "",
+    });
+    form.elements.pointsEarned.value = String(points);
+    form.elements.isMajor.checked = points >= 3;
   }
 }
 
@@ -1925,7 +2016,7 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
   const estimateInput = { ...result, pointScheduleState: eventState };
   const pointEstimate = schedule ? dogShowBreedPointEstimate(entry, schedule, estimateInput) : { points: null };
   const displayedPoints = result.id || !Number.isFinite(pointEstimate.points) ? pointsEarned : pointEstimate.points;
-  const regularAwardsExpanded = [result.groupAward, result.groupJudge, result.bisAward, result.bisJudge].some(Boolean);
+  const regularAwardsExpanded = [result.groupAward, result.groupJudge, result.groupPointsEarned, result.bisAward, result.bisJudge].some(Boolean);
   const ownerHandledAwardsExpanded = [result.ohGroupAward, result.ohGroupJudge, result.ohBisAward, result.ohBisJudge].some(Boolean);
   const resultContext = schedule
     ? `<div class="dog-show-result-context"><strong>${escapeHtml(dogShowRingAppearanceTitle(schedule, scheduleIndex))}</strong><span>${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span></div>`
@@ -1938,7 +2029,7 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
       <div class="field-grid">
         <label>Placement<input name="placement" value="${escapeHtml(result.placement || "")}" placeholder="1st Open Bitch"/></label>
         <label>BOB/BOV &amp; breed awards<input name="awards" value="${escapeHtml(result.awards || "")}" placeholder="WD, BOW, BOB or BOV"/></label>
-        <label>Points earned<input type="number" name="pointsEarned" min="0" max="5" step="1" value="${displayedPoints}"/></label>
+        <label>Championship points used<input type="number" name="pointsEarned" min="0" max="5" step="1" value="${displayedPoints}"/></label>
         <label>Point schedule state<select name="pointScheduleState">${dogShowPointStateOptions(eventState)}</select></label>
       </div>
       <label class="inline-check"><input type="checkbox" name="isMajor"${result.id ? dogShowMajorValue(result) ? " checked" : "" : pointEstimate.isMajor ? " checked" : ""}/> This result earned a major</label>
@@ -1952,7 +2043,9 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
           <div class="field-grid">
             <label>Group win / award<input name="groupAward" value="${escapeHtml(result.groupAward || "")}" placeholder="Group 1, Group 2, Group 3 or Group 4"/></label>
             <label>Group judge<input name="groupJudge" value="${escapeHtml(result.groupJudge || "")}" placeholder="Judge name"/></label>
+            <label>Group points (manual)<input type="number" name="groupPointsEarned" min="0" max="5" step="1" value="${escapeHtml(result.groupPointsEarned ?? "")}" placeholder="Enter when known"/></label>
           </div>
+          <small class="dog-show-group-points-note">AKC uses the higher of the breed points or eligible Group points; these values are not added together.</small>
         </section>
         <section class="dog-show-result-award-card">
           <h3>Regular Best in Show</h3>
@@ -2267,6 +2360,7 @@ async function saveDogShowResult(form) {
   const data = formPayload(form);
   const customerVisible = Boolean(form.elements.customerVisible?.checked);
   const pointsEarned = Math.min(5, Math.max(0, Number(data.pointsEarned || 0)));
+  const groupPointsEarned = data.groupPointsEarned === "" ? "" : Math.min(5, Math.max(0, Number(data.groupPointsEarned || 0)));
   const isMajor = Boolean(form.elements.isMajor?.checked);
   const pointEstimate = schedule ? dogShowBreedPointEstimate(entry, schedule, data) : { points: null };
   const entryCounts = dogShowEntryCounts(schedule || {});
@@ -2278,6 +2372,7 @@ async function saveDogShowResult(form) {
     ...data,
     recordKind: "appearanceResult",
     pointsEarned,
+    groupPointsEarned,
     isMajor,
     id: existing.id || (schedule ? `showResult-${entry.id}-${schedule.id}` : uid("showResult")),
     showEventId: entry.showEventId,
@@ -2571,14 +2666,14 @@ function setupDogShowEventListeners() {
     if (event.target.closest("[data-ring-schedule-row]")) refreshDogShowRingScheduleRows(event.target.closest("form"));
     const resultForm = event.target.closest("#dogShowResultForm");
     if (resultForm && event.target.matches('[name="pointsEarned"], [name="isMajor"]')) resultForm.dataset.pointEstimateAuto = "false";
-    if (resultForm && event.target.matches('[name="outcome"], [name="awards"], [name="pointScheduleState"]')) refreshDogShowPointEstimate(resultForm);
+    if (resultForm && event.target.matches('[name="outcome"], [name="awards"], [name="pointScheduleState"], [name="groupPointsEarned"]')) refreshDogShowPointEstimate(resultForm);
   });
 
   dialog?.addEventListener("change", (event) => {
     const entryForm = event.target.closest("#dogShowEntryForm");
     if (entryForm && event.target.matches('[name="attendanceRole"], [name="status"]')) refreshDogShowAssignmentSummary(entryForm);
     const resultForm = event.target.closest("#dogShowResultForm");
-    if (resultForm && event.target.matches('[name="outcome"], [name="awards"], [name="pointScheduleState"]')) refreshDogShowPointEstimate(resultForm);
+    if (resultForm && event.target.matches('[name="outcome"], [name="awards"], [name="pointScheduleState"], [name="groupPointsEarned"]')) refreshDogShowPointEstimate(resultForm);
   });
 
   page.addEventListener("change", async (event) => {

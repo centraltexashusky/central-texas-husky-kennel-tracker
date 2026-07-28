@@ -10,15 +10,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points', "Dog Show styles are not cache-busted."],
+  ["index.html", 'styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'dog-show.js?v=20260727-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'dog-show.js?v=20260727-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["js/dog-show.js", 'recordKind: "careerProfile"', "Prior career points are not stored separately from ring results."],
   ["js/dog-show.js", "profile.dogKey === dogKey || dogShowDogIdentity(profile) === dogKey", "Imported career profiles cannot be matched without the newer dogKey field."],
@@ -32,8 +32,11 @@ const required = [
   ["js/dog-show.js", 'name="specialBitchCount"', "Ring appearances do not capture the bitch special entry count."],
   ["js/dog-show.js", "function dogShowBreedPointEstimate", "Breed entry counts do not feed an AKC point estimate."],
   ["js/dog-show.js", "DOG_SHOW_AKC_POINT_SCHEDULES", "The Siberian Husky point schedules are missing."],
+  ["js/dog-show.js", '15: {', "The official 2026 AKC Siberian Husky schedule is not complete through Division 15."],
   ["js/dog-show.js", 'name="pointScheduleState"', "The point calculator cannot confirm which state schedule applies."],
   ["js/dog-show.js", 'data-action="apply-point-estimate"', "Users cannot apply the calculated breed points."],
+  ["js/dog-show.js", 'name="groupPointsEarned"', "Regular Group points cannot be entered manually."],
+  ["js/dog-show.js", "dogShowChampionshipPoints", "Breed and manual Group points are not compared using the higher value."],
   ["styles.css", ".dog-show-breed-entry-counts", "Breed entry counts are not styled."],
   ["styles.css", ".dog-show-point-estimate", "Calculated breed points are not styled."],
   ["js/dog-show.js", "Breed / Variety (BOB/BOV)", "Breed and variety awards are not grouped together."],
@@ -248,6 +251,24 @@ const required = [
   ["supabase-schema.sql", "'showCareLog'", "RLS does not allow show care log writes."],
 ];
 
+const official2026SiberianHuskySchedules = [
+  [1, "[2, 4, 5, 6, 9]", "[2, 5, 8, 12, 19]"],
+  [2, "[2, 3, 4, 6, 10]", "[2, 4, 6, 10, 16]"],
+  [3, "[2, 4, 6, 9, 14]", "[2, 5, 7, 10, 15]"],
+  [4, "[2, 3, 4, 5, 7]", "[2, 4, 5, 7, 10]"],
+  [5, "[2, 3, 4, 5, 7]", "[2, 4, 5, 7, 10]"],
+  [6, "[2, 3, 4, 5, 6]", "[2, 4, 5, 7, 10]"],
+  [7, "[2, 4, 5, 8, 13]", "[2, 4, 6, 10, 18]"],
+  [8, "[2, 4, 5, 7, 11]", "[2, 3, 4, 8, 14]"],
+  [9, "[2, 3, 4, 5, 6]", "[2, 4, 5, 7, 10]"],
+  [10, "[2, 3, 4, 5, 6]", "[2, 3, 4, 5, 6]"],
+  [11, "[2, 3, 4, 5, 6]", "[2, 3, 4, 5, 6]"],
+  [12, "[2, 3, 4, 5, 6]", "[2, 3, 4, 5, 6]"],
+  [13, "[2, 4, 6, 7, 8]", "[2, 3, 4, 6, 9]"],
+  [14, "[2, 4, 5, 6, 7]", "[2, 4, 6, 7, 10]"],
+  [15, "[2, 3, 4, 6, 11]", "[2, 5, 7, 10, 15]"],
+];
+
 const forbidden = [
   ['data-action="quick-show-log" data-log-type="Potty"', "Potty must require a pee or poop outcome before logging."],
   ['upsertRecord("boardingDog"', "Dog Show module must not write boarding dog records."],
@@ -262,6 +283,11 @@ for (const [path, needle, message] of required) {
   if (!read(path).includes(needle)) failures.push(message);
 }
 const dogShowSource = read("js/dog-show.js");
+const pointScheduleSource = dogShowSource.slice(dogShowSource.indexOf("const DOG_SHOW_AKC_POINT_SCHEDULES"), dogShowSource.indexOf("const DOG_SHOW_AKC_STATE_NAMES"));
+for (const [division, dogs, bitches] of official2026SiberianHuskySchedules) {
+  const block = pointScheduleSource.match(new RegExp(`\\n\\s*${division}: \\{[\\s\\S]*?dogs: (\\[[^\\n]+\\]),\\n\\s*bitches: (\\[[^\\n]+\\])`));
+  if (!block || block[1] !== dogs || block[2] !== bitches) failures.push(`The 2026 AKC Siberian Husky thresholds for Division ${division} do not match the official schedule.`);
+}
 const dogEntryFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowEntryForm"), dogShowSource.indexOf("function openDogShowPottyPicker"));
 const ringRowsIndex = dogEntryFormSource.indexOf('id="dogShowRingScheduleRows"');
 const addRingIndex = dogEntryFormSource.indexOf('data-action="add-ring-schedule"');
