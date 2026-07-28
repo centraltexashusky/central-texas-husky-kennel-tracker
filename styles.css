@@ -15271,6 +15271,107 @@ details.dog-show-ring-schedules[hidden] {
   color: var(--muted);
 }
 
+.dog-show-expense-split {
+  align-items: end;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr) minmax(250px, 0.9fr);
+  padding: 18px;
+}
+
+.dog-show-expense-split > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.dog-show-expense-split > div:first-child > span {
+  color: #178056;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.dog-show-expense-split h3,
+.dog-show-expense-ledgers h3 {
+  margin: 0;
+}
+
+.dog-show-expense-split p,
+.dog-show-expense-ledgers > div > p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.dog-show-expense-split-metrics {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dog-show-expense-split-metrics > div {
+  background: var(--tint-blue);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+}
+
+.dog-show-expense-split-metrics span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-expense-split form {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.dog-show-expense-split form label {
+  margin: 0;
+}
+
+.dog-show-expense-split form small {
+  color: var(--muted);
+  display: block;
+  line-height: 1.35;
+  margin-top: 5px;
+}
+
+.dog-show-expense-ledgers {
+  display: grid;
+  gap: 20px;
+}
+
+.dog-show-expense-ledgers > div {
+  display: grid;
+  gap: 8px;
+}
+
+.dog-show-expense-ledgers .dog-show-expense-group + .dog-show-expense-group {
+  margin-top: 4px;
+}
+
+.dog-show-expense-empty {
+  color: var(--muted);
+  margin: 0;
+  padding: 18px 16px;
+}
+
+.dog-show-expense-empty.is-standalone {
+  background: var(--panel);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+}
+
 .dog-show-expense-group {
   overflow: hidden;
 }
@@ -15395,6 +15496,19 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-expense-stats {
     grid-template-columns: 1fr;
+  }
+
+  .dog-show-expense-split {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .dog-show-expense-split form {
+    grid-template-columns: 1fr;
+  }
+
+  .dog-show-expense-split form button {
+    width: 100%;
   }
 
   .dog-show-expense-row {
