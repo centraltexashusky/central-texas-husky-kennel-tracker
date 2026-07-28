@@ -1,3 +1,9 @@
+import {
+  akcPointCalculatorBreeds2026,
+  akcPointCalculatorStates2026,
+  calculateAkcBreedPointScenarios2026,
+} from "./dog-show-point-calculator.js?v=20260727-akc-all-breed-calculator-combined-awards";
+
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
 const DOG_SHOW_EVENT_KEY = "cth-dog-show-active-event";
@@ -6,6 +12,7 @@ const DOG_SHOW_CALENDAR_DATE_KEY = "cth-dog-show-calendar-date";
 const DOG_SHOW_TASK_DAY_KEY = "cth-dog-show-task-expanded-day";
 const DOG_SHOW_RING_ROW_STATE_KEY = "cth-dog-show-ring-row-state";
 const DOG_SHOW_PROGRESS_TAB_KEY = "cth-dog-show-progress-tab";
+const DOG_SHOW_CALCULATOR_KEY = "cth-dog-show-calculator";
 const DOG_SHOW_PLANNER_RECORD_ID = "showPlanner-current";
 const DOG_SHOW_PLANNER_BREED_CODE = "346";
 const DOG_SHOW_CALENDAR_SLOT_MINUTES = 15;
@@ -126,8 +133,18 @@ const DOG_SHOW_DEFAULT_PACKING = [
   "Paperwork and vaccination records",
   "First aid and cooling supplies",
 ];
+const DOG_SHOW_EXPENSE_CATEGORIES = [
+  "Entry fees",
+  "Travel",
+  "Lodging",
+  "Grooming reservation",
+  "Food",
+  "Parking",
+  "Supplies",
+  "Other",
+];
 
-let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
+let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calculator", "expenses"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
   ? localStorage.getItem(DOG_SHOW_VIEW_KEY)
   : "home";
 let dogShowDogFilter = "all";
@@ -141,6 +158,23 @@ let dogShowBulkCarePending = false;
 let dogShowProgressTab = ["overview", "dogs", "judges"].includes(localStorage.getItem(DOG_SHOW_PROGRESS_TAB_KEY)) ? localStorage.getItem(DOG_SHOW_PROGRESS_TAB_KEY) : "overview";
 let dogShowProgressDogKey = "";
 let dogShowProgressJudge = "";
+let dogShowCalculatorState = loadDogShowCalculatorState();
+
+function loadDogShowCalculatorState() {
+  const fallback = {
+    state: "TX",
+    breed: "Siberian Huskies",
+    classDogs: 0,
+    classBitches: 0,
+    championDogs: 0,
+    championBitches: 0,
+  };
+  try {
+    return { ...fallback, ...(JSON.parse(localStorage.getItem(DOG_SHOW_CALCULATOR_KEY) || "{}") || {}) };
+  } catch {
+    return fallback;
+  }
+}
 
 function dogShowRecords(type, eventId = "") {
   return readRecords(type).filter((record) => !record.removed && (!eventId || record.showEventId === eventId));
@@ -1266,6 +1300,8 @@ function dogShowMoreHtml(event) {
       <button type="button" data-action="show-helper-summary"><span>H</span><strong>Helpers</strong><small>${helperEmails.length} assigned to this weekend</small></button>
       <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${resultProgress.logged} of ${resultProgress.total} ring appearances logged</small></button>
       <button type="button" data-action="open-show-planner"><span>F</span><strong>Find Shows</strong><small>Compare future panels against your dogs' history</small></button>
+      <button type="button" data-action="open-show-calculator"><span>C</span><strong>Calculator</strong><small>Estimate AKC breed points from the official schedule</small></button>
+      <button type="button" data-action="open-show-expenses"><span>$</span><strong>Expenses</strong><small>Track show costs by dog and category</small></button>
       <button type="button" data-action="open-show-progress"><span>P</span><strong>Show Progress</strong><small>Career points, show history, and judge notes</small></button>
     </div>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Packing List</h3><p>${packing.filter((item) => item.completed).length} of ${packing.length} packed</p></div></div>
@@ -1274,6 +1310,133 @@ function dogShowMoreHtml(event) {
     </section>
     <section class="dog-show-panel"><div class="dog-show-panel-heading"><div><h3>Weekend Helpers</h3><p>${helperEmails.length ? helperEmails.map(dogShowStaffLabel).join(" · ") : "No weekend helper list selected yet."}</p></div><button type="button" class="secondary-button" data-action="edit-show-event">Edit</button></div></section>
   </div>`;
+}
+
+function dogShowCalculatorOptions(values = [], selected = "", labels = {}) {
+  return values.map((value) => `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(labels[value] ? `${labels[value]} (${value})` : value)}</option>`).join("");
+}
+
+function dogShowCalculatorPointCell(points = 0) {
+  return `<strong class="${points >= 3 ? "is-major" : ""}">${points}<span> point${points === 1 ? "" : "s"}</span></strong>`;
+}
+
+function dogShowCalculatorHtml() {
+  const state = dogShowCalculatorState;
+  const result = calculateAkcBreedPointScenarios2026(state);
+  const rows = result ? [
+    ["Winners", "WD / WB from regular class entries", result.scenarios.winners],
+    ["Best of Winners", "Uses the higher WD or WB value", result.scenarios.bestOfWinners],
+    ["Best of Opposite Sex", "Adds same-sex champions defeated", result.scenarios.bestOfOppositeSex],
+    ["BOW + Best of Opposite Sex", "Uses the higher BOW or BOS value", result.scenarios.bestOfWinnersAndOppositeSex],
+    ["Best of Breed / Variety", "Adds champions of both sexes defeated", result.scenarios.bestOfBreed],
+    ["BOW + Best of Breed / Variety", "Uses the higher BOW or BOB/BOV value", result.scenarios.bestOfWinnersAndBreed],
+  ] : [];
+  const pointHeadings = [1, 2, 3, 4, 5];
+  return `<div class="dog-show-view dog-show-calculator-view">
+    <section class="dog-show-calculator-heading">
+      <div><span>AKC BREED POINTS</span><h3>Point Calculator</h3><p>Estimate championship points from the show location, breed or variety, and dogs actually judged.</p></div>
+      <a class="secondary-button" href="https://www.akc.org/sports/conformation/resources/counting-points/" target="_blank" rel="noopener noreferrer">How AKC counts points</a>
+    </section>
+    <form id="dogShowCalculatorForm" class="dog-show-calculator-form">
+      <div class="dog-show-calculator-selects">
+        <label>State / location<select name="state" required>${dogShowCalculatorOptions(akcPointCalculatorStates2026().sort((left, right) => String(DOG_SHOW_AKC_STATE_NAMES[left] || left).localeCompare(String(DOG_SHOW_AKC_STATE_NAMES[right] || right))), state.state, DOG_SHOW_AKC_STATE_NAMES)}</select></label>
+        <label>Breed or variety<select name="breed" required>${dogShowCalculatorOptions(akcPointCalculatorBreeds2026(), state.breed)}</select></label>
+      </div>
+      <fieldset class="dog-show-calculator-counts">
+        <legend>Breed entries judged</legend>
+        <p>Enter the dogs present and judged. Do not include absentees, excused dogs, or a class dog moved up to Best of Breed.</p>
+        <div>
+          <label>Class Dogs<input type="number" name="classDogs" min="0" step="1" inputmode="numeric" value="${Number(state.classDogs) || 0}"/></label>
+          <label>Class Bitches<input type="number" name="classBitches" min="0" step="1" inputmode="numeric" value="${Number(state.classBitches) || 0}"/></label>
+          <label>Champion Dogs<input type="number" name="championDogs" min="0" step="1" inputmode="numeric" value="${Number(state.championDogs) || 0}"/></label>
+          <label>Champion Bitches<input type="number" name="championBitches" min="0" step="1" inputmode="numeric" value="${Number(state.championBitches) || 0}"/></label>
+        </div>
+      </fieldset>
+      <button type="submit">Calculate Points</button>
+    </form>
+    ${result ? `<section class="dog-show-calculator-results" aria-live="polite">
+      <header><div><span>ESTIMATED OUTCOMES</span><h3>${escapeHtml(result.schedule.breed)}</h3><p>${escapeHtml(DOG_SHOW_AKC_STATE_NAMES[result.schedule.state] || result.schedule.state)} · AKC Division ${result.schedule.division} · 2026 schedule</p></div><strong>${result.counts.classDogs}-${result.counts.classBitches}-${result.counts.championDogs}-${result.counts.championBitches}</strong></header>
+      <div class="dog-show-calculator-result-table">
+        <div class="dog-show-calculator-result-head"><span>Possible award</span><strong>Dog</strong><strong>Bitch</strong></div>
+        ${rows.map(([label, note, values]) => `<article><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(note)}</small></div>${dogShowCalculatorPointCell(values.dogs)}${dogShowCalculatorPointCell(values.bitches)}</article>`).join("")}
+      </div>
+      <div class="dog-show-calculator-schedule">
+        <div><h3>Official point thresholds</h3><p>Number competing for each point value.</p></div>
+        <div class="dog-show-calculator-thresholds">
+          <div><span></span>${pointHeadings.map((points) => `<strong>${points} pt</strong>`).join("")}</div>
+          <div><span>Dogs</span>${result.schedule.dogs.map((count) => `<b>${count}</b>`).join("")}</div>
+          <div><span>Bitches</span>${result.schedule.bitches.map((count) => `<b>${count}</b>`).join("")}</div>
+        </div>
+      </div>
+      <p class="dog-show-calculator-note">Estimate only. Confirm the posted judge's book and the AKC schedule before recording points. Group-derived points are not included here.</p>
+    </section>` : ""}
+    <footer class="dog-show-calculator-source">Schedule effective May 12, 2026 · <a href="https://www.akc.org/sports/conformation/resources/points-schedule/" target="_blank" rel="noopener noreferrer">Official AKC Point Schedule</a></footer>
+  </div>`;
+}
+
+function dogShowExpenses(event = dogShowActiveEvent()) {
+  return (Array.isArray(event?.expenses) ? event.expenses : [])
+    .filter((expense) => expense && !expense.removed)
+    .sort((left, right) => String(right.incurredDate || right.submittedAt || "").localeCompare(String(left.incurredDate || left.submittedAt || "")));
+}
+
+function dogShowExpenseCurrency(value = 0) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.max(0, Number(value) || 0));
+}
+
+function dogShowExpensesHtml(event) {
+  const entries = dogShowEntries(event);
+  const expenses = dogShowExpenses(event);
+  const total = expenses.reduce((sum, expense) => sum + Math.max(0, Number(expense.amount) || 0), 0);
+  const grouped = new Map();
+  expenses.forEach((expense) => {
+    const key = expense.showEntryId || `${expense.dogType || "dog"}:${expense.dogId || expense.dogName || "unknown"}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(expense);
+  });
+  const expenseGroups = [...grouped.entries()].map(([key, items]) => {
+    const entry = entries.find((candidate) => candidate.id === key || candidate.id === items[0]?.showEntryId);
+    const name = items[0]?.dogName || dogShowEntryName(entry || {}) || "Dog";
+    const subtotal = items.reduce((sum, expense) => sum + Math.max(0, Number(expense.amount) || 0), 0);
+    return `<section class="dog-show-expense-group">
+      <header><div><h3>${escapeHtml(name)}</h3><p>${items.length} expense${items.length === 1 ? "" : "s"}</p></div><strong>${dogShowExpenseCurrency(subtotal)}</strong></header>
+      <div>${items.map((expense) => `<article class="dog-show-expense-row">
+        <div><strong>${escapeHtml(expense.category || "Other")}</strong><span>${escapeHtml(expense.description || expense.category || "Show expense")}</span><small>${escapeHtml(dogShowFormatDate(expense.incurredDate || String(expense.submittedAt || "").slice(0, 10)))}</small></div>
+        <strong>${dogShowExpenseCurrency(expense.amount)}</strong>
+        <button type="button" data-action="remove-show-expense" data-expense-id="${escapeHtml(expense.id)}" aria-label="Remove ${escapeHtml(expense.description || expense.category || "expense")}" title="Remove expense">×</button>
+      </article>`).join("")}</div>
+    </section>`;
+  }).join("");
+  return `<div class="dog-show-view dog-show-expenses-view">
+    <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Expenses</h3><p>Track each show cost under the dog it supports.</p></div><button type="button" data-action="new-show-expense"${entries.length ? "" : " disabled"}>Add More Expense</button></section>
+    <div class="dog-show-expense-stats">
+      <article><span>Total expenses</span><strong>${dogShowExpenseCurrency(total)}</strong><small>${escapeHtml(event?.name || "Current show")}</small></article>
+      <article><span>Expense items</span><strong>${expenses.length}</strong><small>Across standard and custom costs</small></article>
+      <article><span>Dogs tracked</span><strong>${grouped.size}</strong><small>${entries.length} dog${entries.length === 1 ? "" : "s"} on this show roster</small></article>
+    </div>
+    ${entries.length ? expenseGroups || dogShowRenderEmpty("No show expenses yet", "Add entry fees, travel, lodging, grooming, food, or another cost under a dog.", "new-show-expense", "Add Expense") : dogShowRenderEmpty("Add a dog before recording expenses", "Expenses are assigned to a dog on this show roster.", "add-show-dogs", "Add Dogs")}
+  </div>`;
+}
+
+function openDogShowExpenseForm() {
+  const event = dogShowActiveEvent();
+  const entries = dogShowEntries(event);
+  if (!event || !entries.length) {
+    showToast("Add a dog to this show before recording an expense.");
+    return;
+  }
+  const entryOptions = entries.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(dogShowEntryName(entry))}</option>`).join("");
+  const categoryOptions = DOG_SHOW_EXPENSE_CATEGORIES.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
+  openDogShowDialog("Add Show Expense", `<form id="dogShowExpenseForm" class="dog-show-expense-form">
+    <div class="field-grid">
+      <label>Dog<select name="showEntryId" required>${entryOptions}</select></label>
+      <label>Expense type<select name="category" required>${categoryOptions}</select></label>
+      <label class="dog-show-field-wide">Brief description<input type="text" name="description" maxlength="120" placeholder="Entry for Saturday show, hotel deposit, fuel..." required/></label>
+      <label>Cost<input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required/></label>
+      <label>Expense date<input type="date" name="incurredDate" value="${todayDate()}" required/></label>
+    </div>
+    <div class="button-row"><button type="submit">Save Expense</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+  </form>`);
 }
 
 function dogShowPlannerDogs() {
@@ -1533,14 +1696,14 @@ function renderDogShow() {
   const select = document.getElementById("dogShowEventSelect");
   if (select) select.innerHTML = dogShowEventOptions(event);
   document.querySelectorAll("[data-dog-show-view]").forEach((button) => {
-    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner"].includes(dogShowView);
-    const visibleView = dogShowView === "progress" ? "more" : dogShowView;
+    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calculator", "expenses"].includes(dogShowView);
+    const visibleView = ["progress", "calculator", "expenses"].includes(dogShowView) ? "more" : dogShowView;
     const active = mobileMoreActive || button.dataset.dogShowView === visibleView;
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  if (!event && !["progress", "planner"].includes(dogShowView)) {
+  if (!event && !["progress", "planner", "calculator"].includes(dogShowView)) {
     content.innerHTML = dogShowRenderEmpty("Create the first show weekend", "Add the event once, then build the roster, prep schedule, helper tasks, and results.");
     return;
   }
@@ -1552,13 +1715,15 @@ function renderDogShow() {
     more: dogShowMoreHtml,
     progress: dogShowProgressHtml,
     planner: dogShowPlannerHtml,
+    calculator: dogShowCalculatorHtml,
+    expenses: dogShowExpensesHtml,
   };
   content.innerHTML = renderers[dogShowView](event);
   if (typeof scheduleProfilePhotoHydrationSweep === "function") scheduleProfilePhotoHydrationSweep(40);
 }
 
 function setDogShowView(view = "home") {
-  if (!["home", "dogs", "schedule", "tasks", "more", "progress", "planner"].includes(view)) return;
+  if (!["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calculator", "expenses"].includes(view)) return;
   dogShowView = view;
   localStorage.setItem(DOG_SHOW_VIEW_KEY, view);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2179,6 +2344,57 @@ async function saveDogShowRecord(type, payload) {
   return record;
 }
 
+async function saveDogShowExpense(form) {
+  const event = dogShowActiveEvent();
+  if (!event) return;
+  const data = formPayload(form);
+  const entry = dogShowEntries(event).find((candidate) => candidate.id === data.showEntryId);
+  const amount = Math.max(0, Number(data.amount) || 0);
+  if (!entry || amount <= 0) {
+    showToast("Choose a dog and enter an expense greater than $0.");
+    return;
+  }
+  const expense = {
+    id: uid("showExpense"),
+    showEntryId: entry.id,
+    dogId: entry.dogId || "",
+    dogType: entry.dogType || "",
+    dogName: dogShowEntryName(entry),
+    category: DOG_SHOW_EXPENSE_CATEGORIES.includes(data.category) ? data.category : "Other",
+    description: String(data.description || "").trim(),
+    amount: Math.round(amount * 100) / 100,
+    incurredDate: data.incurredDate || todayDate(),
+    submittedAt: new Date().toISOString(),
+    submittedBy: currentUser?.name || "Staff",
+    submittedEmail: currentUser?.email || "",
+  };
+  await saveDogShowRecord("showEvent", {
+    ...event,
+    expenses: [...dogShowExpenses(event), expense],
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUser?.name || "Staff",
+    updatedEmail: currentUser?.email || "",
+  });
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast(`${expense.category} saved for ${expense.dogName}.`);
+}
+
+async function removeDogShowExpense(expenseId = "") {
+  const event = dogShowActiveEvent();
+  const expense = dogShowExpenses(event).find((candidate) => candidate.id === expenseId);
+  if (!event || !expense || !window.confirm(`Remove ${expense.description || expense.category || "this expense"}?`)) return;
+  await saveDogShowRecord("showEvent", {
+    ...event,
+    expenses: (Array.isArray(event.expenses) ? event.expenses : []).filter((candidate) => candidate.id !== expenseId),
+    updatedAt: new Date().toISOString(),
+    updatedBy: currentUser?.name || "Staff",
+    updatedEmail: currentUser?.email || "",
+  });
+  renderDogShow();
+  showToast("Show expense removed.");
+}
+
 async function saveDogShowEvent(form) {
   const existing = form.dataset.id ? readRecords("showEvent").find((event) => event.id === form.dataset.id) || {} : {};
   const data = formPayload(form);
@@ -2686,6 +2902,21 @@ function setupDogShowEventListeners() {
   });
 
   page.addEventListener("submit", async (event) => {
+    if (event.target.id === "dogShowCalculatorForm") {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.target).entries());
+      dogShowCalculatorState = {
+        state: data.state || "TX",
+        breed: data.breed || "Siberian Huskies",
+        classDogs: Math.max(0, Number(data.classDogs) || 0),
+        classBitches: Math.max(0, Number(data.classBitches) || 0),
+        championDogs: Math.max(0, Number(data.championDogs) || 0),
+        championBitches: Math.max(0, Number(data.championBitches) || 0),
+      };
+      localStorage.setItem(DOG_SHOW_CALCULATOR_KEY, JSON.stringify(dogShowCalculatorState));
+      renderDogShow();
+      return;
+    }
     if (event.target.id !== "dogShowPackingForm") return;
     event.preventDefault();
     await addDogShowPackingItem(event.target);
@@ -2735,6 +2966,10 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "open-show-progress") setDogShowView("progress");
     if (action.dataset.action === "open-show-planner") setDogShowView("planner");
+    if (action.dataset.action === "open-show-calculator") setDogShowView("calculator");
+    if (action.dataset.action === "open-show-expenses") setDogShowView("expenses");
+    if (action.dataset.action === "new-show-expense") openDogShowExpenseForm();
+    if (action.dataset.action === "remove-show-expense") await removeDogShowExpense(action.dataset.expenseId || "");
     if (action.dataset.action === "edit-show-plan") openDogShowPlannerForm();
     if (action.dataset.action === "view-show-decision") openDogShowPlannerDecision(action.dataset.showId || "");
     if (action.dataset.action === "open-planner-judge-history") openDogShowJudgeEvidence(action.dataset.judge || "", "entries", dogShowPlannerRecord().dogKeys || []);
@@ -2829,6 +3064,8 @@ function setupDogShowEventListeners() {
     if (action.dataset.dogShowMoreAction === "operations") setDogShowView("more");
     if (action.dataset.dogShowMoreAction === "progress") setDogShowView("progress");
     if (action.dataset.dogShowMoreAction === "planner") setDogShowView("planner");
+    if (action.dataset.dogShowMoreAction === "calculator") setDogShowView("calculator");
+    if (action.dataset.dogShowMoreAction === "expenses") setDogShowView("expenses");
     if (action.dataset.dogShowMoreAction === "boarding") switchPage("dashboardPage", { history: "push" });
   });
 
@@ -2843,6 +3080,7 @@ function setupDogShowEventListeners() {
     if (event.target.id === "dogShowJudgeNoteForm") await saveDogShowJudgeNote(event.target);
     if (event.target.id === "dogShowTaskForm") await saveDogShowTask(event.target);
     if (event.target.id === "dogShowPlannerForm") await saveDogShowPlanner(event.target);
+    if (event.target.id === "dogShowExpenseForm") await saveDogShowExpense(event.target);
   });
 
   dialog?.addEventListener("click", async (event) => {
