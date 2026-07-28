@@ -16264,6 +16264,135 @@ details.dog-show-ring-schedules[hidden] {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.dog-show-planner-search-section .dog-show-collapsible-content {
+  display: grid;
+  gap: 12px;
+}
+
+.dog-show-planner-mode-option {
+  align-items: start;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin: 0;
+  padding: 11px;
+}
+
+.dog-show-planner-mode-option > span {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-planner-mode-option small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.dog-show-potential-plan {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.dog-show-potential-plan > header span {
+  color: #178056;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.dog-show-potential-plan > header h3 {
+  margin: 3px 0;
+}
+
+.dog-show-potential-plan > header p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.dog-show-potential-list {
+  display: grid;
+  gap: 9px;
+}
+
+.dog-show-potential-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid #D4A72C;
+  border-radius: 9px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.dog-show-potential-card > header,
+.dog-show-potential-card > footer {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.dog-show-potential-card > header span,
+.dog-show-potential-card dt,
+.dog-show-potential-card > footer > span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-potential-card h4,
+.dog-show-potential-card p {
+  margin: 0;
+}
+
+.dog-show-potential-card h4 {
+  font-size: 1rem;
+}
+
+.dog-show-potential-card p {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dog-show-potential-card > header > strong {
+  flex: 0 0 auto;
+}
+
+.dog-show-potential-card dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.dog-show-potential-card dl > div {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+}
+
+.dog-show-potential-card dd {
+  font-weight: 800;
+  margin: 0;
+}
+
+.dog-show-potential-card > footer {
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
 .dog-show-planner-dog-options .dog-show-check-option {
   grid-template-columns: auto 44px minmax(0, 1fr);
 }
@@ -16294,7 +16423,9 @@ details.dog-show-ring-schedules[hidden] {
 :root[data-theme="dark"] .dog-show-decision-summary,
 :root[data-theme="dark"] .dog-show-decision-dogs,
 :root[data-theme="dark"] .dog-show-decision-judge,
-:root[data-theme="dark"] .dog-show-planner-source-note {
+:root[data-theme="dark"] .dog-show-planner-source-note,
+:root[data-theme="dark"] .dog-show-potential-plan,
+:root[data-theme="dark"] .dog-show-potential-card {
   background: #13273D;
   border-color: #4E6C84;
   color: #F5FAFE;
@@ -16376,6 +16507,22 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-planner-card > footer [data-action="view-show-decision"] {
     grid-column: 1 / -1;
+  }
+
+  .dog-show-potential-card > header,
+  .dog-show-potential-card > footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dog-show-potential-card dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-potential-card > footer .button-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
   }
 
   .dog-show-decision-summary {

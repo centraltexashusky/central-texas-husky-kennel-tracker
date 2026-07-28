@@ -16,6 +16,7 @@ type CalendarRequest = {
   endDate?: string;
   states?: string[];
   breedCode?: string;
+  breedName?: string;
 };
 
 const json = (body: Record<string, unknown>, status = 200) =>
@@ -26,6 +27,31 @@ const json = (body: Record<string, unknown>, status = 200) =>
 
 const clean = (value: unknown) => String(value || "").replace(/\s+/g, " ").trim();
 const normalizeEmail = (value: unknown) => clean(value).toLowerCase();
+
+function calendarBreedName(value: unknown) {
+  const text = clean(value);
+  const parenthetical = text.match(/^(.+?)\s+(\(.+\))$/);
+  if (parenthetical) return `${calendarBreedName(parenthetical[1])} ${parenthetical[2]}`;
+  if (/\bies$/i.test(text)) return text.replace(/ies$/i, "y");
+  if (/\bDogs$/i.test(text)) return text.replace(/Dogs$/i, "Dog");
+  if (/\bs$/i.test(text) && !/(?:Belgian Malinois|Bouvier des Flandres|Dogue de Bordeaux|Great Pyrenees|Griffon Bruxellois|Kuvasz)$/i.test(text)) return text.replace(/s$/i, "");
+  return text;
+}
+
+function breedComparisonKey(value: unknown) {
+  return calendarBreedName(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function calendarBreedOption(html: string, requestedName: string) {
+  const { document } = parseHTML(html);
+  const requestedKey = breedComparisonKey(requestedName);
+  return [...document.querySelectorAll("option")]
+    .map((option) => ({
+      code: clean(option.getAttribute("value")).match(/\d{1,5}/)?.[0] || "",
+      name: calendarBreedName(option.textContent),
+    }))
+    .find((option) => option.code && breedComparisonKey(option.name) === requestedKey) || null;
+}
 
 function adminEmails() {
   return (Deno.env.get("ADMIN_ALERT_EMAILS") || Deno.env.get("ADMIN_EMAILS") || "centraltexashusky@gmail.com")
@@ -114,7 +140,22 @@ function calendarAssignmentJudge(showHtml: string, assignment: string) {
   return clean((match?.[1] || "").replace(/<[^>]+>/g, " "));
 }
 
-function parseShowRows(html: string, startDate: string, endDate: string, breedCode: string) {
+function showGroupPanel(showHtml: string, judgeAnchors: Element[]) {
+  const candidates = [...showHtml.matchAll(/<a\b[^>]*title="([^"]*\bGroup)\b[^"]*"[^>]*>([\s\S]*?)<\/a>/gi)]
+    .map((match) => ({
+      groupName: clean(match[1]).replace(/\s+Judge.*$/i, ""),
+      judge: clean((match[2] || "").replace(/<[^>]+>/g, " ")),
+    }))
+    .filter((candidate) => candidate.judge && !/(?:owner.handled|nohs)/i.test(candidate.groupName));
+  if (candidates.length) return candidates[0];
+  const anchor = judgeAnchors.find((item) => /\bGroup\b/i.test(item.getAttribute("title") || "") && !/(?:owner.handled|nohs)/i.test(item.getAttribute("title") || ""));
+  return {
+    groupName: clean(anchor?.getAttribute("title")).replace(/\s+Judge.*$/i, ""),
+    judge: clean(anchor?.textContent),
+  };
+}
+
+function parseShowRows(html: string, startDate: string, endDate: string, breedCode: string, breedName: string) {
   const { document } = parseHTML(html);
   const shows = new Map<string, Record<string, unknown>>();
   [...document.querySelectorAll("tr")].forEach((row) => {
@@ -155,8 +196,10 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
     const showHtml = calendarShowHtml(html, externalId);
     const panelTitle = calendarPanelTitle(showHtml);
     const judgeAnchors = anchors.filter((anchor) => /judpop\.php\?[^#]*jno=/i.test(anchor.getAttribute("href") || ""));
+    const escapedBreedName = breedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const judgeByAssignment = (assignment: RegExp) => clean(judgeAnchors.find((anchor) => assignment.test(anchor.getAttribute("title") || ""))?.textContent);
-    const breedJudge = calendarAssignmentJudge(showHtml, "Siberian Husky") || judgeByAssignment(/^Siberian Husky\b/i) || clean(judgeAnchors[0]?.textContent);
+    const breedJudge = calendarAssignmentJudge(showHtml, breedName) || judgeByAssignment(new RegExp(`^${escapedBreedName}\\b`, "i")) || clean(judgeAnchors[0]?.textContent);
+    const groupPanel = showGroupPanel(showHtml, judgeAnchors);
     const typeAnchor = anchors.find((anchor) => /(?:showtype|opWtype|type=)/i.test(anchor.getAttribute("href") || ""));
     const showType = clean(typeAnchor?.textContent) || (rowText.match(/\b(AB|SP|SWE|BPUP|FCAT|OB|RLY)\b/i)?.[1] || "");
     const nohs = /\bNOHS\b/i.test(rowText);
@@ -177,8 +220,11 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
       nohs,
       superintendent,
       entryClosingDate: closing ? dateNearShow(closing.month, closing.day, showDate) : "",
+      breedCode,
+      breedName,
       breedJudge,
-      groupJudge: calendarAssignmentJudge(showHtml, "Working Group") || judgeByAssignment(/^Working Group\b/i) || panelJudge(panelTitle, "Working Group"),
+      groupName: groupPanel.groupName,
+      groupJudge: groupPanel.judge || (groupPanel.groupName ? panelJudge(panelTitle, groupPanel.groupName) : ""),
       bisJudge: calendarAssignmentJudge(showHtml, "Best In Show") || judgeByAssignment(/^Best In Show\b/i) || panelJudge(panelTitle, "Best-In-Show Judge"),
       sourceUrl: showUrl.toString(),
       panelUrl,
@@ -210,22 +256,39 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({})) as CalendarRequest;
   const startDate = validDate(body.startDate);
   const endDate = validDate(body.endDate);
-  const breedCode = /^\d{1,5}$/.test(clean(body.breedCode)) ? clean(body.breedCode) : "346";
+  let breedCode = /^\d{1,5}$/.test(clean(body.breedCode)) ? clean(body.breedCode) : "";
+  let breedName = calendarBreedName(body.breedName || "Siberian Husky");
   const states = [...new Set((Array.isArray(body.states) ? body.states : []).map((state) => clean(state).toUpperCase()).filter((state) => /^[A-Z]{2}$/.test(state)))].slice(0, 8);
   if (!startDate || !endDate || endDate < startDate) return json({ error: "A valid startDate and endDate are required." }, 400);
   const rangeDays = Math.ceil((new Date(`${endDate}T12:00:00Z`).getTime() - new Date(`${startDate}T12:00:00Z`).getTime()) / 86_400_000);
   if (rangeDays > MAX_RANGE_DAYS) return json({ error: `Date range cannot exceed ${MAX_RANGE_DAYS} days.` }, 400);
   if (!states.length) return json({ error: "At least one valid state is required." }, 400);
 
-  const sourceUrl = new URL(CALENDAR_URL);
-  sourceUrl.searchParams.set("month", "0");
-  sourceUrl.searchParams.set("fmt", "1");
-  sourceUrl.searchParams.set("brno", breedCode);
-  sourceUrl.searchParams.append("breed[]", breedCode);
-  states.forEach((state) => sourceUrl.searchParams.append("state[]", state));
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
+    if (!breedCode) {
+      const breedDirectoryUrl = new URL(CALENDAR_URL);
+      breedDirectoryUrl.searchParams.set("fmt", "1");
+      const directoryResponse = await fetch(breedDirectoryUrl, {
+        headers: {
+          "Accept": "text/html,application/xhtml+xml",
+          "User-Agent": "SnuggleStayShowPlanner/1.0 (centraltexashusky@gmail.com)",
+        },
+        signal: controller.signal,
+      });
+      if (!directoryResponse.ok) return json({ error: `Breed directory returned ${directoryResponse.status}.` }, 502);
+      const breedOption = calendarBreedOption(await directoryResponse.text(), breedName);
+      if (!breedOption) return json({ error: `${breedName} was not found in the Canine Chronicle breed list.` }, 400);
+      breedCode = breedOption.code;
+      breedName = breedOption.name;
+    }
+    const sourceUrl = new URL(CALENDAR_URL);
+    sourceUrl.searchParams.set("month", "0");
+    sourceUrl.searchParams.set("fmt", "1");
+    sourceUrl.searchParams.set("brno", breedCode);
+    sourceUrl.searchParams.append("breed[]", breedCode);
+    states.forEach((state) => sourceUrl.searchParams.append("state[]", state));
     const response = await fetch(sourceUrl, {
       headers: {
         "Accept": "text/html,application/xhtml+xml",
@@ -235,8 +298,8 @@ Deno.serve(async (req) => {
     });
     if (!response.ok) return json({ error: `Calendar source returned ${response.status}.` }, 502);
     const html = await response.text();
-    const shows = parseShowRows(html, startDate, endDate, breedCode);
-    return json({ shows, sourceUrl: sourceUrl.toString(), fetchedAt: new Date().toISOString() });
+    const shows = parseShowRows(html, startDate, endDate, breedCode, breedName);
+    return json({ shows, breedCode, breedName, sourceUrl: sourceUrl.toString(), fetchedAt: new Date().toISOString() });
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "Could not fetch the show calendar." }, 502);
   } finally {
