@@ -418,7 +418,7 @@ function dogShowRingDateTime(entry = {}, schedule = dogShowRingSchedules(entry)[
 function dogShowPrepTimes(entry = {}, schedule = dogShowRingSchedules(entry)[0] || {}) {
   const ring = dogShowRingDateTime(entry, schedule);
   if (!ring) return { ring: null, ready: null, start: null };
-  const buffer = Math.max(0, Number(schedule.readyBufferMinutes ?? entry.readyBufferMinutes ?? 15));
+  const buffer = Math.max(-120, Math.min(60, Number(schedule.readyBufferMinutes ?? entry.readyBufferMinutes ?? 15)));
   const duration = Math.max(0, Number(schedule.prepMinutes ?? entry.prepMinutes ?? 45));
   const ready = new Date(ring.getTime() - buffer * 60000);
   const start = new Date(ready.getTime() - duration * 60000);
@@ -1771,7 +1771,7 @@ function dogShowRingScheduleRowHtml(schedule = {}, index = 0) {
         <output data-entry-count-summary>${escapeHtml(entryCountLabel)}</output>
       </fieldset>
       <label>Prep minutes<input type="number" name="prepMinutes" min="0" max="240" step="5" value="${Number(schedule.prepMinutes ?? 45)}"/></label>
-      <label>Ready-before-ring buffer<input type="number" name="readyBufferMinutes" min="0" max="60" step="5" value="${Number(schedule.readyBufferMinutes ?? 15)}"/></label>
+      <label>Ready buffer (+ before / − after)<input type="number" name="readyBufferMinutes" min="-120" max="60" step="5" value="${Number(schedule.readyBufferMinutes ?? 15)}"/></label>
       <label>Armband<input name="armbandNumber" value="${escapeHtml(schedule.armbandNumber || "")}"/></label>
       <label>Judge<input name="judge" value="${escapeHtml(schedule.judge || "")}"/></label>
     </div>
