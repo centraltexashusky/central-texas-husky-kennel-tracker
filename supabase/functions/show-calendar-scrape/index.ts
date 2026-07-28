@@ -93,13 +93,6 @@ function dateInRange(month: number, day: number, startDate: string, endDate: str
   return "";
 }
 
-function dateNearShow(month: number, day: number, showDate: string) {
-  const show = new Date(`${showDate}T12:00:00Z`);
-  const sameYear = new Date(Date.UTC(show.getUTCFullYear(), month - 1, day));
-  if (sameYear > show) sameYear.setUTCFullYear(sameYear.getUTCFullYear() - 1);
-  return sameYear.toISOString().slice(0, 10);
-}
-
 function datesInText(value: string) {
   return [...value.matchAll(/\b(\d{1,2})\/(\d{1,2})\b/g)].map((match) => ({ month: Number(match[1]), day: Number(match[2]) }));
 }
@@ -169,7 +162,8 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
 
     const cells = [...row.children].filter((child) => ["TD", "TH"].includes(child.tagName));
     const rowText = clean(row.textContent);
-    const dates = datesInText(rowText);
+    const showTitle = String(showAnchor.getAttribute("title") || "");
+    const dates = datesInText(`${rowText} ${showTitle}`);
     if (!dates.length) return;
     const showDate = dateInRange(dates[0].month, dates[0].day, startDate, endDate);
     if (!showDate) return;
@@ -204,10 +198,18 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
     const showType = clean(typeAnchor?.parentElement?.textContent)
       || clean(typeAnchor?.textContent)
       || (rowText.match(/\b(AB|SP|SWE|BPUP|FCAT|OB|RLY)\b/i)?.[1] || "");
-    const nohs = /\bNOHS\b/i.test(rowText);
-    const superintendent = ["Onofrio", "MB-F", "Rau", "Bradshaw", "BaRay", "Foy Trent", "Executive", "Show Secretary"]
-      .find((name) => rowText.toLowerCase().includes(name.toLowerCase())) || "";
-    const closing = dates.length > 1 ? dates[dates.length - 1] : null;
+    const nohs = /\bNOHS\b/i.test(`${rowText} ${showTitle} ${panelTitle}`);
+    const superintendent = clean(showTitle.match(/\bSuper:\s*([^\r\n]+)/i)?.[1])
+      || ["Onofrio", "MB-F", "Rau", "Bradshaw", "BaRay", "Foy Trent", "Executive", "Show Secretary"]
+        .find((name) => rowText.toLowerCase().includes(name.toLowerCase())) || "";
+    const closingMatch = showTitle.match(/\bCloses:\s*(?:[A-Za-z]+\s+)?(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+    const closingDate = closingMatch
+      ? `${closingMatch[3]}-${String(Number(closingMatch[1])).padStart(2, "0")}-${String(Number(closingMatch[2])).padStart(2, "0")}`
+      : "";
+    const premiumAnchor = anchors.find((anchor) => /\bPremium List\b/i.test(anchor.getAttribute("title") || "") || clean(anchor.textContent) === "PL");
+    const judgingProgramAnchor = anchors.find((anchor) => /\bJudging Program\b/i.test(anchor.getAttribute("title") || "") || clean(anchor.textContent) === "JP");
+    const premiumUrl = embeddedUrl(premiumAnchor?.getAttribute("href"), /https?:\/\/[^"')\s]+/i)?.toString() || "";
+    const judgingProgramUrl = embeddedUrl(judgingProgramAnchor?.getAttribute("href"), /https?:\/\/[^"')\s]+/i)?.toString() || "";
     const panelUrl = new URL(`judpan.php?code=&shno=${encodeURIComponent(externalId)}`, SITE_URL).toString();
     shows.set(externalId, {
       externalId,
@@ -221,7 +223,9 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
       showType,
       nohs,
       superintendent,
-      entryClosingDate: closing ? dateNearShow(closing.month, closing.day, showDate) : "",
+      entryClosingDate: closingDate,
+      premiumUrl,
+      judgingProgramUrl,
       breedCode,
       breedName,
       breedJudge,

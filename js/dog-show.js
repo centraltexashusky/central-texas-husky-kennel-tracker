@@ -180,6 +180,7 @@ let dogShowProgressTab = ["overview", "dogs", "judges"].includes(localStorage.ge
 let dogShowProgressDogKey = "";
 let dogShowProgressJudge = "";
 let dogShowCalculatorState = loadDogShowCalculatorState();
+let dogShowPlannerMetadataRefreshKey = "";
 
 function loadDogShowCalculatorState() {
   const fallback = {
@@ -1579,7 +1580,7 @@ function dogShowExpensesHtml(event) {
       <div><span>EXPENSE SPLIT</span><h3>${dogShowExpenseCurrency(splitAmount)} per participating dog</h3><p>Divide total expenses only; income and rewards are not subtracted.</p></div>
       <div class="dog-show-expense-split-metrics"><div><span>Total expenses</span><strong>${dogShowExpenseCurrency(totals.expenseTotal)}</strong></div><div><span>Dogs on show roster</span><strong>${rosterCount}</strong></div></div>
       <form id="dogShowExpenseSplitForm">
-        <label>Dogs sharing expenses<input type="number" name="expenseSplitDogCount" min="1" ${rosterCount ? `max="${rosterCount}"` : ""} step="1" inputmode="numeric" value="${splitCount || ""}" ${rosterCount ? "" : "disabled"}/><small>Lower this count to exclude your own dog or another dog that should not share the costs.</small></label>
+        <label><span class="dog-show-expense-split-label">Dogs sharing expenses <span class="service-info-icon dog-show-expense-split-info" role="button" tabindex="0" aria-label="Lower this count to exclude your own dog or another dog that should not share the costs." title="Lower this count to exclude your own dog or another dog that should not share the costs." data-tooltip="Lower this count to exclude your own dog or another dog that should not share the costs."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true"/></span></span><input type="number" name="expenseSplitDogCount" min="1" ${rosterCount ? `max="${rosterCount}"` : ""} step="1" inputmode="numeric" value="${splitCount || ""}" ${rosterCount ? "" : "disabled"}/></label>
         <button type="submit" ${rosterCount ? "" : "disabled"}>Update Split</button>
       </form>
     </section>
@@ -1740,7 +1741,7 @@ function dogShowPlannerEventFlagLabels(show = {}) {
 
 function dogShowPlannerEventFlagsHtml(show = {}) {
   const flags = dogShowPlannerEventFlagLabels(show);
-  return `<div class="dog-show-planner-flags" aria-label="Event format">${(flags.length ? flags : ["Format pending"]).map((flag) => `<span${flag === "Format pending" ? ' class="is-pending"' : ""}>${escapeHtml(flag)}</span>`).join("")}</div>`;
+  return flags.length ? `<div class="dog-show-planner-flags" aria-label="Event format">${flags.map((flag) => `<span>${escapeHtml(flag)}</span>`).join("")}</div>` : "";
 }
 
 function openDogShowPlannerDecision(showId = "") {
@@ -1810,7 +1811,7 @@ function dogShowPlannerHtml() {
     <section class="dog-show-planner-heading"><div><span>SHOW INTELLIGENCE</span><h3>Show Planner</h3><p>Compare future ${escapeHtml(selectedBreed)} panels with selected dogs' results, breed research, and internal judge notes.</p></div><button type="button" data-action="edit-show-plan">${plan.id ? "Update Search" : "Find Shows"}</button></section>
     ${plan.id ? `<section class="dog-show-planner-criteria"><div><span>${plan.searchMode === "breed" ? "Breed" : "Dogs"}</span><strong>${escapeHtml(plan.searchMode === "breed" ? selectedBreed : selectedDogNames.join(", ") || "All tracked show dogs")}</strong></div><div><span>Dates</span><strong>${escapeHtml(dogShowPlannerDateRange({ startDate: plan.startDate, endDate: plan.endDate }))}</strong></div><div><span>States</span><strong>${escapeHtml((plan.states || []).join(", ") || "All")}</strong></div><div><span>Last checked</span><strong>${escapeHtml(fetchedLabel || "Not available")}</strong></div></section>` : ""}
     ${potentialShows.length ? `<section class="dog-show-potential-plan"><header><div><span>SHOW RESEARCH</span><h3>Potential Show Plan</h3><p>${potentialShows.length} show${potentialShows.length === 1 ? "" : "s"} saved in date order. Research for another breed is appended to the same show.</p></div></header><div class="dog-show-potential-list">${potentialShows.map(dogShowPlannerCandidateHtml).join("")}</div></section>` : ""}
-    ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div><span class="dog-show-source-badge">${plan.localFixture ? "Local test data" : "Canine Chronicle calendar"}</span></header><div class="dog-show-planner-list">${ranked.map(({ show, assessment }) => `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}">
+    ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div></header><div class="dog-show-planner-list">${ranked.map(({ show, assessment }) => `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}">
       <header><div>${dogShowPlannerEventFlagsHtml(show)}<h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
       <div class="dog-show-planner-panel">${dogShowPlannerJudgeHtml("Breed", show.breedJudge || "", plan)}${dogShowPlannerJudgeHtml("Group", show.groupJudge || "", plan)}${dogShowPlannerJudgeHtml("BIS", show.bisJudge || "", plan)}</div>
       <ul>${assessment.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
@@ -1859,9 +1860,73 @@ function dogShowPlannerLocalShows(startDate = todayDate(), breedName = DOG_SHOW_
   const first = dogShowPlannerDateOffset(startDate, 14);
   const second = dogShowPlannerDateOffset(startDate, 35);
   return [
-    { externalId: "local-planner-1", startDate: first, endDate: dogShowPlannerDateOffset(first, 1), club: "Central Texas Kennel Club", cityState: "Belton, TX", state: "TX", showType: "AB/JS/BgP", nohs: true, breedName, breedJudge: dogShowObservedJudges()[0] || "Panel pending", groupJudge: dogShowObservedJudges()[1] || "", bisJudge: dogShowObservedJudges()[2] || "", superintendent: "Sample Superintendent" },
-    { externalId: "local-planner-2", startDate: second, endDate: dogShowPlannerDateOffset(second, 2), club: "Red River Dog Show Cluster", cityState: "Shreveport, LA", state: "LA", showType: "SP", nohs: false, breedName, breedJudge: dogShowObservedJudges()[3] || "Panel pending", groupJudge: dogShowObservedJudges()[4] || "", bisJudge: dogShowObservedJudges()[5] || "", superintendent: "Sample Superintendent" },
+    { externalId: "local-planner-1", startDate: first, endDate: dogShowPlannerDateOffset(first, 1), club: "Central Texas Kennel Club", cityState: "Belton, TX", state: "TX", showType: "AB/JS/BgP", nohs: true, entryClosingDate: dogShowPlannerDateOffset(startDate, 7), breedName, breedJudge: dogShowObservedJudges()[0] || "Panel pending", groupJudge: dogShowObservedJudges()[1] || "", bisJudge: dogShowObservedJudges()[2] || "", superintendent: "Sample Superintendent" },
+    { externalId: "local-planner-2", startDate: second, endDate: dogShowPlannerDateOffset(second, 2), club: "Red River Dog Show Cluster", cityState: "Shreveport, LA", state: "LA", showType: "SP", nohs: false, entryClosingDate: dogShowPlannerDateOffset(startDate, 28), breedName, breedJudge: dogShowObservedJudges()[3] || "Panel pending", groupJudge: dogShowObservedJudges()[4] || "", bisJudge: dogShowObservedJudges()[5] || "", superintendent: "Sample Superintendent" },
   ];
+}
+
+function dogShowPlannerNeedsMetadataRefresh(plan = dogShowPlannerRecord()) {
+  return Boolean(
+    plan.id
+    && !plan.localFixture
+    && Number(plan.metadataVersion || 0) < 2
+    && Array.isArray(plan.shows)
+    && plan.shows.length
+    && plan.startDate
+    && plan.endDate
+    && Array.isArray(plan.states)
+    && plan.states.length
+  );
+}
+
+function dogShowPlannerMergeMetadata(show = {}, imported = {}) {
+  const merged = { ...show };
+  Object.entries(imported).forEach(([key, value]) => {
+    if (value !== "" && value !== null && value !== undefined) merged[key] = value;
+  });
+  return merged;
+}
+
+async function refreshDogShowPlannerMetadata(plan = dogShowPlannerRecord()) {
+  if (!dogShowPlannerNeedsMetadataRefresh(plan)) return;
+  const refreshKey = `${plan.id}:${plan.updatedAt || plan.submittedAt || ""}`;
+  if (dogShowPlannerMetadataRefreshKey === refreshKey) return;
+  dogShowPlannerMetadataRefreshKey = refreshKey;
+  try {
+    if (typeof supabaseClient === "undefined" || !supabaseClient?.functions) return;
+    const { data, error } = await supabaseClient.functions.invoke("show-calendar-scrape", {
+      body: {
+        startDate: plan.startDate,
+        endDate: plan.endDate,
+        states: plan.states,
+        breedCode: plan.breedCode || "",
+        breedName: plan.breedName || DOG_SHOW_PLANNER_DEFAULT_BREED,
+      },
+    });
+    if (error) throw error;
+    const importedShows = Array.isArray(data?.shows) ? data.shows : [];
+    const importedByKey = new Map(importedShows.map((show) => [dogShowPlannerShowKey(show), show]));
+    const matchedShowCount = plan.shows.filter((show) => importedByKey.has(dogShowPlannerShowKey(show))).length;
+    if (!matchedShowCount) throw new Error("No saved planner shows matched the refreshed calendar results.");
+    const shows = plan.shows.map((show) => dogShowPlannerMergeMetadata(show, importedByKey.get(dogShowPlannerShowKey(show)) || {}));
+    await saveDogShowRecord("showResult", {
+      ...plan,
+      shows,
+      sourceUrl: data?.sourceUrl || plan.sourceUrl,
+      fetchedAt: data?.fetchedAt || plan.fetchedAt,
+      metadataVersion: 2,
+      metadataRefreshedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.name || "Staff",
+      helperEmail: currentUser?.email || plan.helperEmail || "",
+    });
+    if (dogShowView === "planner") {
+      renderDogShow();
+      showToast("Show formats, closing dates, and superintendent details refreshed.");
+    }
+  } catch (error) {
+    console.warn("Could not refresh saved Show Planner metadata.", error);
+  }
 }
 
 async function saveDogShowPlanner(form) {
@@ -1927,6 +1992,8 @@ async function saveDogShowPlanner(form) {
     shows,
     sourceUrl: response?.sourceUrl || "https://caninechronicleshowcalendar.com/K9shows.php",
     fetchedAt: response?.fetchedAt || new Date().toISOString(),
+    metadataVersion: 2,
+    metadataRefreshedAt: new Date().toISOString(),
     localFixture,
     submittedAt: dogShowPlannerRecord().submittedAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -2004,6 +2071,8 @@ function openDogShowImportedEvent(show = {}, targets = []) {
     entryClosingDate: show.entryClosingDate || "",
     superintendent: show.superintendent || "",
     sourceUrl: show.sourceUrl || "",
+    premiumUrl: show.premiumUrl || "",
+    judgingProgramUrl: show.judgingProgramUrl || "",
     notes: `Imported from the Canine Chronicle Show Calendar.${breeds.length ? `\nBreeds researched: ${breeds.join(", ")}` : ""}${dogs.length ? `\nDogs considered: ${dogs.join(", ")}` : ""}${panelNotes.length ? `\n${panelNotes.join("\n")}` : show.breedJudge ? `\n${selectedBreed} judge: ${show.breedJudge}` : ""}${show.groupJudge && !panelNotes.length ? `\n${show.groupName || "Group"} judge: ${show.groupJudge}` : ""}${show.bisJudge ? `\nBIS judge: ${show.bisJudge}` : ""}`,
     status: "Active",
   });
@@ -2052,6 +2121,7 @@ function renderDogShow() {
     expenses: dogShowExpensesHtml,
   };
   content.innerHTML = renderers[dogShowView](event);
+  if (dogShowView === "planner") void refreshDogShowPlannerMetadata();
   if (typeof scheduleProfilePhotoHydrationSweep === "function") scheduleProfilePhotoHydrationSweep(40);
 }
 

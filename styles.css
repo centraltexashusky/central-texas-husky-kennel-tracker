@@ -15339,11 +15339,22 @@ details.dog-show-ring-schedules[hidden] {
   margin: 0;
 }
 
-.dog-show-expense-split form small {
-  color: var(--muted);
-  display: block;
-  line-height: 1.35;
-  margin-top: 5px;
+.dog-show-expense-split-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.dog-show-expense-split-info {
+  height: 24px;
+  min-height: 24px;
+  min-width: 24px;
+  width: 24px;
+}
+
+.dog-show-expense-split-info img {
+  height: 24px;
+  width: 24px;
 }
 
 .dog-show-expense-ledgers {
@@ -15955,17 +15966,6 @@ details.dog-show-ring-schedules[hidden] {
   margin: 4px 0 0;
 }
 
-.dog-show-source-badge {
-  background: rgba(49, 95, 133, 0.12);
-  border: 1px solid #4D88B2;
-  border-radius: 999px;
-  color: #315F85;
-  flex: 0 0 auto;
-  font-size: 0.7rem;
-  font-weight: 800;
-  padding: 6px 9px;
-}
-
 .dog-show-planner-card {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -16500,7 +16500,6 @@ details.dog-show-ring-schedules[hidden] {
   color: #AFC3D2;
 }
 
-:root[data-theme="dark"] .dog-show-source-badge,
 :root[data-theme="dark"] .dog-show-planner-score span,
 :root[data-theme="dark"] .dog-show-planner-judge-score em,
 :root[data-theme="dark"] .dog-show-decision-summary > div:first-child > span,

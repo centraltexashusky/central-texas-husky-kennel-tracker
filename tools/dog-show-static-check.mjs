@@ -122,7 +122,18 @@ const required = [
   ["js/dog-show.js", "DOG_SHOW_AKC_JUDGE_SEARCH_URL", "Judge history is missing the official AKC Judges Directory link."],
   ["js/dog-show.js", "function dogShowPlannerEventFlagLabels", "Show Planner cards do not translate event-format codes into readable flags."],
   ["js/dog-show.js", '"Owner-Handled"', "Show Planner cards do not identify National Owner-Handled Series events."],
+  ["js/dog-show.js", "function dogShowPlannerNeedsMetadataRefresh", "Saved Show Planner searches are not checked for missing imported metadata."],
+  ["js/dog-show.js", "function refreshDogShowPlannerMetadata", "Saved Show Planner searches cannot backfill show formats and event details."],
+  ["js/dog-show.js", "metadataVersion: 2", "Fresh Show Planner searches are not marked with the current metadata version."],
+  ["js/dog-show.js", "entryClosingDate: show.entryClosingDate ||", "Imported shows do not prefill the entry closing date."],
+  ["js/dog-show.js", "superintendent: show.superintendent ||", "Imported shows do not prefill the superintendent."],
+  ["js/dog-show.js", "dog-show-expense-split-info", "Expense split guidance is not attached to an info icon."],
+  ["js/dog-show.js", 'data-tooltip="Lower this count to exclude your own dog', "Expense split guidance is missing from the info icon tooltip."],
   ["supabase/functions/show-calendar-scrape/index.ts", "typeAnchor?.parentElement?.textContent", "The calendar scraper does not capture compound show formats such as AB/JS/BgP."],
+  ["supabase/functions/show-calendar-scrape/index.ts", 'showTitle.match(/\\bSuper:', "The calendar scraper does not capture the full superintendent name."],
+  ["supabase/functions/show-calendar-scrape/index.ts", 'showTitle.match(/\\bCloses:', "The calendar scraper does not capture the published entry closing date."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "premiumUrl", "The calendar scraper does not capture the premium list link."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "judgingProgramUrl", "The calendar scraper does not capture the judging program link."],
   ["index.html", "<h2>Dog Show Dashboard</h2>", "The Dog Show workspace heading is missing."],
   ["styles.css", ".dog-show-planner-decision", "Show Planner decision details are not styled."],
   ["styles.css", ".dog-show-planner-flags", "Show Planner event-format flags are not styled."],
@@ -339,6 +350,8 @@ const forbidden = [
 const failures = [];
 if (!fs.existsSync("assets/icons/bis-rosette.png")) failures.push("The Dog Show Home rosette asset is missing.");
 if (read("index.html").includes("Run show weekends, dog care, prep timing, helper assignments, and results.")) failures.push("The removed Dog Show workspace description is still rendered.");
+if (read("js/dog-show.js").includes("Format pending")) failures.push("Planner cards still expose the unclear Format pending placeholder.");
+if (read("js/dog-show.js").includes("Canine Chronicle calendar</span>")) failures.push("The removed Canine Chronicle calendar badge is still rendered.");
 for (const [path, needle, message] of required) {
   if (!read(path).includes(needle)) failures.push(message);
 }
