@@ -9,6 +9,8 @@ const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
 const DOG_SHOW_EVENT_KEY = "cth-dog-show-active-event";
 const DOG_SHOW_CALENDAR_VIEW_KEY = "cth-dog-show-calendar-view";
 const DOG_SHOW_CALENDAR_DATE_KEY = "cth-dog-show-calendar-date";
+const DOG_SHOW_MASTER_CALENDAR_VIEW_KEY = "cth-dog-show-master-calendar-view";
+const DOG_SHOW_MASTER_CALENDAR_DATE_KEY = "cth-dog-show-master-calendar-date";
 const DOG_SHOW_TASK_DAY_KEY = "cth-dog-show-task-expanded-day";
 const DOG_SHOW_RING_ROW_STATE_KEY = "cth-dog-show-ring-row-state";
 const DOG_SHOW_PROGRESS_TAB_KEY = "cth-dog-show-progress-tab";
@@ -165,7 +167,7 @@ function dogShowFinanceCategoryOptions(entryType = "expense", selectedCategory =
     .join("");
 }
 
-let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calculator", "expenses"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
+let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
   ? localStorage.getItem(DOG_SHOW_VIEW_KEY)
   : "home";
 let dogShowDogFilter = "all";
@@ -174,6 +176,8 @@ let dogShowTaskFilter = "open";
 let dogShowSelectedTaskIds = new Set();
 let dogShowCalendarView = ["weekend", "day"].includes(localStorage.getItem(DOG_SHOW_CALENDAR_VIEW_KEY)) ? localStorage.getItem(DOG_SHOW_CALENDAR_VIEW_KEY) : "weekend";
 let dogShowCalendarDate = localStorage.getItem(DOG_SHOW_CALENDAR_DATE_KEY) || "";
+let dogShowMasterCalendarView = ["year", "month", "week", "day"].includes(localStorage.getItem(DOG_SHOW_MASTER_CALENDAR_VIEW_KEY)) ? localStorage.getItem(DOG_SHOW_MASTER_CALENDAR_VIEW_KEY) : "month";
+let dogShowMasterCalendarDate = localStorage.getItem(DOG_SHOW_MASTER_CALENDAR_DATE_KEY) || todayDate();
 let dogShowCalendarDragTaskId = "";
 let dogShowBulkCarePending = false;
 let dogShowProgressTab = ["overview", "dogs", "judges"].includes(localStorage.getItem(DOG_SHOW_PROGRESS_TAB_KEY)) ? localStorage.getItem(DOG_SHOW_PROGRESS_TAB_KEY) : "overview";
@@ -1393,6 +1397,7 @@ function dogShowMoreHtml(event) {
       <button type="button" data-action="show-helper-summary"><span>H</span><strong>Helpers</strong><small>${helperEmails.length} assigned to this weekend</small></button>
       <button type="button" data-action="show-result-summary"><span>R</span><strong>Results</strong><small>${resultProgress.logged} of ${resultProgress.total} ring appearances logged</small></button>
       <button type="button" data-action="open-show-planner"><span>F</span><strong>Find Shows</strong><small>Compare future panels against your dogs' history</small></button>
+      <button type="button" data-action="open-show-calendar"><span>Y</span><strong>Show Calendar</strong><small>Year, month, week, and day planning</small></button>
       <button type="button" data-action="open-show-calculator"><span>C</span><strong>Calculator</strong><small>Estimate AKC breed points from the official schedule</small></button>
       <button type="button" data-action="open-show-expenses"><span>$</span><strong>Finances</strong><small>Track show costs, income, and rewards</small></button>
       <button type="button" data-action="open-show-progress"><span>P</span><strong>Show Progress</strong><small>Career points, show history, and judge notes</small></button>
@@ -1788,7 +1793,7 @@ function dogShowPlannerCandidateHtml(candidate = {}) {
   const targets = Array.isArray(candidate.targets) ? candidate.targets : [];
   const breeds = [...new Set(targets.map((target) => dogShowPlannerCalendarBreedName(target.breed)).filter(Boolean))];
   const dogs = [...new Set(targets.filter((target) => target.targetType === "dog").map((target) => target.dogName).filter(Boolean))];
-  return `<article class="dog-show-potential-card">
+  return `<article class="dog-show-potential-card" data-candidate-id="${escapeHtml(candidate.id || "")}">
     <header><div><span>${escapeHtml(show.state || "Show")}</span><h4>${escapeHtml(show.club || show.name || "Dog Show")}</h4><p>${escapeHtml(show.cityState || "Location pending")}</p></div><strong>${escapeHtml(dogShowPlannerDateRange(show))}</strong></header>
     ${dogShowPlannerEventFlagsHtml(show)}
     <dl>
@@ -1817,25 +1822,28 @@ function dogShowPlannerEventPlanHtml(event = {}, lifecycleStatus = "Going") {
   </article>`;
 }
 
-function dogShowPlannerLifecycleHtml(potentialShows = []) {
-  const activeEventId = dogShowActiveEvent()?.id || "";
-  const events = dogShowEvents();
+function dogShowPlannerVisibleCandidates(potentialShows = dogShowPlannerCandidates(), events = dogShowEvents()) {
   const promotedExternalIds = new Set(events.map((event) => event.plannerExternalId).filter(Boolean));
   const promotedSourceUrls = new Set(events.map((event) => event.sourceUrl).filter(Boolean));
   const promotedShowDates = new Set(events.map((event) => `${String(event.startDate || "")}|${String(event.club || event.name || "").trim().toLowerCase()}`));
+  return potentialShows.filter((candidate) => {
+    const show = candidate.show || {};
+    const showDateKey = `${String(show.startDate || "")}|${String(show.club || show.name || "").trim().toLowerCase()}`;
+    return (!show.externalId || !promotedExternalIds.has(show.externalId))
+      && (!show.sourceUrl || !promotedSourceUrls.has(show.sourceUrl))
+      && !promotedShowDates.has(showDateKey);
+  });
+}
+
+function dogShowPlannerLifecycleHtml(potentialShows = []) {
+  const activeEventId = dogShowActiveEvent()?.id || "";
+  const events = dogShowEvents();
   const groups = new Map(["In Process", "Active", "Going", "Potential Plan", "Completed"].map((status) => [status, []]));
   events.forEach((event) => {
     const status = dogShowPlannerLifecycleStatus(event, activeEventId);
     groups.get(status).push({ kind: "event", event });
   });
-  potentialShows
-    .filter((candidate) => {
-      const show = candidate.show || {};
-      const showDateKey = `${String(show.startDate || "")}|${String(show.club || show.name || "").trim().toLowerCase()}`;
-      return (!show.externalId || !promotedExternalIds.has(show.externalId))
-        && (!show.sourceUrl || !promotedSourceUrls.has(show.sourceUrl))
-        && !promotedShowDates.has(showDateKey);
-    })
+  dogShowPlannerVisibleCandidates(potentialShows, events)
     .forEach((candidate) => groups.get("Potential Plan").push({ kind: "potential", candidate }));
   const itemCount = [...groups.values()].reduce((sum, items) => sum + items.length, 0);
   if (!itemCount) return "";
@@ -1846,9 +1854,154 @@ function dogShowPlannerLifecycleHtml(potentialShows = []) {
       const rightDate = right.event?.startDate || right.candidate?.show?.startDate || "";
       return status === "Completed" ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate);
     });
-    return `<section class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"><header><h4>${escapeHtml(status)}</h4><span>${items.length}</span></header><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status) : dogShowPlannerCandidateHtml(item.candidate)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></section>`;
+    const expanded = status === "In Process" || status === "Active";
+    return `<details class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"${expanded ? " open" : ""}><summary><span><strong>${escapeHtml(status)}</strong><em>${items.length}</em></span><i aria-hidden="true"></i></summary><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status) : dogShowPlannerCandidateHtml(item.candidate)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></details>`;
   }).join("");
   return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3><p>View every show by stage—from early research through the active weekend and completed history. Research for another breed is appended to the same show.</p></div><strong>${itemCount} show${itemCount === 1 ? "" : "s"}</strong></header><div class="dog-show-plan-status-summary">${statusSummary}</div><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
+}
+
+function dogShowPlannerPotentialButtonHtml(show = {}, plan = dogShowPlannerRecord()) {
+  const candidate = dogShowPlannerCandidateForShow(show);
+  const inPotentialPlan = dogShowPlannerCandidateHasTargets(candidate || {}, plan);
+  return inPotentialPlan
+    ? `<button type="button" class="secondary-button" data-action="remove-potential-show" data-candidate-id="${escapeHtml(candidate?.id || "")}">Remove Potential</button>`
+    : `<button type="button" class="secondary-button" data-action="save-potential-show" data-show-id="${escapeHtml(show.externalId || "")}">Potential Show</button>`;
+}
+
+function dogShowMasterDate(value = dogShowMasterCalendarDate || todayDate()) {
+  const date = value instanceof Date ? new Date(value) : new Date(`${value || todayDate()}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? new Date(`${todayDate()}T12:00:00`) : date;
+}
+
+function dogShowMasterCalendarEventStatus(event = {}, activeEventId = "") {
+  const lifecycle = dogShowPlannerLifecycleStatus(event, activeEventId);
+  return lifecycle === "In Process" ? "Active" : lifecycle;
+}
+
+function dogShowMasterCalendarItems() {
+  const events = dogShowEvents();
+  const activeEventId = dogShowActiveEvent()?.id || "";
+  const eventItems = events.map((event) => ({
+    id: `event:${event.id}`,
+    kind: "event",
+    eventId: event.id,
+    title: event.name || event.club || "Dog Show",
+    location: event.venueAddress || event.cityState || event.venue || "Location pending",
+    startDate: event.startDate || todayDate(),
+    endDate: event.endDate || event.startDate || todayDate(),
+    status: dogShowMasterCalendarEventStatus(event, activeEventId),
+    flags: dogShowPlannerEventFlagLabels(event),
+  }));
+  const potentialItems = dogShowPlannerVisibleCandidates(dogShowPlannerCandidates(), events).map((candidate) => {
+    const show = candidate.show || {};
+    return {
+      id: `potential:${candidate.id}`,
+      kind: "potential",
+      candidateId: candidate.id,
+      title: show.club || show.name || "Dog Show",
+      location: show.cityState || "Location pending",
+      startDate: show.startDate || todayDate(),
+      endDate: show.endDate || show.startDate || todayDate(),
+      status: "Potential",
+      flags: dogShowPlannerEventFlagLabels(show),
+    };
+  });
+  return [...eventItems, ...potentialItems].sort((left, right) => String(left.startDate).localeCompare(String(right.startDate)) || String(left.title).localeCompare(String(right.title)));
+}
+
+function dogShowMasterCalendarItemsOnDate(items = [], dateKey = todayDate()) {
+  return items.filter((item) => item.startDate <= dateKey && item.endDate >= dateKey);
+}
+
+function dogShowMasterCalendarItemHtml(item = {}, compact = false) {
+  const statusClass = String(item.status || "Going").toLowerCase().replace(/\s+/g, "-");
+  const actionData = item.kind === "potential"
+    ? `data-candidate-id="${escapeHtml(item.candidateId || "")}"`
+    : `data-event-id="${escapeHtml(item.eventId || "")}"`;
+  return `<button type="button" class="dog-show-master-calendar-item is-${statusClass}${compact ? " is-compact" : ""}" data-action="open-show-calendar-item" data-kind="${escapeHtml(item.kind || "event")}" ${actionData} aria-label="${escapeHtml(`${item.title}, ${item.status}, ${dogShowPlannerDateRange(item)}`)}"><strong>${escapeHtml(item.title || "Dog Show")}</strong>${compact ? "" : `<span>${escapeHtml(item.location || "Location pending")}</span><small>${escapeHtml(dogShowPlannerDateRange(item))} · ${escapeHtml(item.status || "Going")}</small>`}</button>`;
+}
+
+function dogShowMasterCalendarRangeLabel() {
+  const anchor = dogShowMasterDate();
+  if (dogShowMasterCalendarView === "year") return String(anchor.getFullYear());
+  if (dogShowMasterCalendarView === "month") return anchor.toLocaleDateString([], { month: "long", year: "numeric" });
+  if (dogShowMasterCalendarView === "day") return anchor.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const start = new Date(anchor);
+  start.setDate(start.getDate() - start.getDay());
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return `${start.toLocaleDateString([], { month: "short", day: "numeric" })} – ${end.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+function dogShowMasterCalendarYearHtml(items = []) {
+  const year = dogShowMasterDate().getFullYear();
+  const months = Array.from({ length: 12 }, (_, monthIndex) => {
+    const first = new Date(year, monthIndex, 1, 12);
+    const last = new Date(year, monthIndex + 1, 0, 12);
+    const monthStart = dogShowDateKey(first);
+    const monthEnd = dogShowDateKey(last);
+    const monthItems = items.filter((item) => item.startDate <= monthEnd && item.endDate >= monthStart);
+    const blankDays = Array.from({ length: first.getDay() }, () => `<span class="dog-show-master-year-blank"></span>`).join("");
+    const dayButtons = Array.from({ length: last.getDate() }, (_, index) => {
+      const date = new Date(year, monthIndex, index + 1, 12);
+      const dateKey = dogShowDateKey(date);
+      const dayItems = dogShowMasterCalendarItemsOnDate(items, dateKey);
+      const dots = dayItems.slice(0, 3).map((item) => `<i class="is-${String(item.status).toLowerCase()}"></i>`).join("");
+      return `<button type="button" class="${dateKey === todayDate() ? "is-today" : ""}${dayItems.length ? " has-shows" : ""}" data-show-calendar-jump-date="${dateKey}" data-show-calendar-jump-view="day" aria-label="${escapeHtml(`${date.toLocaleDateString([], { month: "long", day: "numeric" })}, ${dayItems.length} show${dayItems.length === 1 ? "" : "s"}`)}"><span>${index + 1}</span><em>${dots}</em></button>`;
+    }).join("");
+    return `<section class="dog-show-master-year-month"><header><button type="button" data-show-calendar-jump-date="${monthStart}" data-show-calendar-jump-view="month">${escapeHtml(first.toLocaleDateString([], { month: "long" }))}</button><span>${monthItems.length}</span></header><div class="dog-show-master-year-weekdays"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div><div class="dog-show-master-year-days">${blankDays}${dayButtons}</div>${monthItems.length ? `<div class="dog-show-master-year-agenda">${monthItems.map((item) => dogShowMasterCalendarItemHtml(item, true)).join("")}</div>` : ""}</section>`;
+  }).join("");
+  return `<div class="dog-show-master-year-grid">${months}</div>`;
+}
+
+function dogShowMasterCalendarMonthHtml(items = []) {
+  const anchor = dogShowMasterDate();
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12);
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate() - first.getDay());
+  const dates = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
+  const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => `<div><span class="weekday-full">${day}</span><span class="weekday-short">${day.slice(0, 3)}</span></div>`).join("");
+  const days = dates.map((date) => {
+    const dateKey = dogShowDateKey(date);
+    const dayItems = dogShowMasterCalendarItemsOnDate(items, dateKey);
+    return `<section class="dog-show-master-month-day${date.getMonth() !== anchor.getMonth() ? " is-outside" : ""}${dateKey === todayDate() ? " is-today" : ""}"><header><button type="button" data-show-calendar-jump-date="${dateKey}" data-show-calendar-jump-view="day">${date.getDate()}</button></header><div>${dayItems.slice(0, 3).map((item) => dogShowMasterCalendarItemHtml(item, true)).join("")}${dayItems.length > 3 ? `<button type="button" class="dog-show-master-calendar-more" data-show-calendar-jump-date="${dateKey}" data-show-calendar-jump-view="day">+${dayItems.length - 3} more</button>` : ""}</div></section>`;
+  }).join("");
+  return `<div class="dog-show-master-month-grid">${weekdays}${days}</div>`;
+}
+
+function dogShowMasterCalendarWeekHtml(items = []) {
+  const start = dogShowMasterDate();
+  start.setDate(start.getDate() - start.getDay());
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const dateKey = dogShowDateKey(date);
+    const dayItems = dogShowMasterCalendarItemsOnDate(items, dateKey);
+    return `<section class="dog-show-master-week-day${dateKey === todayDate() ? " is-today" : ""}"><header><button type="button" data-show-calendar-jump-date="${dateKey}" data-show-calendar-jump-view="day"><span>${escapeHtml(date.toLocaleDateString([], { weekday: "short" }))}</span><strong>${date.getDate()}</strong></button></header><div>${dayItems.length ? dayItems.map((item) => dogShowMasterCalendarItemHtml(item)).join("") : `<p>No shows</p>`}</div></section>`;
+  }).join("");
+  return `<div class="dog-show-master-week-grid">${days}</div>`;
+}
+
+function dogShowMasterCalendarDayHtml(items = []) {
+  const dateKey = dogShowDateKey(dogShowMasterDate());
+  const dayItems = dogShowMasterCalendarItemsOnDate(items, dateKey);
+  return `<section class="dog-show-master-day-list"><header><span>${escapeHtml(dogShowMasterDate().toLocaleDateString([], { weekday: "long" }))}</span><strong>${escapeHtml(dogShowMasterDate().toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }))}</strong></header><div>${dayItems.length ? dayItems.map((item) => dogShowMasterCalendarItemHtml(item)).join("") : dogShowRenderEmpty("No shows on this date", "Use the arrows or calendar views to find another show date.")}</div></section>`;
+}
+
+function dogShowMasterCalendarHtml() {
+  const items = dogShowMasterCalendarItems();
+  const viewHtml = dogShowMasterCalendarView === "year"
+    ? dogShowMasterCalendarYearHtml(items)
+    : dogShowMasterCalendarView === "month"
+      ? dogShowMasterCalendarMonthHtml(items)
+      : dogShowMasterCalendarView === "week"
+        ? dogShowMasterCalendarWeekHtml(items)
+        : dogShowMasterCalendarDayHtml(items);
+  return `<div class="dog-show-view dog-show-master-calendar-view"><section class="dog-show-planner-heading"><div><span>SHOW PLANNING</span><h3>Show Calendar</h3><p>See potential, going, active, and completed shows in one calendar.</p></div><button type="button" data-action="open-show-planner">Find Shows</button></section><section class="dog-show-master-calendar"><header><div class="dog-show-master-calendar-view-toggle" role="group" aria-label="Show Calendar view">${["year", "month", "week", "day"].map((view) => `<button type="button" data-show-master-calendar-view="${view}" class="${dogShowMasterCalendarView === view ? "is-active" : ""}">${view[0].toUpperCase()}${view.slice(1)}</button>`).join("")}</div><div class="dog-show-master-calendar-navigation"><button type="button" class="secondary-button" data-show-calendar-offset="-1" aria-label="Previous ${escapeHtml(dogShowMasterCalendarView)}">‹</button><button type="button" class="secondary-button" data-show-calendar-today>Today</button><strong>${escapeHtml(dogShowMasterCalendarRangeLabel())}</strong><button type="button" class="secondary-button" data-show-calendar-offset="1" aria-label="Next ${escapeHtml(dogShowMasterCalendarView)}">›</button></div></header><div class="dog-show-master-calendar-legend" aria-label="Show statuses"><span class="is-potential">Potential</span><span class="is-going">Going</span><span class="is-active">Active</span><span class="is-completed">Completed</span></div><div class="dog-show-master-calendar-body">${viewHtml}</div></section></div>`;
 }
 
 function dogShowPlannerHtml() {
@@ -1867,7 +2020,7 @@ function dogShowPlannerHtml() {
       <header><div>${dogShowPlannerEventFlagsHtml(show)}<h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
       <div class="dog-show-planner-panel">${dogShowPlannerJudgeHtml("Breed", show.breedJudge || "", plan)}${dogShowPlannerJudgeHtml("Group", show.groupJudge || "", plan)}${dogShowPlannerJudgeHtml("BIS", show.bisJudge || "", plan)}</div>
       <ul>${assessment.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-      <footer><div class="dog-show-planner-meta">${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}</div><div class="button-row"><button type="button" class="secondary-button" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}">View Show Decision</button>${show.sourceUrl && !plan.localFixture ? `<a class="secondary-button dog-show-source-link" href="${escapeHtml(show.sourceUrl)}" target="_blank" rel="noopener noreferrer">View Source</a>` : ""}<button type="button" class="secondary-button" data-action="save-potential-show" data-show-id="${escapeHtml(show.externalId || "")}"${dogShowPlannerCandidateHasTargets(dogShowPlannerCandidateForShow(show) || {}, plan) ? " disabled" : ""}>${dogShowPlannerCandidateHasTargets(dogShowPlannerCandidateForShow(show) || {}, plan) ? "In Potential Plan" : "Potential Show"}</button><button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add Show</button></div></footer>
+      <footer><div class="dog-show-planner-meta">${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}</div><div class="button-row"><button type="button" class="secondary-button" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}">View Show Decision</button>${show.sourceUrl && !plan.localFixture ? `<a class="secondary-button dog-show-source-link" href="${escapeHtml(show.sourceUrl)}" target="_blank" rel="noopener noreferrer">View Source</a>` : ""}${dogShowPlannerPotentialButtonHtml(show, plan)}<button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add Show</button></div></footer>
     </article>`).join("")}</div></section>` : dogShowRenderEmpty("Find the right show for your dogs", "Choose the dogs, dates, and states. The planner will import future shows and rank their published judge panels against your history.", "edit-show-plan", "Find Shows")}
     <section class="dog-show-planner-source-note"><strong>Source and limitations</strong><p>Show listings and panels are imported from the Canine Chronicle Show Calendar. Verify the official premium list before entering; panels, dates, and assignments can change.</p></section>
   </div>`;
@@ -2162,14 +2315,14 @@ function renderDogShow() {
   const select = document.getElementById("dogShowEventSelect");
   if (select) select.innerHTML = dogShowEventOptions(event);
   document.querySelectorAll("[data-dog-show-view]").forEach((button) => {
-    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calculator", "expenses"].includes(dogShowView);
-    const visibleView = ["progress", "calculator", "expenses"].includes(dogShowView) ? "more" : dogShowView;
+    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calendar", "calculator", "expenses"].includes(dogShowView);
+    const visibleView = ["progress", "calendar", "calculator", "expenses"].includes(dogShowView) ? "more" : dogShowView;
     const active = mobileMoreActive || button.dataset.dogShowView === visibleView;
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  if (!event && !["progress", "planner", "calculator"].includes(dogShowView)) {
+  if (!event && !["progress", "planner", "calendar", "calculator"].includes(dogShowView)) {
     content.innerHTML = dogShowRenderEmpty("Create the first show weekend", "Add the event once, then build the roster, prep schedule, helper tasks, and results.");
     return;
   }
@@ -2181,6 +2334,7 @@ function renderDogShow() {
     more: dogShowMoreHtml,
     progress: dogShowProgressHtml,
     planner: dogShowPlannerHtml,
+    calendar: dogShowMasterCalendarHtml,
     calculator: dogShowCalculatorHtml,
     expenses: dogShowExpensesHtml,
   };
@@ -2190,7 +2344,7 @@ function renderDogShow() {
 }
 
 function setDogShowView(view = "home") {
-  if (!["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calculator", "expenses"].includes(view)) return;
+  if (!["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses"].includes(view)) return;
   dogShowView = view;
   localStorage.setItem(DOG_SHOW_VIEW_KEY, view);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -3496,6 +3650,41 @@ function setupDogShowEventListeners() {
       }
       return;
     }
+    const masterCalendarView = event.target.closest("[data-show-master-calendar-view]");
+    if (masterCalendarView) {
+      dogShowMasterCalendarView = masterCalendarView.dataset.showMasterCalendarView || "month";
+      localStorage.setItem(DOG_SHOW_MASTER_CALENDAR_VIEW_KEY, dogShowMasterCalendarView);
+      renderDogShow();
+      return;
+    }
+    const masterCalendarOffset = event.target.closest("[data-show-calendar-offset]");
+    if (masterCalendarOffset) {
+      const anchor = dogShowMasterDate();
+      const offset = Number(masterCalendarOffset.dataset.showCalendarOffset || 0);
+      if (dogShowMasterCalendarView === "year") anchor.setFullYear(anchor.getFullYear() + offset);
+      else if (dogShowMasterCalendarView === "month") anchor.setMonth(anchor.getMonth() + offset);
+      else anchor.setDate(anchor.getDate() + (dogShowMasterCalendarView === "week" ? 7 : 1) * offset);
+      dogShowMasterCalendarDate = dogShowDateKey(anchor);
+      localStorage.setItem(DOG_SHOW_MASTER_CALENDAR_DATE_KEY, dogShowMasterCalendarDate);
+      renderDogShow();
+      return;
+    }
+    const masterCalendarToday = event.target.closest("[data-show-calendar-today]");
+    if (masterCalendarToday) {
+      dogShowMasterCalendarDate = todayDate();
+      localStorage.setItem(DOG_SHOW_MASTER_CALENDAR_DATE_KEY, dogShowMasterCalendarDate);
+      renderDogShow();
+      return;
+    }
+    const masterCalendarJump = event.target.closest("[data-show-calendar-jump-date]");
+    if (masterCalendarJump) {
+      dogShowMasterCalendarDate = masterCalendarJump.dataset.showCalendarJumpDate || todayDate();
+      dogShowMasterCalendarView = masterCalendarJump.dataset.showCalendarJumpView || dogShowMasterCalendarView;
+      localStorage.setItem(DOG_SHOW_MASTER_CALENDAR_DATE_KEY, dogShowMasterCalendarDate);
+      localStorage.setItem(DOG_SHOW_MASTER_CALENDAR_VIEW_KEY, dogShowMasterCalendarView);
+      renderDogShow();
+      return;
+    }
     const action = event.target.closest("[data-action]");
     if (!action) return;
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
@@ -3503,6 +3692,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "open-show-progress") setDogShowView("progress");
     if (action.dataset.action === "open-show-planner") setDogShowView("planner");
+    if (action.dataset.action === "open-show-calendar") setDogShowView("calendar");
     if (action.dataset.action === "open-show-calculator") setDogShowView("calculator");
     if (action.dataset.action === "open-show-expenses") setDogShowView("expenses");
     if (action.dataset.action === "new-show-expense") openDogShowExpenseForm();
@@ -3519,6 +3709,20 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "remove-potential-show") await removeDogShowPotentialShow(action.dataset.candidateId || "");
     if (action.dataset.action === "add-planned-show") openDogShowPlannedEvent(action.dataset.showId || "");
     if (action.dataset.action === "open-planner-show-event") openDogShowPlannerEvent(action.dataset.eventId || "");
+    if (action.dataset.action === "open-show-calendar-item") {
+      if (action.dataset.kind === "potential") {
+        const candidateId = action.dataset.candidateId || "";
+        setDogShowView("planner");
+        requestAnimationFrame(() => {
+          const card = [...document.querySelectorAll("[data-candidate-id]")].find((item) => item.dataset.candidateId === candidateId);
+          const stage = card?.closest("details");
+          if (stage) stage.open = true;
+          card?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      } else {
+        openDogShowPlannerEvent(action.dataset.eventId || "");
+      }
+    }
     if (action.dataset.action === "open-judge-evidence") openDogShowJudgeEvidence(dogShowProgressJudge, action.dataset.evidenceKind || "entries");
     if (action.dataset.action === "select-progress-dog") {
       dogShowProgressDogKey = action.dataset.dogKey || "";
@@ -3609,6 +3813,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.dogShowMoreAction === "operations") setDogShowView("more");
     if (action.dataset.dogShowMoreAction === "progress") setDogShowView("progress");
     if (action.dataset.dogShowMoreAction === "planner") setDogShowView("planner");
+    if (action.dataset.dogShowMoreAction === "calendar") setDogShowView("calendar");
     if (action.dataset.dogShowMoreAction === "calculator") setDogShowView("calculator");
     if (action.dataset.dogShowMoreAction === "expenses") setDogShowView("expenses");
     if (action.dataset.dogShowMoreAction === "boarding") switchPage("dashboardPage", { history: "push" });
