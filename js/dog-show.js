@@ -2,7 +2,7 @@ import {
   akcPointCalculatorBreeds2026,
   akcPointCalculatorStates2026,
   calculateAkcBreedPointScenarios2026,
-} from "./dog-show-point-calculator.js?v=20260727-akc-all-breed-calculator-combined-awards";
+} from "./dog-show-point-calculator.js?v=20260727-akc-all-breed-calculator-special-outcomes-v2";
 
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
@@ -1316,25 +1316,55 @@ function dogShowCalculatorOptions(values = [], selected = "", labels = {}) {
   return values.map((value) => `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(labels[value] ? `${labels[value]} (${value})` : value)}</option>`).join("");
 }
 
-function dogShowCalculatorPointCell(points = 0) {
-  return `<strong class="${points >= 3 ? "is-major" : ""}">${points}<span> point${points === 1 ? "" : "s"}</span></strong>`;
+function dogShowCalculatorPointBadge(points) {
+  if (!Number.isFinite(points)) return `<span class="dog-show-calculator-not-entered">Not entered</span>`;
+  return `<strong class="dog-show-calculator-point-badge${points >= 3 ? " is-major" : ""}">${points} point${points === 1 ? "" : "s"}${points >= 3 ? "<em>Major</em>" : ""}</strong>`;
+}
+
+function dogShowCalculatorOutcomeLine(label, points) {
+  return `<li><span>${label}</span>${dogShowCalculatorPointBadge(points)}</li>`;
+}
+
+function dogShowCalculatorOutcomeCard(title, subtitle, eligible, lines = [], tone = "") {
+  return `<article class="dog-show-calculator-outcome-card ${tone}${eligible ? "" : " is-ineligible"}">
+    <header><div><h4>${escapeHtml(title)}</h4><p>${escapeHtml(subtitle)}</p></div></header>
+    ${eligible ? `<ul>${lines.join("")}</ul>` : `<p class="dog-show-calculator-empty-outcome">No ${escapeHtml(title.toLowerCase())} entered.</p>`}
+  </article>`;
 }
 
 function dogShowCalculatorHtml() {
   const state = dogShowCalculatorState;
   const result = calculateAkcBreedPointScenarios2026(state);
-  const rows = result ? [
-    ["Winners", "WD / WB from regular class entries", result.scenarios.winners],
-    ["Best of Winners", "Uses the higher WD or WB value", result.scenarios.bestOfWinners],
-    ["Best of Opposite Sex", "Adds same-sex champions defeated", result.scenarios.bestOfOppositeSex],
-    ["BOW + Best of Opposite Sex", "Uses the higher BOW or BOS value", result.scenarios.bestOfWinnersAndOppositeSex],
-    ["Best of Breed / Variety", "Adds champions of both sexes defeated", result.scenarios.bestOfBreed],
-    ["BOW + Best of Breed / Variety", "Uses the higher BOW or BOB/BOV value", result.scenarios.bestOfWinnersAndBreed],
+  const outcomeCards = result ? [
+    dogShowCalculatorOutcomeCard("Class Dog", "Championship points", result.outcomes.classDogs.eligible, [
+      dogShowCalculatorOutcomeLine("If the class dog wins <strong>WD</strong>", result.outcomes.classDogs.winners),
+      dogShowCalculatorOutcomeLine("If WD wins <strong>BOW</strong>", result.outcomes.classDogs.bestOfWinners),
+      dogShowCalculatorOutcomeLine("If WD wins <strong>BOW</strong> and WB goes <strong>BOS</strong>", result.outcomes.classDogs.bestOfWinnersWhenOppositeWinnerIsBos),
+      dogShowCalculatorOutcomeLine("If WD goes <strong>BOS</strong>", result.outcomes.classDogs.bestOfOppositeSex),
+      dogShowCalculatorOutcomeLine("If WD goes <strong>BOB/BOV</strong>", result.outcomes.classDogs.bestOfBreed),
+    ], "is-class-dog"),
+    dogShowCalculatorOutcomeCard("Special Dog", "Grand Championship points", result.outcomes.specialDogs.eligible, [
+      dogShowCalculatorOutcomeLine("If the special dog receives <strong>SD</strong>", result.outcomes.specialDogs.select),
+      dogShowCalculatorOutcomeLine("If the special dog goes <strong>BOS</strong>", result.outcomes.specialDogs.bestOfOppositeSex),
+      dogShowCalculatorOutcomeLine("If the special dog goes <strong>BOB/BOV</strong>", result.outcomes.specialDogs.bestOfBreed),
+    ], "is-special-dog"),
+    dogShowCalculatorOutcomeCard("Class Bitch", "Championship points", result.outcomes.classBitches.eligible, [
+      dogShowCalculatorOutcomeLine("If the class bitch wins <strong>WB</strong>", result.outcomes.classBitches.winners),
+      dogShowCalculatorOutcomeLine("If WB wins <strong>BOW</strong>", result.outcomes.classBitches.bestOfWinners),
+      dogShowCalculatorOutcomeLine("If WB wins <strong>BOW</strong> and WD goes <strong>BOS</strong>", result.outcomes.classBitches.bestOfWinnersWhenOppositeWinnerIsBos),
+      dogShowCalculatorOutcomeLine("If WB goes <strong>BOS</strong>", result.outcomes.classBitches.bestOfOppositeSex),
+      dogShowCalculatorOutcomeLine("If WB goes <strong>BOB/BOV</strong>", result.outcomes.classBitches.bestOfBreed),
+    ], "is-class-bitch"),
+    dogShowCalculatorOutcomeCard("Special Bitch", "Grand Championship points", result.outcomes.specialBitches.eligible, [
+      dogShowCalculatorOutcomeLine("If the special bitch receives <strong>SB</strong>", result.outcomes.specialBitches.select),
+      dogShowCalculatorOutcomeLine("If the special bitch goes <strong>BOS</strong>", result.outcomes.specialBitches.bestOfOppositeSex),
+      dogShowCalculatorOutcomeLine("If the special bitch goes <strong>BOB/BOV</strong>", result.outcomes.specialBitches.bestOfBreed),
+    ], "is-special-bitch"),
   ] : [];
   const pointHeadings = [1, 2, 3, 4, 5];
   return `<div class="dog-show-view dog-show-calculator-view">
     <section class="dog-show-calculator-heading">
-      <div><span>AKC BREED POINTS</span><h3>Point Calculator</h3><p>Estimate championship points from the show location, breed or variety, and dogs actually judged.</p></div>
+      <div><span>AKC BREED POINTS</span><h3>Point Calculator</h3><p>Estimate Championship and Grand Championship breed points from the show location and dogs actually judged.</p></div>
       <a class="secondary-button" href="https://www.akc.org/sports/conformation/resources/counting-points/" target="_blank" rel="noopener noreferrer">How AKC counts points</a>
     </section>
     <form id="dogShowCalculatorForm" class="dog-show-calculator-form">
@@ -1344,22 +1374,19 @@ function dogShowCalculatorHtml() {
       </div>
       <fieldset class="dog-show-calculator-counts">
         <legend>Breed entries judged</legend>
-        <p>Enter the dogs present and judged. Do not include absentees, excused dogs, or a class dog moved up to Best of Breed.</p>
+        <p>Enter the dogs present and judged. “Special” means a Champion competing in Best of Breed/Variety. Do not include absentees or excused dogs.</p>
         <div>
           <label>Class Dogs<input type="number" name="classDogs" min="0" step="1" inputmode="numeric" value="${Number(state.classDogs) || 0}"/></label>
           <label>Class Bitches<input type="number" name="classBitches" min="0" step="1" inputmode="numeric" value="${Number(state.classBitches) || 0}"/></label>
-          <label>Champion Dogs<input type="number" name="championDogs" min="0" step="1" inputmode="numeric" value="${Number(state.championDogs) || 0}"/></label>
-          <label>Champion Bitches<input type="number" name="championBitches" min="0" step="1" inputmode="numeric" value="${Number(state.championBitches) || 0}"/></label>
+          <label>Special Dogs<input type="number" name="championDogs" min="0" step="1" inputmode="numeric" value="${Number(state.championDogs) || 0}"/></label>
+          <label>Special Bitches<input type="number" name="championBitches" min="0" step="1" inputmode="numeric" value="${Number(state.championBitches) || 0}"/></label>
         </div>
       </fieldset>
       <button type="submit">Calculate Points</button>
     </form>
     ${result ? `<section class="dog-show-calculator-results" aria-live="polite">
       <header><div><span>ESTIMATED OUTCOMES</span><h3>${escapeHtml(result.schedule.breed)}</h3><p>${escapeHtml(DOG_SHOW_AKC_STATE_NAMES[result.schedule.state] || result.schedule.state)} · AKC Division ${result.schedule.division} · 2026 schedule</p></div><strong>${result.counts.classDogs}-${result.counts.classBitches}-${result.counts.championDogs}-${result.counts.championBitches}</strong></header>
-      <div class="dog-show-calculator-result-table">
-        <div class="dog-show-calculator-result-head"><span>Possible award</span><strong>Dog</strong><strong>Bitch</strong></div>
-        ${rows.map(([label, note, values]) => `<article><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(note)}</small></div>${dogShowCalculatorPointCell(values.dogs)}${dogShowCalculatorPointCell(values.bitches)}</article>`).join("")}
-      </div>
+      <div class="dog-show-calculator-outcomes">${outcomeCards.join("")}</div>
       <div class="dog-show-calculator-schedule">
         <div><h3>Official point thresholds</h3><p>Number competing for each point value.</p></div>
         <div class="dog-show-calculator-thresholds">
@@ -1368,9 +1395,9 @@ function dogShowCalculatorHtml() {
           <div><span>Bitches</span>${result.schedule.bitches.map((count) => `<b>${count}</b>`).join("")}</div>
         </div>
       </div>
-      <p class="dog-show-calculator-note">Estimate only. Confirm the posted judge's book and the AKC schedule before recording points. Group-derived points are not included here.</p>
+      <p class="dog-show-calculator-note">Class outcomes estimate Championship points. Special outcomes estimate Grand Championship points for SD/SB, BOS, and BOB/BOV. Confirm the posted judge's book and AKC schedule before recording points. Group-derived points are not included here.</p>
     </section>` : ""}
-    <footer class="dog-show-calculator-source">Schedule effective May 12, 2026 · <a href="https://www.akc.org/sports/conformation/resources/points-schedule/" target="_blank" rel="noopener noreferrer">Official AKC Point Schedule</a></footer>
+    <footer class="dog-show-calculator-source">Schedule effective May 12, 2026 · <a href="https://www.akc.org/sports/conformation/resources/points-schedule/" target="_blank" rel="noopener noreferrer">Official AKC Point Schedule</a> · <a href="https://www.akc.org/sports/conformation/grand-championship/counting-grand-champion-points/" target="_blank" rel="noopener noreferrer">How AKC counts Grand Championship points</a></footer>
   </div>`;
 }
 

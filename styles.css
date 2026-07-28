@@ -15484,60 +15484,105 @@ details.dog-show-ring-schedules[hidden] {
   padding: 8px 14px;
 }
 
-.dog-show-calculator-result-table {
+.dog-show-calculator-outcomes {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dog-show-calculator-outcome-card {
   border: 1px solid var(--line);
+  border-left: 5px solid #3290D7;
   border-radius: 10px;
   overflow: hidden;
 }
 
-.dog-show-calculator-result-head,
-.dog-show-calculator-result-table article {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) 100px 100px;
+.dog-show-calculator-outcome-card.is-special-dog {
+  border-left-color: #29A7BC;
+}
+
+.dog-show-calculator-outcome-card.is-class-bitch {
+  border-left-color: #D46879;
+}
+
+.dog-show-calculator-outcome-card.is-special-bitch {
+  border-left-color: #D9A52F;
+}
+
+.dog-show-calculator-outcome-card > header {
+  background: var(--tint-blue);
   padding: 12px 14px;
 }
 
-.dog-show-calculator-result-head {
-  background: #10283F;
-  color: #FFFFFF;
+.dog-show-calculator-outcome-card h4,
+.dog-show-calculator-outcome-card p {
+  margin: 0;
+}
+
+.dog-show-calculator-outcome-card > header p {
+  color: var(--muted);
   font-size: 0.72rem;
-  text-transform: uppercase;
 }
 
-.dog-show-calculator-result-head strong {
-  text-align: center;
+.dog-show-calculator-outcome-card ul {
+  display: grid;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.dog-show-calculator-result-table article {
+.dog-show-calculator-outcome-card li {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 10px 14px;
+}
+
+.dog-show-calculator-outcome-card li + li {
   border-top: 1px solid var(--line);
 }
 
-.dog-show-calculator-result-table article > div {
-  display: grid;
-  gap: 2px;
+.dog-show-calculator-outcome-card li > span {
+  line-height: 1.35;
 }
 
-.dog-show-calculator-result-table article small {
-  color: var(--muted);
-}
-
-.dog-show-calculator-result-table article > strong {
-  align-items: baseline;
+.dog-show-calculator-point-badge {
+  align-items: center;
+  background: var(--tint-blue);
+  border: 1px solid var(--line);
+  border-radius: 999px;
   display: flex;
-  font-size: 1.35rem;
-  gap: 4px;
-  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  gap: 6px;
+  padding: 6px 9px;
+  white-space: nowrap;
 }
 
-.dog-show-calculator-result-table article > strong span {
-  color: var(--muted);
-  font-size: 0.68rem;
+.dog-show-calculator-point-badge em {
+  background: #168C57;
+  border-radius: 999px;
+  color: #FFFFFF;
+  font-size: 0.62rem;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  padding: 3px 6px;
+  text-transform: uppercase;
 }
 
-.dog-show-calculator-result-table article > strong.is-major {
+.dog-show-calculator-point-badge.is-major {
   color: #137A4A;
+}
+
+.dog-show-calculator-outcome-card.is-ineligible {
+  opacity: 0.72;
+}
+
+.dog-show-calculator-empty-outcome {
+  color: var(--muted);
+  padding: 16px 14px;
 }
 
 .dog-show-calculator-schedule {
@@ -15592,7 +15637,7 @@ details.dog-show-ring-schedules[hidden] {
   background: #071B2A;
 }
 
-:root[data-theme="dark"] .dog-show-calculator-result-table article > strong.is-major {
+:root[data-theme="dark"] .dog-show-calculator-point-badge.is-major {
   color: #78D5A7;
 }
 
@@ -15615,10 +15660,8 @@ details.dog-show-ring-schedules[hidden] {
     justify-self: stretch;
   }
 
-  .dog-show-calculator-result-head,
-  .dog-show-calculator-result-table article {
-    grid-template-columns: minmax(0, 1fr) 72px 72px;
-    padding: 11px 10px;
+  .dog-show-calculator-outcomes {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -15638,21 +15681,10 @@ details.dog-show-ring-schedules[hidden] {
     align-items: flex-start;
   }
 
-  .dog-show-calculator-result-head,
-  .dog-show-calculator-result-table article {
-    grid-template-columns: minmax(0, 1fr) 58px 58px;
-  }
-
-  .dog-show-calculator-result-table article small {
-    font-size: 0.68rem;
-  }
-
-  .dog-show-calculator-result-table article > strong {
-    font-size: 1.2rem;
-  }
-
-  .dog-show-calculator-result-table article > strong span {
-    display: none;
+  .dog-show-calculator-outcome-card li {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
   }
 }
 

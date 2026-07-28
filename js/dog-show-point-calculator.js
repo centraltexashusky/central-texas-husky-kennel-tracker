@@ -40,6 +40,15 @@ function bestOfWinnersPoints(dogPoints, bitchPoints, combinedClassCount, onePoin
   return combinedClassCount >= onePointThreshold ? 1 : 0;
 }
 
+function pointsWhenEligible(eligible, count, thresholds) {
+  return eligible ? pointsForCount(count, thresholds) : null;
+}
+
+function highestEligiblePoints(...values) {
+  const eligibleValues = values.filter((value) => Number.isFinite(value));
+  return eligibleValues.length ? Math.max(...eligibleValues) : null;
+}
+
 export function akcPointCalculatorBreeds2026() {
   return [...DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026.breeds];
 }
@@ -75,24 +84,78 @@ export function calculateAkcBreedPointScenarios2026(input = {}) {
     championDogs: normalizedCount(input.championDogs),
     championBitches: normalizedCount(input.championBitches),
   };
-  const winnersDog = pointsForCount(counts.classDogs, schedule.dogs);
-  const winnersBitch = pointsForCount(counts.classBitches, schedule.bitches);
+  const hasClassDog = counts.classDogs > 0;
+  const hasClassBitch = counts.classBitches > 0;
+  const hasBothWinners = hasClassDog && hasClassBitch;
+  const hasSpecialDog = counts.championDogs > 0;
+  const hasSpecialBitch = counts.championBitches > 0;
+  const winnersDog = pointsWhenEligible(hasClassDog, counts.classDogs, schedule.dogs);
+  const winnersBitch = pointsWhenEligible(hasClassBitch, counts.classBitches, schedule.bitches);
   const combinedClassCount = counts.classDogs + counts.classBitches;
+  const baseBestOfWinners = hasBothWinners
+    ? {
+        dogs: bestOfWinnersPoints(winnersDog, winnersBitch, combinedClassCount, schedule.dogs[0]),
+        bitches: bestOfWinnersPoints(winnersDog, winnersBitch, combinedClassCount, schedule.bitches[0]),
+      }
+    : { dogs: null, bitches: null };
   const bestOfWinners = {
-    dogs: bestOfWinnersPoints(winnersDog, winnersBitch, combinedClassCount, schedule.dogs[0]),
-    bitches: bestOfWinnersPoints(winnersDog, winnersBitch, combinedClassCount, schedule.bitches[0]),
+    dogs: baseBestOfWinners.dogs,
+    bitches: baseBestOfWinners.bitches,
   };
   const bestOfOppositeSex = {
-    dogs: pointsForCount(counts.classDogs + counts.championDogs, schedule.dogs),
-    bitches: pointsForCount(counts.classBitches + counts.championBitches, schedule.bitches),
+    dogs: pointsWhenEligible(hasClassDog, counts.classDogs + counts.championDogs, schedule.dogs),
+    bitches: pointsWhenEligible(hasClassBitch, counts.classBitches + counts.championBitches, schedule.bitches),
   };
   const bestOfBreed = {
-    dogs: pointsForCount(counts.classDogs + counts.championDogs + counts.championBitches, schedule.dogs),
-    bitches: pointsForCount(counts.classBitches + counts.championDogs + counts.championBitches, schedule.bitches),
+    dogs: pointsWhenEligible(hasClassDog, counts.classDogs + counts.championDogs + counts.championBitches, schedule.dogs),
+    bitches: pointsWhenEligible(hasClassBitch, counts.classBitches + counts.championDogs + counts.championBitches, schedule.bitches),
+  };
+  const bestOfWinnersWhenOppositeWinnerIsBos = {
+    dogs: hasBothWinners ? highestEligiblePoints(bestOfWinners.dogs, bestOfOppositeSex.bitches) : null,
+    bitches: hasBothWinners ? highestEligiblePoints(bestOfWinners.bitches, bestOfOppositeSex.dogs) : null,
+  };
+  const totalBreedEntry = counts.classDogs + counts.classBitches + counts.championDogs + counts.championBitches;
+  const special = {
+    dogs: {
+      select: pointsWhenEligible(hasSpecialDog, Math.max(0, counts.classDogs + counts.championDogs - 1), schedule.dogs),
+      bestOfOppositeSex: pointsWhenEligible(hasSpecialDog, counts.classDogs + counts.championDogs, schedule.dogs),
+      bestOfBreed: pointsWhenEligible(hasSpecialDog, totalBreedEntry, schedule.dogs),
+    },
+    bitches: {
+      select: pointsWhenEligible(hasSpecialBitch, Math.max(0, counts.classBitches + counts.championBitches - 1), schedule.bitches),
+      bestOfOppositeSex: pointsWhenEligible(hasSpecialBitch, counts.classBitches + counts.championBitches, schedule.bitches),
+      bestOfBreed: pointsWhenEligible(hasSpecialBitch, totalBreedEntry, schedule.bitches),
+    },
   };
   return {
     schedule,
     counts,
+    outcomes: {
+      classDogs: {
+        eligible: hasClassDog,
+        winners: winnersDog,
+        bestOfWinners: bestOfWinners.dogs,
+        bestOfWinnersWhenOppositeWinnerIsBos: bestOfWinnersWhenOppositeWinnerIsBos.dogs,
+        bestOfOppositeSex: bestOfOppositeSex.dogs,
+        bestOfBreed: bestOfBreed.dogs,
+      },
+      classBitches: {
+        eligible: hasClassBitch,
+        winners: winnersBitch,
+        bestOfWinners: bestOfWinners.bitches,
+        bestOfWinnersWhenOppositeWinnerIsBos: bestOfWinnersWhenOppositeWinnerIsBos.bitches,
+        bestOfOppositeSex: bestOfOppositeSex.bitches,
+        bestOfBreed: bestOfBreed.bitches,
+      },
+      specialDogs: {
+        eligible: hasSpecialDog,
+        ...special.dogs,
+      },
+      specialBitches: {
+        eligible: hasSpecialBitch,
+        ...special.bitches,
+      },
+    },
     scenarios: {
       winners: {
         dogs: winnersDog,
@@ -100,15 +163,13 @@ export function calculateAkcBreedPointScenarios2026(input = {}) {
       },
       bestOfWinners,
       bestOfOppositeSex,
-      bestOfWinnersAndOppositeSex: {
-        dogs: Math.max(bestOfWinners.dogs, bestOfOppositeSex.dogs),
-        bitches: Math.max(bestOfWinners.bitches, bestOfOppositeSex.bitches),
-      },
+      bestOfWinnersAndOppositeSex: bestOfWinnersWhenOppositeWinnerIsBos,
       bestOfBreed,
       bestOfWinnersAndBreed: {
-        dogs: Math.max(bestOfWinners.dogs, bestOfBreed.dogs),
-        bitches: Math.max(bestOfWinners.bitches, bestOfBreed.bitches),
+        dogs: highestEligiblePoints(bestOfWinners.dogs, bestOfBreed.dogs),
+        bitches: highestEligiblePoints(bestOfWinners.bitches, bestOfBreed.bitches),
       },
+      special,
     },
   };
 }
