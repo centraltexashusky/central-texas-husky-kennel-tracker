@@ -16344,6 +16344,195 @@ details.dog-show-ring-schedules[hidden] {
   padding: 14px;
 }
 
+.dog-show-plan-board {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+}
+
+.dog-show-plan-board > header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.dog-show-plan-board > header span {
+  color: #178056;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.dog-show-plan-board > header h3,
+.dog-show-plan-board > header p {
+  margin: 0;
+}
+
+.dog-show-plan-board > header p {
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.dog-show-plan-board > header > strong {
+  background: var(--tint-blue);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  padding: 7px 11px;
+}
+
+.dog-show-plan-status-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dog-show-plan-status-summary > span {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  font-size: 0.72rem;
+  font-weight: 800;
+  gap: 7px;
+  min-width: 0;
+  padding: 8px;
+}
+
+.dog-show-plan-status-summary strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.dog-show-plan-stages,
+.dog-show-plan-stage,
+.dog-show-plan-stage > div {
+  display: grid;
+  gap: 10px;
+}
+
+.dog-show-plan-stage > header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.dog-show-plan-stage > header h4 {
+  margin: 0;
+}
+
+.dog-show-plan-stage > header span {
+  align-items: center;
+  background: var(--tint-blue);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  min-width: 24px;
+}
+
+.dog-show-plan-stage + .dog-show-plan-stage {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.dog-show-plan-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+.dog-show-plan-event-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid #4D88B2;
+  border-radius: 9px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.dog-show-plan-event-card.is-in-process {
+  border-left-color: #178056;
+}
+
+.dog-show-plan-event-card.is-active {
+  border-left-color: #3290D7;
+}
+
+.dog-show-plan-event-card.is-going {
+  border-left-color: #D4A72C;
+}
+
+.dog-show-plan-event-card.is-completed {
+  border-left-color: #758595;
+}
+
+.dog-show-plan-event-card > header,
+.dog-show-plan-event-card > footer {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.dog-show-plan-event-card > header span,
+.dog-show-plan-event-card dt,
+.dog-show-plan-event-card > footer > span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-plan-event-card h4,
+.dog-show-plan-event-card p {
+  margin: 0;
+}
+
+.dog-show-plan-event-card p {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dog-show-plan-event-card > header > strong {
+  flex: 0 0 auto;
+}
+
+.dog-show-plan-event-card dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.dog-show-plan-event-card dl > div {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+}
+
+.dog-show-plan-event-card dd {
+  font-weight: 800;
+  margin: 0;
+}
+
+.dog-show-plan-event-card > footer {
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
 .dog-show-potential-plan > header span {
   color: #178056;
   font-size: 0.7rem;
@@ -16467,6 +16656,9 @@ details.dog-show-ring-schedules[hidden] {
 :root[data-theme="dark"] .dog-show-decision-dogs,
 :root[data-theme="dark"] .dog-show-decision-judge,
 :root[data-theme="dark"] .dog-show-planner-source-note,
+:root[data-theme="dark"] .dog-show-plan-board,
+:root[data-theme="dark"] .dog-show-plan-status-summary > span,
+:root[data-theme="dark"] .dog-show-plan-event-card,
 :root[data-theme="dark"] .dog-show-potential-plan,
 :root[data-theme="dark"] .dog-show-potential-card {
   background: #13273D;
@@ -16521,6 +16713,17 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-decision-judges {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-plan-board > header,
+  .dog-show-plan-event-card > header,
+  .dog-show-plan-event-card > footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dog-show-plan-status-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -1799,6 +1799,58 @@ function dogShowPlannerCandidateHtml(candidate = {}) {
   </article>`;
 }
 
+function dogShowPlannerLifecycleStatus(event = {}, activeEventId = "") {
+  if (event.status === "Completed" || (event.endDate && event.endDate < todayDate())) return "Completed";
+  if (event.startDate && event.startDate <= todayDate() && (event.endDate || event.startDate) >= todayDate()) return "In Process";
+  if (event.id && event.id === activeEventId) return "Active";
+  return "Going";
+}
+
+function dogShowPlannerEventPlanHtml(event = {}, lifecycleStatus = "Going") {
+  const entries = dogShowEntries(event);
+  const dogs = entries.map(dogShowEntryName).filter(Boolean);
+  return `<article class="dog-show-plan-event-card is-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}">
+    <header><div><span>${escapeHtml(lifecycleStatus)}</span><h4>${escapeHtml(event.name || event.club || "Dog Show")}</h4><p>${escapeHtml(event.venueAddress || event.cityState || event.venue || "Location pending")}</p></div><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></header>
+    ${dogShowPlannerEventFlagsHtml(event)}
+    <dl><div><dt>Status</dt><dd>${escapeHtml(lifecycleStatus)}</dd></div><div><dt>Dogs</dt><dd>${escapeHtml(dogs.join(", ") || "No dogs added yet")}</dd></div></dl>
+    <footer><span>${entries.length} dog${entries.length === 1 ? "" : "s"} on roster</span><button type="button" data-action="open-planner-show-event" data-event-id="${escapeHtml(event.id || "")}">Open Show</button></footer>
+  </article>`;
+}
+
+function dogShowPlannerLifecycleHtml(potentialShows = []) {
+  const activeEventId = dogShowActiveEvent()?.id || "";
+  const events = dogShowEvents();
+  const promotedExternalIds = new Set(events.map((event) => event.plannerExternalId).filter(Boolean));
+  const promotedSourceUrls = new Set(events.map((event) => event.sourceUrl).filter(Boolean));
+  const promotedShowDates = new Set(events.map((event) => `${String(event.startDate || "")}|${String(event.club || event.name || "").trim().toLowerCase()}`));
+  const groups = new Map(["In Process", "Active", "Going", "Potential Plan", "Completed"].map((status) => [status, []]));
+  events.forEach((event) => {
+    const status = dogShowPlannerLifecycleStatus(event, activeEventId);
+    groups.get(status).push({ kind: "event", event });
+  });
+  potentialShows
+    .filter((candidate) => {
+      const show = candidate.show || {};
+      const showDateKey = `${String(show.startDate || "")}|${String(show.club || show.name || "").trim().toLowerCase()}`;
+      return (!show.externalId || !promotedExternalIds.has(show.externalId))
+        && (!show.sourceUrl || !promotedSourceUrls.has(show.sourceUrl))
+        && !promotedShowDates.has(showDateKey);
+    })
+    .forEach((candidate) => groups.get("Potential Plan").push({ kind: "potential", candidate }));
+  const itemCount = [...groups.values()].reduce((sum, items) => sum + items.length, 0);
+  if (!itemCount) return "";
+  const statusSummary = [...groups.entries()].map(([status, items]) => `<span class="is-${status.toLowerCase().replace(/\s+/g, "-")}"><strong>${items.length}</strong>${escapeHtml(status)}</span>`).join("");
+  const groupHtml = [...groups.entries()].map(([status, items]) => {
+    const sorted = [...items].sort((left, right) => {
+      const leftDate = left.event?.startDate || left.candidate?.show?.startDate || "";
+      const rightDate = right.event?.startDate || right.candidate?.show?.startDate || "";
+      return status === "Completed" ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate);
+    });
+    return `<section class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"><header><h4>${escapeHtml(status)}</h4><span>${items.length}</span></header><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status) : dogShowPlannerCandidateHtml(item.candidate)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></section>`;
+  }).join("");
+  return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3><p>View every show by stage—from early research through the active weekend and completed history. Research for another breed is appended to the same show.</p></div><strong>${itemCount} show${itemCount === 1 ? "" : "s"}</strong></header><div class="dog-show-plan-status-summary">${statusSummary}</div><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
+}
+
 function dogShowPlannerHtml() {
   const plan = dogShowPlannerRecord();
   const shows = Array.isArray(plan.shows) ? [...plan.shows] : [];
@@ -1810,7 +1862,7 @@ function dogShowPlannerHtml() {
   return `<div class="dog-show-view dog-show-planner-view">
     <section class="dog-show-planner-heading"><div><span>SHOW INTELLIGENCE</span><h3>Show Planner</h3><p>Compare future ${escapeHtml(selectedBreed)} panels with selected dogs' results, breed research, and internal judge notes.</p></div><button type="button" data-action="edit-show-plan">${plan.id ? "Update Search" : "Find Shows"}</button></section>
     ${plan.id ? `<section class="dog-show-planner-criteria"><div><span>${plan.searchMode === "breed" ? "Breed" : "Dogs"}</span><strong>${escapeHtml(plan.searchMode === "breed" ? selectedBreed : selectedDogNames.join(", ") || "All tracked show dogs")}</strong></div><div><span>Dates</span><strong>${escapeHtml(dogShowPlannerDateRange({ startDate: plan.startDate, endDate: plan.endDate }))}</strong></div><div><span>States</span><strong>${escapeHtml((plan.states || []).join(", ") || "All")}</strong></div><div><span>Last checked</span><strong>${escapeHtml(fetchedLabel || "Not available")}</strong></div></section>` : ""}
-    ${potentialShows.length ? `<section class="dog-show-potential-plan"><header><div><span>SHOW RESEARCH</span><h3>Potential Show Plan</h3><p>${potentialShows.length} show${potentialShows.length === 1 ? "" : "s"} saved in date order. Research for another breed is appended to the same show.</p></div></header><div class="dog-show-potential-list">${potentialShows.map(dogShowPlannerCandidateHtml).join("")}</div></section>` : ""}
+    ${dogShowPlannerLifecycleHtml(potentialShows)}
     ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div></header><div class="dog-show-planner-list">${ranked.map(({ show, assessment }) => `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}">
       <header><div>${dogShowPlannerEventFlagsHtml(show)}<h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
       <div class="dog-show-planner-panel">${dogShowPlannerJudgeHtml("Breed", show.breedJudge || "", plan)}${dogShowPlannerJudgeHtml("Group", show.groupJudge || "", plan)}${dogShowPlannerJudgeHtml("BIS", show.bisJudge || "", plan)}</div>
@@ -1869,7 +1921,7 @@ function dogShowPlannerNeedsMetadataRefresh(plan = dogShowPlannerRecord()) {
   return Boolean(
     plan.id
     && !plan.localFixture
-    && Number(plan.metadataVersion || 0) < 2
+    && Number(plan.metadataVersion || 0) < 3
     && Array.isArray(plan.shows)
     && plan.shows.length
     && plan.startDate
@@ -1914,7 +1966,7 @@ async function refreshDogShowPlannerMetadata(plan = dogShowPlannerRecord()) {
       shows,
       sourceUrl: data?.sourceUrl || plan.sourceUrl,
       fetchedAt: data?.fetchedAt || plan.fetchedAt,
-      metadataVersion: 2,
+      metadataVersion: 3,
       metadataRefreshedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       updatedBy: currentUser?.name || "Staff",
@@ -1992,7 +2044,7 @@ async function saveDogShowPlanner(form) {
     shows,
     sourceUrl: response?.sourceUrl || "https://caninechronicleshowcalendar.com/K9shows.php",
     fetchedAt: response?.fetchedAt || new Date().toISOString(),
-    metadataVersion: 2,
+    metadataVersion: 3,
     metadataRefreshedAt: new Date().toISOString(),
     localFixture,
     submittedAt: dogShowPlannerRecord().submittedAt || new Date().toISOString(),
@@ -2051,7 +2103,7 @@ async function removeDogShowPotentialShow(candidateId = "") {
   showToast("Potential show removed.");
 }
 
-function openDogShowImportedEvent(show = {}, targets = []) {
+function openDogShowImportedEvent(show = {}, targets = [], options = {}) {
   if (!show.startDate) return showToast("The selected show could not be found.");
   const breeds = [...new Set(targets.map((target) => dogShowPlannerCalendarBreedName(target.breed)).filter(Boolean))];
   const dogs = [...new Set(targets.filter((target) => target.targetType === "dog").map((target) => target.dogName).filter(Boolean))];
@@ -2073,6 +2125,11 @@ function openDogShowImportedEvent(show = {}, targets = []) {
     sourceUrl: show.sourceUrl || "",
     premiumUrl: show.premiumUrl || "",
     judgingProgramUrl: show.judgingProgramUrl || "",
+    showType: show.showType || "",
+    nohs: Boolean(show.nohs || show.ownerHandled),
+    plannerExternalId: show.externalId || "",
+    plannerCandidateId: options.candidateId || "",
+    breedName: show.breedName || selectedBreed,
     notes: `Imported from the Canine Chronicle Show Calendar.${breeds.length ? `\nBreeds researched: ${breeds.join(", ")}` : ""}${dogs.length ? `\nDogs considered: ${dogs.join(", ")}` : ""}${panelNotes.length ? `\n${panelNotes.join("\n")}` : show.breedJudge ? `\n${selectedBreed} judge: ${show.breedJudge}` : ""}${show.groupJudge && !panelNotes.length ? `\n${show.groupName || "Group"} judge: ${show.groupJudge}` : ""}${show.bisJudge ? `\nBIS judge: ${show.bisJudge}` : ""}`,
     status: "Active",
   });
@@ -2088,7 +2145,14 @@ function openDogShowPlannedEvent(externalId = "") {
 function openDogShowPotentialEvent(candidateId = "") {
   const candidate = dogShowPlannerCandidates().find((item) => item.id === candidateId);
   if (!candidate) return showToast("The potential show could not be found.");
-  openDogShowImportedEvent(candidate.show || {}, candidate.targets || []);
+  openDogShowImportedEvent(candidate.show || {}, candidate.targets || [], { candidateId: candidate.id });
+}
+
+function openDogShowPlannerEvent(eventId = "") {
+  const event = dogShowEvents().find((candidate) => candidate.id === eventId);
+  if (!event) return showToast("The selected show could not be found.");
+  localStorage.setItem(DOG_SHOW_EVENT_KEY, event.id);
+  setDogShowView("home");
 }
 
 function renderDogShow() {
@@ -2187,6 +2251,11 @@ function dogShowStayTypeOptions(selected = "") {
 function openDogShowEventForm(event = {}) {
   const helperEmails = Array.isArray(event.helperEmails) ? event.helperEmails : [];
   openDogShowDialog(event.id ? "Edit Show Weekend" : "New Show Weekend", `<form id="dogShowEventForm" class="tracker-form" data-id="${escapeHtml(event.id || "")}">
+    <input type="hidden" name="showType" value="${escapeHtml(event.showType || "")}"/>
+    <input type="hidden" name="nohs" value="${(event.nohs || event.ownerHandled) ? "true" : "false"}"/>
+    <input type="hidden" name="plannerExternalId" value="${escapeHtml(event.plannerExternalId || "")}"/>
+    <input type="hidden" name="plannerCandidateId" value="${escapeHtml(event.plannerCandidateId || "")}"/>
+    <input type="hidden" name="breedName" value="${escapeHtml(event.breedName || "")}"/>
     <div class="field-grid">
       <label class="dog-show-field-wide dog-show-status-field">Status<select name="status"><option${event.status !== "Completed" ? " selected" : ""}>Active</option><option${event.status === "Completed" ? " selected" : ""}>Completed</option></select></label>
       <label>Show name<input name="name" value="${escapeHtml(event.name || "")}" required placeholder="Austin Kennel Club Weekend"/></label>
@@ -2854,7 +2923,7 @@ async function saveDogShowEvent(form) {
   const packingItems = Array.isArray(existing.packingItems) && existing.packingItems.length
     ? existing.packingItems
     : DOG_SHOW_DEFAULT_PACKING.map((label, index) => ({ id: `packing-${Date.now()}-${index}`, label, completed: false }));
-  const saved = await saveDogShowRecord("showEvent", { ...existing, ...data, id: existing.id || uid("showEvent"), helperEmails, packingItems, submittedAt: existing.submittedAt || new Date().toISOString(), helperEmail: currentUser?.email || "" });
+  const saved = await saveDogShowRecord("showEvent", { ...existing, ...data, nohs: data.nohs === "true", id: existing.id || uid("showEvent"), helperEmails, packingItems, submittedAt: existing.submittedAt || new Date().toISOString(), helperEmail: currentUser?.email || "" });
   localStorage.setItem(DOG_SHOW_EVENT_KEY, saved.id);
   document.getElementById("dogShowDialog")?.close();
   renderDogShow();
@@ -3449,6 +3518,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "add-potential-show") openDogShowPotentialEvent(action.dataset.candidateId || "");
     if (action.dataset.action === "remove-potential-show") await removeDogShowPotentialShow(action.dataset.candidateId || "");
     if (action.dataset.action === "add-planned-show") openDogShowPlannedEvent(action.dataset.showId || "");
+    if (action.dataset.action === "open-planner-show-event") openDogShowPlannerEvent(action.dataset.eventId || "");
     if (action.dataset.action === "open-judge-evidence") openDogShowJudgeEvidence(dogShowProgressJudge, action.dataset.evidenceKind || "entries");
     if (action.dataset.action === "select-progress-dog") {
       dogShowProgressDogKey = action.dataset.dogKey || "";

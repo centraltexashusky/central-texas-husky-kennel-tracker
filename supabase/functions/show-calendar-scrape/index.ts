@@ -185,7 +185,13 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
       }
     }
     const locationCellIndex = cells.findIndex((cell) => state && clean(cell.textContent).split(/\s+/).includes(state));
-    const city = locationCellIndex > 0 ? clean(cells[locationCellIndex - 1]?.textContent) : "";
+    const titleLocation = clean(showTitle.match(/\bIn:\s*([^\r\n]+)/i)?.[1]);
+    const titleLocationMatch = titleLocation.match(/^(.*?),\s*([A-Z]{2})$/i);
+    if (!state && titleLocationMatch) state = titleLocationMatch[2].toUpperCase();
+    const city = locationCellIndex > 0
+      ? clean(cells[locationCellIndex - 1]?.textContent)
+      : clean(titleLocationMatch?.[1]);
+    const venue = clean(showTitle.match(/\bAt:\s*([^\r\n]+)/i)?.[1]);
     const club = clean(showAnchor.textContent) || clean(cells.find((cell) => cell.contains(showAnchor))?.textContent);
     const showHtml = calendarShowHtml(html, externalId);
     const panelTitle = calendarPanelTitle(showHtml);
@@ -195,9 +201,12 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
     const breedJudge = calendarAssignmentJudge(showHtml, breedName) || judgeByAssignment(new RegExp(`^${escapedBreedName}\\b`, "i")) || clean(judgeAnchors[0]?.textContent);
     const groupPanel = showGroupPanel(showHtml, judgeAnchors);
     const typeAnchor = anchors.find((anchor) => /(?:showtype|opWtype|type=)/i.test(anchor.getAttribute("href") || ""));
-    const showType = clean(typeAnchor?.parentElement?.textContent)
+    const titleShowType = clean(showTitle.match(/\bShow Number=\S+\s+([A-Z/]+)/i)?.[1]).replace(/\bJSHW\b/gi, "JS");
+    let showType = titleShowType
+      || clean(typeAnchor?.parentElement?.textContent)
       || clean(typeAnchor?.textContent)
       || (rowText.match(/\b(AB|SP|SWE|BPUP|FCAT|OB|RLY)\b/i)?.[1] || "");
+    if (/Beginner Puppy Competition/i.test(showTitle) && !/(?:^|\/)BgP(?:\/|$)/i.test(showType)) showType = [showType, "BgP"].filter(Boolean).join("/");
     const nohs = /\bNOHS\b/i.test(`${rowText} ${showTitle} ${panelTitle}`);
     const superintendent = clean(showTitle.match(/\bSuper:\s*([^\r\n]+)/i)?.[1])
       || ["Onofrio", "MB-F", "Rau", "Bradshaw", "BaRay", "Foy Trent", "Executive", "Show Secretary"]
@@ -220,6 +229,7 @@ function parseShowRows(html: string, startDate: string, endDate: string, breedCo
       cityState: [city, state].filter(Boolean).join(", "),
       city,
       state,
+      venue,
       showType,
       nohs,
       superintendent,
