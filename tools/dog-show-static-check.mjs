@@ -145,8 +145,8 @@ const required = [
   ["styles.css", ".dog-show-plan-status-summary", "The show lifecycle status summary is not styled."],
   ["styles.css", ".dog-show-master-calendar", "The Show Calendar is not styled."],
   ["styles.css", ".dog-show-master-year-grid", "The yearly Show Calendar view is not styled."],
-  ["js/dog-show.js", 'data-show-preview="${escapeHtml(showPreview)}"', "Yearly Show Calendar dates do not identify their shows on hover."],
-  ["styles.css", "button.has-shows:hover::after", "Yearly Show Calendar hover previews are not visible."],
+  ["js/dog-show.js", 'title="${escapeHtml(showPreview)}"', "Yearly Show Calendar dates do not identify their shows on hover."],
+  ["styles.css", "button.has-shows:hover,", "Yearly Show Calendar dates do not retain a clear hover state."],
   ["styles.css", ".dog-show-master-month-grid", "The monthly Show Calendar view is not styled."],
   ["styles.css", ".dog-show-master-week-grid", "The weekly Show Calendar view is not styled."],
   ["js/dog-show.js", "entryClosingDate: show.entryClosingDate ||", "Imported shows do not prefill the entry closing date."],
@@ -414,6 +414,7 @@ const noteSaveSource = dogShowSource.slice(dogShowSource.indexOf("async function
 if (noteSaveSource.includes("openDogShowEntryForm")) failures.push("Saving a quick note must close instead of opening the main dog dialog.");
 const stylesSource = read("styles.css");
 if (stylesSource.includes(".dog-show-dog-row.has-conflict")) failures.push("Dog roster cards must not use the purple dashed conflict outline.");
+if (stylesSource.includes("content: attr(data-show-preview)") || dogShowSource.includes("data-show-preview=")) failures.push("Yearly Show Calendar hover must not render the clipped dark preview overlay.");
 const rosterCopyStyles = stylesSource.slice(stylesSource.indexOf(".dog-show-dog-copy strong"), stylesSource.indexOf(".dog-show-dog-status"));
 if (rosterCopyStyles.includes("text-overflow: ellipsis") || rosterCopyStyles.includes("white-space: nowrap")) failures.push("Dog roster quick-view text must wrap instead of truncating information.");
 for (const [needle, message] of forbidden) {
