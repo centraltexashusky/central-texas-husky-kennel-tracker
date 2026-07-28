@@ -16642,12 +16642,24 @@ details.dog-show-ring-schedules[hidden] {
 
 #dogShowPage button.dog-show-master-calendar-item.is-compact {
   border-left-width: 3px;
-  display: block;
+  display: flex;
   font-size: 0.72rem;
-  overflow: hidden;
-  padding: 5px 6px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  min-height: 30px;
+  padding: 6px 7px;
+  white-space: normal;
+}
+
+#dogShowPage button.dog-show-master-calendar-item.is-compact strong {
+  display: block;
+  overflow-wrap: anywhere;
+  width: 100%;
+}
+
+#dogShowPage button.dog-show-master-calendar-item.is-compact.is-grouped small {
+  display: block;
+  font-size: 0.62rem;
+  line-height: 1.25;
 }
 
 .dog-show-master-calendar-item span,
@@ -16767,7 +16779,7 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-master-year-agenda {
   display: grid;
   gap: 4px;
-  max-height: 78px;
+  max-height: 156px;
   overflow: auto;
 }
 

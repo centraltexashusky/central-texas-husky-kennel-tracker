@@ -601,12 +601,63 @@ function dogShowStaffOptions(selected = "", includeBlank = true) {
   return (includeBlank ? `<option value="">Unassigned</option>` : "") + options;
 }
 
+function dogShowEventWeekendKey(event = {}) {
+  return String(event.club || event.name || "Dog Show")
+    .toLowerCase()
+    .replace(/\bkennel club\b/g, "kc")
+    .replace(/\bcounty\b/g, "cnty")
+    .replace(/\bincorporated\b|\binc\b/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function dogShowEventWeekendGroups(events = dogShowEvents()) {
+  const currentByClub = new Map();
+  const groups = [];
+  [...events]
+    .sort((left, right) => String(left.startDate || "").localeCompare(String(right.startDate || "")) || String(left.name || left.club || "").localeCompare(String(right.name || right.club || "")))
+    .forEach((event) => {
+      const key = dogShowEventWeekendKey(event);
+      const current = currentByClub.get(key);
+      const currentEnd = current?.endDate || "";
+      const nextAllowedDate = currentEnd ? dogShowPlannerDateOffset(currentEnd, 1) : "";
+      if (current && event.startDate && event.startDate <= nextAllowedDate) {
+        current.events.push(event);
+        current.startDate = [current.startDate, event.startDate].filter(Boolean).sort()[0] || "";
+        current.endDate = [current.endDate, event.endDate || event.startDate].filter(Boolean).sort().at(-1) || current.startDate;
+        return;
+      }
+      const group = {
+        id: `show-weekend:${event.id}`,
+        key,
+        title: event.name || event.club || "Dog Show",
+        location: event.venueAddress || event.cityState || event.venue || "Location pending",
+        startDate: event.startDate || todayDate(),
+        endDate: event.endDate || event.startDate || todayDate(),
+        events: [event],
+      };
+      groups.push(group);
+      currentByClub.set(key, group);
+    });
+  return groups;
+}
+
 function dogShowEventOptions(active = dogShowActiveEvent()) {
-  const events = dogShowEvents();
-  if (!events.length) return `<option value="">No shows yet</option>`;
-  return events.map((event) => {
-    const weekend = `${dogShowFormatMonthDay(event.startDate)} - ${dogShowFormatMonthDay(event.endDate || event.startDate)}`;
-    return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${event.name || "Untitled Show"} · ${weekend}`)}${event.status === "Completed" ? " - Completed" : ""}</option>`;
+  const groups = dogShowEventWeekendGroups();
+  if (!groups.length) return `<option value="">No shows yet</option>`;
+  return groups.map((group) => {
+    if (group.events.length === 1) {
+      const event = group.events[0];
+      const weekend = `${dogShowFormatMonthDay(event.startDate)} - ${dogShowFormatMonthDay(event.endDate || event.startDate)}`;
+      return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${event.name || "Untitled Show"} · ${weekend}`)}${event.status === "Completed" ? " - Completed" : ""}</option>`;
+    }
+    const label = `${group.title} · ${dogShowFormatMonthDay(group.startDate)} - ${dogShowFormatMonthDay(group.endDate)} · ${group.events.length} events`;
+    const options = group.events.map((event) => {
+      const day = dogShowFormatMonthDay(event.startDate);
+      const weekend = `${dogShowFormatMonthDay(group.startDate)} - ${dogShowFormatMonthDay(group.endDate)}`;
+      const status = event.status === "Completed" ? "Completed" : event.status || "Active";
+      return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${group.title} · ${weekend} · ${day}${status === "Completed" ? " · Completed" : ""}`)}</option>`;
+    }).join("");
+    return `<optgroup label="${escapeHtml(label)}">${options}</optgroup>`;
   }).join("");
 }
 
@@ -1916,17 +1967,30 @@ function dogShowMasterCalendarEventStatus(event = {}, activeEventId = "") {
 function dogShowMasterCalendarItems() {
   const events = dogShowEvents();
   const activeEventId = dogShowActiveEvent()?.id || "";
-  const eventItems = events.map((event) => ({
-    id: `event:${event.id}`,
-    kind: "event",
-    eventId: event.id,
-    title: event.name || event.club || "Dog Show",
-    location: event.venueAddress || event.cityState || event.venue || "Location pending",
-    startDate: event.startDate || todayDate(),
-    endDate: event.endDate || event.startDate || todayDate(),
-    status: dogShowMasterCalendarEventStatus(event, activeEventId),
-    flags: dogShowPlannerEventFlagLabels(event),
-  }));
+  const eventItems = dogShowEventWeekendGroups(events).map((group) => {
+    const statuses = group.events.map((event) => dogShowMasterCalendarEventStatus(event, activeEventId));
+    const status = statuses.includes("Active")
+      ? "Active"
+      : statuses.includes("Going")
+        ? "Going"
+        : statuses.every((value) => value === "Completed")
+          ? "Completed"
+          : statuses[0] || "Going";
+    const activeMember = group.events.find((event) => event.id === activeEventId) || group.events[0];
+    return {
+      id: group.id,
+      kind: "event",
+      eventId: activeMember.id,
+      eventIds: group.events.map((event) => event.id),
+      memberCount: group.events.length,
+      title: group.title,
+      location: group.location,
+      startDate: group.startDate,
+      endDate: group.endDate,
+      status,
+      flags: [...new Set(group.events.flatMap((event) => dogShowPlannerEventFlagLabels(event)))],
+    };
+  });
   const potentialItems = dogShowPlannerVisibleCandidates(dogShowPlannerCandidates(), events).map((candidate) => {
     const show = candidate.show || {};
     return {
@@ -1952,8 +2016,9 @@ function dogShowMasterCalendarItemHtml(item = {}, compact = false) {
   const statusClass = String(item.status || "Going").toLowerCase().replace(/\s+/g, "-");
   const actionData = item.kind === "potential"
     ? `data-candidate-id="${escapeHtml(item.candidateId || "")}"`
-    : `data-event-id="${escapeHtml(item.eventId || "")}"`;
-  return `<button type="button" class="dog-show-master-calendar-item is-${statusClass}${compact ? " is-compact" : ""}" data-action="open-show-calendar-item" data-kind="${escapeHtml(item.kind || "event")}" ${actionData} aria-label="${escapeHtml(`${item.title}, ${item.status}, ${dogShowPlannerDateRange(item)}`)}"><strong>${escapeHtml(item.title || "Dog Show")}</strong>${compact ? "" : `<span>${escapeHtml(item.location || "Location pending")}</span><small>${escapeHtml(dogShowPlannerDateRange(item))} · ${escapeHtml(item.status || "Going")}</small>`}</button>`;
+    : `data-event-id="${escapeHtml(item.eventId || "")}" data-event-ids="${escapeHtml((item.eventIds || [item.eventId]).filter(Boolean).join("|"))}"`;
+  const groupMeta = Number(item.memberCount || 0) > 1 ? `${dogShowPlannerDateRange(item)} · ${item.memberCount} events` : "";
+  return `<button type="button" class="dog-show-master-calendar-item is-${statusClass}${compact ? " is-compact" : ""}${groupMeta ? " is-grouped" : ""}" data-action="open-show-calendar-item" data-kind="${escapeHtml(item.kind || "event")}" ${actionData} aria-label="${escapeHtml(`${item.title}, ${item.status}, ${dogShowPlannerDateRange(item)}${groupMeta ? `, ${item.memberCount} events` : ""}`)}"><strong>${escapeHtml(item.title || "Dog Show")}</strong>${compact ? (groupMeta ? `<small>${escapeHtml(groupMeta)}</small>` : "") : `<span>${escapeHtml(item.location || "Location pending")}</span><small>${escapeHtml(dogShowPlannerDateRange(item))} · ${escapeHtml(item.status || "Going")}${groupMeta ? ` · ${item.memberCount} events` : ""}</small>`}</button>`;
 }
 
 function dogShowMasterCalendarRangeLabel() {
@@ -2353,6 +2418,16 @@ function openDogShowPlannerEvent(eventId = "") {
   if (!event) return showToast("The selected show could not be found.");
   localStorage.setItem(DOG_SHOW_EVENT_KEY, event.id);
   setDogShowView("home");
+}
+
+function openDogShowCalendarEvent(eventIds = "", fallbackEventId = "") {
+  const ids = String(eventIds || "").split("|").filter(Boolean);
+  const events = dogShowEvents().filter((event) => ids.includes(event.id));
+  const selectedDate = dogShowDateKey(dogShowMasterDate());
+  const matchingDate = events.find((event) => (event.startDate || "") <= selectedDate && (event.endDate || event.startDate || "") >= selectedDate);
+  const savedId = localStorage.getItem(DOG_SHOW_EVENT_KEY) || "";
+  const savedMember = events.find((event) => event.id === savedId);
+  openDogShowPlannerEvent((matchingDate || savedMember || events[0])?.id || fallbackEventId);
 }
 
 function renderDogShow() {
@@ -3766,7 +3841,7 @@ function setupDogShowEventListeners() {
           card?.scrollIntoView({ behavior: "smooth", block: "center" });
         });
       } else {
-        openDogShowPlannerEvent(action.dataset.eventId || "");
+        openDogShowCalendarEvent(action.dataset.eventIds || "", action.dataset.eventId || "");
       }
     }
     if (action.dataset.action === "open-judge-evidence") openDogShowJudgeEvidence(dogShowProgressJudge, action.dataset.evidenceKind || "entries");
