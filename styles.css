@@ -13269,6 +13269,51 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   padding: 0 8px;
 }
 
+.dog-show-point-estimate {
+  align-items: center;
+  background: rgba(49, 95, 133, 0.08);
+  border: 1px solid rgba(49, 95, 133, 0.28);
+  border-radius: 9px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 11px 12px;
+}
+
+.dog-show-point-estimate.has-estimate {
+  background: rgba(53, 163, 95, 0.09);
+  border-color: rgba(53, 163, 95, 0.42);
+}
+
+.dog-show-point-estimate > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dog-show-point-estimate span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dog-show-point-estimate strong {
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.dog-show-point-estimate small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.dog-show-point-estimate button {
+  min-height: 38px;
+  white-space: nowrap;
+}
+
 .dog-show-result-award-section {
   background: var(--glass-fill-soft);
   border: 1px solid rgba(49, 95, 133, 0.35);
@@ -13552,6 +13597,56 @@ details.dog-show-ring-schedules[hidden] {
 
 .dog-show-ring-schedule-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dog-show-breed-entry-counts {
+  background: rgba(49, 95, 133, 0.08);
+  border: 1px solid rgba(49, 95, 133, 0.30);
+  border-radius: 9px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+  padding: 12px;
+}
+
+.dog-show-breed-entry-counts legend {
+  color: var(--ink);
+  font-weight: 900;
+  padding: 0 6px;
+}
+
+.dog-show-breed-entry-counts p {
+  color: var(--muted);
+  font-size: 0.72rem;
+  margin: 0;
+}
+
+.dog-show-entry-count-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dog-show-entry-count-grid label {
+  font-size: 0.72rem;
+  min-width: 0;
+}
+
+.dog-show-entry-count-grid input {
+  min-width: 0;
+  width: 100%;
+}
+
+.dog-show-breed-entry-counts output {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 900;
+  justify-self: start;
+  padding: 4px 10px;
 }
 
 .dog-show-timeline-groups {
@@ -14237,6 +14332,19 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-ring-schedule-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-entry-count-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dog-show-point-estimate {
+    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-point-estimate button {
+    width: 100%;
   }
 
   .dog-show-ring-schedule-grid > label,
