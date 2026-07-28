@@ -2035,7 +2035,7 @@ function profileRecordForUser(user) {
     type: "settingsUser",
     id: existing.id || uid("settingsUser"),
     submittedAt: existing.submittedAt || new Date().toISOString(),
-    name: user.name || user.email,
+    name: existing.name || user.name || user.email,
     email: user.email,
     authId: user.key || "",
     role: existing.role || user.role || "customer",

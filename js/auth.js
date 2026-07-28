@@ -28,8 +28,8 @@ function accountSessionKey(account = {}) {
 function userFromSupabase(supabaseUser) {
   if (!supabaseUser?.email) return null;
   const email = supabaseUser.email.toLowerCase();
-  const name = supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || email.split("@")[0];
   const saved = savedUserFor({ email, key: supabaseUser.id });
+  const name = saved?.name || supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || email.split("@")[0];
   const role = saved?.role || supabaseUser.app_metadata?.role || roleForAccount({ email, key: supabaseUser.id });
   return {
     name,
@@ -373,6 +373,15 @@ async function saveSettingsUserProfile(extra = {}, formEl = activeSettingsUserFo
   };
   const record = upsertRecord("settingsUser", payload);
   await sendPayload(record);
+  if (!localTestMode && supabaseClient && settingsUserPayloadBelongsToCurrentSession(record)) {
+    const { error } = await supabaseClient.auth.updateUser({
+      data: {
+        name: record.name,
+        full_name: record.name,
+      },
+    });
+    if (error) console.warn("The saved profile name could not be synchronized to authentication metadata.", error);
+  }
   settingsUserTab = settingsUserTabFor(record);
   renderSettingsUsers();
   return record;

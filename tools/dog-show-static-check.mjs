@@ -14,15 +14,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'grouped-ledgers-expense-split-planner-breed-potential-shows', "Dog Show styles are not cache-busted."],
+  ["index.html", 'direct-judge-search-added-show-conflicts-profile-name', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'grouped-ledgers-expense-split-planner-breed-potential-shows', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'grouped-ledgers-expense-split-planner-breed-potential-shows', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'direct-judge-search-added-show-conflicts', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'direct-judge-search-added-show-conflicts-profile-name', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
@@ -396,6 +396,11 @@ for (const [path, needle, message] of required) {
   if (!read(path).includes(needle)) failures.push(message);
 }
 const dogShowSource = read("js/dog-show.js");
+if (!dogShowSource.includes('id="dogShowAkcJudgeSearchForm"') || !dogShowSource.includes("DOG_SHOW_AKC_JUDGE_RESULTS_URL")) failures.push("The AKC judge link does not submit the selected judge name to the official directory search.");
+if (!dogShowSource.includes('data-action="remove-planned-show"') || !dogShowSource.includes(">Remove Show</button>")) failures.push("Added planner shows do not expose a distinct Remove Show action.");
+if (!dogShowSource.includes("function dogShowPlannerConflictsForShow") || !dogShowSource.includes(">Date Conflict</span>")) failures.push("Planner cards do not identify overlapping added or potential shows.");
+if (!dogShowSource.includes(">In Potential Plan</span>")) failures.push("Planner cards do not visibly identify potential-plan membership.");
+if (!read("styles.css").includes(".dog-show-remove-added-button") || !read("styles.css").includes(".dog-show-planner-state-flags")) failures.push("Planner added, potential, and conflict states are not visually distinct.");
 const pointScheduleSource = dogShowSource.slice(dogShowSource.indexOf("const DOG_SHOW_AKC_POINT_SCHEDULES"), dogShowSource.indexOf("const DOG_SHOW_AKC_STATE_NAMES"));
 for (const [division, dogs, bitches] of official2026SiberianHuskySchedules) {
   const block = pointScheduleSource.match(new RegExp(`\\n\\s*${division}: \\{[\\s\\S]*?dogs: (\\[[^\\n]+\\]),\\n\\s*bitches: (\\[[^\\n]+\\])`));

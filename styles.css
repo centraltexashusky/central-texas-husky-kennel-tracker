@@ -16031,6 +16031,49 @@ details.dog-show-ring-schedules[hidden] {
   color: var(--muted);
 }
 
+.dog-show-planner-state-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.dog-show-planner-state-flags > span {
+  border: 1px solid;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.dog-show-planner-state-flags > .is-added {
+  background: #E6F4ED;
+  border-color: #62AC85;
+  color: #126B43;
+}
+
+.dog-show-planner-state-flags > .is-potential {
+  background: #FFF6D9;
+  border-color: #D4A72C;
+  color: #715500;
+}
+
+.dog-show-planner-state-flags > .is-conflict {
+  background: #FDEBEC;
+  border-color: #C96C73;
+  color: #8B3038;
+}
+
+.dog-show-planner-card.is-added-show {
+  border-left-color: #168254;
+}
+
+.dog-show-planner-card.has-schedule-conflict {
+  box-shadow: 0 0 0 2px rgba(183, 64, 75, 0.22), var(--shadow);
+}
+
 .dog-show-planner-card h3 {
   font-size: 1.08rem;
   letter-spacing: 0;
@@ -16180,6 +16223,24 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-judge-directory-link {
   justify-self: start;
   text-decoration: none;
+}
+
+.dog-show-judge-directory-form {
+  justify-self: start;
+  margin: 0;
+}
+
+.dog-show-remove-added-button {
+  background: #A13D47;
+  border-color: #A13D47;
+  color: #FFFFFF;
+}
+
+.dog-show-remove-added-button:hover,
+.dog-show-remove-added-button:focus-visible {
+  background: #7F2831;
+  border-color: #7F2831;
+  color: #FFFFFF;
 }
 
 .dog-show-judge-directory-note {
@@ -17134,6 +17195,24 @@ details.dog-show-ring-schedules[hidden] {
   background: #13273D;
   border-color: #4E6C84;
   color: #AFC3D2;
+}
+
+:root[data-theme="dark"] .dog-show-planner-state-flags > .is-added {
+  background: #123D30;
+  border-color: #358866;
+  color: #A8E8C7;
+}
+
+:root[data-theme="dark"] .dog-show-planner-state-flags > .is-potential {
+  background: #43370F;
+  border-color: #B89428;
+  color: #FFE79B;
+}
+
+:root[data-theme="dark"] .dog-show-planner-state-flags > .is-conflict {
+  background: #4A1F25;
+  border-color: #B75B64;
+  color: #FFBDC2;
 }
 
 :root[data-theme="dark"] .dog-show-planner-score span,

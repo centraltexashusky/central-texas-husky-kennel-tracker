@@ -20,6 +20,7 @@ const DOG_SHOW_PLANNER_BREED_CODE = "346";
 const DOG_SHOW_PLANNER_DEFAULT_BREED = "Siberian Husky";
 const DOG_SHOW_PLANNER_CANDIDATE_KIND = "showPlannerCandidate";
 const DOG_SHOW_AKC_JUDGE_SEARCH_URL = "https://www.apps.akc.org/a/judges_directory/index.cfm?sso=rel";
+const DOG_SHOW_AKC_JUDGE_RESULTS_URL = "https://www.apps.akc.org/apps/judges_directory/index.cfm?action=results";
 const DOG_SHOW_CALENDAR_SLOT_MINUTES = 15;
 const DOG_SHOW_STALE_MINUTES = 60;
 const DOG_SHOW_AKC_POINT_SCHEDULES = {
@@ -786,8 +787,11 @@ function dogShowPlannerTargetKey(target = {}) {
 }
 
 function dogShowPlannerCandidateForShow(show = {}) {
-  const showKey = dogShowPlannerShowKey(show);
-  return dogShowPlannerCandidates().find((candidate) => candidate.showKey === showKey) || null;
+  const keys = new Set(dogShowPlannerShowMatchKeys(show));
+  return dogShowPlannerCandidates().find((candidate) => {
+    if (keys.has(candidate.showKey)) return true;
+    return dogShowPlannerShowMatchKeys(candidate.show || {}).some((key) => keys.has(key));
+  }) || null;
 }
 
 function dogShowPlannerCandidateHasTargets(candidate = {}, plan = dogShowPlannerRecord()) {
@@ -968,6 +972,53 @@ function dogShowJudgeRoleSummary(result = {}, judgeName = "") {
   ].filter(([name]) => dogShowJudgeNameKey(name) === key).map(([, role]) => role).join(", ");
 }
 
+function dogShowAkcJudgeSearchParts(judgeName = "") {
+  const parts = String(judgeName || "")
+    .replace(/^(?:mr|mrs|ms|miss|dr|col|colonel|hon|judge)\.?\s+/i, "")
+    .replace(/\s+(?:jr|sr|ii|iii|iv)\.?$/i, "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  return {
+    firstName: parts.length > 1 ? parts[0] : "",
+    lastName: parts.at(-1) || "",
+  };
+}
+
+function dogShowAkcJudgeSearchFormHtml(judgeName = "") {
+  const { firstName, lastName } = dogShowAkcJudgeSearchParts(judgeName);
+  return `<form id="dogShowAkcJudgeSearchForm" class="dog-show-judge-directory-form" action="${DOG_SHOW_AKC_JUDGE_RESULTS_URL}" method="post">
+    <input type="hidden" name="searchtype" value="simple"/>
+    <input type="hidden" name="breeds" value="999"/>
+    <input type="hidden" name="judge_id" value=""/>
+    <input type="hidden" name="firstName" value="${escapeHtml(firstName)}"/>
+    <input type="hidden" name="lastName" value="${escapeHtml(lastName)}"/>
+    <button type="submit" class="secondary-button dog-show-judge-directory-link">Search ${escapeHtml(judgeName)} in the AKC Judges Directory</button>
+  </form>`;
+}
+
+function submitDogShowAkcJudgeSearch(form) {
+  const targetName = `akcJudgeSearch${Date.now()}`;
+  const directoryWindow = window.open(DOG_SHOW_AKC_JUDGE_SEARCH_URL, targetName);
+  if (!directoryWindow) {
+    showToast("Allow pop-ups to search the AKC Judges Directory.");
+    return;
+  }
+  form.target = targetName;
+  let submitted = false;
+  const submitSearch = () => {
+    if (submitted) return;
+    submitted = true;
+    HTMLFormElement.prototype.submit.call(form);
+  };
+  try {
+    directoryWindow.addEventListener("load", submitSearch, { once: true });
+  } catch {
+    // The timed fallback below covers browsers that isolate the new window immediately.
+  }
+  window.setTimeout(submitSearch, 1500);
+}
+
 function openDogShowJudgeEvidence(judgeName = "", kind = "entries", dogKeys = []) {
   const labels = { entries: "Entries Logged", placements: "Placements", points: "Points" };
   const selectedDogs = new Set(Array.isArray(dogKeys) ? dogKeys : []);
@@ -986,7 +1037,7 @@ function openDogShowJudgeEvidence(judgeName = "", kind = "entries", dogKeys = []
   }).join("");
   openDogShowDialog(`${labels[kind] || labels.entries}: ${judgeName}`, `<section class="dog-show-judge-evidence-dialog">
     <p>Logged ring results where this person was recorded as a breed, group, BIS, or owner-handled judge${selectedDogs.size ? " for the dogs selected in this plan" : ""}.</p>
-    <a class="secondary-button dog-show-judge-directory-link" href="${DOG_SHOW_AKC_JUDGE_SEARCH_URL}" target="_blank" rel="noopener noreferrer">Search ${escapeHtml(judgeName)} in the AKC Judges Directory</a>
+    ${dogShowAkcJudgeSearchFormHtml(judgeName)}
     <small class="dog-show-judge-directory-note">Use the official AKC search to review approvals, breed eligibility, and assignment history.</small>
     <div class="dog-show-judge-evidence-list">${rows || dogShowRenderEmpty("No matching results", `There are no ${String(labels[kind] || labels.entries).toLowerCase()} to show for this judge${selectedDogs.size ? " and the selected dogs" : ""}.`)}</div>
   </section>`);
@@ -1954,6 +2005,80 @@ function dogShowPlannerPotentialButtonHtml(show = {}, plan = dogShowPlannerRecor
     : `<button type="button" class="secondary-button" data-action="save-potential-show" data-show-id="${escapeHtml(show.externalId || "")}">Potential Show</button>`;
 }
 
+function dogShowPlannerEventMatchKeys(event = {}) {
+  return dogShowPlannerShowMatchKeys({
+    ...event,
+    externalId: event.plannerExternalId || event.externalId || "",
+    club: event.club || event.name || "",
+    cityState: event.cityState || event.venueAddress || "",
+  });
+}
+
+function dogShowPlannerEventForShow(show = {}, events = dogShowEvents()) {
+  const keys = new Set(dogShowPlannerShowMatchKeys(show));
+  return events.find((event) => dogShowPlannerEventMatchKeys(event).some((key) => keys.has(key))) || null;
+}
+
+function dogShowPlannerDateRangesOverlap(left = {}, right = {}) {
+  const leftStart = String(left.startDate || "");
+  const rightStart = String(right.startDate || "");
+  if (!leftStart || !rightStart) return false;
+  const leftEnd = String(left.endDate || leftStart);
+  const rightEnd = String(right.endDate || rightStart);
+  return leftStart <= rightEnd && rightStart <= leftEnd;
+}
+
+function dogShowPlannerSameShow(left = {}, right = {}) {
+  const keys = new Set(dogShowPlannerShowMatchKeys(left));
+  return dogShowPlannerShowMatchKeys(right).some((key) => keys.has(key));
+}
+
+function dogShowPlannerConflictsForShow(show = {}, events = dogShowEvents(), candidates = dogShowPlannerCandidates()) {
+  const eventConflicts = events
+    .filter((event) => !dogShowPlannerSameShow(show, {
+      ...event,
+      externalId: event.plannerExternalId || event.externalId || "",
+      club: event.club || event.name || "",
+      cityState: event.cityState || event.venueAddress || "",
+    }))
+    .filter((event) => dogShowPlannerDateRangesOverlap(show, event))
+    .map((event) => ({ name: event.club || event.name || "Added show", startDate: event.startDate, endDate: event.endDate }));
+  const potentialConflicts = candidates
+    .map((candidate) => candidate.show || {})
+    .filter((candidateShow) => !dogShowPlannerSameShow(show, candidateShow))
+    .filter((candidateShow) => dogShowPlannerDateRangesOverlap(show, candidateShow))
+    .map((candidateShow) => ({ name: candidateShow.club || candidateShow.name || "Potential show", startDate: candidateShow.startDate, endDate: candidateShow.endDate }));
+  const unique = new Map([...eventConflicts, ...potentialConflicts].map((conflict) => [
+    `${conflict.name}|${conflict.startDate}|${conflict.endDate}`,
+    conflict,
+  ]));
+  return [...unique.values()];
+}
+
+function dogShowPlannerCardState(show = {}, plan = dogShowPlannerRecord(), events = dogShowEvents(), candidates = dogShowPlannerCandidates()) {
+  const event = dogShowPlannerEventForShow(show, events);
+  const candidate = dogShowPlannerCandidateForShow(show);
+  const potential = dogShowPlannerCandidateHasTargets(candidate || {}, plan);
+  const conflicts = dogShowPlannerConflictsForShow(show, events, candidates);
+  return { event, candidate, potential, conflicts };
+}
+
+function dogShowPlannerCardStateHtml(state = {}) {
+  const conflictTitle = (state.conflicts || []).map((conflict) => `${conflict.name} (${dogShowPlannerDateRange(conflict)})`).join("; ");
+  if (!state.event && !state.potential && !state.conflicts?.length) return "";
+  return `<div class="dog-show-planner-state-flags">
+    ${state.event ? `<span class="is-added">Added Show</span>` : ""}
+    ${state.potential ? `<span class="is-potential">In Potential Plan</span>` : ""}
+    ${state.conflicts?.length ? `<span class="is-conflict" title="Overlaps ${escapeHtml(conflictTitle)}">Date Conflict</span>` : ""}
+  </div>`;
+}
+
+function dogShowPlannerAddButtonHtml(show = {}, state = dogShowPlannerCardState(show)) {
+  return state.event
+    ? `<button type="button" class="danger-button dog-show-remove-added-button" data-action="remove-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Remove Show</button>`
+    : `<button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add Show</button>`;
+}
+
 function dogShowMasterDate(value = dogShowMasterCalendarDate || todayDate()) {
   const date = value instanceof Date ? new Date(value) : new Date(`${value || todayDate()}T12:00:00`);
   return Number.isNaN(date.getTime()) ? new Date(`${todayDate()}T12:00:00`) : date;
@@ -2113,18 +2238,22 @@ function dogShowPlannerHtml() {
   const selectedDogNames = dogShowPlannerDogs().filter((dog) => (plan.dogKeys || []).includes(dog.key)).map((dog) => dogShowEntryName(dog.entry));
   const selectedBreed = dogShowPlannerCalendarBreedName(plan.breedName || shows[0]?.breedName || DOG_SHOW_PLANNER_DEFAULT_BREED);
   const potentialShows = dogShowPlannerCandidates();
+  const operationalShows = dogShowEvents();
   const ranked = shows.map((show) => ({ show, assessment: dogShowPlannerAssessment(show, plan) })).sort((left, right) => right.assessment.score - left.assessment.score || String(left.show.startDate || "").localeCompare(String(right.show.startDate || "")));
   const fetchedLabel = plan.fetchedAt ? new Date(plan.fetchedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
   return `<div class="dog-show-view dog-show-planner-view">
     <section class="dog-show-planner-heading"><div><span>SHOW INTELLIGENCE</span><h3>Show Planner</h3><p>Compare future ${escapeHtml(selectedBreed)} panels with selected dogs' results, breed research, and internal judge notes.</p></div><button type="button" data-action="edit-show-plan">${plan.id ? "Update Search" : "Find Shows"}</button></section>
     ${plan.id ? `<section class="dog-show-planner-criteria"><div><span>${plan.searchMode === "breed" ? "Breed" : "Dogs"}</span><strong>${escapeHtml(plan.searchMode === "breed" ? selectedBreed : selectedDogNames.join(", ") || "All tracked show dogs")}</strong></div><div><span>Dates</span><strong>${escapeHtml(dogShowPlannerDateRange({ startDate: plan.startDate, endDate: plan.endDate }))}</strong></div><div><span>States</span><strong>${escapeHtml((plan.states || []).join(", ") || "All")}</strong></div><div><span>Last checked</span><strong>${escapeHtml(fetchedLabel || "Not available")}</strong></div></section>` : ""}
     ${dogShowPlannerLifecycleHtml(potentialShows)}
-    ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div></header><div class="dog-show-planner-list">${ranked.map(({ show, assessment }) => `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}">
-      <header><div>${dogShowPlannerEventFlagsHtml(show)}<h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
+    ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div></header><div class="dog-show-planner-list">${ranked.map(({ show, assessment }) => {
+      const state = dogShowPlannerCardState(show, plan, operationalShows, potentialShows);
+      return `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}${state.event ? " is-added-show" : ""}${state.conflicts.length ? " has-schedule-conflict" : ""}">
+      <header><div>${dogShowPlannerEventFlagsHtml(show)}${dogShowPlannerCardStateHtml(state)}<h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
       <div class="dog-show-planner-panel">${dogShowPlannerJudgeHtml("Breed", show.breedJudge || "", plan)}${dogShowPlannerJudgeHtml("Group", show.groupJudge || "", plan)}${dogShowPlannerJudgeHtml("BIS", show.bisJudge || "", plan)}</div>
       <ul>${assessment.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-      <footer><div class="dog-show-planner-meta">${show.eventNumber ? `<span>AKC #${escapeHtml(show.eventNumber)}</span>` : ""}${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}${show.verifiedBy ? `<span>Verified by ${escapeHtml(show.verifiedBy)}</span>` : ""}</div><div class="button-row"><button type="button" class="secondary-button" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}">View Show Decision</button>${dogShowPlannerSourceLinksHtml(show, { localFixture: plan.localFixture })}${dogShowPlannerPotentialButtonHtml(show, plan)}<button type="button" data-action="add-planned-show" data-show-id="${escapeHtml(show.externalId || "")}">Add Show</button></div></footer>
-    </article>`).join("")}</div></section>` : dogShowRenderEmpty("Find the right show for your dogs", "Choose the dogs, dates, and states. The planner will import future shows and rank their published judge panels against your history.", "edit-show-plan", "Find Shows")}
+      <footer><div class="dog-show-planner-meta">${show.eventNumber ? `<span>AKC #${escapeHtml(show.eventNumber)}</span>` : ""}${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}${show.verifiedBy ? `<span>Verified by ${escapeHtml(show.verifiedBy)}</span>` : ""}</div><div class="button-row"><button type="button" class="secondary-button" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}">View Show Decision</button>${dogShowPlannerSourceLinksHtml(show, { localFixture: plan.localFixture })}${dogShowPlannerPotentialButtonHtml(show, plan)}${dogShowPlannerAddButtonHtml(show, state)}</div></footer>
+    </article>`;
+    }).join("")}</div></section>` : dogShowRenderEmpty("Find the right show for your dogs", "Choose the dogs, dates, and states. The planner will import future shows and rank their published judge panels against your history.", "edit-show-plan", "Find Shows")}
     <section class="dog-show-planner-source-note"><strong>Source and limitations</strong><p>Listings are combined and deduplicated using the AKC event number from AKC Event Search and Canine Chronicle. AKC event details and published superintendent documents enrich each show when available. Always confirm the latest premium list before entering because panels and assignments can change.</p></section>
   </div>`;
 }
@@ -2405,6 +2534,24 @@ function openDogShowPlannedEvent(externalId = "") {
   const show = (plan.shows || []).find((item) => item.externalId === externalId);
   if (!show) return;
   openDogShowImportedEvent(show, dogShowPlannerTargets(plan));
+}
+
+async function removeDogShowPlannedEvent(externalId = "") {
+  const plan = dogShowPlannerRecord();
+  const show = (plan.shows || []).find((item) => item.externalId === externalId);
+  const event = show ? dogShowPlannerEventForShow(show) : null;
+  if (!event) return showToast("The added show could not be found.");
+  if (!window.confirm(`Remove ${event.club || event.name || "this show"} from the show schedule? Its roster, tasks, and results will be hidden.`)) return;
+  await saveDogShowRecord("showEvent", {
+    ...event,
+    removed: true,
+    removedAt: new Date().toISOString(),
+    removedBy: currentUser?.name || "Staff",
+    removedEmail: currentUser?.email || "",
+  });
+  if (localStorage.getItem(DOG_SHOW_EVENT_KEY) === event.id) localStorage.removeItem(DOG_SHOW_EVENT_KEY);
+  renderDogShow();
+  showToast("Show removed from the schedule.");
 }
 
 function openDogShowPotentialEvent(candidateId = "") {
@@ -3829,6 +3976,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "add-potential-show") openDogShowPotentialEvent(action.dataset.candidateId || "");
     if (action.dataset.action === "remove-potential-show") await removeDogShowPotentialShow(action.dataset.candidateId || "");
     if (action.dataset.action === "add-planned-show") openDogShowPlannedEvent(action.dataset.showId || "");
+    if (action.dataset.action === "remove-planned-show") await removeDogShowPlannedEvent(action.dataset.showId || "");
     if (action.dataset.action === "open-planner-show-event") openDogShowPlannerEvent(action.dataset.eventId || "");
     if (action.dataset.action === "open-show-calendar-item") {
       if (action.dataset.kind === "potential") {
@@ -3942,6 +4090,10 @@ function setupDogShowEventListeners() {
 
   dialog?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (event.target.id === "dogShowAkcJudgeSearchForm") {
+      submitDogShowAkcJudgeSearch(event.target);
+      return;
+    }
     if (event.target.id === "dogShowEventForm") await saveDogShowEvent(event.target);
     if (event.target.id === "dogShowAddDogsForm") await saveDogShowDogs(event.target);
     if (event.target.id === "dogShowEntryForm") await saveDogShowEntry(event.target);
