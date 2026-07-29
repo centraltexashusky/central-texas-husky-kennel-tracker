@@ -6025,6 +6025,62 @@ option {
   padding: 10px 12px;
 }
 
+.customer-records-section {
+  display: grid;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.customer-records-section + .customer-records-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  padding-top: 20px;
+}
+
+.customer-records-section-heading h3,
+.customer-records-section-heading p {
+  margin: 0;
+}
+
+.customer-records-section-heading p,
+.customer-agreement-response-summary span,
+.customer-agreement-response-empty {
+  color: var(--muted);
+}
+
+.customer-agreement-response-summary {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.customer-agreement-response-summary li {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 2px;
+  padding: 9px 10px;
+}
+
+.customer-agreement-response-summary strong {
+  font-size: 0.82rem;
+}
+
+.customer-agreement-response-summary span {
+  line-height: 1.4;
+}
+
+:root[data-theme="light"] .customer-records-section + .customer-records-section {
+  border-top-color: #d5e2ea;
+}
+
+:root[data-theme="light"] .customer-agreement-response-summary li {
+  background: #f8fbff;
+  border-color: #d5e2ea;
+}
+
 .dashboard-action-panel {
   background: rgba(5, 12, 22, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.14);

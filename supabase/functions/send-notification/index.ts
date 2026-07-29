@@ -1422,31 +1422,85 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const responses = record.agreementResponses && typeof record.agreementResponses === "object"
       ? record.agreementResponses as Record<string, unknown>
       : {};
+    const acknowledgementResponses = Array.isArray(responses.acknowledgementResponses)
+      ? responses.acknowledgementResponses as Record<string, unknown>[]
+      : [];
+    const customerFieldResponses = Array.isArray(responses.customerFieldResponses)
+      ? responses.customerFieldResponses as Record<string, unknown>[]
+      : [];
     const agreementText = String(record.agreementText || record.agreementMarkdown || "").trim();
+    const responseLines = [
+      responses.emergencyTreatmentLabel ? `Treatment authorization: ${responses.emergencyTreatmentLabel}` : "",
+      responses.emergencyTreatmentLimitAmount ? `Treatment limit: $${responses.emergencyTreatmentLimitAmount}` : "",
+      responses.mediaPreferenceLabel ? `Media authorization: ${responses.mediaPreferenceLabel}` : "",
+      ...acknowledgementResponses.flatMap((item, index) => [
+        `Acknowledgement ${index + 1} (${item.required === false ? "Optional" : "Required"}): ${String(item.text || "")}`,
+        `Acknowledgement ${index + 1} accepted: ${item.accepted ? "Yes" : "No"}`,
+      ]),
+      ...customerFieldResponses.flatMap((item, index) => [
+        `Customer information ${index + 1}: ${String(item.prompt || "")}`,
+        `Customer response ${index + 1}: ${String(item.value || "")}`,
+      ]),
+    ].filter(Boolean);
+    const executedAgreementLines = [
+      `Agreement: ${agreementTitle}`,
+      agreementVersion ? `Version: ${agreementVersion}` : "",
+      `Signer: ${signerName}`,
+      signerEmail ? `Email: ${signerEmail}` : "",
+      signedAt ? `Signed: ${signedAt}` : "",
+      ...responseLines,
+      record.documentHash ? `Document hash: ${record.documentHash}` : "",
+      record.signatureHash ? `Signature hash: ${record.signatureHash}` : "",
+      "",
+      "FULLY EXECUTED AGREEMENT",
+      agreementText || "The signed agreement is saved to the customer's profile in Snuggle Stay.",
+    ].filter(Boolean);
+    const adminTo = audienceEmails.length ? audienceEmails : adminEmails();
+    const customerTo = uniqueEmails([
+      record.signerEmail,
+      record.ownerEmail,
+      record.customerEmail,
+      record.linkedOwnerEmail,
+    ]);
+    const adminBody = [
+      "A customer completed and electronically signed a boarding agreement.",
+      "",
+      ...executedAgreementLines,
+      "",
+      `Open customer profiles: ${appLink("#settingsUsersPage")}`,
+    ].join("\n");
+    const customerBody = [
+      `Hello ${signerName},`,
+      "",
+      "Thank you. Your boarding agreement is fully executed. A complete copy, including your acknowledgements and submitted information, appears below and is also saved in My Records.",
+      "",
+      ...executedAgreementLines,
+      "",
+      `Open My Records: ${appLink("#customerFilesPage")}`,
+    ].join("\n");
+    const emails = [
+      {
+        audience: "admin",
+        to: adminTo,
+        subject: `Signed boarding agreement: ${signerName}`,
+        body: adminBody,
+      },
+      ...(customerTo.length
+        ? [{
+            audience: "customer",
+            to: customerTo,
+            subject: `Your fully executed agreement: ${agreementTitle}`,
+            body: customerBody,
+          }]
+        : []),
+    ];
     return {
       subject: `Signed boarding agreement: ${signerName}`,
-      body: [
-        "A customer completed and electronically signed a boarding agreement.",
-        "",
-        `Agreement: ${agreementTitle}`,
-        agreementVersion ? `Version: ${agreementVersion}` : "",
-        `Signer: ${signerName}`,
-        signerEmail ? `Email: ${signerEmail}` : "",
-        signedAt ? `Signed: ${signedAt}` : "",
-        responses.emergencyTreatmentLabel ? `Treatment authorization: ${responses.emergencyTreatmentLabel}` : "",
-        responses.emergencyTreatmentLimitAmount ? `Treatment limit: $${responses.emergencyTreatmentLimitAmount}` : "",
-        responses.mediaPreferenceLabel ? `Media authorization: ${responses.mediaPreferenceLabel}` : "",
-        record.documentHash ? `Document hash: ${record.documentHash}` : "",
-        record.signatureHash ? `Signature hash: ${record.signatureHash}` : "",
-        "",
-        "SIGNED AGREEMENT",
-        agreementText || "The signed agreement is saved to the customer's profile in Snuggle Stay.",
-        "",
-        `Open customer profiles: ${appLink("#settingsUsersPage")}`,
-      ].filter(Boolean).join("\n"),
+      body: adminBody,
       priority: "review",
-      to: audienceEmails.length ? audienceEmails : adminEmails(),
+      to: adminTo,
       sms: false,
+      emails,
     };
   }
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {

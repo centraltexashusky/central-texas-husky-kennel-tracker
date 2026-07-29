@@ -14516,7 +14516,7 @@ function initEvents() {
     }
   });
   $("#customerRequestStatusFilter").addEventListener("change", renderCustomerRequests);
-  $("#customerFilesList")?.addEventListener("click", (event) => {
+  $("#customerFilesPage")?.addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="view-customer-agreement"]');
     if (!button) return;
     event.preventDefault();

@@ -471,8 +471,44 @@ function customerAgreementProfileSnapshot(record = {}) {
 function customerBoardingAgreementsForCurrentUser() {
   const email = normalizeEmail(currentUser?.email);
   if (!email) return [];
-  return readRecords("boardingAgreement")
-    .filter((record) => !record.removed && normalizeEmail(record.signerEmail || record.ownerEmail) === email)
+  const profile = savedUserFor(currentUser) || {};
+  const profileSnapshots = [profile.latestBoardingAgreement, profile.boardingAgreement]
+    .filter((record) => record && record.signedAt);
+  const legacySnapshots = readRecords("boardingDog")
+    .filter((record) => !record.removed)
+    .map((record) => {
+      const saved = record.boardingAgreement && typeof record.boardingAgreement === "object"
+        ? record.boardingAgreement
+        : {};
+      const signedAt = saved.signedAt || record.boardingAgreementSignedAt || "";
+      const id = saved.id || record.boardingAgreementId || "";
+      if (!signedAt || !id) return null;
+      return {
+        ...saved,
+        id,
+        agreementTitle: saved.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE,
+        agreementVersion: saved.agreementVersion || record.boardingAgreementVersion || "",
+        documentHash: saved.documentHash || record.boardingAgreementDocumentHash || "",
+        signatureHash: saved.signatureHash || record.boardingAgreementSignatureHash || "",
+        signerName: saved.signerName || record.ownerName || record.customerName || "",
+        signerEmail: normalizeEmail(saved.signerEmail || record.ownerEmail || record.customerEmail || record.linkedOwnerEmail || ""),
+        signedAt,
+        archivedFromBoardingRecord: true,
+        sourceBoardingDogId: record.id || "",
+        sourceDogName: record.dogName || record.name || "",
+      };
+    })
+    .filter(Boolean);
+  const canonical = readRecords("boardingAgreement")
+    .filter((record) => !record.removed);
+  const agreementsByKey = new Map();
+  [...profileSnapshots, ...legacySnapshots, ...canonical]
+    .filter((record) => normalizeEmail(record.signerEmail || record.ownerEmail) === email)
+    .forEach((record) => {
+      const key = record.id || [record.signedAt, record.agreementVersion, record.sourceBoardingDogId].filter(Boolean).join("|");
+      if (key) agreementsByKey.set(key, record);
+    });
+  return [...agreementsByKey.values()]
     .sort((a, b) => new Date(b.signedAt || b.submittedAt || 0) - new Date(a.signedAt || a.submittedAt || 0));
 }
 
@@ -1015,7 +1051,7 @@ function customerAgreementDetailHtml(record = {}) {
 }
 
 function openCustomerAgreementDetail(id = "") {
-  const record = readRecords("boardingAgreement").find((item) => item.id === id && !item.removed);
+  const record = customerBoardingAgreementsForCurrentUser().find((item) => item.id === id);
   if (!record || normalizeEmail(record.signerEmail || record.ownerEmail) !== normalizeEmail(currentUser?.email)) {
     showToast("This agreement could not be opened.");
     return;
@@ -1504,28 +1540,69 @@ function customerUploadedFileEntriesForCurrentUser() {
     }
     return entries;
   });
-  const agreementFiles = customerBoardingAgreementsForCurrentUser().map((agreement) => ({
-    sourceRecordId: agreement.id || "",
-    sourceRecordType: "boardingAgreement",
-    dogName: "Owner profile",
-    fileName: agreement.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE,
-    fileType: "Signed boarding agreement",
-    savedAt: agreement.signedAt || agreement.submittedAt || "",
-    agreementRecord: agreement,
-    agreementVersion: agreement.agreementVersion || "",
-  }));
-  return [...dogFiles, ...agreementFiles].sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+  return dogFiles.sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0));
+}
+
+function customerAgreementCardResponseSummaryHtml(record = {}) {
+  const responses = record.agreementResponses && typeof record.agreementResponses === "object"
+    ? record.agreementResponses
+    : {};
+  const acknowledgements = arrayValue(responses.acknowledgementResponses);
+  const customerFields = arrayValue(responses.customerFieldResponses);
+  const acknowledgementHtml = acknowledgements.map((item, index) => \`
+    <li>
+      <strong>\${escapeHtml(item?.required === false ? "Optional acknowledgement" : "Required acknowledgement")} \${index + 1}</strong>
+      <span>\${escapeHtml(item?.text || "Acknowledgement")} — \${item?.accepted ? "Accepted" : "Not accepted"}</span>
+    </li>
+  \`).join("");
+  const customerFieldsHtml = customerFields.map((item, index) => \`
+    <li>
+      <strong>\${escapeHtml(item?.prompt || \`Customer information \${index + 1}\`)}</strong>
+      <span>\${escapeHtml(item?.value || "No response entered")}</span>
+    </li>
+  \`).join("");
+  const legacyRows = [];
+  if (!acknowledgements.length && responses.customAcknowledgementText) {
+    legacyRows.push(\`<li><strong>Acknowledgement</strong><span>\${escapeHtml(responses.customAcknowledgementText)} — \${responses.customAcknowledgementAccepted ? "Accepted" : "Not accepted"}</span></li>\`);
+  }
+  if (!customerFields.length && (responses.customFieldPrompt || responses.customFieldValue)) {
+    legacyRows.push(\`<li><strong>\${escapeHtml(responses.customFieldPrompt || "Customer information")}</strong><span>\${escapeHtml(responses.customFieldValue || "No response entered")}</span></li>\`);
+  }
+  const rows = acknowledgementHtml + customerFieldsHtml + legacyRows.join("");
+  return rows
+    ? \`<ul class="customer-agreement-response-summary">\${rows}</ul>\`
+    : '<p class="customer-agreement-response-empty">No additional acknowledgements or customer-entered information were required for this agreement.</p>';
+}
+
+function renderCustomerAgreementRecords() {
+  const list = $("#customerAgreementRecordsList");
+  if (!list) return;
+  const agreements = customerBoardingAgreementsForCurrentUser();
+  list.innerHTML = agreements.length
+    ? agreements.map((agreement) => \`<article class="record-card compact-record-card customer-agreement-record-card">
+        <span>Fully executed agreement</span>
+        <strong>\${escapeHtml(agreement.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE)}</strong>
+        <p>\${escapeHtml([
+          agreement.agreementVersion ? \`Version \${agreement.agreementVersion}\` : "",
+          agreement.signedAt ? \`Signed \${formatDateTime(agreement.signedAt)}\` : "",
+          agreement.signerName || "",
+        ].filter(Boolean).join(" | "))}</p>
+        \${customerAgreementCardResponseSummaryHtml(agreement)}
+        <div class="record-actions">
+          <button type="button" class="secondary-button" data-action="view-customer-agreement" data-id="\${escapeHtml(agreement.id || "")}">Open Agreement</button>
+        </div>
+      </article>\`).join("")
+    : "<p>No signed contract or agreement is saved yet.</p>";
 }
 
 function renderCustomerFiles() {
   const list = $("#customerFilesList");
+  renderCustomerAgreementRecords();
   if (!list) return;
   const files = customerUploadedFileEntriesForCurrentUser();
   list.innerHTML = files.length
     ? files.map((file) => {
-      const action = file.sourceRecordType === "boardingAgreement"
-        ? \`<button type="button" class="secondary-button" data-action="view-customer-agreement" data-id="\${escapeHtml(file.sourceRecordId || "")}">Open Agreement</button>\`
-        : file.src || file.storagePath
+      const action = file.src || file.storagePath
         ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="\${escapeHtml(file.src || "")}" data-media-type="\${escapeHtml(file.mediaType || "")}" data-media-name="\${escapeHtml(file.fileName)}"\${mediaAccessAttrs(file, { sourceRecordId: file.sourceRecordId || "", sourceRecordType: file.sourceRecordType || "" })}>Open</button>\`
         : \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="" data-media-name="\${escapeHtml(file.fileName)}">View Name</button>\`;
       return \`<article class="record-card compact-record-card">
@@ -1535,7 +1612,7 @@ function renderCustomerFiles() {
         <div class="record-actions">\${action}</div>
       </article>\`;
     }).join("")
-    : "<p>No uploaded files are saved yet.</p>";
+    : "<p>No dog profile files are saved yet.</p>";
 }
 
 async function saveCanonicalCustomerDogForBoarding(record = {}, previousRecord = {}) {

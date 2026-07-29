@@ -1,6 +1,8 @@
 import fs from "node:fs";
 
 const customer = fs.readFileSync(new URL("../js/customer.js", import.meta.url), "utf8");
+const shared = fs.readFileSync(new URL("../js/shared.js", import.meta.url), "utf8");
+const indexHtml = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const settings = fs.readFileSync(new URL("../js/settings.js", import.meta.url), "utf8");
 const notifications = fs.readFileSync(new URL("../js/notifications.js", import.meta.url), "utf8");
 const edgeFunction = fs.readFileSync(
@@ -33,11 +35,35 @@ for (const source of [notifications, edgeFunction]) {
 if (!notifications.includes('audienceRoles: ["admin"]')) {
   throw new Error("The signed-agreement notification must target the admin audience.");
 }
-if (!edgeFunction.includes('"SIGNED AGREEMENT"') || !edgeFunction.includes("agreementText")) {
-  throw new Error("The admin email must include the completed agreement text.");
+if (!indexHtml.includes('id="customerAgreementRecordsList"') ||
+  !indexHtml.includes("Signed Contracts &amp; Agreements") ||
+  !indexHtml.includes('id="customerFilesList"')) {
+  throw new Error("My Records must separate executed agreements from dog profile files.");
+}
+if (!customer.includes("function renderCustomerAgreementRecords()") ||
+  !customer.includes("customerAgreementCardResponseSummaryHtml") ||
+  !customer.includes("acknowledgementResponses") ||
+  !customer.includes("customerFieldResponses")) {
+  throw new Error("Customer agreement cards must show acknowledgements and manually entered information.");
+}
+if (!shared.includes('$("#customerFilesPage")?.addEventListener("click"')) {
+  throw new Error("Agreement actions must work from the dedicated My Records agreement section.");
+}
+if (!edgeFunction.includes('"FULLY EXECUTED AGREEMENT"') || !edgeFunction.includes("agreementText")) {
+  throw new Error("Both agreement emails must include the completed agreement text.");
 }
 if (!edgeFunction.includes("record.signatureHash") || !edgeFunction.includes("record.documentHash")) {
-  throw new Error("The admin email must include signature and document verification hashes.");
+  throw new Error("The agreement emails must include signature and document verification hashes.");
+}
+if (!edgeFunction.includes('audience: "admin"') ||
+  !edgeFunction.includes('audience: "customer"') ||
+  !edgeFunction.includes('subject: `Your fully executed agreement: ${agreementTitle}`') ||
+  !edgeFunction.includes('appLink("#customerFilesPage")')) {
+  throw new Error("The executed agreement must be emailed separately to both the admin and customer.");
+}
+if (!edgeFunction.includes("acknowledgementResponses.flatMap") ||
+  !edgeFunction.includes("customerFieldResponses.flatMap")) {
+  throw new Error("Executed-agreement emails must include checkbox selections and customer-entered answers.");
 }
 if (!edgeFunction.includes('eventName === "customerBoardingAgreementSigned"') ||
   !edgeFunction.includes('settingsUserEmailsByRoles(adminClient, ["admin"])')) {
