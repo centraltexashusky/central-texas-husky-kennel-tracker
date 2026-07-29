@@ -17,7 +17,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items" />
+    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -1219,6 +1219,7 @@
               <button type="button" class="secondary-button" data-boarding-profile-tab="Boarding & Request">Boarding & Request</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Customer Update">Customer Update</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Uploaded Files">Uploaded Files</button>
+              <button type="button" class="secondary-button" data-boarding-profile-tab="Contract/Agreement">Contract/Agreement</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Boarding History">Boarding History</button>
               <button type="button" class="secondary-button" data-boarding-profile-tab="Customer Info">Customer Info</button>
               <button type="button" class="secondary-button boarding-medical-behavior-profile-action" data-action="open-boarding-medical-behavior-note">Medical/Behavior Log</button>
@@ -1259,6 +1260,11 @@
             <section class="boarding-profile-section" data-boarding-profile-section="Uploaded Files" hidden>
               <p class="profile-empty-note">Files provided by the customer, including vaccination records and dog documents, appear here.</p>
               <div id="boardingDogUploadedFileList" class="record-grid compact-record-grid"></div>
+            </section>
+
+            <section class="boarding-profile-section" data-boarding-profile-section="Contract/Agreement" hidden>
+              <div class="section-heading compact-heading"><span>A</span><div><h2>Contract/Agreement</h2><p>The signed agreement, checked acknowledgements, and customer-provided answers for this dog or stay.</p></div></div>
+              <div id="boardingDogAgreementList" class="record-grid compact-record-grid"></div>
             </section>
 
             <section class="boarding-profile-section" data-boarding-profile-section="Customer Info" hidden>
@@ -1496,20 +1502,29 @@
           </form>
         </section>
         <section class="recent-submissions settings-setup-panel settings-agreement-template-panel">
-          <div class="section-heading"><span>A</span><div><h2>Customer Agreement</h2><p>Upload the agreement customers review and configure the information they must provide.</p></div></div>
+          <div class="section-heading"><span>A</span><div><h2>Customer Agreement</h2><p>Upload a document or enter the agreement customers review, then configure the information they must provide.</p></div></div>
           <form id="settingsAgreementForm" class="tracker-form settings-setup-form">
             <section class="settings-agreement-document-card">
               <div class="field-grid">
                 <label class="settings-setup-field">Agreement title
                   <input type="text" id="settingsAgreementTitle" name="agreementTitle" maxlength="120" placeholder="Boarding Services Agreement" />
                 </label>
+                <fieldset class="settings-agreement-source-options">
+                  <legend>Agreement source</legend>
+                  <label class="inline-check"><input type="radio" name="agreementSource" value="document" /> Upload a PDF or Word document</label>
+                  <label class="inline-check"><input type="radio" name="agreementSource" value="text" /> Enter contract wording</label>
+                </fieldset>
                 <label class="settings-setup-field settings-agreement-document-field">Agreement document
                   <input type="file" id="settingsAgreementDocument" name="agreementDocument" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
-                  <small class="field-help">Upload one PDF, DOC, or DOCX file. The built-in boarding agreement remains active until this document is saved and enabled.</small>
+                  <small class="field-help">Upload one PDF, DOC, or DOCX file.</small>
+                </label>
+                <label class="settings-setup-field settings-agreement-text-field">Contract wording
+                  <textarea id="settingsAgreementText" name="agreementText" rows="12" maxlength="50000" placeholder="Enter the complete agreement or contract wording customers must review."></textarea>
+                  <small class="field-help">Plain text and simple Markdown headings or lists are supported.</small>
                 </label>
               </div>
               <div id="settingsAgreementDocumentStatus" class="settings-agreement-document-status"></div>
-              <label class="inline-check"><input type="checkbox" id="settingsCustomAgreementEnabled" name="customAgreementEnabled" /> Use the uploaded document for new customer boarding agreements</label>
+              <label class="inline-check"><input type="checkbox" id="settingsCustomAgreementEnabled" name="customAgreementEnabled" /> Use this custom agreement for new customer boarding agreements</label>
             </section>
 
             <details class="settings-agreement-option" open>
@@ -1679,6 +1694,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items"></script>
+    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile"></script>
 </body>
 </html>

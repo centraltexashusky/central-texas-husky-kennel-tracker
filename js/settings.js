@@ -29,6 +29,8 @@ var APP_BRANDING_CONFIG_ID = "workspace-branding";
 var DEFAULT_WORKSPACE_AGREEMENT_CONFIG = {
   customAgreementEnabled: false,
   agreementTitle: "Boarding Services Agreement",
+  agreementSource: "document",
+  agreementText: "",
   document: null,
   acknowledgementEnabled: false,
   acknowledgementText: "",
@@ -72,12 +74,20 @@ function sanitizeWorkspaceAgreementItems(items = [], legacyText = "", prefix = "
 
 function sanitizeWorkspaceAgreementConfig(config = {}) {
   const documentRecord = sanitizeWorkspaceAgreementDocument(config.document);
+  const agreementText = String(config.agreementText || "").trim().slice(0, 50000);
+  const requestedSource = String(config.agreementSource || "").trim().toLowerCase();
+  const agreementSource = requestedSource === "text" || (!documentRecord && agreementText)
+    ? "text"
+    : "document";
+  const hasCustomSource = agreementSource === "text" ? Boolean(agreementText) : Boolean(documentRecord);
   const acknowledgements = sanitizeWorkspaceAgreementItems(config.acknowledgements, config.acknowledgementText, "acknowledgement");
   const customerFields = sanitizeWorkspaceAgreementItems(config.customerFields, config.customerFieldPrompt, "customer-field");
   return {
     ...DEFAULT_WORKSPACE_AGREEMENT_CONFIG,
-    customAgreementEnabled: Boolean(config.customAgreementEnabled && documentRecord),
+    customAgreementEnabled: Boolean(config.customAgreementEnabled && hasCustomSource),
     agreementTitle: String(config.agreementTitle || DEFAULT_WORKSPACE_AGREEMENT_CONFIG.agreementTitle).trim().slice(0, 120) || DEFAULT_WORKSPACE_AGREEMENT_CONFIG.agreementTitle,
+    agreementSource,
+    agreementText,
     document: documentRecord,
     acknowledgementEnabled: Boolean(config.acknowledgementEnabled && acknowledgements.length),
     acknowledgementText: acknowledgements[0]?.text || "",
@@ -219,7 +229,7 @@ function resetSettingsSetup() {
 function settingsAgreementDocumentStatusHtml(config = appAgreementConfig()) {
   const documentRecord = config.document;
   if (!documentRecord) {
-    return '<article class="record-card compact-record-card"><strong>Built-in agreement is active</strong><p>No custom agreement document has been uploaded.</p></article>';
+    return '<article class="record-card compact-record-card"><strong>' + (config.agreementSource === "text" && config.agreementText ? "Contract wording is ready" : "Built-in agreement is active") + '</strong><p>' + (config.agreementSource === "text" && config.agreementText ? "The saved text will be shown to customers when this custom agreement is enabled." : "No custom agreement document has been uploaded.") + '</p></article>';
   }
   return '<article class="record-card compact-record-card"><span>Uploaded agreement</span><strong>' + escapeHtml(documentRecord.name) + '</strong><p>' + escapeHtml(fileSizeLabel(documentRecord.size || 0)) + (documentRecord.savedAt ? " | Uploaded " + escapeHtml(formatDateTime(documentRecord.savedAt) || documentRecord.savedAt) : "") + '</p><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="' + escapeHtml(documentRecord.type) + '" data-media-name="' + escapeHtml(documentRecord.name) + '"' + mediaAccessAttrs(documentRecord, { sourceRecordType: "appSettingsAgreement" }) + '>Open uploaded agreement</button></article>';
 }
@@ -296,6 +306,16 @@ function removeSettingsAgreementItem(button) {
 }
 
 function syncSettingsAgreementOptionFields() {
+  const agreementSource = document.querySelector('input[name="agreementSource"]:checked')?.value === "text" ? "text" : "document";
+  const documentField = $(".settings-agreement-document-field");
+  const textField = $(".settings-agreement-text-field");
+  const documentInput = $("#settingsAgreementDocument");
+  const textInput = $("#settingsAgreementText");
+  if (documentField) documentField.hidden = agreementSource !== "document";
+  if (textField) textField.hidden = agreementSource !== "text";
+  if (documentInput) documentInput.disabled = agreementSource !== "document";
+  if (textInput) textInput.disabled = agreementSource !== "text";
+
   const acknowledgementEnabled = Boolean($("#settingsAgreementAcknowledgementEnabled")?.checked);
   $$('[data-agreement-item-text="acknowledgement"]').forEach((field) => {
     field.disabled = !acknowledgementEnabled;
@@ -318,6 +338,9 @@ function renderSettingsAgreement() {
   if (!form) return;
   const config = appAgreementConfig();
   $("#settingsAgreementTitle").value = config.agreementTitle;
+  const sourceControl = document.querySelector('input[name="agreementSource"][value="' + (config.agreementSource === "text" ? "text" : "document") + '"]');
+  if (sourceControl) sourceControl.checked = true;
+  $("#settingsAgreementText").value = config.agreementText || "";
   $("#settingsCustomAgreementEnabled").checked = config.customAgreementEnabled;
   $("#settingsAgreementAcknowledgementEnabled").checked = config.acknowledgementEnabled;
   renderSettingsAgreementRepeatableItems("acknowledgement", config.acknowledgements);
@@ -366,6 +389,8 @@ async function saveSettingsAgreement(event) {
 
   const customAgreementEnabled = Boolean($("#settingsCustomAgreementEnabled")?.checked);
   const agreementTitle = String($("#settingsAgreementTitle")?.value || "").trim();
+  const agreementSource = document.querySelector('input[name="agreementSource"]:checked')?.value === "text" ? "text" : "document";
+  const agreementText = String($("#settingsAgreementText")?.value || "").trim();
   const acknowledgementEnabled = Boolean($("#settingsAgreementAcknowledgementEnabled")?.checked);
   const acknowledgements = settingsAgreementItemsFromForm("acknowledgement");
   const signatureRequired = Boolean($("#settingsAgreementSignatureRequired")?.checked);
@@ -377,9 +402,14 @@ async function saveSettingsAgreement(event) {
     $("#settingsAgreementTitle")?.focus();
     return null;
   }
-  if (customAgreementEnabled && !documentRecord) {
+  if (customAgreementEnabled && agreementSource === "document" && !documentRecord) {
     showToast("Upload and save an agreement document before enabling it.");
     $("#settingsAgreementDocument")?.focus();
+    return null;
+  }
+  if (customAgreementEnabled && agreementSource === "text" && !agreementText) {
+    showToast("Enter the complete contract wording before enabling it.");
+    $("#settingsAgreementText")?.focus();
     return null;
   }
   if (acknowledgementEnabled && !acknowledgements.length) {
@@ -398,6 +428,8 @@ async function saveSettingsAgreement(event) {
   const agreementConfig = sanitizeWorkspaceAgreementConfig({
     customAgreementEnabled,
     agreementTitle,
+    agreementSource,
+    agreementText,
     document: documentRecord,
     acknowledgementEnabled,
     acknowledgementText: acknowledgements[0]?.text || "",

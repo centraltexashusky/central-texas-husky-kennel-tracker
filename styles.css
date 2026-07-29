@@ -1671,8 +1671,38 @@ body.owned-dog-modal-open {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.settings-agreement-source-options {
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  max-width: 760px;
+  padding: 0;
+}
+
+.settings-agreement-source-options legend {
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.settings-agreement-source-options .inline-check {
+  flex: 1 1 260px;
+  margin: 0;
+}
+
 .settings-agreement-document-field {
   grid-column: 1 / -1;
+}
+
+.settings-agreement-text-field {
+  grid-column: 1 / -1;
+  max-width: 760px;
+}
+
+.settings-agreement-text-field textarea {
+  min-height: 240px;
+  white-space: pre-wrap;
 }
 
 .settings-agreement-document-status {
@@ -1731,6 +1761,52 @@ body.owned-dog-modal-open {
 
 .settings-agreement-add-item {
   justify-self: start;
+}
+
+.boarding-agreement-card {
+  display: grid;
+  gap: 14px;
+}
+
+.boarding-agreement-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.boarding-agreement-response-list {
+  display: grid;
+  gap: 8px;
+}
+
+.boarding-agreement-response {
+  background: color-mix(in srgb, var(--panel) 86%, var(--accent) 14%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.boarding-agreement-response span {
+  color: var(--muted);
+}
+
+.boarding-agreement-text-preview {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.boarding-agreement-text-preview summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.boarding-agreement-text-preview pre {
+  font: inherit;
+  margin: 12px 0 0;
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre-wrap;
 }
 
 .customer-agreement-custom-fields,

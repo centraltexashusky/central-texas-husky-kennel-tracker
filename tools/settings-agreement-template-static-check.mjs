@@ -3,6 +3,7 @@ import fs from "node:fs";
 const index = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const settings = fs.readFileSync(new URL("../js/settings.js", import.meta.url), "utf8");
 const customer = fs.readFileSync(new URL("../js/customer.js", import.meta.url), "utf8");
+const boarding = fs.readFileSync(new URL("../js/boarding.js", import.meta.url), "utf8");
 const shared = fs.readFileSync(new URL("../js/shared.js", import.meta.url), "utf8");
 const schema = fs.readFileSync(new URL("../supabase-schema.sql", import.meta.url), "utf8");
 const migration = fs.readFileSync(
@@ -17,6 +18,10 @@ const repeatableMigration = fs.readFileSync(
   new URL("../supabase/migrations/20260729170000_add_repeatable_agreement_requirements.sql", import.meta.url),
   "utf8",
 );
+const textAgreementMigration = fs.readFileSync(
+  new URL("../supabase/migrations/20260729193000_allow_text_workspace_agreements.sql", import.meta.url),
+  "utf8",
+);
 const mediaAccess = fs.readFileSync(
   new URL("../supabase/functions/media-access/index.ts", import.meta.url),
   "utf8",
@@ -25,6 +30,8 @@ const mediaAccess = fs.readFileSync(
 const required = [
   [index, 'id="settingsAgreementForm"', "workspace agreement form"],
   [index, 'id="settingsAgreementDocument"', "PDF and Word upload"],
+  [index, 'id="settingsAgreementText"', "contract wording field"],
+  [index, 'name="agreementSource"', "document or wording source selector"],
   [index, 'id="settingsAgreementAcknowledgementEnabled"', "optional acknowledgement control"],
   [index, 'id="addSettingsAgreementAcknowledgementButton"', "repeatable acknowledgement control"],
   [index, 'id="settingsAgreementSignatureRequired"', "optional e-sign control"],
@@ -32,6 +39,8 @@ const required = [
   [index, 'id="addSettingsAgreementCustomerFieldButton"', "repeatable customer information control"],
   [index, 'class="settings-setup-field settings-agreement-document-field"', "agreement upload second-row layout"],
   [settings, "sanitizeWorkspaceAgreementConfig", "agreement configuration validation"],
+  [settings, 'agreementSource: "document"', "agreement source default"],
+  [settings, 'agreementText: ""', "agreement wording persistence"],
   [settings, "sanitizeWorkspaceAgreementItems", "repeatable agreement item validation"],
   [settings, "addSettingsAgreementItem", "repeatable setup item behavior"],
   [settings, 'uploadMediaFiles(input, "agreement-templates/workspace"', "private agreement upload"],
@@ -42,7 +51,14 @@ const required = [
   [customer, "customAcknowledgementResponses", "all acknowledgement evidence"],
   [customer, "customerResponseRequired", "customer response evidence"],
   [customer, "customerFieldResponses", "all customer information evidence"],
+  [customer, "agreementBodyText", "signed contract wording snapshot"],
+  [customer, "agreementConfiguration", "signed agreement configuration snapshot"],
   [customer, 'sourceRecordType: "appSettingsAgreement"', "agreement file access context"],
+  [boarding, "renderBoardingDogAgreements", "boarding profile agreement section"],
+  [boarding, "Customer selections and information", "boarding profile response summary"],
+  [boarding, "customAcknowledgementResponses", "boarding profile acknowledgement responses"],
+  [boarding, "customerFieldResponses", "boarding profile customer information responses"],
+  [shared, 'boardingDogsPage: ["boardingDog", "boardingAgreement"', "boarding agreement remote loading"],
   [schema, "agreement_config jsonb", "workspace agreement schema"],
   [migration, "app_settings_agreement_config_object", "agreement configuration migration"],
   [migration, "customAcknowledgementRequired", "custom agreement RLS validation"],
@@ -52,6 +68,8 @@ const required = [
   [validatorMigration, "settings.agreement_config ->> 'customerFieldEnabled'", "server-enforced customer field configuration"],
   [repeatableMigration, "jsonb_array_elements(requirements.acknowledgements) with ordinality", "repeatable acknowledgement validation"],
   [repeatableMigration, "jsonb_array_elements(requirements.customer_fields) with ordinality", "repeatable customer information validation"],
+  [textAgreementMigration, "payload ->> 'agreementBodyText' = settings.agreement_config ->> 'agreementText'", "exact contract wording validation"],
+  [textAgreementMigration, "payload #>> '{agreementConfiguration,agreementText}' = settings.agreement_config ->> 'agreementText'", "signed agreement wording snapshot validation"],
   [mediaAccess, 'body.recordType === "appSettingsAgreement"', "exact agreement media authorization"],
   [mediaAccess, "payloadReferencesExactPath(config.document, storagePath)", "exact private path check"],
 ];

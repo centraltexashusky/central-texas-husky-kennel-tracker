@@ -5293,6 +5293,141 @@ function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
   list.innerHTML = \`\${stayCards}<section class="popup-record-section"><h3>Sent Updates</h3>\${updateHistory}</section>\`;
 }
 
+function boardingAgreementTimestamp(record = {}) {
+  return new Date(record.signedAt || record.submittedAt || record.updatedAt || 0).getTime() || 0;
+}
+
+function boardingAgreementIdentityValues(record = {}) {
+  const values = new Set([
+    record.id,
+    record.requestGroupId,
+    record.reservationGroupId,
+    record.familyReservationId,
+    record.sourceBoardingDogId,
+    record.linkedCustomerDogId,
+  ].filter(Boolean).map(String));
+  arrayValue(record.stays).forEach((stay) => {
+    [
+      stay.id,
+      stay.requestCode,
+      stay.requestGroupId,
+      stay.reservationGroupId,
+      stay.familyReservationId,
+    ].filter(Boolean).forEach((value) => values.add(String(value)));
+  });
+  return values;
+}
+
+function boardingAgreementRecordsForDog(record = {}) {
+  if (!record?.id) return [];
+  const identities = boardingAgreementIdentityValues(record);
+  const explicitIds = new Set([
+    record.boardingAgreementId,
+    record.boardingAgreement?.id,
+    ...arrayValue(record.stays).flatMap((stay) => [stay.boardingAgreementId, stay.boardingAgreement?.id]),
+  ].filter(Boolean).map(String));
+  const dogIds = new Set([record.id, record.linkedCustomerDogId, record.sourceBoardingDogId].filter(Boolean).map(String));
+  const embedded = [
+    record.boardingAgreement,
+    record.latestBoardingAgreement,
+    ...arrayValue(record.stays).flatMap((stay) => [stay.boardingAgreement, stay.latestBoardingAgreement]),
+  ].filter((agreement) => agreement && typeof agreement === "object" && (agreement.id || agreement.signedAt));
+  const canonical = readRecords("boardingAgreement")
+    .filter((agreement) => {
+      if (!agreement || agreement.removed) return false;
+      if (explicitIds.has(String(agreement.id || ""))) return true;
+      const bookingId = String(agreement.agreementResponses?.bookingOrStayId || "");
+      if (bookingId && identities.has(bookingId)) return true;
+      const contextDogIds = arrayValue(agreement.requestContext?.dogIds).map(String);
+      return contextDogIds.some((id) => dogIds.has(id));
+    });
+  const exact = [...canonical, ...embedded];
+  const unique = new Map();
+  exact.forEach((agreement) => {
+    const key = agreement.id || [agreement.signerEmail, agreement.signedAt, agreement.documentHash].join("|");
+    if (!key || unique.has(key)) return;
+    unique.set(key, agreement);
+  });
+  if (!unique.size) {
+    const ownerEmail = normalizeEmail(record.ownerEmail || record.customerEmail || record.linkedOwnerEmail);
+    const latestOwnerAgreement = readRecords("boardingAgreement")
+      .filter((agreement) => !agreement.removed && ownerEmail && normalizeEmail(agreement.signerEmail || agreement.ownerEmail) === ownerEmail)
+      .sort((a, b) => boardingAgreementTimestamp(b) - boardingAgreementTimestamp(a))[0];
+    if (latestOwnerAgreement) unique.set(latestOwnerAgreement.id || "owner-latest", { ...latestOwnerAgreement, ownerAgreementFallback: true });
+  }
+  return [...unique.values()].sort((a, b) => boardingAgreementTimestamp(b) - boardingAgreementTimestamp(a));
+}
+
+function boardingAgreementResponseHtml(record = {}) {
+  const responses = record.agreementResponses || {};
+  const rows = [];
+  const addRow = (label, value) => {
+    const text = String(value ?? "").trim();
+    if (text) rows.push({ label, value: text });
+  };
+  addRow("Signer legal name", responses.signerLegalName || record.signerName);
+  addRow("Electronic records consent", record.electronicConsentAccepted ? "Accepted" : "");
+  addRow("General agreement", record.agreementAccepted ? "Accepted" : "");
+  addRow("Arbitration agreement", record.arbitrationAccepted ? "Accepted" : "");
+  addRow("Treatment authorization", responses.emergencyTreatmentLabel);
+  addRow("Treatment amount", responses.emergencyTreatmentLimitAmount ? "$" + responses.emergencyTreatmentLimitAmount : "");
+  addRow("Media authorization", responses.mediaPreferenceLabel);
+  arrayValue(responses.acknowledgementResponses || record.customAcknowledgementResponses).forEach((item, index) => {
+    addRow(\`Acknowledgement \${index + 1}\`, \`\${item?.text || ""} — \${item?.accepted ? "Accepted" : "Not accepted"}\`);
+  });
+  if (!arrayValue(responses.acknowledgementResponses || record.customAcknowledgementResponses).length && responses.customAcknowledgementText) {
+    addRow("Acknowledgement", \`\${responses.customAcknowledgementText} — \${responses.customAcknowledgementAccepted ? "Accepted" : "Not accepted"}\`);
+  }
+  arrayValue(responses.customerFieldResponses || record.customerFieldResponses).forEach((item, index) => {
+    addRow(item?.prompt || \`Customer information \${index + 1}\`, item?.value || "No response");
+  });
+  if (!arrayValue(responses.customerFieldResponses || record.customerFieldResponses).length && responses.customFieldPrompt) {
+    addRow(responses.customFieldPrompt, responses.customFieldValue || "No response");
+  }
+  addRow("Booking or stay ID", responses.bookingOrStayId);
+  return rows.length
+    ? \`<div class="boarding-agreement-response-list">\${rows.map((row) => \`<div class="boarding-agreement-response"><strong>\${escapeHtml(row.label)}</strong><span>\${escapeHtml(row.value)}</span></div>\`).join("")}</div>\`
+    : '<p>No completed checkbox or customer-response details were preserved in this legacy agreement snapshot.</p>';
+}
+
+function boardingAgreementCardHtml(agreement = {}) {
+  const documentRecord = agreement.agreementDocument && typeof agreement.agreementDocument === "object" ? agreement.agreementDocument : null;
+  const bodyText = String(agreement.agreementBodyText || agreement.agreementConfiguration?.agreementText || "").trim();
+  const documentButton = documentRecord?.storagePath
+    ? \`<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="\${escapeHtml(documentRecord.type || "application/octet-stream")}" data-media-name="\${escapeHtml(documentRecord.name || agreement.agreementTitle || "Agreement document")}"\${mediaAccessAttrs(documentRecord, { sourceRecordType: "appSettingsAgreement" })}>Open agreement document</button>\`
+    : "";
+  const textPreview = bodyText
+    ? \`<details class="boarding-agreement-text-preview"><summary>View contract wording</summary><pre>\${escapeHtml(bodyText)}</pre></details>\`
+    : "";
+  const fallbackNotice = agreement.ownerAgreementFallback
+    ? '<p class="profile-empty-note">This is the latest agreement on the owner profile. It was not explicitly linked to this boarding stay.</p>'
+    : "";
+  return \`<article class="record-card compact-record-card boarding-agreement-card">
+    <div class="boarding-agreement-summary">
+      <span>\${escapeHtml(agreement.agreementTitle || "Boarding Services Agreement")}</span>
+      <strong>Signed \${escapeHtml(formatDateTime(agreement.signedAt || agreement.submittedAt) || agreement.signedAt || "date not recorded")}</strong>
+      <p>\${escapeHtml([agreement.signerName || agreement.ownerName || "", agreement.signerEmail || agreement.ownerEmail || "", agreement.agreementVersion ? "Version " + agreement.agreementVersion : "", agreement.signatureMethod === "electronic-acceptance" ? "Electronic acceptance" : "Electronic signature"].filter(Boolean).join(" | "))}</p>
+    </div>
+    \${fallbackNotice}
+    \${documentButton}
+    \${textPreview}
+    <section><h3>Customer selections and information</h3>\${boardingAgreementResponseHtml(agreement)}</section>
+  </article>\`;
+}
+
+function renderBoardingDogAgreements(record = activeBoardingDog() || {}) {
+  const list = $("#boardingDogAgreementList");
+  if (!list) return;
+  if (!record?.id) {
+    list.innerHTML = '<article class="record-card compact-record-card"><strong>Save the boarding dog first.</strong><p>Signed customer agreements will appear here after the profile exists.</p></article>';
+    return;
+  }
+  const agreements = boardingAgreementRecordsForDog(record);
+  list.innerHTML = agreements.length
+    ? agreements.map(boardingAgreementCardHtml).join("")
+    : '<article class="record-card compact-record-card"><strong>No signed agreement found.</strong><p>When the customer signs a boarding agreement, the signed record and all completed fields will appear here.</p></article>';
+}
+
 function boardingDogDocumentItems(record = {}) {
   const documents = arrayValue(record.documents);
   const legacyDocuments = documents.length ? documents : arrayValue(record.boardingDocuments);
@@ -5689,6 +5824,7 @@ function openBoardingDog(record = {}) {
   renderBoardingVaccinationFiles(record);
   renderBoardingCustomerUpdates(record);
   renderBoardingDogFiles(record);
+  renderBoardingDogAgreements(record);
   renderBoardingKennelLocationControl(record);
   $$('input[name="boardingFlags"]').forEach((input) => {
     input.checked = (record.flags || []).includes(input.value);

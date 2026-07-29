@@ -28,6 +28,7 @@ var customerAgreementSignatureHasInk = false;
 
 function customerWorkspaceAgreementConfig() {
   const config = typeof appAgreementConfig === "function" ? appAgreementConfig() : {};
+  const agreementText = String(config?.agreementText || "").trim();
   const documentRecord = config?.document && typeof config.document === "object" && String(config.document.storagePath || "").trim()
     ? {
         storagePath: String(config.document.storagePath || "").trim(),
@@ -52,10 +53,17 @@ function customerWorkspaceAgreementConfig() {
       })).filter((item) => item.text)
     : (String(config?.customerFieldPrompt || "").trim()
         ? [{ id: "customer-field-1", text: String(config.customerFieldPrompt).trim() }]
-        : []);
+    : []);
+  const requestedSource = String(config?.agreementSource || "").trim().toLowerCase();
+  const agreementSource = requestedSource === "text" || (!documentRecord && agreementText)
+    ? "text"
+    : "document";
+  const hasCustomSource = agreementSource === "text" ? Boolean(agreementText) : Boolean(documentRecord);
   return {
-    customAgreementEnabled: Boolean(config?.customAgreementEnabled && documentRecord),
+    customAgreementEnabled: Boolean(config?.customAgreementEnabled && hasCustomSource),
     agreementTitle: String(config?.agreementTitle || "Boarding Services Agreement").trim() || "Boarding Services Agreement",
+    agreementSource,
+    agreementText,
     document: documentRecord,
     acknowledgementEnabled: Boolean(config?.acknowledgementEnabled && acknowledgements.length),
     acknowledgementText: acknowledgements[0]?.text || "",
@@ -82,6 +90,8 @@ function customerAgreementRuntimeVersion() {
   if (!config.customAgreementEnabled) return CUSTOMER_BOARDING_AGREEMENT_VERSION;
   return "workspace-" + customerAgreementSimpleHash([
     config.updatedAt,
+    config.agreementSource,
+    config.agreementText,
     config.document?.storagePath,
     config.document?.size,
     config.acknowledgementEnabled,
@@ -141,8 +151,8 @@ function customerAgreementText() {
       config.agreementTitle,
       "Version: " + customerAgreementRuntimeVersion(),
       "Effective date: " + customerAgreementRuntimeEffectiveDate(),
-      "Uploaded document: " + (config.document?.name || ""),
-      "Private storage reference: " + (config.document?.storagePath || ""),
+      config.agreementSource === "text" ? config.agreementText : "Uploaded document: " + (config.document?.name || ""),
+      config.agreementSource === "document" ? "Private storage reference: " + (config.document?.storagePath || "") : "",
       ...(config.acknowledgementEnabled ? config.acknowledgements.map((item, index) => \`Required acknowledgement \${index + 1}: \${item.text}\`) : []),
       config.signatureRequired ? "A drawn electronic signature is required." : "A drawn electronic signature is not required.",
       ...(config.customerFieldEnabled ? config.customerFields.map((item, index) => \`Required customer response \${index + 1}: \${item.text}\`) : []),
@@ -396,12 +406,20 @@ function customerAgreementDocumentHtml(record = null) {
   const config = customerWorkspaceAgreementConfig();
   const recordDocument = record?.agreementDocument && typeof record.agreementDocument === "object" ? record.agreementDocument : null;
   const customDocument = recordDocument || (config.customAgreementEnabled ? config.document : null);
+  const agreementBodyText = String(
+    record?.agreementBodyText
+      || record?.agreementConfiguration?.agreementText
+      || (config.customAgreementEnabled && config.agreementSource === "text" ? config.agreementText : ""),
+  ).trim();
   const version = record?.agreementVersion || customerAgreementRuntimeVersion();
   const effectiveDate = record?.agreementEffectiveDate || customerAgreementRuntimeEffectiveDate();
   const title = record?.agreementTitle || customerAgreementRuntimeTitle();
   if (customDocument?.storagePath) {
     const button = '<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="' + escapeHtml(customDocument.type || "application/octet-stream") + '" data-media-name="' + escapeHtml(customDocument.name || title) + '"' + mediaAccessAttrs(customDocument, { sourceRecordType: "appSettingsAgreement" }) + '>Open agreement document</button>';
     return '<article class="customer-agreement-copy"><h3>' + escapeHtml(title) + '</h3><p>Version ' + escapeHtml(version) + ' | Effective ' + escapeHtml(effectiveDate) + '</p><section class="customer-agreement-uploaded-document"><strong>' + escapeHtml(customDocument.name || "Uploaded agreement") + '</strong><p>Open the complete agreement before accepting or signing it.</p>' + button + '</section></article>' + customerAgreementCompletionHtml(record);
+  }
+  if (agreementBodyText) {
+    return "<article class=\\"customer-agreement-copy\\"><h3>" + escapeHtml(title) + "</h3><p>Version " + escapeHtml(version) + " | Effective " + escapeHtml(effectiveDate) + "</p><div class=\\"customer-agreement-markdown\\">" + customerAgreementMarkdownToHtml(agreementBodyText) + "</div></article>" + customerAgreementCompletionHtml(record);
   }
   const markdown = customerAgreementMarkdown(record);
   return "<article class=\\"customer-agreement-copy\\"><h3>" + escapeHtml(title) + "</h3><p>Version " + escapeHtml(version) + " | Effective " + escapeHtml(effectiveDate) + "</p><div class=\\"customer-agreement-markdown\\">" + customerAgreementMarkdownToHtml(markdown) + "</div></article>" + customerAgreementCompletionHtml(record);
@@ -429,6 +447,8 @@ function customerAgreementProfileSnapshot(record = {}) {
     agreementEffectiveDate: record.agreementEffectiveDate || customerAgreementRuntimeEffectiveDate(),
     agreementMode: record.agreementMode || (record.agreementDocument ? "custom-template" : "built-in"),
     agreementDocument: record.agreementDocument || null,
+    agreementBodyText: record.agreementBodyText || record.agreementConfiguration?.agreementText || "",
+    agreementConfiguration: record.agreementConfiguration || null,
     documentFingerprint: record.documentFingerprint || customerAgreementDocumentFingerprint(),
     documentHash: record.documentHash || "",
     signatureHash: record.signatureHash || "",
@@ -797,9 +817,12 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
     agreementVersion: customerAgreementRuntimeVersion(),
     agreementEffectiveDate: customerAgreementRuntimeEffectiveDate(),
     agreementMode: custom ? "custom-template" : "built-in",
-    agreementDocument: custom ? config.document : null,
+    agreementDocument: custom && config.agreementSource === "document" ? config.document : null,
+    agreementBodyText: custom && config.agreementSource === "text" ? config.agreementText : "",
     agreementConfiguration: custom
       ? {
+          agreementSource: config.agreementSource,
+          agreementText: config.agreementSource === "text" ? config.agreementText : "",
           acknowledgementEnabled: config.acknowledgementEnabled,
           acknowledgementText: config.acknowledgementText,
           acknowledgements: config.acknowledgementEnabled ? config.acknowledgements : [],

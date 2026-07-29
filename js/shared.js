@@ -1691,7 +1691,7 @@ function remoteRecordTypesForPage(pageId = "") {
     taskSchedulerPage: ["scheduledCareTask", "ownedDog", "boardingDog", "customerDog", "service", "dailyTask", "careLog"],
     dogShowPage: ["showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "ownedDog", "boardingDog", "customerDog", "settingsUser"],
     ourDogsPage: ["ownedDog", "careLog", "customerDog", "boardingDog"],
-    boardingDogsPage: ["boardingDog", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    boardingDogsPage: ["boardingDog", "boardingAgreement", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
     requestsPage: ["request"],
     maintenancePage: ["maintenance"],
     timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
@@ -11029,7 +11029,12 @@ function renderActivePageRecords(pageId = activePageId()) {
     taskSchedulerPage: () => renderTaskScheduler(),
     dogShowPage: () => renderDogShow(),
     ourDogsPage: () => renderOwnedDogs(),
-    boardingDogsPage: () => { renderBoardingDogs(); renderBoardingRequests(); },
+    boardingDogsPage: () => {
+      renderBoardingDogs();
+      renderBoardingRequests();
+      const openDog = activeBoardingDog();
+      if (openDog?.id) renderBoardingDogAgreements(openDog);
+    },
     requestsPage: () => renderRequests(),
     maintenancePage: () => renderMaintenance(),
     timesheetPage: () => renderTimesheet(),
@@ -14613,8 +14618,20 @@ function initEvents() {
   $("#settingsAgreementForm")?.addEventListener("submit", saveSettingsAgreement);
   $("#settingsAgreementDocument")?.addEventListener("change", (event) => {
     if (!event.currentTarget.files?.length) return;
+    const source = document.querySelector('input[name="agreementSource"][value="document"]');
+    if (source) source.checked = true;
     const enabled = $("#settingsCustomAgreementEnabled");
     if (enabled) enabled.checked = true;
+    syncSettingsAgreementOptionFields();
+  });
+  $$('input[name="agreementSource"]').forEach((input) => input.addEventListener("change", syncSettingsAgreementOptionFields));
+  $("#settingsAgreementText")?.addEventListener("input", (event) => {
+    if (!String(event.currentTarget.value || "").trim()) return;
+    const source = document.querySelector('input[name="agreementSource"][value="text"]');
+    if (source) source.checked = true;
+    const enabled = $("#settingsCustomAgreementEnabled");
+    if (enabled) enabled.checked = true;
+    syncSettingsAgreementOptionFields();
   });
   $("#settingsAgreementAcknowledgementEnabled")?.addEventListener("change", syncSettingsAgreementOptionFields);
   $("#settingsAgreementCustomerFieldEnabled")?.addEventListener("change", syncSettingsAgreementOptionFields);

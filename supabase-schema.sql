@@ -331,7 +331,6 @@ as $$
       (
         payload ->> 'agreementMode' = 'custom-template'
         and lower(coalesce(payload ->> 'agreementAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
-        and nullif(trim(coalesce(payload #>> '{agreementDocument,storagePath}', '')), '') is not null
         and exists (
           select 1
           from public.app_settings settings
@@ -364,8 +363,21 @@ as $$
           ) requirements
           where settings.id = 'workspace'
             and lower(coalesce(settings.agreement_config ->> 'customAgreementEnabled', 'false')) in ('true', 't', '1', 'yes', 'on')
-            and nullif(trim(coalesce(settings.agreement_config #>> '{document,storagePath}', '')), '') is not null
-            and payload #>> '{agreementDocument,storagePath}' = settings.agreement_config #>> '{document,storagePath}'
+            and (
+              (
+                coalesce(settings.agreement_config ->> 'agreementSource', 'document') = 'text'
+                and nullif(trim(coalesce(settings.agreement_config ->> 'agreementText', '')), '') is not null
+                and payload ->> 'agreementBodyText' = settings.agreement_config ->> 'agreementText'
+                and payload #>> '{agreementConfiguration,agreementSource}' = 'text'
+                and payload #>> '{agreementConfiguration,agreementText}' = settings.agreement_config ->> 'agreementText'
+              )
+              or
+              (
+                coalesce(settings.agreement_config ->> 'agreementSource', 'document') <> 'text'
+                and nullif(trim(coalesce(settings.agreement_config #>> '{document,storagePath}', '')), '') is not null
+                and payload #>> '{agreementDocument,storagePath}' = settings.agreement_config #>> '{document,storagePath}'
+              )
+            )
             and (
               (
                 lower(coalesce(settings.agreement_config ->> 'signatureRequired', 'true')) in ('false', 'f', '0', 'no', 'off')
