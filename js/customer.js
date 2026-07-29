@@ -42,9 +42,10 @@ function customerWorkspaceAgreementConfig() {
     ? config.acknowledgements.map((item, index) => ({
         id: String(item?.id || \`acknowledgement-\${index + 1}\`).trim(),
         text: String(item?.text || "").trim(),
+        required: item?.required !== false,
       })).filter((item) => item.text)
     : (String(config?.acknowledgementText || "").trim()
-        ? [{ id: "acknowledgement-1", text: String(config.acknowledgementText).trim() }]
+        ? [{ id: "acknowledgement-1", text: String(config.acknowledgementText).trim(), required: true }]
         : []);
   const customerFields = Array.isArray(config?.customerFields)
     ? config.customerFields.map((item, index) => ({
@@ -153,7 +154,7 @@ function customerAgreementText() {
       "Effective date: " + customerAgreementRuntimeEffectiveDate(),
       config.agreementSource === "text" ? config.agreementText : "Uploaded document: " + (config.document?.name || ""),
       config.agreementSource === "document" ? "Private storage reference: " + (config.document?.storagePath || "") : "",
-      ...(config.acknowledgementEnabled ? config.acknowledgements.map((item, index) => \`Required acknowledgement \${index + 1}: \${item.text}\`) : []),
+      ...(config.acknowledgementEnabled ? config.acknowledgements.map((item, index) => \`\${item.required === false ? "Optional" : "Required"} acknowledgement \${index + 1}: \${item.text}\`) : []),
       config.signatureRequired ? "A drawn electronic signature is required." : "A drawn electronic signature is not required.",
       ...(config.customerFieldEnabled ? config.customerFields.map((item, index) => \`Required customer response \${index + 1}: \${item.text}\`) : []),
     ].filter(Boolean).join("\\n\\n");
@@ -316,6 +317,7 @@ function customerAgreementResponsePayload(estimate = customerEstimateDetails()) 
     ? config.acknowledgements.map((item, index) => ({
         id: item.id,
         text: item.text,
+        required: item.required !== false,
         accepted: Boolean($(\`#customerAgreementCustomAccepted-\${index}\`)?.checked),
       }))
     : [];
@@ -336,7 +338,9 @@ function customerAgreementResponsePayload(estimate = customerEstimateDetails()) 
     mediaPreferenceLabel: config.customAgreementEnabled ? "" : customerAgreementMediaLabel(mediaPreference),
     mediaOptOut: config.customAgreementEnabled ? false : mediaPreference === "opt-out",
     customAcknowledgementText: acknowledgementResponses[0]?.text || "",
-    customAcknowledgementAccepted: acknowledgementResponses.length ? acknowledgementResponses.every((item) => item.accepted) : false,
+    customAcknowledgementAccepted: acknowledgementResponses.length
+      ? acknowledgementResponses.every((item) => item.required === false || item.accepted)
+      : false,
     acknowledgementResponses,
     customFieldPrompt: customerFieldResponses[0]?.prompt || "",
     customFieldValue: customerFieldResponses[0]?.value || "",
@@ -346,6 +350,7 @@ function customerAgreementResponsePayload(estimate = customerEstimateDetails()) 
 
 function customerAgreementCompletedFieldsText(responses = {}) {
   const acknowledgementLines = arrayValue(responses.acknowledgementResponses).flatMap((item, index) => [
+    \`Acknowledgement \${index + 1} requirement: \${item?.required === false ? "Optional" : "Required"}\`,
     \`Acknowledgement \${index + 1}: \${item?.text || ""}\`,
     \`Acknowledgement \${index + 1} accepted: \${item?.accepted ? "Yes" : "No"}\`,
   ]);
@@ -394,7 +399,7 @@ function customerAgreementCompletionHtml(record = {}) {
     customAcknowledgementLabel: responses.customAcknowledgementText ? (responses.customAcknowledgementAccepted ? "Yes" : "No") : "",
   };
   const acknowledgementHtml = arrayValue(responses.acknowledgementResponses).map((item, index) => \`
-    <div class="detail-row"><strong>Acknowledgement \${index + 1}</strong><span>\${escapeHtml(item?.text || "")} — \${item?.accepted ? "Accepted" : "Not accepted"}</span></div>
+    <div class="detail-row"><strong>Acknowledgement \${index + 1} · \${item?.required === false ? "Optional" : "Required"}</strong><span>\${escapeHtml(item?.text || "")} — \${item?.accepted ? "Accepted" : "Not accepted"}</span></div>
   \`).join("");
   const customerFieldsHtml = arrayValue(responses.customerFieldResponses).map((item, index) => \`
     <div class="detail-row"><strong>\${escapeHtml(item?.prompt || \`Customer information \${index + 1}\`)}</strong><span>\${escapeHtml(item?.value || "")}</span></div>
@@ -526,9 +531,9 @@ function configureCustomerAgreementFields() {
     customAcknowledgements.hidden = !(custom && config.acknowledgementEnabled);
     customAcknowledgements.innerHTML = custom && config.acknowledgementEnabled
       ? config.acknowledgements.map((item, index) => \`
-          <label class="inline-check agreement-choice">
-            <input type="checkbox" name="agreementCustomAccepted-\${index}" id="customerAgreementCustomAccepted-\${index}" data-customer-agreement-ack-id="\${escapeHtml(item.id)}"\${existingAcknowledgements.get(item.id) ? " checked" : ""} />
-            <span>\${escapeHtml(item.text)}</span>
+          <label class="inline-check agreement-choice \${item.required === false ? "is-optional" : "is-required"}">
+            <input type="checkbox" name="agreementCustomAccepted-\${index}" id="customerAgreementCustomAccepted-\${index}" data-customer-agreement-ack-id="\${escapeHtml(item.id)}"\${item.required === false ? "" : " required"}\${existingAcknowledgements.get(item.id) ? " checked" : ""} />
+            <span><strong class="agreement-choice-requirement">\${item.required === false ? "Optional" : "Required"}</strong> \${escapeHtml(item.text)}</span>
           </label>
         \`).join("")
       : "";
@@ -686,7 +691,10 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
   const electronicConsent = $("#customerAgreementElectronicConsent");
   const accepted = $("#customerAgreementAccepted");
   const arbitrationAccepted = $("#customerAgreementArbitrationAccepted");
-  const customAcceptedFields = config.acknowledgements.map((item, index) => $("#customerAgreementCustomAccepted-" + index)).filter(Boolean);
+  const customAcceptedFields = config.acknowledgements.map((item, index) => ({
+    item,
+    field: $("#customerAgreementCustomAccepted-" + index),
+  })).filter((entry) => Boolean(entry.field));
   const customResponseFields = config.customerFields.map((item, index) => $("#customerAgreementCustomResponse-" + index)).filter(Boolean);
   const signatureData = $("#customerAgreementSignatureData")?.value || "";
   const signatureError = $("#customerAgreementSignatureError");
@@ -696,7 +704,7 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
     electronicConsent,
     accepted,
     arbitrationAccepted,
-    ...customAcceptedFields,
+    ...customAcceptedFields.map((entry) => entry.field),
     ...customResponseFields,
     ...$$("input[name=\\"agreementEmergencyTreatmentChoice\\"]"),
     ...$$("input[name=\\"agreementMediaPreference\\"]"),
@@ -753,7 +761,8 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
     message = message || "Separate arbitration acceptance is required before signing.";
   }
   if (custom && config.acknowledgementEnabled) {
-    customAcceptedFields.forEach((field) => {
+    customAcceptedFields.forEach(({ item, field }) => {
+      if (item.required === false) return;
       if (field.checked) return;
       setFieldError(field, "This agreement acknowledgement is required.");
       firstInvalid = firstInvalid || field;
@@ -856,8 +865,8 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
     electronicConsentAccepted: custom ? (config.signatureRequired ? Boolean($("#customerAgreementElectronicConsent")?.checked) : false) : true,
     agreementAccepted: true,
     arbitrationAccepted: custom ? false : true,
-    customAcknowledgementRequired: Boolean(custom && config.acknowledgementEnabled),
-    customAcknowledgementAccepted: Boolean(custom && config.acknowledgementEnabled && agreementResponses.acknowledgementResponses.every((item) => item.accepted)),
+    customAcknowledgementRequired: Boolean(custom && config.acknowledgementEnabled && config.acknowledgements.some((item) => item.required !== false)),
+    customAcknowledgementAccepted: Boolean(custom && config.acknowledgementEnabled && agreementResponses.acknowledgementResponses.every((item) => item.required === false || item.accepted)),
     customAcknowledgementResponses: agreementResponses.acknowledgementResponses,
     customerResponseRequired: Boolean(custom && config.customerFieldEnabled),
     customerResponseValue: custom && config.customerFieldEnabled ? (agreementResponses.customerFieldResponses[0]?.value || "") : "",

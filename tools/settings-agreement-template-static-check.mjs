@@ -22,6 +22,10 @@ const textAgreementMigration = fs.readFileSync(
   new URL("../supabase/migrations/20260729193000_allow_text_workspace_agreements.sql", import.meta.url),
   "utf8",
 );
+const optionalAcknowledgementMigration = fs.readFileSync(
+  new URL("../supabase/migrations/20260729200000_allow_optional_agreement_acknowledgements.sql", import.meta.url),
+  "utf8",
+);
 const mediaAccess = fs.readFileSync(
   new URL("../supabase/functions/media-access/index.ts", import.meta.url),
   "utf8",
@@ -34,6 +38,7 @@ const required = [
   [index, 'name="agreementSource"', "document or wording source selector"],
   [index, 'id="settingsAgreementAcknowledgementEnabled"', "optional acknowledgement control"],
   [index, 'id="addSettingsAgreementAcknowledgementButton"', "repeatable acknowledgement control"],
+  [index, "Add customer acknowledgement checkboxes", "acknowledgement group control"],
   [index, 'id="settingsAgreementSignatureRequired"', "optional e-sign control"],
   [index, 'id="settingsAgreementCustomerFieldEnabled"', "optional customer response control"],
   [index, 'id="addSettingsAgreementCustomerFieldButton"', "repeatable customer information control"],
@@ -42,6 +47,7 @@ const required = [
   [settings, 'agreementSource: "document"', "agreement source default"],
   [settings, 'agreementText: ""', "agreement wording persistence"],
   [settings, "sanitizeWorkspaceAgreementItems", "repeatable agreement item validation"],
+  [settings, 'data-agreement-item-required="acknowledgement"', "required or optional acknowledgement control"],
   [settings, "addSettingsAgreementItem", "repeatable setup item behavior"],
   [settings, 'uploadMediaFiles(input, "agreement-templates/workspace"', "private agreement upload"],
   [settings, "agreement_config: sanitizeWorkspaceAgreementConfig", "remote agreement persistence"],
@@ -49,6 +55,7 @@ const required = [
   [customer, 'signatureMethod: custom && !config.signatureRequired ? "electronic-acceptance" : "drawn-signature-pad"', "optional signature evidence"],
   [customer, "customAcknowledgementRequired", "custom acknowledgement evidence"],
   [customer, "customAcknowledgementResponses", "all acknowledgement evidence"],
+  [customer, 'item.required === false || item.accepted', "optional acknowledgement validation"],
   [customer, "customerResponseRequired", "customer response evidence"],
   [customer, "customerFieldResponses", "all customer information evidence"],
   [customer, "agreementBodyText", "signed contract wording snapshot"],
@@ -70,6 +77,9 @@ const required = [
   [repeatableMigration, "jsonb_array_elements(requirements.customer_fields) with ordinality", "repeatable customer information validation"],
   [textAgreementMigration, "payload ->> 'agreementBodyText' = settings.agreement_config ->> 'agreementText'", "exact contract wording validation"],
   [textAgreementMigration, "payload #>> '{agreementConfiguration,agreementText}' = settings.agreement_config ->> 'agreementText'", "signed agreement wording snapshot validation"],
+  [optionalAcknowledgementMigration, "'required', lower(coalesce(item ->> 'required', 'true'))", "legacy-safe acknowledgement requirement normalization"],
+  [optionalAcknowledgementMigration, "customAcknowledgementRequired", "required acknowledgement summary validation"],
+  [optionalAcknowledgementMigration, "and lower(coalesce((payload -> 'customAcknowledgementResponses'", "required-only acceptance validation"],
   [mediaAccess, 'body.recordType === "appSettingsAgreement"', "exact agreement media authorization"],
   [mediaAccess, "payloadReferencesExactPath(config.document, storagePath)", "exact private path check"],
 ];

@@ -340,11 +340,22 @@ as $$
                 when lower(coalesce(settings.agreement_config ->> 'acknowledgementEnabled', 'false')) not in ('true', 't', '1', 'yes', 'on')
                   then '[]'::jsonb
                 when jsonb_typeof(settings.agreement_config -> 'acknowledgements') = 'array'
-                  then settings.agreement_config -> 'acknowledgements'
+                  then coalesce((
+                    select jsonb_agg(
+                      jsonb_build_object(
+                        'id', coalesce(nullif(trim(item ->> 'id'), ''), 'acknowledgement-' || position),
+                        'text', coalesce(item ->> 'text', ''),
+                        'required', lower(coalesce(item ->> 'required', 'true')) in ('true', 't', '1', 'yes', 'on')
+                      )
+                      order by position
+                    )
+                    from jsonb_array_elements(settings.agreement_config -> 'acknowledgements') with ordinality acknowledgement(item, position)
+                  ), '[]'::jsonb)
                 when nullif(trim(coalesce(settings.agreement_config ->> 'acknowledgementText', '')), '') is not null
                   then jsonb_build_array(jsonb_build_object(
                     'id', 'acknowledgement-1',
-                    'text', settings.agreement_config ->> 'acknowledgementText'
+                    'text', settings.agreement_config ->> 'acknowledgementText',
+                    'required', true
                   ))
                 else '[]'::jsonb
               end as acknowledgements,
@@ -402,16 +413,37 @@ as $$
               )
               or (
                 jsonb_array_length(requirements.acknowledgements) > 0
-                and lower(coalesce(payload ->> 'customAcknowledgementRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
-                and lower(coalesce(payload ->> 'customAcknowledgementAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
                 and jsonb_typeof(payload -> 'customAcknowledgementResponses') = 'array'
                 and jsonb_array_length(payload -> 'customAcknowledgementResponses') = jsonb_array_length(requirements.acknowledgements)
+                and (
+                  lower(coalesce(payload ->> 'customAcknowledgementRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
+                ) = exists (
+                  select 1
+                  from jsonb_array_elements(requirements.acknowledgements) expected(item)
+                  where lower(coalesce(expected.item ->> 'required', 'true')) in ('true', 't', '1', 'yes', 'on')
+                )
+                and (
+                  not exists (
+                    select 1
+                    from jsonb_array_elements(requirements.acknowledgements) expected(item)
+                    where lower(coalesce(expected.item ->> 'required', 'true')) in ('true', 't', '1', 'yes', 'on')
+                  )
+                  or lower(coalesce(payload ->> 'customAcknowledgementAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
+                )
                 and not exists (
                   select 1
                   from jsonb_array_elements(requirements.acknowledgements) with ordinality expected(item, position)
                   where coalesce((payload -> 'customAcknowledgementResponses' -> ((expected.position - 1)::integer)) ->> 'id', '') <> coalesce(expected.item ->> 'id', '')
                      or coalesce((payload -> 'customAcknowledgementResponses' -> ((expected.position - 1)::integer)) ->> 'text', '') <> coalesce(expected.item ->> 'text', '')
-                     or lower(coalesce((payload -> 'customAcknowledgementResponses' -> ((expected.position - 1)::integer)) ->> 'accepted', 'false')) not in ('true', 't', '1', 'yes', 'on')
+                     or (
+                       lower(coalesce((payload -> 'customAcknowledgementResponses' -> ((expected.position - 1)::integer)) ->> 'required', 'true')) in ('true', 't', '1', 'yes', 'on')
+                     ) <> (
+                       lower(coalesce(expected.item ->> 'required', 'true')) in ('true', 't', '1', 'yes', 'on')
+                     )
+                     or (
+                       lower(coalesce(expected.item ->> 'required', 'true')) in ('true', 't', '1', 'yes', 'on')
+                       and lower(coalesce((payload -> 'customAcknowledgementResponses' -> ((expected.position - 1)::integer)) ->> 'accepted', 'false')) not in ('true', 't', '1', 'yes', 'on')
+                     )
                 )
               )
             )

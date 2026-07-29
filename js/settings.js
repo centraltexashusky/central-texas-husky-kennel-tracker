@@ -66,7 +66,11 @@ function sanitizeWorkspaceAgreementItems(items = [], legacyText = "", prefix = "
       const text = String(value.text || value.prompt || "").trim().slice(0, 1000);
       if (!text) return null;
       const id = String(value.id || \`\${prefix}-\${index + 1}\`).trim().slice(0, 120) || \`\${prefix}-\${index + 1}\`;
-      return { id, text };
+      return {
+        id,
+        text,
+        ...(prefix === "acknowledgement" ? { required: value.required !== false } : {}),
+      };
     })
     .filter(Boolean)
     .slice(0, 20);
@@ -242,9 +246,20 @@ function settingsAgreementRepeatableItemHtml(type = "acknowledgement", item = {}
     : "Enter the information requested for this agreement.";
   return \`
     <article class="settings-agreement-repeatable-item" data-agreement-item-type="\${escapeHtml(type)}">
-      <label>\${escapeHtml(label)}
-        <textarea data-agreement-item-text="\${escapeHtml(type)}" data-agreement-item-id="\${escapeHtml(item.id || "")}" rows="3" maxlength="1000" placeholder="\${escapeHtml(placeholder)}">\${escapeHtml(item.text || "")}</textarea>
-      </label>
+      <div class="settings-agreement-repeatable-main">
+        <label>\${escapeHtml(label)}
+          <textarea data-agreement-item-text="\${escapeHtml(type)}" data-agreement-item-id="\${escapeHtml(item.id || "")}" rows="3" maxlength="1000" placeholder="\${escapeHtml(placeholder)}">\${escapeHtml(item.text || "")}</textarea>
+        </label>
+        \${isAcknowledgement ? \`
+          <label class="settings-agreement-requirement-field">Customer response
+            <select data-agreement-item-required="acknowledgement" aria-label="Requirement for \${escapeHtml(label.toLowerCase())}">
+              <option value="required"\${item.required === false ? "" : " selected"}>Required checkbox</option>
+              <option value="optional"\${item.required === false ? " selected" : ""}>Optional checkbox</option>
+            </select>
+            <small class="field-help">Required blocks submission until checked. Optional records the customer's choice without blocking them.</small>
+          </label>
+        \` : ""}
+      </div>
       <button type="button" class="remove-task-button settings-agreement-remove-item" data-action="remove-agreement-item" data-agreement-item-type="\${escapeHtml(type)}" aria-label="Remove \${escapeHtml(label.toLowerCase())}">×</button>
     </article>
   \`;
@@ -255,7 +270,7 @@ function renderSettingsAgreementRepeatableItems(type = "acknowledgement", items 
   const container = $(isAcknowledgement ? "#settingsAgreementAcknowledgementItems" : "#settingsAgreementCustomerFieldItems");
   if (!container) return;
   const fallback = isAcknowledgement
-    ? { id: "acknowledgement-1", text: "" }
+    ? { id: "acknowledgement-1", text: "", required: true }
     : { id: "customer-field-1", text: "" };
   const renderItems = items.length ? items : [fallback];
   container.innerHTML = renderItems.map((item, index) => settingsAgreementRepeatableItemHtml(type, item, index)).join("");
@@ -263,10 +278,17 @@ function renderSettingsAgreementRepeatableItems(type = "acknowledgement", items 
 
 function settingsAgreementItemsFromForm(type = "acknowledgement") {
   return $$('[data-agreement-item-text="' + type + '"]')
-    .map((field, index) => ({
-      id: String(field.dataset.agreementItemId || \`\${type}-\${index + 1}\`).trim(),
-      text: String(field.value || "").trim(),
-    }))
+    .map((field, index) => {
+      const item = {
+        id: String(field.dataset.agreementItemId || \`\${type}-\${index + 1}\`).trim(),
+        text: String(field.value || "").trim(),
+      };
+      if (type === "acknowledgement") {
+        item.required = field.closest(".settings-agreement-repeatable-item")
+          ?.querySelector('[data-agreement-item-required="acknowledgement"]')?.value !== "optional";
+      }
+      return item;
+    })
     .filter((item) => item.text)
     .slice(0, 20);
 }
@@ -279,6 +301,7 @@ function addSettingsAgreementItem(type = "acknowledgement") {
   items.push({
     id: \`\${type}-\${Date.now().toString(36)}-\${items.length + 1}\`,
     text: "",
+    ...(isAcknowledgement ? { required: true } : {}),
   });
   renderSettingsAgreementRepeatableItems(type, items);
   syncSettingsAgreementOptionFields();
@@ -320,6 +343,9 @@ function syncSettingsAgreementOptionFields() {
   $$('[data-agreement-item-text="acknowledgement"]').forEach((field) => {
     field.disabled = !acknowledgementEnabled;
     field.closest(".settings-agreement-repeatable-item")?.classList.toggle("is-disabled", !acknowledgementEnabled);
+  });
+  $$('[data-agreement-item-required="acknowledgement"]').forEach((field) => {
+    field.disabled = !acknowledgementEnabled;
   });
   const addAcknowledgement = $("#addSettingsAgreementAcknowledgementButton");
   if (addAcknowledgement) addAcknowledgement.disabled = !acknowledgementEnabled;

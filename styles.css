@@ -1750,6 +1750,17 @@ body.owned-dog-modal-open {
   max-width: none;
 }
 
+.settings-agreement-repeatable-main {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-agreement-requirement-field {
+  display: grid;
+  gap: 6px;
+  max-width: 360px !important;
+}
+
 .settings-agreement-repeatable-item textarea {
   width: 100%;
 }
@@ -2886,8 +2897,20 @@ button.is-loading {
   margin: 0;
 }
 
-.agreement-required-checks .agreement-choice {
+.agreement-required-checks .agreement-choice:not(.is-optional) {
   border-color: var(--red);
+}
+
+.agreement-required-checks .agreement-choice.is-optional {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.agreement-choice-requirement {
+  display: inline-block;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  margin-right: 0.35rem;
+  text-transform: uppercase;
 }
 
 #customerSignatureBlock > label.inline-check {
