@@ -173,6 +173,26 @@ function sourceRowIsTrustedMediaGrant(
     && (recordHasEmail(payload, user.email || "") || recordAudienceHasEmail(payload, user.email || ""));
 }
 
+async function workspaceAgreementReferencesExactPath(
+  adminClient: ReturnType<typeof createClient>,
+  storagePath: string,
+) {
+  const { data, error } = await adminClient
+    .from("app_settings")
+    .select("agreement_config")
+    .eq("id", "workspace")
+    .maybeSingle();
+  if (error) {
+    console.warn("Could not resolve the workspace agreement document.", error.message);
+    return false;
+  }
+  const config = data?.agreement_config && typeof data.agreement_config === "object"
+    ? data.agreement_config as Record<string, unknown>
+    : {};
+  if (config.customAgreementEnabled !== true) return false;
+  return payloadReferencesExactPath(config.document, storagePath);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed." }, 405);
@@ -200,6 +220,13 @@ Deno.serve(async (req) => {
 
   const isStaff = await callerIsStaff(adminClient, user.email);
   let allowed = isStaff || storageOwnerUserId(storagePath) === user.id;
+
+  if (!allowed && body.recordType === "appSettingsAgreement") {
+    // Customers may read only the exact document currently enabled in the
+    // singleton workspace agreement settings. This never grants directory or
+    // admin-owner access to any other uploaded file.
+    allowed = await workspaceAgreementReferencesExactPath(adminClient, storagePath);
+  }
 
   if (!allowed && body.recordId) {
     // Efficiency flow: non-staff source-record authorization must go through the user client so RLS still applies.

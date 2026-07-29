@@ -1615,6 +1615,10 @@ body.owned-dog-modal-open {
   max-width: 860px;
 }
 
+.settings-agreement-template-panel {
+  margin-top: 20px;
+}
+
 .settings-setup-form {
   display: grid;
   gap: 20px;
@@ -1648,6 +1652,69 @@ body.owned-dog-modal-open {
 
 .settings-brand-preview > small {
   color: var(--muted);
+}
+
+.settings-agreement-document-card,
+.settings-agreement-option {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.settings-agreement-document-card {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-agreement-document-status {
+  max-width: 620px;
+}
+
+.settings-agreement-document-status .record-card {
+  margin: 0;
+}
+
+.settings-agreement-option summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.settings-agreement-option-content {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.settings-agreement-option-content label {
+  max-width: 720px;
+}
+
+.settings-agreement-option-content .is-disabled {
+  opacity: 0.58;
+}
+
+.customer-agreement-uploaded-document {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.customer-agreement-uploaded-document .media-preview-button {
+  justify-self: start;
+}
+
+#customerAgreementCustomResponseContainer {
+  margin: 0;
+}
+
+#customerAgreementDrawnSignatureFields {
+  display: grid;
+  gap: 12px;
 }
 
 .section-heading {
@@ -2779,6 +2846,11 @@ button.is-loading {
   background: #F8FBFF !important;
   border-color: #D5E2EA !important;
   color: #172033 !important;
+}
+
+:root[data-theme="light"] body:not(.is-login-view) .customer-agreement-uploaded-document {
+  background: #F8FBFF !important;
+  border-color: #D5E2EA !important;
 }
 
 :root[data-theme="light"] body:not(.is-login-view) :where(.customer-agreement-status strong, .customer-agreement-document h3, .customer-agreement-document h4, .customer-agreement-document strong, .signed-agreement-card strong) {

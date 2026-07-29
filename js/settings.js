@@ -26,13 +26,60 @@ var financialIncomeFilter = "all";
 var financialLineItemSort = "date-desc";
 var DEFAULT_APP_ORGANIZATION_NAME = "Central Texas Husky";
 var APP_BRANDING_CONFIG_ID = "workspace-branding";
+var DEFAULT_WORKSPACE_AGREEMENT_CONFIG = {
+  customAgreementEnabled: false,
+  agreementTitle: "Boarding Services Agreement",
+  document: null,
+  acknowledgementEnabled: false,
+  acknowledgementText: "",
+  signatureRequired: true,
+  customerFieldEnabled: false,
+  customerFieldPrompt: "",
+  updatedAt: "",
+  updatedBy: "",
+};
+
+function sanitizeWorkspaceAgreementDocument(documentRecord = null) {
+  if (!documentRecord || typeof documentRecord !== "object") return null;
+  const storagePath = String(documentRecord.storagePath || "").trim();
+  if (!storagePath) return null;
+  return {
+    storagePath,
+    name: String(documentRecord.name || documentRecord.originalName || "Customer agreement").trim() || "Customer agreement",
+    type: String(documentRecord.type || "application/octet-stream").trim() || "application/octet-stream",
+    size: Math.max(0, Number(documentRecord.size || 0)),
+    savedAt: String(documentRecord.savedAt || "").trim(),
+  };
+}
+
+function sanitizeWorkspaceAgreementConfig(config = {}) {
+  const documentRecord = sanitizeWorkspaceAgreementDocument(config.document);
+  return {
+    ...DEFAULT_WORKSPACE_AGREEMENT_CONFIG,
+    customAgreementEnabled: Boolean(config.customAgreementEnabled && documentRecord),
+    agreementTitle: String(config.agreementTitle || DEFAULT_WORKSPACE_AGREEMENT_CONFIG.agreementTitle).trim().slice(0, 120) || DEFAULT_WORKSPACE_AGREEMENT_CONFIG.agreementTitle,
+    document: documentRecord,
+    acknowledgementEnabled: Boolean(config.acknowledgementEnabled),
+    acknowledgementText: String(config.acknowledgementText || "").trim().slice(0, 1000),
+    signatureRequired: config.signatureRequired !== false,
+    customerFieldEnabled: Boolean(config.customerFieldEnabled),
+    customerFieldPrompt: String(config.customerFieldPrompt || "").trim().slice(0, 1000),
+    updatedAt: String(config.updatedAt || "").trim(),
+    updatedBy: normalizeEmail(config.updatedBy || ""),
+  };
+}
 
 function appBrandingConfig() {
   const record = readRecords("appConfig").find((item) => item.id === APP_BRANDING_CONFIG_ID && !item.removed) || {};
   return {
     ...record,
     organizationName: String(record.organizationName || DEFAULT_APP_ORGANIZATION_NAME).trim() || DEFAULT_APP_ORGANIZATION_NAME,
+    agreementConfig: sanitizeWorkspaceAgreementConfig(record.agreementConfig || {}),
   };
+}
+
+function appAgreementConfig() {
+  return appBrandingConfig().agreementConfig;
 }
 
 function applyAppBranding() {
@@ -52,7 +99,7 @@ async function loadRemoteAppBranding() {
   try {
     const { data, error } = await supabaseClient
       .from("app_settings")
-      .select("id, organization_name, updated_at, updated_by")
+      .select("id, organization_name, agreement_config, updated_at, updated_by")
       .eq("id", "workspace")
       .maybeSingle();
     if (error) throw error;
@@ -61,6 +108,7 @@ async function loadRemoteAppBranding() {
         type: "appConfig",
         id: APP_BRANDING_CONFIG_ID,
         organizationName: data.organization_name,
+        agreementConfig: sanitizeWorkspaceAgreementConfig(data.agreement_config || {}),
         submittedAt: data.updated_at || new Date().toISOString(),
         updatedAt: data.updated_at || new Date().toISOString(),
         updatedBy: data.updated_by || "",
@@ -81,6 +129,7 @@ async function persistAppBrandingConfig(record = {}) {
     .upsert({
       id: "workspace",
       organization_name: record.organizationName,
+      agreement_config: sanitizeWorkspaceAgreementConfig(record.agreementConfig || {}),
       updated_at: record.updatedAt || new Date().toISOString(),
       updated_by: currentUser?.email || "",
     });
@@ -95,6 +144,7 @@ function renderSettingsSetup() {
   input.value = config.organizationName;
   const preview = $("#settingsOrganizationNamePreview");
   if (preview) preview.textContent = config.organizationName;
+  renderSettingsAgreement();
 }
 
 function updateSettingsSetupPreview() {
@@ -142,6 +192,167 @@ function resetSettingsSetup() {
   input.value = DEFAULT_APP_ORGANIZATION_NAME;
   updateSettingsSetupPreview();
   input.focus();
+}
+
+function settingsAgreementDocumentStatusHtml(config = appAgreementConfig()) {
+  const documentRecord = config.document;
+  if (!documentRecord) {
+    return '<article class="record-card compact-record-card"><strong>Built-in agreement is active</strong><p>No custom agreement document has been uploaded.</p></article>';
+  }
+  return '<article class="record-card compact-record-card"><span>Uploaded agreement</span><strong>' + escapeHtml(documentRecord.name) + '</strong><p>' + escapeHtml(fileSizeLabel(documentRecord.size || 0)) + (documentRecord.savedAt ? " | Uploaded " + escapeHtml(formatDateTime(documentRecord.savedAt) || documentRecord.savedAt) : "") + '</p><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="' + escapeHtml(documentRecord.type) + '" data-media-name="' + escapeHtml(documentRecord.name) + '"' + mediaAccessAttrs(documentRecord, { sourceRecordType: "appSettingsAgreement" }) + '>Open uploaded agreement</button></article>';
+}
+
+function syncSettingsAgreementOptionFields() {
+  const acknowledgementEnabled = Boolean($("#settingsAgreementAcknowledgementEnabled")?.checked);
+  const acknowledgementText = $("#settingsAgreementAcknowledgementText");
+  const acknowledgementLabel = $("#settingsAgreementAcknowledgementTextLabel");
+  if (acknowledgementText) acknowledgementText.disabled = !acknowledgementEnabled;
+  if (acknowledgementLabel) acknowledgementLabel.classList.toggle("is-disabled", !acknowledgementEnabled);
+
+  const customerFieldEnabled = Boolean($("#settingsAgreementCustomerFieldEnabled")?.checked);
+  const customerFieldPrompt = $("#settingsAgreementCustomerFieldPrompt");
+  const customerFieldLabel = $("#settingsAgreementCustomerFieldPromptLabel");
+  if (customerFieldPrompt) customerFieldPrompt.disabled = !customerFieldEnabled;
+  if (customerFieldLabel) customerFieldLabel.classList.toggle("is-disabled", !customerFieldEnabled);
+}
+
+function renderSettingsAgreement() {
+  const form = $("#settingsAgreementForm");
+  if (!form) return;
+  const config = appAgreementConfig();
+  $("#settingsAgreementTitle").value = config.agreementTitle;
+  $("#settingsCustomAgreementEnabled").checked = config.customAgreementEnabled;
+  $("#settingsAgreementAcknowledgementEnabled").checked = config.acknowledgementEnabled;
+  $("#settingsAgreementAcknowledgementText").value = config.acknowledgementText;
+  $("#settingsAgreementSignatureRequired").checked = config.signatureRequired;
+  $("#settingsAgreementCustomerFieldEnabled").checked = config.customerFieldEnabled;
+  $("#settingsAgreementCustomerFieldPrompt").value = config.customerFieldPrompt;
+  const fileInput = $("#settingsAgreementDocument");
+  if (fileInput) fileInput.value = "";
+  const status = $("#settingsAgreementDocumentStatus");
+  if (status) status.innerHTML = settingsAgreementDocumentStatusHtml(config);
+  syncSettingsAgreementOptionFields();
+}
+
+async function uploadWorkspaceAgreementDocument(input) {
+  const results = await uploadMediaFiles(input, "agreement-templates/workspace", {
+    allowedTypes: [
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ],
+    allowedExtensions: [".pdf", ".doc", ".docx"],
+    optimizeImages: false,
+    maxBytes: MAX_DOCUMENT_UPLOAD_BYTES,
+    label: "agreement document",
+  });
+  return results.find((item) => mediaItemHasOpenableSource(item)) || null;
+}
+
+async function saveSettingsAgreement(event) {
+  event?.preventDefault();
+  if (currentRole() !== "admin") {
+    showToast("Only admins can change the customer agreement.");
+    return null;
+  }
+  const existingConfig = appAgreementConfig();
+  const fileInput = $("#settingsAgreementDocument");
+  const selectedFile = fileInput?.files?.[0] || null;
+  let documentRecord = existingConfig.document;
+  if (selectedFile) {
+    documentRecord = await uploadWorkspaceAgreementDocument(fileInput);
+    if (!documentRecord) {
+      showToast("The agreement document could not be uploaded.");
+      return null;
+    }
+  }
+
+  const customAgreementEnabled = Boolean($("#settingsCustomAgreementEnabled")?.checked);
+  const agreementTitle = String($("#settingsAgreementTitle")?.value || "").trim();
+  const acknowledgementEnabled = Boolean($("#settingsAgreementAcknowledgementEnabled")?.checked);
+  const acknowledgementText = String($("#settingsAgreementAcknowledgementText")?.value || "").trim();
+  const signatureRequired = Boolean($("#settingsAgreementSignatureRequired")?.checked);
+  const customerFieldEnabled = Boolean($("#settingsAgreementCustomerFieldEnabled")?.checked);
+  const customerFieldPrompt = String($("#settingsAgreementCustomerFieldPrompt")?.value || "").trim();
+
+  if (!agreementTitle) {
+    showToast("Enter an agreement title.");
+    $("#settingsAgreementTitle")?.focus();
+    return null;
+  }
+  if (customAgreementEnabled && !documentRecord) {
+    showToast("Upload and save an agreement document before enabling it.");
+    $("#settingsAgreementDocument")?.focus();
+    return null;
+  }
+  if (acknowledgementEnabled && !acknowledgementText) {
+    showToast("Enter the acknowledgement checkbox text.");
+    $("#settingsAgreementAcknowledgementText")?.focus();
+    return null;
+  }
+  if (customerFieldEnabled && !customerFieldPrompt) {
+    showToast("Enter the information prompt shown to customers.");
+    $("#settingsAgreementCustomerFieldPrompt")?.focus();
+    return null;
+  }
+
+  const existingRecord = readRecords("appConfig").find((item) => item.id === APP_BRANDING_CONFIG_ID) || {};
+  const now = new Date().toISOString();
+  const agreementConfig = sanitizeWorkspaceAgreementConfig({
+    customAgreementEnabled,
+    agreementTitle,
+    document: documentRecord,
+    acknowledgementEnabled,
+    acknowledgementText,
+    signatureRequired,
+    customerFieldEnabled,
+    customerFieldPrompt,
+    updatedAt: now,
+    updatedBy: currentUser?.email || "",
+  });
+  const record = upsertRecord("appConfig", {
+    ...existingRecord,
+    type: "appConfig",
+    id: APP_BRANDING_CONFIG_ID,
+    organizationName: existingRecord.organizationName || DEFAULT_APP_ORGANIZATION_NAME,
+    agreementConfig,
+    submittedAt: existingRecord.submittedAt || now,
+    updatedAt: now,
+    updatedBy: currentUser?.email || "",
+    removed: false,
+  });
+  await persistAppBrandingConfig(record);
+  await addAuditLog("Updated customer agreement setup", "appConfig", { ...record, name: agreementConfig.agreementTitle }, customAgreementEnabled ? "Custom agreement enabled" : "Built-in agreement retained");
+  renderSettingsAgreement();
+  showToast("Customer agreement setup saved.");
+  return record;
+}
+
+async function resetSettingsAgreement() {
+  if (currentRole() !== "admin") return null;
+  const existingRecord = readRecords("appConfig").find((item) => item.id === APP_BRANDING_CONFIG_ID) || {};
+  const now = new Date().toISOString();
+  const agreementConfig = sanitizeWorkspaceAgreementConfig({
+    ...DEFAULT_WORKSPACE_AGREEMENT_CONFIG,
+    updatedAt: now,
+    updatedBy: currentUser?.email || "",
+  });
+  const record = upsertRecord("appConfig", {
+    ...existingRecord,
+    type: "appConfig",
+    id: APP_BRANDING_CONFIG_ID,
+    organizationName: existingRecord.organizationName || DEFAULT_APP_ORGANIZATION_NAME,
+    agreementConfig,
+    submittedAt: existingRecord.submittedAt || now,
+    updatedAt: now,
+    updatedBy: currentUser?.email || "",
+    removed: false,
+  });
+  await persistAppBrandingConfig(record);
+  await addAuditLog("Restored built-in customer agreement", "appConfig", { ...record, name: "Built-in agreement" }, "Custom agreement disabled");
+  renderSettingsAgreement();
+  showToast("The built-in boarding agreement is active.");
+  return record;
 }
 
 function readTableConfig() {

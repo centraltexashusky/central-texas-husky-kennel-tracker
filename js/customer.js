@@ -26,6 +26,59 @@ var customerAgreementControlsInitialized = false;
 var customerAgreementSignatureDrawing = false;
 var customerAgreementSignatureHasInk = false;
 
+function customerWorkspaceAgreementConfig() {
+  const config = typeof appAgreementConfig === "function" ? appAgreementConfig() : {};
+  const documentRecord = config?.document && typeof config.document === "object" && String(config.document.storagePath || "").trim()
+    ? {
+        storagePath: String(config.document.storagePath || "").trim(),
+        name: String(config.document.name || "Customer agreement").trim() || "Customer agreement",
+        type: String(config.document.type || "application/octet-stream").trim() || "application/octet-stream",
+        size: Math.max(0, Number(config.document.size || 0)),
+        savedAt: String(config.document.savedAt || "").trim(),
+      }
+    : null;
+  return {
+    customAgreementEnabled: Boolean(config?.customAgreementEnabled && documentRecord),
+    agreementTitle: String(config?.agreementTitle || "Boarding Services Agreement").trim() || "Boarding Services Agreement",
+    document: documentRecord,
+    acknowledgementEnabled: Boolean(config?.acknowledgementEnabled),
+    acknowledgementText: String(config?.acknowledgementText || "").trim(),
+    signatureRequired: config?.signatureRequired !== false,
+    customerFieldEnabled: Boolean(config?.customerFieldEnabled),
+    customerFieldPrompt: String(config?.customerFieldPrompt || "").trim(),
+    updatedAt: String(config?.updatedAt || "").trim(),
+  };
+}
+
+function customerAgreementUsesCustomTemplate() {
+  return customerWorkspaceAgreementConfig().customAgreementEnabled;
+}
+
+function customerAgreementRuntimeTitle() {
+  const config = customerWorkspaceAgreementConfig();
+  return config.customAgreementEnabled ? config.agreementTitle : CUSTOMER_BOARDING_AGREEMENT_TITLE;
+}
+
+function customerAgreementRuntimeVersion() {
+  const config = customerWorkspaceAgreementConfig();
+  if (!config.customAgreementEnabled) return CUSTOMER_BOARDING_AGREEMENT_VERSION;
+  return "workspace-" + customerAgreementSimpleHash([
+    config.updatedAt,
+    config.document?.storagePath,
+    config.document?.size,
+    config.acknowledgementEnabled,
+    config.acknowledgementText,
+    config.signatureRequired,
+    config.customerFieldEnabled,
+    config.customerFieldPrompt,
+  ].join("|"), 24);
+}
+
+function customerAgreementRuntimeEffectiveDate() {
+  const config = customerWorkspaceAgreementConfig();
+  return config.customAgreementEnabled && config.updatedAt ? String(config.updatedAt).slice(0, 10) : CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE;
+}
+
 function customerAgreementAppliesToEstimate(estimate = customerEstimateDetails()) {
   return !estimate?.isServiceRequest;
 }
@@ -64,6 +117,19 @@ function customerAgreementClauses() {
 }
 
 function customerAgreementText() {
+  const config = customerWorkspaceAgreementConfig();
+  if (config.customAgreementEnabled) {
+    return [
+      config.agreementTitle,
+      "Version: " + customerAgreementRuntimeVersion(),
+      "Effective date: " + customerAgreementRuntimeEffectiveDate(),
+      "Uploaded document: " + (config.document?.name || ""),
+      "Private storage reference: " + (config.document?.storagePath || ""),
+      config.acknowledgementEnabled ? "Required acknowledgement: " + config.acknowledgementText : "",
+      config.signatureRequired ? "A drawn electronic signature is required." : "A drawn electronic signature is not required.",
+      config.customerFieldEnabled ? "Required customer response: " + config.customerFieldPrompt : "",
+    ].filter(Boolean).join("\\n\\n");
+  }
   return [
     CUSTOMER_BOARDING_AGREEMENT_TITLE,
     "Version: " + CUSTOMER_BOARDING_AGREEMENT_VERSION,
@@ -213,19 +279,24 @@ function prefillCustomerAgreementFields(estimate = customerEstimateDetails()) {
 }
 
 function customerAgreementResponsePayload(estimate = customerEstimateDetails()) {
+  const config = customerWorkspaceAgreementConfig();
   const emergencyTreatmentChoice = customerAgreementCheckedValue("agreementEmergencyTreatmentChoice");
   const mediaPreference = customerAgreementCheckedValue("agreementMediaPreference") || "authorized";
   const treatmentLimitRaw = customerAgreementFieldValue("customerAgreementTreatmentLimitAmount");
   const treatmentLimitAmount = emergencyTreatmentChoice === "limit" ? treatmentLimitRaw : "";
   return {
-    signerLegalName: customerAgreementFieldValue("customerAgreementSignatureNameConfirm"),
+    signerLegalName: customerAgreementFieldValue("customerAgreementSignatureNameConfirm") || currentUser?.name || "",
     ownerEmail: normalizeEmail(currentUser?.email),
-    emergencyTreatmentChoice,
-    emergencyTreatmentLabel: customerAgreementTreatmentLabel(emergencyTreatmentChoice),
-    emergencyTreatmentLimitAmount: treatmentLimitAmount,
-    mediaPreference,
-    mediaPreferenceLabel: customerAgreementMediaLabel(mediaPreference),
-    mediaOptOut: mediaPreference === "opt-out",
+    emergencyTreatmentChoice: config.customAgreementEnabled ? "" : emergencyTreatmentChoice,
+    emergencyTreatmentLabel: config.customAgreementEnabled ? "" : customerAgreementTreatmentLabel(emergencyTreatmentChoice),
+    emergencyTreatmentLimitAmount: config.customAgreementEnabled ? "" : treatmentLimitAmount,
+    mediaPreference: config.customAgreementEnabled ? "" : mediaPreference,
+    mediaPreferenceLabel: config.customAgreementEnabled ? "" : customerAgreementMediaLabel(mediaPreference),
+    mediaOptOut: config.customAgreementEnabled ? false : mediaPreference === "opt-out",
+    customAcknowledgementText: config.customAgreementEnabled && config.acknowledgementEnabled ? config.acknowledgementText : "",
+    customAcknowledgementAccepted: config.customAgreementEnabled && config.acknowledgementEnabled ? Boolean($("#customerAgreementCustomAccepted")?.checked) : false,
+    customFieldPrompt: config.customAgreementEnabled && config.customerFieldEnabled ? config.customerFieldPrompt : "",
+    customFieldValue: config.customAgreementEnabled && config.customerFieldEnabled ? customerAgreementFieldValue("customerAgreementCustomResponse") : "",
   };
 }
 
@@ -236,6 +307,10 @@ function customerAgreementCompletedFieldsText(responses = {}) {
     "Emergency treatment spending authorization: " + (responses.emergencyTreatmentLabel || ""),
     "Emergency treatment limit amount: " + (responses.emergencyTreatmentLimitAmount ? "$" + responses.emergencyTreatmentLimitAmount : ""),
     "Media authorization: " + (responses.mediaPreferenceLabel || ""),
+    "Custom acknowledgement: " + (responses.customAcknowledgementText || ""),
+    "Custom acknowledgement accepted: " + (responses.customAcknowledgementText ? (responses.customAcknowledgementAccepted ? "Yes" : "No") : ""),
+    "Customer information prompt: " + (responses.customFieldPrompt || ""),
+    "Customer information response: " + (responses.customFieldValue || ""),
     "Booking or stay ID: " + (responses.bookingOrStayId || ""),
     "Completed at: " + (responses.completedAt || ""),
   ].filter((line) => String(line || "").trim()).join("\\n");
@@ -253,19 +328,31 @@ function customerAgreementCompletionHtml(record = {}) {
     ["Treatment authorization", "emergencyTreatmentLabel"],
     ["Treatment amount", "treatmentLimitLabel"],
     ["Media authorization", "mediaPreferenceLabel"],
+    ["Custom acknowledgement", "customAcknowledgementText"],
+    ["Acknowledgement accepted", "customAcknowledgementLabel"],
+    ["Requested information", "customFieldPrompt"],
+    ["Customer response", "customFieldValue"],
     ["Booking or stay ID", "bookingOrStayId"],
   ];
   const detailRecord = {
     ...responses,
     treatmentLimitLabel: responses.emergencyTreatmentLimitAmount ? "$" + responses.emergencyTreatmentLimitAmount : "",
+    customAcknowledgementLabel: responses.customAcknowledgementText ? (responses.customAcknowledgementAccepted ? "Yes" : "No") : "",
   };
   return "<section class=\\"signed-agreement-responses\\"><h4>Completed agreement selections</h4><div class=\\"signed-agreement-meta\\">" + detailRows(detailRecord, rows) + "</div></section>";
 }
 
 function customerAgreementDocumentHtml(record = null) {
-  const version = record?.agreementVersion || CUSTOMER_BOARDING_AGREEMENT_VERSION;
-  const effectiveDate = record?.agreementEffectiveDate || CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE;
-  const title = record?.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE;
+  const config = customerWorkspaceAgreementConfig();
+  const recordDocument = record?.agreementDocument && typeof record.agreementDocument === "object" ? record.agreementDocument : null;
+  const customDocument = recordDocument || (config.customAgreementEnabled ? config.document : null);
+  const version = record?.agreementVersion || customerAgreementRuntimeVersion();
+  const effectiveDate = record?.agreementEffectiveDate || customerAgreementRuntimeEffectiveDate();
+  const title = record?.agreementTitle || customerAgreementRuntimeTitle();
+  if (customDocument?.storagePath) {
+    const button = '<button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="' + escapeHtml(customDocument.type || "application/octet-stream") + '" data-media-name="' + escapeHtml(customDocument.name || title) + '"' + mediaAccessAttrs(customDocument, { sourceRecordType: "appSettingsAgreement" }) + '>Open agreement document</button>';
+    return '<article class="customer-agreement-copy"><h3>' + escapeHtml(title) + '</h3><p>Version ' + escapeHtml(version) + ' | Effective ' + escapeHtml(effectiveDate) + '</p><section class="customer-agreement-uploaded-document"><strong>' + escapeHtml(customDocument.name || "Uploaded agreement") + '</strong><p>Open the complete agreement before accepting or signing it.</p>' + button + '</section></article>' + customerAgreementCompletionHtml(record);
+  }
   const markdown = customerAgreementMarkdown(record);
   return "<article class=\\"customer-agreement-copy\\"><h3>" + escapeHtml(title) + "</h3><p>Version " + escapeHtml(version) + " | Effective " + escapeHtml(effectiveDate) + "</p><div class=\\"customer-agreement-markdown\\">" + customerAgreementMarkdownToHtml(markdown) + "</div></article>" + customerAgreementCompletionHtml(record);
 }
@@ -279,7 +366,7 @@ function customerAgreementSnapshotIsCurrent(record = {}) {
       && signerEmail === currentEmail
       && record.signedAt
       && record.signatureHash
-      && record.agreementVersion === CUSTOMER_BOARDING_AGREEMENT_VERSION
+      && record.agreementVersion === customerAgreementRuntimeVersion()
       && (!record.documentFingerprint || record.documentFingerprint === customerAgreementDocumentFingerprint()),
   );
 }
@@ -287,9 +374,11 @@ function customerAgreementSnapshotIsCurrent(record = {}) {
 function customerAgreementProfileSnapshot(record = {}) {
   return {
     id: record.id || "",
-    agreementTitle: record.agreementTitle || CUSTOMER_BOARDING_AGREEMENT_TITLE,
-    agreementVersion: record.agreementVersion || CUSTOMER_BOARDING_AGREEMENT_VERSION,
-    agreementEffectiveDate: record.agreementEffectiveDate || CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE,
+    agreementTitle: record.agreementTitle || customerAgreementRuntimeTitle(),
+    agreementVersion: record.agreementVersion || customerAgreementRuntimeVersion(),
+    agreementEffectiveDate: record.agreementEffectiveDate || customerAgreementRuntimeEffectiveDate(),
+    agreementMode: record.agreementMode || (record.agreementDocument ? "custom-template" : "built-in"),
+    agreementDocument: record.agreementDocument || null,
     documentFingerprint: record.documentFingerprint || customerAgreementDocumentFingerprint(),
     documentHash: record.documentHash || "",
     signatureHash: record.signatureHash || "",
@@ -320,6 +409,42 @@ function customerCurrentBoardingAgreement() {
   return customerAgreementSnapshotIsCurrent(profileAgreement) ? profileAgreement : null;
 }
 
+function configureCustomerAgreementFields() {
+  const config = customerWorkspaceAgreementConfig();
+  const custom = config.customAgreementEnabled;
+  const legacyResponses = $("#customerAgreementLegacyResponses");
+  if (legacyResponses) legacyResponses.hidden = custom;
+
+  const customResponseContainer = $("#customerAgreementCustomResponseContainer");
+  if (customResponseContainer) customResponseContainer.hidden = !(custom && config.customerFieldEnabled);
+  const customResponsePrompt = $("#customerAgreementCustomResponsePrompt");
+  if (customResponsePrompt) customResponsePrompt.textContent = config.customerFieldPrompt || "Additional agreement information";
+  const customResponse = $("#customerAgreementCustomResponse");
+  if (customResponse) {
+    customResponse.required = Boolean(custom && config.customerFieldEnabled);
+    customResponse.placeholder = config.customerFieldPrompt || "";
+  }
+
+  const drawnSignatureFields = $("#customerAgreementDrawnSignatureFields");
+  if (drawnSignatureFields) drawnSignatureFields.hidden = Boolean(custom && !config.signatureRequired);
+  const signerName = $("#customerAgreementSignatureNameConfirm");
+  if (signerName) signerName.required = Boolean(!custom || config.signatureRequired);
+
+  const electronicConsentLabel = $("#customerAgreementElectronicConsentLabel");
+  const acceptedLabel = $("#customerAgreementAcceptedLabel");
+  const arbitrationLabel = $("#customerAgreementArbitrationAcceptedLabel");
+  const customAcceptedLabel = $("#customerAgreementCustomAcceptedLabel");
+  if (electronicConsentLabel) electronicConsentLabel.hidden = Boolean(custom && !config.signatureRequired);
+  if (acceptedLabel) acceptedLabel.hidden = custom;
+  if (arbitrationLabel) arbitrationLabel.hidden = custom;
+  if (customAcceptedLabel) customAcceptedLabel.hidden = !(custom && config.acknowledgementEnabled);
+  const customAcceptedText = $("#customerAgreementCustomAcceptedText");
+  if (customAcceptedText) customAcceptedText.textContent = config.acknowledgementText || "I have read and agree to the uploaded agreement.";
+
+  const requiredChecks = $("#customerAgreementRequiredChecks");
+  if (requiredChecks) requiredChecks.hidden = Boolean(custom && !config.signatureRequired && !config.acknowledgementEnabled);
+}
+
 function renderCustomerAgreementPanel(estimate = customerEstimateDetails()) {
   const panel = $("#customerAgreementPanel");
   if (!panel) return;
@@ -328,28 +453,37 @@ function renderCustomerAgreementPanel(estimate = customerEstimateDetails()) {
   if (!applies) return;
   const currentAgreement = customerCurrentBoardingAgreement();
   const signed = Boolean(currentAgreement);
+  const config = customerWorkspaceAgreementConfig();
+  const actionLabel = config.customAgreementEnabled && !config.signatureRequired ? "accept" : "review and e-sign";
   const notice = $("#customerAgreementNotice");
   if (notice) {
     notice.hidden = !applies;
     notice.innerHTML = signed
       ? "<strong>Boarding agreement signed</strong><p>Current agreement on file for " + escapeHtml(currentAgreement.signerName || currentUser?.name || "this owner") + ".</p>"
-      : "<strong>Boarding agreement required</strong><p>This owner must review and e-sign the agreement on the Review step before submitting a boarding request.</p>";
+      : "<strong>Boarding agreement required</strong><p>This owner must " + escapeHtml(actionLabel) + " the agreement on the Review step before submitting a boarding request.</p>";
   }
   const status = $("#customerAgreementStatus");
   if (status) {
     status.innerHTML = signed
       ? "<strong>Boarding agreement signed</strong><p>Signed by " + escapeHtml(currentAgreement.signerName || currentUser?.name || "Owner") + " on " + escapeHtml(formatDateTime(currentAgreement.signedAt) || currentAgreement.signedAt || "file") + ".</p>"
-      : "<strong>Boarding agreement required</strong><p>Review and sign before submitting this boarding request.</p>";
+      : "<strong>Boarding agreement required</strong><p>Open the agreement document and complete the required fields before submitting this boarding request.</p>";
   }
   const documentBody = $("#customerAgreementDocument");
   if (documentBody) documentBody.innerHTML = customerAgreementDocumentHtml();
   const details = $("#customerAgreementDetails");
-  if (details) details.open = !signed;
+  if (details) {
+    details.open = !signed;
+    const summary = details.querySelector("summary");
+    if (summary) summary.textContent = customerAgreementRuntimeTitle();
+  }
   const block = $("#customerSignatureBlock");
   if (block) block.hidden = signed;
+  configureCustomerAgreementFields();
   initializeCustomerAgreementControls();
   prefillCustomerAgreementFields(estimate);
-  window.setTimeout(() => initializeCustomerAgreementSignaturePad(), 0);
+  if (!signed && (!config.customAgreementEnabled || config.signatureRequired)) {
+    window.setTimeout(() => initializeCustomerAgreementSignaturePad(), 0);
+  }
 }
 
 function customerSignatureCanvas() {
@@ -450,6 +584,8 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
   if (!customerAgreementAppliesToEstimate(estimate)) return true;
   if (customerCurrentBoardingAgreement()) return true;
   renderCustomerAgreementPanel(estimate);
+  const config = customerWorkspaceAgreementConfig();
+  const custom = config.customAgreementEnabled;
   const signerName = $("#customerAgreementSignatureNameConfirm");
   const treatmentChoice = customerAgreementCheckedField("agreementEmergencyTreatmentChoice");
   const treatmentAmount = $("#customerAgreementTreatmentLimitAmount");
@@ -457,6 +593,8 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
   const electronicConsent = $("#customerAgreementElectronicConsent");
   const accepted = $("#customerAgreementAccepted");
   const arbitrationAccepted = $("#customerAgreementArbitrationAccepted");
+  const customAccepted = $("#customerAgreementCustomAccepted");
+  const customResponse = $("#customerAgreementCustomResponse");
   const signatureData = $("#customerAgreementSignatureData")?.value || "";
   const signatureError = $("#customerAgreementSignatureError");
   [
@@ -465,6 +603,8 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
     electronicConsent,
     accepted,
     arbitrationAccepted,
+    customAccepted,
+    customResponse,
     ...$$("input[name=\\"agreementEmergencyTreatmentChoice\\"]"),
     ...$$("input[name=\\"agreementMediaPreference\\"]"),
   ].forEach((field) => field && clearFieldError(field));
@@ -480,44 +620,52 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
     firstInvalid = firstInvalid || field;
     message = message || fieldMessage;
   };
-  if (!String(signerName?.value || "").trim()) {
+  if ((!custom || config.signatureRequired) && !String(signerName?.value || "").trim()) {
     requireText(signerName, "Owner legal name is required before signing.");
   }
-  if (!treatmentChoice) {
+  if (!custom && !treatmentChoice) {
     const firstTreatmentChoice = document.querySelector("#customerBookingForm input[name=\\"agreementEmergencyTreatmentChoice\\"]");
     if (firstTreatmentChoice) setFieldError(firstTreatmentChoice, "Select an emergency treatment authorization.");
     firstInvalid = firstInvalid || firstTreatmentChoice;
     message = message || "Select an emergency treatment authorization.";
   }
-  if (treatmentChoice?.value === "limit" && (!String(treatmentAmount?.value || "").trim() || Number(treatmentAmount?.value || 0) <= 0)) {
+  if (!custom && treatmentChoice?.value === "limit" && (!String(treatmentAmount?.value || "").trim() || Number(treatmentAmount?.value || 0) <= 0)) {
     if (treatmentAmount) setFieldError(treatmentAmount, "Enter the approved emergency treatment amount.");
     firstInvalid = firstInvalid || treatmentAmount;
     message = message || "Enter the approved emergency treatment amount.";
   }
-  if (!mediaPreference) {
+  if (!custom && !mediaPreference) {
     const firstMediaPreference = document.querySelector("#customerBookingForm input[name=\\"agreementMediaPreference\\"]");
     if (firstMediaPreference) setFieldError(firstMediaPreference, "Select a media authorization preference.");
     firstInvalid = firstInvalid || firstMediaPreference;
     message = message || "Select a media authorization preference.";
   }
-  if (!signatureData || !customerAgreementSignatureHasInk) {
+  if ((!custom || config.signatureRequired) && (!signatureData || !customerAgreementSignatureHasInk)) {
     message = message || "Draw your signature before submitting.";
     firstInvalid = firstInvalid || customerSignatureCanvas();
   }
-  if (!electronicConsent?.checked) {
+  if ((!custom || config.signatureRequired) && !electronicConsent?.checked) {
     if (electronicConsent) setFieldError(electronicConsent, "Electronic records consent is required before signing.");
     firstInvalid = firstInvalid || electronicConsent;
     message = message || "Electronic records consent is required before signing.";
   }
-  if (!accepted?.checked) {
+  if (!custom && !accepted?.checked) {
     if (accepted) setFieldError(accepted, "Agreement acceptance is required before signing.");
     firstInvalid = firstInvalid || accepted;
     message = message || "Agreement acceptance is required before signing.";
   }
-  if (!arbitrationAccepted?.checked) {
+  if (!custom && !arbitrationAccepted?.checked) {
     if (arbitrationAccepted) setFieldError(arbitrationAccepted, "Separate arbitration acceptance is required before signing.");
     firstInvalid = firstInvalid || arbitrationAccepted;
     message = message || "Separate arbitration acceptance is required before signing.";
+  }
+  if (custom && config.acknowledgementEnabled && !customAccepted?.checked) {
+    if (customAccepted) setFieldError(customAccepted, "This agreement acknowledgement is required.");
+    firstInvalid = firstInvalid || customAccepted;
+    message = message || "Accept the agreement acknowledgement before submitting.";
+  }
+  if (custom && config.customerFieldEnabled && !String(customResponse?.value || "").trim()) {
+    requireText(customResponse, "Enter the requested agreement information.");
   }
   if (firstInvalid) {
     if (signatureError) {
@@ -547,11 +695,13 @@ function customerAgreementRequestContext(estimate = {}) {
 }
 
 async function createCustomerBoardingAgreementRecord(estimate = {}) {
-  const signerName = String($("#customerAgreementSignatureNameConfirm")?.value || currentUser?.name || "").trim();
+  const config = customerWorkspaceAgreementConfig();
+  const custom = config.customAgreementEnabled;
+  const signerName = String($("#customerAgreementSignatureNameConfirm")?.value || currentUser?.name || currentUser?.email || "").trim();
   const signerEmail = normalizeEmail(currentUser?.email);
-  const signatureImageData = $("#customerAgreementSignatureData")?.value || "";
+  const signatureImageData = !custom || config.signatureRequired ? ($("#customerAgreementSignatureData")?.value || "") : "";
   const signedAt = new Date().toISOString();
-  const agreementMarkdown = customerAgreementMarkdown();
+  const agreementMarkdown = custom ? "" : customerAgreementMarkdown();
   const agreementResponses = {
     ...customerAgreementResponsePayload(estimate),
     completedAt: signedAt,
@@ -567,10 +717,23 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
     id: uid("boardingAgreement"),
     submittedAt: signedAt,
     signedAt,
-    agreementTitle: CUSTOMER_BOARDING_AGREEMENT_TITLE,
-    agreementVersion: CUSTOMER_BOARDING_AGREEMENT_VERSION,
-    agreementEffectiveDate: CUSTOMER_BOARDING_AGREEMENT_EFFECTIVE_DATE,
-    agreementClauses: customerAgreementClauses(),
+    agreementTitle: customerAgreementRuntimeTitle(),
+    agreementVersion: customerAgreementRuntimeVersion(),
+    agreementEffectiveDate: customerAgreementRuntimeEffectiveDate(),
+    agreementMode: custom ? "custom-template" : "built-in",
+    agreementDocument: custom ? config.document : null,
+    agreementConfiguration: custom
+      ? {
+          acknowledgementEnabled: config.acknowledgementEnabled,
+          acknowledgementText: config.acknowledgementText,
+          signatureRequired: config.signatureRequired,
+          customerFieldEnabled: config.customerFieldEnabled,
+          customerFieldPrompt: config.customerFieldPrompt,
+        }
+      : null,
+    agreementClauses: custom
+      ? [config.acknowledgementText, config.customerFieldPrompt].filter(Boolean)
+      : customerAgreementClauses(),
     agreementMarkdown,
     agreementText: documentText,
     documentFingerprint: customerAgreementDocumentFingerprint(),
@@ -582,15 +745,20 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
     signerUserId: currentUser?.key || currentUser?.authId || "",
     signerAuthProvider: currentUser?.authProvider || "",
     signerRole: currentRole(),
-    signatureMethod: "drawn-signature-pad",
+    signatureMethod: custom && !config.signatureRequired ? "electronic-acceptance" : "drawn-signature-pad",
+    signatureRequired: custom ? config.signatureRequired : true,
     signatureImageData,
     signatureHash,
-    electronicConsentAccepted: true,
+    electronicConsentAccepted: custom ? (config.signatureRequired ? Boolean($("#customerAgreementElectronicConsent")?.checked) : false) : true,
     agreementAccepted: true,
-    arbitrationAccepted: true,
+    arbitrationAccepted: custom ? false : true,
+    customAcknowledgementRequired: Boolean(custom && config.acknowledgementEnabled),
+    customAcknowledgementAccepted: Boolean(custom && config.acknowledgementEnabled && $("#customerAgreementCustomAccepted")?.checked),
+    customerResponseRequired: Boolean(custom && config.customerFieldEnabled),
+    customerResponseValue: custom && config.customerFieldEnabled ? customerAgreementFieldValue("customerAgreementCustomResponse") : "",
     agreementResponses,
-    electronicConsentText: CUSTOMER_BOARDING_AGREEMENT_CONSENT_TEXT,
-    signatureIntentText: CUSTOMER_BOARDING_AGREEMENT_INTENT_TEXT,
+    electronicConsentText: custom && !config.signatureRequired ? "" : CUSTOMER_BOARDING_AGREEMENT_CONSENT_TEXT,
+    signatureIntentText: custom && !config.signatureRequired ? "The customer submitted a timestamped electronic acceptance without a drawn signature." : CUSTOMER_BOARDING_AGREEMENT_INTENT_TEXT,
     signedUserAgent: userAgent,
     signedLocale: navigator.language || "",
     signedTimezone: timezone,
@@ -610,7 +778,7 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
     requestContext: customerAgreementRequestContext(estimate),
     auditEvents: [
       {
-        action: "viewed-and-signed",
+        action: custom && !config.signatureRequired ? "viewed-and-accepted" : "viewed-and-signed",
         at: signedAt,
         signerEmail,
         userId: currentUser?.key || currentUser?.authId || "",

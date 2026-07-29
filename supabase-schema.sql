@@ -16,11 +16,16 @@ create table if not exists public.kennel_records (
 create table if not exists public.app_settings (
   id text primary key default 'workspace',
   organization_name text not null default 'Central Texas Husky',
+  agreement_config jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now(),
   updated_by text not null default '',
   constraint app_settings_singleton check (id = 'workspace'),
-  constraint app_settings_organization_name_length check (char_length(trim(organization_name)) between 1 and 80)
+  constraint app_settings_organization_name_length check (char_length(trim(organization_name)) between 1 and 80),
+  constraint app_settings_agreement_config_object check (jsonb_typeof(agreement_config) = 'object')
 );
+
+alter table public.app_settings
+  add column if not exists agreement_config jsonb not null default '{}'::jsonb;
 
 create index if not exists kennel_records_type_idx on public.kennel_records (type);
 create index if not exists kennel_records_updated_idx on public.kennel_records (updated_at desc);
@@ -315,9 +320,59 @@ as $$
     and lower(coalesce(payload ->> 'ownerEmail', '')) = public.kennel_auth_email()
     and lower(coalesce(payload ->> 'signerEmail', '')) = public.kennel_auth_email()
     and lower(coalesce(payload ->> 'removed', 'false')) <> 'true'
-    and lower(coalesce(payload ->> 'electronicConsentAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
-    and lower(coalesce(payload ->> 'agreementAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
-    and lower(coalesce(payload ->> 'arbitrationAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
+    and (
+      (
+        coalesce(payload ->> 'agreementMode', 'built-in') <> 'custom-template'
+        and lower(coalesce(payload ->> 'electronicConsentAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
+        and lower(coalesce(payload ->> 'agreementAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
+        and lower(coalesce(payload ->> 'arbitrationAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
+      )
+      or
+      (
+        payload ->> 'agreementMode' = 'custom-template'
+        and lower(coalesce(payload ->> 'agreementAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
+        and nullif(trim(coalesce(payload #>> '{agreementDocument,storagePath}', '')), '') is not null
+        and exists (
+          select 1
+          from public.app_settings settings
+          where settings.id = 'workspace'
+            and lower(coalesce(settings.agreement_config ->> 'customAgreementEnabled', 'false')) in ('true', 't', '1', 'yes', 'on')
+            and nullif(trim(coalesce(settings.agreement_config #>> '{document,storagePath}', '')), '') is not null
+            and payload #>> '{agreementDocument,storagePath}' = settings.agreement_config #>> '{document,storagePath}'
+            and (
+              (
+                lower(coalesce(settings.agreement_config ->> 'signatureRequired', 'true')) in ('false', 'f', '0', 'no', 'off')
+                and lower(coalesce(payload ->> 'signatureRequired', 'false')) in ('false', 'f', '0', 'no', 'off')
+                and payload ->> 'signatureMethod' = 'electronic-acceptance'
+              )
+              or
+              (
+                lower(coalesce(settings.agreement_config ->> 'signatureRequired', 'true')) in ('true', 't', '1', 'yes', 'on')
+                and lower(coalesce(payload ->> 'signatureRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
+                and lower(coalesce(payload ->> 'electronicConsentAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
+                and payload ->> 'signatureMethod' = 'drawn-signature-pad'
+                and nullif(trim(coalesce(payload ->> 'signatureImageData', '')), '') is not null
+              )
+            )
+            and (
+              lower(coalesce(settings.agreement_config ->> 'acknowledgementEnabled', 'false')) in ('false', 'f', '0', 'no', 'off')
+              or (
+                lower(coalesce(payload ->> 'customAcknowledgementRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
+                and lower(coalesce(payload ->> 'customAcknowledgementAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
+                and payload #>> '{agreementConfiguration,acknowledgementText}' = settings.agreement_config ->> 'acknowledgementText'
+              )
+            )
+            and (
+              lower(coalesce(settings.agreement_config ->> 'customerFieldEnabled', 'false')) in ('false', 'f', '0', 'no', 'off')
+              or (
+                lower(coalesce(payload ->> 'customerResponseRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
+                and nullif(trim(coalesce(payload ->> 'customerResponseValue', '')), '') is not null
+                and payload #>> '{agreementConfiguration,customerFieldPrompt}' = settings.agreement_config ->> 'customerFieldPrompt'
+              )
+            )
+        )
+      )
+    )
     and nullif(trim(coalesce(payload ->> 'signedAt', '')), '') is not null
     and nullif(trim(coalesce(payload ->> 'agreementVersion', '')), '') is not null
     and nullif(trim(coalesce(payload ->> 'documentHash', '')), '') is not null

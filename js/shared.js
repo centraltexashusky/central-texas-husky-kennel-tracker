@@ -14610,6 +14610,15 @@ function initEvents() {
   $("#settingsSetupForm")?.addEventListener("submit", saveSettingsSetup);
   $("#settingsOrganizationName")?.addEventListener("input", updateSettingsSetupPreview);
   $("#resetSettingsSetupButton")?.addEventListener("click", resetSettingsSetup);
+  $("#settingsAgreementForm")?.addEventListener("submit", saveSettingsAgreement);
+  $("#settingsAgreementDocument")?.addEventListener("change", (event) => {
+    if (!event.currentTarget.files?.length) return;
+    const enabled = $("#settingsCustomAgreementEnabled");
+    if (enabled) enabled.checked = true;
+  });
+  $("#settingsAgreementAcknowledgementEnabled")?.addEventListener("change", syncSettingsAgreementOptionFields);
+  $("#settingsAgreementCustomerFieldEnabled")?.addEventListener("change", syncSettingsAgreementOptionFields);
+  $("#resetSettingsAgreementButton")?.addEventListener("click", resetSettingsAgreement);
   $("#settingsUserTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-settings-user-tab]");
     if (!button) return;

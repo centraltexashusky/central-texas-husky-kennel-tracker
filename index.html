@@ -17,7 +17,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding" />
+    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -434,7 +434,7 @@
                   <div id="customerAgreementDocument"></div>
                 </details>
                 <div class="customer-signature-block" id="customerSignatureBlock">
-                  <section class="agreement-response-card">
+                  <section class="agreement-response-card" id="customerAgreementLegacyResponses">
                     <strong>Agreement selections</strong>
                     <p>Select the agreement options that must be captured with this signature.</p>
                     <fieldset class="agreement-choice-group">
@@ -450,22 +450,29 @@
                       <label class="inline-check agreement-choice"><input type="radio" name="agreementMediaPreference" value="opt-out" /> I do not authorize promotional or public use of photographs or recordings of my dog.</label>
                     </fieldset>
                   </section>
-                  <div class="field-grid">
-                    <label>Signer full legal name<input type="text" name="agreementSignatureNameConfirm" id="customerAgreementSignatureNameConfirm" autocomplete="name" /></label>
+                  <label id="customerAgreementCustomResponseContainer" hidden>
+                    <span id="customerAgreementCustomResponsePrompt">Additional agreement information</span>
+                    <textarea name="agreementCustomResponse" id="customerAgreementCustomResponse" rows="3" maxlength="2000"></textarea>
+                  </label>
+                  <div id="customerAgreementDrawnSignatureFields">
+                    <div class="field-grid">
+                      <label>Signer full legal name<input type="text" name="agreementSignatureNameConfirm" id="customerAgreementSignatureNameConfirm" autocomplete="name" /></label>
+                    </div>
+                    <label class="customer-signature-label" for="customerSignaturePad">Signature</label>
+                    <canvas id="customerSignaturePad" class="customer-signature-pad" width="720" height="220" aria-label="Draw signature"></canvas>
+                    <input type="hidden" name="agreementSignatureData" id="customerAgreementSignatureData" />
+                    <p id="customerAgreementSignatureError" class="form-error" hidden>Draw your signature before submitting.</p>
+                    <div class="button-row customer-signature-actions">
+                      <button type="button" class="secondary-button" id="clearCustomerSignatureButton">Clear Signature</button>
+                      <button type="button" class="secondary-button" id="printCustomerAgreementButton">Print Agreement</button>
+                    </div>
                   </div>
-                  <label class="customer-signature-label" for="customerSignaturePad">Signature</label>
-                  <canvas id="customerSignaturePad" class="customer-signature-pad" width="720" height="220" aria-label="Draw signature"></canvas>
-                  <input type="hidden" name="agreementSignatureData" id="customerAgreementSignatureData" />
-                  <p id="customerAgreementSignatureError" class="form-error" hidden>Draw your signature before submitting.</p>
-                  <div class="button-row customer-signature-actions">
-                    <button type="button" class="secondary-button" id="clearCustomerSignatureButton">Clear Signature</button>
-                    <button type="button" class="secondary-button" id="printCustomerAgreementButton">Print Agreement</button>
-                  </div>
-                  <fieldset class="agreement-choice-group agreement-required-checks">
+                  <fieldset class="agreement-choice-group agreement-required-checks" id="customerAgreementRequiredChecks">
                     <legend>Required acknowledgements</legend>
-                    <label class="inline-check agreement-choice"><input type="checkbox" name="agreementElectronicConsent" id="customerAgreementElectronicConsent" /> I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.</label>
-                    <label class="inline-check agreement-choice"><input type="checkbox" name="agreementAccepted" id="customerAgreementAccepted" /> I have read and agree to the Cuddle Stay Boarding Services Agreement, including the assumption of risk, release of liability, indemnification, and ordinary-negligence release terms.</label>
-                    <label class="inline-check agreement-choice"><input type="checkbox" name="agreementArbitrationAccepted" id="customerAgreementArbitrationAccepted" /> I have read and agree to the mandatory individual binding arbitration provision and understand I am waiving covered court, judge, jury, class, collective, consolidated, coordinated, or representative-action rights.</label>
+                    <label class="inline-check agreement-choice" id="customerAgreementElectronicConsentLabel"><input type="checkbox" name="agreementElectronicConsent" id="customerAgreementElectronicConsent" /> I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.</label>
+                    <label class="inline-check agreement-choice" id="customerAgreementAcceptedLabel"><input type="checkbox" name="agreementAccepted" id="customerAgreementAccepted" /> I have read and agree to the Cuddle Stay Boarding Services Agreement, including the assumption of risk, release of liability, indemnification, and ordinary-negligence release terms.</label>
+                    <label class="inline-check agreement-choice" id="customerAgreementArbitrationAcceptedLabel"><input type="checkbox" name="agreementArbitrationAccepted" id="customerAgreementArbitrationAccepted" /> I have read and agree to the mandatory individual binding arbitration provision and understand I am waiving covered court, judge, jury, class, collective, consolidated, coordinated, or representative-action rights.</label>
+                    <label class="inline-check agreement-choice" id="customerAgreementCustomAcceptedLabel" hidden><input type="checkbox" name="agreementCustomAccepted" id="customerAgreementCustomAccepted" /> <span id="customerAgreementCustomAcceptedText">I have read and agree to the uploaded agreement.</span></label>
                   </fieldset>
                 </div>
               </section>
@@ -1491,6 +1498,57 @@
             </div>
           </form>
         </section>
+        <section class="recent-submissions settings-setup-panel settings-agreement-template-panel">
+          <div class="section-heading"><span>A</span><div><h2>Customer Agreement</h2><p>Upload the agreement customers review and configure the information they must provide.</p></div></div>
+          <form id="settingsAgreementForm" class="tracker-form settings-setup-form">
+            <section class="settings-agreement-document-card">
+              <div class="field-grid">
+                <label class="settings-setup-field">Agreement title
+                  <input type="text" id="settingsAgreementTitle" name="agreementTitle" maxlength="120" placeholder="Boarding Services Agreement" />
+                </label>
+                <label class="settings-setup-field">Agreement document
+                  <input type="file" id="settingsAgreementDocument" name="agreementDocument" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                  <small class="field-help">Upload one PDF, DOC, or DOCX file. The built-in boarding agreement remains active until this document is saved and enabled.</small>
+                </label>
+              </div>
+              <div id="settingsAgreementDocumentStatus" class="settings-agreement-document-status"></div>
+              <label class="inline-check"><input type="checkbox" id="settingsCustomAgreementEnabled" name="customAgreementEnabled" /> Use the uploaded document for new customer boarding agreements</label>
+            </section>
+
+            <details class="settings-agreement-option" open>
+              <summary>Custom acknowledgement checkbox</summary>
+              <div class="settings-agreement-option-content">
+                <label class="inline-check"><input type="checkbox" id="settingsAgreementAcknowledgementEnabled" name="acknowledgementEnabled" /> Require a customer acknowledgement checkbox</label>
+                <label id="settingsAgreementAcknowledgementTextLabel">Checkbox text
+                  <textarea id="settingsAgreementAcknowledgementText" name="acknowledgementText" rows="3" maxlength="1000" placeholder="I have read and agree to the uploaded agreement."></textarea>
+                </label>
+              </div>
+            </details>
+
+            <details class="settings-agreement-option" open>
+              <summary>Electronic signature</summary>
+              <div class="settings-agreement-option-content">
+                <label class="inline-check"><input type="checkbox" id="settingsAgreementSignatureRequired" name="signatureRequired" checked /> Require the customer to enter their legal name and draw an electronic signature</label>
+                <small class="field-help">When disabled, the submission still saves a timestamped acceptance record and document fingerprint.</small>
+              </div>
+            </details>
+
+            <details class="settings-agreement-option" open>
+              <summary>Customer information field</summary>
+              <div class="settings-agreement-option-content">
+                <label class="inline-check"><input type="checkbox" id="settingsAgreementCustomerFieldEnabled" name="customerFieldEnabled" /> Ask the customer for additional information</label>
+                <label id="settingsAgreementCustomerFieldPromptLabel">Prompt shown to customer
+                  <textarea id="settingsAgreementCustomerFieldPrompt" name="customerFieldPrompt" rows="3" maxlength="1000" placeholder="Enter the information requested for this agreement."></textarea>
+                </label>
+              </div>
+            </details>
+
+            <div class="button-row">
+              <button type="submit" id="saveSettingsAgreementButton">Save Agreement Setup</button>
+              <button type="button" class="secondary-button" id="resetSettingsAgreementButton">Use Built-in Agreement</button>
+            </div>
+          </form>
+        </section>
       </section>
       <section class="page-view" id="settingsUsersPage">
         <section class="recent-submissions">
@@ -1626,6 +1684,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution"></script>
+    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config"></script>
 </body>
 </html>
