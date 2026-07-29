@@ -1697,10 +1697,11 @@ function dogShowExpenseSplitCount(event = dogShowActiveEvent(), rosterCount = do
 function dogShowExpensesHtml(event) {
   const expenses = dogShowExpenses(event);
   const totals = dogShowFinanceTotals(expenses);
+  const showWideTransactions = expenses.filter((transaction) => !transaction.showEntryId && !transaction.dogName);
+  const showWideTotals = dogShowFinanceTotals(showWideTransactions);
   const rosterCount = dogShowEntries(event).length;
   const splitCount = dogShowExpenseSplitCount(event, rosterCount);
-  const splitAmount = splitCount ? totals.expenseTotal / splitCount : 0;
-  const showWideTransactions = expenses.filter((transaction) => !transaction.showEntryId && !transaction.dogName);
+  const splitAmount = splitCount ? showWideTotals.expenseTotal / splitCount : 0;
   const dogGroups = dogShowExpenseDogGroups(event, expenses);
   return `<div class="dog-show-view dog-show-expenses-view">
     <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Income & Expenses</h3><p>Track show-wide costs and rewards. Assign a dog only when the transaction belongs to that dog.</p></div><button type="button" data-action="new-show-expense">Add Transaction</button></section>
@@ -1710,8 +1711,8 @@ function dogShowExpensesHtml(event) {
       <article><span>Net</span><strong class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)}</strong><small>${escapeHtml(event?.name || "Current show")}</small></article>
     </div>
     <section class="dog-show-expense-split">
-      <div><span>EXPENSE SPLIT</span><h3>${dogShowExpenseCurrency(splitAmount)} per participating dog</h3><p>Divide total expenses only; income and rewards are not subtracted.</p></div>
-      <div class="dog-show-expense-split-metrics"><div><span>Total expenses</span><strong>${dogShowExpenseCurrency(totals.expenseTotal)}</strong></div><div><span>Dogs on show roster</span><strong>${rosterCount}</strong></div></div>
+      <div><span>SHOW-WIDE EXPENSE SPLIT</span><h3>${dogShowExpenseCurrency(splitAmount)} per participating dog</h3><p>Divide show-wide expenses only. Dog-specific expenses, income, and rewards are excluded.</p></div>
+      <div class="dog-show-expense-split-metrics"><div><span>Show-wide expenses</span><strong>${dogShowExpenseCurrency(showWideTotals.expenseTotal)}</strong></div><div><span>Dogs on show roster</span><strong>${rosterCount}</strong></div></div>
       <form id="dogShowExpenseSplitForm">
         <label><span class="dog-show-expense-split-label">Dogs sharing expenses <span class="service-info-icon dog-show-expense-split-info" role="button" tabindex="0" aria-label="Lower this count to exclude your own dog or another dog that should not share the costs." title="Lower this count to exclude your own dog or another dog that should not share the costs." data-tooltip="Lower this count to exclude your own dog or another dog that should not share the costs."><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true"/></span></span><input type="number" name="expenseSplitDogCount" min="1" ${rosterCount ? `max="${rosterCount}"` : ""} step="1" inputmode="numeric" value="${splitCount || ""}" ${rosterCount ? "" : "disabled"}/></label>
         <button type="submit" ${rosterCount ? "" : "disabled"}>Update Split</button>
