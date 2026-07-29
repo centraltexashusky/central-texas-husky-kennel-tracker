@@ -16903,16 +16903,16 @@ details.dog-show-ring-schedules[hidden] {
   padding: 12px;
 }
 
-.dog-show-plan-event-card.is-in-process {
+.dog-show-plan-event-card.is-active {
   border-left-color: #178056;
 }
 
-.dog-show-plan-event-card.is-active {
+.dog-show-plan-event-card.is-going-to {
   border-left-color: #3290D7;
 }
 
 .dog-show-plan-event-card.is-going {
-  border-left-color: #D4A72C;
+  border-left-color: #A660CC;
 }
 
 .dog-show-plan-event-card.is-completed {
@@ -16997,6 +16997,10 @@ details.dog-show-ring-schedules[hidden] {
   background: #d4a72c;
 }
 
+.dog-show-master-calendar-legend .is-going-to::before {
+  background: #3290d7;
+}
+
 .dog-show-master-calendar-legend .is-going::before {
   background: #a660cc;
 }
@@ -17029,6 +17033,11 @@ details.dog-show-ring-schedules[hidden] {
 #dogShowPage button.dog-show-master-calendar-item.is-potential {
   background: color-mix(in srgb, #d4a72c 12%, var(--panel));
   border-left-color: #d4a72c;
+}
+
+#dogShowPage button.dog-show-master-calendar-item.is-going-to {
+  background: color-mix(in srgb, #3290d7 10%, var(--panel));
+  border-left-color: #3290d7;
 }
 
 #dogShowPage button.dog-show-master-calendar-item.is-going {
