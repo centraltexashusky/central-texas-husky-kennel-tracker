@@ -14618,6 +14618,12 @@ function initEvents() {
   });
   $("#settingsAgreementAcknowledgementEnabled")?.addEventListener("change", syncSettingsAgreementOptionFields);
   $("#settingsAgreementCustomerFieldEnabled")?.addEventListener("change", syncSettingsAgreementOptionFields);
+  $("#addSettingsAgreementAcknowledgementButton")?.addEventListener("click", () => addSettingsAgreementItem("acknowledgement"));
+  $("#addSettingsAgreementCustomerFieldButton")?.addEventListener("click", () => addSettingsAgreementItem("customer-field"));
+  $("#settingsAgreementForm")?.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="remove-agreement-item"]');
+    if (button) removeSettingsAgreementItem(button);
+  });
   $("#resetSettingsAgreementButton")?.addEventListener("click", resetSettingsAgreement);
   $("#settingsUserTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-settings-user-tab]");

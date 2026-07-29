@@ -335,6 +335,33 @@ as $$
         and exists (
           select 1
           from public.app_settings settings
+          cross join lateral (
+            select
+              case
+                when lower(coalesce(settings.agreement_config ->> 'acknowledgementEnabled', 'false')) not in ('true', 't', '1', 'yes', 'on')
+                  then '[]'::jsonb
+                when jsonb_typeof(settings.agreement_config -> 'acknowledgements') = 'array'
+                  then settings.agreement_config -> 'acknowledgements'
+                when nullif(trim(coalesce(settings.agreement_config ->> 'acknowledgementText', '')), '') is not null
+                  then jsonb_build_array(jsonb_build_object(
+                    'id', 'acknowledgement-1',
+                    'text', settings.agreement_config ->> 'acknowledgementText'
+                  ))
+                else '[]'::jsonb
+              end as acknowledgements,
+              case
+                when lower(coalesce(settings.agreement_config ->> 'customerFieldEnabled', 'false')) not in ('true', 't', '1', 'yes', 'on')
+                  then '[]'::jsonb
+                when jsonb_typeof(settings.agreement_config -> 'customerFields') = 'array'
+                  then settings.agreement_config -> 'customerFields'
+                when nullif(trim(coalesce(settings.agreement_config ->> 'customerFieldPrompt', '')), '') is not null
+                  then jsonb_build_array(jsonb_build_object(
+                    'id', 'customer-field-1',
+                    'text', settings.agreement_config ->> 'customerFieldPrompt'
+                  ))
+                else '[]'::jsonb
+              end as customer_fields
+          ) requirements
           where settings.id = 'workspace'
             and lower(coalesce(settings.agreement_config ->> 'customAgreementEnabled', 'false')) in ('true', 't', '1', 'yes', 'on')
             and nullif(trim(coalesce(settings.agreement_config #>> '{document,storagePath}', '')), '') is not null
@@ -354,20 +381,45 @@ as $$
                 and nullif(trim(coalesce(payload ->> 'signatureImageData', '')), '') is not null
               )
             )
+            and coalesce(payload #> '{agreementConfiguration,acknowledgements}', '[]'::jsonb) = requirements.acknowledgements
+            and coalesce(payload #> '{agreementConfiguration,customerFields}', '[]'::jsonb) = requirements.customer_fields
             and (
-              lower(coalesce(settings.agreement_config ->> 'acknowledgementEnabled', 'false')) in ('false', 'f', '0', 'no', 'off')
+              (
+                jsonb_array_length(requirements.acknowledgements) = 0
+                and lower(coalesce(payload ->> 'customAcknowledgementRequired', 'false')) in ('false', 'f', '0', 'no', 'off')
+              )
               or (
-                lower(coalesce(payload ->> 'customAcknowledgementRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
+                jsonb_array_length(requirements.acknowledgements) > 0
+                and lower(coalesce(payload ->> 'customAcknowledgementRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
                 and lower(coalesce(payload ->> 'customAcknowledgementAccepted', 'false')) in ('true', 't', '1', 'yes', 'on')
-                and payload #>> '{agreementConfiguration,acknowledgementText}' = settings.agreement_config ->> 'acknowledgementText'
+                and jsonb_typeof(payload -> 'customAcknowledgementResponses') = 'array'
+                and jsonb_array_length(payload -> 'customAcknowledgementResponses') = jsonb_array_length(requirements.acknowledgements)
+                and not exists (
+                  select 1
+                  from jsonb_array_elements(requirements.acknowledgements) with ordinality expected(item, position)
+                  where coalesce((payload -> 'customAcknowledgementResponses' -> ((expected.position - 1)::integer)) ->> 'id', '') <> coalesce(expected.item ->> 'id', '')
+                     or coalesce((payload -> 'customAcknowledgementResponses' -> ((expected.position - 1)::integer)) ->> 'text', '') <> coalesce(expected.item ->> 'text', '')
+                     or lower(coalesce((payload -> 'customAcknowledgementResponses' -> ((expected.position - 1)::integer)) ->> 'accepted', 'false')) not in ('true', 't', '1', 'yes', 'on')
+                )
               )
             )
             and (
-              lower(coalesce(settings.agreement_config ->> 'customerFieldEnabled', 'false')) in ('false', 'f', '0', 'no', 'off')
+              (
+                jsonb_array_length(requirements.customer_fields) = 0
+                and lower(coalesce(payload ->> 'customerResponseRequired', 'false')) in ('false', 'f', '0', 'no', 'off')
+              )
               or (
-                lower(coalesce(payload ->> 'customerResponseRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
-                and nullif(trim(coalesce(payload ->> 'customerResponseValue', '')), '') is not null
-                and payload #>> '{agreementConfiguration,customerFieldPrompt}' = settings.agreement_config ->> 'customerFieldPrompt'
+                jsonb_array_length(requirements.customer_fields) > 0
+                and lower(coalesce(payload ->> 'customerResponseRequired', 'false')) in ('true', 't', '1', 'yes', 'on')
+                and jsonb_typeof(payload -> 'customerFieldResponses') = 'array'
+                and jsonb_array_length(payload -> 'customerFieldResponses') = jsonb_array_length(requirements.customer_fields)
+                and not exists (
+                  select 1
+                  from jsonb_array_elements(requirements.customer_fields) with ordinality expected(item, position)
+                  where coalesce((payload -> 'customerFieldResponses' -> ((expected.position - 1)::integer)) ->> 'id', '') <> coalesce(expected.item ->> 'id', '')
+                     or coalesce((payload -> 'customerFieldResponses' -> ((expected.position - 1)::integer)) ->> 'prompt', '') <> coalesce(expected.item ->> 'text', '')
+                     or nullif(trim(coalesce((payload -> 'customerFieldResponses' -> ((expected.position - 1)::integer)) ->> 'value', '')), '') is null
+                )
               )
             )
         )

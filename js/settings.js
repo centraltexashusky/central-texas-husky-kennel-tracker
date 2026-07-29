@@ -32,9 +32,11 @@ var DEFAULT_WORKSPACE_AGREEMENT_CONFIG = {
   document: null,
   acknowledgementEnabled: false,
   acknowledgementText: "",
+  acknowledgements: [],
   signatureRequired: true,
   customerFieldEnabled: false,
   customerFieldPrompt: "",
+  customerFields: [],
   updatedAt: "",
   updatedBy: "",
 };
@@ -52,18 +54,38 @@ function sanitizeWorkspaceAgreementDocument(documentRecord = null) {
   };
 }
 
+function sanitizeWorkspaceAgreementItems(items = [], legacyText = "", prefix = "item") {
+  const source = Array.isArray(items) && items.length
+    ? items
+    : (String(legacyText || "").trim() ? [{ text: legacyText }] : []);
+  return source
+    .map((item, index) => {
+      const value = item && typeof item === "object" ? item : { text: item };
+      const text = String(value.text || value.prompt || "").trim().slice(0, 1000);
+      if (!text) return null;
+      const id = String(value.id || \`\${prefix}-\${index + 1}\`).trim().slice(0, 120) || \`\${prefix}-\${index + 1}\`;
+      return { id, text };
+    })
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
 function sanitizeWorkspaceAgreementConfig(config = {}) {
   const documentRecord = sanitizeWorkspaceAgreementDocument(config.document);
+  const acknowledgements = sanitizeWorkspaceAgreementItems(config.acknowledgements, config.acknowledgementText, "acknowledgement");
+  const customerFields = sanitizeWorkspaceAgreementItems(config.customerFields, config.customerFieldPrompt, "customer-field");
   return {
     ...DEFAULT_WORKSPACE_AGREEMENT_CONFIG,
     customAgreementEnabled: Boolean(config.customAgreementEnabled && documentRecord),
     agreementTitle: String(config.agreementTitle || DEFAULT_WORKSPACE_AGREEMENT_CONFIG.agreementTitle).trim().slice(0, 120) || DEFAULT_WORKSPACE_AGREEMENT_CONFIG.agreementTitle,
     document: documentRecord,
-    acknowledgementEnabled: Boolean(config.acknowledgementEnabled),
-    acknowledgementText: String(config.acknowledgementText || "").trim().slice(0, 1000),
+    acknowledgementEnabled: Boolean(config.acknowledgementEnabled && acknowledgements.length),
+    acknowledgementText: acknowledgements[0]?.text || "",
+    acknowledgements,
     signatureRequired: config.signatureRequired !== false,
-    customerFieldEnabled: Boolean(config.customerFieldEnabled),
-    customerFieldPrompt: String(config.customerFieldPrompt || "").trim().slice(0, 1000),
+    customerFieldEnabled: Boolean(config.customerFieldEnabled && customerFields.length),
+    customerFieldPrompt: customerFields[0]?.text || "",
+    customerFields,
     updatedAt: String(config.updatedAt || "").trim(),
     updatedBy: normalizeEmail(config.updatedBy || ""),
   };
@@ -202,18 +224,93 @@ function settingsAgreementDocumentStatusHtml(config = appAgreementConfig()) {
   return '<article class="record-card compact-record-card"><span>Uploaded agreement</span><strong>' + escapeHtml(documentRecord.name) + '</strong><p>' + escapeHtml(fileSizeLabel(documentRecord.size || 0)) + (documentRecord.savedAt ? " | Uploaded " + escapeHtml(formatDateTime(documentRecord.savedAt) || documentRecord.savedAt) : "") + '</p><button type="button" class="secondary-button media-preview-button" data-action="view-media" data-src="" data-media-type="' + escapeHtml(documentRecord.type) + '" data-media-name="' + escapeHtml(documentRecord.name) + '"' + mediaAccessAttrs(documentRecord, { sourceRecordType: "appSettingsAgreement" }) + '>Open uploaded agreement</button></article>';
 }
 
+function settingsAgreementRepeatableItemHtml(type = "acknowledgement", item = {}, index = 0) {
+  const isAcknowledgement = type === "acknowledgement";
+  const label = isAcknowledgement ? \`Checkbox text \${index + 1}\` : \`Prompt shown to customer \${index + 1}\`;
+  const placeholder = isAcknowledgement
+    ? "I have read and agree to the uploaded agreement."
+    : "Enter the information requested for this agreement.";
+  return \`
+    <article class="settings-agreement-repeatable-item" data-agreement-item-type="\${escapeHtml(type)}">
+      <label>\${escapeHtml(label)}
+        <textarea data-agreement-item-text="\${escapeHtml(type)}" data-agreement-item-id="\${escapeHtml(item.id || "")}" rows="3" maxlength="1000" placeholder="\${escapeHtml(placeholder)}">\${escapeHtml(item.text || "")}</textarea>
+      </label>
+      <button type="button" class="remove-task-button settings-agreement-remove-item" data-action="remove-agreement-item" data-agreement-item-type="\${escapeHtml(type)}" aria-label="Remove \${escapeHtml(label.toLowerCase())}">×</button>
+    </article>
+  \`;
+}
+
+function renderSettingsAgreementRepeatableItems(type = "acknowledgement", items = []) {
+  const isAcknowledgement = type === "acknowledgement";
+  const container = $(isAcknowledgement ? "#settingsAgreementAcknowledgementItems" : "#settingsAgreementCustomerFieldItems");
+  if (!container) return;
+  const fallback = isAcknowledgement
+    ? { id: "acknowledgement-1", text: "" }
+    : { id: "customer-field-1", text: "" };
+  const renderItems = items.length ? items : [fallback];
+  container.innerHTML = renderItems.map((item, index) => settingsAgreementRepeatableItemHtml(type, item, index)).join("");
+}
+
+function settingsAgreementItemsFromForm(type = "acknowledgement") {
+  return $$('[data-agreement-item-text="' + type + '"]')
+    .map((field, index) => ({
+      id: String(field.dataset.agreementItemId || \`\${type}-\${index + 1}\`).trim(),
+      text: String(field.value || "").trim(),
+    }))
+    .filter((item) => item.text)
+    .slice(0, 20);
+}
+
+function addSettingsAgreementItem(type = "acknowledgement") {
+  const isAcknowledgement = type === "acknowledgement";
+  const enabled = $(isAcknowledgement ? "#settingsAgreementAcknowledgementEnabled" : "#settingsAgreementCustomerFieldEnabled");
+  if (enabled) enabled.checked = true;
+  const items = settingsAgreementItemsFromForm(type);
+  items.push({
+    id: \`\${type}-\${Date.now().toString(36)}-\${items.length + 1}\`,
+    text: "",
+  });
+  renderSettingsAgreementRepeatableItems(type, items);
+  syncSettingsAgreementOptionFields();
+  const fields = $$('[data-agreement-item-text="' + type + '"]');
+  fields[fields.length - 1]?.focus();
+}
+
+function removeSettingsAgreementItem(button) {
+  const type = button?.dataset.agreementItemType === "customer-field" ? "customer-field" : "acknowledgement";
+  const item = button?.closest(".settings-agreement-repeatable-item");
+  if (!item) return;
+  item.remove();
+  const remaining = $$('[data-agreement-item-text="' + type + '"]');
+  if (!remaining.length) {
+    renderSettingsAgreementRepeatableItems(type, []);
+  } else {
+    remaining.forEach((field, index) => {
+      const label = field.closest("label");
+      if (label?.firstChild) {
+        label.firstChild.textContent = (type === "acknowledgement" ? "Checkbox text " : "Prompt shown to customer ") + (index + 1);
+      }
+    });
+  }
+  syncSettingsAgreementOptionFields();
+}
+
 function syncSettingsAgreementOptionFields() {
   const acknowledgementEnabled = Boolean($("#settingsAgreementAcknowledgementEnabled")?.checked);
-  const acknowledgementText = $("#settingsAgreementAcknowledgementText");
-  const acknowledgementLabel = $("#settingsAgreementAcknowledgementTextLabel");
-  if (acknowledgementText) acknowledgementText.disabled = !acknowledgementEnabled;
-  if (acknowledgementLabel) acknowledgementLabel.classList.toggle("is-disabled", !acknowledgementEnabled);
+  $$('[data-agreement-item-text="acknowledgement"]').forEach((field) => {
+    field.disabled = !acknowledgementEnabled;
+    field.closest(".settings-agreement-repeatable-item")?.classList.toggle("is-disabled", !acknowledgementEnabled);
+  });
+  const addAcknowledgement = $("#addSettingsAgreementAcknowledgementButton");
+  if (addAcknowledgement) addAcknowledgement.disabled = !acknowledgementEnabled;
 
   const customerFieldEnabled = Boolean($("#settingsAgreementCustomerFieldEnabled")?.checked);
-  const customerFieldPrompt = $("#settingsAgreementCustomerFieldPrompt");
-  const customerFieldLabel = $("#settingsAgreementCustomerFieldPromptLabel");
-  if (customerFieldPrompt) customerFieldPrompt.disabled = !customerFieldEnabled;
-  if (customerFieldLabel) customerFieldLabel.classList.toggle("is-disabled", !customerFieldEnabled);
+  $$('[data-agreement-item-text="customer-field"]').forEach((field) => {
+    field.disabled = !customerFieldEnabled;
+    field.closest(".settings-agreement-repeatable-item")?.classList.toggle("is-disabled", !customerFieldEnabled);
+  });
+  const addCustomerField = $("#addSettingsAgreementCustomerFieldButton");
+  if (addCustomerField) addCustomerField.disabled = !customerFieldEnabled;
 }
 
 function renderSettingsAgreement() {
@@ -223,10 +320,10 @@ function renderSettingsAgreement() {
   $("#settingsAgreementTitle").value = config.agreementTitle;
   $("#settingsCustomAgreementEnabled").checked = config.customAgreementEnabled;
   $("#settingsAgreementAcknowledgementEnabled").checked = config.acknowledgementEnabled;
-  $("#settingsAgreementAcknowledgementText").value = config.acknowledgementText;
+  renderSettingsAgreementRepeatableItems("acknowledgement", config.acknowledgements);
   $("#settingsAgreementSignatureRequired").checked = config.signatureRequired;
   $("#settingsAgreementCustomerFieldEnabled").checked = config.customerFieldEnabled;
-  $("#settingsAgreementCustomerFieldPrompt").value = config.customerFieldPrompt;
+  renderSettingsAgreementRepeatableItems("customer-field", config.customerFields);
   const fileInput = $("#settingsAgreementDocument");
   if (fileInput) fileInput.value = "";
   const status = $("#settingsAgreementDocumentStatus");
@@ -270,10 +367,10 @@ async function saveSettingsAgreement(event) {
   const customAgreementEnabled = Boolean($("#settingsCustomAgreementEnabled")?.checked);
   const agreementTitle = String($("#settingsAgreementTitle")?.value || "").trim();
   const acknowledgementEnabled = Boolean($("#settingsAgreementAcknowledgementEnabled")?.checked);
-  const acknowledgementText = String($("#settingsAgreementAcknowledgementText")?.value || "").trim();
+  const acknowledgements = settingsAgreementItemsFromForm("acknowledgement");
   const signatureRequired = Boolean($("#settingsAgreementSignatureRequired")?.checked);
   const customerFieldEnabled = Boolean($("#settingsAgreementCustomerFieldEnabled")?.checked);
-  const customerFieldPrompt = String($("#settingsAgreementCustomerFieldPrompt")?.value || "").trim();
+  const customerFields = settingsAgreementItemsFromForm("customer-field");
 
   if (!agreementTitle) {
     showToast("Enter an agreement title.");
@@ -285,14 +382,14 @@ async function saveSettingsAgreement(event) {
     $("#settingsAgreementDocument")?.focus();
     return null;
   }
-  if (acknowledgementEnabled && !acknowledgementText) {
-    showToast("Enter the acknowledgement checkbox text.");
-    $("#settingsAgreementAcknowledgementText")?.focus();
+  if (acknowledgementEnabled && !acknowledgements.length) {
+    showToast("Enter at least one acknowledgement checkbox.");
+    $('[data-agreement-item-text="acknowledgement"]')?.focus();
     return null;
   }
-  if (customerFieldEnabled && !customerFieldPrompt) {
-    showToast("Enter the information prompt shown to customers.");
-    $("#settingsAgreementCustomerFieldPrompt")?.focus();
+  if (customerFieldEnabled && !customerFields.length) {
+    showToast("Enter at least one customer information prompt.");
+    $('[data-agreement-item-text="customer-field"]')?.focus();
     return null;
   }
 
@@ -303,10 +400,12 @@ async function saveSettingsAgreement(event) {
     agreementTitle,
     document: documentRecord,
     acknowledgementEnabled,
-    acknowledgementText,
+    acknowledgementText: acknowledgements[0]?.text || "",
+    acknowledgements,
     signatureRequired,
     customerFieldEnabled,
-    customerFieldPrompt,
+    customerFieldPrompt: customerFields[0]?.text || "",
+    customerFields,
     updatedAt: now,
     updatedBy: currentUser?.email || "",
   });

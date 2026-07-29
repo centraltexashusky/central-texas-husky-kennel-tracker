@@ -1667,6 +1667,14 @@ body.owned-dog-modal-open {
   gap: 14px;
 }
 
+.settings-agreement-document-card .field-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-agreement-document-field {
+  grid-column: 1 / -1;
+}
+
 .settings-agreement-document-status {
   max-width: 620px;
 }
@@ -1692,6 +1700,48 @@ body.owned-dog-modal-open {
 
 .settings-agreement-option-content .is-disabled {
   opacity: 0.58;
+}
+
+.settings-agreement-repeatable-list {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-agreement-repeatable-item {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  max-width: 760px;
+}
+
+.settings-agreement-repeatable-item label {
+  margin: 0;
+  max-width: none;
+}
+
+.settings-agreement-repeatable-item textarea {
+  width: 100%;
+}
+
+.settings-agreement-remove-item {
+  align-self: end;
+  margin-bottom: 2px;
+}
+
+.settings-agreement-add-item {
+  justify-self: start;
+}
+
+.customer-agreement-custom-fields,
+.customer-agreement-custom-acknowledgements {
+  display: grid;
+  gap: 12px;
+}
+
+.customer-agreement-custom-fields[hidden],
+.customer-agreement-custom-acknowledgements[hidden] {
+  display: none;
 }
 
 .customer-agreement-uploaded-document {

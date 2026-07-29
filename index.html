@@ -17,7 +17,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config" />
+    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -450,10 +450,7 @@
                       <label class="inline-check agreement-choice"><input type="radio" name="agreementMediaPreference" value="opt-out" /> I do not authorize promotional or public use of photographs or recordings of my dog.</label>
                     </fieldset>
                   </section>
-                  <label id="customerAgreementCustomResponseContainer" hidden>
-                    <span id="customerAgreementCustomResponsePrompt">Additional agreement information</span>
-                    <textarea name="agreementCustomResponse" id="customerAgreementCustomResponse" rows="3" maxlength="2000"></textarea>
-                  </label>
+                  <div id="customerAgreementCustomResponses" class="customer-agreement-custom-fields" hidden></div>
                   <div id="customerAgreementDrawnSignatureFields">
                     <div class="field-grid">
                       <label>Signer full legal name<input type="text" name="agreementSignatureNameConfirm" id="customerAgreementSignatureNameConfirm" autocomplete="name" /></label>
@@ -472,7 +469,7 @@
                     <label class="inline-check agreement-choice" id="customerAgreementElectronicConsentLabel"><input type="checkbox" name="agreementElectronicConsent" id="customerAgreementElectronicConsent" /> I consent to conducting this transaction electronically, receiving and retaining this agreement electronically, and using my electronic signature for this boarding agreement.</label>
                     <label class="inline-check agreement-choice" id="customerAgreementAcceptedLabel"><input type="checkbox" name="agreementAccepted" id="customerAgreementAccepted" /> I have read and agree to the Cuddle Stay Boarding Services Agreement, including the assumption of risk, release of liability, indemnification, and ordinary-negligence release terms.</label>
                     <label class="inline-check agreement-choice" id="customerAgreementArbitrationAcceptedLabel"><input type="checkbox" name="agreementArbitrationAccepted" id="customerAgreementArbitrationAccepted" /> I have read and agree to the mandatory individual binding arbitration provision and understand I am waiving covered court, judge, jury, class, collective, consolidated, coordinated, or representative-action rights.</label>
-                    <label class="inline-check agreement-choice" id="customerAgreementCustomAcceptedLabel" hidden><input type="checkbox" name="agreementCustomAccepted" id="customerAgreementCustomAccepted" /> <span id="customerAgreementCustomAcceptedText">I have read and agree to the uploaded agreement.</span></label>
+                    <div id="customerAgreementCustomAcknowledgements" class="customer-agreement-custom-acknowledgements" hidden></div>
                   </fieldset>
                 </div>
               </section>
@@ -1506,7 +1503,7 @@
                 <label class="settings-setup-field">Agreement title
                   <input type="text" id="settingsAgreementTitle" name="agreementTitle" maxlength="120" placeholder="Boarding Services Agreement" />
                 </label>
-                <label class="settings-setup-field">Agreement document
+                <label class="settings-setup-field settings-agreement-document-field">Agreement document
                   <input type="file" id="settingsAgreementDocument" name="agreementDocument" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
                   <small class="field-help">Upload one PDF, DOC, or DOCX file. The built-in boarding agreement remains active until this document is saved and enabled.</small>
                 </label>
@@ -1519,9 +1516,8 @@
               <summary>Custom acknowledgement checkbox</summary>
               <div class="settings-agreement-option-content">
                 <label class="inline-check"><input type="checkbox" id="settingsAgreementAcknowledgementEnabled" name="acknowledgementEnabled" /> Require a customer acknowledgement checkbox</label>
-                <label id="settingsAgreementAcknowledgementTextLabel">Checkbox text
-                  <textarea id="settingsAgreementAcknowledgementText" name="acknowledgementText" rows="3" maxlength="1000" placeholder="I have read and agree to the uploaded agreement."></textarea>
-                </label>
+                <div id="settingsAgreementAcknowledgementItems" class="settings-agreement-repeatable-list"></div>
+                <button type="button" class="secondary-button settings-agreement-add-item" id="addSettingsAgreementAcknowledgementButton">Add another acknowledgement</button>
               </div>
             </details>
 
@@ -1537,9 +1533,8 @@
               <summary>Customer information field</summary>
               <div class="settings-agreement-option-content">
                 <label class="inline-check"><input type="checkbox" id="settingsAgreementCustomerFieldEnabled" name="customerFieldEnabled" /> Ask the customer for additional information</label>
-                <label id="settingsAgreementCustomerFieldPromptLabel">Prompt shown to customer
-                  <textarea id="settingsAgreementCustomerFieldPrompt" name="customerFieldPrompt" rows="3" maxlength="1000" placeholder="Enter the information requested for this agreement."></textarea>
-                </label>
+                <div id="settingsAgreementCustomerFieldItems" class="settings-agreement-repeatable-list"></div>
+                <button type="button" class="secondary-button settings-agreement-add-item" id="addSettingsAgreementCustomerFieldButton">Add another information field</button>
               </div>
             </details>
 
@@ -1684,6 +1679,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config"></script>
+    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items"></script>
 </body>
 </html>

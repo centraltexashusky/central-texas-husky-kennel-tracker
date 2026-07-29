@@ -37,15 +37,33 @@ function customerWorkspaceAgreementConfig() {
         savedAt: String(config.document.savedAt || "").trim(),
       }
     : null;
+  const acknowledgements = Array.isArray(config?.acknowledgements)
+    ? config.acknowledgements.map((item, index) => ({
+        id: String(item?.id || \`acknowledgement-\${index + 1}\`).trim(),
+        text: String(item?.text || "").trim(),
+      })).filter((item) => item.text)
+    : (String(config?.acknowledgementText || "").trim()
+        ? [{ id: "acknowledgement-1", text: String(config.acknowledgementText).trim() }]
+        : []);
+  const customerFields = Array.isArray(config?.customerFields)
+    ? config.customerFields.map((item, index) => ({
+        id: String(item?.id || \`customer-field-\${index + 1}\`).trim(),
+        text: String(item?.text || item?.prompt || "").trim(),
+      })).filter((item) => item.text)
+    : (String(config?.customerFieldPrompt || "").trim()
+        ? [{ id: "customer-field-1", text: String(config.customerFieldPrompt).trim() }]
+        : []);
   return {
     customAgreementEnabled: Boolean(config?.customAgreementEnabled && documentRecord),
     agreementTitle: String(config?.agreementTitle || "Boarding Services Agreement").trim() || "Boarding Services Agreement",
     document: documentRecord,
-    acknowledgementEnabled: Boolean(config?.acknowledgementEnabled),
-    acknowledgementText: String(config?.acknowledgementText || "").trim(),
+    acknowledgementEnabled: Boolean(config?.acknowledgementEnabled && acknowledgements.length),
+    acknowledgementText: acknowledgements[0]?.text || "",
+    acknowledgements,
     signatureRequired: config?.signatureRequired !== false,
-    customerFieldEnabled: Boolean(config?.customerFieldEnabled),
-    customerFieldPrompt: String(config?.customerFieldPrompt || "").trim(),
+    customerFieldEnabled: Boolean(config?.customerFieldEnabled && customerFields.length),
+    customerFieldPrompt: customerFields[0]?.text || "",
+    customerFields,
     updatedAt: String(config?.updatedAt || "").trim(),
   };
 }
@@ -67,10 +85,10 @@ function customerAgreementRuntimeVersion() {
     config.document?.storagePath,
     config.document?.size,
     config.acknowledgementEnabled,
-    config.acknowledgementText,
+    JSON.stringify(config.acknowledgements),
     config.signatureRequired,
     config.customerFieldEnabled,
-    config.customerFieldPrompt,
+    JSON.stringify(config.customerFields),
   ].join("|"), 24);
 }
 
@@ -125,9 +143,9 @@ function customerAgreementText() {
       "Effective date: " + customerAgreementRuntimeEffectiveDate(),
       "Uploaded document: " + (config.document?.name || ""),
       "Private storage reference: " + (config.document?.storagePath || ""),
-      config.acknowledgementEnabled ? "Required acknowledgement: " + config.acknowledgementText : "",
+      ...(config.acknowledgementEnabled ? config.acknowledgements.map((item, index) => \`Required acknowledgement \${index + 1}: \${item.text}\`) : []),
       config.signatureRequired ? "A drawn electronic signature is required." : "A drawn electronic signature is not required.",
-      config.customerFieldEnabled ? "Required customer response: " + config.customerFieldPrompt : "",
+      ...(config.customerFieldEnabled ? config.customerFields.map((item, index) => \`Required customer response \${index + 1}: \${item.text}\`) : []),
     ].filter(Boolean).join("\\n\\n");
   }
   return [
@@ -284,6 +302,20 @@ function customerAgreementResponsePayload(estimate = customerEstimateDetails()) 
   const mediaPreference = customerAgreementCheckedValue("agreementMediaPreference") || "authorized";
   const treatmentLimitRaw = customerAgreementFieldValue("customerAgreementTreatmentLimitAmount");
   const treatmentLimitAmount = emergencyTreatmentChoice === "limit" ? treatmentLimitRaw : "";
+  const acknowledgementResponses = config.customAgreementEnabled && config.acknowledgementEnabled
+    ? config.acknowledgements.map((item, index) => ({
+        id: item.id,
+        text: item.text,
+        accepted: Boolean($(\`#customerAgreementCustomAccepted-\${index}\`)?.checked),
+      }))
+    : [];
+  const customerFieldResponses = config.customAgreementEnabled && config.customerFieldEnabled
+    ? config.customerFields.map((item, index) => ({
+        id: item.id,
+        prompt: item.text,
+        value: customerAgreementFieldValue(\`customerAgreementCustomResponse-\${index}\`),
+      }))
+    : [];
   return {
     signerLegalName: customerAgreementFieldValue("customerAgreementSignatureNameConfirm") || currentUser?.name || "",
     ownerEmail: normalizeEmail(currentUser?.email),
@@ -293,14 +325,24 @@ function customerAgreementResponsePayload(estimate = customerEstimateDetails()) 
     mediaPreference: config.customAgreementEnabled ? "" : mediaPreference,
     mediaPreferenceLabel: config.customAgreementEnabled ? "" : customerAgreementMediaLabel(mediaPreference),
     mediaOptOut: config.customAgreementEnabled ? false : mediaPreference === "opt-out",
-    customAcknowledgementText: config.customAgreementEnabled && config.acknowledgementEnabled ? config.acknowledgementText : "",
-    customAcknowledgementAccepted: config.customAgreementEnabled && config.acknowledgementEnabled ? Boolean($("#customerAgreementCustomAccepted")?.checked) : false,
-    customFieldPrompt: config.customAgreementEnabled && config.customerFieldEnabled ? config.customerFieldPrompt : "",
-    customFieldValue: config.customAgreementEnabled && config.customerFieldEnabled ? customerAgreementFieldValue("customerAgreementCustomResponse") : "",
+    customAcknowledgementText: acknowledgementResponses[0]?.text || "",
+    customAcknowledgementAccepted: acknowledgementResponses.length ? acknowledgementResponses.every((item) => item.accepted) : false,
+    acknowledgementResponses,
+    customFieldPrompt: customerFieldResponses[0]?.prompt || "",
+    customFieldValue: customerFieldResponses[0]?.value || "",
+    customerFieldResponses,
   };
 }
 
 function customerAgreementCompletedFieldsText(responses = {}) {
+  const acknowledgementLines = arrayValue(responses.acknowledgementResponses).flatMap((item, index) => [
+    \`Acknowledgement \${index + 1}: \${item?.text || ""}\`,
+    \`Acknowledgement \${index + 1} accepted: \${item?.accepted ? "Yes" : "No"}\`,
+  ]);
+  const customerFieldLines = arrayValue(responses.customerFieldResponses).flatMap((item, index) => [
+    \`Customer information prompt \${index + 1}: \${item?.prompt || ""}\`,
+    \`Customer information response \${index + 1}: \${item?.value || ""}\`,
+  ]);
   return [
     "Completed Agreement Fields",
     "Signer legal name: " + (responses.signerLegalName || ""),
@@ -311,6 +353,8 @@ function customerAgreementCompletedFieldsText(responses = {}) {
     "Custom acknowledgement accepted: " + (responses.customAcknowledgementText ? (responses.customAcknowledgementAccepted ? "Yes" : "No") : ""),
     "Customer information prompt: " + (responses.customFieldPrompt || ""),
     "Customer information response: " + (responses.customFieldValue || ""),
+    ...acknowledgementLines,
+    ...customerFieldLines,
     "Booking or stay ID: " + (responses.bookingOrStayId || ""),
     "Completed at: " + (responses.completedAt || ""),
   ].filter((line) => String(line || "").trim()).join("\\n");
@@ -323,15 +367,15 @@ function customerAgreementSignedDocumentText(responses = {}) {
 function customerAgreementCompletionHtml(record = {}) {
   const responses = record?.agreementResponses || null;
   if (!responses) return "";
+  const hasAcknowledgementResponses = arrayValue(responses.acknowledgementResponses).length > 0;
+  const hasCustomerFieldResponses = arrayValue(responses.customerFieldResponses).length > 0;
   const rows = [
     ["Signer legal name", "signerLegalName"],
     ["Treatment authorization", "emergencyTreatmentLabel"],
     ["Treatment amount", "treatmentLimitLabel"],
     ["Media authorization", "mediaPreferenceLabel"],
-    ["Custom acknowledgement", "customAcknowledgementText"],
-    ["Acknowledgement accepted", "customAcknowledgementLabel"],
-    ["Requested information", "customFieldPrompt"],
-    ["Customer response", "customFieldValue"],
+    ...(!hasAcknowledgementResponses ? [["Custom acknowledgement", "customAcknowledgementText"], ["Acknowledgement accepted", "customAcknowledgementLabel"]] : []),
+    ...(!hasCustomerFieldResponses ? [["Requested information", "customFieldPrompt"], ["Customer response", "customFieldValue"]] : []),
     ["Booking or stay ID", "bookingOrStayId"],
   ];
   const detailRecord = {
@@ -339,7 +383,13 @@ function customerAgreementCompletionHtml(record = {}) {
     treatmentLimitLabel: responses.emergencyTreatmentLimitAmount ? "$" + responses.emergencyTreatmentLimitAmount : "",
     customAcknowledgementLabel: responses.customAcknowledgementText ? (responses.customAcknowledgementAccepted ? "Yes" : "No") : "",
   };
-  return "<section class=\\"signed-agreement-responses\\"><h4>Completed agreement selections</h4><div class=\\"signed-agreement-meta\\">" + detailRows(detailRecord, rows) + "</div></section>";
+  const acknowledgementHtml = arrayValue(responses.acknowledgementResponses).map((item, index) => \`
+    <div class="detail-row"><strong>Acknowledgement \${index + 1}</strong><span>\${escapeHtml(item?.text || "")} — \${item?.accepted ? "Accepted" : "Not accepted"}</span></div>
+  \`).join("");
+  const customerFieldsHtml = arrayValue(responses.customerFieldResponses).map((item, index) => \`
+    <div class="detail-row"><strong>\${escapeHtml(item?.prompt || \`Customer information \${index + 1}\`)}</strong><span>\${escapeHtml(item?.value || "")}</span></div>
+  \`).join("");
+  return "<section class=\\"signed-agreement-responses\\"><h4>Completed agreement selections</h4><div class=\\"signed-agreement-meta\\">" + detailRows(detailRecord, rows) + acknowledgementHtml + customerFieldsHtml + "</div></section>";
 }
 
 function customerAgreementDocumentHtml(record = null) {
@@ -415,14 +465,23 @@ function configureCustomerAgreementFields() {
   const legacyResponses = $("#customerAgreementLegacyResponses");
   if (legacyResponses) legacyResponses.hidden = custom;
 
-  const customResponseContainer = $("#customerAgreementCustomResponseContainer");
-  if (customResponseContainer) customResponseContainer.hidden = !(custom && config.customerFieldEnabled);
-  const customResponsePrompt = $("#customerAgreementCustomResponsePrompt");
-  if (customResponsePrompt) customResponsePrompt.textContent = config.customerFieldPrompt || "Additional agreement information";
-  const customResponse = $("#customerAgreementCustomResponse");
-  if (customResponse) {
-    customResponse.required = Boolean(custom && config.customerFieldEnabled);
-    customResponse.placeholder = config.customerFieldPrompt || "";
+  const customResponses = $("#customerAgreementCustomResponses");
+  if (customResponses) {
+    const existingResponseValues = new Map(
+      [...customResponses.querySelectorAll("[data-customer-agreement-field-id]")].map((field) => [
+        String(field.dataset.customerAgreementFieldId || ""),
+        String(field.value || ""),
+      ]),
+    );
+    customResponses.hidden = !(custom && config.customerFieldEnabled);
+    customResponses.innerHTML = custom && config.customerFieldEnabled
+      ? config.customerFields.map((item, index) => \`
+          <label>
+            <span>\${escapeHtml(item.text)}</span>
+            <textarea name="agreementCustomResponse-\${index}" id="customerAgreementCustomResponse-\${index}" data-customer-agreement-field-id="\${escapeHtml(item.id)}" rows="3" maxlength="2000" required>\${escapeHtml(existingResponseValues.get(item.id) || "")}</textarea>
+          </label>
+        \`).join("")
+      : "";
   }
 
   const drawnSignatureFields = $("#customerAgreementDrawnSignatureFields");
@@ -433,13 +492,27 @@ function configureCustomerAgreementFields() {
   const electronicConsentLabel = $("#customerAgreementElectronicConsentLabel");
   const acceptedLabel = $("#customerAgreementAcceptedLabel");
   const arbitrationLabel = $("#customerAgreementArbitrationAcceptedLabel");
-  const customAcceptedLabel = $("#customerAgreementCustomAcceptedLabel");
   if (electronicConsentLabel) electronicConsentLabel.hidden = Boolean(custom && !config.signatureRequired);
   if (acceptedLabel) acceptedLabel.hidden = custom;
   if (arbitrationLabel) arbitrationLabel.hidden = custom;
-  if (customAcceptedLabel) customAcceptedLabel.hidden = !(custom && config.acknowledgementEnabled);
-  const customAcceptedText = $("#customerAgreementCustomAcceptedText");
-  if (customAcceptedText) customAcceptedText.textContent = config.acknowledgementText || "I have read and agree to the uploaded agreement.";
+  const customAcknowledgements = $("#customerAgreementCustomAcknowledgements");
+  if (customAcknowledgements) {
+    const existingAcknowledgements = new Map(
+      [...customAcknowledgements.querySelectorAll("[data-customer-agreement-ack-id]")].map((field) => [
+        String(field.dataset.customerAgreementAckId || ""),
+        Boolean(field.checked),
+      ]),
+    );
+    customAcknowledgements.hidden = !(custom && config.acknowledgementEnabled);
+    customAcknowledgements.innerHTML = custom && config.acknowledgementEnabled
+      ? config.acknowledgements.map((item, index) => \`
+          <label class="inline-check agreement-choice">
+            <input type="checkbox" name="agreementCustomAccepted-\${index}" id="customerAgreementCustomAccepted-\${index}" data-customer-agreement-ack-id="\${escapeHtml(item.id)}"\${existingAcknowledgements.get(item.id) ? " checked" : ""} />
+            <span>\${escapeHtml(item.text)}</span>
+          </label>
+        \`).join("")
+      : "";
+  }
 
   const requiredChecks = $("#customerAgreementRequiredChecks");
   if (requiredChecks) requiredChecks.hidden = Boolean(custom && !config.signatureRequired && !config.acknowledgementEnabled);
@@ -593,8 +666,8 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
   const electronicConsent = $("#customerAgreementElectronicConsent");
   const accepted = $("#customerAgreementAccepted");
   const arbitrationAccepted = $("#customerAgreementArbitrationAccepted");
-  const customAccepted = $("#customerAgreementCustomAccepted");
-  const customResponse = $("#customerAgreementCustomResponse");
+  const customAcceptedFields = config.acknowledgements.map((item, index) => $("#customerAgreementCustomAccepted-" + index)).filter(Boolean);
+  const customResponseFields = config.customerFields.map((item, index) => $("#customerAgreementCustomResponse-" + index)).filter(Boolean);
   const signatureData = $("#customerAgreementSignatureData")?.value || "";
   const signatureError = $("#customerAgreementSignatureError");
   [
@@ -603,8 +676,8 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
     electronicConsent,
     accepted,
     arbitrationAccepted,
-    customAccepted,
-    customResponse,
+    ...customAcceptedFields,
+    ...customResponseFields,
     ...$$("input[name=\\"agreementEmergencyTreatmentChoice\\"]"),
     ...$$("input[name=\\"agreementMediaPreference\\"]"),
   ].forEach((field) => field && clearFieldError(field));
@@ -659,13 +732,16 @@ function validateCustomerAgreementForBooking(estimate = customerEstimateDetails(
     firstInvalid = firstInvalid || arbitrationAccepted;
     message = message || "Separate arbitration acceptance is required before signing.";
   }
-  if (custom && config.acknowledgementEnabled && !customAccepted?.checked) {
-    if (customAccepted) setFieldError(customAccepted, "This agreement acknowledgement is required.");
-    firstInvalid = firstInvalid || customAccepted;
-    message = message || "Accept the agreement acknowledgement before submitting.";
+  if (custom && config.acknowledgementEnabled) {
+    customAcceptedFields.forEach((field) => {
+      if (field.checked) return;
+      setFieldError(field, "This agreement acknowledgement is required.");
+      firstInvalid = firstInvalid || field;
+      message = message || "Accept every agreement acknowledgement before submitting.";
+    });
   }
-  if (custom && config.customerFieldEnabled && !String(customResponse?.value || "").trim()) {
-    requireText(customResponse, "Enter the requested agreement information.");
+  if (custom && config.customerFieldEnabled) {
+    customResponseFields.forEach((field) => requireText(field, "Enter all requested agreement information."));
   }
   if (firstInvalid) {
     if (signatureError) {
@@ -726,13 +802,18 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
       ? {
           acknowledgementEnabled: config.acknowledgementEnabled,
           acknowledgementText: config.acknowledgementText,
+          acknowledgements: config.acknowledgementEnabled ? config.acknowledgements : [],
           signatureRequired: config.signatureRequired,
           customerFieldEnabled: config.customerFieldEnabled,
           customerFieldPrompt: config.customerFieldPrompt,
+          customerFields: config.customerFieldEnabled ? config.customerFields : [],
         }
       : null,
     agreementClauses: custom
-      ? [config.acknowledgementText, config.customerFieldPrompt].filter(Boolean)
+      ? [
+          ...(config.acknowledgementEnabled ? config.acknowledgements.map((item) => item.text) : []),
+          ...(config.customerFieldEnabled ? config.customerFields.map((item) => item.text) : []),
+        ]
       : customerAgreementClauses(),
     agreementMarkdown,
     agreementText: documentText,
@@ -753,9 +834,11 @@ async function createCustomerBoardingAgreementRecord(estimate = {}) {
     agreementAccepted: true,
     arbitrationAccepted: custom ? false : true,
     customAcknowledgementRequired: Boolean(custom && config.acknowledgementEnabled),
-    customAcknowledgementAccepted: Boolean(custom && config.acknowledgementEnabled && $("#customerAgreementCustomAccepted")?.checked),
+    customAcknowledgementAccepted: Boolean(custom && config.acknowledgementEnabled && agreementResponses.acknowledgementResponses.every((item) => item.accepted)),
+    customAcknowledgementResponses: agreementResponses.acknowledgementResponses,
     customerResponseRequired: Boolean(custom && config.customerFieldEnabled),
-    customerResponseValue: custom && config.customerFieldEnabled ? customerAgreementFieldValue("customerAgreementCustomResponse") : "",
+    customerResponseValue: custom && config.customerFieldEnabled ? (agreementResponses.customerFieldResponses[0]?.value || "") : "",
+    customerFieldResponses: agreementResponses.customerFieldResponses,
     agreementResponses,
     electronicConsentText: custom && !config.signatureRequired ? "" : CUSTOMER_BOARDING_AGREEMENT_CONSENT_TEXT,
     signatureIntentText: custom && !config.signatureRequired ? "The customer submitted a timestamped electronic acceptance without a drawn signature." : CUSTOMER_BOARDING_AGREEMENT_INTENT_TEXT,
