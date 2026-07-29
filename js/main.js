@@ -1,6 +1,6 @@
 // === MODULE: MAIN ===
 import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
-import "./shared.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-dashboard-timeline-restore-guarded-inline-status-profile-name-persistence";
+import "./shared.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-dashboard-timeline-restore-guarded-inline-status-profile-name-persistence-organization-setup-branding";
 import "./auth.js?v=20260721-dog-show-nav-user-profile-name-persistence";
 import "./customer.js?v=20260722-multi-operation-windows";
 import "./boarding.js?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-service-price-clarity";
@@ -8,7 +8,7 @@ import "./daily.js?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vac
 import "./task-scheduler.js?v=20260722-compact-week-grid-fit-operational-flow";
 import "./dog-show.js?v=20260728-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-nationwide-format-filters";
 import "./timesheet.js?v=20260709-staff-payroll-financials";
-import "./settings.js?v=20260722-multi-operation-windows";
+import "./settings.js?v=20260722-multi-operation-windows-organization-setup-branding";
 import "./notifications.js?v=20260723-customer-file-view-v2-dashboard-vaccine-queues";
 import "./search.js?v=20260623-efficiency-guardrails";
 

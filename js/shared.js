@@ -363,6 +363,7 @@ var mobileMoreMenuItems = [
   { pageId: "maintenancePage", label: "Maintenance", roles: ["helper", "staff", "admin"] },
   { pageId: "requestsPage", label: "Requests", roles: ["helper", "staff", "admin"] },
   { pageId: "financialsPage", label: "Financials", roles: ["admin"] },
+  { pageId: "settingsSetupPage", label: "Setup", roles: ["admin"] },
   { pageId: "settingsUsersPage", label: "Users", roles: ["admin"] },
   { pageId: "settingsKennelLocationsPage", label: "Kennel Locations", roles: ["admin"] },
   { pageId: "settingsHoursPage", label: "Hours of Operation", roles: ["admin"] },
@@ -370,7 +371,7 @@ var mobileMoreMenuItems = [
   { pageId: "settingsAlertsPage", label: "Alerts", roles: ["admin"] },
   { pageId: "settingsAuditLogPage", label: "Audit Log", roles: ["admin"] },
 ];
-var settingsPageIds = new Set(["settingsUsersPage", "settingsKennelLocationsPage", "settingsHoursPage", "servicesPage", "settingsAlertsPage", "settingsAuditLogPage"]);
+var settingsPageIds = new Set(["settingsSetupPage", "settingsUsersPage", "settingsKennelLocationsPage", "settingsHoursPage", "servicesPage", "settingsAlertsPage", "settingsAuditLogPage"]);
 var operationWeekdays = [
   { key: "monday", label: "Monday", shortLabel: "Mon", dayIndex: 1 },
   { key: "tuesday", label: "Tuesday", shortLabel: "Tue", dayIndex: 2 },
@@ -523,6 +524,7 @@ var stateKeys = {
   legacyDogLink: "cth-legacyDogLink-records",
   boardingAgreement: "cth-boardingAgreement-records",
   settingsUser: "cth-settingsUser-records",
+  appConfig: "cth-appConfig-records",
   cfoNote: "cth-cfoNote-records",
   calendarNote: "cth-calendarNote-records",
   kennelLocation: "cth-kennelLocation-records",
@@ -10994,6 +10996,7 @@ async function toggleRecordCompletion(type, id) {
 }
 
 function renderSharedRecords() {
+  applyAppBranding();
   renderNotifications();
   updateTimeDisplays();
   renderGlobalSearchResults();
@@ -11032,6 +11035,7 @@ function renderActivePageRecords(pageId = activePageId()) {
     timesheetPage: () => renderTimesheet(),
     servicesPage: () => renderServices(),
     financialsPage: () => { renderFinancials(); renderDemoSubmissions(); },
+    settingsSetupPage: () => renderSettingsSetup(),
     settingsUsersPage: () => renderSettingsUsers(),
     settingsKennelLocationsPage: () => renderKennelLocations(),
     settingsHoursPage: () => renderOperationHoursSettings(),
@@ -11066,6 +11070,7 @@ function renderAllRecords(options = {}) {
   renderTimesheet();
   renderServices();
   renderFinancials();
+  renderSettingsSetup();
   renderSettingsUsers();
   renderKennelLocations();
   renderOperationHoursSettings();
@@ -14602,6 +14607,9 @@ function initEvents() {
   $("#adminSendPasswordResetButton")?.addEventListener("click", () => adminSendPasswordResetEmail());
   $("#newSettingsUserButton")?.addEventListener("click", () => openSettingsUser());
   $("#openSettingsUserButton")?.addEventListener("click", () => openSettingsUserPopup(defaultSettingsUserForActiveTab()));
+  $("#settingsSetupForm")?.addEventListener("submit", saveSettingsSetup);
+  $("#settingsOrganizationName")?.addEventListener("input", updateSettingsSetupPreview);
+  $("#resetSettingsSetupButton")?.addEventListener("click", resetSettingsSetup);
   $("#settingsUserTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-settings-user-tab]");
     if (!button) return;
@@ -14877,6 +14885,8 @@ async function initializeApp() {
         clearLocalAppSession({ switchToLogin: false });
       }
     }
+    if (helperIsLoggedIn()) await loadRemoteAppBranding();
+    else applyAppBranding();
     updateNavigationAccess();
     if (helperIsLoggedIn()) {
       seedDefaultAdminConfigRecords();

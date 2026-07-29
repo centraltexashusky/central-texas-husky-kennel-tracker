@@ -24,6 +24,125 @@ var financialLineItemSearch = "";
 var financialStatusFilter = "all";
 var financialIncomeFilter = "all";
 var financialLineItemSort = "date-desc";
+var DEFAULT_APP_ORGANIZATION_NAME = "Central Texas Husky";
+var APP_BRANDING_CONFIG_ID = "workspace-branding";
+
+function appBrandingConfig() {
+  const record = readRecords("appConfig").find((item) => item.id === APP_BRANDING_CONFIG_ID && !item.removed) || {};
+  return {
+    ...record,
+    organizationName: String(record.organizationName || DEFAULT_APP_ORGANIZATION_NAME).trim() || DEFAULT_APP_ORGANIZATION_NAME,
+  };
+}
+
+function applyAppBranding() {
+  const config = appBrandingConfig();
+  $$("[data-app-organization-name]").forEach((element) => {
+    element.textContent = config.organizationName;
+  });
+  document.title = \`Snuggle Stay | \${config.organizationName}\`;
+  return config;
+}
+
+async function loadRemoteAppBranding() {
+  if (localTestMode || !supabaseClient || !helperIsLoggedIn()) {
+    applyAppBranding();
+    return appBrandingConfig();
+  }
+  try {
+    const { data, error } = await supabaseClient
+      .from("app_settings")
+      .select("id, organization_name, updated_at, updated_by")
+      .eq("id", "workspace")
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.organization_name) {
+      upsertRecord("appConfig", {
+        type: "appConfig",
+        id: APP_BRANDING_CONFIG_ID,
+        organizationName: data.organization_name,
+        submittedAt: data.updated_at || new Date().toISOString(),
+        updatedAt: data.updated_at || new Date().toISOString(),
+        updatedBy: data.updated_by || "",
+        removed: false,
+      });
+    }
+  } catch (error) {
+    console.warn("Workspace branding could not be loaded; using the default name.", error);
+  }
+  applyAppBranding();
+  return appBrandingConfig();
+}
+
+async function persistAppBrandingConfig(record = {}) {
+  if (localTestMode || !supabaseClient) return { ok: true, local: true };
+  const { error } = await supabaseClient
+    .from("app_settings")
+    .upsert({
+      id: "workspace",
+      organization_name: record.organizationName,
+      updated_at: record.updatedAt || new Date().toISOString(),
+      updated_by: currentUser?.email || "",
+    });
+  if (error) throw error;
+  return { ok: true };
+}
+
+function renderSettingsSetup() {
+  const input = $("#settingsOrganizationName");
+  if (!input) return;
+  const config = applyAppBranding();
+  input.value = config.organizationName;
+  const preview = $("#settingsOrganizationNamePreview");
+  if (preview) preview.textContent = config.organizationName;
+}
+
+function updateSettingsSetupPreview() {
+  const value = String($("#settingsOrganizationName")?.value || "").trim();
+  const preview = $("#settingsOrganizationNamePreview");
+  if (preview) preview.textContent = value || DEFAULT_APP_ORGANIZATION_NAME;
+}
+
+async function saveSettingsSetup(event) {
+  event?.preventDefault();
+  if (currentRole() !== "admin") {
+    showToast("Only admins can change workspace setup.");
+    return null;
+  }
+  const organizationName = String($("#settingsOrganizationName")?.value || "").trim();
+  if (!organizationName) {
+    showToast("Enter an organization name.");
+    $("#settingsOrganizationName")?.focus();
+    return null;
+  }
+  const existing = readRecords("appConfig").find((item) => item.id === APP_BRANDING_CONFIG_ID) || {};
+  const now = new Date().toISOString();
+  const record = upsertRecord("appConfig", {
+    ...existing,
+    type: "appConfig",
+    id: APP_BRANDING_CONFIG_ID,
+    organizationName,
+    submittedAt: existing.submittedAt || now,
+    updatedAt: now,
+    updatedBy: currentUser?.email || "",
+    removed: false,
+  });
+  await persistAppBrandingConfig(record);
+  await addAuditLog("Updated workspace setup", "appConfig", { ...record, name: organizationName }, \`Organization name: \${organizationName}\`);
+  applyAppBranding();
+  renderSettingsSetup();
+  showToast("Workspace setup saved.");
+  return record;
+}
+
+function resetSettingsSetup() {
+  if (currentRole() !== "admin") return;
+  const input = $("#settingsOrganizationName");
+  if (!input) return;
+  input.value = DEFAULT_APP_ORGANIZATION_NAME;
+  updateSettingsSetupPreview();
+  input.focus();
+}
 
 function readTableConfig() {
   const saved = JSON.parse(localStorage.getItem(stateKeys.tableConfig) || "null") || {};

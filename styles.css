@@ -1611,6 +1611,45 @@ body.owned-dog-modal-open {
   padding: 20px;
 }
 
+.settings-setup-panel {
+  max-width: 860px;
+}
+
+.settings-setup-form {
+  display: grid;
+  gap: 20px;
+}
+
+.settings-setup-field,
+.settings-brand-preview {
+  max-width: 620px;
+}
+
+.settings-brand-preview {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.settings-brand-preview > span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-brand-preview > strong {
+  font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+.settings-brand-preview > small {
+  color: var(--muted);
+}
+
 .section-heading {
   align-items: center;
   display: flex;
