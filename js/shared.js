@@ -1697,7 +1697,7 @@ function remoteRecordTypesForPage(pageId = "") {
     timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
     servicesPage: ["service"],
     financialsPage: ["boardingDog", "service", "timesheet"],
-    settingsUsersPage: ["settingsUser", "boardingAgreement"],
+    settingsUsersPage: ["settingsUser", "boardingAgreement", "boardingDog"],
     settingsKennelLocationsPage: ["kennelLocation", "kennelBuilding"],
     settingsHoursPage: ["operationHours", "operationDateOverride"],
     settingsAlertsPage: ["notificationPreference", "notificationLog"],
@@ -4875,7 +4875,7 @@ function renderAfterRealtimeTypes(types = []) {
   if (activePage === "financialsPage" && hasAny(["boardingDog", "service", "timesheet", "settingsUser"])) {
     renderFinancials();
   }
-  if (activePage === "settingsUsersPage" && hasAny(["settingsUser", "boardingAgreement"])) renderSettingsUsers();
+  if (activePage === "settingsUsersPage" && hasAny(["settingsUser", "boardingAgreement", "boardingDog"])) renderSettingsUsers();
   if (activePage === "settingsKennelLocationsPage" && hasAny(["kennelLocation", "kennelBuilding"])) renderKennelLocations();
   if (activePage === "settingsHoursPage" && hasAny(["operationHours", "operationDateOverride"])) renderOperationHoursSettings();
   if (activePage === "settingsAlertsPage" && hasAny(["notificationPreference", "notificationLog"])) renderSettingsAlerts();

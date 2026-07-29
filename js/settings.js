@@ -2045,14 +2045,65 @@ function settingsUserLastLoginText(user = {}) {
   return \`\${formatDateTime(user.lastLoginAt)}\${provider}\`;
 }
 
+function settingsUserAgreementTimestamp(record = {}) {
+  return new Date(record.signedAt || record.submittedAt || record.updatedAt || 0).getTime() || 0;
+}
+
+function boardingAgreementSnapshotFromBoardingRecord(record = {}) {
+  const saved = record.boardingAgreement && typeof record.boardingAgreement === "object"
+    ? record.boardingAgreement
+    : {};
+  const signedAt = saved.signedAt || record.boardingAgreementSignedAt || "";
+  const id = saved.id || record.boardingAgreementId || "";
+  if (!signedAt || !id) return null;
+  return {
+    ...saved,
+    id,
+    agreementTitle: saved.agreementTitle || "Cuddle Stay Boarding Services Agreement",
+    agreementVersion: saved.agreementVersion || record.boardingAgreementVersion || "",
+    documentHash: saved.documentHash || record.boardingAgreementDocumentHash || "",
+    signatureHash: saved.signatureHash || record.boardingAgreementSignatureHash || "",
+    signerName: saved.signerName || record.ownerName || record.customerName || "",
+    signerEmail: normalizeEmail(saved.signerEmail || record.ownerEmail || record.customerEmail || record.linkedOwnerEmail || ""),
+    signedAt,
+    archivedFromBoardingRecord: true,
+    sourceBoardingDogId: record.id || "",
+    sourceDogName: record.dogName || record.name || "",
+  };
+}
+
+function legacyBoardingAgreementsForSettingsUser(user = {}) {
+  const userEmail = normalizeEmail(user.email);
+  if (!userEmail) return [];
+  return readRecords("boardingDog")
+    .filter((record) => !record.removed)
+    .map(boardingAgreementSnapshotFromBoardingRecord)
+    .filter((record) => record && normalizeEmail(record.signerEmail) === userEmail);
+}
+
+function allSettingsUserAgreementSnapshots() {
+  const canonical = readRecords("boardingAgreement").filter((record) => !record.removed);
+  const legacy = readRecords("boardingDog")
+    .filter((record) => !record.removed)
+    .map(boardingAgreementSnapshotFromBoardingRecord)
+    .filter(Boolean);
+  const profiles = readRecords("settingsUser")
+    .filter((record) => !record.removed)
+    .flatMap((record) => [record.latestBoardingAgreement, record.boardingAgreement])
+    .filter((record) => record && record.id && record.signedAt);
+  return [...canonical, ...legacy, ...profiles];
+}
+
 function latestBoardingAgreementForSettingsUser(user = {}) {
   const userEmail = normalizeEmail(user.email);
   const savedAgreement = user.latestBoardingAgreement || user.boardingAgreement || {};
   if (!userEmail) return savedAgreement;
-  const canonicalAgreement = readRecords("boardingAgreement")
-    .filter((record) => !record.removed && normalizeEmail(record.signerEmail || record.ownerEmail) === userEmail)
-    .sort((a, b) => new Date(b.signedAt || b.submittedAt || 0) - new Date(a.signedAt || a.submittedAt || 0))[0];
-  return canonicalAgreement || savedAgreement;
+  return [
+    ...readRecords("boardingAgreement")
+      .filter((record) => !record.removed && normalizeEmail(record.signerEmail || record.ownerEmail) === userEmail),
+    ...legacyBoardingAgreementsForSettingsUser(user),
+    ...(savedAgreement?.signedAt ? [savedAgreement] : []),
+  ].sort((a, b) => settingsUserAgreementTimestamp(b) - settingsUserAgreementTimestamp(a))[0] || {};
 }
 
 function settingsUserPopupHtml(user = {}) {
@@ -2060,8 +2111,11 @@ function settingsUserPopupHtml(user = {}) {
   const canImpersonate = isEdit && currentRole() === "admin" && normalizeEmail(user.email) !== normalizeEmail(currentUser?.email);
   const showPayrollFields = isStaffRole(user.role || "customer");
   const latestAgreement = latestBoardingAgreementForSettingsUser(user);
+  const agreementStorageLabel = latestAgreement.archivedFromBoardingRecord
+    ? "Saved with booking record"
+    : "Saved to customer profile";
   const agreementCard = isEdit && latestAgreement.signedAt
-    ? \`<article class="record-card compact-record-card settings-user-login-card"><span>Boarding Agreement</span><strong>Signed \${escapeHtml(formatDateTime(latestAgreement.signedAt) || latestAgreement.signedAt)}</strong><p>\${escapeHtml([latestAgreement.signerName || user.name || "", latestAgreement.agreementVersion ? "Version " + latestAgreement.agreementVersion : "", "Saved to customer profile"].filter(Boolean).join(" | "))}</p>\${latestAgreement.id ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="view-settings-user-agreement" data-id="\${escapeHtml(latestAgreement.id)}">Open Agreement</button></div>\` : ""}</article>\`
+    ? \`<article class="record-card compact-record-card settings-user-login-card"><span>Boarding Agreement</span><strong>Signed \${escapeHtml(formatDateTime(latestAgreement.signedAt) || latestAgreement.signedAt)}</strong><p>\${escapeHtml([latestAgreement.signerName || user.name || "", latestAgreement.agreementVersion ? "Version " + latestAgreement.agreementVersion : "", agreementStorageLabel].filter(Boolean).join(" | "))}</p>\${latestAgreement.id ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="view-settings-user-agreement" data-id="\${escapeHtml(latestAgreement.id)}">Open Agreement</button></div>\` : ""}</article>\`
     : "";
   return \`
     <form id="settingsUserPopupForm" class="tracker-form" data-user-id="\${escapeHtml(user.id || "")}">
@@ -2108,7 +2162,9 @@ function openSettingsUserAgreement(id = "") {
     showToast("This agreement could not be opened.");
     return;
   }
-  const record = readRecords("boardingAgreement").find((item) => item.id === id && !item.removed);
+  const record = allSettingsUserAgreementSnapshots()
+    .filter((item) => item.id === id)
+    .sort((a, b) => settingsUserAgreementTimestamp(b) - settingsUserAgreementTimestamp(a))[0];
   if (!record) {
     showToast("This agreement could not be opened.");
     return;

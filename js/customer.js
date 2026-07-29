@@ -662,6 +662,39 @@ async function ensureCustomerBoardingAgreementForEstimate(estimate = {}) {
   return customerAgreementProfileSnapshot(record);
 }
 
+function customerLegacyAgreementNoticeHtml(record = {}) {
+  if (!record.archivedFromBoardingRecord) return "";
+  const dogName = record.sourceDogName ? " for " + record.sourceDogName : "";
+  const copyStatus = record.agreementText || record.agreementMarkdown
+    ? "The saved agreement text is shown below."
+    : record.agreementVersion === CUSTOMER_BOARDING_AGREEMENT_VERSION
+      ? "The agreement version matches the current retained source, which is shown below."
+      : "The original full agreement text was not retained in this older booking snapshot, so the current agreement text is not substituted for it.";
+  const signatureStatus = record.signatureImageData
+    ? "The saved signature image is included."
+    : "The drawn signature image was not retained in this older booking format.";
+  return "<article class=\\"record-card compact-record-card signed-agreement-archive-notice\\"><span>Archived booking agreement</span><strong>Signed agreement evidence saved with the booking" + escapeHtml(dogName) + "</strong><p>" + escapeHtml(copyStatus + " " + signatureStatus) + "</p></article>";
+}
+
+function customerLegacyAgreementSummaryHtml(record = {}) {
+  const responseRows = [
+    ["Signer legal name", "signerLegalName"],
+    ["Treatment authorization", "emergencyTreatmentLabel"],
+    ["Treatment amount", "treatmentLimitLabel"],
+    ["Media authorization", "mediaPreferenceLabel"],
+    ["Booking or stay ID", "bookingOrStayId"],
+  ];
+  const responses = record.agreementResponses || {};
+  const responseRecord = {
+    ...responses,
+    treatmentLimitLabel: responses.emergencyTreatmentLimitAmount ? "$" + responses.emergencyTreatmentLimitAmount : "",
+  };
+  const responseHtml = Object.values(responses).some((value) => String(value ?? "").trim())
+    ? "<section class=\\"signed-agreement-responses\\"><h4>Completed agreement selections</h4><div class=\\"signed-agreement-meta\\">" + detailRows(responseRecord, responseRows) + "</div></section>"
+    : "";
+  return "<article class=\\"customer-agreement-copy\\"><h3>" + escapeHtml(record.agreementTitle || "Boarding Services Agreement") + "</h3><p>Version " + escapeHtml(record.agreementVersion || "Legacy version") + (record.agreementEffectiveDate ? " | Effective " + escapeHtml(record.agreementEffectiveDate) : "") + "</p><p>This archived record preserves the customer's acceptance and verification evidence. The original full text is unavailable in this legacy snapshot.</p></article>" + responseHtml;
+}
+
 function customerAgreementDetailHtml(record = {}) {
   const rows = [
     ["Signer", "signerName"],
@@ -674,6 +707,8 @@ function customerAgreementDetailHtml(record = {}) {
     ["Document hash", "documentHash"],
     ["Signature hash", "signatureHash"],
     ["Device", "deviceLabel"],
+    ["Booking record", "sourceBoardingDogId"],
+    ["Dog", "sourceDogName"],
   ];
   const detailRecord = {
     ...record,
@@ -684,7 +719,14 @@ function customerAgreementDetailHtml(record = {}) {
     deviceLabel: [record.signedTimezone, record.signedLocale].filter(Boolean).join(" | "),
   };
   const signature = record.signatureImageData ? "<img class=\\"signed-agreement-signature\\" src=\\"" + escapeHtml(record.signatureImageData) + "\\" alt=\\"Saved signature\\" />" : "";
-  return customerAgreementDocumentHtml(record)
+  const canRenderAgreementCopy = !record.archivedFromBoardingRecord
+    || Boolean(record.agreementText || record.agreementMarkdown)
+    || record.agreementVersion === CUSTOMER_BOARDING_AGREEMENT_VERSION;
+  const agreementCopy = canRenderAgreementCopy
+    ? customerAgreementDocumentHtml(record)
+    : customerLegacyAgreementSummaryHtml(record);
+  return customerLegacyAgreementNoticeHtml(record)
+    + agreementCopy
     + "<section class=\\"signed-agreement-meta\\">" + detailRows(detailRecord, rows) + "</section>"
     + signature;
 }
