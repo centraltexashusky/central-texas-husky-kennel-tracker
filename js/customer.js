@@ -650,7 +650,12 @@ async function ensureCustomerBoardingAgreementForEstimate(estimate = {}) {
   const payload = await createCustomerBoardingAgreementRecord(estimate);
   const record = upsertRecord("boardingAgreement", payload);
   await sendPayload(record);
-  await saveCustomerAgreementToProfile(record);
+  try {
+    await saveCustomerAgreementToProfile(record);
+  } catch (error) {
+    console.warn("The signed agreement was saved, but the customer profile snapshot could not be updated.", error);
+  }
+  await notifyIfNeeded(record, "customerBoardingAgreementSigned");
   renderCustomerFiles();
   renderCustomerAgreementPanel(estimate);
   clearCustomerSignaturePad();

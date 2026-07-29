@@ -1110,6 +1110,7 @@ function notificationReasonForEvent(eventName = "", recordOrNotification = {}) {
   const source = recordOrNotification.sourceSnapshot ? notificationSourceSnapshot(recordOrNotification) : recordOrNotification;
   const name = eventName || recordOrNotification.eventName || "";
   if (!name && recoveredBoardingRequestNotification(recordOrNotification)) return "Boarding request needs approval";
+  if (name === "customerBoardingAgreementSigned") return "Signed boarding agreement";
   if (name === "customerBoardingRequestCreated") return "Boarding request needs approval";
   if (name === "customerBoardingRequestUpdated") return "Boarding request updated";
   if (name === "customerApprovedStayCancelled") return "Approved stay cancelled";
@@ -1131,6 +1132,7 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   const source = recordOrNotification.sourceSnapshot ? notificationSourceSnapshot(recordOrNotification) : recordOrNotification;
   const name = eventName || recordOrNotification.eventName || "";
   const sourceType = recordOrNotification.sourceType || source.type || "";
+  if (name === "customerBoardingAgreementSigned" || sourceType === "boardingAgreement") return "Open Agreement";
   if (name === "customerDogFileUploaded") return "View File";
   if (name === "customerBoardingRequestCreated" || name === "customerBoardingRequestUpdated" || recoveredBoardingRequestNotification(recordOrNotification)) return "Review Request";
   if (name === "boardingCustomerRequestApproved" || name === "boardingCustomerRequestDeclined" || name === "boardingCustomerRequestCancelled" || name === "boardingCustomerRequestUpdatedByStaff") return "Open Request";
@@ -1307,6 +1309,13 @@ function serviceRequestReadyForPickupNotificationMessage(record = {}) {
 
 function notificationEventConfig(eventName = "", record = {}) {
   const configs = {
+    customerBoardingAgreementSigned: {
+      title: \`Boarding agreement signed: \${record.signerName || record.ownerName || record.signerEmail || "Customer"}\`,
+      message: \`\${record.signerName || record.ownerName || record.signerEmail || "A customer"} signed \${record.agreementTitle || "the boarding agreement"}\${record.agreementVersion ? \` (Version \${record.agreementVersion})\` : ""}.\`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
     customerBoardingRequestCreated: {
       title: boardingRequestAlertTitle(record),
       message: boardingRequestAlertMessage(record, boardingPrimaryStay(record) || {}, "customerBoardingRequestCreated"),
@@ -1829,6 +1838,20 @@ async function openNotification(id = "") {
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;
   const recoveredRequest = recoveredBoardingRequestNotification(notification);
+  if (sourceType === "boardingAgreement" || notification.eventName === "customerBoardingAgreementSigned") {
+    const source = notificationSourceSnapshot(notification);
+    const record = readRecords("boardingAgreement").find((item) => item.id === sourceId && !item.removed)
+      || (source?.type === "boardingAgreement" && source.id ? source : null);
+    if (record) {
+      if (typeof customerAgreementDetailHtml === "function") {
+        showDetailDialog("Signed Boarding Agreement", customerAgreementDetailHtml(record));
+      } else {
+        showDetailDialog(notificationDisplayTitle(notification), \`<p>\${escapeHtml(notificationDisplayMessage(notification))}</p>\`);
+      }
+      renderDashboard();
+      return;
+    }
+  }
   if (notification.eventName === "customerDogFileUploaded") {
     openCustomerDogFileNotification(notification);
     renderDashboard();

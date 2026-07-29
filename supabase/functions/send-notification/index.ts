@@ -38,6 +38,7 @@ const ALLOWED_EVENT_NAMES = new Set([
   "boardingCustomerRequestUpdatedByStaff",
   "careLogAdminAlertCreated",
   "customerApprovedStayCancelled",
+  "customerBoardingAgreementSigned",
   "customerBoardingRequestCreated",
   "customerBoardingRequestUpdated",
   "customerDogFileUploaded",
@@ -172,6 +173,12 @@ async function notificationAudienceEmails(
   notification: Record<string, unknown> = {},
 ) {
   const audienceEmails = recordAudienceEmails(notification).length ? recordAudienceEmails(notification) : recordAudienceEmails(record);
+  if (eventName === "customerBoardingAgreementSigned") {
+    return uniqueEmails([
+      ...audienceEmails,
+      ...(await settingsUserEmailsByRoles(adminClient, ["admin"])),
+    ]);
+  }
   if (eventName !== "schedulePublished") return audienceEmails;
   return uniqueEmails([
     ...audienceEmails,
@@ -1406,6 +1413,42 @@ function hydrateNotificationPayload(
 async function notificationContent(adminClient: ReturnType<typeof createClient>, eventName: string, record: Record<string, unknown>, notification: Record<string, unknown> = {}) {
   const stay = notificationTargetStay(record, notification, eventName);
   const audienceEmails = await notificationAudienceEmails(adminClient, eventName, record, notification);
+  if (eventName === "customerBoardingAgreementSigned") {
+    const signerName = String(record.signerName || record.ownerName || record.signerEmail || "Customer");
+    const signerEmail = String(record.signerEmail || record.ownerEmail || "");
+    const agreementTitle = String(record.agreementTitle || "Boarding Services Agreement");
+    const agreementVersion = String(record.agreementVersion || "");
+    const signedAt = formatEmailDateTimeText(record.signedAt || record.submittedAt || "");
+    const responses = record.agreementResponses && typeof record.agreementResponses === "object"
+      ? record.agreementResponses as Record<string, unknown>
+      : {};
+    const agreementText = String(record.agreementText || record.agreementMarkdown || "").trim();
+    return {
+      subject: `Signed boarding agreement: ${signerName}`,
+      body: [
+        "A customer completed and electronically signed a boarding agreement.",
+        "",
+        `Agreement: ${agreementTitle}`,
+        agreementVersion ? `Version: ${agreementVersion}` : "",
+        `Signer: ${signerName}`,
+        signerEmail ? `Email: ${signerEmail}` : "",
+        signedAt ? `Signed: ${signedAt}` : "",
+        responses.emergencyTreatmentLabel ? `Treatment authorization: ${responses.emergencyTreatmentLabel}` : "",
+        responses.emergencyTreatmentLimitAmount ? `Treatment limit: $${responses.emergencyTreatmentLimitAmount}` : "",
+        responses.mediaPreferenceLabel ? `Media authorization: ${responses.mediaPreferenceLabel}` : "",
+        record.documentHash ? `Document hash: ${record.documentHash}` : "",
+        record.signatureHash ? `Signature hash: ${record.signatureHash}` : "",
+        "",
+        "SIGNED AGREEMENT",
+        agreementText || "The signed agreement is saved to the customer's profile in Snuggle Stay.",
+        "",
+        `Open customer profiles: ${appLink("#settingsUsersPage")}`,
+      ].filter(Boolean).join("\n"),
+      priority: "review",
+      to: audienceEmails.length ? audienceEmails : adminEmails(),
+      sms: false,
+    };
+  }
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";
     const media = await recordMediaLines(adminClient, record);

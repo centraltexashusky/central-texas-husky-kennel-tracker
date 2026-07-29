@@ -2045,13 +2045,23 @@ function settingsUserLastLoginText(user = {}) {
   return \`\${formatDateTime(user.lastLoginAt)}\${provider}\`;
 }
 
+function latestBoardingAgreementForSettingsUser(user = {}) {
+  const userEmail = normalizeEmail(user.email);
+  const savedAgreement = user.latestBoardingAgreement || user.boardingAgreement || {};
+  if (!userEmail) return savedAgreement;
+  const canonicalAgreement = readRecords("boardingAgreement")
+    .filter((record) => !record.removed && normalizeEmail(record.signerEmail || record.ownerEmail) === userEmail)
+    .sort((a, b) => new Date(b.signedAt || b.submittedAt || 0) - new Date(a.signedAt || a.submittedAt || 0))[0];
+  return canonicalAgreement || savedAgreement;
+}
+
 function settingsUserPopupHtml(user = {}) {
   const isEdit = Boolean(user.id);
   const canImpersonate = isEdit && currentRole() === "admin" && normalizeEmail(user.email) !== normalizeEmail(currentUser?.email);
   const showPayrollFields = isStaffRole(user.role || "customer");
-  const latestAgreement = user.latestBoardingAgreement || {};
+  const latestAgreement = latestBoardingAgreementForSettingsUser(user);
   const agreementCard = isEdit && latestAgreement.signedAt
-    ? \`<article class="record-card compact-record-card settings-user-login-card"><span>Boarding Agreement</span><strong>Signed \${escapeHtml(formatDateTime(latestAgreement.signedAt) || latestAgreement.signedAt)}</strong><p>\${escapeHtml([latestAgreement.signerName || user.name || "", latestAgreement.agreementVersion ? "Version " + latestAgreement.agreementVersion : ""].filter(Boolean).join(" | "))}</p>\${latestAgreement.id ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="view-settings-user-agreement" data-id="\${escapeHtml(latestAgreement.id)}">Open Agreement</button></div>\` : ""}</article>\`
+    ? \`<article class="record-card compact-record-card settings-user-login-card"><span>Boarding Agreement</span><strong>Signed \${escapeHtml(formatDateTime(latestAgreement.signedAt) || latestAgreement.signedAt)}</strong><p>\${escapeHtml([latestAgreement.signerName || user.name || "", latestAgreement.agreementVersion ? "Version " + latestAgreement.agreementVersion : "", "Saved to customer profile"].filter(Boolean).join(" | "))}</p>\${latestAgreement.id ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="view-settings-user-agreement" data-id="\${escapeHtml(latestAgreement.id)}">Open Agreement</button></div>\` : ""}</article>\`
     : "";
   return \`
     <form id="settingsUserPopupForm" class="tracker-form" data-user-id="\${escapeHtml(user.id || "")}">
