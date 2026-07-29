@@ -2157,8 +2157,10 @@ function boardingStayServiceTaskListHtml(record = {}, stay = {}, options = {}) {
         const unitMeta = unitComplete
           ? "Completed " + (formatDateTime(unit.completedAt) || "") + (unit.completedBy ? " by " + unit.completedBy : "")
           : "Needs completion before pickup";
-        const action = !unitComplete && options.actions
-          ? \`<button type="button" class="secondary-button" data-action="complete-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id)}" data-task-key="\${escapeHtml(taskKey)}" data-unit-index="\${escapeHtml(unit.index)}">Complete</button>\`
+        const action = options.actions
+          ? unitComplete
+            ? \`<button type="button" class="secondary-button boarding-service-undo-button" data-action="confirm-undo-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id)}" data-task-key="\${escapeHtml(taskKey)}" data-unit-index="\${escapeHtml(unit.index)}">Undo</button>\`
+            : \`<button type="button" class="secondary-button" data-action="complete-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id)}" data-task-key="\${escapeHtml(taskKey)}" data-unit-index="\${escapeHtml(unit.index)}">Complete</button>\`
           : "";
         return \`<div class="boarding-service-unit-row \${unitComplete ? "is-service-complete" : ""}">
           <div><strong>\${escapeHtml(unit.label || task.serviceName || "Service")}</strong><span>\${escapeHtml(unitMeta)}</span></div>
@@ -2175,6 +2177,39 @@ function boardingStayServiceTaskListHtml(record = {}, stay = {}, options = {}) {
       </article>\`;
     }).join("")}
   </div>\`;
+}
+
+function boardingStayServiceUndoConfirmationHtml(record = {}, stay = {}, task = {}, unit = {}) {
+  const stayAttrs = boardingStayDataAttrs(record, stay);
+  const taskKey = boardingServiceTaskKey(task);
+  const requestCode = boardingStayRequestCode(record, stay);
+  const completedText = formatDateTime(unit.completedAt || task.completedAt) || "Previously completed";
+  const completedBy = unit.completedBy || task.completedBy || "";
+  return \`<section class="popup-record-section boarding-service-undo-confirmation">
+    <article class="record-card compact-record-card">
+      <strong>Return \${escapeHtml(unit.label || task.serviceName || "this service")} to Open?</strong>
+      <p>\${escapeHtml(record.dogName || "Boarding dog")} | Stay ID: \${escapeHtml(requestCode || "Not recorded")}</p>
+      <p>\${escapeHtml(completedText)}\${completedBy ? \` by \${escapeHtml(completedBy)}\` : ""}.</p>
+      <p>This removes the linked completion entry and marks the service as requiring completion again.</p>
+    </article>
+    <div class="button-row">
+      <button type="button" class="danger-button" data-action="undo-stay-service" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-task-id="\${escapeHtml(task.id || "")}" data-task-key="\${escapeHtml(taskKey)}" data-unit-index="\${escapeHtml(unit.index || unit.unitIndex || 1)}">Undo Completion</button>
+      <button type="button" class="secondary-button" data-action="close-dialog">Cancel</button>
+    </div>
+  </section>\`;
+}
+
+function openBoardingStayServiceUndoConfirmation(record = {}, reference = {}, taskId = "", taskKey = "", unitIndex = "") {
+  const displayRecord = boardingDogRecordForDisplay(record.id || reference.dogId || "") || record;
+  const stay = boardingStayByReference(displayRecord, reference);
+  const task = stay ? boardingStayServiceTasks(displayRecord, stay)
+    .find((item) => item.id === taskId || (taskKey && boardingServiceTaskKey(item) === taskKey)) : null;
+  const unit = task ? boardingServiceTaskUnitForCompletion(task, unitIndex) : null;
+  if (!displayRecord?.id || !stay?.id || !task || !unit || unit.status !== "completed") {
+    showToast("That completed stay service could not be found.");
+    return;
+  }
+  showDetailDialog("Undo Service Completion", boardingStayServiceUndoConfirmationHtml(displayRecord, stay, task, unit));
 }
 
 function boardingStayWithServiceTaskStatus(record = {}, stay = {}, taskId = "", status = "completed", targetTask = {}, targetTaskKey = "", unitIndex = "", options = {}) {
@@ -2214,7 +2249,9 @@ function boardingStayWithServiceTaskStatus(record = {}, stay = {}, taskId = "", 
       completedAt: allComplete ? timestamp : "",
       completedBy: allComplete ? staff.name : "",
       completedByEmail: allComplete ? staff.email : "",
-      lastCompletedUnitIndex: status === "completed" ? targetUnitIndex : task.lastCompletedUnitIndex || "",
+      lastCompletedUnitIndex: status === "completed"
+        ? targetUnitIndex
+        : completedUnits[completedUnits.length - 1]?.index || "",
       updatedAt: timestamp,
     };
   });
@@ -2288,6 +2325,22 @@ function boardingServiceCareLogsWithCompletion(record = {}, log = {}) {
   ];
 }
 
+function boardingServiceCareLogsWithoutCompletion(record = {}, stay = {}, task = {}, unit = {}) {
+  const taskId = String(task.id || "");
+  const taskKey = boardingServiceTaskKey(task);
+  const unitIndex = Number(unit.index || unit.unitIndex || 0);
+  const requestCode = String(boardingStayRequestCode(record, stay) || "");
+  return arrayValue(record.careLogs).filter((log) => {
+    const sameTask = (taskId && String(log.serviceTaskId || "") === taskId)
+      || (taskKey && String(log.serviceTaskKey || "") === taskKey);
+    const sameUnit = Number(log.serviceUnitIndex || 0) === unitIndex;
+    const logRequestCode = String(log.requestCode || "");
+    const sameStay = (!log.stayId || String(log.stayId) === String(stay.id || ""))
+      && (!logRequestCode || !requestCode || logRequestCode === requestCode);
+    return !(sameTask && sameUnit && sameStay);
+  });
+}
+
 async function retireScheduledCareTasksForBoardingServiceUnit(record = {}, stay = {}, task = {}, unitIndex = "", options = {}) {
   if (options.retireLinkedSchedule === false) return false;
   const unit = boardingServiceTaskUnitForCompletion(task, unitIndex);
@@ -2341,6 +2394,7 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
   const targetUnit = boardingServiceTaskUnitForCompletion(targetTask, unitIndex);
   const completedAlready = status === "completed" && targetUnit.status === "completed";
   const shouldCreateCareLog = status === "completed" && options.createCareLog !== false && !completedAlready;
+  const shouldRemoveCareLog = status !== "completed" && options.removeCareLog !== false && targetUnit.status === "completed";
   const completionCareLogId = shouldCreateCareLog ? options.careLogId || uid("boardingCareLog") : "";
   const statusOptions = {
     ...options,
@@ -2391,6 +2445,7 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
       ...rawRecord,
       stays: nextStays,
       ...(completionLog ? { careLogs: boardingServiceCareLogsWithCompletion(rawRecord, completionLog) } : {}),
+      ...(shouldRemoveCareLog ? { careLogs: boardingServiceCareLogsWithoutCompletion(rawRecord, targetStay, targetTask, targetUnit) } : {}),
       updatedAt: new Date().toISOString(),
     });
     await sendPayload(updated);
@@ -2417,7 +2472,7 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
   renderCustomerRequests();
   renderDashboard();
   if (typeof renderTaskScheduler === "function" && activePageId() === "taskSchedulerPage") renderTaskScheduler();
-  showToast(status === "completed" ? "Stay service marked done." : "Stay service updated.");
+  showToast(status === "completed" ? "Stay service marked done." : "Stay service returned to open.");
   return latest;
 }
 

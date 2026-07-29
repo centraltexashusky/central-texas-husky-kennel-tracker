@@ -11722,10 +11722,14 @@ function initEvents() {
       openOwnerUpdateAlert(ownerUpdateCard.dataset.id, boardingStayReferenceFromAction(ownerUpdateCard));
       return;
     }
-    const stayServiceCard = event.target.closest('[data-action="complete-stay-service"]');
+    const stayServiceCard = event.target.closest('[data-action="complete-stay-service"], [data-action="confirm-undo-stay-service"]');
     if (stayServiceCard) {
       const dog = boardingDogRecordForDisplay(stayServiceCard.dataset.dogId || stayServiceCard.dataset.id);
       const reference = boardingStayReferenceFromAction(stayServiceCard);
+      if (stayServiceCard.dataset.action === "confirm-undo-stay-service") {
+        openBoardingStayServiceUndoConfirmation(dog || {}, reference, stayServiceCard.dataset.taskId || "", stayServiceCard.dataset.taskKey || "", stayServiceCard.dataset.unitIndex || "");
+        return;
+      }
       const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, stayServiceCard.dataset.taskId || "", "completed", stayServiceCard.dataset.taskKey || "", stayServiceCard.dataset.unitIndex || "");
       if (updated) showStayServiceCompletionConfirmation(updated, reference, stayServiceCard.dataset.taskId || "", stayServiceCard.dataset.taskKey || "", dashboardAlertFilter);
       return;
@@ -12517,6 +12521,19 @@ function initEvents() {
       const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, action.dataset.taskId || "", "completed", action.dataset.taskKey || "", action.dataset.unitIndex || "");
       if (updated && refreshServicesPopup) openBoardingServicesPopup(updated, reference);
       else if (updated) showStayServiceCompletionConfirmation(updated, reference, action.dataset.taskId || "", action.dataset.taskKey || "", alertFilter);
+      return;
+    }
+    if (action.dataset.action === "confirm-undo-stay-service") {
+      const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
+      const reference = boardingStayReferenceFromAction(action);
+      openBoardingStayServiceUndoConfirmation(dog || {}, reference, action.dataset.taskId || "", action.dataset.taskKey || "", action.dataset.unitIndex || "");
+      return;
+    }
+    if (action.dataset.action === "undo-stay-service") {
+      const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
+      const reference = boardingStayReferenceFromAction(action);
+      const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, action.dataset.taskId || "", "pending", action.dataset.taskKey || "", action.dataset.unitIndex || "");
+      if (updated) openBoardingServicesPopup(updated, reference);
       return;
     }
     if (action.dataset.action === "confirm-ready-for-pickup") {
@@ -14110,7 +14127,7 @@ function initEvents() {
     openBoardingStayPopup(dog);
   });
   $("#boardingStayHistory").addEventListener("click", async (event) => {
-    const button = event.target.closest('[data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"], [data-action="complete-stay-service"], [data-action="open-owner-update-for-stay"]');
+    const button = event.target.closest('[data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"], [data-action="complete-stay-service"], [data-action="confirm-undo-stay-service"], [data-action="open-owner-update-for-stay"]');
     if (!button) return;
     const dog = activeBoardingDog();
     const reference = boardingStayReferenceFromAction(button);
@@ -14121,6 +14138,9 @@ function initEvents() {
     if (button.dataset.action === "complete-stay-service") {
       const updated = await updateBoardingStayServiceTaskStatus(dog || {}, reference, button.dataset.taskId || "", "completed", button.dataset.taskKey || "", button.dataset.unitIndex || "");
       if (updated) showStayServiceCompletionConfirmation(updated, reference, button.dataset.taskId || "", button.dataset.taskKey || "");
+    }
+    if (button.dataset.action === "confirm-undo-stay-service") {
+      openBoardingStayServiceUndoConfirmation(dog || {}, reference, button.dataset.taskId || "", button.dataset.taskKey || "", button.dataset.unitIndex || "");
     }
   });
   $("#boardingCustomerUpdateList")?.addEventListener("click", (event) => {
