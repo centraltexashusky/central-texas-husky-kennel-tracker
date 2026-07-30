@@ -15889,7 +15889,7 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-finance-report-stats {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .dog-show-finance-report-stats article {
@@ -15932,6 +15932,15 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-finance-report-event .is-expense,
 .dog-show-finance-dog-row .is-expense {
   color: #B04A43;
+}
+
+.dog-show-finance-report-stats .is-dog-cost,
+.dog-show-finance-report-group .is-dog-cost,
+.dog-show-finance-report-event .is-dog-cost,
+.dog-show-finance-dog-row .is-dog-cost,
+.dog-show-finance-dog-cost-section .is-dog-cost,
+.dog-show-expense-group > header > strong.is-dog-cost {
+  color: #8B5E13;
 }
 
 .dog-show-finance-report-groups {
@@ -15995,11 +16004,16 @@ details.dog-show-ring-schedules[hidden] {
   position: relative;
 }
 
-.dog-show-finance-report-group-metrics,
-.dog-show-finance-report-event-metrics {
+.dog-show-finance-report-group-metrics {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dog-show-finance-report-event-metrics {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .dog-show-finance-report-group-metrics > div,
@@ -16012,6 +16026,80 @@ details.dog-show-ring-schedules[hidden] {
   display: grid;
   gap: 12px;
   padding: 14px;
+}
+
+.dog-show-finance-report-group-content {
+  display: grid;
+}
+
+.dog-show-finance-dog-cost-section {
+  background: color-mix(in srgb, var(--tint-gold) 42%, var(--panel));
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.dog-show-finance-dog-cost-section > header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.dog-show-finance-dog-cost-section > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dog-show-finance-dog-cost-section > header span {
+  color: #8B5E13;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.dog-show-finance-dog-cost-section h4,
+.dog-show-finance-dog-cost-section p {
+  margin: 0;
+}
+
+.dog-show-finance-dog-cost-section p {
+  color: var(--muted);
+}
+
+.dog-show-finance-dog-cost-table {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dog-show-finance-dog-cost-row {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(160px, 1fr) repeat(3, minmax(125px, 0.65fr)) minmax(60px, 0.35fr);
+  padding: 10px 12px;
+}
+
+.dog-show-finance-dog-cost-row:first-child {
+  border-top: 0;
+}
+
+.dog-show-finance-dog-cost-row.is-heading {
+  background: var(--tint-blue);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-finance-dog-cost-row small,
+.dog-show-finance-dog-row small {
+  color: var(--muted);
+  display: block;
 }
 
 .dog-show-finance-report-event {
@@ -16339,6 +16427,15 @@ details.dog-show-ring-schedules[hidden] {
   color: #B04A43;
 }
 
+.dog-show-expense-row .dog-show-finance-kind.is-dog-cost {
+  color: #8B5E13;
+}
+
+.dog-show-expense-row .dog-show-dog-cost-note {
+  color: #8B5E13;
+  font-weight: 700;
+}
+
 .dog-show-expense-actions {
   align-items: center;
   display: flex;
@@ -16390,6 +16487,17 @@ details.dog-show-ring-schedules[hidden] {
   color: #FFAAA3;
 }
 
+:root[data-theme="dark"] .dog-show-finance-report-stats .is-dog-cost,
+:root[data-theme="dark"] .dog-show-finance-report-group .is-dog-cost,
+:root[data-theme="dark"] .dog-show-finance-report-event .is-dog-cost,
+:root[data-theme="dark"] .dog-show-finance-dog-row .is-dog-cost,
+:root[data-theme="dark"] .dog-show-finance-dog-cost-section .is-dog-cost,
+:root[data-theme="dark"] .dog-show-expense-group > header > strong.is-dog-cost,
+:root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-dog-cost,
+:root[data-theme="dark"] .dog-show-expense-row .dog-show-dog-cost-note {
+  color: #FFD58A;
+}
+
 @media (max-width: 720px) {
   .dog-show-expenses-heading {
     align-items: stretch;
@@ -16411,10 +16519,6 @@ details.dog-show-ring-schedules[hidden] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dog-show-finance-report-stats article:last-child {
-    grid-column: 1 / -1;
-  }
-
   .dog-show-finance-report-group > summary {
     align-items: start;
     grid-template-columns: 1fr;
@@ -16426,31 +16530,69 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-finance-report-event > header,
-  .dog-show-finance-report-event > footer {
+  .dog-show-finance-report-event > footer,
+  .dog-show-finance-dog-cost-section > header {
     align-items: stretch;
     flex-direction: column;
   }
 
   .dog-show-finance-show-wide-breakdown,
-  .dog-show-finance-dog-row {
+  .dog-show-finance-dog-row,
+  .dog-show-finance-dog-cost-row {
     grid-template-columns: 1fr 1fr;
   }
 
-  .dog-show-finance-dog-row.is-heading {
+  .dog-show-finance-dog-row.is-heading,
+  .dog-show-finance-dog-cost-row.is-heading {
     display: none;
   }
 
+  .dog-show-finance-dog-row > :nth-child(2)::before,
   .dog-show-finance-dog-row > :nth-child(3)::before,
   .dog-show-finance-dog-row > :nth-child(4)::before {
     color: var(--muted);
-    content: "Income: ";
     font-size: 0.68rem;
     font-weight: 800;
     text-transform: uppercase;
   }
 
+  .dog-show-finance-dog-row > :nth-child(2)::before {
+    content: "Direct expenses: ";
+  }
+
+  .dog-show-finance-dog-row > :nth-child(3)::before {
+    content: "Assigned rewards: ";
+  }
+
   .dog-show-finance-dog-row > :nth-child(4)::before {
-    content: "Net: ";
+    content: "Dog cost: ";
+  }
+
+  .dog-show-finance-dog-cost-row > :nth-child(2)::before,
+  .dog-show-finance-dog-cost-row > :nth-child(3)::before,
+  .dog-show-finance-dog-cost-row > :nth-child(4)::before,
+  .dog-show-finance-dog-cost-row > :nth-child(5)::before {
+    color: var(--muted);
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .dog-show-finance-dog-cost-row > :nth-child(2)::before {
+    content: "Direct expenses";
+  }
+
+  .dog-show-finance-dog-cost-row > :nth-child(3)::before {
+    content: "Assigned rewards";
+  }
+
+  .dog-show-finance-dog-cost-row > :nth-child(4)::before {
+    content: "Total dog cost";
+  }
+
+  .dog-show-finance-dog-cost-row > :nth-child(5)::before {
+    content: "Shows";
   }
 
   .dog-show-expense-stats {
