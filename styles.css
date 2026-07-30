@@ -17654,8 +17654,8 @@ details.dog-show-ring-schedules[hidden] {
   border: 1px solid rgba(49, 95, 133, 0.26);
   border-radius: 8px;
   display: grid;
-  gap: 9px;
-  padding: 10px;
+  gap: 5px;
+  padding: 7px 9px;
 }
 
 .dog-show-plan-point-schedule > header {
@@ -17666,8 +17666,9 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-plan-point-schedule > header > div {
-  display: grid;
-  gap: 2px;
+  align-items: baseline;
+  display: flex;
+  gap: 7px;
 }
 
 .dog-show-plan-point-schedule > header span {
@@ -17678,7 +17679,7 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-plan-point-schedule > header strong {
-  font-size: 0.8rem;
+  font-size: 0.72rem;
 }
 
 .dog-show-plan-point-schedule > header a {
@@ -17689,16 +17690,18 @@ details.dog-show-ring-schedules[hidden] {
 
 .dog-show-plan-point-schedule-list {
   display: grid;
-  gap: 8px;
+  gap: 5px;
 }
 
 .dog-show-plan-point-schedule-list > article {
+  align-items: center;
   display: grid;
-  gap: 6px;
+  gap: 7px;
+  grid-template-columns: minmax(115px, 0.55fr) minmax(0, 2fr);
 }
 
 .dog-show-plan-point-schedule-list h5 {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   margin: 0;
 }
 
@@ -17712,19 +17715,18 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-plan-point-thresholds > div {
   display: grid;
   gap: 1px;
-  grid-template-columns: minmax(74px, 1.2fr) repeat(5, minmax(36px, 1fr));
+  grid-template-columns: minmax(62px, 1fr) repeat(5, minmax(43px, 1fr));
 }
 
 .dog-show-plan-point-thresholds span,
-.dog-show-plan-point-thresholds strong,
 .dog-show-plan-point-thresholds b {
   align-items: center;
   background: var(--glass-fill-soft);
   display: flex;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   justify-content: center;
-  min-height: 29px;
-  padding: 5px;
+  min-height: 23px;
+  padding: 3px 5px;
   text-align: center;
 }
 
@@ -17732,9 +17734,21 @@ details.dog-show-ring-schedules[hidden] {
   justify-content: flex-start;
 }
 
+.dog-show-plan-point-thresholds b {
+  gap: 4px;
+}
+
+.dog-show-plan-point-thresholds b small {
+  color: var(--muted);
+  font-size: 0.57rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .dog-show-plan-point-schedule > p {
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: 0.64rem;
+  line-height: 1.25;
   margin: 0;
 }
 
@@ -17964,12 +17978,17 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-plan-point-schedule > header {
-    align-items: start;
-    flex-direction: column;
+    gap: 6px;
+  }
+
+  .dog-show-plan-point-schedule-list > article {
+    align-items: stretch;
+    gap: 4px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dog-show-plan-point-thresholds > div {
-    grid-template-columns: minmax(66px, 1.1fr) repeat(5, minmax(32px, 1fr));
+    grid-template-columns: minmax(58px, 1.1fr) repeat(5, minmax(36px, 1fr));
   }
 }
 
