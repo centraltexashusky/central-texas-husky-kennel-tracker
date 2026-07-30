@@ -16,6 +16,8 @@ const DOG_SHOW_TASK_DAY_KEY = "cth-dog-show-task-expanded-day";
 const DOG_SHOW_RING_ROW_STATE_KEY = "cth-dog-show-ring-row-state";
 const DOG_SHOW_PROGRESS_TAB_KEY = "cth-dog-show-progress-tab";
 const DOG_SHOW_CALCULATOR_KEY = "cth-dog-show-calculator";
+const DOG_SHOW_FINANCE_MODE_KEY = "cth-dog-show-finance-mode";
+const DOG_SHOW_FINANCE_PERIOD_KEY = "cth-dog-show-finance-period";
 const DOG_SHOW_PLANNER_RECORD_ID = "showPlanner-current";
 const DOG_SHOW_PLANNER_BREED_CODE = "346";
 const DOG_SHOW_PLANNER_DEFAULT_BREED = "Siberian Husky";
@@ -204,6 +206,8 @@ let dogShowProgressDogKey = "";
 let dogShowProgressJudge = "";
 let dogShowCalculatorState = loadDogShowCalculatorState();
 let dogShowPlannerMetadataRefreshKey = "";
+let dogShowFinanceMode = ["current", "compiled"].includes(localStorage.getItem(DOG_SHOW_FINANCE_MODE_KEY)) ? localStorage.getItem(DOG_SHOW_FINANCE_MODE_KEY) : "current";
+let dogShowFinancePeriod = ["show", "week", "month", "year"].includes(localStorage.getItem(DOG_SHOW_FINANCE_PERIOD_KEY)) ? localStorage.getItem(DOG_SHOW_FINANCE_PERIOD_KEY) : "show";
 
 function loadDogShowCalculatorState() {
   const fallback = {
@@ -1747,7 +1751,188 @@ function dogShowExpenseSplitCount(event = dogShowActiveEvent(), rosterCount = do
   return Math.min(rosterCount, Math.max(1, saved || rosterCount));
 }
 
+function dogShowFinanceEventSummary(event = {}) {
+  const transactions = dogShowExpenses(event);
+  const showWideTransactions = transactions.filter((transaction) => !transaction.showEntryId && !transaction.dogName);
+  const dogTransactions = transactions.filter((transaction) => transaction.showEntryId || transaction.dogName);
+  return {
+    event,
+    transactions,
+    showWideTransactions,
+    dogTransactions,
+    totals: dogShowFinanceTotals(transactions),
+    showWideTotals: dogShowFinanceTotals(showWideTransactions),
+    dogTotals: dogShowFinanceTotals(dogTransactions),
+    dogGroups: dogShowExpenseDogGroups(event, transactions),
+    rosterCount: dogShowEntries(event).length,
+  };
+}
+
+function dogShowFinanceReportDate(event = {}) {
+  const fallbackTransaction = dogShowExpenses(event).find((transaction) => transaction.incurredDate || transaction.submittedAt);
+  return event.startDate || fallbackTransaction?.incurredDate || String(fallbackTransaction?.submittedAt || "").slice(0, 10) || "";
+}
+
+function dogShowFinanceWeekRange(dateKey = "") {
+  const date = dateKey ? new Date(`${dateKey}T12:00:00`) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  const mondayOffset = (date.getDay() + 6) % 7;
+  const start = new Date(date);
+  start.setDate(date.getDate() - mondayOffset);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: dogShowDateKey(start), end: dogShowDateKey(end) };
+}
+
+function dogShowFinancePeriodMeta(event = {}, period = dogShowFinancePeriod) {
+  const dateKey = dogShowFinanceReportDate(event);
+  if (!dateKey) return { key: "undated", label: "Date not set", sortKey: "0000-00-00" };
+  const date = new Date(`${dateKey}T12:00:00`);
+  if (period === "week") {
+    const range = dogShowFinanceWeekRange(dateKey);
+    return {
+      key: range?.start || dateKey,
+      label: range ? `${dogShowFormatMonthDay(range.start)} – ${dogShowFormatMonthDay(range.end)}` : dogShowFormatDate(dateKey),
+      sortKey: range?.start || dateKey,
+    };
+  }
+  if (period === "month") {
+    return {
+      key: dateKey.slice(0, 7),
+      label: date.toLocaleDateString([], { month: "long", year: "numeric" }),
+      sortKey: dateKey.slice(0, 7),
+    };
+  }
+  if (period === "year") {
+    return { key: dateKey.slice(0, 4), label: dateKey.slice(0, 4), sortKey: dateKey.slice(0, 4) };
+  }
+  return {
+    key: event.id || dateKey,
+    label: event.name || event.club || "Untitled show",
+    sortKey: dateKey,
+  };
+}
+
+function dogShowFinanceReportGroups(period = dogShowFinancePeriod) {
+  const groups = new Map();
+  dogShowEvents().forEach((event) => {
+    const summary = dogShowFinanceEventSummary(event);
+    const meta = dogShowFinancePeriodMeta(event, period);
+    if (!groups.has(meta.key)) groups.set(meta.key, { ...meta, summaries: [] });
+    groups.get(meta.key).summaries.push(summary);
+  });
+  return [...groups.values()]
+    .map((group) => {
+      group.summaries.sort((left, right) => String(dogShowFinanceReportDate(right.event)).localeCompare(String(dogShowFinanceReportDate(left.event))));
+      group.transactions = group.summaries.flatMap((summary) => summary.transactions);
+      group.showWideTransactions = group.summaries.flatMap((summary) => summary.showWideTransactions);
+      group.dogTransactions = group.summaries.flatMap((summary) => summary.dogTransactions);
+      group.totals = dogShowFinanceTotals(group.transactions);
+      group.showWideTotals = dogShowFinanceTotals(group.showWideTransactions);
+      group.dogTotals = dogShowFinanceTotals(group.dogTransactions);
+      return group;
+    })
+    .sort((left, right) => String(right.sortKey).localeCompare(String(left.sortKey)));
+}
+
+function dogShowFinanceMetricHtml(label = "", value = 0, className = "") {
+  return `<div><span>${escapeHtml(label)}</span><strong class="${escapeHtml(className)}">${dogShowExpenseCurrency(value)}</strong></div>`;
+}
+
+function dogShowFinanceDogBreakdownHtml(summary = {}) {
+  if (!summary.dogGroups.length) return `<p class="dog-show-finance-report-empty">No dog-specific transactions for this show.</p>`;
+  return `<div class="dog-show-finance-dog-breakdown" role="table" aria-label="Dog-specific finances">
+    <div class="dog-show-finance-dog-row is-heading" role="row"><span role="columnheader">Dog</span><span role="columnheader">Expenses</span><span role="columnheader">Income / rewards</span><span role="columnheader">Net</span></div>
+    ${summary.dogGroups.map((group) => {
+      const totals = dogShowFinanceTotals(group.transactions);
+      return `<div class="dog-show-finance-dog-row" role="row"><strong role="cell">${escapeHtml(group.label)}</strong><span role="cell">${dogShowExpenseCurrency(totals.expenseTotal)}</span><span role="cell" class="is-income">${dogShowExpenseCurrency(totals.incomeTotal)}</span><strong role="cell" class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)}</strong></div>`;
+    }).join("")}
+  </div>`;
+}
+
+function dogShowFinanceReportEventHtml(summary = {}) {
+  const { event, totals, showWideTotals, dogTotals } = summary;
+  const dateLabel = event.startDate
+    ? `${dogShowFormatDate(event.startDate)}${event.endDate && event.endDate !== event.startDate ? ` – ${dogShowFormatDate(event.endDate)}` : ""}`
+    : "Show date not set";
+  return `<article class="dog-show-finance-report-event${event.id === dogShowActiveEvent()?.id ? " is-current" : ""}">
+    <header>
+      <div><span>${escapeHtml(dogShowEventStatus(event.status))}</span><h4>${escapeHtml(event.name || event.club || "Untitled show")}</h4><p>${escapeHtml(dateLabel)}${event.cityState || event.venue ? ` · ${escapeHtml(event.cityState || event.venue)}` : ""}</p></div>
+      <strong class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)} net</strong>
+    </header>
+    <div class="dog-show-finance-report-event-metrics">
+      ${dogShowFinanceMetricHtml("Show-wide expense", showWideTotals.expenseTotal)}
+      ${dogShowFinanceMetricHtml("Dog expenses", dogTotals.expenseTotal)}
+      ${dogShowFinanceMetricHtml("Income / rewards", totals.incomeTotal, "is-income")}
+      ${dogShowFinanceMetricHtml("Total expense", totals.expenseTotal)}
+    </div>
+    <details class="dog-show-finance-report-event-details">
+      <summary>View complete cost breakdown</summary>
+      <div class="dog-show-finance-show-wide-breakdown">
+        <strong>Show-wide</strong>
+        <span>${showWideTotals.expenseCount} expense${showWideTotals.expenseCount === 1 ? "" : "s"} · ${dogShowExpenseCurrency(showWideTotals.expenseTotal)}</span>
+        <span>${showWideTotals.incomeCount} reward${showWideTotals.incomeCount === 1 ? "" : "s"} · ${dogShowExpenseCurrency(showWideTotals.incomeTotal)}</span>
+        <strong class="${showWideTotals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(showWideTotals.netTotal)} net</strong>
+      </div>
+      ${dogShowFinanceDogBreakdownHtml(summary)}
+    </details>
+    <footer><span>${summary.rosterCount} dog${summary.rosterCount === 1 ? "" : "s"} on roster · ${summary.transactions.length} transaction${summary.transactions.length === 1 ? "" : "s"}</span><button type="button" class="secondary-button" data-action="open-show-finance-event" data-event-id="${escapeHtml(event.id)}">Open show finances</button></footer>
+  </article>`;
+}
+
+function dogShowFinanceReportGroupHtml(group = {}, index = 0) {
+  const periodLabel = dogShowFinancePeriod === "show"
+    ? `${dogShowFormatDate(group.summaries[0]?.event?.startDate || "")} · ${group.summaries[0]?.event?.cityState || group.summaries[0]?.event?.venue || "Location not set"}`
+    : group.label;
+  return `<details class="dog-show-finance-report-group"${index === 0 ? " open" : ""}>
+    <summary>
+      <div><span>${dogShowFinancePeriod === "show" ? "SHOW" : dogShowFinancePeriod.toUpperCase()}</span><strong>${escapeHtml(dogShowFinancePeriod === "show" ? group.label : periodLabel)}</strong><small>${dogShowFinancePeriod === "show" ? `${escapeHtml(periodLabel)} · ` : ""}${group.summaries.length} show${group.summaries.length === 1 ? "" : "s"} · ${group.transactions.length} transaction${group.transactions.length === 1 ? "" : "s"}</small></div>
+      <div class="dog-show-finance-report-group-metrics">
+        ${dogShowFinanceMetricHtml("Show-wide", group.showWideTotals.expenseTotal)}
+        ${dogShowFinanceMetricHtml("Dog expenses", group.dogTotals.expenseTotal)}
+        ${dogShowFinanceMetricHtml("Income", group.totals.incomeTotal, "is-income")}
+        ${dogShowFinanceMetricHtml("Net", group.totals.netTotal, group.totals.netTotal >= 0 ? "is-income" : "is-expense")}
+      </div>
+    </summary>
+    <div class="dog-show-finance-report-events">${group.summaries.map(dogShowFinanceReportEventHtml).join("")}</div>
+  </details>`;
+}
+
+function dogShowCompiledFinanceHtml() {
+  const groups = dogShowFinanceReportGroups();
+  const summaries = dogShowEvents().map(dogShowFinanceEventSummary);
+  const transactions = summaries.flatMap((summary) => summary.transactions);
+  const showWideTransactions = summaries.flatMap((summary) => summary.showWideTransactions);
+  const dogTransactions = summaries.flatMap((summary) => summary.dogTransactions);
+  const totals = dogShowFinanceTotals(transactions);
+  const showWideTotals = dogShowFinanceTotals(showWideTransactions);
+  const dogTotals = dogShowFinanceTotals(dogTransactions);
+  const periodLabels = { show: "Show", week: "Week", month: "Month", year: "Year" };
+  return `<section class="dog-show-finance-report" aria-label="Compiled dog show financial report">
+    <header class="dog-show-finance-report-heading">
+      <div><span>COMPILED FINANCES</span><h3>Financial Reports</h3><p>Compare every show and reporting period. Periods use each show's start date, while show-wide and dog-specific costs stay separate.</p></div>
+      <div class="dog-show-finance-period-tabs" role="group" aria-label="Financial report period">${Object.entries(periodLabels).map(([value, label]) => `<button type="button" class="secondary-button${dogShowFinancePeriod === value ? " is-active" : ""}" data-finance-period="${value}" aria-pressed="${dogShowFinancePeriod === value}">${label}</button>`).join("")}</div>
+    </header>
+    <div class="dog-show-finance-report-stats">
+      <article><span>All expenses</span><strong>${dogShowExpenseCurrency(totals.expenseTotal)}</strong><small>${totals.expenseCount} cost item${totals.expenseCount === 1 ? "" : "s"}</small></article>
+      <article><span>Show-wide expenses</span><strong>${dogShowExpenseCurrency(showWideTotals.expenseTotal)}</strong><small>Shared show costs only</small></article>
+      <article><span>Dog-specific expenses</span><strong>${dogShowExpenseCurrency(dogTotals.expenseTotal)}</strong><small>Assigned to individual dogs</small></article>
+      <article><span>Income / rewards</span><strong class="is-income">${dogShowExpenseCurrency(totals.incomeTotal)}</strong><small>${totals.incomeCount} reward item${totals.incomeCount === 1 ? "" : "s"}</small></article>
+      <article><span>Net</span><strong class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)}</strong><small>${summaries.length} show${summaries.length === 1 ? "" : "s"} compiled</small></article>
+    </div>
+    <div class="dog-show-finance-report-groups">${groups.length ? groups.map(dogShowFinanceReportGroupHtml).join("") : `<p class="dog-show-expense-empty is-standalone">No dog shows are available for this report yet.</p>`}</div>
+  </section>`;
+}
+
 function dogShowExpensesHtml(event) {
+  const mode = event ? dogShowFinanceMode : "compiled";
+  const modeTabs = `<div class="dog-show-finance-mode-tabs" role="group" aria-label="Finance view"><button type="button" class="secondary-button${mode === "current" ? " is-active" : ""}" data-finance-mode="current" aria-pressed="${mode === "current"}"${event ? "" : " disabled"}>Current Show</button><button type="button" class="secondary-button${mode === "compiled" ? " is-active" : ""}" data-finance-mode="compiled" aria-pressed="${mode === "compiled"}">Compiled Reports</button></div>`;
+  if (mode === "compiled") {
+    return `<div class="dog-show-view dog-show-expenses-view">
+      <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Income & Expenses</h3><p>Review one show or compile complete costs and rewards across every show.</p></div>${modeTabs}</section>
+      ${dogShowCompiledFinanceHtml()}
+    </div>`;
+  }
   const expenses = dogShowExpenses(event);
   const totals = dogShowFinanceTotals(expenses);
   const showWideTransactions = expenses.filter((transaction) => !transaction.showEntryId && !transaction.dogName);
@@ -1757,7 +1942,7 @@ function dogShowExpensesHtml(event) {
   const splitAmount = splitCount ? showWideTotals.expenseTotal / splitCount : 0;
   const dogGroups = dogShowExpenseDogGroups(event, expenses);
   return `<div class="dog-show-view dog-show-expenses-view">
-    <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Income & Expenses</h3><p>Track show-wide costs and rewards. Assign a dog only when the transaction belongs to that dog.</p></div><button type="button" data-action="new-show-expense">Add Transaction</button></section>
+    <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Income & Expenses</h3><p>Track show-wide costs and rewards. Assign a dog only when the transaction belongs to that dog.</p></div><div class="dog-show-finance-heading-actions">${modeTabs}<button type="button" data-action="new-show-expense">Add Transaction</button></div></section>
     <div class="dog-show-expense-stats">
       <article><span>Total expenses</span><strong>${dogShowExpenseCurrency(totals.expenseTotal)}</strong><small>${totals.expenseCount} cost item${totals.expenseCount === 1 ? "" : "s"}</small></article>
       <article><span>Income / rewards</span><strong class="is-income">${dogShowExpenseCurrency(totals.incomeTotal)}</strong><small>${totals.incomeCount} reward item${totals.incomeCount === 1 ? "" : "s"}</small></article>
@@ -2743,7 +2928,7 @@ function renderDogShow() {
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  if (!event && !["progress", "planner", "calendar", "calculator"].includes(dogShowView)) {
+  if (!event && !["progress", "planner", "calendar", "calculator", "expenses"].includes(dogShowView)) {
     content.innerHTML = dogShowRenderEmpty("Create the first show weekend", "Add the event once, then build the roster, prep schedule, helper tasks, and results.");
     return;
   }
@@ -4223,6 +4408,20 @@ function setupDogShowEventListeners() {
       renderDogShow();
       return;
     }
+    const financeMode = event.target.closest("[data-finance-mode]");
+    if (financeMode) {
+      dogShowFinanceMode = financeMode.dataset.financeMode === "compiled" ? "compiled" : "current";
+      localStorage.setItem(DOG_SHOW_FINANCE_MODE_KEY, dogShowFinanceMode);
+      renderDogShow();
+      return;
+    }
+    const financePeriod = event.target.closest("[data-finance-period]");
+    if (financePeriod) {
+      dogShowFinancePeriod = ["show", "week", "month", "year"].includes(financePeriod.dataset.financePeriod) ? financePeriod.dataset.financePeriod : "show";
+      localStorage.setItem(DOG_SHOW_FINANCE_PERIOD_KEY, dogShowFinancePeriod);
+      renderDogShow();
+      return;
+    }
     const masterCalendarJump = event.target.closest("[data-show-calendar-jump-date]");
     if (masterCalendarJump) {
       dogShowMasterCalendarDate = masterCalendarJump.dataset.showCalendarJumpDate || todayDate();
@@ -4267,6 +4466,15 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "open-show-calendar") setDogShowView("calendar");
     if (action.dataset.action === "open-show-calculator") setDogShowView("calculator");
     if (action.dataset.action === "open-show-expenses") setDogShowView("expenses");
+    if (action.dataset.action === "open-show-finance-event") {
+      const selectedEvent = dogShowEvents().find((candidate) => candidate.id === action.dataset.eventId);
+      if (selectedEvent) {
+        localStorage.setItem(DOG_SHOW_EVENT_KEY, selectedEvent.id);
+        dogShowFinanceMode = "current";
+        localStorage.setItem(DOG_SHOW_FINANCE_MODE_KEY, dogShowFinanceMode);
+        renderDogShow();
+      }
+    }
     if (action.dataset.action === "new-show-expense") openDogShowExpenseForm();
     if (action.dataset.action === "edit-show-expense") {
       const expense = dogShowExpenses(dogShowActiveEvent()).find((candidate) => candidate.id === action.dataset.expenseId);
