@@ -18,6 +18,8 @@ const DOG_SHOW_PROGRESS_TAB_KEY = "cth-dog-show-progress-tab";
 const DOG_SHOW_CALCULATOR_KEY = "cth-dog-show-calculator";
 const DOG_SHOW_FINANCE_MODE_KEY = "cth-dog-show-finance-mode";
 const DOG_SHOW_FINANCE_PERIOD_KEY = "cth-dog-show-finance-period";
+const DOG_SHOW_FINANCE_SCOPE_KEY = "cth-dog-show-finance-scope";
+const DOG_SHOW_FINANCE_CUSTOMER_KEY = "cth-dog-show-finance-customer";
 const DOG_SHOW_PLANNER_RECORD_ID = "showPlanner-current";
 const DOG_SHOW_PLANNER_BREED_CODE = "346";
 const DOG_SHOW_PLANNER_DEFAULT_BREED = "Siberian Husky";
@@ -208,6 +210,8 @@ let dogShowCalculatorState = loadDogShowCalculatorState();
 let dogShowPlannerMetadataRefreshKey = "";
 let dogShowFinanceMode = ["current", "compiled"].includes(localStorage.getItem(DOG_SHOW_FINANCE_MODE_KEY)) ? localStorage.getItem(DOG_SHOW_FINANCE_MODE_KEY) : "current";
 let dogShowFinancePeriod = ["show", "week", "month", "year"].includes(localStorage.getItem(DOG_SHOW_FINANCE_PERIOD_KEY)) ? localStorage.getItem(DOG_SHOW_FINANCE_PERIOD_KEY) : "show";
+let dogShowFinanceScope = ["business", "customer"].includes(localStorage.getItem(DOG_SHOW_FINANCE_SCOPE_KEY)) ? localStorage.getItem(DOG_SHOW_FINANCE_SCOPE_KEY) : "business";
+let dogShowFinanceCustomerKey = localStorage.getItem(DOG_SHOW_FINANCE_CUSTOMER_KEY) || "all";
 
 function loadDogShowCalculatorState() {
   const fallback = {
@@ -1216,11 +1220,14 @@ function dogShowUpcomingTableHtml(activeEvent = dogShowActiveEvent()) {
     const dogNames = entries.map(dogShowEntryName);
     const helpers = (Array.isArray(event.helperEmails) ? event.helperEmails : []).map(dogShowStaffLabel);
     const location = event.venueAddress || event.cityState || event.venue || "Location pending";
-    return `<tr class="${event.id === activeEvent?.id ? "is-current" : ""}" data-show-table-row="${escapeHtml(event.id)}">
+    const lifecycleStatus = dogShowPlannerLifecycleStatus(event);
+    const statusClass = `is-status-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}`;
+    const closingNeedsAttention = lifecycleStatus === "Going To";
+    return `<tr class="${event.id === activeEvent?.id ? "is-current " : ""}${statusClass}" data-show-table-row="${escapeHtml(event.id)}">
       <td class="dog-show-upcoming-select-cell"><input type="checkbox" data-show-table-select="${escapeHtml(event.id)}" aria-label="Select ${escapeHtml(event.name || "show")}"/></td>
       <td data-label="Show"><strong>${escapeHtml(event.name || event.club || "Dog Show")}</strong><small>${escapeHtml(location)}</small></td>
-      <td data-label="Dates"><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong>${event.entryClosingDate ? `<small>Closes ${escapeHtml(dogShowFormatDate(event.entryClosingDate))}</small>` : ""}</td>
-      <td data-label="Status"><select data-show-quick-status="${escapeHtml(event.id)}" aria-label="Status for ${escapeHtml(event.name || "show")}">${dogShowEventStatusOptions(event.status)}</select></td>
+      <td data-label="Dates"><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong>${event.entryClosingDate ? `<small class="dog-show-upcoming-closing${closingNeedsAttention ? " is-attention" : ""}">Closes ${escapeHtml(dogShowFormatDate(event.entryClosingDate))}</small>` : ""}</td>
+      <td data-label="Status"><select class="dog-show-upcoming-status ${statusClass}" data-show-quick-status="${escapeHtml(event.id)}" aria-label="Status for ${escapeHtml(event.name || "show")}">${dogShowEventStatusOptions(event.status)}</select></td>
       <td data-label="Dogs"><strong>${entries.length}</strong><small title="${escapeHtml(dogNames.join(", "))}">${escapeHtml(dogNames.length ? dogNames.join(", ") : "No dogs assigned")}</small></td>
       <td data-label="Helpers"><strong>${helpers.length}</strong><small title="${escapeHtml(helpers.join(", "))}">${escapeHtml(helpers.length ? helpers.join(", ") : "No helpers assigned")}</small></td>
       <td data-label="Actions"><div class="dog-show-upcoming-actions"><button type="button" class="secondary-button" data-action="open-show-table-event" data-event-id="${escapeHtml(event.id)}">Open</button><button type="button" class="secondary-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">Dogs & Helpers</button><button type="button" class="secondary-button" data-action="edit-show-table-event" data-event-id="${escapeHtml(event.id)}">Setup</button></div></td>
@@ -1804,6 +1811,149 @@ function dogShowFinanceDogCostGroups(summaries = []) {
     .sort((left, right) => right.costTotals.totalCost - left.costTotals.totalCost || left.label.localeCompare(right.label));
 }
 
+function dogShowCustomerIdentity(entry = {}) {
+  if (entry.dogType !== "boardingDog") return null;
+  const dog = dogShowSourceDog(entry);
+  const email = [dog.ownerEmail, dog.customerEmail, dog.linkedOwnerEmail, dog.secondaryOwnerEmail]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .find(Boolean) || "";
+  const user = email
+    ? readRecords("settingsUser").find((candidate) => !candidate.removed && String(candidate.email || "").trim().toLowerCase() === email) || {}
+    : {};
+  const name = String(user.name || dog.ownerName || dog.customerName || dog.requestedByName || "").trim();
+  const recordId = String(dog.customerId || dog.ownerId || dog.userId || "").trim();
+  const key = email ? `email:${email}` : recordId ? `id:${recordId}` : name ? `name:${name.toLowerCase()}` : "";
+  if (!key) return null;
+  return { key, name: name || email || "Customer", email };
+}
+
+function dogShowFinanceCustomerLedgers() {
+  const ledgers = [];
+  dogShowEvents().forEach((event) => {
+    const summary = dogShowFinanceEventSummary(event);
+    const entries = dogShowEntries(event);
+    const splitCount = dogShowExpenseSplitCount(event, entries.length);
+    const customerEntries = entries.filter((entry) => dogShowCustomerIdentity(entry));
+    const otherEntries = entries.filter((entry) => !dogShowCustomerIdentity(entry));
+    const sharedEntryIds = new Set([...customerEntries, ...otherEntries].slice(0, splitCount).map((entry) => entry.id));
+    const perDogShare = splitCount ? summary.showWideTotals.expenseTotal / splitCount : 0;
+    const transactionGroups = new Map(summary.dogGroups.map((group) => [group.entry?.id || group.key, group.transactions]));
+    customerEntries.forEach((entry) => {
+      const customer = dogShowCustomerIdentity(entry);
+      const transactions = transactionGroups.get(entry.id) || [];
+      const costs = dogShowDogAttributableCostTotals(transactions);
+      const showWideShare = sharedEntryIds.has(entry.id) ? perDogShare : 0;
+      ledgers.push({
+        customer,
+        event,
+        entry,
+        dogName: dogShowEntryName(entry),
+        directExpenseTotal: costs.directExpenseTotal,
+        assignedRewardTotal: costs.assignedRewardTotal,
+        directDogCost: costs.totalCost,
+        showWideShare,
+        totalCustomerCost: costs.totalCost + showWideShare,
+      });
+    });
+  });
+  return ledgers;
+}
+
+function dogShowFinanceCustomerReports(period = dogShowFinancePeriod) {
+  const reports = new Map();
+  dogShowFinanceCustomerLedgers().forEach((ledger) => {
+    if (!reports.has(ledger.customer.key)) {
+      reports.set(ledger.customer.key, {
+        customer: ledger.customer,
+        ledgers: [],
+        dogNames: new Set(),
+        eventIds: new Set(),
+        periods: new Map(),
+      });
+    }
+    const report = reports.get(ledger.customer.key);
+    report.ledgers.push(ledger);
+    report.dogNames.add(ledger.dogName);
+    report.eventIds.add(ledger.event.id);
+    const meta = dogShowFinancePeriodMeta(ledger.event, period);
+    if (!report.periods.has(meta.key)) report.periods.set(meta.key, { ...meta, ledgers: [] });
+    report.periods.get(meta.key).ledgers.push(ledger);
+  });
+  return [...reports.values()].map((report) => {
+    const addTotals = (target) => ({
+      directExpenseTotal: target.reduce((sum, ledger) => sum + ledger.directExpenseTotal, 0),
+      assignedRewardTotal: target.reduce((sum, ledger) => sum + ledger.assignedRewardTotal, 0),
+      directDogCost: target.reduce((sum, ledger) => sum + ledger.directDogCost, 0),
+      showWideShare: target.reduce((sum, ledger) => sum + ledger.showWideShare, 0),
+      totalCustomerCost: target.reduce((sum, ledger) => sum + ledger.totalCustomerCost, 0),
+    });
+    report.totals = addTotals(report.ledgers);
+    report.periods = [...report.periods.values()]
+      .map((periodGroup) => ({ ...periodGroup, totals: addTotals(periodGroup.ledgers) }))
+      .sort((left, right) => String(right.sortKey).localeCompare(String(left.sortKey)));
+    return report;
+  }).sort((left, right) => right.totals.totalCustomerCost - left.totals.totalCustomerCost || left.customer.name.localeCompare(right.customer.name));
+}
+
+function dogShowFinanceCustomerPeriodHtml(periodGroup = {}) {
+  const dogGroups = new Map();
+  periodGroup.ledgers.forEach((ledger) => {
+    const key = `${ledger.entry.dogType || "dog"}:${ledger.entry.dogId || ledger.dogName}`;
+    if (!dogGroups.has(key)) dogGroups.set(key, { dogName: ledger.dogName, ledgers: [] });
+    dogGroups.get(key).ledgers.push(ledger);
+  });
+  return `<section class="dog-show-customer-period">
+    <header><div><span>${dogShowFinancePeriod.toUpperCase()}</span><strong>${escapeHtml(periodGroup.label)}</strong></div><strong class="is-dog-cost">${dogShowExpenseCurrency(periodGroup.totals.totalCustomerCost)}</strong></header>
+    <div class="dog-show-customer-period-metrics">
+      ${dogShowFinanceMetricHtml("Direct dog expenses", periodGroup.totals.directExpenseTotal)}
+      ${dogShowFinanceMetricHtml("Assigned rewards", periodGroup.totals.assignedRewardTotal)}
+      ${dogShowFinanceMetricHtml("Show-wide share", periodGroup.totals.showWideShare)}
+      ${dogShowFinanceMetricHtml("Customer cost", periodGroup.totals.totalCustomerCost, "is-dog-cost")}
+    </div>
+    <div class="dog-show-customer-dog-table" role="table" aria-label="Customer dog costs">
+      <div class="dog-show-customer-dog-row is-heading" role="row"><span>Dog</span><span>Direct</span><span>Rewards</span><span>Shared</span><span>Total</span><span>Shows</span></div>
+      ${[...dogGroups.values()].map((dogGroup) => {
+        const direct = dogGroup.ledgers.reduce((sum, ledger) => sum + ledger.directExpenseTotal, 0);
+        const rewards = dogGroup.ledgers.reduce((sum, ledger) => sum + ledger.assignedRewardTotal, 0);
+        const shared = dogGroup.ledgers.reduce((sum, ledger) => sum + ledger.showWideShare, 0);
+        const shows = new Set(dogGroup.ledgers.map((ledger) => ledger.event.id)).size;
+        return `<div class="dog-show-customer-dog-row" role="row"><strong>${escapeHtml(dogGroup.dogName)}</strong><span>${dogShowExpenseCurrency(direct)}</span><span>${dogShowExpenseCurrency(rewards)}</span><span>${dogShowExpenseCurrency(shared)}</span><strong class="is-dog-cost">${dogShowExpenseCurrency(direct + rewards + shared)}</strong><span>${shows}</span></div>`;
+      }).join("")}
+    </div>
+  </section>`;
+}
+
+function dogShowFinanceCustomerReportHtml() {
+  const allReports = dogShowFinanceCustomerReports();
+  if (dogShowFinanceCustomerKey !== "all" && !allReports.some((report) => report.customer.key === dogShowFinanceCustomerKey)) {
+    dogShowFinanceCustomerKey = "all";
+  }
+  const reports = dogShowFinanceCustomerKey === "all" ? allReports : allReports.filter((report) => report.customer.key === dogShowFinanceCustomerKey);
+  const totals = reports.reduce((aggregate, report) => ({
+    directDogCost: aggregate.directDogCost + report.totals.directDogCost,
+    showWideShare: aggregate.showWideShare + report.totals.showWideShare,
+    totalCustomerCost: aggregate.totalCustomerCost + report.totals.totalCustomerCost,
+    dogs: aggregate.dogs + report.dogNames.size,
+    shows: aggregate.shows + report.eventIds.size,
+  }), { directDogCost: 0, showWideShare: 0, totalCustomerCost: 0, dogs: 0, shows: 0 });
+  return `<section class="dog-show-customer-report" aria-label="Customer show expense reports">
+    <div class="dog-show-customer-report-toolbar">
+      <label>Customer<select data-finance-customer><option value="all"${dogShowFinanceCustomerKey === "all" ? " selected" : ""}>All customers</option>${allReports.map((report) => `<option value="${escapeHtml(report.customer.key)}"${report.customer.key === dogShowFinanceCustomerKey ? " selected" : ""}>${escapeHtml(report.customer.name)}${report.customer.email ? ` · ${escapeHtml(report.customer.email)}` : ""}</option>`).join("")}</select></label>
+      <p>Customer cost includes direct dog charges, dog-assigned rewards, and each customer dog’s configured share of show-wide expenses.</p>
+    </div>
+    <div class="dog-show-customer-report-stats">
+      <article><span>Customer dog costs</span><strong>${dogShowExpenseCurrency(totals.directDogCost)}</strong><small>Direct expenses + assigned rewards</small></article>
+      <article><span>Show-wide share</span><strong>${dogShowExpenseCurrency(totals.showWideShare)}</strong><small>Allocated by each show’s sharing count</small></article>
+      <article><span>Total customer cost</span><strong class="is-dog-cost">${dogShowExpenseCurrency(totals.totalCustomerCost)}</strong><small>${totals.dogs} dog${totals.dogs === 1 ? "" : "s"} · ${totals.shows} show assignment${totals.shows === 1 ? "" : "s"}</small></article>
+    </div>
+    <p class="dog-show-customer-allocation-note">Show-wide shares are assigned to customer dogs first, up to the “Dogs sharing expenses” count saved for each show. Owned dogs fill any remaining sharing slots.</p>
+    <div class="dog-show-customer-report-list">${reports.length ? reports.map((report, index) => `<details class="dog-show-customer-report-card"${index === 0 ? " open" : ""}>
+      <summary><div><strong>${escapeHtml(report.customer.name)}</strong><small>${escapeHtml(report.customer.email || "No customer email saved")} · ${report.dogNames.size} dog${report.dogNames.size === 1 ? "" : "s"} · ${report.eventIds.size} show${report.eventIds.size === 1 ? "" : "s"}</small></div><strong class="is-dog-cost">${dogShowExpenseCurrency(report.totals.totalCustomerCost)}</strong></summary>
+      <div>${report.periods.map(dogShowFinanceCustomerPeriodHtml).join("")}</div>
+    </details>`).join("") : `<p class="dog-show-expense-empty is-standalone">No customer dog expenses are available for this report yet.</p>`}</div>
+  </section>`;
+}
+
 function dogShowFinanceReportDate(event = {}) {
   const fallbackTransaction = dogShowExpenses(event).find((transaction) => transaction.incurredDate || transaction.submittedAt);
   return event.startDate || fallbackTransaction?.incurredDate || String(fallbackTransaction?.submittedAt || "").slice(0, 10) || "";
@@ -1967,9 +2117,12 @@ function dogShowCompiledFinanceHtml() {
   return `<section class="dog-show-finance-report" aria-label="Compiled dog show financial report">
     <header class="dog-show-finance-report-heading">
       <div><span>COMPILED FINANCES</span><h3>Financial Reports</h3><p>Compare business finances and attributable dog costs for every show, week, month, or year.</p></div>
-      <div class="dog-show-finance-period-tabs" role="group" aria-label="Financial report period">${Object.entries(periodLabels).map(([value, label]) => `<button type="button" class="secondary-button${dogShowFinancePeriod === value ? " is-active" : ""}" data-finance-period="${value}" aria-pressed="${dogShowFinancePeriod === value}">${label}</button>`).join("")}</div>
+      <div class="dog-show-finance-report-controls">
+        <div class="dog-show-finance-scope-tabs" role="group" aria-label="Financial report audience"><button type="button" class="secondary-button${dogShowFinanceScope === "business" ? " is-active" : ""}" data-finance-scope="business" aria-pressed="${dogShowFinanceScope === "business"}">Business</button><button type="button" class="secondary-button${dogShowFinanceScope === "customer" ? " is-active" : ""}" data-finance-scope="customer" aria-pressed="${dogShowFinanceScope === "customer"}">Customers</button></div>
+        <div class="dog-show-finance-period-tabs" role="group" aria-label="Financial report period">${Object.entries(periodLabels).map(([value, label]) => `<button type="button" class="secondary-button${dogShowFinancePeriod === value ? " is-active" : ""}" data-finance-period="${value}" aria-pressed="${dogShowFinancePeriod === value}">${label}</button>`).join("")}</div>
+      </div>
     </header>
-    <div class="dog-show-finance-report-stats">
+    ${dogShowFinanceScope === "customer" ? dogShowFinanceCustomerReportHtml() : `<div class="dog-show-finance-report-stats">
       <article><span>All expenses</span><strong>${dogShowExpenseCurrency(totals.expenseTotal)}</strong><small>${totals.expenseCount} cost item${totals.expenseCount === 1 ? "" : "s"}</small></article>
       <article><span>Show-wide expenses</span><strong>${dogShowExpenseCurrency(showWideTotals.expenseTotal)}</strong><small>Shared show costs only</small></article>
       <article><span>Dog-specific expenses</span><strong>${dogShowExpenseCurrency(dogTotals.expenseTotal)}</strong><small>Assigned to individual dogs</small></article>
@@ -1977,7 +2130,7 @@ function dogShowCompiledFinanceHtml() {
       <article><span>Income / rewards</span><strong class="is-income">${dogShowExpenseCurrency(totals.incomeTotal)}</strong><small>${totals.incomeCount} reward item${totals.incomeCount === 1 ? "" : "s"}</small></article>
       <article><span>Net</span><strong class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)}</strong><small>${summaries.length} show${summaries.length === 1 ? "" : "s"} compiled</small></article>
     </div>
-    <div class="dog-show-finance-report-groups">${groups.length ? groups.map(dogShowFinanceReportGroupHtml).join("") : `<p class="dog-show-expense-empty is-standalone">No dog shows are available for this report yet.</p>`}</div>
+    <div class="dog-show-finance-report-groups">${groups.length ? groups.map(dogShowFinanceReportGroupHtml).join("") : `<p class="dog-show-expense-empty is-standalone">No dog shows are available for this report yet.</p>`}</div>`}
   </section>`;
 }
 
@@ -4368,6 +4521,12 @@ function setupDogShowEventListeners() {
       if (saved) showToast(`Show status updated to ${dogShowEventStatus(status)}.`);
       return;
     }
+    if (event.target.matches("[data-finance-customer]")) {
+      dogShowFinanceCustomerKey = event.target.value || "all";
+      localStorage.setItem(DOG_SHOW_FINANCE_CUSTOMER_KEY, dogShowFinanceCustomerKey);
+      renderDogShow();
+      return;
+    }
     if (event.target.matches("[data-show-task-select]")) {
       if (event.target.checked) dogShowSelectedTaskIds.add(event.target.dataset.showTaskSelect);
       else dogShowSelectedTaskIds.delete(event.target.dataset.showTaskSelect);
@@ -4476,6 +4635,13 @@ function setupDogShowEventListeners() {
     if (financePeriod) {
       dogShowFinancePeriod = ["show", "week", "month", "year"].includes(financePeriod.dataset.financePeriod) ? financePeriod.dataset.financePeriod : "show";
       localStorage.setItem(DOG_SHOW_FINANCE_PERIOD_KEY, dogShowFinancePeriod);
+      renderDogShow();
+      return;
+    }
+    const financeScope = event.target.closest("[data-finance-scope]");
+    if (financeScope) {
+      dogShowFinanceScope = financeScope.dataset.financeScope === "customer" ? "customer" : "business";
+      localStorage.setItem(DOG_SHOW_FINANCE_SCOPE_KEY, dogShowFinanceScope);
       renderDogShow();
       return;
     }

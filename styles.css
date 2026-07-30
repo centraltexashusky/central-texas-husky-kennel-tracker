@@ -12176,6 +12176,18 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   box-shadow: inset 4px 0 #3290d7;
 }
 
+.dog-show-upcoming-table tbody tr.is-status-going-to td {
+  background: color-mix(in srgb, #F3C84B 8%, var(--panel));
+}
+
+.dog-show-upcoming-table tbody tr.is-status-going td {
+  background: color-mix(in srgb, #9B62D0 8%, var(--panel));
+}
+
+.dog-show-upcoming-table tbody tr.is-status-active td {
+  background: color-mix(in srgb, #20A66A 8%, var(--panel));
+}
+
 .dog-show-upcoming-table td > strong,
 .dog-show-upcoming-table td > small {
   display: block;
@@ -12191,8 +12203,47 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   white-space: nowrap;
 }
 
+.dog-show-upcoming-table .dog-show-upcoming-closing {
+  color: #8A5A00;
+  font-weight: 800;
+  max-width: none;
+}
+
+.dog-show-upcoming-table .dog-show-upcoming-closing.is-attention {
+  background: color-mix(in srgb, #F3C84B 22%, var(--panel));
+  border: 1px solid color-mix(in srgb, #D68A00 55%, var(--line));
+  border-radius: 999px;
+  color: #8A4B00;
+  display: inline-block;
+  margin-top: 5px;
+  padding: 3px 7px;
+}
+
 #dogShowPage .dog-show-upcoming-table select {
   min-width: 170px;
+}
+
+#dogShowPage .dog-show-upcoming-status {
+  border-width: 2px;
+  font-weight: 800;
+}
+
+#dogShowPage .dog-show-upcoming-status.is-status-going-to {
+  background: color-mix(in srgb, #F3C84B 20%, var(--panel));
+  border-color: #C38A00;
+  color: #754800;
+}
+
+#dogShowPage .dog-show-upcoming-status.is-status-going {
+  background: color-mix(in srgb, #9B62D0 18%, var(--panel));
+  border-color: #8651B8;
+  color: color-mix(in srgb, #5D2E86 85%, var(--ink));
+}
+
+#dogShowPage .dog-show-upcoming-status.is-status-active {
+  background: color-mix(in srgb, #20A66A 18%, var(--panel));
+  border-color: #178056;
+  color: color-mix(in srgb, #126643 85%, var(--ink));
 }
 
 .dog-show-upcoming-select-cell {
@@ -12203,13 +12254,14 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 .dog-show-upcoming-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  min-width: 225px;
+  gap: 4px;
+  min-width: 190px;
 }
 
 #dogShowPage .dog-show-upcoming-actions button {
-  min-height: 34px;
-  padding: 6px 9px;
+  font-size: 0.75rem;
+  min-height: 30px;
+  padding: 4px 7px;
 }
 
 .dog-show-quick-team-summary {
@@ -14770,13 +14822,35 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-upcoming-table tr {
-    border: 1px solid var(--line);
+    background: var(--panel);
+    border: 2px solid var(--line);
     border-radius: 9px;
+    box-shadow: 0 8px 20px rgba(11, 31, 51, 0.08);
     margin-bottom: 10px;
     overflow: hidden;
   }
 
+  .dog-show-upcoming-table tr.is-status-going-to {
+    background: color-mix(in srgb, #F3C84B 14%, var(--panel));
+    border-color: color-mix(in srgb, #C38A00 55%, var(--line));
+  }
+
+  .dog-show-upcoming-table tr.is-status-going {
+    background: color-mix(in srgb, #9B62D0 13%, var(--panel));
+    border-color: color-mix(in srgb, #8651B8 55%, var(--line));
+  }
+
+  .dog-show-upcoming-table tr.is-status-active {
+    background: color-mix(in srgb, #20A66A 13%, var(--panel));
+    border-color: color-mix(in srgb, #178056 55%, var(--line));
+  }
+
+  .dog-show-upcoming-table tr.is-current {
+    box-shadow: 0 0 0 2px #3290d7, 0 10px 24px rgba(50, 144, 215, 0.18);
+  }
+
   .dog-show-upcoming-table td {
+    background: transparent !important;
     border-bottom: 1px solid var(--line);
     display: grid;
     gap: 7px;
@@ -14822,7 +14896,12 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-upcoming-actions {
+    gap: 6px;
     min-width: 0;
+  }
+
+  #dogShowPage .dog-show-upcoming-actions button {
+    min-height: 34px;
   }
 
   .dog-show-quick-team-summary {
@@ -15827,7 +15906,8 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-finance-mode-tabs,
-.dog-show-finance-period-tabs {
+.dog-show-finance-period-tabs,
+.dog-show-finance-scope-tabs {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -15835,16 +15915,37 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-finance-mode-tabs .secondary-button,
-.dog-show-finance-period-tabs .secondary-button {
+.dog-show-finance-period-tabs .secondary-button,
+.dog-show-finance-scope-tabs .secondary-button {
   min-height: 40px;
   padding: 8px 14px;
 }
 
 .dog-show-finance-mode-tabs .secondary-button.is-active,
-.dog-show-finance-period-tabs .secondary-button.is-active {
+.dog-show-finance-period-tabs .secondary-button.is-active,
+.dog-show-finance-scope-tabs .secondary-button.is-active {
   background: var(--teal);
   border-color: var(--teal);
   color: #FFFFFF;
+}
+
+.dog-show-finance-report-controls {
+  align-items: flex-end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.dog-show-finance-scope-tabs {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.dog-show-finance-scope-tabs .secondary-button {
+  min-height: 34px;
+  padding: 6px 12px;
 }
 
 .dog-show-finance-report {
@@ -15890,6 +15991,191 @@ details.dog-show-ring-schedules[hidden] {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.dog-show-customer-report {
+  display: grid;
+  gap: 12px;
+}
+
+.dog-show-customer-report-toolbar {
+  align-items: end;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(240px, 0.55fr) minmax(0, 1fr);
+  padding: 14px;
+}
+
+#dogShowPage .dog-show-customer-report-toolbar label {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 900;
+  gap: 4px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.dog-show-customer-report-toolbar p,
+.dog-show-customer-allocation-note {
+  color: var(--muted);
+  margin: 0;
+}
+
+.dog-show-customer-report-stats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dog-show-customer-report-stats article {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+}
+
+.dog-show-customer-report-stats span,
+.dog-show-customer-period-metrics span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-customer-report-stats strong {
+  font-size: 1.2rem;
+}
+
+.dog-show-customer-report-stats small {
+  color: var(--muted);
+}
+
+.dog-show-customer-report .is-dog-cost {
+  color: #8B5E13;
+}
+
+.dog-show-customer-allocation-note {
+  background: color-mix(in srgb, var(--tint-gold) 45%, var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.dog-show-customer-report-list {
+  display: grid;
+  gap: 10px;
+}
+
+.dog-show-customer-report-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.dog-show-customer-report-card > summary {
+  align-items: center;
+  background: var(--tint-blue);
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 14px;
+}
+
+.dog-show-customer-report-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-customer-report-card > summary > div {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-customer-report-card > summary small {
+  color: var(--muted);
+}
+
+.dog-show-customer-report-card > div,
+.dog-show-customer-period {
+  display: grid;
+}
+
+.dog-show-customer-period {
+  border-top: 1px solid var(--line);
+  gap: 10px;
+  padding: 14px;
+}
+
+.dog-show-customer-period > header {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.dog-show-customer-period > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dog-show-customer-period > header span {
+  color: #178056;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.dog-show-customer-period-metrics {
+  background: var(--tint-blue);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 10px;
+}
+
+.dog-show-customer-period-metrics > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dog-show-customer-dog-table {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dog-show-customer-dog-row {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(140px, 1fr) repeat(4, minmax(90px, 0.55fr)) minmax(50px, 0.3fr);
+  padding: 9px 11px;
+}
+
+.dog-show-customer-dog-row:first-child {
+  border-top: 0;
+}
+
+.dog-show-customer-dog-row.is-heading {
+  background: var(--tint-blue);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .dog-show-finance-report-stats article {
@@ -16510,6 +16796,20 @@ details.dog-show-ring-schedules[hidden] {
     flex-direction: column;
   }
 
+  .dog-show-finance-report-controls {
+    justify-items: stretch;
+  }
+
+  .dog-show-finance-scope-tabs,
+  .dog-show-finance-period-tabs {
+    justify-content: stretch;
+  }
+
+  .dog-show-finance-scope-tabs > button,
+  .dog-show-finance-period-tabs > button {
+    flex: 1 1 0;
+  }
+
   .dog-show-finance-heading-actions > button,
   .dog-show-finance-mode-tabs > button {
     flex: 1 1 0;
@@ -16517,6 +16817,27 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-finance-report-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dog-show-customer-report-toolbar,
+  .dog-show-customer-report-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .dog-show-customer-period-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dog-show-customer-dog-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dog-show-customer-dog-row.is-heading {
+    display: none;
+  }
+
+  .dog-show-customer-dog-row > strong:first-child {
+    grid-column: 1 / -1;
   }
 
   .dog-show-finance-report-group > summary {
