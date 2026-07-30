@@ -1201,6 +1201,40 @@ function dogShowRenderEmpty(title, copy, action = "new-show-event", label = "Cre
   return `<section class="dog-show-empty"><span>S</span><h3>${escapeHtml(title)}</h3><p>${escapeHtml(copy)}</p><button type="button" data-action="${escapeHtml(action)}">${escapeHtml(label)}</button></section>`;
 }
 
+function dogShowUpcomingTableHtml(activeEvent = dogShowActiveEvent()) {
+  const events = dogShowEvents()
+    .filter((event) => dogShowPlannerLifecycleStatus(event) !== "Completed")
+    .sort((left, right) => String(left.startDate || "").localeCompare(String(right.startDate || "")) || String(left.name || "").localeCompare(String(right.name || "")));
+  if (!events.length) return "";
+  const rows = events.map((event) => {
+    const entries = dogShowEntries(event);
+    const dogNames = entries.map(dogShowEntryName);
+    const helpers = (Array.isArray(event.helperEmails) ? event.helperEmails : []).map(dogShowStaffLabel);
+    const location = event.venueAddress || event.cityState || event.venue || "Location pending";
+    return `<tr class="${event.id === activeEvent?.id ? "is-current" : ""}" data-show-table-row="${escapeHtml(event.id)}">
+      <td class="dog-show-upcoming-select-cell"><input type="checkbox" data-show-table-select="${escapeHtml(event.id)}" aria-label="Select ${escapeHtml(event.name || "show")}"/></td>
+      <td data-label="Show"><strong>${escapeHtml(event.name || event.club || "Dog Show")}</strong><small>${escapeHtml(location)}</small></td>
+      <td data-label="Dates"><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong>${event.entryClosingDate ? `<small>Closes ${escapeHtml(dogShowFormatDate(event.entryClosingDate))}</small>` : ""}</td>
+      <td data-label="Status"><select data-show-quick-status="${escapeHtml(event.id)}" aria-label="Status for ${escapeHtml(event.name || "show")}">${dogShowEventStatusOptions(event.status)}</select></td>
+      <td data-label="Dogs"><strong>${entries.length}</strong><small title="${escapeHtml(dogNames.join(", "))}">${escapeHtml(dogNames.length ? dogNames.join(", ") : "No dogs assigned")}</small></td>
+      <td data-label="Helpers"><strong>${helpers.length}</strong><small title="${escapeHtml(helpers.join(", "))}">${escapeHtml(helpers.length ? helpers.join(", ") : "No helpers assigned")}</small></td>
+      <td data-label="Actions"><div class="dog-show-upcoming-actions"><button type="button" class="secondary-button" data-action="open-show-table-event" data-event-id="${escapeHtml(event.id)}">Open</button><button type="button" class="secondary-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">Dogs & Helpers</button><button type="button" class="secondary-button" data-action="edit-show-table-event" data-event-id="${escapeHtml(event.id)}">Setup</button></div></td>
+    </tr>`;
+  }).join("");
+  return `<section class="dog-show-upcoming-shows">
+    <header><div><span>SHOW MANAGEMENT</span><h3>Upcoming & Current Shows</h3><p>Update registration status, dogs, and helpers without opening each show.</p></div><strong>${events.length} show${events.length === 1 ? "" : "s"}</strong></header>
+    <div class="dog-show-upcoming-bulk">
+      <label class="inline-check"><input type="checkbox" data-show-table-select-all/><span>Select all</span></label>
+      <label>Set selected shows to<select data-show-table-bulk-status>${dogShowEventStatusOptions("Going")}</select></label>
+      <button type="button" data-action="apply-show-table-status">Apply Status</button>
+    </div>
+    <div class="dog-show-upcoming-table-wrap"><table class="dog-show-upcoming-table">
+      <thead><tr><th scope="col"><span class="visually-hidden">Select</span></th><th scope="col">Show</th><th scope="col">Dates</th><th scope="col">Status</th><th scope="col">Dogs</th><th scope="col">Helpers</th><th scope="col">Quick actions</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </section>`;
+}
+
 function dogShowHomeHtml(event) {
   const entries = dogShowEntries(event);
   const tasks = dogShowTasks(event);
@@ -1220,6 +1254,7 @@ function dogShowHomeHtml(event) {
   const assignmentText = entries.length ? `${assignedEntries.length} of ${entries.length} dogs assigned to a handler or care helper` : "No dogs added to this show yet";
   const staySummary = [event.stayType, event.stayName, event.stayAddress].filter(Boolean).join(" · ");
   return `<div class="dog-show-view dog-show-home-view">
+    ${dogShowUpcomingTableHtml(event)}
     <section class="dog-show-event-summary"><div><span>Dog Shows</span><h3>${escapeHtml(event.name || "Show Weekend")}</h3><p>${escapeHtml([dogShowFormatDate(event.startDate), event.venue, event.venueAddress || event.cityState].filter(Boolean).join(" · "))}</p>${staySummary ? `<small>Stay: ${escapeHtml(staySummary)}</small>` : ""}</div><button type="button" class="secondary-button" data-action="edit-show-event">Show Setup</button></section>
     <section class="dog-show-stat-grid">
       <article><span>Need care</span><strong>${needCare.length}</strong><small>stale or no log</small></article>
@@ -2766,6 +2801,31 @@ function openDogShowEventForm(event = {}) {
   </form>`);
 }
 
+function dogShowQuickTeamDogOptions(event = {}) {
+  const selected = new Set(dogShowEntries(event).map((entry) => `${entry.dogType}:${entry.dogId}`));
+  const option = (dog, dogType) => {
+    const key = `${dogType}:${dog.id}`;
+    return `<label class="dog-show-check-option"><input type="checkbox" name="dogKeys" value="${escapeHtml(key)}"${selected.has(key) ? " checked" : ""}/><span><strong>${escapeHtml(dogShowDogName(dog, dogType))}</strong><small>${dogType === "boardingDog" ? "Customer dog" : "Our dog"}</small></span></label>`;
+  };
+  return `<div class="dog-show-source-group"><h3>Our Dogs</h3><div class="dog-show-check-grid">${dogShowOwnedDogs().map((dog) => option(dog, "ownedDog")).join("") || "<p>No Our Dogs available.</p>"}</div></div>
+    <div class="dog-show-source-group"><h3>Customer Dogs</h3><div class="dog-show-check-grid">${dogShowBoardingDogs().map((dog) => option(dog, "boardingDog")).join("") || "<p>No customer dogs available.</p>"}</div></div>`;
+}
+
+function openDogShowQuickTeamForm(eventId = "") {
+  const event = dogShowEvents().find((candidate) => candidate.id === eventId);
+  if (!event) return showToast("The selected show could not be found.");
+  const helperEmails = Array.isArray(event.helperEmails) ? event.helperEmails : [];
+  openDogShowDialog(`Manage: ${event.name || event.club || "Dog Show"}`, `<form id="dogShowQuickTeamForm" class="tracker-form" data-event-id="${escapeHtml(event.id)}">
+    <section class="dog-show-quick-team-summary">
+      <div><span>DATES</span><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></div>
+      <label>Status<select name="status">${dogShowEventStatusOptions(event.status)}</select></label>
+    </section>
+    <fieldset><legend>Dogs attending</legend><p class="dog-show-form-note">Check dogs to add them. Uncheck dogs to remove them from this show while preserving their prior show records.</p>${dogShowQuickTeamDogOptions(event)}</fieldset>
+    <fieldset><legend>Helpers attending</legend><div class="dog-show-check-grid">${dogShowHelperCheckboxes(helperEmails)}</div></fieldset>
+    <div class="button-row dog-show-dialog-sticky-actions"><button type="submit">Save Show Team</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+  </form>`);
+}
+
 function dogShowAvailableDogOptions() {
   const event = dogShowActiveEvent();
   const existing = new Set(dogShowEntries(event).map((entry) => `${entry.dogType}:${entry.dogId}`));
@@ -3415,6 +3475,93 @@ async function saveDogShowEvent(form) {
   showToast("Show weekend saved.");
 }
 
+async function saveDogShowTableStatuses(eventIds = [], status = "Going To") {
+  const selectedIds = new Set(eventIds.filter(Boolean));
+  const nextStatus = dogShowEventStatus(status);
+  const timestamp = new Date().toISOString();
+  const records = dogShowEvents()
+    .filter((event) => selectedIds.has(event.id))
+    .map((event) => upsertRecord("showEvent", {
+      ...event,
+      status: nextStatus,
+      updatedAt: timestamp,
+      updatedBy: currentUser?.name || "Staff",
+      updatedEmail: currentUser?.email || "",
+    }));
+  if (!records.length) return false;
+  await sendPayloadBatch(records);
+  renderDogShow();
+  return true;
+}
+
+async function saveDogShowQuickTeam(form) {
+  const event = dogShowEvents().find((candidate) => candidate.id === form.dataset.eventId);
+  if (!event) return showToast("The selected show could not be found.");
+  const selectedDogKeys = new Set([...form.querySelectorAll('input[name="dogKeys"]:checked')].map((input) => input.value));
+  const selectedHelperEmails = [...form.querySelectorAll('input[name="helperEmails"]:checked')].map((input) => input.value);
+  const allEntries = readRecords("showEntry").filter((entry) => entry.showEventId === event.id);
+  const allDogs = [
+    ...dogShowOwnedDogs().map((dog) => ({ dog, dogType: "ownedDog" })),
+    ...dogShowBoardingDogs().map((dog) => ({ dog, dogType: "boardingDog" })),
+  ];
+  const timestamp = new Date().toISOString();
+  const entryUpdates = [];
+  allDogs.forEach(({ dog, dogType }) => {
+    const key = `${dogType}:${dog.id}`;
+    const matching = allEntries.filter((entry) => entry.dogType === dogType && entry.dogId === dog.id);
+    const active = matching.find((entry) => !entry.removed);
+    if (selectedDogKeys.has(key) && !active) {
+      const archived = matching[0];
+      entryUpdates.push(upsertRecord("showEntry", {
+        ...(archived || {}),
+        type: "showEntry",
+        id: archived?.id || uid("showEntry"),
+        showEventId: event.id,
+        dogId: dog.id,
+        dogType,
+        dogName: dogShowDogName(dog, dogType),
+        attendanceRole: archived?.attendanceRole || "Showing",
+        handlerEmail: archived?.handlerEmail || "",
+        helperEmail: archived?.helperEmail || "",
+        prepMinutes: Number(archived?.prepMinutes || 45),
+        readyBufferMinutes: Number(archived?.readyBufferMinutes || 15),
+        status: archived?.status || "Confirmed",
+        removed: false,
+        removedAt: "",
+        removedBy: "",
+        removedEmail: "",
+        submittedAt: archived?.submittedAt || timestamp,
+        updatedAt: timestamp,
+        updatedBy: currentUser?.name || "Staff",
+        updatedEmail: currentUser?.email || "",
+      }));
+    }
+    if (!selectedDogKeys.has(key)) {
+      matching.filter((entry) => !entry.removed).forEach((entry) => {
+        entryUpdates.push(upsertRecord("showEntry", {
+          ...entry,
+          removed: true,
+          removedAt: timestamp,
+          removedBy: currentUser?.name || "Staff",
+          removedEmail: currentUser?.email || "",
+        }));
+      });
+    }
+  });
+  const updatedEvent = upsertRecord("showEvent", {
+    ...event,
+    status: dogShowEventStatus(form.elements.status.value),
+    helperEmails: selectedHelperEmails,
+    updatedAt: timestamp,
+    updatedBy: currentUser?.name || "Staff",
+    updatedEmail: currentUser?.email || "",
+  });
+  await sendPayloadBatch([updatedEvent, ...entryUpdates]);
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast("Show status, dogs, and helpers updated.");
+}
+
 async function saveDogShowDogs(form) {
   const event = dogShowActiveEvent();
   if (!event) return;
@@ -3910,6 +4057,19 @@ function setupDogShowEventListeners() {
   });
 
   page.addEventListener("change", async (event) => {
+    if (event.target.matches("[data-show-table-select-all]")) {
+      page.querySelectorAll("[data-show-table-select]").forEach((input) => {
+        input.checked = event.target.checked;
+      });
+      return;
+    }
+    if (event.target.matches("[data-show-quick-status]")) {
+      const status = event.target.value;
+      event.target.disabled = true;
+      const saved = await saveDogShowTableStatuses([event.target.dataset.showQuickStatus], status);
+      if (saved) showToast(`Show status updated to ${dogShowEventStatus(status)}.`);
+      return;
+    }
     if (event.target.matches("[data-show-task-select]")) {
       if (event.target.checked) dogShowSelectedTaskIds.add(event.target.dataset.showTaskSelect);
       else dogShowSelectedTaskIds.delete(event.target.dataset.showTaskSelect);
@@ -4019,6 +4179,31 @@ function setupDogShowEventListeners() {
     const action = event.target.closest("[data-action]");
     if (!action) return;
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
+    if (action.dataset.action === "apply-show-table-status") {
+      const selectedIds = [...page.querySelectorAll("[data-show-table-select]:checked")].map((input) => input.dataset.showTableSelect);
+      const status = page.querySelector("[data-show-table-bulk-status]")?.value || "Going";
+      if (!selectedIds.length) {
+        showToast("Select at least one show to update.");
+        return;
+      }
+      action.disabled = true;
+      const saved = await saveDogShowTableStatuses(selectedIds, status);
+      if (saved) showToast(`${selectedIds.length} show${selectedIds.length === 1 ? "" : "s"} updated to ${dogShowEventStatus(status)}.`);
+      return;
+    }
+    if (action.dataset.action === "open-show-table-event") {
+      openDogShowPlannerEvent(action.dataset.eventId || "");
+      return;
+    }
+    if (action.dataset.action === "manage-show-table-team") {
+      openDogShowQuickTeamForm(action.dataset.eventId || "");
+      return;
+    }
+    if (action.dataset.action === "edit-show-table-event") {
+      const selectedEvent = dogShowEvents().find((candidate) => candidate.id === action.dataset.eventId);
+      if (selectedEvent) openDogShowEventForm(selectedEvent);
+      return;
+    }
     if (action.dataset.action === "new-show-event") openDogShowEventForm();
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.action === "open-show-progress") setDogShowView("progress");
@@ -4158,6 +4343,7 @@ function setupDogShowEventListeners() {
       return;
     }
     if (event.target.id === "dogShowEventForm") await saveDogShowEvent(event.target);
+    if (event.target.id === "dogShowQuickTeamForm") await saveDogShowQuickTeam(event.target);
     if (event.target.id === "dogShowAddDogsForm") await saveDogShowDogs(event.target);
     if (event.target.id === "dogShowEntryForm") await saveDogShowEntry(event.target);
     if (event.target.id === "dogShowNoteForm") await saveDogShowNote(event.target);

@@ -12062,6 +12062,178 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   min-width: 0;
 }
 
+.dog-show-upcoming-shows {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+  padding: 14px;
+}
+
+.dog-show-upcoming-shows > header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.dog-show-upcoming-shows > header span {
+  color: #178056;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.dog-show-upcoming-shows > header h3,
+.dog-show-upcoming-shows > header p {
+  margin: 0;
+}
+
+.dog-show-upcoming-shows > header p {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin-top: 3px;
+}
+
+.dog-show-upcoming-shows > header > strong {
+  background: var(--tint-blue);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  padding: 7px 11px;
+}
+
+.dog-show-upcoming-bulk {
+  align-items: end;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+}
+
+#dogShowPage .dog-show-upcoming-bulk label {
+  margin: 0;
+}
+
+#dogShowPage .dog-show-upcoming-bulk .inline-check {
+  align-self: center;
+  min-height: 42px;
+  padding: 8px 10px;
+}
+
+#dogShowPage .dog-show-upcoming-bulk label:not(.inline-check) {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.7rem;
+  font-weight: 800;
+  gap: 3px;
+}
+
+#dogShowPage .dog-show-upcoming-bulk select {
+  min-width: 210px;
+}
+
+.dog-show-upcoming-table-wrap {
+  -webkit-overflow-scrolling: touch;
+  overflow-x: auto;
+}
+
+.dog-show-upcoming-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 980px;
+  width: 100%;
+}
+
+.dog-show-upcoming-table th {
+  background: var(--tint-blue);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 9px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.dog-show-upcoming-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 9px;
+  vertical-align: middle;
+}
+
+.dog-show-upcoming-table tbody tr.is-current td {
+  background: color-mix(in srgb, #3290d7 8%, var(--panel));
+}
+
+.dog-show-upcoming-table tbody tr.is-current td:first-child {
+  box-shadow: inset 4px 0 #3290d7;
+}
+
+.dog-show-upcoming-table td > strong,
+.dog-show-upcoming-table td > small {
+  display: block;
+}
+
+.dog-show-upcoming-table td > small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  margin-top: 3px;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#dogShowPage .dog-show-upcoming-table select {
+  min-width: 170px;
+}
+
+.dog-show-upcoming-select-cell {
+  text-align: center;
+  width: 36px;
+}
+
+.dog-show-upcoming-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 225px;
+}
+
+#dogShowPage .dog-show-upcoming-actions button {
+  min-height: 34px;
+  padding: 6px 9px;
+}
+
+.dog-show-quick-team-summary {
+  align-items: end;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.55fr);
+  padding: 12px;
+}
+
+.dog-show-quick-team-summary > div {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-quick-team-summary > div span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
 .dog-show-event-summary {
   background: #10283F;
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -14564,6 +14736,97 @@ details.dog-show-ring-schedules[hidden] {
   .dog-show-section-band,
   .dog-show-panel-heading {
     align-items: flex-start;
+  }
+
+  .dog-show-upcoming-shows > header {
+    align-items: flex-start;
+  }
+
+  .dog-show-upcoming-bulk {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #dogShowPage .dog-show-upcoming-bulk select,
+  #dogShowPage .dog-show-upcoming-bulk button {
+    width: 100%;
+  }
+
+  .dog-show-upcoming-table {
+    min-width: 0;
+  }
+
+  .dog-show-upcoming-table thead {
+    display: none;
+  }
+
+  .dog-show-upcoming-table,
+  .dog-show-upcoming-table tbody,
+  .dog-show-upcoming-table tr,
+  .dog-show-upcoming-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .dog-show-upcoming-table tr {
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+
+  .dog-show-upcoming-table td {
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    gap: 7px;
+    grid-template-columns: 82px minmax(0, 1fr);
+    padding: 9px 10px;
+  }
+
+  .dog-show-upcoming-table td::before {
+    color: var(--muted);
+    content: attr(data-label);
+    font-size: 0.67rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .dog-show-upcoming-table td > strong,
+  .dog-show-upcoming-table td > small,
+  .dog-show-upcoming-table td > select,
+  .dog-show-upcoming-table td > .dog-show-upcoming-actions {
+    grid-column: 2;
+  }
+
+  .dog-show-upcoming-table td > small {
+    max-width: none;
+    white-space: normal;
+  }
+
+  .dog-show-upcoming-table .dog-show-upcoming-select-cell {
+    align-items: center;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .dog-show-upcoming-table .dog-show-upcoming-select-cell::before {
+    content: "Select show";
+    margin-right: auto;
+  }
+
+  #dogShowPage .dog-show-upcoming-table select {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .dog-show-upcoming-actions {
+    min-width: 0;
+  }
+
+  .dog-show-quick-team-summary {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dog-show-list-toolbar .button-row {
