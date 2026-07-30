@@ -1,4 +1,8 @@
 // === MODULE: SHARED ===
+import { DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026 } from "./dog-show-point-data.js?v=20260730-dog-profile-registration-akc-breeds";
+
+globalThis.SNUGGLE_STAY_AKC_BREEDS = [...(DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026?.breeds || [])];
+
 const __snuggleStayModuleSource = `// === MODULE: SHARED ===
 var SUPABASE_URL = "https://vwvkzniygessvwifrwvn.supabase.co";
 var SUPABASE_ANON_KEY = "sb_publishable_IeKmeCMalVYUnYQUe3gEew_NdjAzmAQ";
@@ -2783,6 +2787,77 @@ function setFormValues(targetForm, record) {
     field.value = value ?? "";
   });
 }
+
+var AKC_OTHER_BREED_VALUE = "__other__";
+
+function normalizedAkcBreedName(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/ies$/, "y")
+    .replace(/s$/, "");
+}
+
+function readableAkcBreedName(value = "") {
+  const raw = String(value || "").trim();
+  if (raw === "Siberian Huskies") return "Siberian Husky";
+  return raw;
+}
+
+function akcDogBreedOptions() {
+  return [...new Set((globalThis.SNUGGLE_STAY_AKC_BREEDS || [])
+    .map(readableAkcBreedName)
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function syncAkcBreedControl(targetForm, value = undefined) {
+  const select = targetForm?.querySelector?.("[data-akc-breed-select]");
+  const otherInput = targetForm?.querySelector?.("[data-akc-breed-other]");
+  if (!select || !otherInput) return;
+  const currentValue = value === undefined ? String(otherInput.value || "") : String(value || "");
+  const breeds = akcDogBreedOptions();
+  select.replaceChildren();
+  select.add(new Option("Select an AKC breed", ""));
+  breeds.forEach((breed) => select.add(new Option(breed, breed)));
+  select.add(new Option("Other type", AKC_OTHER_BREED_VALUE));
+  const normalizedValue = normalizedAkcBreedName(currentValue);
+  const knownBreed = breeds.find((breed) => normalizedAkcBreedName(breed) === normalizedValue) || "";
+  if (knownBreed) {
+    select.value = knownBreed;
+    otherInput.value = knownBreed;
+    otherInput.hidden = true;
+  } else if (currentValue) {
+    select.value = AKC_OTHER_BREED_VALUE;
+    otherInput.value = currentValue;
+    otherInput.hidden = false;
+  } else {
+    select.value = "";
+    otherInput.value = "";
+    otherInput.hidden = true;
+  }
+}
+
+function handleAkcBreedSelection(select) {
+  const targetForm = select?.closest?.("form");
+  const otherInput = targetForm?.querySelector?.("[data-akc-breed-other]");
+  if (!otherInput) return;
+  if (select.value === AKC_OTHER_BREED_VALUE) {
+    if (akcDogBreedOptions().some((breed) => breed === otherInput.value)) otherInput.value = "";
+    otherInput.hidden = false;
+    otherInput.focus();
+    return;
+  }
+  otherInput.value = select.value || "";
+  otherInput.hidden = true;
+}
+
+document.addEventListener("change", (event) => {
+  const select = event.target?.closest?.("[data-akc-breed-select]");
+  if (select) handleAkcBreedSelection(select);
+});
 
 function selectedPhotoFor(kind, input) {
   return input?.files?.[0] || selectedDogPhotos[kind]?.file || null;
@@ -7393,6 +7468,10 @@ async function mirrorBoardingCustomerUpdateToCustomerDog(boardingRecord = {}, up
 var canonicalDogProfileFields = [
   "dogName",
   "breedDescription",
+  "akcRegistrationNumber",
+  "microchipNumber",
+  "sireName",
+  "damName",
   "dateOfBirth",
   "sex",
   "spayNeuterStatus",
@@ -7555,6 +7634,10 @@ function canonicalDogPayloadFromLegacy(dogId = "", sources = {}) {
     secondaryOwnerEmail: normalizeEmail(customerDog.secondaryOwnerEmail || boardingDog.secondaryOwnerEmail),
     breed: customerDog.breed || customerDog.breedDescription || boardingDog.breed || boardingDog.breedDescription || "",
     breedDescription: customerDog.breedDescription || boardingDog.breedDescription || "",
+    akcRegistrationNumber: customerDog.akcRegistrationNumber || boardingDog.akcRegistrationNumber || "",
+    microchipNumber: customerDog.microchipNumber || boardingDog.microchipNumber || "",
+    sireName: customerDog.sireName || boardingDog.sireName || "",
+    damName: customerDog.damName || boardingDog.damName || "",
     sex: customerDog.sex || boardingDog.sex || "Unknown",
     birthday: customerDog.birthday || customerDog.dateOfBirth || boardingDog.birthday || boardingDog.dateOfBirth || "",
     weight: customerDog.weight || boardingDog.weight || "",
@@ -8201,6 +8284,10 @@ async function linkBoardingDogOwnerAccount(record = {}) {
     submittedAt: existingCustomerDog.submittedAt || timestamp,
     dogName: record.dogName || existingCustomerDog.dogName || "Boarding dog",
     breedDescription: record.breedDescription || existingCustomerDog.breedDescription || "",
+    akcRegistrationNumber: record.akcRegistrationNumber || existingCustomerDog.akcRegistrationNumber || "",
+    microchipNumber: record.microchipNumber || existingCustomerDog.microchipNumber || "",
+    sireName: record.sireName || existingCustomerDog.sireName || "",
+    damName: record.damName || existingCustomerDog.damName || "",
     sex: record.sex || existingCustomerDog.sex || "Unknown",
     spayNeuterStatus: record.spayNeuterStatus || existingCustomerDog.spayNeuterStatus || "Unknown",
     ownerName: record.ownerName || existingCustomerDog.ownerName || "",
@@ -8490,7 +8577,7 @@ function mergeBoardingProfileGroup(records = []) {
     flags: mergePrimitiveList(records, "flags"),
   };
   [
-    "dogName", "breedDescription", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "profilePhotoMeta", "profilePhotoSourceRecordId", "profilePhotoSourceRecordType", "sex", "spayNeuterStatus",
+    "dogName", "breedDescription", "akcRegistrationNumber", "microchipNumber", "sireName", "damName", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "profilePhotoMeta", "profilePhotoSourceRecordId", "profilePhotoSourceRecordType", "sex", "spayNeuterStatus",
     "ownerName", "ownerPhone", "ownerEmail", "customerEmail", "linkedOwnerEmail", "secondaryOwnerEmail",
     "emergencyName", "emergencyPhone", "vetInfo", "foodInstructions", "specialCare", "boardingHistory",
     "rabiesDate", "dhppDate", "bordetellaDate", "heartwormDate", "vaccinationFiles",
@@ -10686,6 +10773,7 @@ function resetCustomerDogForm() {
   $("#saveCustomerDogButton").textContent = "Save Dog";
   $("#customerDogFormTitle").textContent = "Add Dog";
   fillCustomerDefaults();
+  syncAkcBreedControl($("#customerDogForm"), "");
   resetSelectedDogPhoto("customer", {});
   if (typeof setCustomerDogWizardStep === "function") setCustomerDogWizardStep("profile");
 }

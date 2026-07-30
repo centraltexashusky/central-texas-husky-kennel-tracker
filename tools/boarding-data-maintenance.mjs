@@ -274,7 +274,7 @@ function canonicalProfileFromGroup(records = []) {
     updatedAt: new Date().toISOString(),
     maintenanceLastRunAt: new Date().toISOString(),
   };
-  ["dogName", "breedDescription", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "sex", "spayNeuterStatus", "ownerName", "ownerPhone", "ownerEmail", "customerEmail", "linkedOwnerEmail", "secondaryOwnerEmail", "emergencyName", "emergencyPhone", "vetInfo", "foodInstructions", "specialCare", "boardingHistory", "rabiesDate", "dhppDate", "bordetellaDate", "heartwormDate", "vaccinationFiles"].forEach((field) => {
+  ["dogName", "breedDescription", "akcRegistrationNumber", "microchipNumber", "sireName", "damName", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "sex", "spayNeuterStatus", "ownerName", "ownerPhone", "ownerEmail", "customerEmail", "linkedOwnerEmail", "secondaryOwnerEmail", "emergencyName", "emergencyPhone", "vetInfo", "foodInstructions", "specialCare", "boardingHistory", "rabiesDate", "dhppDate", "bordetellaDate", "heartwormDate", "vaccinationFiles"].forEach((field) => {
     if (merged[field]) return;
     const fallback = records.find((record) => record[field]);
     if (fallback) merged[field] = fallback[field];

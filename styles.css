@@ -1885,6 +1885,18 @@ body.owned-dog-modal-open {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.dog-breed-field {
+  align-content: start;
+}
+
+.dog-breed-field [data-akc-breed-other]:not([hidden]) {
+  margin-top: 2px;
+}
+
+.dog-breed-field small {
+  font-weight: 600;
+}
+
 label {
   color: var(--ink);
   display: grid;

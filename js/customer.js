@@ -1286,6 +1286,10 @@ function customerDogFromBoardingDog(record = {}, email = currentUser?.email, opt
     linkedBoardingDogId: record.id,
     dogName: record.dogName || linked.dogName || "Boarding dog",
     breedDescription: record.breedDescription || linked.breedDescription || "",
+    akcRegistrationNumber: record.akcRegistrationNumber || linked.akcRegistrationNumber || "",
+    microchipNumber: record.microchipNumber || linked.microchipNumber || "",
+    sireName: record.sireName || linked.sireName || "",
+    damName: record.damName || linked.damName || "",
     dateOfBirth: record.dateOfBirth || linked.dateOfBirth || "",
     sex: record.sex || linked.sex || "Unknown",
     spayNeuterStatus: record.spayNeuterStatus || linked.spayNeuterStatus || "Unknown",
@@ -2767,6 +2771,7 @@ function openCustomerDogInline(record = {}) {
   $("#detailDialog")?.close();
   resetCustomerDogForm();
   setFormValues(formEl, record);
+  syncAkcBreedControl(formEl, record.breedDescription || "");
   $("#customerDogId").value = record.id || "";
   $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
   $("#customerDogFormTitle").textContent = record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog";
@@ -2782,6 +2787,7 @@ function openCustomerDog(record = {}) {
   const formEl = $("#customerDogForm");
   resetCustomerDogForm();
   setFormValues(formEl, record);
+  syncAkcBreedControl(formEl, record.breedDescription || "");
   $("#customerDogId").value = record.id || "";
   $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
   $("#customerDogFormTitle").textContent = record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog";
@@ -2986,6 +2992,10 @@ async function submitPendingCustomerBooking() {
         sourceBoardingDogId: dog.sourceBoardingDogId || "",
         dogName: dog.dogName || "",
         breedDescription: dog.breedDescription || "",
+        akcRegistrationNumber: dog.akcRegistrationNumber || "",
+        microchipNumber: dog.microchipNumber || "",
+        sireName: dog.sireName || "",
+        damName: dog.damName || "",
         sex: dog.sex || "",
         spayNeuterStatus: dog.spayNeuterStatus || "",
         dateOfBirth: dog.dateOfBirth || "",
@@ -3115,6 +3125,10 @@ async function submitPendingCustomerBooking() {
         requestGroupStatus: requestReviewStatus,
         dogName: dog.dogName,
         breedDescription: dog.breedDescription,
+        akcRegistrationNumber: dog.akcRegistrationNumber || existingTarget?.akcRegistrationNumber || "",
+        microchipNumber: dog.microchipNumber || existingTarget?.microchipNumber || "",
+        sireName: dog.sireName || existingTarget?.sireName || "",
+        damName: dog.damName || existingTarget?.damName || "",
         dateOfBirth: dog.dateOfBirth || existingTarget?.dateOfBirth || "",
         sex: dog.sex || existingTarget?.sex || "",
         ownerName: dog.ownerName,

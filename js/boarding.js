@@ -3012,6 +3012,10 @@ function boardingDraftFromCustomerDog(dog = {}) {
   return {
     dogName: dog.dogName || "",
     breedDescription: dog.breedDescription || "",
+    akcRegistrationNumber: dog.akcRegistrationNumber || "",
+    microchipNumber: dog.microchipNumber || "",
+    sireName: dog.sireName || "",
+    damName: dog.damName || "",
     sex: sexFromCombinedDogSpayNeuterStatus(combinedStatus) || dog.sex || "Unknown",
     spayNeuterStatus: combinedStatus,
     ownerName: dog.ownerName || "",
@@ -5848,6 +5852,7 @@ function resetBoardingDogFormForRecord(record = {}) {
   });
   selectedDogPhotos.boarding = null;
   setFormValues(formEl, record);
+  syncAkcBreedControl(formEl, record.breedDescription || "");
   const combinedStatus = combinedDogSpayNeuterStatus(record);
   if (formEl.elements.spayNeuterStatus) formEl.elements.spayNeuterStatus.value = combinedStatus;
   if (formEl.elements.sex) formEl.elements.sex.value = sexFromCombinedDogSpayNeuterStatus(combinedStatus) || record.sex || "";
