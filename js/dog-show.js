@@ -1,4 +1,5 @@
 import {
+  akcBreedPointSchedule2026,
   akcPointCalculatorBreeds2026,
   akcPointCalculatorStates2026,
   calculateAkcBreedPointScenarios2026,
@@ -749,9 +750,9 @@ function dogShowPlannerCalendarBreedName(value = "") {
   if (!text) return DOG_SHOW_PLANNER_DEFAULT_BREED;
   const parenthetical = text.match(/^(.+?)\s+(\(.+\))$/);
   if (parenthetical) return `${dogShowPlannerCalendarBreedName(parenthetical[1])} ${parenthetical[2]}`;
-  if (/\bies$/i.test(text)) return text.replace(/ies$/i, "y");
-  if (/\bDogs$/i.test(text)) return text.replace(/Dogs$/i, "Dog");
-  if (/\bs$/i.test(text) && !/(?:Belgian Malinois|Bouvier des Flandres|Dogue de Bordeaux|Great Pyrenees|Griffon Bruxellois|Kuvasz)$/i.test(text)) return text.replace(/s$/i, "");
+  if (/ies$/i.test(text)) return text.replace(/ies$/i, "y");
+  if (/Dogs$/i.test(text)) return text.replace(/Dogs$/i, "Dog");
+  if (/s$/i.test(text) && !/(?:Belgian Malinois|Bouvier des Flandres|Dogue de Bordeaux|Great Pyrenees|Griffon Bruxellois|Kuvasz)$/i.test(text)) return text.replace(/s$/i, "");
   return text;
 }
 
@@ -2039,13 +2040,68 @@ function dogShowPlannerLifecycleStatus(event = {}) {
   return dogShowEventStatus(event.status);
 }
 
-function dogShowPlannerEventPlanHtml(event = {}, lifecycleStatus = "Going To") {
+function dogShowPlannerPointScheduleBreeds(event = {}, entries = dogShowEntries(event), planner = dogShowPlannerRecord()) {
+  const plannerCandidate = dogShowPlannerCandidateForShow({
+    ...event,
+    externalId: event.plannerExternalId || event.externalId || "",
+    club: event.club || event.name || "",
+    cityState: event.cityState || event.venueAddress || "",
+  });
+  const relatedPlannerShow = (planner.shows || []).find((show) => {
+    if (dogShowPlannerEventForShow(show)?.id === event.id) return true;
+    const showName = String(show.club || show.name || "").trim().toLowerCase();
+    const eventName = String(event.club || event.name || "").trim().toLowerCase();
+    return Boolean(show.startDate && show.startDate === event.startDate && showName && showName === eventName);
+  });
+  const requestedBreeds = [
+    ...entries.map(dogShowBreed),
+    event.breedName,
+    plannerCandidate?.show?.breedName,
+    ...(plannerCandidate?.targets || []).map((target) => target.breed),
+    relatedPlannerShow?.breedName,
+    relatedPlannerShow && planner.searchMode === "breed" ? planner.breedName : "",
+  ].filter(Boolean);
+  if (planner.searchMode === "breed") {
+    requestedBreeds.push(planner.breedName || planner.shows?.[0]?.breedName || DOG_SHOW_PLANNER_DEFAULT_BREED);
+  }
+  return [...new Set(requestedBreeds.map((breed) => (
+    akcPointCalculatorBreeds2026().find((candidate) => dogShowPlannerBreedMatches(candidate, breed)) || ""
+  )).filter(Boolean))];
+}
+
+function dogShowPlannerPointScheduleHtml(event = {}, lifecycleStatus = "Going To", planner = dogShowPlannerRecord()) {
+  if (lifecycleStatus === "Completed") return "";
+  const state = dogShowEventState(event);
+  const breeds = dogShowPlannerPointScheduleBreeds(event, dogShowEntries(event), planner);
+  const showDate = String(event.startDate || "");
+  const schedules = state && showDate >= "2026-05-12" && showDate <= "2027-05-11"
+    ? breeds.map((breed) => akcBreedPointSchedule2026(state, breed)).filter(Boolean)
+    : [];
+  if (!schedules.length) {
+    const reason = !state
+      ? "Add a two-letter state to the show address to load its AKC division."
+      : !breeds.length
+        ? "Add a dog to the show roster to load that breed's point schedule."
+        : "No matching 2026 AKC breed schedule is available for this show.";
+    return `<section class="dog-show-plan-point-schedule is-empty"><header><div><span>AKC BREED POINTS</span><strong>Point schedule unavailable</strong></div></header><p>${escapeHtml(reason)}</p></section>`;
+  }
+  const first = schedules[0];
+  const points = [1, 2, 3, 4, 5];
+  return `<section class="dog-show-plan-point-schedule">
+    <header><div><span>AKC BREED POINTS</span><strong>${escapeHtml(`${DOG_SHOW_AKC_STATE_NAMES[first.state] || first.state} · Division ${first.division}`)}</strong></div><a href="https://www.akc.org/sports/conformation/resources/points-schedule/" target="_blank" rel="noopener noreferrer">Official schedule</a></header>
+    <div class="dog-show-plan-point-schedule-list">${schedules.map((schedule) => `<article><h5>${escapeHtml(schedule.breed)}</h5><div class="dog-show-plan-point-thresholds" role="table" aria-label="${escapeHtml(`${schedule.breed} point thresholds`)}"><div role="row"><span role="columnheader">Points</span>${points.map((value) => `<strong role="columnheader">${value}</strong>`).join("")}</div><div role="row"><span role="rowheader">Dogs</span>${schedule.dogs.map((count) => `<b role="cell">${count}</b>`).join("")}</div><div role="row"><span role="rowheader">Bitches</span>${schedule.bitches.map((count) => `<b role="cell">${count}</b>`).join("")}</div></div></article>`).join("")}</div>
+    <p>Number competing for 1–5 breed points. Special dogs and bitches can affect BOB/BOV and BOS outcomes; Group points are not included.</p>
+  </section>`;
+}
+
+function dogShowPlannerEventPlanHtml(event = {}, lifecycleStatus = "Going To", planner = dogShowPlannerRecord()) {
   const entries = dogShowEntries(event);
   const dogs = entries.map(dogShowEntryName).filter(Boolean);
   return `<article class="dog-show-plan-event-card is-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}">
     <header><div><span>${escapeHtml(lifecycleStatus)}</span><h4>${escapeHtml(event.name || event.club || "Dog Show")}</h4><p>${escapeHtml(event.venueAddress || event.cityState || event.venue || "Location pending")}</p></div><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></header>
     ${dogShowPlannerEventFlagsHtml(event)}
     <dl><div><dt>Status</dt><dd>${escapeHtml(lifecycleStatus)}</dd></div><div><dt>Dogs</dt><dd>${escapeHtml(dogs.join(", ") || "No dogs added yet")}</dd></div></dl>
+    ${dogShowPlannerPointScheduleHtml(event, lifecycleStatus, planner)}
     <footer><span>${entries.length} dog${entries.length === 1 ? "" : "s"} on roster</span><button type="button" data-action="open-planner-show-event" data-event-id="${escapeHtml(event.id || "")}">Open Show</button></footer>
   </article>`;
 }
@@ -2063,7 +2119,7 @@ function dogShowPlannerVisibleCandidates(potentialShows = dogShowPlannerCandidat
   });
 }
 
-function dogShowPlannerLifecycleHtml(potentialShows = []) {
+function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlannerRecord()) {
   const events = dogShowEvents();
   const groups = new Map(["Active", "Going", "Going To", "Potential Plan", "Completed"].map((status) => [status, []]));
   events.forEach((event) => {
@@ -2082,7 +2138,7 @@ function dogShowPlannerLifecycleHtml(potentialShows = []) {
       return status === "Completed" ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate);
     });
     const expanded = status === "Active";
-    return `<details class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"${expanded ? " open" : ""}><summary><span><strong>${escapeHtml(status)}</strong><em>${items.length}</em></span><i aria-hidden="true"></i></summary><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status) : dogShowPlannerCandidateHtml(item.candidate)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></details>`;
+    return `<details class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"${expanded ? " open" : ""}><summary><span><strong>${escapeHtml(status)}</strong><em>${items.length}</em></span><i aria-hidden="true"></i></summary><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status, planner) : dogShowPlannerCandidateHtml(item.candidate)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></details>`;
   }).join("");
   return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3><p>View every show by stage—from early research through the active weekend and completed history. Research for another breed is appended to the same show.</p></div><strong>${itemCount} show${itemCount === 1 ? "" : "s"}</strong></header><div class="dog-show-plan-status-summary">${statusSummary}</div><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
 }
@@ -2336,7 +2392,7 @@ function dogShowPlannerHtml() {
   return `<div class="dog-show-view dog-show-planner-view">
     <section class="dog-show-planner-heading"><div><span>SHOW INTELLIGENCE</span><h3>Show Planner</h3><p>Compare future ${escapeHtml(selectedBreed)} panels with selected dogs' results, breed research, and internal judge notes.</p></div><button type="button" data-action="edit-show-plan">${plan.id ? "Update Search" : "Find Shows"}</button></section>
     ${plan.id ? `<section class="dog-show-planner-criteria"><div><span>${plan.searchMode === "breed" ? "Breed" : "Dogs"}</span><strong>${escapeHtml(plan.searchMode === "breed" ? selectedBreed : selectedDogNames.join(", ") || "All tracked show dogs")}</strong></div><div><span>Dates</span><strong>${escapeHtml(dogShowPlannerDateRange({ startDate: plan.startDate, endDate: plan.endDate }))}</strong></div><div><span>States</span><strong>${escapeHtml((plan.states || []).join(", ") || "Nationwide")}</strong></div><div><span>Formats</span><strong>${escapeHtml(selectedEventTypeLabels.join(", ") || "All formats")}</strong></div><div><span>Last checked</span><strong>${escapeHtml(fetchedLabel || "Not available")}</strong></div></section>` : ""}
-    ${dogShowPlannerLifecycleHtml(potentialShows)}
+    ${dogShowPlannerLifecycleHtml(potentialShows, plan)}
     ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div></header><div class="dog-show-planner-list">${ranked.map(({ show, assessment }) => {
       const state = dogShowPlannerCardState(show, plan, operationalShows, potentialShows);
       return `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}${state.event ? " is-added-show" : ""}${state.conflicts.length ? " has-schedule-conflict" : ""}">
