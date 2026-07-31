@@ -16074,6 +16074,10 @@ details.dog-show-ring-schedules[hidden] {
   color: #8B5E13;
 }
 
+.dog-show-customer-report .is-dog-credit {
+  color: #16835B;
+}
+
 .dog-show-customer-allocation-note {
   background: color-mix(in srgb, var(--tint-gold) 45%, var(--panel));
   border: 1px solid var(--line);
@@ -16239,6 +16243,24 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-finance-dog-cost-section .is-dog-cost,
 .dog-show-expense-group > header > strong.is-dog-cost {
   color: #8B5E13;
+}
+
+.dog-show-finance-report-stats .is-dog-credit,
+.dog-show-finance-report-group .is-dog-credit,
+.dog-show-finance-report-event .is-dog-credit,
+.dog-show-finance-dog-row .is-dog-credit,
+.dog-show-finance-dog-cost-section .is-dog-credit,
+.dog-show-expense-group > header > strong.is-dog-credit {
+  color: #16835B;
+}
+
+.dog-show-finance-report-stats .is-balanced,
+.dog-show-finance-report-group .is-balanced,
+.dog-show-finance-report-event .is-balanced,
+.dog-show-finance-dog-row .is-balanced,
+.dog-show-finance-dog-cost-section .is-balanced,
+.dog-show-expense-group > header > strong.is-balanced {
+  color: var(--muted);
 }
 
 .dog-show-finance-report-groups {
@@ -16725,12 +16747,12 @@ details.dog-show-ring-schedules[hidden] {
   color: #B04A43;
 }
 
-.dog-show-expense-row .dog-show-finance-kind.is-dog-cost {
-  color: #8B5E13;
+.dog-show-expense-row .dog-show-finance-kind.is-dog-credit {
+  color: #16835B;
 }
 
-.dog-show-expense-row .dog-show-dog-cost-note {
-  color: #8B5E13;
+.dog-show-expense-row .dog-show-dog-credit-note {
+  color: #16835B;
   font-weight: 700;
 }
 
@@ -16791,9 +16813,20 @@ details.dog-show-ring-schedules[hidden] {
 :root[data-theme="dark"] .dog-show-finance-dog-row .is-dog-cost,
 :root[data-theme="dark"] .dog-show-finance-dog-cost-section .is-dog-cost,
 :root[data-theme="dark"] .dog-show-expense-group > header > strong.is-dog-cost,
-:root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-dog-cost,
-:root[data-theme="dark"] .dog-show-expense-row .dog-show-dog-cost-note {
+:root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-dog-cost {
   color: #FFD58A;
+}
+
+:root[data-theme="dark"] .dog-show-customer-report .is-dog-credit,
+:root[data-theme="dark"] .dog-show-finance-report-stats .is-dog-credit,
+:root[data-theme="dark"] .dog-show-finance-report-group .is-dog-credit,
+:root[data-theme="dark"] .dog-show-finance-report-event .is-dog-credit,
+:root[data-theme="dark"] .dog-show-finance-dog-row .is-dog-credit,
+:root[data-theme="dark"] .dog-show-finance-dog-cost-section .is-dog-credit,
+:root[data-theme="dark"] .dog-show-expense-group > header > strong.is-dog-credit,
+:root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-dog-credit,
+:root[data-theme="dark"] .dog-show-expense-row .dog-show-dog-credit-note {
+  color: #79DDB6;
 }
 
 @media (max-width: 720px) {
@@ -16894,11 +16927,11 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-finance-dog-row > :nth-child(3)::before {
-    content: "Assigned rewards: ";
+    content: "Income offsets: ";
   }
 
   .dog-show-finance-dog-row > :nth-child(4)::before {
-    content: "Dog cost: ";
+    content: "Net position: ";
   }
 
   .dog-show-finance-dog-cost-row > :nth-child(2)::before,
@@ -16917,11 +16950,11 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-finance-dog-cost-row > :nth-child(3)::before {
-    content: "Assigned rewards";
+    content: "Income offsets";
   }
 
   .dog-show-finance-dog-cost-row > :nth-child(4)::before {
-    content: "Total dog cost";
+    content: "Net position";
   }
 
   .dog-show-finance-dog-cost-row > :nth-child(5)::before {

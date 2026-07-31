@@ -1711,20 +1711,31 @@ function dogShowFinanceTotals(transactions = []) {
 
 function dogShowDogAttributableCostTotals(transactions = []) {
   const totals = dogShowFinanceTotals(transactions);
+  const netCost = totals.expenseTotal - totals.incomeTotal;
   return {
     directExpenseCount: totals.expenseCount,
     assignedRewardCount: totals.incomeCount,
     directExpenseTotal: totals.expenseTotal,
     assignedRewardTotal: totals.incomeTotal,
-    totalCost: totals.expenseTotal + totals.incomeTotal,
+    netCost,
   };
+}
+
+function dogShowDogCostPositionHtml(netCost = 0, labels = {}) {
+  const value = Number(netCost) || 0;
+  const positiveLabel = labels.positive || "dog cost";
+  const negativeLabel = labels.negative || "dog credit";
+  const zeroLabel = labels.zero || "balanced";
+  if (value > 0) return `<strong class="is-dog-cost">${dogShowExpenseCurrency(value)} ${escapeHtml(positiveLabel)}</strong>`;
+  if (value < 0) return `<strong class="is-dog-credit">${dogShowExpenseCurrency(Math.abs(value))} ${escapeHtml(negativeLabel)}</strong>`;
+  return `<strong class="is-balanced">${dogShowExpenseCurrency(0)} ${escapeHtml(zeroLabel)}</strong>`;
 }
 
 function dogShowFinanceRowHtml(transaction = {}) {
   const isIncome = transaction.entryType === "income";
   const isDogAssignedIncome = isIncome && Boolean(transaction.showEntryId || transaction.dogName);
   return `<article class="dog-show-expense-row">
-    <div><span class="dog-show-finance-kind is-${isIncome ? "income" : "expense"}">${isIncome ? "Business income / reward" : "Expense"}</span>${isDogAssignedIncome ? `<span class="dog-show-finance-kind is-dog-cost">Dog cost</span>` : ""}<strong>${escapeHtml(transaction.category || "Other")}</strong><span>${escapeHtml(transaction.description || transaction.category || "Show transaction")}</span><small>${escapeHtml(dogShowFormatDate(transaction.incurredDate || String(transaction.submittedAt || "").slice(0, 10)))}</small>${isDogAssignedIncome ? `<small class="dog-show-dog-cost-note">Counts as ${dogShowExpenseCurrency(transaction.amount)} attributable cost for this dog.</small>` : ""}</div>
+    <div><span class="dog-show-finance-kind is-${isIncome ? "income" : "expense"}">${isIncome ? "Business income / reward" : "Expense"}</span>${isDogAssignedIncome ? `<span class="dog-show-finance-kind is-dog-credit">Dog cost offset</span>` : ""}<strong>${escapeHtml(transaction.category || "Other")}</strong><span>${escapeHtml(transaction.description || transaction.category || "Show transaction")}</span><small>${escapeHtml(dogShowFormatDate(transaction.incurredDate || String(transaction.submittedAt || "").slice(0, 10)))}</small>${isDogAssignedIncome ? `<small class="dog-show-dog-credit-note">Offsets ${dogShowExpenseCurrency(transaction.amount)} from this dog’s expenses.</small>` : ""}</div>
     <strong class="${isIncome ? "is-income" : "is-expense"}">${isIncome ? "+" : "−"}${dogShowExpenseCurrency(transaction.amount)}</strong>
     <div class="dog-show-expense-actions">
       <button type="button" class="secondary-button" data-action="edit-show-expense" data-expense-id="${escapeHtml(transaction.id)}" aria-label="Edit ${escapeHtml(transaction.description || transaction.category || "transaction")}">Edit</button>
@@ -1742,7 +1753,7 @@ function dogShowFinanceGroupHtml(title = "", transactions = [], options = {}) {
     ? `${dogCostTotals.directExpenseCount} direct expense${dogCostTotals.directExpenseCount === 1 ? "" : "s"} · ${dogCostTotals.assignedRewardCount} business reward${dogCostTotals.assignedRewardCount === 1 ? "" : "s"}`
     : `${totals.expenseCount} expense${totals.expenseCount === 1 ? "" : "s"} · ${totals.incomeCount} reward${totals.incomeCount === 1 ? "" : "s"}`;
   return `<section class="dog-show-expense-group${options.className ? ` ${escapeHtml(options.className)}` : ""}">
-    <header><div><h3>${escapeHtml(title)}</h3><p>${itemLabel} · ${summary}</p></div>${isDogLedger ? `<strong class="is-dog-cost">${dogShowExpenseCurrency(dogCostTotals.totalCost)} dog cost</strong>` : `<strong class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)} net</strong>`}</header>
+    <header><div><h3>${escapeHtml(title)}</h3><p>${itemLabel} · ${summary}</p></div>${isDogLedger ? dogShowDogCostPositionHtml(dogCostTotals.netCost) : `<strong class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)} net</strong>`}</header>
     <div>${transactions.length ? transactions.map(dogShowFinanceRowHtml).join("") : `<p class="dog-show-expense-empty">${escapeHtml(options.emptyText || "No transactions recorded.")}</p>`}</div>
   </section>`;
 }
@@ -1808,7 +1819,7 @@ function dogShowFinanceDogCostGroups(summaries = []) {
       showCount: group.eventIds.size,
       costTotals: dogShowDogAttributableCostTotals(group.transactions),
     }))
-    .sort((left, right) => right.costTotals.totalCost - left.costTotals.totalCost || left.label.localeCompare(right.label));
+    .sort((left, right) => right.costTotals.netCost - left.costTotals.netCost || left.label.localeCompare(right.label));
 }
 
 function dogShowCustomerIdentity(entry = {}) {
@@ -1850,9 +1861,9 @@ function dogShowFinanceCustomerLedgers() {
         dogName: dogShowEntryName(entry),
         directExpenseTotal: costs.directExpenseTotal,
         assignedRewardTotal: costs.assignedRewardTotal,
-        directDogCost: costs.totalCost,
+        directDogCost: costs.netCost,
         showWideShare,
-        totalCustomerCost: costs.totalCost + showWideShare,
+        totalCustomerCost: costs.netCost + showWideShare,
       });
     });
   });
@@ -1903,21 +1914,21 @@ function dogShowFinanceCustomerPeriodHtml(periodGroup = {}) {
     dogGroups.get(key).ledgers.push(ledger);
   });
   return `<section class="dog-show-customer-period">
-    <header><div><span>${dogShowFinancePeriod.toUpperCase()}</span><strong>${escapeHtml(periodGroup.label)}</strong></div><strong class="is-dog-cost">${dogShowExpenseCurrency(periodGroup.totals.totalCustomerCost)}</strong></header>
+    <header><div><span>${dogShowFinancePeriod.toUpperCase()}</span><strong>${escapeHtml(periodGroup.label)}</strong></div>${dogShowDogCostPositionHtml(periodGroup.totals.totalCustomerCost, { positive: "customer cost", negative: "customer credit" })}</header>
     <div class="dog-show-customer-period-metrics">
       ${dogShowFinanceMetricHtml("Direct dog expenses", periodGroup.totals.directExpenseTotal)}
-      ${dogShowFinanceMetricHtml("Assigned rewards", periodGroup.totals.assignedRewardTotal)}
+      ${dogShowFinanceMetricHtml("Income offsets", periodGroup.totals.assignedRewardTotal, "is-dog-credit")}
       ${dogShowFinanceMetricHtml("Show-wide share", periodGroup.totals.showWideShare)}
-      ${dogShowFinanceMetricHtml("Customer cost", periodGroup.totals.totalCustomerCost, "is-dog-cost")}
+      ${dogShowDogCostMetricHtml("Net customer position", periodGroup.totals.totalCustomerCost, { positive: "cost", negative: "credit" })}
     </div>
     <div class="dog-show-customer-dog-table" role="table" aria-label="Customer dog costs">
-      <div class="dog-show-customer-dog-row is-heading" role="row"><span>Dog</span><span>Direct</span><span>Rewards</span><span>Shared</span><span>Total</span><span>Shows</span></div>
+      <div class="dog-show-customer-dog-row is-heading" role="row"><span>Dog</span><span>Direct</span><span>Offsets</span><span>Shared</span><span>Net position</span><span>Shows</span></div>
       ${[...dogGroups.values()].map((dogGroup) => {
         const direct = dogGroup.ledgers.reduce((sum, ledger) => sum + ledger.directExpenseTotal, 0);
         const rewards = dogGroup.ledgers.reduce((sum, ledger) => sum + ledger.assignedRewardTotal, 0);
         const shared = dogGroup.ledgers.reduce((sum, ledger) => sum + ledger.showWideShare, 0);
         const shows = new Set(dogGroup.ledgers.map((ledger) => ledger.event.id)).size;
-        return `<div class="dog-show-customer-dog-row" role="row"><strong>${escapeHtml(dogGroup.dogName)}</strong><span>${dogShowExpenseCurrency(direct)}</span><span>${dogShowExpenseCurrency(rewards)}</span><span>${dogShowExpenseCurrency(shared)}</span><strong class="is-dog-cost">${dogShowExpenseCurrency(direct + rewards + shared)}</strong><span>${shows}</span></div>`;
+        return `<div class="dog-show-customer-dog-row" role="row"><strong>${escapeHtml(dogGroup.dogName)}</strong><span>${dogShowExpenseCurrency(direct)}</span><span class="is-dog-credit">${dogShowExpenseCurrency(rewards)}</span><span>${dogShowExpenseCurrency(shared)}</span>${dogShowDogCostPositionHtml(direct - rewards + shared, { positive: "cost", negative: "credit" })}<span>${shows}</span></div>`;
       }).join("")}
     </div>
   </section>`;
@@ -1939,16 +1950,16 @@ function dogShowFinanceCustomerReportHtml() {
   return `<section class="dog-show-customer-report" aria-label="Customer show expense reports">
     <div class="dog-show-customer-report-toolbar">
       <label>Customer<select data-finance-customer><option value="all"${dogShowFinanceCustomerKey === "all" ? " selected" : ""}>All customers</option>${allReports.map((report) => `<option value="${escapeHtml(report.customer.key)}"${report.customer.key === dogShowFinanceCustomerKey ? " selected" : ""}>${escapeHtml(report.customer.name)}${report.customer.email ? ` · ${escapeHtml(report.customer.email)}` : ""}</option>`).join("")}</select></label>
-      <p>Customer cost includes direct dog charges, dog-assigned rewards, and each customer dog’s configured share of show-wide expenses.</p>
+      <p>Customer position includes direct dog charges and each customer dog’s configured share of show-wide expenses, less dog-assigned reimbursements and rewards.</p>
     </div>
     <div class="dog-show-customer-report-stats">
-      <article><span>Customer dog costs</span><strong>${dogShowExpenseCurrency(totals.directDogCost)}</strong><small>Direct expenses + assigned rewards</small></article>
+      <article><span>Net dog position</span>${dogShowDogCostPositionHtml(totals.directDogCost, { positive: "cost", negative: "credit" })}<small>Direct expenses less reimbursements and rewards</small></article>
       <article><span>Show-wide share</span><strong>${dogShowExpenseCurrency(totals.showWideShare)}</strong><small>Allocated by each show’s sharing count</small></article>
-      <article><span>Total customer cost</span><strong class="is-dog-cost">${dogShowExpenseCurrency(totals.totalCustomerCost)}</strong><small>${totals.dogs} dog${totals.dogs === 1 ? "" : "s"} · ${totals.shows} show assignment${totals.shows === 1 ? "" : "s"}</small></article>
+      <article><span>Net customer position</span>${dogShowDogCostPositionHtml(totals.totalCustomerCost, { positive: "cost", negative: "credit" })}<small>${totals.dogs} dog${totals.dogs === 1 ? "" : "s"} · ${totals.shows} show assignment${totals.shows === 1 ? "" : "s"}</small></article>
     </div>
     <p class="dog-show-customer-allocation-note">Show-wide shares are assigned to customer dogs first, up to the “Dogs sharing expenses” count saved for each show. Owned dogs fill any remaining sharing slots.</p>
     <div class="dog-show-customer-report-list">${reports.length ? reports.map((report, index) => `<details class="dog-show-customer-report-card"${index === 0 ? " open" : ""}>
-      <summary><div><strong>${escapeHtml(report.customer.name)}</strong><small>${escapeHtml(report.customer.email || "No customer email saved")} · ${report.dogNames.size} dog${report.dogNames.size === 1 ? "" : "s"} · ${report.eventIds.size} show${report.eventIds.size === 1 ? "" : "s"}</small></div><strong class="is-dog-cost">${dogShowExpenseCurrency(report.totals.totalCustomerCost)}</strong></summary>
+      <summary><div><strong>${escapeHtml(report.customer.name)}</strong><small>${escapeHtml(report.customer.email || "No customer email saved")} · ${report.dogNames.size} dog${report.dogNames.size === 1 ? "" : "s"} · ${report.eventIds.size} show${report.eventIds.size === 1 ? "" : "s"}</small></div>${dogShowDogCostPositionHtml(report.totals.totalCustomerCost, { positive: "cost", negative: "credit" })}</summary>
       <div>${report.periods.map(dogShowFinanceCustomerPeriodHtml).join("")}</div>
     </details>`).join("") : `<p class="dog-show-expense-empty is-standalone">No customer dog expenses are available for this report yet.</p>`}</div>
   </section>`;
@@ -2017,7 +2028,7 @@ function dogShowFinanceReportGroups(period = dogShowFinancePeriod) {
       group.showWideTotals = dogShowFinanceTotals(group.showWideTransactions);
       group.dogTotals = dogShowFinanceTotals(group.dogTransactions);
       group.dogCostGroups = dogShowFinanceDogCostGroups(group.summaries);
-      group.dogAttributableCostTotal = group.dogCostGroups.reduce((sum, dogGroup) => sum + dogGroup.costTotals.totalCost, 0);
+      group.dogAttributableCostTotal = group.dogCostGroups.reduce((sum, dogGroup) => sum + dogGroup.costTotals.netCost, 0);
       return group;
     })
     .sort((left, right) => String(right.sortKey).localeCompare(String(left.sortKey)));
@@ -2027,13 +2038,17 @@ function dogShowFinanceMetricHtml(label = "", value = 0, className = "") {
   return `<div><span>${escapeHtml(label)}</span><strong class="${escapeHtml(className)}">${dogShowExpenseCurrency(value)}</strong></div>`;
 }
 
+function dogShowDogCostMetricHtml(label = "", value = 0, labels = {}) {
+  return `<div><span>${escapeHtml(label)}</span>${dogShowDogCostPositionHtml(value, labels)}</div>`;
+}
+
 function dogShowFinanceDogBreakdownHtml(summary = {}) {
   if (!summary.dogGroups.length) return `<p class="dog-show-finance-report-empty">No dog-specific transactions for this show.</p>`;
   return `<div class="dog-show-finance-dog-breakdown" role="table" aria-label="Individual dog costs">
-    <div class="dog-show-finance-dog-row is-heading" role="row"><span role="columnheader">Dog</span><span role="columnheader">Direct expenses</span><span role="columnheader">Assigned rewards</span><span role="columnheader">Total dog cost</span></div>
+    <div class="dog-show-finance-dog-row is-heading" role="row"><span role="columnheader">Dog</span><span role="columnheader">Direct expenses</span><span role="columnheader">Income offsets</span><span role="columnheader">Net dog position</span></div>
     ${summary.dogGroups.map((group) => {
       const totals = dogShowDogAttributableCostTotals(group.transactions);
-      return `<div class="dog-show-finance-dog-row" role="row"><strong role="cell">${escapeHtml(group.label)}</strong><span role="cell">${dogShowExpenseCurrency(totals.directExpenseTotal)}</span><span role="cell">${dogShowExpenseCurrency(totals.assignedRewardTotal)} <small>business income</small></span><strong role="cell" class="is-dog-cost">${dogShowExpenseCurrency(totals.totalCost)}</strong></div>`;
+      return `<div class="dog-show-finance-dog-row" role="row"><strong role="cell">${escapeHtml(group.label)}</strong><span role="cell">${dogShowExpenseCurrency(totals.directExpenseTotal)}</span><span role="cell" class="is-dog-credit">${dogShowExpenseCurrency(totals.assignedRewardTotal)} <small>business income</small></span>${dogShowDogCostPositionHtml(totals.netCost, { positive: "cost", negative: "credit" })}</div>`;
     }).join("")}
   </div>`;
 }
@@ -2042,17 +2057,17 @@ function dogShowFinanceDogCostSectionHtml(group = {}) {
   const dogGroups = Array.isArray(group.dogCostGroups) ? group.dogCostGroups : [];
   const periodLabel = dogShowFinancePeriod === "show" ? "show" : dogShowFinancePeriod;
   return `<section class="dog-show-finance-dog-cost-section">
-    <header><div><span>INDIVIDUAL DOG COSTS</span><h4>Attributable costs by dog</h4><p>Direct expenses plus dog-assigned rewards or handler compensation. Assigned rewards remain income for the business.</p></div><strong>${dogShowExpenseCurrency(group.dogAttributableCostTotal)} total dog cost</strong></header>
+    <header><div><span>INDIVIDUAL DOG COSTS</span><h4>Net positions by dog</h4><p>Direct expenses minus dog-assigned reimbursements and rewards. Assigned amounts remain income for the business.</p></div>${dogShowDogCostPositionHtml(group.dogAttributableCostTotal, { positive: "net dog cost", negative: "net dog credit" })}</header>
     ${dogGroups.length ? `<div class="dog-show-finance-dog-cost-table" role="table" aria-label="Individual dog costs for this ${escapeHtml(periodLabel)}">
-      <div class="dog-show-finance-dog-cost-row is-heading" role="row"><span role="columnheader">Dog</span><span role="columnheader">Direct expenses</span><span role="columnheader">Assigned rewards</span><span role="columnheader">Total dog cost</span><span role="columnheader">Shows</span></div>
-      ${dogGroups.map((dogGroup) => `<div class="dog-show-finance-dog-cost-row" role="row"><strong role="cell">${escapeHtml(dogGroup.label)}</strong><span role="cell">${dogShowExpenseCurrency(dogGroup.costTotals.directExpenseTotal)}</span><span role="cell">${dogShowExpenseCurrency(dogGroup.costTotals.assignedRewardTotal)} <small>business income</small></span><strong role="cell" class="is-dog-cost">${dogShowExpenseCurrency(dogGroup.costTotals.totalCost)}</strong><span role="cell">${dogGroup.showCount}</span></div>`).join("")}
+      <div class="dog-show-finance-dog-cost-row is-heading" role="row"><span role="columnheader">Dog</span><span role="columnheader">Direct expenses</span><span role="columnheader">Income offsets</span><span role="columnheader">Net position</span><span role="columnheader">Shows</span></div>
+      ${dogGroups.map((dogGroup) => `<div class="dog-show-finance-dog-cost-row" role="row"><strong role="cell">${escapeHtml(dogGroup.label)}</strong><span role="cell">${dogShowExpenseCurrency(dogGroup.costTotals.directExpenseTotal)}</span><span role="cell" class="is-dog-credit">${dogShowExpenseCurrency(dogGroup.costTotals.assignedRewardTotal)} <small>business income</small></span>${dogShowDogCostPositionHtml(dogGroup.costTotals.netCost, { positive: "cost", negative: "credit" })}<span role="cell">${dogGroup.showCount}</span></div>`).join("")}
     </div>` : `<p class="dog-show-finance-report-empty">No individual dog costs in this ${escapeHtml(periodLabel)}.</p>`}
   </section>`;
 }
 
 function dogShowFinanceReportEventHtml(summary = {}) {
   const { event, totals, showWideTotals, dogTotals } = summary;
-  const dogAttributableCost = dogShowFinanceDogCostGroups([summary]).reduce((sum, dogGroup) => sum + dogGroup.costTotals.totalCost, 0);
+  const dogAttributableCost = dogShowFinanceDogCostGroups([summary]).reduce((sum, dogGroup) => sum + dogGroup.costTotals.netCost, 0);
   const dateLabel = event.startDate
     ? `${dogShowFormatDate(event.startDate)}${event.endDate && event.endDate !== event.startDate ? ` – ${dogShowFormatDate(event.endDate)}` : ""}`
     : "Show date not set";
@@ -2064,7 +2079,7 @@ function dogShowFinanceReportEventHtml(summary = {}) {
     <div class="dog-show-finance-report-event-metrics">
       ${dogShowFinanceMetricHtml("Show-wide expense", showWideTotals.expenseTotal)}
       ${dogShowFinanceMetricHtml("Direct dog expense", dogTotals.expenseTotal)}
-      ${dogShowFinanceMetricHtml("Attributable dog cost", dogAttributableCost, "is-dog-cost")}
+      ${dogShowDogCostMetricHtml("Net dog position", dogAttributableCost, { positive: "cost", negative: "credit" })}
       ${dogShowFinanceMetricHtml("Business income", totals.incomeTotal, "is-income")}
       ${dogShowFinanceMetricHtml("Total expense", totals.expenseTotal)}
     </div>
@@ -2091,7 +2106,7 @@ function dogShowFinanceReportGroupHtml(group = {}, index = 0) {
       <div><span>${dogShowFinancePeriod === "show" ? "SHOW" : dogShowFinancePeriod.toUpperCase()}</span><strong>${escapeHtml(dogShowFinancePeriod === "show" ? group.label : periodLabel)}</strong><small>${dogShowFinancePeriod === "show" ? `${escapeHtml(periodLabel)} · ` : ""}${group.summaries.length} show${group.summaries.length === 1 ? "" : "s"} · ${group.transactions.length} transaction${group.transactions.length === 1 ? "" : "s"}</small></div>
       <div class="dog-show-finance-report-group-metrics">
         ${dogShowFinanceMetricHtml("Show-wide", group.showWideTotals.expenseTotal)}
-        ${dogShowFinanceMetricHtml("Dog costs", group.dogAttributableCostTotal, "is-dog-cost")}
+        ${dogShowDogCostMetricHtml("Net dog position", group.dogAttributableCostTotal, { positive: "cost", negative: "credit" })}
         ${dogShowFinanceMetricHtml("Business income", group.totals.incomeTotal, "is-income")}
         ${dogShowFinanceMetricHtml("Net", group.totals.netTotal, group.totals.netTotal >= 0 ? "is-income" : "is-expense")}
       </div>
@@ -2112,7 +2127,7 @@ function dogShowCompiledFinanceHtml() {
   const totals = dogShowFinanceTotals(transactions);
   const showWideTotals = dogShowFinanceTotals(showWideTransactions);
   const dogTotals = dogShowFinanceTotals(dogTransactions);
-  const dogAttributableCostTotal = dogShowFinanceDogCostGroups(summaries).reduce((sum, dogGroup) => sum + dogGroup.costTotals.totalCost, 0);
+  const dogAttributableCostTotal = dogShowFinanceDogCostGroups(summaries).reduce((sum, dogGroup) => sum + dogGroup.costTotals.netCost, 0);
   const periodLabels = { show: "Show", week: "Week", month: "Month", year: "Year" };
   return `<section class="dog-show-finance-report" aria-label="Compiled dog show financial report">
     <header class="dog-show-finance-report-heading">
@@ -2126,7 +2141,7 @@ function dogShowCompiledFinanceHtml() {
       <article><span>All expenses</span><strong>${dogShowExpenseCurrency(totals.expenseTotal)}</strong><small>${totals.expenseCount} cost item${totals.expenseCount === 1 ? "" : "s"}</small></article>
       <article><span>Show-wide expenses</span><strong>${dogShowExpenseCurrency(showWideTotals.expenseTotal)}</strong><small>Shared show costs only</small></article>
       <article><span>Dog-specific expenses</span><strong>${dogShowExpenseCurrency(dogTotals.expenseTotal)}</strong><small>Assigned to individual dogs</small></article>
-      <article><span>Attributable dog costs</span><strong class="is-dog-cost">${dogShowExpenseCurrency(dogAttributableCostTotal)}</strong><small>Direct dog expenses + assigned rewards</small></article>
+      <article><span>Net dog position</span>${dogShowDogCostPositionHtml(dogAttributableCostTotal, { positive: "cost", negative: "credit" })}<small>Direct dog expenses less reimbursements and rewards</small></article>
       <article><span>Income / rewards</span><strong class="is-income">${dogShowExpenseCurrency(totals.incomeTotal)}</strong><small>${totals.incomeCount} reward item${totals.incomeCount === 1 ? "" : "s"}</small></article>
       <article><span>Net</span><strong class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)}</strong><small>${summaries.length} show${summaries.length === 1 ? "" : "s"} compiled</small></article>
     </div>
@@ -2168,7 +2183,7 @@ function dogShowExpensesHtml(event) {
     </section>
     <div class="dog-show-expense-ledgers">
       <div><h3>Show-wide transactions</h3><p>Costs and rewards that are not assigned to one dog.</p>${dogShowFinanceGroupHtml("Show-wide", showWideTransactions, { className: "is-show-wide", emptyText: "No show-wide transactions yet." })}</div>
-      <div><h3>Transactions by dog</h3><p>Direct expenses and assigned rewards both count toward dog cost. Assigned rewards remain income for the business.</p>${dogGroups.length ? dogGroups.map((group) => dogShowFinanceGroupHtml(group.label, group.transactions, { className: "is-dog-ledger" })).join("") : `<p class="dog-show-expense-empty is-standalone">No dog-specific transactions yet.</p>`}</div>
+      <div><h3>Transactions by dog</h3><p>Direct expenses increase dog cost. Dog-assigned reimbursements and rewards offset that cost while remaining business income.</p>${dogGroups.length ? dogGroups.map((group) => dogShowFinanceGroupHtml(group.label, group.transactions, { className: "is-dog-ledger" })).join("") : `<p class="dog-show-expense-empty is-standalone">No dog-specific transactions yet.</p>`}</div>
     </div>
   </div>`;
 }
