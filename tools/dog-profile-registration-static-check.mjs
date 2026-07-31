@@ -20,6 +20,11 @@ for (const field of ["akcRegistrationNumber", "microchipNumber", "sireName", "da
   assert.match(boarding, new RegExp(`${field}: dog\\.${field}`), `${field} must copy from a customer dog into Boarding Dogs`);
   assert.match(customer, new RegExp(`${field}: record\\.${field}`), `${field} must remain available through customer/boarding profile projection`);
   assert.match(maintenance, new RegExp(`"${field}"`), `${field} must survive boarding record consolidation`);
+  assert.doesNotMatch(
+    index,
+    new RegExp(`<label>[^<]+<small>Optional</small><input[^>]+name="${field}"`),
+    `${field} must not display an Optional helper label`,
+  );
 }
 
 assert.equal(
