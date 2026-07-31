@@ -16194,6 +16194,191 @@ details.dog-show-ring-schedules[hidden] {
   text-transform: uppercase;
 }
 
+.dog-show-dog-report {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+}
+
+.dog-show-dog-report-selector {
+  align-self: start;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+#dogShowPage .dog-show-dog-report-selector label {
+  display: grid;
+  font-weight: 800;
+  gap: 6px;
+  margin: 0;
+}
+
+.dog-show-dog-report-options,
+.dog-show-dog-report-results,
+.dog-show-dog-report-periods {
+  display: grid;
+  gap: 10px;
+}
+
+.dog-show-dog-report-options {
+  margin-top: 12px;
+  max-height: 480px;
+  overflow: auto;
+}
+
+.dog-show-dog-report-options button {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.dog-show-dog-report-options button:hover,
+.dog-show-dog-report-options button:focus-visible,
+.dog-show-dog-report-options button.is-active {
+  background: var(--tint-blue);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.dog-show-dog-report-options button small,
+.dog-show-dog-report-results > header p,
+.dog-show-dog-report-period small,
+.dog-show-dog-report-empty {
+  color: var(--muted);
+}
+
+.dog-show-dog-report-empty {
+  margin: 12px 0 0;
+}
+
+.dog-show-dog-report-results > header {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.dog-show-dog-report-results > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-dog-report-results > header span,
+.dog-show-dog-report-period > summary span {
+  color: #16835B;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.dog-show-dog-report-results > header h4,
+.dog-show-dog-report-results > header p {
+  margin: 0;
+}
+
+.dog-show-dog-report-stats,
+.dog-show-dog-report-period-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dog-show-dog-report-stats article,
+.dog-show-dog-report-period-metrics > div {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 3px;
+  padding: 12px;
+}
+
+.dog-show-dog-report-stats article > span,
+.dog-show-dog-report-period-metrics span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-dog-report-stats small {
+  color: var(--muted);
+}
+
+.dog-show-dog-report-period {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.dog-show-dog-report-period > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 13px 14px;
+}
+
+.dog-show-dog-report-period > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-dog-report-period > summary > div,
+.dog-show-dog-report-period-content {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-dog-report-period-content {
+  border-top: 1px solid var(--line);
+  gap: 12px;
+  padding: 14px;
+}
+
+.dog-show-dog-report-events article {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.dog-show-dog-report-events article:first-child {
+  border-top: 0;
+}
+
+.dog-show-dog-report-events article > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dog-show-dog-report-events article > div:last-child {
+  justify-items: end;
+}
+
+.dog-show-dog-report .is-dog-credit {
+  color: #16835B;
+}
+
 .dog-show-finance-report-stats article {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -16241,7 +16426,7 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-finance-report-event .is-dog-cost,
 .dog-show-finance-dog-row .is-dog-cost,
 .dog-show-finance-dog-cost-section .is-dog-cost,
-.dog-show-expense-group > header > strong.is-dog-cost {
+.dog-show-expense-group > summary > strong.is-dog-cost {
   color: #8B5E13;
 }
 
@@ -16250,7 +16435,7 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-finance-report-event .is-dog-credit,
 .dog-show-finance-dog-row .is-dog-credit,
 .dog-show-finance-dog-cost-section .is-dog-credit,
-.dog-show-expense-group > header > strong.is-dog-credit {
+.dog-show-expense-group > summary > strong.is-dog-credit {
   color: #16835B;
 }
 
@@ -16259,7 +16444,7 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-finance-report-event .is-balanced,
 .dog-show-finance-dog-row .is-balanced,
 .dog-show-finance-dog-cost-section .is-balanced,
-.dog-show-expense-group > header > strong.is-balanced {
+.dog-show-expense-group > summary > strong.is-balanced {
   color: var(--muted);
 }
 
@@ -16571,23 +16756,25 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-expense-split {
-  align-items: end;
+  align-items: stretch;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: var(--shadow);
   display: grid;
   gap: 18px;
-  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr) minmax(250px, 0.9fr);
+  grid-template-columns: minmax(200px, 1fr) minmax(220px, 0.9fr) minmax(230px, 0.9fr) minmax(170px, 0.65fr);
   padding: 18px;
 }
 
-.dog-show-expense-split > div:first-child {
+.dog-show-expense-split-intro {
+  align-content: center;
   display: grid;
   gap: 4px;
 }
 
-.dog-show-expense-split > div:first-child > span {
+.dog-show-expense-split-intro > span,
+.dog-show-expense-split-result > span {
   color: #178056;
   font-size: 0.7rem;
   font-weight: 900;
@@ -16620,6 +16807,23 @@ details.dog-show-ring-schedules[hidden] {
   padding: 10px;
 }
 
+.dog-show-expense-split-result {
+  background: var(--tint-blue);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+}
+
+.dog-show-expense-split-result strong {
+  font-size: 1.18rem;
+}
+
+.dog-show-expense-split-result small {
+  color: var(--muted);
+}
+
 .dog-show-expense-split-metrics span {
   color: var(--muted);
   font-size: 0.68rem;
@@ -16632,6 +16836,10 @@ details.dog-show-ring-schedules[hidden] {
   display: grid;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.dog-show-expense-split form button {
+  white-space: nowrap;
 }
 
 .dog-show-expense-split form label {
@@ -16686,40 +16894,101 @@ details.dog-show-ring-schedules[hidden] {
   overflow: hidden;
 }
 
-.dog-show-expense-group > header {
+.dog-show-expense-group > summary {
   align-items: center;
   background: var(--tint-blue);
-  display: flex;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   justify-content: space-between;
+  list-style: none;
   padding: 14px 16px;
 }
 
-.dog-show-expense-group > header p {
+.dog-show-expense-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-expense-group > summary::after {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  content: "+";
+  display: inline-flex;
+  font-size: 1rem;
+  font-weight: 800;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.dog-show-expense-group[open] > summary::after {
+  content: "−";
+}
+
+.dog-show-expense-group > summary:hover,
+.dog-show-expense-group > summary:focus-visible {
+  background: color-mix(in srgb, var(--tint-blue) 75%, var(--accent));
+  outline: none;
+}
+
+.dog-show-expense-group > summary p {
   color: var(--muted);
   margin: 2px 0 0;
 }
 
-.dog-show-expense-group > header > strong {
+.dog-show-expense-group > summary > strong {
   font-size: 1.18rem;
 }
 
+.dog-show-expense-table-header,
 .dog-show-expense-row {
   align-items: center;
-  border-top: 1px solid var(--line);
   display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  grid-template-columns: minmax(90px, 0.75fr) minmax(135px, 1fr) minmax(100px, 0.8fr) minmax(180px, 1.5fr) minmax(105px, 0.75fr) minmax(150px, 0.9fr);
+}
+
+.dog-show-expense-table-header {
+  background: color-mix(in srgb, var(--tint-blue) 55%, var(--panel));
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  padding: 9px 16px;
+  text-transform: uppercase;
+}
+
+.dog-show-expense-row {
+  border-top: 1px solid var(--line);
   padding: 13px 16px;
 }
 
-.dog-show-expense-row > div {
-  display: grid;
-  gap: 2px;
+.dog-show-expense-cell {
+  min-width: 0;
 }
 
-.dog-show-expense-row > div > span,
-.dog-show-expense-row > div > small {
+.dog-show-expense-cell.is-kind,
+.dog-show-expense-cell.is-description {
+  display: grid;
+  gap: 4px;
+}
+
+.dog-show-expense-cell.is-date,
+.dog-show-expense-cell.is-description > span,
+.dog-show-expense-cell.is-description > small {
   color: var(--muted);
+}
+
+.dog-show-expense-cell.is-description > span {
+  overflow-wrap: anywhere;
+}
+
+.dog-show-expense-cell.is-amount {
+  justify-self: end;
+  text-align: right;
 }
 
 .dog-show-expense-row .dog-show-finance-kind {
@@ -16734,16 +17003,16 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-expense-row .dog-show-finance-kind.is-income,
-.dog-show-expense-row > strong.is-income,
+.dog-show-expense-row .is-amount.is-income,
 .dog-show-expense-stats strong.is-income,
-.dog-show-expense-group > header > strong.is-income {
+.dog-show-expense-group > summary > strong.is-income {
   color: #16835B;
 }
 
 .dog-show-expense-row .dog-show-finance-kind.is-expense,
-.dog-show-expense-row > strong.is-expense,
+.dog-show-expense-row .is-amount.is-expense,
 .dog-show-expense-stats strong.is-expense,
-.dog-show-expense-group > header > strong.is-expense {
+.dog-show-expense-group > summary > strong.is-expense {
   color: #B04A43;
 }
 
@@ -16759,7 +17028,7 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-expense-actions {
   align-items: center;
   display: flex;
-  gap: 8px;
+  justify-content: space-between;
 }
 
 .dog-show-expense-actions .secondary-button {
@@ -16794,16 +17063,16 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 :root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-income,
-:root[data-theme="dark"] .dog-show-expense-row > strong.is-income,
+:root[data-theme="dark"] .dog-show-expense-row .is-amount.is-income,
 :root[data-theme="dark"] .dog-show-expense-stats strong.is-income,
-:root[data-theme="dark"] .dog-show-expense-group > header > strong.is-income {
+:root[data-theme="dark"] .dog-show-expense-group > summary > strong.is-income {
   color: #79DDB6;
 }
 
 :root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-expense,
-:root[data-theme="dark"] .dog-show-expense-row > strong.is-expense,
+:root[data-theme="dark"] .dog-show-expense-row .is-amount.is-expense,
 :root[data-theme="dark"] .dog-show-expense-stats strong.is-expense,
-:root[data-theme="dark"] .dog-show-expense-group > header > strong.is-expense {
+:root[data-theme="dark"] .dog-show-expense-group > summary > strong.is-expense {
   color: #FFAAA3;
 }
 
@@ -16812,7 +17081,7 @@ details.dog-show-ring-schedules[hidden] {
 :root[data-theme="dark"] .dog-show-finance-report-event .is-dog-cost,
 :root[data-theme="dark"] .dog-show-finance-dog-row .is-dog-cost,
 :root[data-theme="dark"] .dog-show-finance-dog-cost-section .is-dog-cost,
-:root[data-theme="dark"] .dog-show-expense-group > header > strong.is-dog-cost,
+:root[data-theme="dark"] .dog-show-expense-group > summary > strong.is-dog-cost,
 :root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-dog-cost {
   color: #FFD58A;
 }
@@ -16823,7 +17092,7 @@ details.dog-show-ring-schedules[hidden] {
 :root[data-theme="dark"] .dog-show-finance-report-event .is-dog-credit,
 :root[data-theme="dark"] .dog-show-finance-dog-row .is-dog-credit,
 :root[data-theme="dark"] .dog-show-finance-dog-cost-section .is-dog-credit,
-:root[data-theme="dark"] .dog-show-expense-group > header > strong.is-dog-credit,
+:root[data-theme="dark"] .dog-show-expense-group > summary > strong.is-dog-credit,
 :root[data-theme="dark"] .dog-show-expense-row .dog-show-finance-kind.is-dog-credit,
 :root[data-theme="dark"] .dog-show-expense-row .dog-show-dog-credit-note {
   color: #79DDB6;
@@ -16867,6 +17136,44 @@ details.dog-show-ring-schedules[hidden] {
   .dog-show-customer-report-toolbar,
   .dog-show-customer-report-stats {
     grid-template-columns: 1fr;
+  }
+
+  .dog-show-dog-report {
+    grid-template-columns: 1fr;
+  }
+
+  .dog-show-dog-report-options {
+    max-height: 260px;
+  }
+
+  .dog-show-dog-report-results > header,
+  .dog-show-dog-report-events article {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dog-show-dog-report-stats,
+  .dog-show-dog-report-period-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .dog-show-dog-report-events article > div:last-child {
+    justify-items: start;
+  }
+
+  .dog-show-expense-group > summary {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dog-show-expense-group > summary > strong {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .dog-show-expense-group > summary::after {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
 
   .dog-show-customer-period-metrics {
@@ -16978,14 +17285,42 @@ details.dog-show-ring-schedules[hidden] {
     width: 100%;
   }
 
+  .dog-show-expense-table-header {
+    display: none;
+  }
+
   .dog-show-expense-row {
     align-items: start;
-    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 14px;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr);
+    padding: 14px 16px;
+  }
+
+  .dog-show-expense-cell::before {
+    color: var(--muted);
+    content: attr(data-label);
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .dog-show-expense-cell.is-description {
+    grid-column: 1 / -1;
+  }
+
+  .dog-show-expense-cell.is-amount {
+    justify-self: stretch;
+    text-align: left;
   }
 
   .dog-show-expense-actions {
+    border-top: 1px dashed var(--line);
     grid-column: 1 / -1;
-    justify-content: flex-end;
+    justify-content: space-between;
+    padding-top: 10px;
   }
 }
 
