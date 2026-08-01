@@ -344,7 +344,7 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({})) as CalendarRequest;
   const startDate = validDate(body.startDate);
   const endDate = validDate(body.endDate);
-  let breedCode = /^\d{1,5}$/.test(clean(body.breedCode)) ? clean(body.breedCode) : "";
+  let breedCode = "";
   let breedName = calendarBreedName(body.breedName || "Siberian Husky");
   const states = [...new Set((Array.isArray(body.states) ? body.states : []).map((state) => clean(state).toUpperCase()).filter((state) => /^[A-Z]{2}$/.test(state)))];
   const eventTypes = [...new Set((Array.isArray(body.eventTypes) ? body.eventTypes : []).map((type) => clean(type).toLowerCase()).filter((type) => SHOW_FORMAT_FILTERS.has(type)))];
@@ -355,11 +355,9 @@ Deno.serve(async (req) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 28_000);
   try {
-    if (!breedCode) {
-      const resolvedBreed = await fetchAkcBreedCode(breedName, controller.signal);
-      breedCode = resolvedBreed.code;
-      breedName = resolvedBreed.name;
-    }
+    const resolvedBreed = await fetchAkcBreedCode(breedName, controller.signal);
+    breedCode = resolvedBreed.code;
+    breedName = resolvedBreed.name;
     const akcShows = await fetchAkcShows(startDate, endDate, states, breedCode, breedName, controller.signal);
     const shows = akcShows
       .filter((show) => showMatchesEventTypes(show, eventTypes))

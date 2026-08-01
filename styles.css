@@ -18501,6 +18501,22 @@ button.dog-show-planner-score:focus-visible {
   font-size: 0.68rem;
 }
 
+.dog-show-planner-form-error {
+  background: #FDEBEC;
+  border: 1px solid #C96C73;
+  border-radius: 8px;
+  color: #8B3038;
+  font-size: 0.82rem;
+  font-weight: 800;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.dog-show-planner-form-error:focus {
+  box-shadow: 0 0 0 3px rgba(201, 108, 115, 0.2);
+  outline: none;
+}
+
 .dog-show-planner-mode-option {
   align-items: start;
   background: var(--glass-fill-soft);
@@ -19511,6 +19527,12 @@ button.dog-show-planner-score:focus-visible {
 :root[data-theme="dark"] .dog-show-source-link:focus-visible {
   background: #18344D;
   border-color: #79A9C9;
+}
+
+:root[data-theme="dark"] .dog-show-planner-form-error {
+  background: #4A1F25;
+  border-color: #B75B64;
+  color: #FFBDC2;
 }
 
 :root[data-theme="dark"] .dog-show-planner-score span,

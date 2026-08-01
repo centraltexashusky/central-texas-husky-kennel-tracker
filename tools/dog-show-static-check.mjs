@@ -14,15 +14,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'planner-card-controls-lazy-v19', "Dog Show styles are not cache-busted."],
+  ["index.html", 'breed-code-inline-error-v20', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'planner-card-controls-lazy-v19', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'planner-card-controls-lazy-v19', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'breed-code-inline-error-v20', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'breed-code-inline-error-v20', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
@@ -171,7 +171,7 @@ const required = [
   ["js/dog-show.js", '"Owner-Handled"', "Show Planner cards do not identify National Owner-Handled Series events."],
   ["js/dog-show.js", "function dogShowPlannerNeedsMetadataRefresh", "Saved Show Planner searches are not checked for missing imported metadata."],
   ["js/dog-show.js", "function refreshDogShowPlannerMetadata", "Saved Show Planner searches cannot backfill show formats and event details."],
-  ["js/dog-show.js", "metadataVersion: 6", "Fresh Show Planner searches are not marked with the current AKC-only metadata version."],
+  ["js/dog-show.js", "metadataVersion: 7", "Fresh Show Planner searches are not marked with the current AKC-only metadata version."],
   ["js/dog-show.js", "No states selected searches all AKC events nationwide.", "The planner does not explain how to run a nationwide search."],
   ["js/dog-show.js", 'name="eventTypes"', "The planner is missing show-format checkboxes."],
   ["js/dog-show.js", "dogShowPlannerMatchesEventTypes", "Planner results are not filtered by the selected show formats."],
@@ -471,6 +471,11 @@ if (!plannerFormSource.includes("No states selected searches all AKC events nati
 if (!dogShowSource.includes(`form.querySelectorAll('input[name="states"]:checked')`)) failures.push("Planner searches do not save the selected states.");
 if (!dogShowSource.includes("function dogShowPlannerCanonicalBreedName") || !plannerFormSource.includes("capitalization does not matter")) failures.push("Planner breed searches do not advertise or implement case-insensitive matching.");
 if (!read("styles.css").includes(".dog-show-planner-state-picker") || !read("styles.css").includes(".dog-show-planner-state-options")) failures.push("The Planner States multi-select menu is not styled.");
+if (!plannerFormSource.includes("data-planner-form-error") || !dogShowSource.includes("function setDogShowPlannerFormError") || !read("styles.css").includes(".dog-show-planner-form-error")) failures.push("Planner search errors are not rendered visibly inside the open dialog.");
+const plannerSaveSource = dogShowSource.slice(dogShowSource.indexOf("async function saveDogShowPlanner"), dogShowSource.indexOf("async function saveDogShowPotentialShow"));
+if (plannerSaveSource.includes('return showToast("Choose') || plannerSaveSource.includes("showToast(errorMessage")) failures.push("Planner validation or import errors still escape to the obscured page-level toast.");
+if (!calendarScraperSource.includes("const resolvedBreed = await fetchAkcBreedCode") || calendarScraperSource.includes("if (!breedCode)")) failures.push("The AKC importer still trusts stale saved breed codes instead of resolving the current official code.");
+if (!dogShowSource.includes('const DOG_SHOW_PLANNER_BREED_CODE = "626"')) failures.push("The local Siberian Husky fallback code is not aligned with the current AKC breed directory.");
 if (calendarScraperSource.includes("At least one valid state is required")) failures.push("The calendar importer still rejects nationwide searches.");
 if (/canine\s*chronicle|caninechronicle/i.test(calendarScraperSource)) failures.push("The calendar importer still contains a Canine Chronicle source path.");
 if (/Canine Chronicle|canineChronicleSourceUrl|caninechronicle/i.test(dogShowSource)) failures.push("Show Planner still exposes Canine Chronicle as a listing source.");

@@ -22,7 +22,7 @@ const DOG_SHOW_FINANCE_SCOPE_KEY = "cth-dog-show-finance-scope";
 const DOG_SHOW_FINANCE_CUSTOMER_KEY = "cth-dog-show-finance-customer";
 const DOG_SHOW_FINANCE_DOG_KEY = "cth-dog-show-finance-dog";
 const DOG_SHOW_PLANNER_RECORD_ID = "showPlanner-current";
-const DOG_SHOW_PLANNER_BREED_CODE = "346";
+const DOG_SHOW_PLANNER_BREED_CODE = "626";
 const DOG_SHOW_PLANNER_DEFAULT_BREED = "Siberian Husky";
 const DOG_SHOW_PLANNER_CANDIDATE_KIND = "showPlannerCandidate";
 const DOG_SHOW_AKC_JUDGE_SEARCH_URL = "https://www.apps.akc.org/a/judges_directory/index.cfm?sso=rel";
@@ -3001,6 +3001,7 @@ function openDogShowPlannerForm() {
     </details>
     <div class="field-grid"><label>Start date<input type="date" name="startDate" value="${escapeHtml(plan.startDate || todayDate())}" required/></label><label>End date<input type="date" name="endDate" value="${escapeHtml(plan.endDate || dogShowPlannerDateOffset(todayDate(), 90))}" required/></label><div class="dog-show-field-wide dog-show-planner-state-field"><span>States</span><details class="dog-show-planner-state-picker"><summary><strong data-planner-state-selection>${escapeHtml(dogShowPlannerStateSelectionLabel([...selectedStates]))}</strong><small>Select multiple</small><i aria-hidden="true"></i></summary><div class="dog-show-planner-state-menu"><header><p>Choose one or more states.</p><button type="button" class="secondary-button" data-action="clear-planner-states"${selectedStates.size ? "" : " disabled"}>Clear selections</button></header><div class="dog-show-planner-state-options">${stateOptions}</div></div></details><small>No states selected searches all AKC events nationwide.</small></div></div>
     <fieldset class="dog-show-form-section dog-show-planner-format-section"><legend>Show formats</legend><p>Select one or more formats to narrow the results. Leave every box unchecked to include all published conformation shows.</p><div class="dog-show-planner-format-options">${eventTypeOptions}</div></fieldset>
+    <p class="dog-show-planner-form-error" data-planner-form-error role="alert" aria-live="assertive" tabindex="-1" hidden></p>
     <div class="dog-show-form-actions"><button type="submit">Find &amp; Rank Shows</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
   </form>`);
 }
@@ -3018,7 +3019,7 @@ function dogShowPlannerNeedsMetadataRefresh(plan = dogShowPlannerRecord()) {
   return Boolean(
     plan.id
     && !plan.localFixture
-    && Number(plan.metadataVersion || 0) < 6
+    && Number(plan.metadataVersion || 0) < 7
     && Array.isArray(plan.shows)
     && plan.shows.length
     && plan.startDate
@@ -3050,7 +3051,6 @@ async function refreshDogShowPlannerMetadata(plan = dogShowPlannerRecord()) {
         endDate: plan.endDate,
         states: plan.states,
         eventTypes: plan.eventTypes || [],
-        breedCode: plan.breedCode || "",
         breedName: plan.breedName || DOG_SHOW_PLANNER_DEFAULT_BREED,
       },
     });
@@ -3069,7 +3069,7 @@ async function refreshDogShowPlannerMetadata(plan = dogShowPlannerRecord()) {
       fetchedAt: data?.fetchedAt || plan.fetchedAt,
       sourceUrls: data?.sourceUrls || plan.sourceUrls,
       sourceCounts: data?.sourceCounts || plan.sourceCounts,
-      metadataVersion: 6,
+      metadataVersion: 7,
       metadataRefreshedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       updatedBy: currentUser?.name || "Staff",
@@ -3084,8 +3084,17 @@ async function refreshDogShowPlannerMetadata(plan = dogShowPlannerRecord()) {
   }
 }
 
+function setDogShowPlannerFormError(form, message = "") {
+  const error = form?.querySelector("[data-planner-form-error]");
+  if (!error) return;
+  error.textContent = String(message || "").trim();
+  error.hidden = !error.textContent;
+  if (!error.hidden) error.focus({ preventScroll: true });
+}
+
 async function saveDogShowPlanner(form) {
   const button = form.querySelector('button[type="submit"]');
+  setDogShowPlannerFormError(form);
   const data = formPayload(form);
   const searchMode = data.searchMode === "breed" ? "breed" : "dogs";
   const dogKeys = [...form.querySelectorAll('input[name="dogKeys"]:checked')].map((input) => input.value);
@@ -3098,20 +3107,19 @@ async function saveDogShowPlanner(form) {
     : selectedDogBreeds[0] || DOG_SHOW_PLANNER_DEFAULT_BREED;
   const states = [...form.querySelectorAll('input[name="states"]:checked')].map((input) => input.value).filter((state) => DOG_SHOW_AKC_STATE_NAMES[state]);
   const eventTypes = [...form.querySelectorAll('input[name="eventTypes"]:checked')].map((input) => input.value);
-  if (searchMode === "dogs" && !dogKeys.length) return showToast("Choose at least one dog, or use Search by breed.");
-  if (searchMode === "dogs" && selectedDogBreeds.length > 1) return showToast("Choose dogs from one breed at a time, or search each breed separately.");
-  if (searchMode === "breed" && !String(data.breedName || "").trim()) return showToast("Choose or enter a breed.");
-  if (data.endDate < data.startDate) return showToast("The end date must be after the start date.");
+  if (searchMode === "dogs" && !dogKeys.length) return setDogShowPlannerFormError(form, "Choose at least one dog, or use Search by breed.");
+  if (searchMode === "dogs" && selectedDogBreeds.length > 1) return setDogShowPlannerFormError(form, "Choose dogs from one breed at a time, or search each breed separately.");
+  if (searchMode === "breed" && !String(data.breedName || "").trim()) return setDogShowPlannerFormError(form, "Choose or enter a breed.");
+  if (data.endDate < data.startDate) return setDogShowPlannerFormError(form, "The end date must be after the start date.");
   const rangeDays = Math.ceil((new Date(`${data.endDate}T12:00:00`).getTime() - new Date(`${data.startDate}T12:00:00`).getTime()) / 86_400_000);
-  if (rangeDays > 370) return showToast("Choose a date range of one year or less.");
+  if (rangeDays > 370) return setDogShowPlannerFormError(form, "Choose a date range of one year or less.");
   button.disabled = true;
   button.textContent = "Checking show calendars…";
   let response = null;
   let errorMessage = "";
   try {
     if (typeof supabaseClient === "undefined" || !supabaseClient?.functions) throw new Error("The show calendar service is unavailable.");
-    const requestedBreedCode = dogShowPlannerBreedMatches(breedName, DOG_SHOW_PLANNER_DEFAULT_BREED) ? DOG_SHOW_PLANNER_BREED_CODE : "";
-    const { data: functionData, error } = await supabaseClient.functions.invoke("show-calendar-scrape", { body: { startDate: data.startDate, endDate: data.endDate, states, eventTypes, breedCode: requestedBreedCode, breedName } });
+    const { data: functionData, error } = await supabaseClient.functions.invoke("show-calendar-scrape", { body: { startDate: data.startDate, endDate: data.endDate, states, eventTypes, breedName } });
     if (error) {
       let functionMessage = "";
       if (error.context && typeof error.context.json === "function") {
@@ -3132,7 +3140,7 @@ async function saveDogShowPlanner(form) {
   if (!shows.length && !localFixture) {
     button.disabled = false;
     button.textContent = "Find & Rank Shows";
-    showToast(errorMessage || "No shows matched that date range, location, and show-format selection.");
+    setDogShowPlannerFormError(form, errorMessage || "No shows matched that date range, location, and show-format selection.");
     return;
   }
   await saveDogShowRecord("showResult", {
@@ -3153,7 +3161,7 @@ async function saveDogShowPlanner(form) {
     },
     sourceCounts: response?.sourceCounts || {},
     fetchedAt: response?.fetchedAt || new Date().toISOString(),
-    metadataVersion: 6,
+    metadataVersion: 7,
     metadataRefreshedAt: new Date().toISOString(),
     localFixture,
     submittedAt: dogShowPlannerRecord().submittedAt || new Date().toISOString(),
@@ -4775,6 +4783,7 @@ function setupDogShowEventListeners() {
     const judgeNoteForm = event.target.closest("#dogShowJudgeNoteForm");
     if (judgeNoteForm && event.target.matches('[name="judgeName"]')) refreshDogShowAkcJudgeSearch(judgeNoteForm);
     const plannerForm = event.target.closest("#dogShowPlannerForm");
+    if (plannerForm && event.target.matches("input")) setDogShowPlannerFormError(plannerForm);
     if (plannerForm && event.target.matches('[name="breedName"]') && String(event.target.value || "").trim()) {
       plannerForm.elements.searchMode.value = "breed";
     }
