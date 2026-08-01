@@ -18325,6 +18325,106 @@ details.dog-show-ring-schedules[hidden] {
   gap: 12px;
 }
 
+.dog-show-planner-state-field {
+  color: var(--ink);
+  display: grid;
+  font-weight: 700;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dog-show-planner-state-field > small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.dog-show-planner-state-picker {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.dog-show-planner-state-picker > summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 4px 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  list-style: none;
+  min-height: 44px;
+  padding: 8px 11px;
+}
+
+.dog-show-planner-state-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-planner-state-picker > summary small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.dog-show-planner-state-picker > summary i::before {
+  content: "+";
+  font-style: normal;
+}
+
+.dog-show-planner-state-picker[open] > summary i::before {
+  content: "−";
+}
+
+.dog-show-planner-state-menu {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.dog-show-planner-state-menu > header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.dog-show-planner-state-menu > header p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.dog-show-planner-state-menu > header button {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.dog-show-planner-state-options {
+  display: grid;
+  gap: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.dog-show-planner-state-options .dog-show-check-option {
+  cursor: pointer;
+  min-width: 0;
+}
+
+.dog-show-planner-state-options .dog-show-check-option span {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.dog-show-planner-state-options .dog-show-check-option small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
 .dog-show-planner-mode-option {
   align-items: start;
   background: var(--glass-fill-soft);
@@ -19344,6 +19444,10 @@ details.dog-show-ring-schedules[hidden] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dog-show-planner-state-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .dog-show-planner-panel {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -19398,7 +19502,8 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-planner-criteria,
   .dog-show-planner-dog-options,
-  .dog-show-planner-format-options {
+  .dog-show-planner-format-options,
+  .dog-show-planner-state-options {
     grid-template-columns: minmax(0, 1fr);
   }
 

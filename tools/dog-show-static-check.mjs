@@ -14,15 +14,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'planner-akc-only-breed-schedule-pagination-v17', "Dog Show styles are not cache-busted."],
+  ["index.html", 'state-multiselect-breed-case-v18', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'planner-akc-only-breed-schedule-pagination-v17', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'planner-akc-only-breed-schedule-pagination-v17', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'state-multiselect-breed-case-v18', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'state-multiselect-breed-case-v18', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
@@ -172,7 +172,7 @@ const required = [
   ["js/dog-show.js", "function dogShowPlannerNeedsMetadataRefresh", "Saved Show Planner searches are not checked for missing imported metadata."],
   ["js/dog-show.js", "function refreshDogShowPlannerMetadata", "Saved Show Planner searches cannot backfill show formats and event details."],
   ["js/dog-show.js", "metadataVersion: 6", "Fresh Show Planner searches are not marked with the current AKC-only metadata version."],
-  ["js/dog-show.js", 'placeholder="Leave blank for all states"', "The planner does not explain how to run a nationwide search."],
+  ["js/dog-show.js", "No states selected searches all AKC events nationwide.", "The planner does not explain how to run a nationwide search."],
   ["js/dog-show.js", 'name="eventTypes"', "The planner is missing show-format checkboxes."],
   ["js/dog-show.js", "dogShowPlannerMatchesEventTypes", "Planner results are not filtered by the selected show formats."],
   ["styles.css", ".dog-show-planner-format-options", "The planner show-format controls are not styled."],
@@ -465,8 +465,12 @@ for (const [path, needle, message] of required) {
 }
 const dogShowSource = read("js/dog-show.js");
 const calendarScraperSource = read("supabase/functions/show-calendar-scrape/index.ts");
-const plannerStateField = dogShowSource.match(/<label class="dog-show-field-wide">States[\s\S]*?<\/label>/)?.[0] || "";
-if (plannerStateField.includes("required")) failures.push("The Planner States field still blocks nationwide searches.");
+const plannerFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowPlannerForm"), dogShowSource.indexOf("function dogShowPlannerLocalShows"));
+if (!plannerFormSource.includes('class="dog-show-planner-state-picker"') || !plannerFormSource.includes('type="checkbox" name="states"')) failures.push("The Planner States control is not a multi-select menu.");
+if (!plannerFormSource.includes("No states selected searches all AKC events nationwide.")) failures.push("The Planner States control does not explain its nationwide empty state.");
+if (!dogShowSource.includes(`form.querySelectorAll('input[name="states"]:checked')`)) failures.push("Planner searches do not save the selected states.");
+if (!dogShowSource.includes("function dogShowPlannerCanonicalBreedName") || !plannerFormSource.includes("capitalization does not matter")) failures.push("Planner breed searches do not advertise or implement case-insensitive matching.");
+if (!read("styles.css").includes(".dog-show-planner-state-picker") || !read("styles.css").includes(".dog-show-planner-state-options")) failures.push("The Planner States multi-select menu is not styled.");
 if (calendarScraperSource.includes("At least one valid state is required")) failures.push("The calendar importer still rejects nationwide searches.");
 if (/canine\s*chronicle|caninechronicle/i.test(calendarScraperSource)) failures.push("The calendar importer still contains a Canine Chronicle source path.");
 if (/Canine Chronicle|canineChronicleSourceUrl|caninechronicle/i.test(dogShowSource)) failures.push("Show Planner still exposes Canine Chronicle as a listing source.");

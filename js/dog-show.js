@@ -780,6 +780,27 @@ function dogShowPlannerBreedMatches(left = "", right = "") {
   return Boolean(normalize(left)) && normalize(left) === normalize(right);
 }
 
+function dogShowPlannerCanonicalBreedName(value = "") {
+  const typedBreed = dogShowPlannerCalendarBreedName(value);
+  return dogShowPlannerBreedOptions().find((breed) => dogShowPlannerBreedMatches(breed, typedBreed)) || typedBreed;
+}
+
+function dogShowPlannerStateSelectionLabel(states = []) {
+  const selected = [...new Set(states)].filter((state) => DOG_SHOW_AKC_STATE_NAMES[state]);
+  if (!selected.length) return "All states (nationwide)";
+  if (selected.length <= 3) return selected.join(", ");
+  return `${selected.length} states selected`;
+}
+
+function refreshDogShowPlannerStatePicker(form = document.getElementById("dogShowPlannerForm")) {
+  if (!form) return;
+  const selected = [...form.querySelectorAll('input[name="states"]:checked')].map((input) => input.value);
+  const label = form.querySelector("[data-planner-state-selection]");
+  const clearButton = form.querySelector('[data-action="clear-planner-states"]');
+  if (label) label.textContent = dogShowPlannerStateSelectionLabel(selected);
+  if (clearButton) clearButton.disabled = !selected.length;
+}
+
 function dogShowPlannerCandidates() {
   return dogShowProgressRecords(DOG_SHOW_PLANNER_CANDIDATE_KIND)
     .sort((left, right) => String(left.show?.startDate || "").localeCompare(String(right.show?.startDate || "")) || String(left.show?.club || "").localeCompare(String(right.show?.club || "")));
@@ -2945,8 +2966,13 @@ function openDogShowPlannerForm() {
   const searchMode = plan.searchMode === "breed" ? "breed" : "dogs";
   const selectedKeys = new Set(Array.isArray(plan.dogKeys) && plan.dogKeys.length ? plan.dogKeys : dogs.slice(0, 1).map((dog) => dog.key));
   const selectedEventTypes = new Set(Array.isArray(plan.eventTypes) ? plan.eventTypes : []);
-  const breedName = dogShowPlannerCalendarBreedName(plan.breedName || DOG_SHOW_PLANNER_DEFAULT_BREED);
+  const selectedStates = new Set(Array.isArray(plan.states) ? plan.states : []);
+  const breedName = dogShowPlannerCanonicalBreedName(plan.breedName || DOG_SHOW_PLANNER_DEFAULT_BREED);
   const breedOptions = dogShowPlannerBreedOptions().map((breed) => `<option value="${escapeHtml(breed)}"></option>`).join("");
+  const stateOptions = Object.entries(DOG_SHOW_AKC_STATE_NAMES)
+    .sort((left, right) => left[1].localeCompare(right[1]))
+    .map(([code, name]) => `<label class="dog-show-check-option"><input type="checkbox" name="states" value="${escapeHtml(code)}"${selectedStates.has(code) ? " checked" : ""}/><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(code)}</small></span></label>`)
+    .join("");
   const eventTypeOptions = DOG_SHOW_PLANNER_EVENT_TYPE_OPTIONS.map((option) => `<label class="dog-show-check-option"><input type="checkbox" name="eventTypes" value="${escapeHtml(option.value)}"${selectedEventTypes.has(option.value) ? " checked" : ""}/><span><strong>${escapeHtml(option.label)}</strong></span></label>`).join("");
   openDogShowDialog("Find Dog Shows", `<form id="dogShowPlannerForm" class="tracker-form">
     <p class="dog-show-form-intro">Search using specific dogs for judge-history scoring, or research any breed without adding a dog first.</p>
@@ -2961,11 +2987,11 @@ function openDogShowPlannerForm() {
       <summary><span><strong>Search by breed</strong><small>Research a breed without selecting a dog.</small></span></summary>
       <div class="dog-show-collapsible-content">
         <label class="dog-show-planner-mode-option"><input type="radio" name="searchMode" value="breed"${searchMode === "breed" ? " checked" : ""}/><span><strong>Search using a breed only</strong><small>The calendar will use that breed's published breed and group judges.</small></span></label>
-        <label>Breed<input name="breedName" list="dogShowPlannerBreedList" value="${escapeHtml(breedName)}" autocomplete="off" placeholder="Start typing a breed name"/><small>Select a breed from the list or enter its official name.</small></label>
+        <label>Breed<input name="breedName" list="dogShowPlannerBreedList" value="${escapeHtml(breedName)}" autocomplete="off" placeholder="Start typing any breed name"/><small>Type any breed name—capitalization does not matter—or choose from the suggestions.</small></label>
         <datalist id="dogShowPlannerBreedList">${breedOptions}</datalist>
       </div>
     </details>
-    <div class="field-grid"><label>Start date<input type="date" name="startDate" value="${escapeHtml(plan.startDate || todayDate())}" required/></label><label>End date<input type="date" name="endDate" value="${escapeHtml(plan.endDate || dogShowPlannerDateOffset(todayDate(), 90))}" required/></label><label class="dog-show-field-wide">States<input name="states" value="${escapeHtml(Array.isArray(plan.states) ? plan.states.join(", ") : "TX, OK, LA")}" placeholder="Leave blank for all states"/><small>Optional. Enter two-letter state codes separated by commas, or leave blank to search nationwide.</small></label></div>
+    <div class="field-grid"><label>Start date<input type="date" name="startDate" value="${escapeHtml(plan.startDate || todayDate())}" required/></label><label>End date<input type="date" name="endDate" value="${escapeHtml(plan.endDate || dogShowPlannerDateOffset(todayDate(), 90))}" required/></label><div class="dog-show-field-wide dog-show-planner-state-field"><span>States</span><details class="dog-show-planner-state-picker"><summary><strong data-planner-state-selection>${escapeHtml(dogShowPlannerStateSelectionLabel([...selectedStates]))}</strong><small>Select multiple</small><i aria-hidden="true"></i></summary><div class="dog-show-planner-state-menu"><header><p>Choose one or more states.</p><button type="button" class="secondary-button" data-action="clear-planner-states"${selectedStates.size ? "" : " disabled"}>Clear selections</button></header><div class="dog-show-planner-state-options">${stateOptions}</div></div></details><small>No states selected searches all AKC events nationwide.</small></div></div>
     <fieldset class="dog-show-form-section dog-show-planner-format-section"><legend>Show formats</legend><p>Select one or more formats to narrow the results. Leave every box unchecked to include all published conformation shows.</p><div class="dog-show-planner-format-options">${eventTypeOptions}</div></fieldset>
     <div class="dog-show-form-actions"><button type="submit">Find &amp; Rank Shows</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
   </form>`);
@@ -3060,9 +3086,9 @@ async function saveDogShowPlanner(form) {
     .filter((dog) => selectedDogKeys.has(dog.key))
     .map((dog) => dogShowPlannerCalendarBreedName(dogShowBreed(dog.entry) || DOG_SHOW_PLANNER_DEFAULT_BREED)))];
   const breedName = searchMode === "breed"
-    ? dogShowPlannerCalendarBreedName(data.breedName)
+    ? dogShowPlannerCanonicalBreedName(data.breedName)
     : selectedDogBreeds[0] || DOG_SHOW_PLANNER_DEFAULT_BREED;
-  const states = String(data.states || "").split(/[\s,]+/).map((state) => state.trim().toUpperCase()).filter((state) => /^[A-Z]{2}$/.test(state));
+  const states = [...form.querySelectorAll('input[name="states"]:checked')].map((input) => input.value).filter((state) => DOG_SHOW_AKC_STATE_NAMES[state]);
   const eventTypes = [...form.querySelectorAll('input[name="eventTypes"]:checked')].map((input) => input.value);
   if (searchMode === "dogs" && !dogKeys.length) return showToast("Choose at least one dog, or use Search by breed.");
   if (searchMode === "dogs" && selectedDogBreeds.length > 1) return showToast("Choose dogs from one breed at a time, or search each breed separately.");
@@ -4723,7 +4749,11 @@ function setupDogShowEventListeners() {
   dialog?.addEventListener("change", (event) => {
     const plannerForm = event.target.closest("#dogShowPlannerForm");
     if (plannerForm && event.target.matches('[name="dogKeys"]') && event.target.checked) plannerForm.elements.searchMode.value = "dogs";
-    if (plannerForm && event.target.matches('[name="breedName"]') && String(event.target.value || "").trim()) plannerForm.elements.searchMode.value = "breed";
+    if (plannerForm && event.target.matches('[name="breedName"]') && String(event.target.value || "").trim()) {
+      plannerForm.elements.searchMode.value = "breed";
+      event.target.value = dogShowPlannerCanonicalBreedName(event.target.value);
+    }
+    if (plannerForm && event.target.matches('[name="states"]')) refreshDogShowPlannerStatePicker(plannerForm);
     const entryForm = event.target.closest("#dogShowEntryForm");
     if (entryForm && event.target.matches('[name="attendanceRole"], [name="status"]')) refreshDogShowAssignmentSummary(entryForm);
     const resultForm = event.target.closest("#dogShowResultForm");
@@ -5084,6 +5114,12 @@ function setupDogShowEventListeners() {
     const action = event.target.closest("[data-action]");
     if (!action) return;
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
+    if (action.dataset.action === "clear-planner-states") {
+      const plannerForm = action.closest("#dogShowPlannerForm");
+      plannerForm?.querySelectorAll('input[name="states"]:checked').forEach((input) => { input.checked = false; });
+      refreshDogShowPlannerStatePicker(plannerForm);
+      return;
+    }
     if (action.dataset.action === "add-ring-schedule") {
       const rows = dialog.querySelector("#dogShowRingScheduleRows");
       const schedule = { id: uid("showRing"), ringDate: dogShowActiveEvent()?.startDate || todayDate(), prepMinutes: 45, readyBufferMinutes: 15 };
