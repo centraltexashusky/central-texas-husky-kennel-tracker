@@ -18068,13 +18068,59 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-judge-directory-link {
-  justify-self: start;
+  flex: 0 1 auto;
   text-decoration: none;
 }
 
 .dog-show-judge-directory-form {
-  justify-self: start;
   margin: 0;
+}
+
+.dog-show-judge-directory-control {
+  align-items: center;
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.dog-show-judge-directory-control > span {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-judge-directory-control small {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.dog-show-judge-note-actions {
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.dog-show-judge-note-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.dog-show-delete-judge-button {
+  background: #A13D47;
+  border-color: #A13D47;
+  color: #FFFFFF;
+  margin-left: auto;
+}
+
+.dog-show-delete-judge-button:hover,
+.dog-show-delete-judge-button:focus-visible {
+  background: #7F2831;
+  border-color: #7F2831;
+  color: #FFFFFF;
 }
 
 .dog-show-remove-added-button {
@@ -18093,6 +18139,17 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-judge-directory-note {
   color: var(--muted);
   margin-top: -5px;
+}
+
+@media (max-width: 720px) {
+  .dog-show-judge-directory-control {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dog-show-judge-directory-link {
+    width: 100%;
+  }
 }
 
 .dog-show-planner-source-note {

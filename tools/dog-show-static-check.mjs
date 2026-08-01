@@ -104,6 +104,11 @@ const required = [
   ["js/dog-show.js", 'recordKind: "careerProfile"', "Prior career points are not stored separately from ring results."],
   ["js/dog-show.js", "profile.dogKey === dogKey || dogShowDogIdentity(profile) === dogKey", "Imported career profiles cannot be matched without the newer dogKey field."],
   ["js/dog-show.js", 'recordKind: "judgeNote"', "Judge intelligence is not stored as an internal Dog Show record."],
+  ["js/dog-show.js", "function dogShowAkcJudgeSearchButtonHtml", "Judge Notes are missing the AKC Judges Directory control."],
+  ["js/dog-show.js", 'form="dogShowAkcJudgeSearchForm"', "The Judge Notes AKC search button is not connected to the directory search form."],
+  ["js/dog-show.js", 'data-action="delete-judge-note"', "Existing Judge Notes cannot be deleted."],
+  ["js/dog-show.js", "function removeDogShowJudgeNote", "Judge Note deletion behavior is missing."],
+  ["styles.css", ".dog-show-judge-note-actions", "Judge Note actions cannot keep Save and Cancel left while Delete stays right."],
   ["js/dog-show.js", 'recordKind: "appearanceResult"', "Ring results are not explicitly identified for progress calculations."],
   ["js/dog-show.js", 'name="pointsEarned"', "Ring results do not capture structured points earned."],
   ["js/dog-show.js", 'name="isMajor"', "Ring results do not capture major wins."],
@@ -469,6 +474,12 @@ const plannerStateField = dogShowSource.match(/<label class="dog-show-field-wide
 if (plannerStateField.includes("required")) failures.push("The Planner States field still blocks nationwide searches.");
 if (calendarScraperSource.includes("At least one valid state is required")) failures.push("The calendar importer still rejects nationwide searches.");
 if (!dogShowSource.includes('id="dogShowAkcJudgeSearchForm"') || !dogShowSource.includes("DOG_SHOW_AKC_JUDGE_RESULTS_URL")) failures.push("The AKC judge link does not submit the selected judge name to the official directory search.");
+const judgeNoteFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowJudgeNoteForm"), dogShowSource.indexOf("function openDogShowTaskForm"));
+if (!judgeNoteFormSource.includes("dogShowAkcJudgeSearchButtonHtml(displayedJudgeName)")) failures.push("The AKC Judges Directory control is not rendered inside Edit Judge Notes.");
+const judgeEvidenceSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowJudgeEvidence"), dogShowSource.indexOf("function dogShowJudgeNote"));
+if (judgeEvidenceSource.includes("dogShowAkcJudgeSearchFormHtml") || judgeEvidenceSource.includes("dog-show-judge-directory-link")) failures.push("Judge evidence dialogs still render the AKC directory control outside Edit Judge Notes.");
+const judgeDeleteSource = dogShowSource.slice(dogShowSource.indexOf("async function removeDogShowJudgeNote"), dogShowSource.indexOf("async function saveDogShowTask"));
+if (!judgeDeleteSource.includes("removed: true") || !judgeDeleteSource.includes("Linked show history was kept")) failures.push("Deleting Judge Notes must preserve linked show history and explain that boundary.");
 const judgeRenameSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowRenamedJudgeRecords"), dogShowSource.indexOf("async function saveDogShowJudgeNote"));
 for (const judgeField of ['"judge"', '"groupJudge"', '"bisJudge"', '"ohGroupJudge"', '"ohBisJudge"']) {
   if (!judgeRenameSource.includes(judgeField)) failures.push(`Judge rename migration does not preserve ${judgeField} appearance history.`);

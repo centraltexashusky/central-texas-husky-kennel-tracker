@@ -1035,14 +1035,32 @@ function dogShowAkcJudgeSearchParts(judgeName = "") {
 
 function dogShowAkcJudgeSearchFormHtml(judgeName = "") {
   const { firstName, lastName } = dogShowAkcJudgeSearchParts(judgeName);
-  return `<form id="dogShowAkcJudgeSearchForm" class="dog-show-judge-directory-form" action="${DOG_SHOW_AKC_JUDGE_RESULTS_URL}" method="post">
+  return `<form id="dogShowAkcJudgeSearchForm" class="dog-show-judge-directory-form" action="${DOG_SHOW_AKC_JUDGE_RESULTS_URL}" method="post" hidden>
     <input type="hidden" name="searchtype" value="simple"/>
     <input type="hidden" name="breeds" value="999"/>
     <input type="hidden" name="judge_id" value=""/>
     <input type="hidden" name="firstName" value="${escapeHtml(firstName)}"/>
     <input type="hidden" name="lastName" value="${escapeHtml(lastName)}"/>
-    <button type="submit" class="secondary-button dog-show-judge-directory-link">Search ${escapeHtml(judgeName)} in the AKC Judges Directory</button>
   </form>`;
+}
+
+function dogShowAkcJudgeSearchButtonHtml(judgeName = "") {
+  return `<section class="dog-show-judge-directory-control"><span><strong>AKC Judges Directory</strong><small>Review approvals, breed eligibility, and assignment history.</small></span><button type="submit" form="dogShowAkcJudgeSearchForm" class="secondary-button dog-show-judge-directory-link" data-akc-judge-search${judgeName ? "" : " disabled"}>Search ${escapeHtml(judgeName || "this judge")} in the AKC Judges Directory</button></section>`;
+}
+
+function refreshDogShowAkcJudgeSearch(form) {
+  const judgeName = String(form?.elements?.judgeName?.value || "").trim();
+  const searchForm = document.getElementById("dogShowAkcJudgeSearchForm");
+  const searchButton = form?.querySelector("[data-akc-judge-search]");
+  const { firstName, lastName } = dogShowAkcJudgeSearchParts(judgeName);
+  if (searchForm) {
+    searchForm.elements.firstName.value = firstName;
+    searchForm.elements.lastName.value = lastName;
+  }
+  if (searchButton) {
+    searchButton.disabled = !judgeName;
+    searchButton.textContent = `Search ${judgeName || "this judge"} in the AKC Judges Directory`;
+  }
 }
 
 function submitDogShowAkcJudgeSearch(form) {
@@ -1085,8 +1103,6 @@ function openDogShowJudgeEvidence(judgeName = "", kind = "entries", dogKeys = []
   }).join("");
   openDogShowDialog(`${labels[kind] || labels.entries}: ${judgeName}`, `<section class="dog-show-judge-evidence-dialog">
     <p>Logged ring results where this person was recorded as a breed, group, BIS, or owner-handled judge${selectedDogs.size ? " for the dogs selected in this plan" : ""}.</p>
-    ${dogShowAkcJudgeSearchFormHtml(judgeName)}
-    <small class="dog-show-judge-directory-note">Use the official AKC search to review approvals, breed eligibility, and assignment history.</small>
     <div class="dog-show-judge-evidence-list">${rows || dogShowRenderEmpty("No matching results", `There are no ${String(labels[kind] || labels.entries).toLowerCase()} to show for this judge${selectedDogs.size ? " and the selected dogs" : ""}.`)}</div>
   </section>`);
 }
@@ -3830,6 +3846,7 @@ function openDogShowCareerProfileForm(dogKey = "") {
 function openDogShowJudgeNoteForm(judgeName = "") {
   const note = dogShowJudgeNote(judgeName);
   const dogs = dogShowProgressDogs();
+  const displayedJudgeName = note.judgeName || judgeName;
   openDogShowDialog(note.id ? `Judge Notes: ${note.judgeName}` : "Add Judge Note", `<form id="dogShowJudgeNoteForm" class="tracker-form" data-id="${escapeHtml(note.id || "")}" data-original-judge-name="${escapeHtml(note.judgeName || judgeName)}">
     <div class="dog-show-form-note"><strong>Internal team intelligence</strong><span>Keep observations factual and tied to repeated show experience.</span></div>
     <div class="field-grid">
@@ -3838,9 +3855,10 @@ function openDogShowJudgeNoteForm(judgeName = "") {
     </div>
     <label>Preference tags<input name="preferenceTags" value="${escapeHtml(note.preferenceTags || "")}" placeholder="Clean movement, balanced outline, confident temperament"/></label>
     <label>Best fit dogs<input name="bestFitDogs" value="${escapeHtml(note.bestFitDogs || "")}" placeholder="${escapeHtml(dogs.slice(0, 3).map((dog) => dogShowEntryName(dog.entry)).join(", "))}"/></label>
+    ${dogShowAkcJudgeSearchButtonHtml(displayedJudgeName)}
     <label>Internal notes<textarea name="notes" rows="5" placeholder="What the team observed, what was rewarded, and what to watch next time">${escapeHtml(note.notes || "")}</textarea></label>
-    <div class="button-row"><button type="submit">Save Judge Note</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
-  </form>`);
+    <div class="button-row dog-show-judge-note-actions"><span class="dog-show-judge-note-primary-actions"><button type="submit">Save Judge Note</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></span>${note.id ? `<button type="button" class="danger-button dog-show-delete-judge-button" data-action="delete-judge-note" data-id="${escapeHtml(note.id)}" data-judge="${escapeHtml(note.judgeName)}">Delete Judge</button>` : ""}</div>
+  </form>${dogShowAkcJudgeSearchFormHtml(displayedJudgeName)}`);
 }
 
 function openDogShowTaskForm(task = {}) {
@@ -4439,6 +4457,27 @@ async function saveDogShowJudgeNote(form) {
   showToast(`Judge notes saved for ${judgeName}.${renamedRecords.length ? ` Updated ${renamedRecords.length} linked show record${renamedRecords.length === 1 ? "" : "s"}.` : ""}`);
 }
 
+async function removeDogShowJudgeNote(id = "") {
+  const note = readRecords("showResult").find((record) => record.id === id && record.recordKind === "judgeNote" && !record.removed);
+  if (!note) return;
+  const judgeName = note.judgeName || "this judge";
+  const linkedResults = dogShowJudgeEvidence(judgeName).results.length;
+  const historyNotice = linkedResults
+    ? ` ${linkedResults} linked result${linkedResults === 1 ? "" : "s"} will remain in show history.`
+    : "";
+  if (!window.confirm(`Delete ${judgeName} from Judge Notes?${historyNotice}`)) return;
+  await saveDogShowRecord("showResult", {
+    ...note,
+    removed: true,
+    removedAt: new Date().toISOString(),
+    removedBy: currentUser?.name || "Staff",
+    removedEmail: currentUser?.email || "",
+  });
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast(`Judge notes deleted for ${judgeName}.${linkedResults ? " Linked show history was kept." : ""}`);
+}
+
 async function saveDogShowTask(form) {
   const existing = form.dataset.id ? readRecords("showDayTask").find((task) => task.id === form.dataset.id) || {} : {};
   const data = formPayload(form);
@@ -4638,6 +4677,8 @@ function setupDogShowEventListeners() {
   });
 
   dialog?.addEventListener("input", (event) => {
+    const judgeNoteForm = event.target.closest("#dogShowJudgeNoteForm");
+    if (judgeNoteForm && event.target.matches('[name="judgeName"]')) refreshDogShowAkcJudgeSearch(judgeNoteForm);
     const plannerForm = event.target.closest("#dogShowPlannerForm");
     if (plannerForm && event.target.matches('[name="breedName"]') && String(event.target.value || "").trim()) {
       plannerForm.elements.searchMode.value = "breed";
@@ -5053,6 +5094,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "duplicate-show-task") openDuplicateDogShowTask(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "delete-show-task") await removeDogShowTask(action.dataset.id);
+    if (action.dataset.action === "delete-judge-note") await removeDogShowJudgeNote(action.dataset.id);
     if (action.dataset.action === "remove-show-log") await removeDogShowLog(action.dataset.id, action.dataset.entryId);
     if (action.dataset.action === "complete-show-prep") await completeDogShowPrep(action.dataset.id, action.dataset.ringScheduleId);
     if (action.dataset.action === "complete-show-task") {
