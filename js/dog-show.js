@@ -956,6 +956,14 @@ function dogShowJudgeNotes() {
   return dogShowProgressRecords("judgeNote").sort((left, right) => String(left.judgeName || "").localeCompare(String(right.judgeName || "")));
 }
 
+function dogShowHiddenJudgeNameKeys() {
+  const activeKeys = new Set(dogShowJudgeNotes().map((note) => dogShowJudgeNameKey(note.judgeName)).filter(Boolean));
+  return new Set(readRecords("showResult")
+    .filter((record) => record.recordKind === "judgeNote" && record.removed && record.judgeName)
+    .map((record) => dogShowJudgeNameKey(record.judgeName))
+    .filter((key) => key && !activeKeys.has(key)));
+}
+
 function dogShowJudgeNameKey(name = "") {
   return String(name || "")
     .normalize("NFKD")
@@ -977,6 +985,7 @@ function dogShowSearchKey(value = "") {
 
 function dogShowObservedJudges() {
   const names = new Map();
+  const hiddenJudgeKeys = dogShowHiddenJudgeNameKeys();
   dogShowRecords("showEntry").forEach((entry) => dogShowRingSchedules(entry).forEach((schedule) => {
     if (schedule.judge) names.set(dogShowJudgeNameKey(schedule.judge), schedule.judge.trim());
   }));
@@ -986,7 +995,7 @@ function dogShowObservedJudges() {
   dogShowJudgeNotes().forEach((note) => {
     if (note.judgeName) names.set(dogShowJudgeNameKey(note.judgeName), note.judgeName.trim());
   });
-  return [...names.values()].sort((left, right) => left.localeCompare(right));
+  return [...names.entries()].filter(([key]) => !hiddenJudgeKeys.has(key)).map(([, name]) => name).sort((left, right) => left.localeCompare(right));
 }
 
 function dogShowJudgeEvidence(name = "") {
@@ -3847,7 +3856,7 @@ function openDogShowJudgeNoteForm(judgeName = "") {
   const note = dogShowJudgeNote(judgeName);
   const dogs = dogShowProgressDogs();
   const displayedJudgeName = note.judgeName || judgeName;
-  openDogShowDialog(note.id ? `Judge Notes: ${note.judgeName}` : "Add Judge Note", `<form id="dogShowJudgeNoteForm" class="tracker-form" data-id="${escapeHtml(note.id || "")}" data-original-judge-name="${escapeHtml(note.judgeName || judgeName)}">
+  openDogShowDialog(displayedJudgeName ? `Judge Notes: ${displayedJudgeName}` : "Add Judge Note", `<form id="dogShowJudgeNoteForm" class="tracker-form" data-id="${escapeHtml(note.id || "")}" data-original-judge-name="${escapeHtml(note.judgeName || judgeName)}">
     <div class="dog-show-form-note"><strong>Internal team intelligence</strong><span>Keep observations factual and tied to repeated show experience.</span></div>
     <div class="field-grid">
       <label>Judge name<input name="judgeName" list="dogShowJudgeNames" value="${escapeHtml(note.judgeName || judgeName)}" required/><datalist id="dogShowJudgeNames">${dogShowObservedJudges().map((judge) => `<option value="${escapeHtml(judge)}"></option>`).join("")}</datalist></label>
@@ -3857,7 +3866,7 @@ function openDogShowJudgeNoteForm(judgeName = "") {
     <label>Best fit dogs<input name="bestFitDogs" value="${escapeHtml(note.bestFitDogs || "")}" placeholder="${escapeHtml(dogs.slice(0, 3).map((dog) => dogShowEntryName(dog.entry)).join(", "))}"/></label>
     ${dogShowAkcJudgeSearchButtonHtml(displayedJudgeName)}
     <label>Internal notes<textarea name="notes" rows="5" placeholder="What the team observed, what was rewarded, and what to watch next time">${escapeHtml(note.notes || "")}</textarea></label>
-    <div class="button-row dog-show-judge-note-actions"><span class="dog-show-judge-note-primary-actions"><button type="submit">Save Judge Note</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></span>${note.id ? `<button type="button" class="danger-button dog-show-delete-judge-button" data-action="delete-judge-note" data-id="${escapeHtml(note.id)}" data-judge="${escapeHtml(note.judgeName)}">Delete Judge</button>` : ""}</div>
+    <div class="button-row dog-show-judge-note-actions"><span class="dog-show-judge-note-primary-actions"><button type="submit">Save Judge Note</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></span>${displayedJudgeName ? `<button type="button" class="danger-button dog-show-delete-judge-button" data-action="delete-judge-note" data-id="${escapeHtml(note.id || "")}" data-judge="${escapeHtml(displayedJudgeName)}">Delete Judge</button>` : ""}</div>
   </form>${dogShowAkcJudgeSearchFormHtml(displayedJudgeName)}`);
 }
 
@@ -4457,17 +4466,21 @@ async function saveDogShowJudgeNote(form) {
   showToast(`Judge notes saved for ${judgeName}.${renamedRecords.length ? ` Updated ${renamedRecords.length} linked show record${renamedRecords.length === 1 ? "" : "s"}.` : ""}`);
 }
 
-async function removeDogShowJudgeNote(id = "") {
-  const note = readRecords("showResult").find((record) => record.id === id && record.recordKind === "judgeNote" && !record.removed);
-  if (!note) return;
-  const judgeName = note.judgeName || "this judge";
+async function removeDogShowJudgeNote(id = "", requestedJudgeName = "") {
+  const note = readRecords("showResult").find((record) => record.recordKind === "judgeNote" && !record.removed && (id ? record.id === id : dogShowJudgeNameKey(record.judgeName) === dogShowJudgeNameKey(requestedJudgeName)));
+  const judgeName = String(note?.judgeName || requestedJudgeName || "").trim();
+  if (!judgeName) return;
   const linkedResults = dogShowJudgeEvidence(judgeName).results.length;
   const historyNotice = linkedResults
     ? ` ${linkedResults} linked result${linkedResults === 1 ? "" : "s"} will remain in show history.`
     : "";
   if (!window.confirm(`Delete ${judgeName} from Judge Notes?${historyNotice}`)) return;
   await saveDogShowRecord("showResult", {
-    ...note,
+    ...(note || {}),
+    type: "showResult",
+    id: note?.id || uid("showJudgeNote"),
+    recordKind: "judgeNote",
+    judgeName,
     removed: true,
     removedAt: new Date().toISOString(),
     removedBy: currentUser?.name || "Staff",
@@ -5094,7 +5107,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "edit-show-task") openDogShowTaskForm(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "duplicate-show-task") openDuplicateDogShowTask(dogShowTasks().find((task) => task.id === action.dataset.id) || {});
     if (action.dataset.action === "delete-show-task") await removeDogShowTask(action.dataset.id);
-    if (action.dataset.action === "delete-judge-note") await removeDogShowJudgeNote(action.dataset.id);
+    if (action.dataset.action === "delete-judge-note") await removeDogShowJudgeNote(action.dataset.id, action.dataset.judge);
     if (action.dataset.action === "remove-show-log") await removeDogShowLog(action.dataset.id, action.dataset.entryId);
     if (action.dataset.action === "complete-show-prep") await completeDogShowPrep(action.dataset.id, action.dataset.ringScheduleId);
     if (action.dataset.action === "complete-show-task") {

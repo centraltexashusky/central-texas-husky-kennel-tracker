@@ -108,6 +108,7 @@ const required = [
   ["js/dog-show.js", 'form="dogShowAkcJudgeSearchForm"', "The Judge Notes AKC search button is not connected to the directory search form."],
   ["js/dog-show.js", 'data-action="delete-judge-note"', "Existing Judge Notes cannot be deleted."],
   ["js/dog-show.js", "function removeDogShowJudgeNote", "Judge Note deletion behavior is missing."],
+  ["js/dog-show.js", "function dogShowHiddenJudgeNameKeys", "Deleted judges are not hidden from Judge Notes while their show history is preserved."],
   ["styles.css", ".dog-show-judge-note-actions", "Judge Note actions cannot keep Save and Cancel left while Delete stays right."],
   ["js/dog-show.js", 'recordKind: "appearanceResult"', "Ring results are not explicitly identified for progress calculations."],
   ["js/dog-show.js", 'name="pointsEarned"', "Ring results do not capture structured points earned."],
@@ -476,10 +477,14 @@ if (calendarScraperSource.includes("At least one valid state is required")) fail
 if (!dogShowSource.includes('id="dogShowAkcJudgeSearchForm"') || !dogShowSource.includes("DOG_SHOW_AKC_JUDGE_RESULTS_URL")) failures.push("The AKC judge link does not submit the selected judge name to the official directory search.");
 const judgeNoteFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowJudgeNoteForm"), dogShowSource.indexOf("function openDogShowTaskForm"));
 if (!judgeNoteFormSource.includes("dogShowAkcJudgeSearchButtonHtml(displayedJudgeName)")) failures.push("The AKC Judges Directory control is not rendered inside Edit Judge Notes.");
+if (!judgeNoteFormSource.includes("displayedJudgeName ? `<button") || judgeNoteFormSource.includes("note.id ? `<button")) failures.push("Delete Judge must be available for both saved-note and history-only judges.");
 const judgeEvidenceSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowJudgeEvidence"), dogShowSource.indexOf("function dogShowJudgeNote"));
 if (judgeEvidenceSource.includes("dogShowAkcJudgeSearchFormHtml") || judgeEvidenceSource.includes("dog-show-judge-directory-link")) failures.push("Judge evidence dialogs still render the AKC directory control outside Edit Judge Notes.");
 const judgeDeleteSource = dogShowSource.slice(dogShowSource.indexOf("async function removeDogShowJudgeNote"), dogShowSource.indexOf("async function saveDogShowTask"));
 if (!judgeDeleteSource.includes("removed: true") || !judgeDeleteSource.includes("Linked show history was kept")) failures.push("Deleting Judge Notes must preserve linked show history and explain that boundary.");
+if (!judgeDeleteSource.includes('uid("showJudgeNote")') || !judgeDeleteSource.includes("requestedJudgeName")) failures.push("History-only judges cannot be soft-deleted without an existing Judge Note ID.");
+const observedJudgeSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowObservedJudges"), dogShowSource.indexOf("function dogShowJudgeEvidence"));
+if (!observedJudgeSource.includes("dogShowHiddenJudgeNameKeys") || !observedJudgeSource.includes("!hiddenJudgeKeys.has(key)")) failures.push("Soft-deleted judges still appear in the Judge Notes selector.");
 const judgeRenameSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowRenamedJudgeRecords"), dogShowSource.indexOf("async function saveDogShowJudgeNote"));
 for (const judgeField of ['"judge"', '"groupJudge"', '"bisJudge"', '"ohGroupJudge"', '"ohBisJudge"']) {
   if (!judgeRenameSource.includes(judgeField)) failures.push(`Judge rename migration does not preserve ${judgeField} appearance history.`);
