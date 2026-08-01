@@ -1,12 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { parseHTML } from "npm:linkedom@0.18.12";
 
-const CALENDAR_URL = "https://caninechronicleshowcalendar.com/K9shows.php";
-const SITE_URL = "https://caninechronicleshowcalendar.com/";
 const AKC_API_URL = "https://webapps.akc.org/event-search/api/";
 const AKC_EVENT_URL = "https://www.apps.akc.org/apps/events/search/index_results.cfm";
 const AKC_DOCUMENT_URL = "https://www.apps.akc.org/apps/eventplans/eventsearch/blocks/dsp_generate_pdf.cfm";
+const AKC_SEARCH_URL = "https://webapps.akc.org/event-search/";
 const MAX_RANGE_DAYS = 370;
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,25 +40,6 @@ const SHOW_FORMAT_FILTERS = new Set([
   "open-show",
   "sweepstakes",
 ]);
-const calendarAttributeText = (value: unknown) =>
-  String(value || "")
-    .replace(/&nbsp;?/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/<[^>]+>/g, " ")
-    .trim();
-const calendarText = (value: unknown) => clean(calendarAttributeText(value));
-const identityText = (value: unknown) => clean(value).toLowerCase().replace(/\b(?:incorporated|inc|llc|l\.l\.c)\b/g, "").replace(/[^a-z0-9]+/g, "");
-
-function showFingerprint(show: Record<string, unknown>) {
-  return [
-    clean(show.startDate),
-    identityText(show.club || show.name),
-    identityText(show.city),
-    clean(show.state).toUpperCase(),
-  ].join("|");
-}
 
 function showFormatKeys(show: Record<string, unknown>) {
   const typeTokens = clean(show.showType)
@@ -87,12 +66,13 @@ function showMatchesEventTypes(show: Record<string, unknown>, eventTypes: string
   return eventTypes.some((type) => showTypes.has(type));
 }
 
-function canonicalShowId(eventNumber: unknown, fallbackSource: string, fallbackId: unknown) {
+function canonicalShowId(eventNumber: unknown, fallbackId: unknown) {
   const akcNumber = clean(eventNumber).match(/\d{8,12}/)?.[0] || "";
-  return akcNumber ? `akc:${akcNumber}` : `${fallbackSource}:${clean(fallbackId)}`;
+  return akcNumber ? `akc:${akcNumber}` : `akc-event:${clean(fallbackId)}`;
 }
 
 function eventSourceUrl(eventNumber: unknown) {
+  if (!clean(eventNumber)) return AKC_SEARCH_URL;
   const url = new URL(AKC_EVENT_URL);
   url.searchParams.set("action", "plan");
   url.searchParams.set("event_number", clean(eventNumber));
@@ -105,6 +85,21 @@ function akcDocumentUrl(document: Record<string, unknown> | undefined) {
   const url = new URL(AKC_DOCUMENT_URL);
   url.searchParams.set("KEY_BINARY_CONTENT", keyBinary);
   return url.toString();
+}
+
+function httpUrl(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const candidate = clean(value);
+    if (!candidate || (!/^https?:\/\//i.test(candidate) && !candidate.includes("."))) continue;
+    try {
+      const url = new URL(/^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`);
+      if (["http:", "https:"].includes(url.protocol) && url.hostname.includes(".")) return url.toString();
+    } catch {
+      // AKC sometimes returns empty or non-URL contact fields.
+    }
+  }
+  return "";
 }
 
 function superintendentWebsite(value: unknown) {
@@ -138,17 +133,6 @@ function breedComparisonKey(value: unknown) {
   return calendarBreedName(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-function calendarBreedOption(html: string, requestedName: string) {
-  const { document } = parseHTML(html);
-  const requestedKey = breedComparisonKey(requestedName);
-  return [...document.querySelectorAll("option")]
-    .map((option) => ({
-      code: clean(option.getAttribute("value")).match(/\d{1,5}/)?.[0] || "",
-      name: calendarBreedName(option.textContent),
-    }))
-    .find((option) => option.code && breedComparisonKey(option.name) === requestedKey) || null;
-}
-
 function adminEmails() {
   return (Deno.env.get("ADMIN_ALERT_EMAILS") || Deno.env.get("ADMIN_EMAILS") || "centraltexashusky@gmail.com")
     .split(",")
@@ -179,169 +163,6 @@ function validDate(value: unknown) {
   return /^\d{4}-\d{2}-\d{2}$/.test(text) && Number.isFinite(new Date(`${text}T12:00:00Z`).getTime()) ? text : "";
 }
 
-function dateInRange(month: number, day: number, startDate: string, endDate: string) {
-  const start = new Date(`${startDate}T00:00:00Z`);
-  const end = new Date(`${endDate}T23:59:59Z`);
-  for (let year = start.getUTCFullYear(); year <= end.getUTCFullYear(); year += 1) {
-    const candidate = new Date(Date.UTC(year, month - 1, day));
-    if (candidate >= start && candidate <= end) return candidate.toISOString().slice(0, 10);
-  }
-  return "";
-}
-
-function datesInText(value: string) {
-  return [...value.matchAll(/\b(\d{1,2})\/(\d{1,2})\b/g)].map((match) => ({ month: Number(match[1]), day: Number(match[2]) }));
-}
-
-function queryArrayValue(url: URL, key: string) {
-  return url.searchParams.get(key) || url.searchParams.get(`${key}[]`) || "";
-}
-
-function embeddedUrl(value: unknown, filePattern: RegExp) {
-  const match = clean(value).match(filePattern)?.[0] || "";
-  if (!match) return null;
-  try {
-    return new URL(match.replace(/&amp;/gi, "&"), SITE_URL);
-  } catch {
-    return null;
-  }
-}
-
-function panelJudge(title: unknown, label: string) {
-  const match = String(title || "").match(new RegExp(`${label}:<\\/td><td[^>]*>([\\s\\S]*?)<\\/td>`, "i"));
-  return clean((match?.[1] || "").replace(/<[^>]+>/g, " "));
-}
-
-function calendarShowHtml(html: string, externalId: string) {
-  const mainMarker = new RegExp(`showpop\\.php\\?shno=${externalId}(?:&|&amp;)brno=`, "i");
-  const markerIndex = html.search(mainMarker);
-  if (markerIndex < 0) return "";
-  const remainingHtml = html.slice(markerIndex + 20);
-  const nextMainShowOffset = remainingHtml.search(/showpop\.php\?shno=\d+(?:&|&amp;)brno=/i);
-  const nextShowIndex = nextMainShowOffset >= 0 ? markerIndex + 20 + nextMainShowOffset : -1;
-  return html.slice(markerIndex, nextShowIndex > markerIndex ? nextShowIndex : markerIndex + 20_000);
-}
-
-function calendarShowAnchors(html: string) {
-  const anchors: Array<{ href: string; title: string; text: string }> = [];
-  const pattern = /<a\b[^>]*\bhref\s*=\s*javascript:opWshpop\("([^"]*showpop\.php\?[^"]*\bshno=\d+[^"]*(?:&|&amp;)brno=\d+[^"]*)"\)[^>]*\btitle\s*=\s*"([\s\S]*?\bShow Number=[\s\S]*?\bOn:[\s\S]*?)"[^>]*>([\s\S]*?)<\/a>/gi;
-  for (const match of html.matchAll(pattern)) {
-    anchors.push({
-      href: calendarText(match[1]),
-      title: calendarAttributeText(match[2]),
-      text: calendarText(match[3]),
-    });
-  }
-  return anchors;
-}
-
-function calendarPanelTitle(showHtml: string) {
-  return showHtml.match(/title="([^"]*Best-In-Show Judge:[^"]*)"/i)?.[1] || "";
-}
-
-function calendarAssignmentJudge(showHtml: string, assignment: string) {
-  const escapedAssignment = assignment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = showHtml.match(new RegExp(`<a\\b[^>]*title="${escapedAssignment}\\b[^"]*"[^>]*>([\\s\\S]*?)<\\/a>`, "i"));
-  return clean((match?.[1] || "").replace(/<[^>]+>/g, " "));
-}
-
-function showGroupPanel(showHtml: string, judgeAnchors: Element[]) {
-  const candidates = [...showHtml.matchAll(/<a\b[^>]*title="([^"]*\bGroup)\b[^"]*"[^>]*>([\s\S]*?)<\/a>/gi)]
-    .map((match) => ({
-      groupName: clean(match[1]).replace(/\s+Judge.*$/i, ""),
-      judge: clean((match[2] || "").replace(/<[^>]+>/g, " ")),
-    }))
-    .filter((candidate) => candidate.judge && !/(?:owner.handled|nohs)/i.test(candidate.groupName));
-  if (candidates.length) return candidates[0];
-  const anchor = judgeAnchors.find((item) => /\bGroup\b/i.test(item.getAttribute("title") || "") && !/(?:owner.handled|nohs)/i.test(item.getAttribute("title") || ""));
-  return {
-    groupName: clean(anchor?.getAttribute("title")).replace(/\s+Judge.*$/i, ""),
-    judge: clean(anchor?.textContent),
-  };
-}
-
-function parseShowRows(html: string, startDate: string, endDate: string, breedCode: string, breedName: string) {
-  const shows = new Map<string, Record<string, unknown>>();
-  // The source uses legacy, non-closed table markup. Standards-based DOM
-  // parsers nest many visible shows inside one synthetic row and discard most
-  // of the later links. Read each authoritative show-link record from the raw
-  // response, then isolate its panel block for the remaining fields.
-  calendarShowAnchors(html).forEach(({ href: showHref, title: showTitle, text: showAnchorText }) => {
-    const showUrl = embeddedUrl(showHref, /showpop\.php\?[^"')\s]+/i);
-    if (!showUrl) return;
-    const externalId = queryArrayValue(showUrl, "shno");
-    if (!externalId) return;
-
-    const dates = datesInText(showTitle);
-    if (!dates.length) return;
-    const showDate = dateInRange(dates[0].month, dates[0].day, startDate, endDate);
-    if (!showDate) return;
-
-    const titleLocation = clean(showTitle.match(/\bIn:\s*([^\r\n]+)/i)?.[1]);
-    const titleLocationMatch = titleLocation.match(/^(.*?),\s*([A-Z]{2})$/i);
-    const state = clean(titleLocationMatch?.[2]).toUpperCase();
-    const city = clean(titleLocationMatch?.[1]);
-    const venue = clean(showTitle.match(/\bAt:\s*([^\r\n]+)/i)?.[1]);
-    const club = showAnchorText;
-    const showHtml = calendarShowHtml(html, externalId);
-    const panelTitle = calendarPanelTitle(showHtml);
-    const breedJudge = calendarAssignmentJudge(showHtml, breedName);
-    const groupPanel = showGroupPanel(showHtml, []);
-    const titleShowType = clean(showTitle.match(/\bShow Number=\S+\s+([A-Z/]+)/i)?.[1]).replace(/\bJSHW\b/gi, "JS");
-    const eventNumber = clean(showTitle.match(/\bShow Number=(\d{8,12})\b/i)?.[1]);
-    let showType = titleShowType;
-    if (/Beginner Puppy Competition/i.test(showTitle) && !/(?:^|\/)BgP(?:\/|$)/i.test(showType)) showType = [showType, "BgP"].filter(Boolean).join("/");
-    const nohs = /(?:\bNOHS\b|National Owner-Handled)/i.test(`${showTitle} ${panelTitle} ${showHtml}`);
-    const superintendent = clean(showTitle.match(/\bSuper:\s*([^\r\n]+)/i)?.[1])
-      || ["Onofrio", "MB-F", "Rau", "Bradshaw", "BaRay", "Foy Trent", "Executive", "Show Secretary"]
-        .find((name) => showHtml.toLowerCase().includes(name.toLowerCase())) || "";
-    const closingMatch = showTitle.match(/\bCloses:\s*(?:[A-Za-z]+\s+)?(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
-    const closingDate = closingMatch
-      ? `${closingMatch[3]}-${String(Number(closingMatch[1])).padStart(2, "0")}-${String(Number(closingMatch[2])).padStart(2, "0")}`
-      : "";
-    const premiumMarkup = showHtml.match(/<a\b[^>]*title="Premium List"[^>]*>/i)?.[0] || "";
-    const judgingProgramMarkup = showHtml.match(/<a\b[^>]*title="Judging Program"[^>]*>/i)?.[0] || "";
-    const premiumUrl = embeddedUrl(premiumMarkup, /https?:\/\/[^"')\s]+/i)?.toString() || "";
-    const judgingProgramUrl = embeddedUrl(judgingProgramMarkup, /https?:\/\/[^"')\s]+/i)?.toString() || "";
-    const panelUrl = new URL(`judpan.php?code=&shno=${encodeURIComponent(externalId)}`, SITE_URL).toString();
-    const canonicalId = canonicalShowId(eventNumber, "canine-chronicle", externalId);
-    shows.set(canonicalId, {
-      externalId: canonicalId,
-      canonicalId,
-      eventNumber,
-      sourceIds: { canineChronicle: externalId, ...(eventNumber ? { akc: eventNumber } : {}) },
-      startDate: showDate,
-      endDate: showDate,
-      club,
-      name: club,
-      cityState: [city, state].filter(Boolean).join(", "),
-      city,
-      state,
-      venue,
-      showType,
-      nohs,
-      superintendent,
-      entryClosingDate: closingDate,
-      premiumUrl,
-      judgingProgramUrl,
-      breedCode,
-      breedName,
-      breedJudge,
-      groupName: groupPanel.groupName,
-      groupJudge: groupPanel.judge || (groupPanel.groupName ? panelJudge(panelTitle, groupPanel.groupName) : ""),
-      bisJudge: calendarAssignmentJudge(showHtml, "Best In Show") || panelJudge(panelTitle, "Best-In-Show Judge"),
-      sourceUrl: showUrl.toString(),
-      canineChronicleSourceUrl: showUrl.toString(),
-      panelUrl,
-      source: "Canine Chronicle Show Calendar",
-      sources: [
-        sourceRecord("canine-chronicle", "Canine Chronicle", showUrl.toString()),
-      ].filter(Boolean),
-    });
-  });
-  return [...shows.values()].sort((left, right) => String(left.startDate).localeCompare(String(right.startDate)));
-}
-
 function akcDate(value: unknown) {
   const date = new Date(Number(value) || String(value || ""));
   return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : "";
@@ -367,7 +188,7 @@ function parseAkcEvents(payload: Record<string, unknown>, startDate: string, end
         .filter((item) => clean(item.competitionGroupCode) === "CONF");
       if (!items.length) return null;
       const eventNumber = clean(event.eventNumber);
-      const canonicalId = canonicalShowId(eventNumber, "akc-event", event.id);
+      const canonicalId = canonicalShowId(eventNumber, event.id);
       const judges = event.judges && typeof event.judges === "object" ? event.judges as Record<string, unknown> : {};
       const superintendent = event.superintendentSecretary && typeof event.superintendentSecretary === "object"
         ? event.superintendentSecretary as Record<string, unknown>
@@ -377,8 +198,9 @@ function parseAkcEvents(payload: Record<string, unknown>, startDate: string, end
       const premiumDocument = documents.find((document) => /premium/i.test(clean(document.name)) || clean(document.code) === "PRMLST");
       const judgingDocument = documents.find((document) => /judg(?:e|ing).*(?:program|schedule)|running order/i.test(clean(document.name)));
       const officialUrl = eventSourceUrl(eventNumber);
-      const superintendentUrl = superintendentWebsite(superintendent.name);
+      const superintendentUrl = httpUrl(superintendent.website, superintendent.websiteUrl, superintendent.url) || superintendentWebsite(superintendent.name);
       const site = event.site && typeof event.site === "object" ? event.site as Record<string, unknown> : {};
+      const eventWebsiteUrl = httpUrl(event.websiteUrl, event.website, event.eventWebsiteUrl, event.clubWebsiteUrl, site.websiteUrl, site.website);
       const city = clean(event.city);
       const state = clean(event.state).toUpperCase();
       const siteAddress = [site.location1, site.location2, site.location3, [city, state, site.postalCode].map(clean).filter(Boolean).join(" ")]
@@ -389,9 +211,14 @@ function parseAkcEvents(payload: Record<string, unknown>, startDate: string, end
         ...clean(event.eventType).split("/"),
         ...items.map((item) => clean(item.competitionMethodCode)),
       ].map(clean).filter(Boolean))].join("/");
+      const premiumUrl = akcDocumentUrl(premiumDocument);
+      const judgingProgramUrl = akcDocumentUrl(judgingDocument);
       const sources = [
-        sourceRecord("akc", "AKC Event Search", officialUrl),
-        sourceRecord("superintendent", clean(superintendent.name) || "Show superintendent", superintendentUrl),
+        sourceRecord("akc", "AKC Event", officialUrl),
+        sourceRecord("superintendent", clean(superintendent.name) || "Superintendent", superintendentUrl),
+        sourceRecord("event-website", "Show Website", eventWebsiteUrl),
+        sourceRecord("premium", "Premium List", premiumUrl),
+        sourceRecord("judging-program", "Judging Program", judgingProgramUrl),
       ].filter(Boolean);
       return {
         externalId: canonicalId,
@@ -408,6 +235,7 @@ function parseAkcEvents(payload: Record<string, unknown>, startDate: string, end
         state,
         venue: clean(site.name),
         venueAddress: siteAddress,
+        eventWebsiteUrl,
         showType,
         nohs: event.isNationalOwner === true,
         juniorShowmanship: event.isJuniorShowmanship === true,
@@ -417,8 +245,8 @@ function parseAkcEvents(payload: Record<string, unknown>, startDate: string, end
         superintendentEmail: clean(superintendent.email),
         superintendentUrl,
         entryClosingDate: akcDate(items.find((item) => item.displayClosing !== false)?.closingDate),
-        premiumUrl: akcDocumentUrl(premiumDocument),
-        judgingProgramUrl: akcDocumentUrl(judgingDocument),
+        premiumUrl,
+        judgingProgramUrl,
         breedCode,
         breedName,
         breedJudge: akcJudge(judges.breedJudge),
@@ -435,56 +263,6 @@ function parseAkcEvents(payload: Record<string, unknown>, startDate: string, end
       };
     })
     .filter(Boolean) as Array<Record<string, unknown>>;
-}
-
-function mergeShowRecords(akcShows: Array<Record<string, unknown>>, canineShows: Array<Record<string, unknown>>) {
-  const merged = new Map<string, Record<string, unknown>>();
-  const aliases = new Map<string, string>();
-  const addAliases = (key: string, show: Record<string, unknown>) => {
-    const eventNumber = clean(show.eventNumber);
-    if (eventNumber) aliases.set(`event:${eventNumber}`, key);
-    const fingerprint = showFingerprint(show);
-    if (fingerprint.replace(/\|/g, "")) aliases.set(`fingerprint:${fingerprint}`, key);
-  };
-  const add = (show: Record<string, unknown>, preferExisting: boolean) => {
-    const eventNumber = clean(show.eventNumber);
-    const fingerprint = showFingerprint(show);
-    // AKC can schedule two separately numbered events for the same club,
-    // location, and date. Never collapse those official event numbers into
-    // one card; the fingerprint is only a fallback for a source record that
-    // does not publish an AKC number.
-    const existingKey = eventNumber
-      ? aliases.get(`event:${eventNumber}`) || clean(show.canonicalId || show.externalId)
-      : aliases.get(`fingerprint:${fingerprint}`) || clean(show.canonicalId || show.externalId);
-    const existing = merged.get(existingKey);
-    if (!existing) {
-      merged.set(existingKey, { ...show });
-      addAliases(existingKey, show);
-      return;
-    }
-    const base = preferExisting ? existing : show;
-    const enrichment = preferExisting ? show : existing;
-    const combined = { ...base };
-    Object.entries(enrichment).forEach(([field, value]) => {
-      if ((combined[field] === "" || combined[field] === null || combined[field] === undefined) && value !== "" && value !== null && value !== undefined) combined[field] = value;
-    });
-    combined.showType = [...new Set(`${clean(existing.showType)}/${clean(show.showType)}`.split("/").map(clean).filter(Boolean))].join("/");
-    combined.nohs = existing.nohs === true || show.nohs === true;
-    const existingSourceIds = existing.sourceIds && typeof existing.sourceIds === "object" ? existing.sourceIds as Record<string, unknown> : {};
-    const showSourceIds = show.sourceIds && typeof show.sourceIds === "object" ? show.sourceIds as Record<string, unknown> : {};
-    combined.sourceIds = { ...existingSourceIds, ...showSourceIds };
-    combined.sources = [...new Map([
-      ...(Array.isArray(existing.sources) ? existing.sources : []),
-      ...(Array.isArray(show.sources) ? show.sources : []),
-    ].map((source) => [clean((source as Record<string, unknown>)?.type), source])).values()].filter(Boolean);
-    merged.set(existingKey, combined);
-    addAliases(existingKey, combined);
-  };
-  akcShows.forEach((show) => add(show, true));
-  canineShows.forEach((show) => add(show, true));
-  return [...merged.values()].sort((left, right) =>
-    clean(left.startDate).localeCompare(clean(right.startDate))
-    || clean(left.club).localeCompare(clean(right.club)));
 }
 
 async function fetchAkcBreedCode(breedName: string, signal: AbortSignal) {
@@ -577,99 +355,29 @@ Deno.serve(async (req) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 28_000);
   try {
-    const sourceWarnings: string[] = [];
-    let canineBreedName = breedName;
-    let canineBreedCode = breedCode;
-    let akcBreedCode = "";
-    let akcBreedName = breedName;
-    const breedLookups = await Promise.allSettled([
-      (async () => {
-        if (canineBreedCode) return { code: canineBreedCode, name: canineBreedName };
-        const breedDirectoryUrl = new URL(CALENDAR_URL);
-        breedDirectoryUrl.searchParams.set("fmt", "1");
-        const directoryResponse = await fetch(breedDirectoryUrl, {
-          headers: {
-            "Accept": "text/html,application/xhtml+xml",
-            "User-Agent": "SnuggleStayShowPlanner/2.0 (centraltexashusky@gmail.com)",
-          },
-          signal: controller.signal,
-        });
-        if (!directoryResponse.ok) throw new Error(`Canine Chronicle breed directory returned ${directoryResponse.status}.`);
-        const breedOption = calendarBreedOption(await directoryResponse.text(), canineBreedName);
-        if (!breedOption) throw new Error(`${canineBreedName} was not found in the Canine Chronicle breed list.`);
-        return breedOption;
-      })(),
-      fetchAkcBreedCode(breedName, controller.signal),
-    ]);
-    if (breedLookups[0].status === "fulfilled") {
-      canineBreedCode = breedLookups[0].value.code;
-      canineBreedName = breedLookups[0].value.name;
-    } else {
-      sourceWarnings.push(breedLookups[0].reason instanceof Error ? breedLookups[0].reason.message : "Canine Chronicle breed lookup failed.");
+    if (!breedCode) {
+      const resolvedBreed = await fetchAkcBreedCode(breedName, controller.signal);
+      breedCode = resolvedBreed.code;
+      breedName = resolvedBreed.name;
     }
-    if (breedLookups[1].status === "fulfilled") {
-      akcBreedCode = breedLookups[1].value.code;
-      akcBreedName = breedLookups[1].value.name;
-    } else {
-      sourceWarnings.push(breedLookups[1].reason instanceof Error ? breedLookups[1].reason.message : "AKC breed lookup failed.");
-    }
-    if (!canineBreedCode && !akcBreedCode) {
-      return json({ error: sourceWarnings.join(" ") || `${breedName} was not found in either show calendar.` }, 400);
-    }
-
-    const canineSourceUrl = new URL(CALENDAR_URL);
-    canineSourceUrl.searchParams.delete("month");
-    canineSourceUrl.searchParams.set("perf", "conf");
-    canineSourceUrl.searchParams.set("fmt", "1");
-    if (canineBreedCode) {
-      canineSourceUrl.searchParams.set("brno", canineBreedCode);
-      canineSourceUrl.searchParams.append("breed[]", canineBreedCode);
-    }
-    states.forEach((state) => canineSourceUrl.searchParams.append("state[]", state));
-
-    const sourceRequests = await Promise.allSettled([
-      canineBreedCode
-        ? fetch(canineSourceUrl, {
-          headers: {
-            "Accept": "text/html,application/xhtml+xml",
-            "User-Agent": "SnuggleStayShowPlanner/2.0 (centraltexashusky@gmail.com)",
-          },
-          signal: controller.signal,
-        }).then(async (response) => {
-          if (!response.ok) throw new Error(`Canine Chronicle returned ${response.status}.`);
-          return parseShowRows(await response.text(), startDate, endDate, canineBreedCode, canineBreedName);
-        })
-        : Promise.resolve([]),
-      akcBreedCode
-        ? fetchAkcShows(startDate, endDate, states, akcBreedCode, akcBreedName, controller.signal)
-        : Promise.resolve([]),
-    ]);
-    const canineShows = sourceRequests[0].status === "fulfilled" ? sourceRequests[0].value : [];
-    const akcShows = sourceRequests[1].status === "fulfilled" ? sourceRequests[1].value : [];
-    sourceRequests.forEach((result) => {
-      if (result.status === "rejected") sourceWarnings.push(result.reason instanceof Error ? result.reason.message : "A show source could not be reached.");
-    });
-    if (!canineShows.length && !akcShows.length && sourceWarnings.length) {
-      return json({ error: sourceWarnings.join(" ") }, 502);
-    }
-    const shows = mergeShowRecords(akcShows, canineShows).filter((show) => showMatchesEventTypes(show, eventTypes));
+    const akcShows = await fetchAkcShows(startDate, endDate, states, breedCode, breedName, controller.signal);
+    const shows = akcShows
+      .filter((show) => showMatchesEventTypes(show, eventTypes))
+      .sort((left, right) => clean(left.startDate).localeCompare(clean(right.startDate)) || clean(left.club).localeCompare(clean(right.club)));
     return json({
       shows,
-      breedCode: canineBreedCode,
-      akcBreedCode,
-      breedName: akcBreedName || canineBreedName || breedName,
+      breedCode,
+      akcBreedCode: breedCode,
+      breedName,
       eventTypes,
-      sourceUrl: canineSourceUrl.toString(),
-      sourceUrls: {
-        akc: "https://webapps.akc.org/event-search/",
-        canineChronicle: canineSourceUrl.toString(),
-      },
-      sourceWarnings,
-      sourceCounts: { akc: akcShows.length, canineChronicle: canineShows.length, deduplicated: shows.length },
+      sourceUrl: AKC_SEARCH_URL,
+      sourceUrls: { akc: AKC_SEARCH_URL },
+      sourceWarnings: [],
+      sourceCounts: { akc: akcShows.length, filtered: shows.length },
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Could not fetch the show calendars." }, 502);
+    return json({ error: error instanceof Error ? error.message : "Could not fetch AKC Event Search." }, 502);
   } finally {
     clearTimeout(timeout);
   }

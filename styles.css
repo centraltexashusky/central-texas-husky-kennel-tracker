@@ -17817,6 +17817,22 @@ details.dog-show-ring-schedules[hidden] {
   margin: 4px 0 0;
 }
 
+.dog-show-planner-more {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 4px;
+  padding-top: 14px;
+}
+
+.dog-show-planner-more span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .dog-show-planner-card {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -19370,6 +19386,7 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-planner-heading,
   .dog-show-planner-results > header,
+  .dog-show-planner-more,
   .dog-show-planner-card > footer {
     align-items: stretch;
     flex-direction: column;

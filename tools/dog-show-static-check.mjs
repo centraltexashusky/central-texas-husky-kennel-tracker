@@ -14,15 +14,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'nationwide-format-filters', "Dog Show styles are not cache-busted."],
+  ["index.html", 'planner-akc-only-breed-schedule-pagination-v17', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'nationwide-format-filters', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'nationwide-format-filters', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'planner-akc-only-breed-schedule-pagination-v17', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'planner-akc-only-breed-schedule-pagination-v17', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
@@ -171,7 +171,7 @@ const required = [
   ["js/dog-show.js", '"Owner-Handled"', "Show Planner cards do not identify National Owner-Handled Series events."],
   ["js/dog-show.js", "function dogShowPlannerNeedsMetadataRefresh", "Saved Show Planner searches are not checked for missing imported metadata."],
   ["js/dog-show.js", "function refreshDogShowPlannerMetadata", "Saved Show Planner searches cannot backfill show formats and event details."],
-  ["js/dog-show.js", "metadataVersion: 5", "Fresh Show Planner searches are not marked with the current nationwide-format metadata version."],
+  ["js/dog-show.js", "metadataVersion: 6", "Fresh Show Planner searches are not marked with the current AKC-only metadata version."],
   ["js/dog-show.js", 'placeholder="Leave blank for all states"', "The planner does not explain how to run a nationwide search."],
   ["js/dog-show.js", 'name="eventTypes"', "The planner is missing show-format checkboxes."],
   ["js/dog-show.js", "dogShowPlannerMatchesEventTypes", "Planner results are not filtered by the selected show formats."],
@@ -233,11 +233,11 @@ const required = [
   ["js/dog-show.js", "superintendent: show.superintendent ||", "Imported shows do not prefill the superintendent."],
   ["js/dog-show.js", "dog-show-expense-split-info", "Expense split guidance is not attached to an info icon."],
   ["js/dog-show.js", 'data-tooltip="Lower this count to exclude your own dog', "Expense split guidance is missing from the info icon tooltip."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "titleShowType", "The calendar scraper does not recover show formats from authoritative title metadata."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "Beginner Puppy Competition", "The calendar scraper does not recognize Beginner Puppy competitions."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "titleLocationMatch", "The calendar scraper does not recover location from title metadata."],
-  ["supabase/functions/show-calendar-scrape/index.ts", 'showTitle.match(/\\bSuper:', "The calendar scraper does not capture the full superintendent name."],
-  ["supabase/functions/show-calendar-scrape/index.ts", 'showTitle.match(/\\bCloses:', "The calendar scraper does not capture the published entry closing date."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "clean(event.eventType)", "The AKC importer does not read authoritative show formats."],
+  ["supabase/functions/show-calendar-scrape/index.ts", '"BGP", "BPUP"', "The calendar scraper does not recognize Beginner Puppy competitions."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "const city = clean(event.city)", "The AKC importer does not capture the event location."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "event.superintendentSecretary", "The AKC importer does not capture the full superintendent record."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "closingDate", "The AKC importer does not capture the published entry closing date."],
   ["supabase/functions/show-calendar-scrape/index.ts", "premiumUrl", "The calendar scraper does not capture the premium list link."],
   ["supabase/functions/show-calendar-scrape/index.ts", "judgingProgramUrl", "The calendar scraper does not capture the judging program link."],
   ["index.html", "<h2>Dog Show Dashboard</h2>", "The Dog Show workspace heading is missing."],
@@ -248,23 +248,15 @@ const required = [
   ["styles.css", ".dog-show-planner-mode-option", "The dog/breed planner mode choice is not styled."],
   ["supabase/functions/show-calendar-scrape/index.ts", "callerIsStaff", "The calendar scraper is not staff-restricted."],
   ["supabase/functions/show-calendar-scrape/index.ts", "MAX_RANGE_DAYS = 370", "The calendar scraper does not support a full-year planning window."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "embeddedUrl(showHref", "The calendar scraper does not normalize JavaScript popup links."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "calendarShowAnchors(html)", "The calendar scraper still depends on malformed legacy table-row nesting."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "calendarShowHtml(html, externalId)", "The calendar scraper does not isolate each raw show block."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "function calendarBreedOption", "The calendar scraper cannot resolve an arbitrary breed from the source list."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "calendarAssignmentJudge(showHtml, breedName)", "The calendar scraper does not read the selected breed's judge assignment."],
-  ["supabase/functions/show-calendar-scrape/index.ts", 'canineSourceUrl.searchParams.set("fmt", "1")', "The calendar scraper does not request the breed-panel calendar layout."],
-  ["supabase/functions/show-calendar-scrape/index.ts", 'canineSourceUrl.searchParams.delete("month")', "The calendar scraper still limits state searches to Canine Chronicle's Current+2 window."],
-  ["supabase/functions/show-calendar-scrape/index.ts", 'canineSourceUrl.searchParams.set("perf", "conf")', "The calendar scraper does not explicitly request conformation shows."],
   ["supabase/functions/show-calendar-scrape/index.ts", 'new URL("search/events", AKC_API_URL)', "The calendar scraper does not query the official AKC Event Search source."],
   ["supabase/functions/show-calendar-scrape/index.ts", "canonicalShowId(eventNumber", "The calendar scraper does not use the AKC event number as its canonical show identifier."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "mergeShowRecords(akcShows, canineShows)", "AKC and Canine Chronicle results are not deduplicated before reaching the planner."],
   ["supabase/functions/show-calendar-scrape/index.ts", "superintendentWebsite", "The calendar scraper does not link AKC superintendent details to the licensed superintendent source."],
   ["supabase/functions/show-calendar-scrape/index.ts", "sourceCounts: { akc:", "The calendar scraper does not report per-source and deduplicated result counts."],
-  ["js/dog-show.js", "function dogShowPlannerSourceLinksHtml", "Show Planner cards do not expose AKC, Canine Chronicle, and superintendent provenance."],
+  ["supabase/functions/show-calendar-scrape/index.ts", 'sourceRecord("event-website", "Show Website", eventWebsiteUrl)', "The AKC importer does not expose a show website when the event payload provides one."],
+  ["js/dog-show.js", "function dogShowPlannerSourceLinksHtml", "Show Planner cards do not expose AKC and superintendent provenance."],
   ["js/dog-show.js", "AKC event number:", "Imported show records do not retain their official AKC event identifier."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "showGroupPanel(showHtml, [])", "The calendar scraper does not resolve the selected breed's group judge."],
-  ["supabase/functions/show-calendar-scrape/index.ts", "breedCode: canineBreedCode", "The calendar scraper does not return the resolved breed metadata."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "groupJudge: akcJudge(judges.groupJudge)", "The AKC importer does not resolve the selected breed's group judge."],
+  ["supabase/functions/show-calendar-scrape/index.ts", "akcBreedCode: breedCode", "The calendar scraper does not return the resolved AKC breed metadata."],
   ["js/dog-show.js", "error.context.json()", "Show Planner does not surface the Edge Function's useful error message."],
   ["js/dog-show.js", 'data-progress-tab="${value}"', "Show Progress is missing Overview, Dogs, and Judges tabs."],
   ["styles.css", ".dog-show-progress-view", "Show Progress is not styled."],
@@ -476,6 +468,8 @@ const calendarScraperSource = read("supabase/functions/show-calendar-scrape/inde
 const plannerStateField = dogShowSource.match(/<label class="dog-show-field-wide">States[\s\S]*?<\/label>/)?.[0] || "";
 if (plannerStateField.includes("required")) failures.push("The Planner States field still blocks nationwide searches.");
 if (calendarScraperSource.includes("At least one valid state is required")) failures.push("The calendar importer still rejects nationwide searches.");
+if (/canine\s*chronicle|caninechronicle/i.test(calendarScraperSource)) failures.push("The calendar importer still contains a Canine Chronicle source path.");
+if (/Canine Chronicle|canineChronicleSourceUrl|caninechronicle/i.test(dogShowSource)) failures.push("Show Planner still exposes Canine Chronicle as a listing source.");
 if (!dogShowSource.includes('id="dogShowAkcJudgeSearchForm"') || !dogShowSource.includes("DOG_SHOW_AKC_JUDGE_RESULTS_URL")) failures.push("The AKC judge link does not submit the selected judge name to the official directory search.");
 const judgeNoteFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowJudgeNoteForm"), dogShowSource.indexOf("function openDogShowTaskForm"));
 if (!judgeNoteFormSource.includes("dogShowAkcJudgeSearchButtonHtml(displayedJudgeName)")) failures.push("The AKC Judges Directory control is not rendered inside Edit Judge Notes.");
@@ -510,6 +504,9 @@ const plannerCandidateHtmlSource = dogShowSource.slice(dogShowSource.indexOf("fu
 if (!plannerCandidateHtmlSource.includes('dogShowPlannerPointScheduleHtml(show, "Potential Plan", planner)')) failures.push("Potential-plan show cards are missing their state point schedule.");
 const plannerResultsHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerHtml"), dogShowSource.indexOf("function dogShowPlannerDateOffset"));
 if (!plannerResultsHtmlSource.includes('dogShowPlannerPointScheduleHtml(show, "Recommended", plan)')) failures.push("Recommended show cards are missing their state point schedule.");
+if (!plannerResultsHtmlSource.includes("ranked.slice(0, dogShowPlannerVisibleCount)") || !plannerResultsHtmlSource.includes('data-action="show-more-planner-results"')) failures.push("Recommended shows are not paginated 20 at a time.");
+const plannerPointScheduleBreedsSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerPointScheduleBreeds"), dogShowSource.indexOf("function dogShowPlannerPointScheduleHtml"));
+if (!plannerPointScheduleBreedsSource.includes("event.breedName") || plannerPointScheduleBreedsSource.includes("const requestedBreeds = [")) failures.push("Planner point schedules are not scoped to the breed attached to the searched show.");
 const dogEntryFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowEntryForm"), dogShowSource.indexOf("function openDogShowPottyPicker"));
 const ringRowsIndex = dogEntryFormSource.indexOf('id="dogShowRingScheduleRows"');
 const addRingIndex = dogEntryFormSource.indexOf('data-action="add-ring-schedule"');
