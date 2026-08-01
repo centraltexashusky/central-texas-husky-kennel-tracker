@@ -80,6 +80,11 @@ const required = [
   ["js/dog-show.js", 'data-finance-scope="dog"', "Compiled finances cannot switch to dog reports."],
   ["js/dog-show.js", "data-finance-dog-filter", "Dog finance reports cannot search by dog."],
   ["js/dog-show.js", "data-finance-dog-key", "Dog finance reports cannot select one dog."],
+  ["js/dog-show.js", 'data-progress-filter="dog"', "Show Progress dogs cannot be searched."],
+  ["js/dog-show.js", 'data-progress-filter="judge"', "Show Progress judges cannot be searched."],
+  ["js/dog-show.js", "function dogShowRenamedJudgeRecords", "Corrected judge names do not preserve linked show history."],
+  ["js/dog-show.js", 'data-original-judge-name="', "Judge edits do not retain the original name needed to migrate history."],
+  ["js/dog-show.js", 'class="dog-show-expense-edit-row" data-action="edit-show-expense"', "Finance rows are not directly editable by mouse and keyboard."],
   ["js/dog-show.js", "data-finance-customer", "Customer finance reports cannot filter to one customer."],
   ["js/dog-show.js", "Show-wide share", "Customer reports do not show the allocated show-wide expense share."],
   ["js/dog-show.js", 'data-action="open-show-finance-event"', "Compiled finance rows cannot open the selected show ledger."],
@@ -464,6 +469,13 @@ const plannerStateField = dogShowSource.match(/<label class="dog-show-field-wide
 if (plannerStateField.includes("required")) failures.push("The Planner States field still blocks nationwide searches.");
 if (calendarScraperSource.includes("At least one valid state is required")) failures.push("The calendar importer still rejects nationwide searches.");
 if (!dogShowSource.includes('id="dogShowAkcJudgeSearchForm"') || !dogShowSource.includes("DOG_SHOW_AKC_JUDGE_RESULTS_URL")) failures.push("The AKC judge link does not submit the selected judge name to the official directory search.");
+const judgeRenameSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowRenamedJudgeRecords"), dogShowSource.indexOf("async function saveDogShowJudgeNote"));
+for (const judgeField of ['"judge"', '"groupJudge"', '"bisJudge"', '"ohGroupJudge"', '"ohBisJudge"']) {
+  if (!judgeRenameSource.includes(judgeField)) failures.push(`Judge rename migration does not preserve ${judgeField} appearance history.`);
+}
+if (!judgeRenameSource.includes('readRecords("showEntry")') || !judgeRenameSource.includes("ringSchedules")) failures.push("Judge rename migration does not preserve scheduled show history.");
+if (!read("styles.css").includes(".dog-show-progress-search") || !read("styles.css").includes(".dog-show-progress-filter-empty")) failures.push("Progress dog and judge search controls are not styled.");
+if (!read("styles.css").includes(".dog-show-expense-edit-row:focus-visible") || !read("styles.css").includes("border: 0;")) failures.push("Clickable finance rows or the borderless remove control are not styled accessibly.");
 if (!dogShowSource.includes('data-action="remove-planned-show"') || !dogShowSource.includes(">Remove Show</button>")) failures.push("Added planner shows do not expose a distinct Remove Show action.");
 if (!dogShowSource.includes("function dogShowPlannerConflictsForShow") || !dogShowSource.includes(">Date Conflict</span>")) failures.push("Planner cards do not identify overlapping added or potential shows.");
 if (!dogShowSource.includes(">In Potential Plan</span>")) failures.push("Planner cards do not visibly identify potential-plan membership.");

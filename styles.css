@@ -15366,6 +15366,26 @@ details.dog-show-ring-schedules[hidden] {
   padding: 8px;
 }
 
+.dog-show-progress-search {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.dog-show-progress-search input {
+  background: var(--panel);
+  min-height: 40px;
+  width: 100%;
+}
+
+.dog-show-progress-filter-empty {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 8px;
+  text-align: center;
+}
+
 .dog-show-progress-dog-selector > button,
 .dog-show-judge-selector > button:not(.secondary-button) {
   align-items: center;
@@ -15672,6 +15692,16 @@ details.dog-show-ring-schedules[hidden] {
     max-height: none;
     overflow-x: auto;
     overflow-y: hidden;
+  }
+
+  .dog-show-progress-search {
+    flex: 0 0 min(220px, 72vw);
+    position: static;
+  }
+
+  .dog-show-progress-filter-empty {
+    flex: 0 0 auto;
+    margin: auto 8px;
   }
 
   .dog-show-progress-dog-selector > button,
@@ -16943,11 +16973,11 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-expense-table-header,
-.dog-show-expense-row {
+.dog-show-expense-edit-row {
   align-items: center;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(90px, 0.75fr) minmax(135px, 1fr) minmax(100px, 0.8fr) minmax(180px, 1.5fr) minmax(105px, 0.75fr) minmax(150px, 0.9fr);
+  grid-template-columns: minmax(90px, 0.75fr) minmax(135px, 1fr) minmax(100px, 0.8fr) minmax(180px, 1.5fr) minmax(105px, 0.75fr);
 }
 
 .dog-show-expense-table-header {
@@ -16963,7 +16993,26 @@ details.dog-show-ring-schedules[hidden] {
 
 .dog-show-expense-row {
   border-top: 1px solid var(--line);
-  padding: 13px 16px;
+  position: relative;
+}
+
+.dog-show-expense-edit-row {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 13px 52px 13px 16px;
+  text-align: left;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+  width: 100%;
+}
+
+.dog-show-expense-edit-row:hover,
+.dog-show-expense-edit-row:focus-visible {
+  background: color-mix(in srgb, var(--tint-blue) 58%, var(--panel));
+  box-shadow: inset 3px 0 var(--accent);
+  outline: none;
 }
 
 .dog-show-expense-cell {
@@ -17028,19 +17077,17 @@ details.dog-show-ring-schedules[hidden] {
 .dog-show-expense-actions {
   align-items: center;
   display: flex;
-  justify-content: space-between;
-}
-
-.dog-show-expense-actions .secondary-button {
-  min-height: 32px;
-  padding: 6px 12px;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 1;
 }
 
 .dog-show-expense-actions .dog-show-remove-expense {
   align-items: center;
-  background: #FFF2F0;
-  border: 1px solid #DFA9A3;
-  border-radius: 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
   color: #9F2D28;
   display: flex;
   font-size: 1.1rem;
@@ -17051,14 +17098,19 @@ details.dog-show-ring-schedules[hidden] {
   width: 32px;
 }
 
+.dog-show-expense-actions .dog-show-remove-expense:hover,
+.dog-show-expense-actions .dog-show-remove-expense:focus-visible {
+  background: color-mix(in srgb, #DFA9A3 22%, transparent);
+  outline: none;
+}
+
 .dog-show-expense-form {
   display: grid;
   gap: 16px;
 }
 
 :root[data-theme="dark"] .dog-show-expense-actions .dog-show-remove-expense {
-  background: #412525;
-  border-color: #81514D;
+  background: transparent;
   color: #FFB5AE;
 }
 
@@ -17289,11 +17341,11 @@ details.dog-show-ring-schedules[hidden] {
     display: none;
   }
 
-  .dog-show-expense-row {
+  .dog-show-expense-edit-row {
     align-items: start;
     gap: 10px 14px;
     grid-template-columns: minmax(0, 1fr) minmax(120px, 0.8fr);
-    padding: 14px 16px;
+    padding: 14px 52px 14px 16px;
   }
 
   .dog-show-expense-cell::before {
@@ -17317,10 +17369,8 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-expense-actions {
-    border-top: 1px dashed var(--line);
-    grid-column: 1 / -1;
-    justify-content: space-between;
-    padding-top: 10px;
+    right: 8px;
+    top: 8px;
   }
 }
 

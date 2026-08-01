@@ -966,6 +966,15 @@ function dogShowJudgeNameKey(name = "") {
     .trim();
 }
 
+function dogShowSearchKey(value = "") {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function dogShowObservedJudges() {
   const names = new Map();
   dogShowRecords("showEntry").forEach((entry) => dogShowRingSchedules(entry).forEach((schedule) => {
@@ -1133,7 +1142,7 @@ function dogShowProgressDogsHtml() {
   if (!dogShowProgressDogKey || !dogs.some((dog) => dog.key === dogShowProgressDogKey)) dogShowProgressDogKey = dogs[0]?.key || "";
   const selected = dogs.find((dog) => dog.key === dogShowProgressDogKey);
   if (!selected) return dogShowRenderEmpty("No show dogs yet", "Add a dog to a show weekend to create its progress profile.");
-  return `<div class="dog-show-progress-dogs-layout"><aside class="dog-show-progress-dog-selector" aria-label="Show dogs">${dogs.map((dog) => `<button type="button" data-action="select-progress-dog" data-dog-key="${escapeHtml(dog.key)}" class="${dog.key === selected.key ? "is-active" : ""}">${dogShowPhotoHtml(dog.entry, "dog-show-progress-photo")}<span><strong>${escapeHtml(dogShowEntryName(dog.entry))}</strong><small>${dog.totalPoints} points · ${dog.totalMajors} majors</small></span></button>`).join("")}</aside>
+  return `<div class="dog-show-progress-dogs-layout"><aside class="dog-show-progress-dog-selector" aria-label="Show dogs"><label class="dog-show-progress-search"><span class="sr-only">Search dogs</span><input type="search" data-progress-filter="dog" placeholder="Search dogs" autocomplete="off"></label>${dogs.map((dog) => `<button type="button" data-action="select-progress-dog" data-progress-filter-item="dog" data-search-value="${escapeHtml(dogShowSearchKey(dogShowEntryName(dog.entry)))}" data-dog-key="${escapeHtml(dog.key)}" class="${dog.key === selected.key ? "is-active" : ""}">${dogShowPhotoHtml(dog.entry, "dog-show-progress-photo")}<span><strong>${escapeHtml(dogShowEntryName(dog.entry))}</strong><small>${dog.totalPoints} points · ${dog.totalMajors} majors</small></span></button>`).join("")}<p class="dog-show-progress-filter-empty" data-progress-filter-empty="dog" hidden>No matching dogs.</p></aside>
     <div class="dog-show-progress-dog-detail"><section class="dog-show-progress-dog-hero">${dogShowPhotoHtml(selected.entry, "dog-show-progress-hero-photo")}<div><span>Career Progress</span><h3>${escapeHtml(dogShowNameWithBreed(selected.entry))}</h3><p>${selected.totalPoints} of ${selected.targetPoints} points · ${selected.totalMajors} of ${selected.targetMajors} majors</p>${dogShowProgressBarHtml(selected)}</div><button type="button" class="secondary-button" data-action="edit-career-baseline" data-dog-key="${escapeHtml(selected.key)}">Edit Prior Points</button></section>
       <section class="dog-show-progress-breakdown"><div><span>Prior points</span><strong>${selected.priorPoints}</strong><small>${selected.priorMajors} prior majors</small></div><div><span>Logged here</span><strong>${selected.loggedPoints}</strong><small>${selected.loggedMajors} logged majors</small></div><div><span>Current total</span><strong>${selected.totalPoints}</strong><small>${Math.max(0, selected.targetPoints - selected.totalPoints)} points needed</small></div></section>
       <section class="dog-show-progress-section"><header><div><h3>Show History</h3><p>Each result is tied to one ring appearance.</p></div></header><div class="dog-show-progress-history">${dogShowProgressHistoryHtml(selected)}</div></section>
@@ -1145,10 +1154,10 @@ function dogShowProgressJudgesHtml() {
   if (!dogShowProgressJudge || !judges.some((judge) => dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge))) dogShowProgressJudge = judges[0] || "";
   const note = dogShowJudgeNote(dogShowProgressJudge);
   const evidence = dogShowJudgeEvidence(dogShowProgressJudge);
-  return `<div class="dog-show-progress-judges-layout"><aside class="dog-show-judge-selector"><button type="button" class="secondary-button" data-action="edit-judge-note">Add Judge</button>${judges.map((judge) => {
+  return `<div class="dog-show-progress-judges-layout"><aside class="dog-show-judge-selector" aria-label="Show judges"><label class="dog-show-progress-search"><span class="sr-only">Search judges</span><input type="search" data-progress-filter="judge" placeholder="Search judges" autocomplete="off"></label><button type="button" class="secondary-button" data-action="edit-judge-note">Add Judge</button>${judges.map((judge) => {
     const judgeNote = dogShowJudgeNote(judge);
-    return `<button type="button" data-action="select-progress-judge" data-judge="${escapeHtml(judge)}" class="${dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge) ? "is-active" : ""}"><span class="dog-show-judge-rating is-${escapeHtml(String(judgeNote.recommendation || "Watch").toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(judgeNote.recommendation || "Watch")}</span><span class="dog-show-judge-selector-copy"><strong>${escapeHtml(judge)}</strong><small>${dogShowJudgeEvidence(judge).results.length} logged result${dogShowJudgeEvidence(judge).results.length === 1 ? "" : "s"}</small></span></button>`;
-  }).join("")}</aside><div class="dog-show-judge-detail">${dogShowProgressJudge ? `<section class="dog-show-judge-hero"><div><span>Judge Intelligence</span><h3>${escapeHtml(dogShowProgressJudge)}</h3><p>${escapeHtml(note.preferenceTags || "No preference tags yet")}</p></div><button type="button" class="secondary-button" data-action="edit-judge-note" data-judge="${escapeHtml(dogShowProgressJudge)}">Edit Notes</button></section><section class="dog-show-progress-breakdown dog-show-judge-metrics"><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="entries" aria-label="View entries logged under ${escapeHtml(dogShowProgressJudge)}"><span>Entries logged</span><strong>${evidence.results.length}</strong><small>View result details <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="placements" aria-label="View placements under ${escapeHtml(dogShowProgressJudge)}"><span>Placements</span><strong>${evidence.placements}</strong><small>View wins and placements <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="points" aria-label="View points earned under ${escapeHtml(dogShowProgressJudge)}"><span>Points</span><strong>${evidence.points}</strong><small>${evidence.majors} major${evidence.majors === 1 ? "" : "s"} <i aria-hidden="true">›</i></small></button></section><section class="dog-show-progress-section"><header><div><h3>Team Notes</h3><p>Internal observations only. Treat patterns as guidance, not guarantees.</p></div></header><dl class="dog-show-judge-notes"><div><dt>Recommendation</dt><dd>${escapeHtml(note.recommendation || "Watch")}</dd></div><div><dt>Best fit dogs</dt><dd>${escapeHtml(note.bestFitDogs || "Not recorded")}</dd></div><div><dt>Preferences</dt><dd>${escapeHtml(note.preferenceTags || "Not recorded")}</dd></div><div><dt>Notes</dt><dd>${escapeHtml(note.notes || "No internal notes yet")}</dd></div></dl></section>` : dogShowRenderEmpty("No judges found", "Add a judge note or enter judges on ring appearances.", "edit-judge-note", "Add Judge")}</div></div>`;
+    return `<button type="button" data-action="select-progress-judge" data-progress-filter-item="judge" data-search-value="${escapeHtml(dogShowSearchKey(judge))}" data-judge="${escapeHtml(judge)}" class="${dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge) ? "is-active" : ""}"><span class="dog-show-judge-rating is-${escapeHtml(String(judgeNote.recommendation || "Watch").toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(judgeNote.recommendation || "Watch")}</span><span class="dog-show-judge-selector-copy"><strong>${escapeHtml(judge)}</strong><small>${dogShowJudgeEvidence(judge).results.length} logged result${dogShowJudgeEvidence(judge).results.length === 1 ? "" : "s"}</small></span></button>`;
+  }).join("")}<p class="dog-show-progress-filter-empty" data-progress-filter-empty="judge" hidden>No matching judges.</p></aside><div class="dog-show-judge-detail">${dogShowProgressJudge ? `<section class="dog-show-judge-hero"><div><span>Judge Intelligence</span><h3>${escapeHtml(dogShowProgressJudge)}</h3><p>${escapeHtml(note.preferenceTags || "No preference tags yet")}</p></div><button type="button" class="secondary-button" data-action="edit-judge-note" data-judge="${escapeHtml(dogShowProgressJudge)}">Edit Notes</button></section><section class="dog-show-progress-breakdown dog-show-judge-metrics"><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="entries" aria-label="View entries logged under ${escapeHtml(dogShowProgressJudge)}"><span>Entries logged</span><strong>${evidence.results.length}</strong><small>View result details <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="placements" aria-label="View placements under ${escapeHtml(dogShowProgressJudge)}"><span>Placements</span><strong>${evidence.placements}</strong><small>View wins and placements <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="points" aria-label="View points earned under ${escapeHtml(dogShowProgressJudge)}"><span>Points</span><strong>${evidence.points}</strong><small>${evidence.majors} major${evidence.majors === 1 ? "" : "s"} <i aria-hidden="true">›</i></small></button></section><section class="dog-show-progress-section"><header><div><h3>Team Notes</h3><p>Internal observations only. Treat patterns as guidance, not guarantees.</p></div></header><dl class="dog-show-judge-notes"><div><dt>Recommendation</dt><dd>${escapeHtml(note.recommendation || "Watch")}</dd></div><div><dt>Best fit dogs</dt><dd>${escapeHtml(note.bestFitDogs || "Not recorded")}</dd></div><div><dt>Preferences</dt><dd>${escapeHtml(note.preferenceTags || "Not recorded")}</dd></div><div><dt>Notes</dt><dd>${escapeHtml(note.notes || "No internal notes yet")}</dd></div></dl></section>` : dogShowRenderEmpty("No judges found", "Add a judge note or enter judges on ring appearances.", "edit-judge-note", "Add Judge")}</div></div>`;
 }
 
 function dogShowProgressHtml() {
@@ -1740,13 +1749,14 @@ function dogShowFinanceRowHtml(transaction = {}) {
   const description = transaction.description || transaction.category || "Show transaction";
   const date = dogShowFormatDate(transaction.incurredDate || String(transaction.submittedAt || "").slice(0, 10));
   return `<article class="dog-show-expense-row">
-    <time class="dog-show-expense-cell is-date" data-label="Date" datetime="${escapeHtml(transaction.incurredDate || "")}">${escapeHtml(date)}</time>
-    <div class="dog-show-expense-cell is-kind" data-label="Income / expense"><span class="dog-show-finance-kind is-${isIncome ? "income" : "expense"}">${transactionLabel}</span>${isDogAssignedIncome ? `<span class="dog-show-finance-kind is-dog-credit">Dog cost offset</span>` : ""}</div>
-    <strong class="dog-show-expense-cell is-category" data-label="Category">${escapeHtml(transaction.category || "Other")}</strong>
-    <div class="dog-show-expense-cell is-description" data-label="Description"><span>${escapeHtml(description)}</span>${isDogAssignedIncome ? `<small class="dog-show-dog-credit-note">Offsets ${dogShowExpenseCurrency(transaction.amount)} from this dog’s expenses.</small>` : ""}</div>
-    <strong class="dog-show-expense-cell is-amount ${isIncome ? "is-income" : "is-expense"}" data-label="Dollar amount">${isIncome ? "+" : "−"}${dogShowExpenseCurrency(transaction.amount)}</strong>
+    <button type="button" class="dog-show-expense-edit-row" data-action="edit-show-expense" data-expense-id="${escapeHtml(transaction.id)}" aria-label="Edit ${escapeHtml(description)}">
+      <time class="dog-show-expense-cell is-date" data-label="Date" datetime="${escapeHtml(transaction.incurredDate || "")}">${escapeHtml(date)}</time>
+      <span class="dog-show-expense-cell is-kind" data-label="Income / expense"><span class="dog-show-finance-kind is-${isIncome ? "income" : "expense"}">${transactionLabel}</span>${isDogAssignedIncome ? `<span class="dog-show-finance-kind is-dog-credit">Dog cost offset</span>` : ""}</span>
+      <strong class="dog-show-expense-cell is-category" data-label="Category">${escapeHtml(transaction.category || "Other")}</strong>
+      <span class="dog-show-expense-cell is-description" data-label="Description"><span>${escapeHtml(description)}</span>${isDogAssignedIncome ? `<small class="dog-show-dog-credit-note">Offsets ${dogShowExpenseCurrency(transaction.amount)} from this dog’s expenses.</small>` : ""}</span>
+      <strong class="dog-show-expense-cell is-amount ${isIncome ? "is-income" : "is-expense"}" data-label="Dollar amount">${isIncome ? "+" : "−"}${dogShowExpenseCurrency(transaction.amount)}</strong>
+    </button>
     <div class="dog-show-expense-actions">
-      <button type="button" class="secondary-button" data-action="edit-show-expense" data-expense-id="${escapeHtml(transaction.id)}" aria-label="Edit ${escapeHtml(description)}">Edit</button>
       <button type="button" class="dog-show-remove-expense" data-action="remove-show-expense" data-expense-id="${escapeHtml(transaction.id)}" aria-label="Remove ${escapeHtml(description)}" title="Remove transaction">×</button>
     </div>
   </article>`;
@@ -1762,7 +1772,7 @@ function dogShowFinanceGroupHtml(title = "", transactions = [], options = {}) {
     : `${totals.expenseCount} expense${totals.expenseCount === 1 ? "" : "s"} · ${totals.incomeCount} reward${totals.incomeCount === 1 ? "" : "s"}`;
   return `<details class="dog-show-expense-group${options.className ? ` ${escapeHtml(options.className)}` : ""}">
     <summary><div><h3>${escapeHtml(title)}</h3><p>${itemLabel} · ${summary}</p></div>${isDogLedger ? dogShowDogCostPositionHtml(dogCostTotals.netCost) : `<strong class="${totals.netTotal >= 0 ? "is-income" : "is-expense"}">${dogShowExpenseCurrency(totals.netTotal)} net</strong>`}</summary>
-    <div>${transactions.length ? `<div class="dog-show-expense-table-header" aria-hidden="true"><span>Date</span><span>Income / expense</span><span>Category</span><span>Description</span><span>Dollar amount</span><span>Actions</span></div>${transactions.map(dogShowFinanceRowHtml).join("")}` : `<p class="dog-show-expense-empty">${escapeHtml(options.emptyText || "No transactions recorded.")}</p>`}</div>
+    <div>${transactions.length ? `<div class="dog-show-expense-table-header" aria-hidden="true"><span>Date</span><span>Income / expense</span><span>Category</span><span>Description</span><span>Dollar amount</span></div>${transactions.map(dogShowFinanceRowHtml).join("")}` : `<p class="dog-show-expense-empty">${escapeHtml(options.emptyText || "No transactions recorded.")}</p>`}</div>
   </details>`;
 }
 
@@ -3820,7 +3830,7 @@ function openDogShowCareerProfileForm(dogKey = "") {
 function openDogShowJudgeNoteForm(judgeName = "") {
   const note = dogShowJudgeNote(judgeName);
   const dogs = dogShowProgressDogs();
-  openDogShowDialog(note.id ? `Judge Notes: ${note.judgeName}` : "Add Judge Note", `<form id="dogShowJudgeNoteForm" class="tracker-form" data-id="${escapeHtml(note.id || "")}">
+  openDogShowDialog(note.id ? `Judge Notes: ${note.judgeName}` : "Add Judge Note", `<form id="dogShowJudgeNoteForm" class="tracker-form" data-id="${escapeHtml(note.id || "")}" data-original-judge-name="${escapeHtml(note.judgeName || judgeName)}">
     <div class="dog-show-form-note"><strong>Internal team intelligence</strong><span>Keep observations factual and tied to repeated show experience.</span></div>
     <div class="field-grid">
       <label>Judge name<input name="judgeName" list="dogShowJudgeNames" value="${escapeHtml(note.judgeName || judgeName)}" required/><datalist id="dogShowJudgeNames">${dogShowObservedJudges().map((judge) => `<option value="${escapeHtml(judge)}"></option>`).join("")}</datalist></label>
@@ -4364,15 +4374,52 @@ async function saveDogShowCareerProfile(form) {
   showToast(`Prior points saved for ${dogShowEntryName(dog.entry)}.`);
 }
 
+function dogShowRenamedJudgeRecords(originalJudgeName = "", nextJudgeName = "") {
+  const originalKey = dogShowJudgeNameKey(originalJudgeName);
+  if (!originalKey || !nextJudgeName || originalJudgeName === nextJudgeName) return [];
+  const rename = (value = "") => dogShowJudgeNameKey(value) === originalKey ? nextJudgeName : value;
+  const updatedAt = new Date().toISOString();
+  const updates = [];
+
+  readRecords("showEntry").forEach((entry) => {
+    let changed = false;
+    const judge = rename(entry.judge || "");
+    if (judge !== (entry.judge || "")) changed = true;
+    const ringSchedules = Array.isArray(entry.ringSchedules) ? entry.ringSchedules.map((schedule) => {
+      const nextJudge = rename(schedule?.judge || "");
+      if (nextJudge !== (schedule?.judge || "")) changed = true;
+      return nextJudge === (schedule?.judge || "") ? schedule : { ...schedule, judge: nextJudge };
+    }) : entry.ringSchedules;
+    if (changed) updates.push(upsertRecord("showEntry", { ...entry, judge, ringSchedules, updatedAt }));
+  });
+
+  const resultJudgeFields = ["judge", "groupJudge", "bisJudge", "ohGroupJudge", "ohBisJudge"];
+  readRecords("showResult").filter((record) => !record.recordKind || record.recordKind === "appearanceResult").forEach((result) => {
+    const renamed = { ...result };
+    let changed = false;
+    resultJudgeFields.forEach((field) => {
+      const nextJudge = rename(result[field] || "");
+      if (nextJudge !== (result[field] || "")) {
+        renamed[field] = nextJudge;
+        changed = true;
+      }
+    });
+    if (changed) updates.push(upsertRecord("showResult", { ...renamed, updatedAt }));
+  });
+  return updates;
+}
+
 async function saveDogShowJudgeNote(form) {
   const existing = form.dataset.id ? readRecords("showResult").find((record) => record.id === form.dataset.id) || {} : {};
   const data = formPayload(form);
   const judgeName = String(data.judgeName || "").trim();
   if (!judgeName) return;
+  const originalJudgeName = String(form.dataset.originalJudgeName || existing.judgeName || "").trim();
   const matching = dogShowJudgeNote(judgeName);
-  await saveDogShowRecord("showResult", {
+  const savedNote = upsertRecord("showResult", {
     ...matching,
     ...existing,
+    type: "showResult",
     id: existing.id || matching.id || uid("showJudgeNote"),
     recordKind: "judgeNote",
     judgeName,
@@ -4384,10 +4431,12 @@ async function saveDogShowJudgeNote(form) {
     helperEmail: currentUser?.email || "",
     submittedAt: existing.submittedAt || matching.submittedAt || new Date().toISOString(),
   });
+  const renamedRecords = dogShowRenamedJudgeRecords(originalJudgeName, judgeName);
+  await sendPayloadBatch([savedNote, ...renamedRecords]);
   dogShowProgressJudge = judgeName;
   document.getElementById("dogShowDialog")?.close();
   renderDogShow();
-  showToast(`Judge notes saved for ${judgeName}.`);
+  showToast(`Judge notes saved for ${judgeName}.${renamedRecords.length ? ` Updated ${renamedRecords.length} linked show record${renamedRecords.length === 1 ? "" : "s"}.` : ""}`);
 }
 
 async function saveDogShowTask(form) {
@@ -4553,6 +4602,19 @@ function setupDogShowEventListeners() {
   document.getElementById("dogShowDialogCloseButton")?.addEventListener("click", () => dialog?.close());
 
   page.addEventListener("input", (event) => {
+    if (event.target.matches("[data-progress-filter]")) {
+      const filterKind = event.target.dataset.progressFilter || "";
+      const query = dogShowSearchKey(event.target.value || "");
+      let visibleCount = 0;
+      page.querySelectorAll(`[data-progress-filter-item="${filterKind}"]`).forEach((item) => {
+        const visible = !query || String(item.dataset.searchValue || "").includes(query);
+        item.hidden = !visible;
+        if (visible) visibleCount += 1;
+      });
+      const empty = page.querySelector(`[data-progress-filter-empty="${filterKind}"]`);
+      if (empty) empty.hidden = visibleCount > 0;
+      return;
+    }
     if (event.target.matches("[data-finance-dog-filter]")) {
       const query = String(event.target.value || "").trim().toLowerCase();
       let visibleCount = 0;
