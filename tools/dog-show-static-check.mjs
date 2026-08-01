@@ -183,6 +183,7 @@ const required = [
   ["js/dog-show.js", "function dogShowPlannerLifecycleHtml", "The Planner is missing its unified show lifecycle board."],
   ["js/dog-show.js", "function dogShowPlannerPointScheduleHtml", "Show lifecycle cards are missing their AKC breed point schedule."],
   ["js/dog-show.js", "akcBreedPointSchedule2026(state, breed)", "Lifecycle point schedules do not reuse the official calculator data."],
+  ["js/dog-show.js", 'class="dog-show-plan-point-schedule-content"', "Collapsed point schedules are missing their expandable content."],
   ["js/dog-show.js", "Counts for 1–5 points · Group points excluded.", "Lifecycle point schedules do not explain their thresholds."],
   ["js/dog-show.js", 'aria-label="${points[index]} point requires ${count} dogs"', "Compact lifecycle point thresholds are not individually labeled."],
   ["js/dog-show.js", '"Active", "Going", "Going To", "Potential Plan", "Completed"', "The show lifecycle board is missing one or more required stages."],
@@ -217,6 +218,7 @@ const required = [
   ["js/dog-show.js", "plannerExternalId", "Promoted planner shows cannot be matched back to their research records."],
   ["styles.css", ".dog-show-plan-status-summary", "The show lifecycle status summary is not styled."],
   ["styles.css", ".dog-show-plan-point-schedule", "Lifecycle point schedules are not styled."],
+  ["styles.css", ".dog-show-plan-point-schedule > summary", "Point schedules do not expose a styled collapsed summary."],
   ["styles.css", ".dog-show-plan-point-thresholds", "Lifecycle point thresholds are not styled."],
   ["styles.css", ".dog-show-master-calendar", "The Show Calendar is not styled."],
   ["styles.css", ".dog-show-master-calendar-legend .is-going-to::before", "The Going To calendar status is missing its legend color."],
@@ -501,6 +503,13 @@ for (const [division, dogs, bitches] of official2026SiberianHuskySchedules) {
   const block = pointScheduleSource.match(new RegExp(`\\n\\s*${division}: \\{[\\s\\S]*?dogs: (\\[[^\\n]+\\]),\\n\\s*bitches: (\\[[^\\n]+\\])`));
   if (!block || block[1] !== dogs || block[2] !== bitches) failures.push(`The 2026 AKC Siberian Husky thresholds for Division ${division} do not match the official schedule.`);
 }
+const plannerPointScheduleHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerPointScheduleHtml"), dogShowSource.indexOf("function dogShowPlannerEventPlanHtml"));
+if (!plannerPointScheduleHtmlSource.includes('<details class="dog-show-plan-point-schedule') || !plannerPointScheduleHtmlSource.includes("<summary>")) failures.push("Planner point schedules must render as collapsed details controls.");
+if (plannerPointScheduleHtmlSource.includes('lifecycleStatus === "Completed"')) failures.push("Completed shows still omit their state point schedule.");
+const plannerCandidateHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerCandidateHtml"), dogShowSource.indexOf("function dogShowPlannerLifecycleStatus"));
+if (!plannerCandidateHtmlSource.includes('dogShowPlannerPointScheduleHtml(show, "Potential Plan", planner)')) failures.push("Potential-plan show cards are missing their state point schedule.");
+const plannerResultsHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerHtml"), dogShowSource.indexOf("function dogShowPlannerDateOffset"));
+if (!plannerResultsHtmlSource.includes('dogShowPlannerPointScheduleHtml(show, "Recommended", plan)')) failures.push("Recommended show cards are missing their state point schedule.");
 const dogEntryFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowEntryForm"), dogShowSource.indexOf("function openDogShowPottyPicker"));
 const ringRowsIndex = dogEntryFormSource.indexOf('id="dogShowRingScheduleRows"');
 const addRingIndex = dogEntryFormSource.indexOf('data-action="add-ring-schedule"');

@@ -18978,36 +18978,81 @@ details.dog-show-ring-schedules[hidden] {
   background: rgba(49, 95, 133, 0.06);
   border: 1px solid rgba(49, 95, 133, 0.26);
   border-radius: 8px;
-  display: grid;
-  gap: 5px;
-  padding: 7px 9px;
+  overflow: hidden;
 }
 
-.dog-show-plan-point-schedule > header {
+.dog-show-plan-point-schedule > summary {
   align-items: center;
+  cursor: pointer;
   display: flex;
   gap: 10px;
   justify-content: space-between;
+  list-style: none;
+  padding: 9px;
 }
 
-.dog-show-plan-point-schedule > header > div {
+.dog-show-plan-point-schedule > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-plan-point-schedule > summary > div {
   align-items: baseline;
   display: flex;
   gap: 7px;
 }
 
-.dog-show-plan-point-schedule > header span {
+.dog-show-plan-point-schedule > summary span {
   color: #178056;
   font-size: 0.66rem;
   font-weight: 900;
   letter-spacing: 0.07em;
 }
 
-.dog-show-plan-point-schedule > header strong {
+.dog-show-plan-point-schedule > summary strong {
   font-size: 0.72rem;
 }
 
-.dog-show-plan-point-schedule > header a {
+.dog-show-plan-point-schedule > summary i {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 24px;
+  font-style: normal;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.dog-show-plan-point-schedule > summary i::before {
+  content: "+";
+}
+
+.dog-show-plan-point-schedule[open] > summary i::before {
+  content: "−";
+}
+
+.dog-show-plan-point-schedule-content {
+  border-top: 1px solid rgba(49, 95, 133, 0.18);
+  display: grid;
+  gap: 5px;
+  padding: 8px 9px 9px;
+}
+
+.dog-show-plan-point-schedule-content > header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.dog-show-plan-point-schedule-content > header > span {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.dog-show-plan-point-schedule-content > header a {
   color: var(--blue);
   font-size: 0.72rem;
   font-weight: 800;
@@ -19070,7 +19115,7 @@ details.dog-show-ring-schedules[hidden] {
   white-space: nowrap;
 }
 
-.dog-show-plan-point-schedule > p {
+.dog-show-plan-point-schedule-content > p {
   color: var(--muted);
   font-size: 0.64rem;
   line-height: 1.25;
@@ -19302,7 +19347,8 @@ details.dog-show-ring-schedules[hidden] {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dog-show-plan-point-schedule > header {
+  .dog-show-plan-point-schedule > summary,
+  .dog-show-plan-point-schedule-content > header {
     gap: 6px;
   }
 
