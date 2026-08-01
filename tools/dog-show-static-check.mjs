@@ -14,15 +14,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'state-multiselect-breed-case-v18', "Dog Show styles are not cache-busted."],
+  ["index.html", 'planner-card-controls-lazy-v19', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'state-multiselect-breed-case-v18', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'state-multiselect-breed-case-v18', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'planner-card-controls-lazy-v19', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'planner-card-controls-lazy-v19', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
@@ -508,7 +508,11 @@ const plannerCandidateHtmlSource = dogShowSource.slice(dogShowSource.indexOf("fu
 if (!plannerCandidateHtmlSource.includes('dogShowPlannerPointScheduleHtml(show, "Potential Plan", planner)')) failures.push("Potential-plan show cards are missing their state point schedule.");
 const plannerResultsHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerHtml"), dogShowSource.indexOf("function dogShowPlannerDateOffset"));
 if (!plannerResultsHtmlSource.includes('dogShowPlannerPointScheduleHtml(show, "Recommended", plan)')) failures.push("Recommended show cards are missing their state point schedule.");
-if (!plannerResultsHtmlSource.includes("ranked.slice(0, dogShowPlannerVisibleCount)") || !plannerResultsHtmlSource.includes('data-action="show-more-planner-results"')) failures.push("Recommended shows are not paginated 20 at a time.");
+if (!plannerResultsHtmlSource.includes("ranked.slice(0, dogShowPlannerVisibleCount)") || !plannerResultsHtmlSource.includes("data-dog-show-planner-lazy")) failures.push("Recommended shows are not lazily rendered 20 at a time.");
+if (!dogShowSource.includes("function scheduleDogShowPlannerLazyLoad") || !dogShowSource.includes("new IntersectionObserver") || dogShowSource.includes('data-action="show-more-planner-results"')) failures.push("Recommended show lazy loading still depends on a manual Show More button.");
+if (!plannerResultsHtmlSource.includes('<button type="button" class="dog-show-planner-score" data-action="view-show-decision"') || plannerResultsHtmlSource.includes(">View Show Decision</button>")) failures.push("Planner scores do not replace the redundant View Show Decision button.");
+if (!plannerResultsHtmlSource.includes("dog-show-planner-card-controls") || !plannerResultsHtmlSource.includes("dog-show-planner-actions") || !plannerResultsHtmlSource.includes("dogShowPlannerSourceSectionHtml")) failures.push("Planner card actions and official external links are not grouped separately.");
+if (!dogShowSource.includes('class="dog-show-source-link"') || dogShowSource.includes('class="secondary-button dog-show-source-link"')) failures.push("Official show links are not rendered as compact link flags.");
 const plannerPointScheduleBreedsSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerPointScheduleBreeds"), dogShowSource.indexOf("function dogShowPlannerPointScheduleHtml"));
 if (!plannerPointScheduleBreedsSource.includes("event.breedName") || plannerPointScheduleBreedsSource.includes("const requestedBreeds = [")) failures.push("Planner point schedules are not scoped to the breed attached to the searched show.");
 const dogEntryFormSource = dogShowSource.slice(dogShowSource.indexOf("function openDogShowEntryForm"), dogShowSource.indexOf("function openDogShowPottyPicker"));

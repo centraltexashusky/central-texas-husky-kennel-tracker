@@ -211,6 +211,8 @@ let dogShowCalculatorState = loadDogShowCalculatorState();
 let dogShowPlannerMetadataRefreshKey = "";
 const DOG_SHOW_PLANNER_PAGE_SIZE = 20;
 let dogShowPlannerVisibleCount = DOG_SHOW_PLANNER_PAGE_SIZE;
+let dogShowPlannerLazyObserver = null;
+let dogShowPlannerLazyCleanup = null;
 let dogShowFinanceMode = ["current", "compiled"].includes(localStorage.getItem(DOG_SHOW_FINANCE_MODE_KEY)) ? localStorage.getItem(DOG_SHOW_FINANCE_MODE_KEY) : "current";
 let dogShowFinancePeriod = ["show", "week", "month", "year"].includes(localStorage.getItem(DOG_SHOW_FINANCE_PERIOD_KEY)) ? localStorage.getItem(DOG_SHOW_FINANCE_PERIOD_KEY) : "show";
 let dogShowFinanceScope = ["business", "customer", "dog"].includes(localStorage.getItem(DOG_SHOW_FINANCE_SCOPE_KEY)) ? localStorage.getItem(DOG_SHOW_FINANCE_SCOPE_KEY) : "business";
@@ -2511,8 +2513,13 @@ function dogShowPlannerSourceLinksHtml(show = {}, options = {}) {
   const unique = new Map([...sources, ...fallbackSources].map((source) => [source.url, source]));
   return [...unique.values()]
     .filter((source) => source?.url)
-    .map((source) => `<a class="secondary-button dog-show-source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label || "View Source")}</a>`)
+    .map((source) => `<a class="dog-show-source-link" href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label || "View Source")}<span aria-hidden="true">↗</span></a>`)
     .join("");
+}
+
+function dogShowPlannerSourceSectionHtml(show = {}, options = {}) {
+  const links = dogShowPlannerSourceLinksHtml(show, options);
+  return links ? `<nav class="dog-show-planner-sources" aria-label="Official show links"><span>Official links</span><div>${links}</div></nav>` : "";
 }
 
 function dogShowPlannerEventFlagsHtml(show = {}) {
@@ -2549,7 +2556,8 @@ function openDogShowPlannerDecision(showId = "") {
     <div class="dog-show-decision-dogs"><span>${plan.searchMode === "breed" ? "Breed evaluated" : "Dogs evaluated"}</span><strong>${escapeHtml(evaluatedLabel)}</strong></div>
     <div class="dog-show-decision-judges">${judgeRows}</div>
     <section class="dog-show-decision-reasons"><h3>Why this score</h3><ul>${assessment.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul></section>
-    <div class="button-row">${dogShowPlannerSourceLinksHtml(show, { localFixture: plan.localFixture })}<button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>
+    ${dogShowPlannerSourceSectionHtml(show, { localFixture: plan.localFixture })}
+    <div class="button-row"><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>
   </section>`);
 }
 
@@ -2943,13 +2951,13 @@ function dogShowPlannerHtml() {
     ${ranked.length ? `<section class="dog-show-planner-results"><header><div><h3>Recommended Shows</h3><p>${ranked.length} show${ranked.length === 1 ? "" : "s"} found · Showing ${visibleRanked.length}. Recommendations explain the evidence used; they are guidance, not a prediction.</p></div></header><div class="dog-show-planner-list">${visibleRanked.map(({ show, assessment }) => {
       const state = dogShowPlannerCardState(show, plan, operationalShows, potentialShows);
       return `<article class="dog-show-planner-card is-${assessment.label.toLowerCase().replace(/\s+/g, "-")}${state.event ? " is-added-show" : ""}${state.conflicts.length ? " has-schedule-conflict" : ""}">
-      <header><div>${dogShowPlannerEventFlagsHtml(show)}${dogShowPlannerCardStateHtml(state)}<h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><div class="dog-show-planner-score"><strong>${assessment.score}</strong><span>${assessment.label}</span></div></header>
+      <header><div>${dogShowPlannerEventFlagsHtml(show)}${dogShowPlannerCardStateHtml(state)}<h3>${escapeHtml(show.club || show.name || "Dog Show")}</h3><p>${escapeHtml([dogShowPlannerDateRange(show), show.cityState].filter(Boolean).join(" · "))}</p></div><button type="button" class="dog-show-planner-score" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}" aria-label="View show decision for ${escapeHtml(show.club || show.name || "Dog Show")}: ${assessment.score} ${escapeHtml(assessment.label)}"><strong>${assessment.score}</strong><span>${assessment.label}</span></button></header>
       <div class="dog-show-planner-panel">${dogShowPlannerJudgeHtml("Breed", show.breedJudge || "", plan)}${dogShowPlannerJudgeHtml("Group", show.groupJudge || "", plan)}${dogShowPlannerJudgeHtml("BIS", show.bisJudge || "", plan)}</div>
       ${dogShowPlannerPointScheduleHtml(show, "Recommended", plan)}
       <ul>${assessment.reasons.slice(0, 3).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>
-      <footer><div class="dog-show-planner-meta">${show.eventNumber ? `<span>AKC #${escapeHtml(show.eventNumber)}</span>` : ""}${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}${show.verifiedBy ? `<span>Verified by ${escapeHtml(show.verifiedBy)}</span>` : ""}</div><div class="button-row"><button type="button" class="secondary-button" data-action="view-show-decision" data-show-id="${escapeHtml(show.externalId || "")}">View Show Decision</button>${dogShowPlannerSourceLinksHtml(show, { localFixture: plan.localFixture })}${dogShowPlannerPotentialButtonHtml(show, plan)}${dogShowPlannerAddButtonHtml(show, state)}</div></footer>
+      <footer><div class="dog-show-planner-meta">${show.eventNumber ? `<span>AKC #${escapeHtml(show.eventNumber)}</span>` : ""}${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}${show.verifiedBy ? `<span>Verified by ${escapeHtml(show.verifiedBy)}</span>` : ""}</div><div class="dog-show-planner-card-controls"><div class="button-row dog-show-planner-actions">${dogShowPlannerPotentialButtonHtml(show, plan)}${dogShowPlannerAddButtonHtml(show, state)}</div>${dogShowPlannerSourceSectionHtml(show, { localFixture: plan.localFixture })}</div></footer>
     </article>`;
-    }).join("")}</div>${remainingShowCount ? `<div class="dog-show-planner-more"><button type="button" class="secondary-button" data-action="show-more-planner-results">Show ${Math.min(DOG_SHOW_PLANNER_PAGE_SIZE, remainingShowCount)} More</button><span>${remainingShowCount} show${remainingShowCount === 1 ? "" : "s"} remaining</span></div>` : ""}</section>` : dogShowRenderEmpty("Find the right show for your dogs", "Choose the dogs or breed, dates, optional states, and show formats. The planner will import future shows and rank their published judge panels against your history.", "edit-show-plan", "Find Shows")}
+    }).join("")}</div>${remainingShowCount ? `<div class="dog-show-planner-more" data-dog-show-planner-lazy role="status" aria-live="polite"><i aria-hidden="true"></i><span>More shows load automatically as you scroll · ${remainingShowCount} remaining</span></div>` : ""}</section>` : dogShowRenderEmpty("Find the right show for your dogs", "Choose the dogs or breed, dates, optional states, and show formats. The planner will import future shows and rank their published judge panels against your history.", "edit-show-plan", "Find Shows")}
     <section class="dog-show-planner-source-note"><strong>Source and limitations</strong><p>Listings and event details come from AKC Event Search. AKC-published superintendent, show website, premium-list, and judging-program links appear when available. Always confirm the latest premium list before entering because panels and assignments can change.</p></section>
   </div>`;
 }
@@ -3285,9 +3293,40 @@ function openDogShowCalendarEvent(eventIds = "", fallbackEventId = "") {
   openDogShowPlannerEvent((matchingDate || savedMember || events[0])?.id || fallbackEventId);
 }
 
+function scheduleDogShowPlannerLazyLoad() {
+  const sentinel = document.querySelector("[data-dog-show-planner-lazy]");
+  if (!sentinel) return;
+  const loadNextPage = () => {
+    if (!sentinel.isConnected || dogShowView !== "planner") return;
+    dogShowPlannerLazyObserver?.disconnect();
+    dogShowPlannerLazyObserver = null;
+    dogShowPlannerLazyCleanup?.();
+    dogShowPlannerLazyCleanup = null;
+    dogShowPlannerVisibleCount += DOG_SHOW_PLANNER_PAGE_SIZE;
+    renderDogShow();
+  };
+  if ("IntersectionObserver" in window) {
+    dogShowPlannerLazyObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadNextPage();
+    }, { rootMargin: "600px 0px" });
+    dogShowPlannerLazyObserver.observe(sentinel);
+    return;
+  }
+  const loadWhenNearViewport = () => {
+    if (sentinel.getBoundingClientRect().top <= window.innerHeight + 600) loadNextPage();
+  };
+  window.addEventListener("scroll", loadWhenNearViewport, { passive: true });
+  dogShowPlannerLazyCleanup = () => window.removeEventListener("scroll", loadWhenNearViewport);
+  requestAnimationFrame(loadWhenNearViewport);
+}
+
 function renderDogShow() {
   const content = document.getElementById("dogShowContent");
   if (!content) return;
+  dogShowPlannerLazyObserver?.disconnect();
+  dogShowPlannerLazyObserver = null;
+  dogShowPlannerLazyCleanup?.();
+  dogShowPlannerLazyCleanup = null;
   const event = dogShowActiveEvent();
   const select = document.getElementById("dogShowEventSelect");
   if (select) select.innerHTML = dogShowEventOptions(event);
@@ -3315,7 +3354,10 @@ function renderDogShow() {
     expenses: dogShowExpensesHtml,
   };
   content.innerHTML = renderers[dogShowView](event);
-  if (dogShowView === "planner") void refreshDogShowPlannerMetadata();
+  if (dogShowView === "planner") {
+    scheduleDogShowPlannerLazyLoad();
+    void refreshDogShowPlannerMetadata();
+  }
   if (typeof scheduleProfilePhotoHydrationSweep === "function") scheduleProfilePhotoHydrationSweep(40);
 }
 
@@ -4969,10 +5011,6 @@ function setupDogShowEventListeners() {
     }
     if (action.dataset.action === "remove-show-expense") await removeDogShowExpense(action.dataset.expenseId || "");
     if (action.dataset.action === "edit-show-plan") openDogShowPlannerForm();
-    if (action.dataset.action === "show-more-planner-results") {
-      dogShowPlannerVisibleCount += DOG_SHOW_PLANNER_PAGE_SIZE;
-      renderDogShow();
-    }
     if (action.dataset.action === "view-show-decision") openDogShowPlannerDecision(action.dataset.showId || "");
     if (action.dataset.action === "open-planner-judge-history") openDogShowJudgeEvidence(action.dataset.judge || "", "entries", dogShowPlannerRecord().dogKeys || []);
     if (action.dataset.action === "save-potential-show") await saveDogShowPotentialShow(action.dataset.showId || "");
