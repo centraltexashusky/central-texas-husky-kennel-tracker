@@ -246,11 +246,16 @@ function dogShowEvents() {
   });
 }
 
+function dogShowOperationalEvents() {
+  return dogShowEvents().filter((event) => dogShowPlannerLifecycleStatus(event) !== "Completed");
+}
+
 function dogShowActiveEvent() {
-  const events = dogShowEvents();
+  const events = dogShowOperationalEvents();
   const savedId = localStorage.getItem(DOG_SHOW_EVENT_KEY) || "";
-  const selected = events.find((event) => event.id === savedId) || events.find((event) => event.status !== "Completed") || events[0] || null;
+  const selected = events.find((event) => event.id === savedId) || events[0] || null;
   if (selected && selected.id !== savedId) localStorage.setItem(DOG_SHOW_EVENT_KEY, selected.id);
+  if (!selected && savedId) localStorage.removeItem(DOG_SHOW_EVENT_KEY);
   return selected;
 }
 
@@ -675,8 +680,8 @@ function dogShowEventWeekendGroups(events = dogShowEvents()) {
 }
 
 function dogShowEventOptions(active = dogShowActiveEvent()) {
-  const groups = dogShowEventWeekendGroups();
-  if (!groups.length) return `<option value="">No shows yet</option>`;
+  const groups = dogShowEventWeekendGroups(dogShowOperationalEvents());
+  if (!groups.length) return `<option value="">No active shows</option>`;
   return groups.map((group) => {
     if (group.events.length === 1) {
       const event = group.events[0];
@@ -2650,6 +2655,18 @@ function dogShowPlannerPointScheduleHtml(event = {}, lifecycleStatus = "Going To
 function dogShowPlannerEventPlanHtml(event = {}, lifecycleStatus = "Going To", planner = dogShowPlannerRecord()) {
   const entries = dogShowEntries(event);
   const dogs = entries.map(dogShowEntryName).filter(Boolean);
+  if (lifecycleStatus === "Completed") {
+    const results = dogShowAppearanceResultsAll().filter((result) => result.showEventId === event.id);
+    const resultRows = results.map((result) => {
+      const summary = [dogShowOutcomeLabel(result.outcome), result.placement, dogShowResultAwardsSummary(result)].filter(Boolean).join(" · ") || "Result logged";
+      return `<li><strong>${escapeHtml(result.dogName || "Dog")}</strong><span>${escapeHtml(summary)}</span></li>`;
+    }).join("");
+    return `<article class="dog-show-plan-event-card is-completed is-history-only">
+      <header><div><span>Completed</span><h4>${escapeHtml(event.name || event.club || "Dog Show")}</h4></div><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></header>
+      <dl><div><dt>Dogs who went</dt><dd>${escapeHtml(dogs.join(", ") || "No dogs recorded")}</dd></div><div><dt>Show results</dt><dd>${results.length} result${results.length === 1 ? "" : "s"} recorded</dd></div></dl>
+      <section class="dog-show-plan-completed-results" aria-label="Show results"><h5>Results</h5>${resultRows ? `<ul>${resultRows}</ul>` : "<p>No show results were recorded.</p>"}</section>
+    </article>`;
+  }
   return `<article class="dog-show-plan-event-card is-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}">
     <header><div><span>${escapeHtml(lifecycleStatus)}</span><h4>${escapeHtml(event.name || event.club || "Dog Show")}</h4><p>${escapeHtml(event.venueAddress || event.cityState || event.venue || "Location pending")}</p></div><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></header>
     ${dogShowPlannerEventFlagsHtml(event)}
@@ -2693,7 +2710,7 @@ function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlann
     const expanded = status === "Active";
     return `<details class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"${expanded ? " open" : ""}><summary><span><strong>${escapeHtml(status)}</strong><em>${items.length}</em></span><i aria-hidden="true"></i></summary><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status, planner) : dogShowPlannerCandidateHtml(item.candidate, planner)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></details>`;
   }).join("");
-  return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3><p>View every show by stage—from early research through the active weekend and completed history. Research for another breed is appended to the same show.</p></div><strong>${itemCount} show${itemCount === 1 ? "" : "s"}</strong></header><div class="dog-show-plan-status-summary">${statusSummary}</div><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
+  return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3><p>View every show by stage. Completed shows keep a compact log of the dates, dogs who went, and results. Research for another breed is appended to the same show.</p></div><strong>${itemCount} show${itemCount === 1 ? "" : "s"}</strong></header><div class="dog-show-plan-status-summary">${statusSummary}</div><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
 }
 
 function dogShowPlannerPotentialButtonHtml(show = {}, plan = dogShowPlannerRecord()) {

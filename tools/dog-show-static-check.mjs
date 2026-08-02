@@ -14,15 +14,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'breed-code-inline-error-v20', "Dog Show styles are not cache-busted."],
+  ["index.html", 'completed-history-v21', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'breed-code-inline-error-v20', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'breed-code-inline-error-v20', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'completed-history-v21', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'completed-history-v21', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
@@ -508,7 +508,12 @@ for (const [division, dogs, bitches] of official2026SiberianHuskySchedules) {
 }
 const plannerPointScheduleHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerPointScheduleHtml"), dogShowSource.indexOf("function dogShowPlannerEventPlanHtml"));
 if (!plannerPointScheduleHtmlSource.includes('<details class="dog-show-plan-point-schedule') || !plannerPointScheduleHtmlSource.includes("<summary>")) failures.push("Planner point schedules must render as collapsed details controls.");
-if (plannerPointScheduleHtmlSource.includes('lifecycleStatus === "Completed"')) failures.push("Completed shows still omit their state point schedule.");
+const plannerEventPlanHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerEventPlanHtml"), dogShowSource.indexOf("function dogShowPlannerVisibleCandidates"));
+if (!plannerEventPlanHtmlSource.includes('lifecycleStatus === "Completed"') || !plannerEventPlanHtmlSource.includes("dog-show-plan-completed-results")) failures.push("Completed shows do not render a compact date, attendee, and results history card.");
+if (!plannerEventPlanHtmlSource.includes("dogShowAppearanceResultsAll()") || !plannerEventPlanHtmlSource.includes("Dogs who went")) failures.push("Completed show history does not preserve attendees and appearance results.");
+const completedHistorySource = plannerEventPlanHtmlSource.slice(plannerEventPlanHtmlSource.indexOf('lifecycleStatus === "Completed"'), plannerEventPlanHtmlSource.indexOf('return `<article class="dog-show-plan-event-card is-${'));
+if (completedHistorySource.includes("dogShowPlannerPointScheduleHtml") || completedHistorySource.includes("open-planner-show-event")) failures.push("Completed history still exposes operational show details.");
+if (!dogShowSource.includes("function dogShowOperationalEvents") || !dogShowSource.includes("dogShowEventWeekendGroups(dogShowOperationalEvents())") || !dogShowSource.includes("No active shows")) failures.push("Completed shows are still available in the operational show selector.");
 const plannerCandidateHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerCandidateHtml"), dogShowSource.indexOf("function dogShowPlannerLifecycleStatus"));
 if (!plannerCandidateHtmlSource.includes('dogShowPlannerPointScheduleHtml(show, "Potential Plan", planner)')) failures.push("Potential-plan show cards are missing their state point schedule.");
 const plannerResultsHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerHtml"), dogShowSource.indexOf("function dogShowPlannerDateOffset"));
