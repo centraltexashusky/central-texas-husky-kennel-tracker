@@ -183,6 +183,7 @@ function staffPayrollRecordsForRange(range = timesheetActiveRange(), options = {
       const user = staffPayrollUserForRecord(record, users);
       const rate = staffHourlyRate(user);
       const hours = Number(record.hours || 0) || 0;
+      const total = Math.round((hours * rate + Number.EPSILON) * 100) / 100;
       return {
         id: record.id || "",
         date: timesheetRecordDate(record),
@@ -190,7 +191,7 @@ function staffPayrollRecordsForRange(range = timesheetActiveRange(), options = {
         staffEmail: record.helperEmail || user.email || "",
         hours,
         rate,
-        total: hours * rate,
+        total,
         missingRate: !rate,
       };
     })

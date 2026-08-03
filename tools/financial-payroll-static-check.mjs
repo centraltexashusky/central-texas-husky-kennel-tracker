@@ -15,8 +15,8 @@ if (!shared.includes('activePage === "financialsPage" && hasAny(["boardingDog", 
 if (!timesheet.includes('Number(record.hours || 0) > 0 && record.clockOutTime')) {
   failures.push("Payroll must use completed clock records with positive hours.");
 }
-if (!timesheet.includes("total: hours * rate")) {
-  failures.push("Payroll no longer multiplies completed hours by the saved hourly rate.");
+if (!timesheet.includes("Math.round((hours * rate + Number.EPSILON) * 100) / 100")) {
+  failures.push("Payroll no longer multiplies completed hours by the saved hourly rate and rounds each line to cents.");
 }
 if (!index.includes('data-timesheet-tab="payroll"') || !index.includes('id="timesheetPayrollPanel"')) {
   failures.push("Timesheet does not expose the admin payroll review tab and panel.");
