@@ -4,6 +4,7 @@ import fs from "node:fs";
 const edge = fs.readFileSync("supabase/functions/send-notification/index.ts", "utf8");
 const customer = fs.readFileSync("js/customer.js", "utf8");
 const notifications = fs.readFileSync("js/notifications.js", "utf8");
+const shared = fs.readFileSync("js/shared.js", "utf8");
 const main = fs.readFileSync("js/main.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 
@@ -17,6 +18,11 @@ assert.match(submitSource, /const savedRecords = \[\]/, "request records must be
 assert.match(submitSource, /await sendPayload\(record\)/, "each dog request must persist before the grouped notification is sent");
 assert.match(submitSource, /notifyIfNeeded\(savedRecords\[0\]/, "one grouped notification must be sent from the first saved request");
 assert.doesNotMatch(submitSource, /saveAndNotify\(payload/, "multi-dog requests must not send one email per dog");
+assert.match(
+  shared,
+  /if\s*\(isStaffRole\(\)\s*\|\|\s*notificationVisibleToCurrentUser\(notification\)\)\s*\{[\s\S]*?await\s+sendPayload\(notification\)/,
+  "customer staff-only alerts should rely on the edge function instead of failing notificationLog RLS",
+);
 
 assert.match(notifications, /function boardingRequestDogNames/, "in-app request alerts must understand grouped dog names");
 assert.match(edge, /function renderExecutedAgreementEmail/, "signed agreements need a dedicated email renderer");
@@ -65,7 +71,7 @@ assert.match(html, /☐.*I agree\./, "agreement selections must remain readable"
 assert.doesNotMatch(html, /\*\*|# CUDDLE/, "raw Markdown markers must not reach the HTML email");
 assert.doesNotMatch(text, /\*\*|^#/m, "plain-text agreement copies must remove Markdown markers");
 
-assert.match(main, /boarding-request-grouped-email-v24/, "grouped request modules are not cache-busted");
-assert.match(index, /boarding-request-grouped-email-v24/, "the app entrypoint is not cache-busted");
+assert.match(main, /boarding-request-notification-rls-v25/, "grouped request modules are not cache-busted");
+assert.match(index, /boarding-request-notification-rls-v25/, "the app entrypoint is not cache-busted");
 
 console.log("Boarding notification email checks passed.");

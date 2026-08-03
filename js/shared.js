@@ -11242,10 +11242,16 @@ async function notifyIfNeeded(record = {}, eventName = "") {
   if (!supabaseClient || localTestMode) {
     return notification;
   }
-  try {
-    await sendPayload(notification);
-  } catch (error) {
-    console.warn("Could not save notification before delivery.", error);
+  // Customer-triggered alerts are usually addressed to staff. Those records do
+  // not pass the customer's notificationLog RLS check, and the edge function
+  // already persists the hydrated notification with its service-role client.
+  // Avoid showing a false "Save failed" message before a valid request finishes.
+  if (isStaffRole() || notificationVisibleToCurrentUser(notification)) {
+    try {
+      await sendPayload(notification);
+    } catch (error) {
+      console.warn("Could not save notification before delivery.", error);
+    }
   }
   try {
     const { data, error } = await supabaseClient.functions.invoke("send-notification", {
