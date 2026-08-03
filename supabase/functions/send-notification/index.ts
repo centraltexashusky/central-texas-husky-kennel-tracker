@@ -783,7 +783,7 @@ function getBoardingEmailDetails(record: Record<string, unknown>, stay: Record<s
     phone,
     pickUp,
     requestId,
-    total: record.estimatedTotal || stay.estimatedTotal || "",
+    total: record.requestGroupTotal || stay.requestGroupTotal || record.estimatedTotal || stay.estimatedTotal || "",
   };
 }
 
@@ -1695,7 +1695,9 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const adminTo = audienceEmails.length ? audienceEmails : adminEmails();
     const customerTo = customerEmailsForRecord(record);
     const customerSchedule = stayScheduleEmailText(stay);
-    const estimatedTotal = formatEmailMoneyText(record.estimatedTotal || stay.estimatedTotal || "");
+    const estimatedTotal = formatEmailMoneyText(
+      record.requestGroupTotal || stay.requestGroupTotal || record.estimatedTotal || stay.estimatedTotal || "",
+    );
     const dogNames = Array.isArray(record.requestGroupDogNames) && record.requestGroupDogNames.length
       ? [...new Set(record.requestGroupDogNames.map((name) => String(name || "").trim()).filter(Boolean))]
       : [String(record.dogName || "Customer dog")];

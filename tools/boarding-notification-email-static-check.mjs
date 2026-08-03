@@ -31,6 +31,11 @@ assert.match(edge, /html: adminRendered\.html/, "admin agreement messages must i
 assert.match(edge, /html: customerRendered\.html/, "customer agreement messages must include the dedicated HTML");
 assert.match(edge, /record\.requestGroupRequestedServices/, "admin request emails must use grouped service details");
 assert.match(edge, /record\.requestGroupDogNames/, "admin request emails must use grouped dog names");
+assert.match(
+  edge,
+  /record\.requestGroupTotal\s*\|\|\s*stay\.requestGroupTotal\s*\|\|\s*record\.estimatedTotal/,
+  "grouped request emails must prefer the whole-group total over one dog's subtotal",
+);
 
 const rendererStart = edge.indexOf("function agreementInlineHtml");
 const rendererEnd = edge.indexOf("function renderExecutedAgreementEmail", rendererStart);
