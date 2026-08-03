@@ -2967,8 +2967,20 @@ async function submitPendingCustomerBooking() {
   const groupDogIds = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.id || dog.sourceBoardingDogId || "").filter(Boolean);
   const groupDogCount = groupDogNames.length;
   const groupSelectedServices = [...new Set(arrayValue(estimate.services).map((service) => service.serviceName || service.name || "").filter(Boolean))];
+  const requestGroupRequestedServices = uniqueCustomerBookingDogs(estimate.dogs).flatMap((dog) => (
+    customerServicesForDog(estimate, dog).map((service) => ({
+      id: service.id,
+      serviceId: service.id,
+      serviceName: service.serviceName,
+      dogName: dog.dogName || "Dog",
+      quantity: Number(service.quantity || 1),
+      unitPrice: Number(service.basePrice || service.unitPrice || 0),
+      unit: service.unit || "",
+    }))
+  ));
   let savedCount = 0;
   let skippedCount = 0;
+  const savedRecords = [];
   const submittedDogKeys = new Set();
   let boardingAgreement = null;
   try {
@@ -3155,8 +3167,10 @@ async function submitPendingCustomerBooking() {
         requestGroupDogNames: groupDogNames,
         requestGroupDogCount: groupDogCount,
         requestGroupServiceNames: groupSelectedServices,
+        requestGroupRequestedServices,
         requestGroupTotal: estimate.total,
         requestGroupStatus: requestReviewStatus,
+        dogNames: groupDogNames,
         dogName: dog.dogName,
         breedDescription: dog.breedDescription,
         akcRegistrationNumber: dog.akcRegistrationNumber || existingTarget?.akcRegistrationNumber || "",
@@ -3218,7 +3232,9 @@ async function submitPendingCustomerBooking() {
         cancelledAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.cancelledAt || "",
         checkedOutAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.checkedOutAt || "",
       };
-      const record = await saveAndNotify(payload, editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
+      const record = upsertRecord(payload.type, payload);
+      await sendPayload(record);
+      savedRecords.push(record);
       savedCount += 1;
       await ensureCustomerAccessProfile({
         email: record.ownerEmail,
@@ -3233,6 +3249,9 @@ async function submitPendingCustomerBooking() {
           boardingDogId: record.id,
         });
       }
+    }
+    if (savedRecords.length) {
+      await notifyIfNeeded(savedRecords[0], editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
     }
     pendingCustomerBooking = null;
     $("#bookingConfirmDialog").close();

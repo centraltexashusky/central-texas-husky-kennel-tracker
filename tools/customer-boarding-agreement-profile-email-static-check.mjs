@@ -57,7 +57,9 @@ if (!edgeFunction.includes("record.signatureHash") || !edgeFunction.includes("re
 }
 if (!edgeFunction.includes('audience: "admin"') ||
   !edgeFunction.includes('audience: "customer"') ||
-  !edgeFunction.includes('subject: `Your fully executed agreement: ${agreementTitle}`') ||
+  !edgeFunction.includes('const customerSubject = `Your fully executed agreement: ${agreementTitle}`') ||
+  !edgeFunction.includes("html: adminRendered.html") ||
+  !edgeFunction.includes("html: customerRendered.html") ||
   !edgeFunction.includes('appLink("#customerFilesPage")')) {
   throw new Error("The executed agreement must be emailed separately to both the admin and customer.");
 }

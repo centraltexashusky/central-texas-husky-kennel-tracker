@@ -668,15 +668,20 @@ function serviceLine(rawItem: unknown) {
   if (!rawItem || typeof rawItem !== "object") return String(rawItem || "").trim();
   const item = rawItem as Record<string, unknown>;
   const name = String(item.serviceName || item.name || item.label || item.id || "Service").replace(/\s+requested$/i, "").trim();
+  const dogName = String(item.dogName || "").trim();
   const quantity = Number(item.quantity || item.count || 1);
   const count = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
-  return `${count} x ${name} requested`;
+  return `${count} x ${name}${dogName ? ` for ${dogName}` : ""} requested`;
 }
 
 function requestServiceLines(record: Record<string, unknown>, stay: Record<string, unknown>) {
-  return requestServiceItems(record, stay)
+  const groupedRequests = Array.isArray(record.requestGroupRequestedServices)
+    ? record.requestGroupRequestedServices
+    : [];
+  const lines = (groupedRequests.length ? groupedRequests : requestServiceItems(record, stay))
     .map(serviceLine)
     .filter(Boolean);
+  return [...new Set(lines)];
 }
 
 function declineNoteText(record: Record<string, unknown>, stay: Record<string, unknown>) {
@@ -735,9 +740,12 @@ function getBoardingEmailDetails(record: Record<string, unknown>, stay: Record<s
     || record.customerPhone
     || record.phone
     || "";
-  const dogList = Array.isArray(record.dogNames)
-    ? record.dogNames.join(", ")
-    : record.dogNames || record.dogs || record.dogName || stay.dogName || "";
+  const dogNames = Array.isArray(record.requestGroupDogNames) && record.requestGroupDogNames.length
+    ? record.requestGroupDogNames
+    : record.dogNames;
+  const dogList = Array.isArray(dogNames)
+    ? dogNames.join(", ")
+    : dogNames || record.dogs || record.dogName || stay.dogName || "";
   const dropOff =
     stay.dropoffTime
     || stay.requestedDropoffTime
@@ -1017,6 +1025,176 @@ function renderAdminBoardingRequestEmail(
     template: "admin_boarding_request_premium",
     text,
   };
+}
+
+function agreementInlineHtml(value = "") {
+  return escapeHtml(value).replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;color:#111111;">$1</strong>');
+}
+
+function agreementMarkdownToEmailHtml(markdown = "") {
+  const lines = String(markdown || "").replace(/\r/g, "").split("\n");
+  const html: string[] = [];
+  let activeList = "";
+  const closeList = () => {
+    if (!activeList) return;
+    html.push(activeList === "ol" ? "</ol>" : "</ul>");
+    activeList = "";
+  };
+  const openList = (kind: "ol" | "ul") => {
+    if (activeList === kind) return;
+    closeList();
+    activeList = kind;
+    html.push(kind === "ol"
+      ? '<ol style="margin:10px 0 20px;padding-left:27px;color:#263142;font-size:15px;line-height:1.65;">'
+      : '<ul style="margin:10px 0 20px;padding-left:25px;color:#263142;font-size:15px;line-height:1.65;">');
+  };
+
+  lines.forEach((rawLine) => {
+    const line = rawLine.trim();
+    if (!line) {
+      closeList();
+      return;
+    }
+    if (/^-{3,}$/.test(line)) {
+      closeList();
+      html.push('<div style="margin:28px 0;border-top:1px solid #d9c28f;"></div>');
+      return;
+    }
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      const headingStyle = level === 1
+        ? "margin:30px 0 12px;font-family:Georgia,'Times New Roman',serif;font-size:23px;line-height:1.28;color:#111111;letter-spacing:.2px;"
+        : "margin:24px 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:1.35;color:#9a6815;";
+      html.push(`<h${Math.min(level + 1, 4)} style="${headingStyle}">${agreementInlineHtml(heading[2])}</h${Math.min(level + 1, 4)}>`);
+      return;
+    }
+    const ordered = line.match(/^\d+\.\s+(.+)$/);
+    if (ordered) {
+      openList("ol");
+      html.push(`<li style="margin:0 0 8px;padding-left:5px;">${agreementInlineHtml(ordered[1])}</li>`);
+      return;
+    }
+    const bullet = line.match(/^[*+-]\s+(.+)$/);
+    if (bullet) {
+      openList("ul");
+      html.push(`<li style="margin:0 0 8px;padding-left:4px;">${agreementInlineHtml(bullet[1])}</li>`);
+      return;
+    }
+    const checkbox = line.match(/^([☐☑])\s*(.+)$/);
+    if (checkbox) {
+      closeList();
+      html.push(`<p style="margin:8px 0 8px 8px;color:#263142;font-size:15px;line-height:1.6;"><span style="display:inline-block;width:22px;font-size:18px;vertical-align:-1px;">${checkbox[1]}</span>${agreementInlineHtml(checkbox[2])}</p>`);
+      return;
+    }
+    closeList();
+    html.push(`<p style="margin:0 0 14px;color:#263142;font-size:15px;line-height:1.68;">${agreementInlineHtml(line)}</p>`);
+  });
+  closeList();
+  return html.join("\n");
+}
+
+function agreementMarkdownToPlainText(markdown = "") {
+  return String(markdown || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line
+      .replace(/^#{1,3}\s+/, "")
+      .replace(/^\*\s+/, "- ")
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/^-{3,}\s*$/, ""))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function renderExecutedAgreementEmail(options: {
+  actionLabel: string;
+  actionUrl: string;
+  agreementText: string;
+  audienceLabel: string;
+  intro: string;
+  subject: string;
+  summaryRows: { label: string; value: unknown }[];
+  verificationRows?: { label: string; value: unknown }[];
+}) {
+  const logoUrl = emailLogoUrl();
+  const agreementHtml = agreementMarkdownToEmailHtml(options.agreementText);
+  const agreementText = agreementMarkdownToPlainText(options.agreementText);
+  const summaryRows = options.summaryRows.filter((row) => String(row.value ?? "").trim());
+  const verificationRows = (options.verificationRows || []).filter((row) => String(row.value ?? "").trim());
+  const rowsHtml = summaryRows.map((row, index) => `<tr>
+    <td valign="top" style="padding:${index ? "12px" : "0"} 0 12px;${index === summaryRows.length - 1 ? "" : "border-bottom:1px dotted #d7b46a;"}">
+      <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:14px;font-weight:700;">${emailValue(row.label)}</div>
+      <div style="margin-top:4px;color:#111827;font-size:15px;line-height:1.5;">${emailValue(row.value)}</div>
+    </td>
+  </tr>`).join("");
+  const verificationHtml = verificationRows.length
+    ? `<tr><td style="padding:0 28px 28px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f3ea;border:1px solid #d9c28f;border-radius:14px;">
+          <tr><td style="padding:16px 18px;">
+            <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:15px;font-weight:700;">Document verification</div>
+            ${verificationRows.map((row) => `<div style="margin-top:8px;color:#596273;font-size:11px;line-height:1.45;overflow-wrap:anywhere;"><strong>${emailValue(row.label)}:</strong> ${emailValue(row.value)}</div>`).join("")}
+          </td></tr>
+        </table>
+      </td></tr>`
+    : "";
+  const html = `<!doctype html>
+<html>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(options.subject)}</title></head>
+  <body style="margin:0;padding:0;background:#f6f1e8;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f1e8;padding:26px 10px;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:760px;background:#fffaf1;border:1px solid #d7b46a;border-radius:22px;overflow:hidden;">
+          <tr><td align="center" style="background:#050505;padding:30px 28px 24px;border-bottom:5px solid #b98524;">
+            <img src="${escapeHtml(logoUrl)}" width="92" alt="Central Texas Husky trophy logo" style="display:block;width:92px;height:auto;margin:0 auto 14px;">
+            <div style="font-family:Georgia,'Times New Roman',serif;font-size:29px;line-height:1.08;letter-spacing:3px;color:#fff8dd;font-weight:700;">CENTRAL TEXAS HUSKY</div>
+            <div style="margin-top:9px;color:#d2a13a;font-size:13px;letter-spacing:4px;text-transform:uppercase;font-weight:700;">BOARDING &amp; SERVICES</div>
+          </td></tr>
+          <tr><td align="center" style="padding:24px 28px 12px;">
+            <div style="display:inline-block;border-radius:999px;background:#111111;color:#d2a13a;padding:7px 14px;font-size:11px;letter-spacing:1.7px;text-transform:uppercase;font-weight:800;">${emailValue(options.audienceLabel)}</div>
+            <h1 style="margin:16px 0 10px;font-family:Georgia,'Times New Roman',serif;font-size:30px;line-height:1.22;color:#111111;">${escapeHtml(options.subject)}</h1>
+            <p style="margin:0;max-width:610px;color:#445064;font-size:16px;line-height:1.6;">${escapeHtml(options.intro)}</p>
+          </td></tr>
+          <tr><td style="padding:10px 28px 26px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fffdf8;border:1px solid #d7b46a;border-radius:16px;">
+              <tr><td style="padding:20px 22px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rowsHtml}</table></td></tr>
+            </table>
+          </td></tr>
+          <tr><td style="padding:0 28px 28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border:1px solid #d7b46a;border-radius:16px;">
+              <tr><td style="padding:26px 30px;">
+                <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;">Fully Executed Agreement</div>
+                <div style="margin-top:16px;">${agreementHtml || '<p style="color:#596273;">The signed agreement is saved in Snuggle Stay.</p>'}</div>
+              </td></tr>
+            </table>
+          </td></tr>
+          ${verificationHtml}
+          <tr><td align="center" style="padding:0 28px 30px;">
+            <a href="${escapeHtml(options.actionUrl)}" style="display:inline-block;background:#c9962f;border:1px solid #8a5c14;border-radius:11px;color:#111111;text-decoration:none;font-size:17px;font-weight:800;padding:14px 30px;">${escapeHtml(options.actionLabel)}</a>
+            <p style="margin:20px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-style:italic;color:#445064;">&mdash; Central Texas Husky Team &mdash;</p>
+          </td></tr>
+          <tr><td style="background:#050505;border-top:4px solid #b98524;padding:18px;text-align:center;color:#d2a13a;font-size:11px;letter-spacing:1.8px;text-transform:uppercase;">Central Texas Husky &middot; Boarding &amp; Services</td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+  const text = [
+    options.subject,
+    "",
+    options.intro,
+    "",
+    ...summaryRows.map((row) => `${row.label}: ${String(row.value)}`),
+    "",
+    "FULLY EXECUTED AGREEMENT",
+    agreementText || "The signed agreement is saved in Snuggle Stay.",
+    ...(verificationRows.length ? ["", "DOCUMENT VERIFICATION", ...verificationRows.map((row) => `${row.label}: ${String(row.value)}`)] : []),
+    "",
+    `${options.actionLabel}: ${options.actionUrl}`,
+  ].join("\n");
+  return { html, logoUrl, template: "executed_boarding_agreement_v2", text };
 }
 
 type ParsedEmailBody = {
@@ -1429,32 +1607,6 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       ? responses.customerFieldResponses as Record<string, unknown>[]
       : [];
     const agreementText = String(record.agreementText || record.agreementMarkdown || "").trim();
-    const responseLines = [
-      responses.emergencyTreatmentLabel ? `Treatment authorization: ${responses.emergencyTreatmentLabel}` : "",
-      responses.emergencyTreatmentLimitAmount ? `Treatment limit: $${responses.emergencyTreatmentLimitAmount}` : "",
-      responses.mediaPreferenceLabel ? `Media authorization: ${responses.mediaPreferenceLabel}` : "",
-      ...acknowledgementResponses.flatMap((item, index) => [
-        `Acknowledgement ${index + 1} (${item.required === false ? "Optional" : "Required"}): ${String(item.text || "")}`,
-        `Acknowledgement ${index + 1} accepted: ${item.accepted ? "Yes" : "No"}`,
-      ]),
-      ...customerFieldResponses.flatMap((item, index) => [
-        `Customer information ${index + 1}: ${String(item.prompt || "")}`,
-        `Customer response ${index + 1}: ${String(item.value || "")}`,
-      ]),
-    ].filter(Boolean);
-    const executedAgreementLines = [
-      `Agreement: ${agreementTitle}`,
-      agreementVersion ? `Version: ${agreementVersion}` : "",
-      `Signer: ${signerName}`,
-      signerEmail ? `Email: ${signerEmail}` : "",
-      signedAt ? `Signed: ${signedAt}` : "",
-      ...responseLines,
-      record.documentHash ? `Document hash: ${record.documentHash}` : "",
-      record.signatureHash ? `Signature hash: ${record.signatureHash}` : "",
-      "",
-      "FULLY EXECUTED AGREEMENT",
-      agreementText || "The signed agreement is saved to the customer's profile in Snuggle Stay.",
-    ].filter(Boolean);
     const adminTo = audienceEmails.length ? audienceEmails : adminEmails();
     const customerTo = uniqueEmails([
       record.signerEmail,
@@ -1462,41 +1614,73 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       record.customerEmail,
       record.linkedOwnerEmail,
     ]);
-    const adminBody = [
-      "A customer completed and electronically signed a boarding agreement.",
-      "",
-      ...executedAgreementLines,
-      "",
-      `Open customer profiles: ${appLink("#settingsUsersPage")}`,
-    ].join("\n");
-    const customerBody = [
-      `Hello ${signerName},`,
-      "",
-      "Thank you. Your boarding agreement is fully executed. A complete copy, including your acknowledgements and submitted information, appears below and is also saved in My Records.",
-      "",
-      ...executedAgreementLines,
-      "",
-      `Open My Records: ${appLink("#customerFilesPage")}`,
-    ].join("\n");
+    const summaryRows = [
+      { label: "Agreement", value: agreementTitle },
+      { label: "Version", value: agreementVersion },
+      { label: "Signer", value: signerName },
+      { label: "Email", value: signerEmail },
+      { label: "Signed", value: signedAt },
+      { label: "Treatment authorization", value: responses.emergencyTreatmentLabel },
+      { label: "Treatment limit", value: responses.emergencyTreatmentLimitAmount ? `$${responses.emergencyTreatmentLimitAmount}` : "" },
+      { label: "Media authorization", value: responses.mediaPreferenceLabel },
+      ...acknowledgementResponses.flatMap((item, index) => [
+        { label: `Acknowledgement ${index + 1} (${item.required === false ? "Optional" : "Required"})`, value: item.text },
+        { label: `Acknowledgement ${index + 1} accepted`, value: item.accepted ? "Yes" : "No" },
+      ]),
+      ...customerFieldResponses.flatMap((item, index) => [
+        { label: `Customer information ${index + 1}`, value: item.prompt },
+        { label: `Customer response ${index + 1}`, value: item.value },
+      ]),
+    ];
+    const verificationRows = [
+      { label: "Document hash", value: record.documentHash },
+      { label: "Signature hash", value: record.signatureHash },
+    ];
+    const adminSubject = `Signed boarding agreement: ${signerName}`;
+    const customerSubject = `Your fully executed agreement: ${agreementTitle}`;
+    const adminRendered = renderExecutedAgreementEmail({
+      actionLabel: "Open Customer Profiles",
+      actionUrl: appLink("#settingsUsersPage"),
+      agreementText,
+      audienceLabel: "Staff/Admin",
+      intro: "A customer completed and electronically signed a boarding agreement.",
+      subject: adminSubject,
+      summaryRows,
+      verificationRows,
+    });
+    const customerRendered = renderExecutedAgreementEmail({
+      actionLabel: "Open My Records",
+      actionUrl: appLink("#customerFilesPage"),
+      agreementText,
+      audienceLabel: "Customer Copy",
+      intro: `Hello ${signerName}. Thank you - your boarding agreement is fully executed and saved in My Records.`,
+      subject: customerSubject,
+      summaryRows,
+      verificationRows,
+    });
     const emails = [
       {
         audience: "admin",
         to: adminTo,
-        subject: `Signed boarding agreement: ${signerName}`,
-        body: adminBody,
+        subject: adminSubject,
+        body: adminRendered.text,
+        html: adminRendered.html,
+        template: adminRendered.template,
       },
       ...(customerTo.length
         ? [{
             audience: "customer",
             to: customerTo,
-            subject: `Your fully executed agreement: ${agreementTitle}`,
-            body: customerBody,
+            subject: customerSubject,
+            body: customerRendered.text,
+            html: customerRendered.html,
+            template: customerRendered.template,
           }]
         : []),
     ];
     return {
-      subject: `Signed boarding agreement: ${signerName}`,
-      body: adminBody,
+      subject: adminSubject,
+      body: adminRendered.text,
       priority: "review",
       to: adminTo,
       sms: false,
@@ -1512,7 +1696,10 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const customerTo = customerEmailsForRecord(record);
     const customerSchedule = stayScheduleEmailText(stay);
     const estimatedTotal = formatEmailMoneyText(record.estimatedTotal || stay.estimatedTotal || "");
-    const dogName = String(record.dogName || "Customer dog");
+    const dogNames = Array.isArray(record.requestGroupDogNames) && record.requestGroupDogNames.length
+      ? [...new Set(record.requestGroupDogNames.map((name) => String(name || "").trim()).filter(Boolean))]
+      : [String(record.dogName || "Customer dog")];
+    const dogName = dogNames.join(", ");
     const adminRendered = renderAdminBoardingRequestEmail(record, stay, {
       action,
       requestType,

@@ -928,15 +928,24 @@ function recoveredBoardingRequestNotification(notification = {}) {
   return candidates[0] || null;
 }
 
+function boardingRequestDogNames(record = {}) {
+  const names = arrayValue(record.requestGroupDogNames || record.dogNames)
+    .map((name) => String(name || "").trim())
+    .filter(Boolean);
+  if (!names.length && record.dogName) names.push(String(record.dogName).trim());
+  return [...new Set(names)].join(", ") || "Customer dog";
+}
+
 function boardingRequestAlertTitle(record = {}) {
-  return \`Boarding request needs approval: \${record.dogName || "Customer dog"}\`;
+  return \`Boarding request needs approval: \${boardingRequestDogNames(record)}\`;
 }
 
 function boardingRequestAlertMessage(record = {}, stay = {}, eventName = "customerBoardingRequestCreated") {
   const owner = record.ownerName || record.ownerEmail || record.customerEmail || "A customer";
   const action = eventName === "customerBoardingRequestUpdated" ? "updated" : "submitted";
   const schedule = stay?.id ? boardingScheduleText(record, stay) : boardingScheduleText(record);
-  return \`\${owner} \${action} a boarding request\${record.dogName ? \` for \${record.dogName}\` : ""}\${schedule ? \` for \${schedule}\` : ""}. Open this alert to approve or decline the request.\`;
+  const dogNames = boardingRequestDogNames(record);
+  return \`\${owner} \${action} a boarding request\${dogNames ? \` for \${dogNames}\` : ""}\${schedule ? \` for \${schedule}\` : ""}. Open this alert to approve or decline the request.\`;
 }
 
 function notificationSourceTypeLabel(sourceType = "") {
