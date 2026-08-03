@@ -18726,40 +18726,169 @@ button.dog-show-planner-score:focus-visible {
 .dog-show-plan-completed-results {
   border-top: 1px solid var(--line);
   display: grid;
-  gap: 7px;
+  gap: 10px;
   padding-top: 9px;
 }
 
-.dog-show-plan-completed-results h5,
-.dog-show-plan-completed-results ul {
-  margin: 0;
+.dog-show-plan-completed-results > header {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
 }
 
 .dog-show-plan-completed-results h5 {
   color: var(--muted);
   font-size: 0.68rem;
   letter-spacing: 0.04em;
+  margin: 0;
   text-transform: uppercase;
 }
 
-.dog-show-plan-completed-results ul {
-  display: grid;
-  gap: 5px;
-  list-style: none;
-  padding: 0;
+.dog-show-plan-completed-results > header > span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
-.dog-show-plan-completed-results li {
-  align-items: baseline;
+.dog-show-plan-completed-dogs {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dog-show-plan-completed-dog-results {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dog-show-plan-completed-dog-results > summary {
+  align-items: center;
+  cursor: pointer;
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px 10px;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 58px;
+  padding: 10px 12px;
+}
+
+.dog-show-plan-completed-dog-results > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dog-show-plan-completed-dog-results > summary > span {
+  display: grid;
+  gap: 2px;
+}
+
+.dog-show-plan-completed-dog-results > summary > span:last-child {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.dog-show-plan-completed-dog-results > summary strong {
+  font-size: 0.88rem;
+}
+
+.dog-show-plan-completed-dog-results > summary small,
+.dog-show-plan-completed-dog-results > summary b {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.dog-show-plan-completed-dog-results > summary b {
+  color: #177D55;
+  white-space: nowrap;
+}
+
+.dog-show-plan-completed-dog-results > summary i {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  font-style: normal;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.dog-show-plan-completed-dog-results > summary i::before {
+  content: "+";
+}
+
+.dog-show-plan-completed-dog-results[open] > summary i::before {
+  content: "−";
+}
+
+.dog-show-plan-completed-dog-results > div {
+  border-top: 1px solid var(--line);
+  display: grid;
+}
+
+.dog-show-plan-completed-appearance {
+  display: grid;
+  gap: 7px;
+  padding: 10px 12px;
+}
+
+.dog-show-plan-completed-appearance + .dog-show-plan-completed-appearance {
+  border-top: 1px solid var(--line);
+}
+
+.dog-show-plan-completed-appearance > header {
+  align-items: center;
+  display: flex;
+  gap: 10px;
   justify-content: space-between;
 }
 
-.dog-show-plan-completed-results li span {
+.dog-show-plan-completed-appearance > header > span {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-plan-completed-appearance > header > div,
+.dog-show-plan-completed-awards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.dog-show-plan-completed-appearance > header strong,
+.dog-show-plan-completed-appearance > header em,
+.dog-show-plan-completed-awards span {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-style: normal;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+
+.dog-show-plan-completed-appearance > header strong.is-win {
+  background: rgba(23, 128, 86, 0.1);
+  border-color: rgba(23, 128, 86, 0.35);
+  color: #177D55;
+}
+
+.dog-show-plan-completed-appearance > p {
+  color: var(--muted);
+  font-size: 0.68rem;
+  margin: 0;
+}
+
+.dog-show-plan-completed-awards span {
+  color: var(--muted);
+  line-height: 1.3;
+  white-space: normal;
 }
 
 .dog-show-master-calendar {
@@ -19626,6 +19755,20 @@ button.dog-show-planner-score:focus-visible {
 
   .dog-show-plan-event-card.is-history-only dl {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-plan-completed-dogs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dog-show-plan-completed-results > header,
+  .dog-show-plan-completed-dog-results > summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dog-show-plan-completed-dog-results > summary > span:last-child {
+    justify-content: space-between;
   }
 
   .dog-show-plan-point-schedule > summary,

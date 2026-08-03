@@ -14,15 +14,15 @@ const required = [
   ["index.html", 'data-dog-show-view="home"', "Missing Home view."],
   ["index.html", 'class="dog-show-mobile-nav-image dog-show-home-rosette"', "Dog Show Home does not use the rosette image."],
   ["index.html", 'src="assets/icons/bis-rosette.png?v=20260715-dog-show-rosette-home"', "Dog Show Home does not load the versioned rosette asset."],
-  ["index.html", 'completed-history-v21', "Dog Show styles are not cache-busted."],
+  ["index.html", 'completed-result-groups-v22', "Dog Show styles are not cache-busted."],
   ["index.html", 'data-dog-show-view="dogs"', "Missing Dogs view."],
   ["index.html", 'data-dog-show-view="schedule"', "Missing Schedule view."],
   ["index.html", 'data-dog-show-view="tasks"', "Missing Tasks view."],
   ["index.html", 'data-dog-show-view="planner"', "Missing Planner view."],
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
-  ["js/main.js", 'completed-history-v21', "Dog Show planner changes are not cache-busted."],
-  ["index.html", 'completed-history-v21', "Dog Show entrypoint changes are not cache-busted."],
+  ["js/main.js", 'completed-result-groups-v22', "Dog Show planner changes are not cache-busted."],
+  ["index.html", 'completed-result-groups-v22', "Dog Show entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
@@ -511,6 +511,8 @@ if (!plannerPointScheduleHtmlSource.includes('<details class="dog-show-plan-poin
 const plannerEventPlanHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerEventPlanHtml"), dogShowSource.indexOf("function dogShowPlannerVisibleCandidates"));
 if (!plannerEventPlanHtmlSource.includes('lifecycleStatus === "Completed"') || !plannerEventPlanHtmlSource.includes("dog-show-plan-completed-results")) failures.push("Completed shows do not render a compact date, attendee, and results history card.");
 if (!plannerEventPlanHtmlSource.includes("dogShowAppearanceResultsAll()") || !plannerEventPlanHtmlSource.includes("Dogs who went")) failures.push("Completed show history does not preserve attendees and appearance results.");
+if (!dogShowSource.includes("function dogShowPlannerCompletedResultsHtml") || !dogShowSource.includes("dog-show-plan-completed-dog-results") || !dogShowSource.includes("Select a dog to view details")) failures.push("Completed results are not grouped into expandable dog summaries.");
+if (!read("styles.css").includes(".dog-show-plan-completed-dogs") || !read("styles.css").includes(".dog-show-plan-completed-appearance")) failures.push("Grouped completed results are not styled as compact cards.");
 const completedHistorySource = plannerEventPlanHtmlSource.slice(plannerEventPlanHtmlSource.indexOf('lifecycleStatus === "Completed"'), plannerEventPlanHtmlSource.indexOf('return `<article class="dog-show-plan-event-card is-${'));
 if (completedHistorySource.includes("dogShowPlannerPointScheduleHtml") || completedHistorySource.includes("open-planner-show-event")) failures.push("Completed history still exposes operational show details.");
 if (!dogShowSource.includes("function dogShowOperationalEvents") || !dogShowSource.includes("dogShowEventWeekendGroups(dogShowOperationalEvents())") || !dogShowSource.includes("No active shows")) failures.push("Completed shows are still available in the operational show selector.");

@@ -2652,19 +2652,44 @@ function dogShowPlannerPointScheduleHtml(event = {}, lifecycleStatus = "Going To
   </details>`;
 }
 
+function dogShowPlannerCompletedResultsHtml(results = []) {
+  const grouped = new Map();
+  results.forEach((result) => {
+    const key = dogShowDogIdentity(result);
+    if (!grouped.has(key)) grouped.set(key, { name: result.dogName || "Dog", results: [] });
+    grouped.get(key).results.push(result);
+  });
+  const dogGroups = [...grouped.values()].sort((left, right) => left.name.localeCompare(right.name));
+  if (!dogGroups.length) return "<p>No show results were recorded.</p>";
+  return `<div class="dog-show-plan-completed-dogs">${dogGroups.map((group) => {
+    const wins = group.results.filter((result) => result.outcome === "Win").length;
+    const summary = wins
+      ? `${wins} win${wins === 1 ? "" : "s"}`
+      : [...new Set(group.results.map((result) => dogShowOutcomeLabel(result.outcome)).filter(Boolean))].join(" · ") || "Results recorded";
+    const appearances = group.results.map((result, index) => {
+      const outcome = dogShowOutcomeLabel(result.outcome) || "Result logged";
+      const outcomeClass = outcome.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const meta = [result.ringDate ? dogShowFormatDate(result.ringDate) : "", result.classEntered || "", result.judge ? `Judge: ${result.judge}` : ""].filter(Boolean);
+      const awards = dogShowResultAwardsSummary(result).split(" · ").filter(Boolean);
+      return `<article class="dog-show-plan-completed-appearance">
+        <header><span>Appearance ${index + 1}</span><div><strong class="is-${escapeHtml(outcomeClass)}">${escapeHtml(outcome)}</strong>${result.placement ? `<em>${escapeHtml(result.placement)}</em>` : ""}</div></header>
+        ${meta.length ? `<p>${escapeHtml(meta.join(" · "))}</p>` : ""}
+        <div class="dog-show-plan-completed-awards">${awards.length ? awards.map((award) => `<span>${escapeHtml(award)}</span>`).join("") : "<span>No awards recorded</span>"}</div>
+      </article>`;
+    }).join("");
+    return `<details class="dog-show-plan-completed-dog-results"><summary><span><strong>${escapeHtml(group.name)}</strong><small>${group.results.length} appearance${group.results.length === 1 ? "" : "s"}</small></span><span><b>${escapeHtml(summary)}</b><i aria-hidden="true"></i></span></summary><div>${appearances}</div></details>`;
+  }).join("")}</div>`;
+}
+
 function dogShowPlannerEventPlanHtml(event = {}, lifecycleStatus = "Going To", planner = dogShowPlannerRecord()) {
   const entries = dogShowEntries(event);
   const dogs = entries.map(dogShowEntryName).filter(Boolean);
   if (lifecycleStatus === "Completed") {
     const results = dogShowAppearanceResultsAll().filter((result) => result.showEventId === event.id);
-    const resultRows = results.map((result) => {
-      const summary = [dogShowOutcomeLabel(result.outcome), result.placement, dogShowResultAwardsSummary(result)].filter(Boolean).join(" · ") || "Result logged";
-      return `<li><strong>${escapeHtml(result.dogName || "Dog")}</strong><span>${escapeHtml(summary)}</span></li>`;
-    }).join("");
     return `<article class="dog-show-plan-event-card is-completed is-history-only">
       <header><div><span>Completed</span><h4>${escapeHtml(event.name || event.club || "Dog Show")}</h4></div><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></header>
       <dl><div><dt>Dogs who went</dt><dd>${escapeHtml(dogs.join(", ") || "No dogs recorded")}</dd></div><div><dt>Show results</dt><dd>${results.length} result${results.length === 1 ? "" : "s"} recorded</dd></div></dl>
-      <section class="dog-show-plan-completed-results" aria-label="Show results"><h5>Results</h5>${resultRows ? `<ul>${resultRows}</ul>` : "<p>No show results were recorded.</p>"}</section>
+      <section class="dog-show-plan-completed-results" aria-label="Show results"><header><h5>Results by dog</h5><span>Select a dog to view details</span></header>${dogShowPlannerCompletedResultsHtml(results)}</section>
     </article>`;
   }
   return `<article class="dog-show-plan-event-card is-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}">
