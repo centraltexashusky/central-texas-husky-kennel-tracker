@@ -2546,59 +2546,19 @@ function dogShowPlannerSourceLinksHtml(show = {}, options = {}) {
     .join("");
 }
 
+function dogShowPlannerLastYearEntriesUrl(show = {}) {
+  const eventNumber = String(show.eventNumber || "").trim();
+  if (!eventNumber) return "";
+  return `https://www.apps.akc.org/apps/events/search/index_results.cfm?action=plan&event_number=${encodeURIComponent(eventNumber)}`;
+}
+
 function dogShowPlannerSourceSectionHtml(show = {}, options = {}) {
   const links = dogShowPlannerSourceLinksHtml(show, options);
-  const history = show.externalId
-    ? `<button type="button" class="dog-show-source-link" data-action="open-planner-last-year-entries" data-show-id="${escapeHtml(show.externalId)}">Last Year Entries<span aria-hidden="true">↗</span></button>`
+  const lastYearEntriesUrl = options.localFixture ? "" : dogShowPlannerLastYearEntriesUrl(show);
+  const lastYearEntriesLink = lastYearEntriesUrl
+    ? `<a class="dog-show-source-link" href="${escapeHtml(lastYearEntriesUrl)}" target="_blank" rel="noopener noreferrer">Last Year Entries<span aria-hidden="true">↗</span></a>`
     : "";
-  return links || history ? `<nav class="dog-show-planner-sources" aria-label="Show research links"><span>Show links</span><div>${links}${history}</div></nav>` : "";
-}
-
-function dogShowPlannerPreviousYearName(value = "") {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/\b(19|20)\d{2}\b/g, "")
-    .replace(/\b(incorporated|inc|llc|l\.l\.c)\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function dogShowPlannerPreviousYearState(value = "") {
-  return String(value || "").toUpperCase().match(/\b[A-Z]{2}\b/g)?.at(-1) || "";
-}
-
-function dogShowPlannerPreviousYearEvents(show = {}) {
-  const start = new Date(`${show.startDate || ""}T12:00:00`);
-  if (!Number.isFinite(start.getTime())) return [];
-  const priorYear = start.getFullYear() - 1;
-  const showName = dogShowPlannerPreviousYearName(show.club || show.name);
-  const showState = dogShowPlannerPreviousYearState(show.cityState || show.venueAddress || show.state);
-  return dogShowEvents()
-    .filter((event) => Number(String(event.startDate || "").slice(0, 4)) === priorYear)
-    .filter((event) => dogShowPlannerPreviousYearName(event.club || event.name) === showName)
-    .filter((event) => !showState || !dogShowPlannerPreviousYearState(event.cityState || event.venueAddress || event.state) || dogShowPlannerPreviousYearState(event.cityState || event.venueAddress || event.state) === showState)
-    .sort((left, right) => String(left.startDate || "").localeCompare(String(right.startDate || "")));
-}
-
-function openDogShowPlannerPreviousYearEntries(showId = "") {
-  const plan = dogShowPlannerRecord();
-  const show = (plan.shows || []).find((item) => String(item.externalId || "") === String(showId || ""));
-  if (!show) return showToast("The selected show could not be found.");
-  const previousYear = Number(String(show.startDate || "").slice(0, 4)) - 1;
-  const matches = dogShowPlannerPreviousYearEvents(show);
-  const cards = matches.map((event) => {
-    const entries = dogShowEntries(event);
-    const entryById = new Map(entries.map((entry) => [entry.id, entry]));
-    const results = dogShowAppearanceResultsAll().filter((result) => result.showEventId === event.id);
-    const resultRows = results.map((result) => {
-      const entry = entryById.get(result.showEntryId) || result;
-      const outcome = [dogShowOutcomeLabel(result.outcome), result.placement, dogShowResultAwardsSummary(result)].filter(Boolean).join(" · ") || "Result recorded";
-      return `<li><strong>${escapeHtml(dogShowEntryName(entry))}</strong><span>${escapeHtml(outcome)}</span></li>`;
-    }).join("");
-    return `<article class="dog-show-prior-year-card"><header><div><strong>${escapeHtml(event.club || event.name || "Dog Show")}</strong><span>${escapeHtml(dogShowPlannerDateRange(event))}</span></div><b>${entries.length} entered</b></header><p>${escapeHtml(entries.map(dogShowEntryName).filter(Boolean).join(", ") || "No dogs recorded")}</p>${resultRows ? `<ul>${resultRows}</ul>` : `<small>No results were recorded for this show.</small>`}</article>`;
-  }).join("");
-  const empty = `<section class="dog-show-empty"><span>S</span><h3>No prior-year entries found</h3><p>No matching ${Number.isFinite(previousYear) ? previousYear : "prior-year"} show or entered dogs are recorded in Snuggle Stay.</p></section>`;
-  openDogShowDialog(`Last Year Entries: ${show.club || show.name || "Dog Show"}`, `<section class="dog-show-prior-year-entries"><p>Snuggle Stay history for the same club and state in ${Number.isFinite(previousYear) ? previousYear : "the prior year"}. Use the official show links to confirm total AKC entry counts.</p>${cards || empty}</section>`);
+  return links || lastYearEntriesLink ? `<nav class="dog-show-planner-sources" aria-label="Show research links"><span>Show links</span><div>${links}${lastYearEntriesLink}</div></nav>` : "";
 }
 
 function dogShowPlannerEventFlagsHtml(show = {}) {
@@ -5145,7 +5105,6 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "remove-show-expense") await removeDogShowExpense(action.dataset.expenseId || "");
     if (action.dataset.action === "edit-show-plan") openDogShowPlannerForm();
     if (action.dataset.action === "view-show-decision") openDogShowPlannerDecision(action.dataset.showId || "");
-    if (action.dataset.action === "open-planner-last-year-entries") openDogShowPlannerPreviousYearEntries(action.dataset.showId || "");
     if (action.dataset.action === "open-planner-judge-history") openDogShowJudgeEvidence(action.dataset.judge || "", "entries", dogShowPlannerRecord().dogKeys || []);
     if (action.dataset.action === "save-potential-show") await saveDogShowPotentialShow(action.dataset.showId || "");
     if (action.dataset.action === "add-potential-show") openDogShowPotentialEvent(action.dataset.candidateId || "");
@@ -5327,7 +5286,6 @@ function setupDogShowEventListeners() {
       return;
     }
     if (action.dataset.action === "close-show-dialog") dialog.close();
-    if (action.dataset.action === "open-planner-last-year-entries") openDogShowPlannerPreviousYearEntries(action.dataset.showId || "");
     if (action.dataset.action === "open-planner-judge-history") openDogShowJudgeEvidence(action.dataset.judge || "", "entries", dogShowPlannerRecord().dogKeys || []);
     if (action.dataset.action === "open-progress-result") openDogShowProgressResult(action.dataset.resultId || "");
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
