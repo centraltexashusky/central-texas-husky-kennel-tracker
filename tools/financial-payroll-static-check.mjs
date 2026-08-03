@@ -15,11 +15,17 @@ if (!shared.includes('activePage === "financialsPage" && hasAny(["boardingDog", 
 if (!timesheet.includes('Number(record.hours || 0) > 0 && record.clockOutTime')) {
   failures.push("Payroll must use completed clock records with positive hours.");
 }
-if (!timesheet.includes("Math.round((hours * rate + Number.EPSILON) * 100) / 100")) {
-  failures.push("Payroll no longer multiplies completed hours by the saved hourly rate and rounds each line to cents.");
+if (!timesheet.includes("const hours = payrollRoundToHundredth(item.hours);") || !timesheet.includes("const total = payrollRoundToHundredth(hours * Number(item.rate || 0));")) {
+  failures.push("Payroll must multiply the same two-decimal employee hours displayed in the table by the saved hourly rate.");
+}
+if (timesheet.includes("existing.total += entry.total")) {
+  failures.push("Payroll still adds per-clock-entry pay instead of calculating from displayed employee hours.");
 }
 if (!index.includes('data-timesheet-tab="payroll"') || !index.includes('id="timesheetPayrollPanel"')) {
   failures.push("Timesheet does not expose the admin payroll review tab and panel.");
+}
+if (!index.includes("displayed two-decimal completed hours × hourly rate")) {
+  failures.push("Payroll does not explain the visible calculation used for each employee.");
 }
 if (!timesheet.includes('staffPayrollSummaryForRange(range, { includeAll: true })')) {
   failures.push("Payroll review does not summarize all employees in the selected date range.");

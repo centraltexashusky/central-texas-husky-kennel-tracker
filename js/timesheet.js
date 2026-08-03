@@ -164,6 +164,12 @@ function payrollMoney(value = 0) {
   return prefix + Math.abs(number).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function payrollRoundToHundredth(value = 0) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number)) return 0;
+  return Math.round((number + Number.EPSILON) * 100) / 100;
+}
+
 function staffPayrollUserForRecord(record = {}, users = settingsUsers()) {
   const recordEmail = normalizeEmail(record.helperEmail || record.staffEmail || "");
   const recordName = normalizeHelperName(record.helperName || record.staffName || "");
@@ -183,7 +189,7 @@ function staffPayrollRecordsForRange(range = timesheetActiveRange(), options = {
       const user = staffPayrollUserForRecord(record, users);
       const rate = staffHourlyRate(user);
       const hours = Number(record.hours || 0) || 0;
-      const total = Math.round((hours * rate + Number.EPSILON) * 100) / 100;
+      const total = payrollRoundToHundredth(hours * rate);
       return {
         id: record.id || "",
         date: timesheetRecordDate(record),
@@ -213,18 +219,23 @@ function staffPayrollSummaryForRange(range = timesheetActiveRange(), options = {
       shifts: 0,
     };
     existing.hours += entry.hours;
-    existing.total += entry.total;
     existing.rate = entry.rate || existing.rate;
     existing.missingRate = existing.missingRate || entry.missingRate;
     existing.shifts += 1;
     byStaff.set(key, existing);
   });
-  const staff = [...byStaff.values()].sort((a, b) => String(a.staffName || "").localeCompare(String(b.staffName || "")));
+  const staff = [...byStaff.values()]
+    .map((item) => {
+      const hours = payrollRoundToHundredth(item.hours);
+      const total = payrollRoundToHundredth(hours * Number(item.rate || 0));
+      return { ...item, hours, total };
+    })
+    .sort((a, b) => String(a.staffName || "").localeCompare(String(b.staffName || "")));
   return {
     entries,
     staff,
-    totalHours: staff.reduce((sum, item) => sum + Number(item.hours || 0), 0),
-    totalPayroll: staff.reduce((sum, item) => sum + Number(item.total || 0), 0),
+    totalHours: payrollRoundToHundredth(staff.reduce((sum, item) => sum + Number(item.hours || 0), 0)),
+    totalPayroll: payrollRoundToHundredth(staff.reduce((sum, item) => sum + Number(item.total || 0), 0)),
     missingRateCount: staff.filter((item) => item.missingRate).length,
   };
 }
