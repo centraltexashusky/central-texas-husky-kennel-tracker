@@ -1209,10 +1209,10 @@ function dogShowProgressJudgesHtml() {
   if (!dogShowProgressJudge || !judges.some((judge) => dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge))) dogShowProgressJudge = judges[0] || "";
   const note = dogShowJudgeNote(dogShowProgressJudge);
   const evidence = dogShowJudgeEvidence(dogShowProgressJudge);
-  return `<div class="dog-show-progress-judges-layout"><aside class="dog-show-judge-selector" aria-label="Show judges"><label class="dog-show-progress-search"><span class="sr-only">Search judges</span><input type="search" data-progress-filter="judge" placeholder="Search judges" autocomplete="off"></label><button type="button" class="secondary-button" data-action="edit-judge-note">Add Judge</button>${judges.map((judge) => {
+  return `<div class="dog-show-progress-judges-layout"><aside class="dog-show-judge-selector" aria-label="Show judges"><div class="dog-show-judge-selector-tools"><label class="dog-show-progress-search"><span class="sr-only">Search judges</span><input type="search" data-progress-filter="judge" placeholder="Search judges" autocomplete="off"></label><button type="button" class="secondary-button" data-action="edit-judge-note">Add Judge</button></div><div class="dog-show-judge-selector-list">${judges.map((judge) => {
     const judgeNote = dogShowJudgeNote(judge);
-    return `<button type="button" data-action="select-progress-judge" data-progress-filter-item="judge" data-search-value="${escapeHtml(dogShowSearchKey(judge))}" data-judge="${escapeHtml(judge)}" class="${dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge) ? "is-active" : ""}"><span class="dog-show-judge-rating is-${escapeHtml(String(judgeNote.recommendation || "Watch").toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(judgeNote.recommendation || "Watch")}</span><span class="dog-show-judge-selector-copy"><strong>${escapeHtml(judge)}</strong><small>${dogShowJudgeEvidence(judge).results.length} logged result${dogShowJudgeEvidence(judge).results.length === 1 ? "" : "s"}</small></span></button>`;
-  }).join("")}<p class="dog-show-progress-filter-empty" data-progress-filter-empty="judge" hidden>No matching judges.</p></aside><div class="dog-show-judge-detail">${dogShowProgressJudge ? `<section class="dog-show-judge-hero"><div><span>Judge Intelligence</span><h3>${escapeHtml(dogShowProgressJudge)}</h3><p>${escapeHtml(note.preferenceTags || "No preference tags yet")}</p></div><button type="button" class="secondary-button" data-action="edit-judge-note" data-judge="${escapeHtml(dogShowProgressJudge)}">Edit Notes</button></section><section class="dog-show-progress-breakdown dog-show-judge-metrics"><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="entries" aria-label="View entries logged under ${escapeHtml(dogShowProgressJudge)}"><span>Entries logged</span><strong>${evidence.results.length}</strong><small>View result details <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="placements" aria-label="View placements under ${escapeHtml(dogShowProgressJudge)}"><span>Placements</span><strong>${evidence.placements}</strong><small>View wins and placements <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="points" aria-label="View points earned under ${escapeHtml(dogShowProgressJudge)}"><span>Points</span><strong>${evidence.points}</strong><small>${evidence.majors} major${evidence.majors === 1 ? "" : "s"} <i aria-hidden="true">›</i></small></button></section><section class="dog-show-progress-section"><header><div><h3>Team Notes</h3><p>Internal observations only. Treat patterns as guidance, not guarantees.</p></div></header><dl class="dog-show-judge-notes"><div><dt>Recommendation</dt><dd>${escapeHtml(note.recommendation || "Watch")}</dd></div><div><dt>Best fit dogs</dt><dd>${escapeHtml(note.bestFitDogs || "Not recorded")}</dd></div><div><dt>Preferences</dt><dd>${escapeHtml(note.preferenceTags || "Not recorded")}</dd></div><div><dt>Notes</dt><dd>${escapeHtml(note.notes || "No internal notes yet")}</dd></div></dl></section>` : dogShowRenderEmpty("No judges found", "Add a judge note or enter judges on ring appearances.", "edit-judge-note", "Add Judge")}</div></div>`;
+    return `<button type="button" data-action="select-progress-judge" data-progress-filter-item="judge" data-search-value="${escapeHtml(dogShowSearchKey(judge))}" data-judge="${escapeHtml(judge)}" class="${dogShowJudgeNameKey(judge) === dogShowJudgeNameKey(dogShowProgressJudge) ? "is-active" : ""}"><span class="dog-show-judge-selector-copy"><strong>${escapeHtml(judge)}</strong><span class="dog-show-judge-rating is-${escapeHtml(String(judgeNote.recommendation || "Watch").toLowerCase().replace(/\s+/g, "-"))}">${escapeHtml(judgeNote.recommendation || "Watch")}</span><small>${dogShowJudgeEvidence(judge).results.length} logged result${dogShowJudgeEvidence(judge).results.length === 1 ? "" : "s"}</small></span></button>`;
+  }).join("")}</div><p class="dog-show-progress-filter-empty" data-progress-filter-empty="judge" hidden>No matching judges.</p></aside><div class="dog-show-judge-detail">${dogShowProgressJudge ? `<section class="dog-show-judge-hero"><div><span>Judge Intelligence</span><h3>${escapeHtml(dogShowProgressJudge)}</h3><p>${escapeHtml(note.preferenceTags || "No preference tags yet")}</p></div><button type="button" class="secondary-button" data-action="edit-judge-note" data-judge="${escapeHtml(dogShowProgressJudge)}">Edit Notes</button></section><section class="dog-show-progress-breakdown dog-show-judge-metrics"><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="entries" aria-label="View entries logged under ${escapeHtml(dogShowProgressJudge)}"><span>Entries logged</span><strong>${evidence.results.length}</strong><small>View result details <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="placements" aria-label="View placements under ${escapeHtml(dogShowProgressJudge)}"><span>Placements</span><strong>${evidence.placements}</strong><small>View wins and placements <i aria-hidden="true">›</i></small></button><button type="button" class="dog-show-judge-metric" data-action="open-judge-evidence" data-evidence-kind="points" aria-label="View points earned under ${escapeHtml(dogShowProgressJudge)}"><span>Points</span><strong>${evidence.points}</strong><small>${evidence.majors} major${evidence.majors === 1 ? "" : "s"} <i aria-hidden="true">›</i></small></button></section><section class="dog-show-progress-section"><header><div><h3>Team Notes</h3><p>Internal observations only. Treat patterns as guidance, not guarantees.</p></div></header><dl class="dog-show-judge-notes"><div><dt>Recommendation</dt><dd>${escapeHtml(note.recommendation || "Watch")}</dd></div><div><dt>Best fit dogs</dt><dd>${escapeHtml(note.bestFitDogs || "Not recorded")}</dd></div><div><dt>Preferences</dt><dd>${escapeHtml(note.preferenceTags || "Not recorded")}</dd></div><div><dt>Notes</dt><dd>${escapeHtml(note.notes || "No internal notes yet")}</dd></div></dl></section>` : dogShowRenderEmpty("No judges found", "Add a judge note or enter judges on ring appearances.", "edit-judge-note", "Add Judge")}</div></div>`;
 }
 
 function dogShowProgressHtml() {
@@ -1303,7 +1303,7 @@ function dogShowUpcomingTableHtml(activeEvent = dogShowActiveEvent()) {
     <header><div><span>SHOW MANAGEMENT</span><h3>Upcoming & Current Shows</h3><p>Update registration status, dogs, and helpers without opening each show.</p></div><strong>${events.length} show${events.length === 1 ? "" : "s"}</strong></header>
     <div class="dog-show-upcoming-bulk">
       <label class="inline-check"><input type="checkbox" data-show-table-select-all/><span>Select all</span></label>
-      <label>Set selected shows to<select data-show-table-bulk-status>${dogShowEventStatusOptions("Going")}</select></label>
+      <label class="dog-show-upcoming-bulk-status">Set selected shows to<select data-show-table-bulk-status>${dogShowEventStatusOptions("Going")}</select></label>
       <button type="button" data-action="apply-show-table-status">Apply Status</button>
     </div>
     <div class="dog-show-upcoming-table-wrap"><table class="dog-show-upcoming-table">
@@ -1630,7 +1630,7 @@ function dogShowTasksHtml(event) {
     return `<section class="dog-show-task-day${expanded ? " is-expanded" : " is-collapsed"}"><header class="dog-show-task-day-header"><button type="button" class="dog-show-task-day-toggle" data-task-day-toggle="${escapeHtml(dateKey)}" aria-expanded="${expanded}" aria-controls="${panelId}"><strong>${escapeHtml(dateKey === "Date missing" ? dateKey : dogShowFormatDate(dateKey))}</strong><span>${items.length} task${items.length === 1 ? "" : "s"}</span><i aria-hidden="true"></i></button></header><div class="dog-show-task-list" id="${panelId}"${expanded ? "" : " hidden"}>${items.map((task) => dogShowTaskRowHtml(task, event)).join("")}</div></section>`;
   }).join("");
   return `<div class="dog-show-view dog-show-tasks-view">
-    <section class="dog-show-list-toolbar"><div><h3>Show Tasks</h3><p>Assigned work stays separate from boarding daily tasks.</p></div><div class="button-row"><button type="button" class="secondary-button" data-action="create-water-round">Water Round</button><button type="button" data-action="new-show-task">New Task</button></div></section>
+    <section class="dog-show-list-toolbar"><div><h3>Show Tasks</h3><p>Assigned work stays separate from boarding daily tasks.</p></div><div class="button-row"><button type="button" data-action="new-show-task">New Task</button></div></section>
     <div class="dog-show-filter-row" role="group" aria-label="Task filters">
       <button type="button" data-task-filter="open" class="${dogShowTaskFilter === "open" ? "is-active" : ""}">Open ${all.filter((task) => task.status !== "Completed").length}</button>
       <button type="button" data-task-filter="mine" class="${dogShowTaskFilter === "mine" ? "is-active" : ""}">Mine</button>
@@ -1638,7 +1638,7 @@ function dogShowTasksHtml(event) {
       <button type="button" data-task-filter="all" class="${dogShowTaskFilter === "all" ? "is-active" : ""}">All ${all.length}</button>
     </div>
     <div class="dog-show-task-batch"><label><input type="checkbox" data-action="select-visible-show-tasks"${allVisibleSelected ? " checked" : ""}${selectableTaskIds.length ? "" : " disabled"} /> ${allVisibleSelected ? "Unselect visible" : "Select visible"}</label><button type="button" class="secondary-button" data-action="complete-selected-show-tasks"${dogShowSelectedTaskIds.size ? "" : " disabled"}>Complete selected (${dogShowSelectedTaskIds.size})</button></div>
-    <div class="dog-show-task-groups">${taskGroups || dogShowRenderEmpty("No tasks in this view", "Add a team task or create a water round for every dog.", "new-show-task", "New Task")}</div>
+    <div class="dog-show-task-groups">${taskGroups || dogShowRenderEmpty("No tasks in this view", "Add a team task for this show.", "new-show-task", "New Task")}</div>
   </div>`;
 }
 
@@ -2168,12 +2168,38 @@ function dogShowFinanceReportGroups(period = dogShowFinancePeriod) {
     .sort((left, right) => String(right.sortKey).localeCompare(String(left.sortKey)));
 }
 
-function dogShowFinanceMetricHtml(label = "", value = 0, className = "") {
-  return `<div><span>${escapeHtml(label)}</span><strong class="${escapeHtml(className)}">${dogShowExpenseCurrency(value)}</strong></div>`;
+const DOG_SHOW_FINANCE_METRIC_INFO = {
+  "show-wide": {
+    title: "Show-wide expenses",
+    copy: "Shared show costs that are not assigned to one dog, such as travel, lodging, parking, venue fees, or team supplies. Each expense is counted once in the business total.",
+  },
+  "net-dog-position": {
+    title: "Net dog position",
+    copy: "Dog-attributable expenses after subtracting income or rewards assigned to those dogs. Cost means expenses are higher than offsets; credit means assigned income is higher than expenses.",
+  },
+  "business-income": {
+    title: "Business income",
+    copy: "Income and rewards recorded for these shows before subtracting any expenses. Dog-assigned rewards stay business income while also offsetting that dog's attributable cost.",
+  },
+};
+
+function dogShowFinanceMetricLabelHtml(label = "", infoKey = "") {
+  const info = DOG_SHOW_FINANCE_METRIC_INFO[infoKey];
+  return `<span class="dog-show-finance-metric-label">${escapeHtml(label)}${info ? `<button type="button" class="dog-show-finance-metric-info" data-action="open-finance-metric-info" data-info-key="${escapeHtml(infoKey)}" aria-label="About ${escapeHtml(info.title)}" title="About ${escapeHtml(info.title)}">i</button>` : ""}</span>`;
 }
 
-function dogShowDogCostMetricHtml(label = "", value = 0, labels = {}) {
-  return `<div><span>${escapeHtml(label)}</span>${dogShowDogCostPositionHtml(value, labels)}</div>`;
+function dogShowFinanceMetricHtml(label = "", value = 0, className = "", infoKey = "") {
+  return `<div>${dogShowFinanceMetricLabelHtml(label, infoKey)}<strong class="${escapeHtml(className)}">${dogShowExpenseCurrency(value)}</strong></div>`;
+}
+
+function dogShowDogCostMetricHtml(label = "", value = 0, labels = {}, infoKey = "") {
+  return `<div>${dogShowFinanceMetricLabelHtml(label, infoKey)}${dogShowDogCostPositionHtml(value, labels)}</div>`;
+}
+
+function openDogShowFinanceMetricInfo(infoKey = "") {
+  const info = DOG_SHOW_FINANCE_METRIC_INFO[infoKey];
+  if (!info) return;
+  openDogShowDialog(info.title, `<section class="dog-show-dialog-section dog-show-finance-metric-explanation"><p>${escapeHtml(info.copy)}</p></section>`);
 }
 
 function dogShowFinanceDogBreakdownHtml(summary = {}) {
@@ -2239,9 +2265,9 @@ function dogShowFinanceReportGroupHtml(group = {}, index = 0) {
     <summary>
       <div><span>${dogShowFinancePeriod === "show" ? "SHOW" : dogShowFinancePeriod.toUpperCase()}</span><strong>${escapeHtml(dogShowFinancePeriod === "show" ? group.label : periodLabel)}</strong><small>${dogShowFinancePeriod === "show" ? `${escapeHtml(periodLabel)} · ` : ""}${group.summaries.length} show${group.summaries.length === 1 ? "" : "s"} · ${group.transactions.length} transaction${group.transactions.length === 1 ? "" : "s"}</small></div>
       <div class="dog-show-finance-report-group-metrics">
-        ${dogShowFinanceMetricHtml("Show-wide", group.showWideTotals.expenseTotal)}
-        ${dogShowDogCostMetricHtml("Net dog position", group.dogAttributableCostTotal, { positive: "cost", negative: "credit" })}
-        ${dogShowFinanceMetricHtml("Business income", group.totals.incomeTotal, "is-income")}
+        ${dogShowFinanceMetricHtml("Show-wide", group.showWideTotals.expenseTotal, "", "show-wide")}
+        ${dogShowDogCostMetricHtml("Net dog position", group.dogAttributableCostTotal, { positive: "cost", negative: "credit" }, "net-dog-position")}
+        ${dogShowFinanceMetricHtml("Business income", group.totals.incomeTotal, "is-income", "business-income")}
         ${dogShowFinanceMetricHtml("Net", group.totals.netTotal, group.totals.netTotal >= 0 ? "is-income" : "is-expense")}
       </div>
     </summary>
@@ -2780,8 +2806,7 @@ function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlann
       const rightDate = right.event?.startDate || right.candidate?.show?.startDate || "";
       return status === "Completed" ? rightDate.localeCompare(leftDate) : leftDate.localeCompare(rightDate);
     });
-    const expanded = status === "Active";
-    return `<details class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"${expanded ? " open" : ""}><summary><span><strong>${escapeHtml(status)}</strong><em>${items.length}</em></span><i aria-hidden="true"></i></summary><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status, planner) : dogShowPlannerCandidateHtml(item.candidate, planner)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></details>`;
+    return `<details class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"><summary><span><strong>${escapeHtml(status)}</strong><em>${items.length}</em></span><i aria-hidden="true"></i></summary><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status, planner) : dogShowPlannerCandidateHtml(item.candidate, planner)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></details>`;
   }).join("");
   return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3><p>View every show by stage. Completed shows keep a compact log of the dates, dogs who went, and results. Research for another breed is appended to the same show.</p></div><strong>${itemCount} show${itemCount === 1 ? "" : "s"}</strong></header><div class="dog-show-plan-status-summary">${statusSummary}</div><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
 }
@@ -5065,6 +5090,12 @@ function setupDogShowEventListeners() {
     const action = event.target.closest("[data-action]");
     if (!action) return;
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
+    if (action.dataset.action === "open-finance-metric-info") {
+      event.preventDefault();
+      event.stopPropagation();
+      openDogShowFinanceMetricInfo(action.dataset.infoKey || "");
+      return;
+    }
     if (action.dataset.action === "apply-show-table-status") {
       const selectedIds = [...page.querySelectorAll("[data-show-table-select]:checked")].map((input) => input.dataset.showTableSelect);
       const status = page.querySelector("[data-show-table-bulk-status]")?.value || "Going";

@@ -12138,10 +12138,10 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   background: var(--glass-fill-soft);
   border: 1px solid var(--line);
   border-radius: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(135px, auto) minmax(230px, 1fr) auto;
+  padding: 12px;
 }
 
 #dogShowPage .dog-show-upcoming-bulk label {
@@ -12150,8 +12150,13 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
 
 #dogShowPage .dog-show-upcoming-bulk .inline-check {
   align-self: center;
-  min-height: 42px;
-  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  min-height: 44px;
+  padding: 9px 11px;
 }
 
 #dogShowPage .dog-show-upcoming-bulk label:not(.inline-check) {
@@ -12160,10 +12165,39 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   font-size: 0.7rem;
   font-weight: 800;
   gap: 3px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 #dogShowPage .dog-show-upcoming-bulk select {
-  min-width: 210px;
+  font-size: 0.82rem;
+  min-height: 44px;
+  min-width: 0;
+  text-transform: none;
+  width: 100%;
+}
+
+#dogShowPage .dog-show-upcoming-bulk > button {
+  min-height: 44px;
+  padding-inline: 18px;
+}
+
+@media (max-width: 760px) {
+  .dog-show-upcoming-bulk {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #dogShowPage .dog-show-upcoming-bulk .inline-check {
+    grid-column: 1 / -1;
+  }
+
+  #dogShowPage .dog-show-upcoming-bulk-status {
+    grid-column: 1;
+  }
+
+  #dogShowPage .dog-show-upcoming-bulk > button {
+    grid-column: 2;
+  }
 }
 
 .dog-show-upcoming-table-wrap {
@@ -14827,6 +14861,12 @@ details.dog-show-ring-schedules[hidden] {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  #dogShowPage .dog-show-upcoming-bulk .inline-check,
+  #dogShowPage .dog-show-upcoming-bulk-status,
+  #dogShowPage .dog-show-upcoming-bulk > button {
+    grid-column: 1;
+  }
+
   #dogShowPage .dog-show-upcoming-bulk select,
   #dogShowPage .dog-show-upcoming-bulk button {
     width: 100%;
@@ -15402,7 +15442,7 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-progress-dog-selector > button,
-.dog-show-judge-selector > button:not(.secondary-button) {
+.dog-show-judge-selector-list > button {
   align-items: center;
   appearance: none;
   background: var(--panel);
@@ -15418,7 +15458,7 @@ details.dog-show-ring-schedules[hidden] {
 }
 
 .dog-show-progress-dog-selector > button.is-active,
-.dog-show-judge-selector > button.is-active {
+.dog-show-judge-selector-list > button.is-active {
   background: rgba(49, 95, 133, 0.12);
   border-color: #4D88B2;
   box-shadow: inset 4px 0 #315F85;
@@ -15539,8 +15579,32 @@ details.dog-show-ring-schedules[hidden] {
   font-size: 1.15rem;
 }
 
-.dog-show-judge-selector > button:not(.secondary-button) {
-  grid-template-columns: 74px minmax(0, 1fr);
+.dog-show-judge-selector-tools,
+.dog-show-judge-selector-list {
+  display: grid;
+  gap: 6px;
+}
+
+.dog-show-judge-selector-tools {
+  background: var(--glass-fill-soft);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.dog-show-judge-selector-tools .dog-show-progress-search {
+  position: static;
+}
+
+.dog-show-judge-selector-tools > button {
+  min-height: 38px;
+  width: 100%;
+}
+
+.dog-show-judge-selector-list > button {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 78px;
+  padding: 9px 10px;
 }
 
 .dog-show-judge-rating {
@@ -15552,6 +15616,7 @@ details.dog-show-ring-schedules[hidden] {
   font-weight: 800;
   justify-content: center;
   padding: 4px 6px;
+  justify-self: start;
 }
 
 .dog-show-judge-rating.is-show-under {
@@ -15636,7 +15701,7 @@ details.dog-show-ring-schedules[hidden] {
 :root[data-theme="dark"] .dog-show-progress-dog-selector,
 :root[data-theme="dark"] .dog-show-judge-selector,
 :root[data-theme="dark"] .dog-show-progress-dog-selector > button,
-:root[data-theme="dark"] .dog-show-judge-selector > button:not(.secondary-button),
+:root[data-theme="dark"] .dog-show-judge-selector-list > button,
 :root[data-theme="dark"] .dog-show-progress-history-row,
 :root[data-theme="dark"] .dog-show-judge-snapshot > button {
   background: #13273D;
@@ -15720,12 +15785,28 @@ details.dog-show-ring-schedules[hidden] {
   }
 
   .dog-show-progress-dog-selector > button,
-  .dog-show-judge-selector > button:not(.secondary-button) {
+  .dog-show-judge-selector-list > button {
     flex: 0 0 190px;
   }
 
-  .dog-show-judge-selector > .secondary-button {
-    flex: 0 0 auto;
+  .dog-show-judge-selector {
+    display: grid;
+    overflow: visible;
+  }
+
+  .dog-show-judge-selector-tools {
+    position: static;
+  }
+
+  .dog-show-judge-selector-list {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 3px;
+  }
+
+  .dog-show-judge-selector-list > button {
+    flex-basis: 158px;
   }
 
   .dog-show-progress-dog-hero,
@@ -15829,6 +15910,15 @@ details.dog-show-ring-schedules[hidden] {
   display: block;
   line-height: 1.15;
   overflow-wrap: anywhere;
+}
+
+.dog-show-judge-selector-copy strong {
+  font-size: 0.84rem;
+  line-height: 1.08;
+}
+
+.dog-show-judge-selector-copy small {
+  font-size: 0.65rem;
 }
 
 .dog-show-judge-metric {
@@ -16441,6 +16531,54 @@ details.dog-show-ring-schedules[hidden] {
   font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.dog-show-finance-metric-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+#dogShowPage .dog-show-finance-metric-info {
+  align-items: center;
+  background: transparent;
+  border: 1px solid #6F8398;
+  border-radius: 999px;
+  box-shadow: none;
+  color: #315F85;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 900;
+  height: 17px;
+  justify-content: center;
+  line-height: 1;
+  min-height: 17px;
+  padding: 0;
+  text-transform: lowercase;
+  width: 17px;
+}
+
+#dogShowPage .dog-show-finance-metric-info:hover,
+#dogShowPage .dog-show-finance-metric-info:focus-visible {
+  background: #315F85;
+  border-color: #315F85;
+  color: #FFFFFF;
+  transform: none;
+}
+
+.dog-show-finance-metric-explanation {
+  background: var(--tint-blue);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--ink);
+  line-height: 1.55;
+  padding: 14px;
+}
+
+.dog-show-finance-metric-explanation p {
+  margin: 0;
 }
 
 .dog-show-finance-report-stats strong {

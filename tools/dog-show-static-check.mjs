@@ -82,6 +82,12 @@ const required = [
   ["js/dog-show.js", "data-finance-dog-key", "Dog finance reports cannot select one dog."],
   ["js/dog-show.js", 'data-progress-filter="dog"', "Show Progress dogs cannot be searched."],
   ["js/dog-show.js", 'data-progress-filter="judge"', "Show Progress judges cannot be searched."],
+  ["js/dog-show.js", 'class="dog-show-judge-selector-tools"', "The Add Judge action is not grouped below the judge search field."],
+  ["js/dog-show.js", 'class="dog-show-judge-selector-list"', "Judge selector cards are not separated from the search and add controls."],
+  ["js/dog-show.js", "DOG_SHOW_FINANCE_METRIC_INFO", "Compiled finance metrics are missing their plain-language definitions."],
+  ["js/dog-show.js", 'data-action="open-finance-metric-info"', "Compiled finance metric info buttons are missing."],
+  ["styles.css", ".dog-show-finance-metric-info", "Compiled finance metric info buttons are not styled."],
+  ["styles.css", ".dog-show-upcoming-bulk-status", "The upcoming-show bulk controls are not styled as a coherent toolbar."],
   ["js/dog-show.js", "function dogShowRenamedJudgeRecords", "Corrected judge names do not preserve linked show history."],
   ["js/dog-show.js", 'data-original-judge-name="', "Judge edits do not retain the original name needed to migrate history."],
   ["js/dog-show.js", 'class="dog-show-expense-edit-row" data-action="edit-show-expense"', "Finance rows are not directly editable by mouse and keyboard."],
@@ -187,7 +193,7 @@ const required = [
   ["js/dog-show.js", "Counts for 1–5 points · Group points excluded.", "Lifecycle point schedules do not explain their thresholds."],
   ["js/dog-show.js", 'aria-label="${points[index]} point requires ${count} dogs"', "Compact lifecycle point thresholds are not individually labeled."],
   ["js/dog-show.js", '"Active", "Going", "Going To", "Potential Plan", "Completed"', "The show lifecycle board is missing one or more required stages."],
-  ["js/dog-show.js", 'const expanded = status === "Active"', "Only the currently active show stage should expand by default."],
+  ["js/dog-show.js", 'return `<details class="dog-show-plan-stage is-${status.toLowerCase().replace(/\\s+/g, "-")}"><summary>', "Show lifecycle stages should all render collapsed by default."],
   ["js/dog-show.js", 'Going To — Planned', "Show Setup is missing the planned attendance status."],
   ["js/dog-show.js", 'Going — Booked/Paid', "Show Setup is missing the booked and paid attendance status."],
   ["js/dog-show.js", 'Active — Show Underway', "Show Setup does not explain when to use Active."],
@@ -453,6 +459,7 @@ const forbidden = [
   ['saveDogShowRecord("boardingDog"', "Dog Show module must not save boarding dog records."],
   ['upsertRecord("careLog"', "Dog Show module must not write boarding/shared care logs."],
   ['upsertRecord("scheduledCareTask"', "Dog Show prep tasks must stay out of the boarding scheduler."],
+  ['data-action="create-water-round">Water Round</button>', "The removed Water Round task action is still rendered."],
 ];
 
 const failures = [];
