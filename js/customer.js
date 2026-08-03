@@ -2901,6 +2901,39 @@ function customerEstimateDetails() {
   };
 }
 
+function customerBoardingStatusIsRequestWritable(value = "") {
+  return new Set(["", "draft", "pending", "pending_customer_request", "pending customer request", "cancelled", "canceled"])
+    .has(String(value || "").trim().toLowerCase());
+}
+
+function customerBoardingRecordCanAcceptRequestWrite(record = {}) {
+  if (!record?.id || !customerBoardingStatusIsRequestWritable(record.boardingStatus || record.status || "Pending")) return false;
+  const operationalFields = [
+    "approvedAt", "approvedBy", "checkedInAt", "inKennelAt", "readyForPickupAt", "checkedOutAt",
+    "kennelLocationId", "kennelLocationName", "kennelBuilding", "kennelAssignedAt",
+  ];
+  if (operationalFields.some((field) => String(record[field] || "").trim())) return false;
+  if (arrayValue(record.stays).some((stay) => (
+    !customerBoardingStatusIsRequestWritable(stay.status)
+    || operationalFields.some((field) => String(stay[field] || "").trim())
+  ))) return false;
+  return !arrayValue(record.statusHistory).some((entry) => (
+    !customerBoardingStatusIsRequestWritable(entry.from)
+    || !customerBoardingStatusIsRequestWritable(entry.to)
+  ));
+}
+
+function customerBoardingEditableRequestRecord(recordId = "", stayId = "") {
+  const records = readRecords("boardingDog").filter((record) => !record.removed);
+  const exact = records.find((record) => record.id === recordId) || null;
+  if (exact && (!stayId || boardingStayByReference(exact, stayId))) return exact;
+  if (stayId) {
+    const stayRecord = records.find((record) => boardingStayByReference(record, stayId));
+    if (stayRecord) return stayRecord;
+  }
+  return exact;
+}
+
 async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
   if (customerBookingSubmitInProgress) return;
@@ -2928,7 +2961,7 @@ async function submitPendingCustomerBooking() {
   if (confirmButton) confirmButton.disabled = true;
   const editingId = $("#editingCustomerRequestId")?.value;
   const editingStayId = $("#editingCustomerStayId")?.value || "";
-  const editingRecord = editingId ? boardingDogRecordForDisplay(editingId) : null;
+  const editingRecord = editingId ? customerBoardingEditableRequestRecord(editingId, editingStayId) : null;
   const requestGroupId = editingRecord?.requestGroupId || editingRecord?.reservationGroupId || estimate.requestGroupId || estimate.submissionId || uid("requestGroup");
   const groupDogNames = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.dogName || "Dog");
   const groupDogIds = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.id || dog.sourceBoardingDogId || "").filter(Boolean);
@@ -2965,7 +2998,8 @@ async function submitPendingCustomerBooking() {
       const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1))
         ? editingRecord
         : sharedBoardingRecord;
-      const useExisting = Boolean(existingTarget);
+      const useExisting = Boolean(existingTarget && (editingRecord || customerBoardingRecordCanAcceptRequestWrite(existingTarget)));
+      const detachedFromHistoricalProfile = Boolean(existingTarget && !useExisting);
       const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : {};
       const existingStayRequestCode = existingStay && Object.keys(existingStay).length
         ? boardingStayRequestCode(existingTarget || sharedBoardingRecord || dog, existingStay)
@@ -3138,7 +3172,12 @@ async function submitPendingCustomerBooking() {
         secondaryOwnerEmail,
         requestedByEmail: currentUser?.email || ownerEmail,
         requestedByName: currentUser?.name || dog.ownerName || "",
-        linkedCustomerDogId: dog.isSharedBoardingDog ? linkedCustomerDogForBoarding(sharedBoardingRecord || {})?.id || dog.linkedCustomerDogId || "" : dog.id,
+        linkedCustomerDogId: detachedFromHistoricalProfile
+          ? ""
+          : dog.isSharedBoardingDog
+            ? linkedCustomerDogForBoarding(sharedBoardingRecord || {})?.id || dog.linkedCustomerDogId || ""
+            : dog.id,
+        sourceCustomerDogId: dog.sourceCustomerDogId || (detachedFromHistoricalProfile ? dog.id || existingTarget?.linkedCustomerDogId || "" : existingTarget?.sourceCustomerDogId || ""),
         linkedOwnerEmail: ownerEmail,
         emergencyName: dog.emergencyName,
         emergencyPhone: dog.emergencyPhone,
@@ -3156,7 +3195,7 @@ async function submitPendingCustomerBooking() {
         dhppDuration: dog.dhppDuration,
         rabiesGoodThreeYears: dog.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(dog, "rabies") ? "Yes" : ""),
         dhppGoodThreeYears: dog.dhppGoodThreeYears || (vaccineDurationIsThreeYears(dog, "dhpp") ? "Yes" : ""),
-        sourceBoardingDogId: dog.sourceBoardingDogId || "",
+        sourceBoardingDogId: dog.sourceBoardingDogId || (detachedFromHistoricalProfile ? existingTarget.id || "" : ""),
         profilePhotoUrl: dog.profilePhotoUrl || "",
         profilePhotoPath: dog.profilePhotoPath || "",
         vaccinationRecords: dog.vaccinationRecords || [],
