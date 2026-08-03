@@ -1560,6 +1560,21 @@ body.owned-dog-modal-open {
   margin: 0;
 }
 
+.schedule-review-payroll .data-table td:first-child strong,
+.schedule-review-payroll .data-table td:first-child span {
+  display: block;
+}
+
+.schedule-review-payroll .data-table td:first-child span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 3px;
+}
+
+.payroll-rate-missing {
+  background: color-mix(in srgb, var(--warning, #c47a16) 8%, transparent);
+}
+
 .login-panel {
   align-items: center;
   background: #f6f8f7;

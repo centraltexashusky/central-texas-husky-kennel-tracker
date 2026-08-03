@@ -231,15 +231,21 @@ function staffPayrollSummaryForRange(range = timesheetActiveRange(), options = {
 function syncTimesheetRangeUi(range = timesheetActiveRange()) {
   const startInput = $("#timesheetStartDate");
   const endInput = $("#timesheetEndDate");
+  const payrollStartInput = $("#payrollStartDate");
+  const payrollEndInput = $("#payrollEndDate");
   if (startInput) startInput.value = range.start || "";
   if (endInput) endInput.value = range.end || "";
+  if (payrollStartInput) payrollStartInput.value = range.start || "";
+  if (payrollEndInput) payrollEndInput.value = range.end || "";
   const title = $("#timesheetTableTitle");
   const help = $("#timesheetTableHelp");
   const summary = $("#timesheetRangeSummary");
+  const payrollSummary = $("#payrollRangeSummary");
   const label = timesheetRangeLabel(range);
   if (title) title.textContent = range.isFiltered ? "Selected Date Range" : "Current Week";
   if (help) help.textContent = range.isFiltered ? "Clock in and clock out records for the selected date range." : "Clock in and clock out records for this week.";
   if (summary) summary.textContent = label ? \`Showing timesheet records for \${label}.\` : "";
+  if (payrollSummary) payrollSummary.textContent = label ? \`Showing payroll estimates for \${label}.\` : "";
 }
 
 function renderTimesheet() {
@@ -290,6 +296,7 @@ function renderTimesheet() {
 	  renderTimeOffTab();
 	  renderHolidayTab();
 	  renderScheduleReviewTab();
+	  renderPayrollTab();
 	}
 
 async function saveTimeEntry(payload, options = {}) {
@@ -464,11 +471,11 @@ var STAFF_SCHEDULE_DEFAULT_START_HOUR = 6;
 var STAFF_SCHEDULE_DEFAULT_END_HOUR = 19;
 
 function timesheetTabAllowed(tab = "clock") {
-  return tab !== "review" || currentRole() === "admin";
+  return !["review", "payroll"].includes(tab) || currentRole() === "admin";
 }
 
 function setTimesheetTab(tab = "clock") {
-  const requestedTab = ["clock", "schedule", "timeOff", "holidays", "review"].includes(tab) ? tab : "clock";
+  const requestedTab = ["clock", "schedule", "timeOff", "holidays", "review", "payroll"].includes(tab) ? tab : "clock";
   timesheetTab = timesheetTabAllowed(requestedTab) ? requestedTab : "clock";
   renderTimesheet();
 }
@@ -1480,6 +1487,36 @@ function renderScheduleReviewTab() {
     ? issues.map((issue) => \`<article class="record-card compact-record-card \${issue.priority === "urgent" ? "is-urgent" : ""}"><strong>\${escapeHtml(issue.title)}</strong><p>\${escapeHtml(issue.detail)}</p></article>\`).join("")
     : "<p>No schedule issues found for this week.</p>";
   list.innerHTML = payrollTable + issuesHtml;
+}
+
+function renderPayrollTab() {
+  const summary = $("#payrollSummary");
+  const rows = $("#payrollRows");
+  if (!summary || !rows) return;
+  if (currentRole() !== "admin") {
+    summary.innerHTML = "";
+    rows.innerHTML = "";
+    return;
+  }
+
+  const range = timesheetActiveRange();
+  const payroll = staffPayrollSummaryForRange(range, { includeAll: true });
+  summary.innerHTML = [
+    ["Estimated gross pay", payrollMoney(payroll.totalPayroll), "before taxes and deductions"],
+    ["Completed hours", payroll.totalHours.toFixed(2), "clocked hours in this range"],
+    ["Employees", payroll.staff.length, "with completed clock records"],
+    ["Missing rates", payroll.missingRateCount, payroll.missingRateCount ? "set rates before payroll" : "all hourly rates are set"],
+  ].map(([label, value, note]) => \`<div class="summary-card"><span>\${escapeHtml(label)}</span><strong>\${escapeHtml(String(value))}</strong><p>\${escapeHtml(note)}</p></div>\`).join("");
+
+  rows.innerHTML = payroll.staff.length
+    ? payroll.staff.map((item) => \`<tr\${item.missingRate ? ' class="payroll-rate-missing"' : ""}>
+        <td><strong>\${escapeHtml(item.staffName || "Staff")}</strong>\${item.staffEmail ? \`<span>\${escapeHtml(item.staffEmail)}</span>\` : ""}</td>
+        <td>\${escapeHtml(item.hours.toFixed(2))}</td>
+        <td>\${item.missingRate ? '<strong class="service-warning-text">Rate not set</strong>' : escapeHtml(staffHourlyRateText({ hourlyRate: item.rate }))}</td>
+        <td><strong>\${item.missingRate ? "—" : escapeHtml(payrollMoney(item.total || 0))}</strong></td>
+        <td>\${escapeHtml(String(item.shifts || 0))}</td>
+      </tr>\`).join("")
+    : '<tr><td colspan="5">No completed clock records for this date range.</td></tr>';
 }
 
 function scheduleShiftFormHtml(record = {}) {

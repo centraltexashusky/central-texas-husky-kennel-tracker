@@ -11690,6 +11690,23 @@ function initEvents() {
     timesheetFilterEnd = "";
     renderTimesheet();
   });
+  $("#applyPayrollDateFilterButton")?.addEventListener("click", () => {
+    const start = dateOnly($("#payrollStartDate")?.value);
+    const end = dateOnly($("#payrollEndDate")?.value);
+    if (!start && !end) {
+      timesheetFilterStart = "";
+      timesheetFilterEnd = "";
+    } else {
+      timesheetFilterStart = start || end;
+      timesheetFilterEnd = end || start;
+    }
+    renderTimesheet();
+  });
+  $("#resetPayrollDateFilterButton")?.addEventListener("click", () => {
+    timesheetFilterStart = "";
+    timesheetFilterEnd = "";
+    renderTimesheet();
+  });
   $("#exportCareLogsButton")?.addEventListener("click", exportCareLogs);
   document.addEventListener("pointerover", (event) => {
     const infoIcon = event.target.closest(".service-info-icon");

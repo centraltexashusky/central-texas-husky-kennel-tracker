@@ -18,6 +18,21 @@ if (!timesheet.includes('Number(record.hours || 0) > 0 && record.clockOutTime'))
 if (!timesheet.includes("total: hours * rate")) {
   failures.push("Payroll no longer multiplies completed hours by the saved hourly rate.");
 }
+if (!index.includes('data-timesheet-tab="payroll"') || !index.includes('id="timesheetPayrollPanel"')) {
+  failures.push("Timesheet does not expose the admin payroll review tab and panel.");
+}
+if (!timesheet.includes('staffPayrollSummaryForRange(range, { includeAll: true })')) {
+  failures.push("Payroll review does not summarize all employees in the selected date range.");
+}
+if (!timesheet.includes('!["review", "payroll"].includes(tab) || currentRole() === "admin"')) {
+  failures.push("Sensitive payroll details are not restricted to admins.");
+}
+if (!timesheet.includes('item.missingRate ? "—"')) {
+  failures.push("Missing hourly rates can be mistaken for valid zero-dollar pay.");
+}
+if (!shared.includes('"#applyPayrollDateFilterButton"') || !shared.includes('"#resetPayrollDateFilterButton"')) {
+  failures.push("Payroll date range controls are not connected.");
+}
 if (!/shared\.js\?v=2026072[3-9]-/.test(main)) {
   failures.push("The payroll record-loading fix is not cache-busted.");
 }
