@@ -407,6 +407,7 @@ var alertTypeDefinitions = [
   { key: "timeOffReviewed", label: "Time off approval/denial", group: "Staff" },
   { key: "schedulePublished", label: "Schedule published", group: "Schedule" },
   { key: "scheduleChangedAfterPublish", label: "Schedule changed after publish", group: "Schedule" },
+  { key: "dogShowClosingSoon", label: "Dog show entry closing soon", group: "Dog Shows" },
   { key: "urgentStaffAlertSent", label: "Urgent staff broadcast", group: "Manual" },
   { key: "urgentCustomerAlertSent", label: "Urgent customer broadcast", group: "Manual" },
 ];
@@ -423,6 +424,7 @@ var adminDefaultAlertTypes = new Set([
   "timeOffRequested",
   "schedulePublished",
   "scheduleChangedAfterPublish",
+  "dogShowClosingSoon",
   "urgentStaffAlertSent",
   "urgentCustomerAlertSent",
 ]);
@@ -12455,6 +12457,31 @@ function initEvents() {
     }
     const action = event.target.closest("[data-action]");
     if (!action) return;
+    if (action.dataset.action === "close-detail-dialog") {
+      $("#detailDialog").close();
+      return;
+    }
+    if (action.dataset.action === "open-dog-show-alert-planner") {
+      $("#detailDialog").close();
+      switchPage("dogShowPage");
+      if (typeof setDogShowView === "function") setDogShowView("planner");
+      else if (typeof renderDogShow === "function") renderDogShow();
+      return;
+    }
+    if (action.dataset.action === "mark-dog-show-alert-booked") {
+      const eventId = action.dataset.eventId || "";
+      if (!eventId || typeof saveDogShowTableStatuses !== "function") return;
+      action.disabled = true;
+      const saved = await saveDogShowTableStatuses([eventId], "Going");
+      if (saved) {
+        $("#detailDialog").close();
+        renderNotifications();
+        showToast("Show marked Going — Booked/Paid. Daily closing alerts are resolved.");
+      } else {
+        action.disabled = false;
+      }
+      return;
+    }
     if (action.dataset.action === "open-customer-notification-file") {
       event.preventDefault();
       event.stopPropagation();

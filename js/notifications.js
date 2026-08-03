@@ -1016,6 +1016,7 @@ function notificationDisplayTitle(notification = {}) {
   if (eventName === "timeOffReviewed") return \`Time off \${String(source.status || "reviewed").toLowerCase()}: \${dateRangeText(source.startDate, source.endDate)}\`;
   if (eventName === "schedulePublished") return "Kennel schedule published";
   if (eventName === "scheduleChangedAfterPublish") return \`Schedule changed: \${source.staffName || "Staff"}\`;
+  if (eventName === "dogShowClosingSoon") return \`Dog show closes soon: \${source.showName || source.club || source.name || source.show?.club || source.show?.name || "Show entry"}\`;
   if (eventName === "urgentStaffAlertSent") return "Urgent staff alert";
   if (eventName === "urgentCustomerAlertSent") return "Urgent customer alert";
   if (eventName === "customerStayUpdateSent") return \`Stay update: \${dogName || "Customer dog"}\`;
@@ -1061,6 +1062,11 @@ function notificationDisplayMessage(notification = {}) {
   if (eventName === "timeOffReviewed") return \`\${source.reviewedBy || "Admin"} marked your time off request \${source.status || "reviewed"}.\`;
   if (eventName === "schedulePublished") return \`The schedule for \${dateRangeText(source.weekStart, addDays(source.weekStart, 6))} has been published.\`;
   if (eventName === "scheduleChangedAfterPublish") return \`\${source.staffName || "A staff member"} has a schedule change on \${source.date || "the published schedule"}.\`;
+  if (eventName === "dogShowClosingSoon") {
+    const days = Number(source.daysUntilClosing);
+    const timing = days === 0 ? "closes today" : \`closes in \${days} day\${days === 1 ? "" : "s"}\`;
+    return \`\${source.showName || source.club || source.name || source.show?.club || source.show?.name || "This show"} \${timing} (\${source.entryClosingDate || "closing date pending"}). Decide whether to enter, then update the show status.\`;
+  }
   if (eventName === "urgentStaffAlertSent" || eventName === "urgentCustomerAlertSent") return source.message || "An urgent alert was sent.";
   if (eventName === "customerStayUpdateSent") {
     const update = source.latestCustomerUpdate || {};
@@ -1110,6 +1116,7 @@ function notificationCategoryForEvent(eventName = "", recordOrNotification = {})
   if (name.includes("carelog") || name.includes("medical") || sourceType === "carelog") return "Medical/Care";
   if (name.includes("maintenance") || sourceType === "maintenance") return "Maintenance";
   if (name.includes("schedule") || name.includes("timeoff") || sourceType === "timesheet" || sourceType === "timeoffrequest") return "Staff";
+  if (name.includes("dogshow") || sourceType === "showevent" || sourceType === "showplannercandidate") return "Dog Shows";
   if (name.includes("request") || sourceType === "request") return "Requests";
   if (name.includes("customer")) return "Customer";
   return notificationSourceTypeLabel(sourceType || eventName) || "Alert";
@@ -1134,6 +1141,7 @@ function notificationReasonForEvent(eventName = "", recordOrNotification = {}) {
   if (name === "maintenanceCreated" || name === "urgentMaintenanceCreated") return source.issue || "Maintenance item needs review";
   if (name === "customerStayUpdateSent") return "Owner update sent";
   if (name === "timeOffRequested") return "Time off review needed";
+  if (name === "dogShowClosingSoon") return "Entry decision due before closing";
   return notificationEventDisplayLabel(name || source.type || "Alert");
 }
 
@@ -1150,6 +1158,7 @@ function notificationActionLabel(eventName = "", recordOrNotification = {}) {
   if (sourceType === "maintenance" || name.includes("Maintenance")) return "Open Maintenance";
   if (sourceType === "careLog" || name === "careLogAdminAlertCreated") return "Open Care Note";
   if (name === "timeOffRequested") return "Review Time Off";
+  if (name === "dogShowClosingSoon") return "Review Entry Plan";
   if (sourceType === "timesheet" || sourceType === "timeOffRequest" || name.includes("timeOff") || name.includes("schedule")) return "Open Staff Item";
   if (sourceType === "request" || name.includes("Request")) return "Open Request";
   return "Open Alert";
@@ -1474,6 +1483,14 @@ function notificationEventConfig(eventName = "", record = {}) {
       channels: ["email", "inApp"],
       audienceEmails: customerStayUpdateAudienceEmails(record),
     },
+    dogShowClosingSoon: {
+      title: \`Dog show closes soon: \${record.showName || record.club || record.name || record.show?.club || record.show?.name || "Show entry"}\`,
+      message: \`\${record.showName || record.club || record.name || record.show?.club || record.show?.name || "This show"} \${Number(record.daysUntilClosing) === 0 ? "closes today" : \`closes in \${Number(record.daysUntilClosing)} day\${Number(record.daysUntilClosing) === 1 ? "" : "s"}\`} (\${record.entryClosingDate || "closing date pending"}). Decide whether to enter, then update the show status.\`,
+      priority: Number(record.daysUntilClosing) <= 2 ? "urgent" : "review",
+      channels: ["inApp"],
+      audienceRoles: ["admin"],
+      audienceEmails: getAdminEmails(),
+    },
     dogShowResultPublished: {
       title: \`\${record.resultIsUpdate ? "Updated dog show result" : "Dog show result"}: \${record.dogName || "Your dog"}\`,
       message: \`\${record.dogName || "Your dog"} received \${record.outcome === "Scratched" ? "Withdrawn before judging" : record.outcome || "a new result"} at \${record.showName || "the dog show"}.\`,
@@ -1543,6 +1560,120 @@ function createNotificationRecord(record = {}, eventName = "", config = {}) {
   });
 }
 
+var dogShowClosingNotificationSyncKeys = new Set();
+
+function dogShowClosingAlertDateKey(value = "") {
+  return /^\\d{4}-\\d{2}-\\d{2}$/.test(String(value || "")) ? String(value) : "";
+}
+
+function dogShowClosingAlertDaysUntil(value = "", today = todayDate()) {
+  const closing = dogShowClosingAlertDateKey(value);
+  if (!closing) return NaN;
+  const closingTime = new Date(\`\${closing}T12:00:00\`).getTime();
+  const todayTime = new Date(\`\${today}T12:00:00\`).getTime();
+  return Math.round((closingTime - todayTime) / 86400000);
+}
+
+function dogShowClosingAlertFormattedDate(value = "") {
+  const date = new Date(\`\${value || ""}T12:00:00\`);
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "Not available";
+}
+
+function dogShowClosingAlertSources() {
+  const events = readRecords("showEvent").filter((record) => !record.removed);
+  const promotedCandidateIds = new Set(events.map((event) => event.plannerCandidateId).filter(Boolean));
+  const promotedExternalIds = new Set(events.map((event) => event.plannerExternalId || event.externalId).filter(Boolean));
+  const scheduled = events.map((event) => ({
+    ...event,
+    type: "showEvent",
+    showName: event.club || event.name || "Dog Show",
+    entryClosingDate: event.entryClosingDate || event.closingDate || "",
+  }));
+  const potential = readRecords("showResult")
+    .filter((record) => !record.removed && record.recordKind === "showPlannerCandidate")
+    .filter((record) => !promotedCandidateIds.has(record.id) && !promotedExternalIds.has(record.show?.canonicalId || record.show?.externalId))
+    .map((record) => ({
+      ...record,
+      type: "showPlannerCandidate",
+      status: "Potential",
+      showName: record.show?.club || record.show?.name || "Dog Show",
+      startDate: record.show?.startDate || "",
+      endDate: record.show?.endDate || record.show?.startDate || "",
+      cityState: record.show?.cityState || "",
+      entryClosingDate: record.show?.entryClosingDate || record.show?.closingDate || "",
+    }));
+  return [...scheduled, ...potential];
+}
+
+function ensureDogShowClosingNotifications() {
+  if (!currentUser || currentRole() !== "admin") return [];
+  const today = todayDate();
+  const created = [];
+  const eligibleStatuses = new Set(["going to", "potential", "potential plan"]);
+  dogShowClosingAlertSources().forEach((source) => {
+    if (!eligibleStatuses.has(String(source.status || "").trim().toLowerCase())) return;
+    if (source.startDate && source.startDate <= today) return;
+    const daysUntilClosing = dogShowClosingAlertDaysUntil(source.entryClosingDate, today);
+    if (!Number.isFinite(daysUntilClosing) || daysUntilClosing < 0 || daysUntilClosing > 7) return;
+    const alertShowIdentity = source.plannerCandidateId || (source.type === "showPlannerCandidate" ? source.id : source.plannerExternalId || source.externalId || source.id);
+    const record = { ...source, alertShowIdentity, daysUntilClosing, alertGeneratedFor: today, updatedAt: \`\${today}T12:00:00.000Z\` };
+    const config = notificationEventConfig("dogShowClosingSoon", record);
+    const dedupeKey = \`dogShowClosingSoon:\${record.type}:\${record.id}:\${record.updatedAt}\`;
+    const alreadyAlertedToday = readRecords("notificationLog").some((item) => {
+      if (item.removed || item.eventName !== "dogShowClosingSoon") return false;
+      const snapshot = notificationSourceSnapshot(item);
+      return snapshot.alertShowIdentity === alertShowIdentity && snapshot.alertGeneratedFor === today;
+    });
+    if (!config || alreadyAlertedToday || readRecords("notificationLog").some((item) => item.dedupeKey === dedupeKey && !item.removed)) return;
+    const notification = createNotificationRecord(record, "dogShowClosingSoon", config);
+    created.push(notification);
+    if (!localTestMode && supabaseClient && !dogShowClosingNotificationSyncKeys.has(dedupeKey)) {
+      dogShowClosingNotificationSyncKeys.add(dedupeKey);
+      Promise.resolve(sendPayload(notification, { quiet: true }))
+        .catch((error) => console.warn("Could not save dog show closing alert.", error))
+        .finally(() => dogShowClosingNotificationSyncKeys.delete(dedupeKey));
+    }
+  });
+  return created;
+}
+
+function dogShowClosingNotificationLiveSource(notification = {}) {
+  const source = notificationSourceSnapshot(notification);
+  if (notification.sourceType === "showEvent") {
+    return readRecords("showEvent").find((record) => record.id === notification.sourceId && !record.removed) || source;
+  }
+  if (notification.sourceType === "showPlannerCandidate") {
+    const candidate = readRecords("showResult").find((record) => record.id === notification.sourceId && !record.removed) || source;
+    return {
+      ...candidate,
+      status: candidate.status || "Potential",
+      showName: candidate.showName || candidate.show?.club || candidate.show?.name || source.showName,
+      entryClosingDate: candidate.entryClosingDate || candidate.show?.entryClosingDate || source.entryClosingDate,
+      startDate: candidate.startDate || candidate.show?.startDate || source.startDate,
+      endDate: candidate.endDate || candidate.show?.endDate || source.endDate,
+      cityState: candidate.cityState || candidate.show?.cityState || source.cityState,
+    };
+  }
+  return source;
+}
+
+function openDogShowClosingNotification(notification = {}) {
+  const source = dogShowClosingNotificationLiveSource(notification);
+  const status = String(source.status || "Potential");
+  const daysUntilClosing = dogShowClosingAlertDaysUntil(source.entryClosingDate, todayDate());
+  const resolved = !["going to", "potential", "potential plan"].includes(status.toLowerCase()) || !Number.isFinite(daysUntilClosing) || daysUntilClosing < 0 || (source.startDate && source.startDate <= todayDate());
+  const timing = !Number.isFinite(daysUntilClosing) ? "Closing date unavailable" : daysUntilClosing < 0 ? "Entry period closed" : daysUntilClosing === 0 ? "Closes today" : \`Closes in \${daysUntilClosing} day\${daysUntilClosing === 1 ? "" : "s"}\`;
+  const showDates = source.startDate ? [dogShowClosingAlertFormattedDate(source.startDate), source.endDate && source.endDate !== source.startDate ? dogShowClosingAlertFormattedDate(source.endDate) : ""].filter(Boolean).join(" – ") : "";
+  showDetailDialog(notificationDisplayTitle(notification), \`<section class="dog-show-closing-alert-plan">
+    <header><div><span>\${resolved ? "RESOLVED OR EXPIRED" : "ENTRY DECISION NEEDED"}</span><h3>\${escapeHtml(source.showName || source.club || source.name || source.show?.club || source.show?.name || "Dog Show")}</h3><p>\${escapeHtml([source.cityState || source.show?.cityState, showDates].filter(Boolean).join(" · "))}</p></div><strong>\${escapeHtml(timing)}</strong></header>
+    <dl><div><dt>Closing date</dt><dd>\${escapeHtml(dogShowClosingAlertFormattedDate(source.entryClosingDate))}</dd></div><div><dt>Current status</dt><dd>\${escapeHtml(status)}</dd></div></dl>
+    <section><h3>Action plan</h3><ol><li>Review the AKC event, premium list, judges, and eligible dogs.</li><li>Decide whether the kennel is entering this show before the closing date.</li><li>If entry and payment are complete, change the show to <strong>Going — Booked/Paid</strong>. If not attending, remove it from the plan.</li></ol></section>
+    <p class="dog-show-closing-alert-resolution">\${resolved ? "No further daily alert will be created while this status or date remains resolved." : "This reminder returns once per day until the entry closes or the show is marked booked/paid or underway."}</p>
+    <div class="button-row">\${notification.sourceType === "showEvent" && !resolved ? \`<button type="button" data-action="mark-dog-show-alert-booked" data-event-id="\${escapeHtml(notification.sourceId)}">Mark Booked/Paid</button>\` : ""}<button type="button" class="secondary-button" data-action="open-dog-show-alert-planner" data-source-id="\${escapeHtml(notification.sourceId || "")}">Open Show Planner</button><button type="button" class="secondary-button" data-action="close-detail-dialog">Close</button></div>
+  </section>\`);
+  return true;
+}
+
 function notificationRetentionTimestamp(notification = {}) {
   const timestamp = notification.submittedAt || notification.sentAt || notification.updatedAt || "";
   const time = new Date(timestamp).getTime();
@@ -1600,6 +1731,7 @@ function renderNotifications() {
   const summary = $("#notificationPanelSummary");
   const readButton = $("#showReadNotificationsButton");
   if (!button || !badge || !panel || !list || !summary) return;
+  ensureDogShowClosingNotifications();
   pruneExpiredNotifications();
   scheduleRemoteNotificationRetentionCleanup();
   const available = readRecords("notificationLog")
@@ -1847,6 +1979,11 @@ async function openNotification(id = "") {
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;
   const recoveredRequest = recoveredBoardingRequestNotification(notification);
+  if (notification.eventName === "dogShowClosingSoon") {
+    openDogShowClosingNotification(notification);
+    renderDashboard();
+    return;
+  }
   if (sourceType === "boardingAgreement" || notification.eventName === "customerBoardingAgreementSigned") {
     const source = notificationSourceSnapshot(notification);
     const record = readRecords("boardingAgreement").find((item) => item.id === sourceId && !item.removed)

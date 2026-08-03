@@ -17902,6 +17902,7 @@ details.dog-show-ring-schedules[hidden] {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
+  margin-top: 6px;
 }
 
 .dog-show-planner-flags > span {
@@ -18028,19 +18029,34 @@ button.dog-show-planner-score:focus-visible {
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 4px;
-  min-height: 94px;
-  padding: 10px;
+  gap: 8px;
+  min-height: 70px;
+  padding: 9px 10px;
 }
 
 .dog-show-planner-judge {
   box-shadow: none;
   color: inherit;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 1fr;
   font-family: inherit;
-  justify-items: start;
   margin: 0;
   text-align: left;
   width: 100%;
+}
+
+.dog-show-planner-judge-copy {
+  align-content: center;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dog-show-planner-judge-copy > span {
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .dog-show-planner-judge:not(.is-pending) {
@@ -18063,7 +18079,9 @@ button.dog-show-planner-score:focus-visible {
 .dog-show-planner-judge-score {
   align-items: center;
   display: flex;
-  gap: 6px;
+  gap: 5px;
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .dog-show-planner-judge-score b {
@@ -18137,6 +18155,12 @@ button.dog-show-planner-score:focus-visible {
   text-decoration: none;
 }
 
+button.dog-show-source-link {
+  cursor: pointer;
+  font-family: inherit;
+  margin: 0;
+}
+
 .dog-show-source-link:hover,
 .dog-show-source-link:focus-visible {
   background: #E9F3FA;
@@ -18168,6 +18192,158 @@ button.dog-show-planner-score:focus-visible {
 .dog-show-judge-evidence-dialog {
   display: grid;
   gap: 10px;
+}
+
+.dog-show-prior-year-entries {
+  display: grid;
+  gap: 12px;
+}
+
+.dog-show-prior-year-entries > p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.dog-show-prior-year-card {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.dog-show-prior-year-card > header {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.dog-show-prior-year-card > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.dog-show-prior-year-card > header span,
+.dog-show-prior-year-card > p,
+.dog-show-prior-year-card > small {
+  color: var(--muted);
+  margin: 0;
+}
+
+.dog-show-prior-year-card > ul {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dog-show-prior-year-card > ul li {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+  padding-top: 6px;
+}
+
+.dog-show-prior-year-card > ul span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.dog-show-closing-alert-plan {
+  display: grid;
+  gap: 14px;
+}
+
+.dog-show-closing-alert-plan > header {
+  align-items: start;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+}
+
+.dog-show-closing-alert-plan > header > div {
+  display: grid;
+  gap: 4px;
+}
+
+.dog-show-closing-alert-plan > header span {
+  color: #A55D00;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.dog-show-closing-alert-plan > header h3,
+.dog-show-closing-alert-plan > header p,
+.dog-show-closing-alert-plan > section h3,
+.dog-show-closing-alert-plan > section ol,
+.dog-show-closing-alert-resolution {
+  margin: 0;
+}
+
+.dog-show-closing-alert-plan > header p,
+.dog-show-closing-alert-resolution {
+  color: var(--muted);
+}
+
+.dog-show-closing-alert-plan > header > strong {
+  background: #FFF2D6;
+  border: 1px solid #E1B85E;
+  border-radius: 999px;
+  color: #754D00;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.dog-show-closing-alert-plan > dl {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.dog-show-closing-alert-plan > dl > div,
+.dog-show-closing-alert-plan > section {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.dog-show-closing-alert-plan dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.dog-show-closing-alert-plan dd {
+  font-weight: 800;
+  margin: 3px 0 0;
+}
+
+.dog-show-closing-alert-plan > section {
+  display: grid;
+  gap: 8px;
+}
+
+.dog-show-closing-alert-plan > section ol {
+  display: grid;
+  gap: 7px;
+  padding-left: 22px;
+}
+
+@media (max-width: 640px) {
+  .dog-show-closing-alert-plan > header {
+    flex-direction: column;
+  }
+
+  .dog-show-closing-alert-plan > dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .dog-show-judge-evidence-dialog > p {
