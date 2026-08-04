@@ -165,7 +165,6 @@ const required = [
   ["js/dog-show.js", 'data-action="save-potential-show"', "Show research cannot be added to the potential-show plan."],
   ["js/dog-show.js", 'recordKind: DOG_SHOW_PLANNER_CANDIDATE_KIND', "Potential shows are not persisted separately from the current search."],
   ["js/dog-show.js", "function dogShowPlannerCandidateForShow", "Potential-show research cannot merge targets into an existing show."],
-  ["js/dog-show.js", "Research for another breed is appended to the same show.", "The planner does not explain multi-breed show merging."],
   ["js/dog-show.js", 'name="searchMode" value="breed"', "The planner cannot search by breed without selecting a dog."],
   ["js/dog-show.js", "dog-show-collapsible-section dog-show-planner-search-section", "Planner dog and breed selection panels are not collapsible."],
   ["js/dog-show.js", "function dogShowPlannerBreedOptions", "The planner is missing its searchable breed list."],
@@ -222,7 +221,6 @@ const required = [
   ["js/dog-show.js", 'data-action="open-show-calendar"', "Dog Show More is missing the Show Calendar shortcut."],
   ["index.html", 'data-dog-show-more-action="calendar"', "The mobile Dog Show More menu is missing Show Calendar."],
   ["js/dog-show.js", "plannerExternalId", "Promoted planner shows cannot be matched back to their research records."],
-  ["styles.css", ".dog-show-plan-status-summary", "The show lifecycle status summary is not styled."],
   ["styles.css", ".dog-show-plan-point-schedule", "Lifecycle point schedules are not styled."],
   ["styles.css", ".dog-show-plan-point-schedule > summary", "Point schedules do not expose a styled collapsed summary."],
   ["styles.css", ".dog-show-plan-point-thresholds", "Lifecycle point thresholds are not styled."],
@@ -523,6 +521,7 @@ if (!read("styles.css").includes(".dog-show-plan-completed-dogs") || !read("styl
 const completedHistorySource = plannerEventPlanHtmlSource.slice(plannerEventPlanHtmlSource.indexOf('lifecycleStatus === "Completed"'), plannerEventPlanHtmlSource.indexOf('return `<article class="dog-show-plan-event-card is-${'));
 if (completedHistorySource.includes("dogShowPlannerPointScheduleHtml") || completedHistorySource.includes("open-planner-show-event")) failures.push("Completed history still exposes operational show details.");
 if (!dogShowSource.includes("function dogShowOperationalEvents") || !dogShowSource.includes("dogShowEventWeekendGroups(dogShowOperationalEvents())") || !dogShowSource.includes("No active shows")) failures.push("Completed shows are still available in the operational show selector.");
+if (dogShowSource.includes("View every show by stage.") || dogShowSource.includes("dog-show-plan-status-summary")) failures.push("The lifecycle board still renders redundant explanatory text or duplicate status-count cards.");
 const plannerCandidateHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerCandidateHtml"), dogShowSource.indexOf("function dogShowPlannerLifecycleStatus"));
 if (!plannerCandidateHtmlSource.includes('dogShowPlannerPointScheduleHtml(show, "Potential Plan", planner)')) failures.push("Potential-plan show cards are missing their state point schedule.");
 const plannerResultsHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerHtml"), dogShowSource.indexOf("function dogShowPlannerDateOffset"));

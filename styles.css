@@ -18837,47 +18837,8 @@ button.dog-show-planner-score:focus-visible {
   letter-spacing: 0.06em;
 }
 
-.dog-show-plan-board > header h3,
-.dog-show-plan-board > header p {
+.dog-show-plan-board > header h3 {
   margin: 0;
-}
-
-.dog-show-plan-board > header p {
-  color: var(--muted);
-  margin-top: 4px;
-}
-
-.dog-show-plan-board > header > strong {
-  background: var(--tint-blue);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  flex: 0 0 auto;
-  padding: 7px 11px;
-}
-
-.dog-show-plan-status-summary {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.dog-show-plan-status-summary > span {
-  align-items: center;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--muted);
-  display: flex;
-  font-size: 0.72rem;
-  font-weight: 800;
-  gap: 7px;
-  min-width: 0;
-  padding: 8px;
-}
-
-.dog-show-plan-status-summary strong {
-  color: var(--ink);
-  font-size: 1rem;
 }
 
 .dog-show-plan-stages,
@@ -19904,7 +19865,6 @@ button.dog-show-planner-score:focus-visible {
 :root[data-theme="dark"] .dog-show-decision-judge,
 :root[data-theme="dark"] .dog-show-planner-source-note,
 :root[data-theme="dark"] .dog-show-plan-board,
-:root[data-theme="dark"] .dog-show-plan-status-summary > span,
 :root[data-theme="dark"] .dog-show-plan-event-card,
 :root[data-theme="dark"] .dog-show-plan-point-schedule,
 :root[data-theme="dark"] .dog-show-potential-plan,
@@ -20012,10 +19972,6 @@ button.dog-show-planner-score:focus-visible {
   .dog-show-plan-event-card > footer {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .dog-show-plan-status-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dog-show-plan-event-card.is-history-only dl {

@@ -2759,7 +2759,6 @@ function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlann
     .forEach((candidate) => groups.get("Potential Plan").push({ kind: "potential", candidate }));
   const itemCount = [...groups.values()].reduce((sum, items) => sum + items.length, 0);
   if (!itemCount) return "";
-  const statusSummary = [...groups.entries()].map(([status, items]) => `<span class="is-${status.toLowerCase().replace(/\s+/g, "-")}"><strong>${items.length}</strong>${escapeHtml(status)}</span>`).join("");
   const groupHtml = [...groups.entries()].map(([status, items]) => {
     const sorted = [...items].sort((left, right) => {
       const leftDate = left.event?.startDate || left.candidate?.show?.startDate || "";
@@ -2768,7 +2767,7 @@ function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlann
     });
     return `<details class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"><summary><span><strong>${escapeHtml(status)}</strong><em>${items.length}</em></span><i aria-hidden="true"></i></summary><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status, planner) : dogShowPlannerCandidateHtml(item.candidate, planner)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></details>`;
   }).join("");
-  return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3><p>View every show by stage. Completed shows keep a compact log of the dates, dogs who went, and results. Research for another breed is appended to the same show.</p></div><strong>${itemCount} show${itemCount === 1 ? "" : "s"}</strong></header><div class="dog-show-plan-status-summary">${statusSummary}</div><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
+  return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3></div></header><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
 }
 
 function dogShowPlannerPotentialButtonHtml(show = {}, plan = dogShowPlannerRecord()) {
