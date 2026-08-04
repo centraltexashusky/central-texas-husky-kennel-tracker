@@ -1907,6 +1907,9 @@ function remoteSaveErrorMessage(error = {}) {
   if (error?.code === "AUTH_SESSION_MISMATCH" || error?.code === "AUTH_SESSION_MISSING") {
     return error.message;
   }
+  if (error?.code === "REMOTE_REQUEST_TIMEOUT" || error?.name === "AbortError" || error?.name === "TimeoutError") {
+    return "The save took too long. Check the connection and try again.";
+  }
   return error?.message || String(error);
 }
 
@@ -3359,16 +3362,86 @@ function avatarText(name = "") {
     .join("");
 }
 
+var toastHideTimer = 0;
+
+function popupFeedbackIsError(message = "") {
+  return /\b(error|failed?|failure|could not|cannot|can't|not allowed|not found|invalid|missing|required|choose|enter|fix|sign in|admin access|try again|timed out|too long)\b/i.test(String(message || ""));
+}
+
+function activePopupFeedbackHost() {
+  const popupSelector = [
+    "dialog[open]",
+    ".boarding-dog-modal:not([hidden])",
+    ".owned-dog-modal:not([hidden])",
+    ".service-modal:not([hidden])",
+    ".customer-dog-modal:not([hidden])",
+    ".customer-request-modal:not([hidden])",
+  ].join(", ");
+  const focusedPopup = document.activeElement?.closest?.(popupSelector);
+  if (focusedPopup) return focusedPopup;
+  const openDialogs = $$("dialog[open]");
+  if (openDialogs.length) return openDialogs[openDialogs.length - 1];
+  const openPopups = $$(popupSelector);
+  return openPopups[openPopups.length - 1] || null;
+}
+
+function clearPopupFeedback(host = null) {
+  const feedback = host?.querySelector?.(":scope > .popup-feedback");
+  if (!feedback) return;
+  window.clearTimeout(Number(feedback.dataset.hideTimer || 0));
+  feedback.remove();
+}
+
+function showPopupFeedback(message = "") {
+  const host = activePopupFeedbackHost();
+  if (!host || !message) return null;
+  let feedback = host.querySelector(":scope > .popup-feedback");
+  if (!feedback) {
+    feedback = document.createElement("div");
+    feedback.className = "popup-feedback";
+    const anchor = host.querySelector(":scope > .dialog-header, :scope > .section-heading");
+    if (anchor) anchor.insertAdjacentElement("afterend", feedback);
+    else host.prepend(feedback);
+    if (host.matches?.("dialog")) {
+      host.addEventListener("close", () => clearPopupFeedback(host), { once: true });
+    } else {
+      const hiddenObserver = new MutationObserver(() => {
+        if (!host.hidden) return;
+        clearPopupFeedback(host);
+        hiddenObserver.disconnect();
+      });
+      hiddenObserver.observe(host, { attributes: true, attributeFilter: ["hidden"] });
+    }
+  }
+  window.clearTimeout(Number(feedback.dataset.hideTimer || 0));
+  const isError = popupFeedbackIsError(message);
+  feedback.textContent = message;
+  feedback.classList.toggle("is-error", isError);
+  feedback.setAttribute("role", isError ? "alert" : "status");
+  feedback.setAttribute("aria-live", isError ? "assertive" : "polite");
+  delete feedback.dataset.hideTimer;
+  if (!isError) {
+    feedback.dataset.hideTimer = String(window.setTimeout(() => feedback.remove(), 4200));
+  }
+  return feedback;
+}
+
 function showToast(message) {
   const toast = $("#toast");
+  if (!toast) return;
+  window.clearTimeout(toastHideTimer);
   toast.textContent = message;
   toast.classList.add("is-visible");
-  window.setTimeout(() => toast.classList.remove("is-visible"), 3400);
+  showPopupFeedback(message);
+  toastHideTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 3400);
 }
 
 function friendlyNetworkError(error) {
   const raw = String(error?.message || error || "").trim();
   if (!raw) return "Network request failed. Check your connection and try again.";
+  if (error?.code === "REMOTE_REQUEST_TIMEOUT" || /aborted|aborterror|timeout|timed out|too long/i.test(raw)) {
+    return "The request took too long. Check the connection and try again.";
+  }
   if (/failed to fetch|networkerror|load failed|network request failed/i.test(raw)) {
     return "Network request failed. Check your connection, refresh the app, and try again.";
   }
@@ -3391,6 +3464,19 @@ function setButtonLoading(button, loading, loadingText = "Saving...") {
   if (button.dataset.originalText) {
     button.textContent = button.dataset.originalText;
     delete button.dataset.originalText;
+  }
+}
+
+async function runPopupOperation(button, loadingText, operation, errorPrefix = "Action could not be completed") {
+  setButtonLoading(button, true, loadingText);
+  try {
+    return await operation();
+  } catch (error) {
+    console.error(errorPrefix, error);
+    showToast(errorPrefix + ": " + friendlyNetworkError(error));
+    return null;
+  } finally {
+    if (button?.isConnected) setButtonLoading(button, false);
   }
 }
 
@@ -4737,6 +4823,30 @@ async function addCustomTabTask(button) {
 // Extracted to js/daily.js: setOwnedFormLocked
 
 
+var REMOTE_REQUEST_TIMEOUT_MS = 12000;
+
+function remoteRequestTimeoutError(label = "Save") {
+  const error = new Error(label + " took too long. Check the connection and try again.");
+  error.code = "REMOTE_REQUEST_TIMEOUT";
+  return error;
+}
+
+function withRemoteRequestTimeout(promise, label = "Save", timeoutMs = REMOTE_REQUEST_TIMEOUT_MS) {
+  let timer = 0;
+  const timeout = new Promise((resolve, reject) => {
+    timer = window.setTimeout(() => reject(remoteRequestTimeoutError(label)), timeoutMs);
+  });
+  return Promise.race([Promise.resolve(promise), timeout]).finally(() => window.clearTimeout(timer));
+}
+
+function remoteRequestAbortSignal(timeoutMs = REMOTE_REQUEST_TIMEOUT_MS) {
+  if (typeof AbortSignal?.timeout === "function") return AbortSignal.timeout(timeoutMs);
+  if (typeof AbortController !== "function") return null;
+  const controller = new AbortController();
+  window.setTimeout(() => controller.abort(), timeoutMs);
+  return controller.signal;
+}
+
 async function sendPayload(payload, options = {}) {
   if (localTestMode || !supabaseClient) {
     modeLabel.textContent = localTestMode ? "Local test saved" : "Local saved";
@@ -4770,7 +4880,10 @@ async function sendPayload(payload, options = {}) {
   try {
     const now = new Date().toISOString();
     const identity = await remoteWriteIdentity(payload);
-    const { error } = await supabaseClient.from("kennel_records").upsert(remoteWriteRow(payload, now, identity));
+    const query = supabaseClient.from("kennel_records").upsert(remoteWriteRow(payload, now, identity));
+    const signal = remoteRequestAbortSignal();
+    const request = signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
+    const { error } = await withRemoteRequestTimeout(request, "Save");
     if (error) throw error;
     modeLabel.textContent = "Saved";
     return { ok: true };
@@ -4820,7 +4933,10 @@ async function sendPayloadBatch(payloads = [], options = {}) {
     const rows = remoteRecords.map((payload) => remoteWriteRow(payload, now, identity));
 
     // Timesheet efficiency: one Supabase upsert keeps bulk scheduling fast and avoids one network round trip per shift.
-    const { error } = await supabaseClient.from("kennel_records").upsert(rows);
+    const query = supabaseClient.from("kennel_records").upsert(rows);
+    const signal = remoteRequestAbortSignal();
+    const request = signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
+    const { error } = await withRemoteRequestTimeout(request, "Batch save");
     if (error) throw error;
 
     remoteRecords.forEach((record) => upsertRecord(record.type, record));
@@ -6417,6 +6533,7 @@ function phoneLinkHtml(phone = "", label = "") {
 function showDetailDialog(title, html, context = null, options = {}) {
   detailDialogContext = context;
   const dialog = $("#detailDialog");
+  clearPopupFeedback(dialog);
   dialog?.classList.remove("is-customer-dog-editor", "has-backdrop-close");
   if (dialog) dialog.dataset.backdropClose = options.backdropClose ? "true" : "false";
   if (options.dialogClass) dialog?.classList.add(options.dialogClass);
@@ -8252,9 +8369,9 @@ async function submitBoardingCheckIn(formEl) {
     checkInDetails,
   });
   if (!updated) return;
-  await addAuditLog("Checked in boarding dog", "boardingDog", updated, \`\${updated.dogName || "Dog"} belongings: \${data.belongings || "none"}\`);
+  queueBoardingLifecycleFollowUp("Boarding check-in audit log", () => addAuditLog("Checked in boarding dog", "boardingDog", updated, (updated.dogName || "Dog") + " belongings: " + (data.belongings || "none")));
   if (addedServices.length) {
-    await addAuditLog("Added check-in service", "boardingDog", updated, addedServices.map((service) => \`\${service.serviceName} x\${service.quantity}\`).join(", "));
+    queueBoardingLifecycleFollowUp("Boarding check-in service audit log", () => addAuditLog("Added check-in service", "boardingDog", updated, addedServices.map((service) => service.serviceName + " x" + service.quantity).join(", ")));
   }
   pendingBoardingCheckIn = null;
   if (data.assignKennelAfterCheckIn === "Yes") {
@@ -11256,9 +11373,12 @@ async function notifyIfNeeded(record = {}, eventName = "") {
     }
   }
   try {
-    const { data, error } = await supabaseClient.functions.invoke("send-notification", {
-      body: { eventName, recordId: record.id, notificationId: notification.id },
-    });
+    const { data, error } = await withRemoteRequestTimeout(
+      supabaseClient.functions.invoke("send-notification", {
+        body: { eventName, recordId: record.id, notificationId: notification.id },
+      }),
+      "Notification delivery",
+    );
     if (error) throw error;
     const emailSkipped = Boolean(data?.emailResult?.skipped);
     const emailFailed = Boolean(data?.emailResult?.failed);
@@ -12154,21 +12274,24 @@ function initEvents() {
         allowEarly: true,
       };
       transitionOptions.early = boardingTransitionIsEarly(record, "Checked Out", transitionOptions);
-      const paid = upsertRecord("boardingDog", {
+      const paid = {
         ...record,
         paymentStatus: "Paid",
         paymentMethod: paymentMethodForm.elements.paymentMethod.value,
         paidAt: new Date().toISOString(),
         paidBy: currentUser?.name || helperName?.value || "",
-      });
-      await sendPayload(paid);
-      await addAuditLog("Marked boarding invoice paid", "boardingDog", paid, \`\${paid.dogName || "Dog"} | \${paid.paymentMethod}\`);
-      await saveBoardingStatusTransition(paid, "Checked Out", transitionOptions);
-      showDetailDialog("Payment Recorded", \`<p>\${escapeHtml(paid.dogName || "Dog")} was marked paid by \${escapeHtml(paid.paymentMethod)} and checked out.</p>\`);
+      };
+      await runPopupOperation(event.submitter || paymentMethodForm.querySelector('button[type="submit"]'), "Checking out...", async () => {
+        const updated = await saveBoardingStatusTransition(paid, "Checked Out", transitionOptions);
+        if (!updated) return null;
+        queueBoardingLifecycleFollowUp("Boarding payment audit log", () => addAuditLog("Marked boarding invoice paid", "boardingDog", updated, (updated.dogName || "Dog") + " | " + (updated.paymentMethod || "")));
+        showDetailDialog("Payment Recorded", \`<p>\${escapeHtml(updated.dogName || "Dog")} was marked paid by \${escapeHtml(updated.paymentMethod)} and checked out.</p>\`);
+        return updated;
+      }, "Checkout could not be completed");
       return;
     }
     if (boardingCheckInForm) {
-      await submitBoardingCheckIn(boardingCheckInForm);
+      await runPopupOperation(event.submitter || boardingCheckInForm.querySelector('button[type="submit"]'), "Checking in...", () => submitBoardingCheckIn(boardingCheckInForm), "Check-in could not be completed");
       return;
     }
     if (boardingCheckInServiceForm) {
@@ -12395,13 +12518,13 @@ function initEvents() {
         showToast("Choose a kennel location before assigning this dog.");
         return;
       }
-      const updated = await saveBoardingStatusTransition(record, kennelAssignmentForm.dataset.nextStatus || "In Kennel", {
+      const updated = await runPopupOperation(event.submitter || kennelAssignmentForm.querySelector('button[type="submit"]'), "Assigning...", () => saveBoardingStatusTransition(record, kennelAssignmentForm.dataset.nextStatus || "In Kennel", {
         allowEarly: kennelAssignmentForm.dataset.allowEarly === "true",
         early: kennelAssignmentForm.dataset.early === "true",
         stayId: kennelAssignmentForm.dataset.stayId || "",
         requestCode: kennelAssignmentForm.dataset.requestCode || "",
         kennelLocation: location,
-      });
+      }), "Kennel assignment could not be completed");
       if (updated) showDetailDialog("Kennel Assigned", \`<p>\${escapeHtml(updated.dogName || "Dog")} is now In Kennel at \${escapeHtml(location.building)} - \${escapeHtml(location.name)}.</p>\`);
     }
     if (timesheetEditForm) {
@@ -12620,30 +12743,31 @@ function initEvents() {
       return;
     }
     if (action.dataset.action === "transition-boarding-stay") {
-      const dog = boardingDogRecordForDisplay(action.dataset.dogId);
-      const options = boardingStayReferenceFromAction(action);
-      const stay = boardingStayByReference(dog || {}, options) || {};
-      const currentStayStatus = boardingStayDisplayStatus(dog, stay);
-      if (action.dataset.nextStatus === "Ready For Pickup") {
-        openReadyForPickupReview(dog, options);
-        return;
-      }
-      if (action.dataset.nextStatus === "Checked Out") {
-        openCheckoutInvoicePopup(dog, options);
-        return;
-      }
-      if (action.dataset.nextStatus === "Checked In") {
-        options.allowEarly = true;
-        options.early = boardingTransitionIsEarly(dog, "Checked In", options);
-      }
-      let updated = null;
-      if (action.dataset.nextStatus === "Checked In" && currentStayStatus === "In Kennel") {
-        updated = await saveBoardingStayStatusTransition(dog, options.stayId, action.dataset.nextStatus, options);
-      } else if (["Checked In", "In Kennel"].includes(action.dataset.nextStatus)) {
-        updated = await saveBoardingStatusTransition(dog, action.dataset.nextStatus, options);
-      } else {
-        updated = await saveBoardingStayStatusTransition(dog, options.stayId, action.dataset.nextStatus, options);
-      }
+      const updated = await runPopupOperation(action, "Updating...", async () => {
+        const dog = boardingDogRecordForDisplay(action.dataset.dogId);
+        const options = boardingStayReferenceFromAction(action);
+        const stay = boardingStayByReference(dog || {}, options) || {};
+        const currentStayStatus = boardingStayDisplayStatus(dog, stay);
+        if (action.dataset.nextStatus === "Ready For Pickup") {
+          openReadyForPickupReview(dog, options);
+          return null;
+        }
+        if (action.dataset.nextStatus === "Checked Out") {
+          openCheckoutInvoicePopup(dog, options);
+          return null;
+        }
+        if (action.dataset.nextStatus === "Checked In") {
+          options.allowEarly = true;
+          options.early = boardingTransitionIsEarly(dog, "Checked In", options);
+        }
+        if (action.dataset.nextStatus === "Checked In" && currentStayStatus === "In Kennel") {
+          return saveBoardingStayStatusTransition(dog, options.stayId, action.dataset.nextStatus, options);
+        }
+        if (["Checked In", "In Kennel"].includes(action.dataset.nextStatus)) {
+          return saveBoardingStatusTransition(dog, action.dataset.nextStatus, options);
+        }
+        return saveBoardingStayStatusTransition(dog, options.stayId, action.dataset.nextStatus, options);
+      }, "Status update could not be completed");
       if (updated) $("#detailDialog").close();
       return;
     }
@@ -12675,19 +12799,21 @@ function initEvents() {
       return;
     }
     if (action.dataset.action === "confirm-ready-for-pickup") {
-      const record = boardingDogRecordForDisplay(action.dataset.id);
-      const options = action.dataset.stayId ? boardingStayReferenceFromAction(action) : {};
-      const targetStay = record ? (boardingStayByReference(record, options) || activeBoardingStay(record) || currentOrNextStay(record) || {}) : {};
-      const serviceStats = record ? boardingStayServiceStats(record, targetStay) : { incompleteTasks: [] };
-      if (serviceStats.incompleteTasks.length) {
-        showToast("Complete requested stay services before marking ready.");
-        return;
-      }
-      const note = $("#pickupReadyNote")?.value.trim() || "";
-      const noteRecord = record && note ? upsertRecord("boardingDog", { ...record, pickupReadyNote: note, updatedAt: new Date().toISOString() }) : record;
-      if (record && note) await sendPayload(noteRecord);
-      if (noteRecord) await saveBoardingStatusTransition(noteRecord, "Ready For Pickup", options);
-      if (record) showDetailDialog("Ready For Pickup", \`<p>\${escapeHtml(record.dogName || "Dog")} is marked ready for pickup.</p>\`);
+      await runPopupOperation(action, "Updating...", async () => {
+        const record = boardingDogRecordForDisplay(action.dataset.id);
+        const options = action.dataset.stayId ? boardingStayReferenceFromAction(action) : {};
+        const targetStay = record ? (boardingStayByReference(record, options) || activeBoardingStay(record) || currentOrNextStay(record) || {}) : {};
+        const serviceStats = record ? boardingStayServiceStats(record, targetStay) : { incompleteTasks: [] };
+        if (serviceStats.incompleteTasks.length) {
+          showToast("Complete requested stay services before marking ready.");
+          return null;
+        }
+        const note = $("#pickupReadyNote")?.value.trim() || "";
+        const noteRecord = record && note ? { ...record, pickupReadyNote: note, updatedAt: new Date().toISOString() } : record;
+        const updated = noteRecord ? await saveBoardingStatusTransition(noteRecord, "Ready For Pickup", options) : null;
+        if (updated) showDetailDialog("Ready For Pickup", \`<p>\${escapeHtml(updated.dogName || "Dog")} is marked ready for pickup.</p>\`);
+        return updated;
+      }, "Ready-for-pickup update could not be completed");
       return;
     }
     if (action.dataset.action === "checkout-paid-method") {
@@ -12696,15 +12822,17 @@ function initEvents() {
       return;
     }
     if (action.dataset.action === "confirm-check-out") {
-      const record = boardingDogRecordForDisplay(action.dataset.id);
-      const note = $("#checkoutNote")?.value.trim() || "";
-      const noteRecord = record && note ? upsertRecord("boardingDog", { ...record, checkoutNote: note, updatedAt: new Date().toISOString() }) : record;
-      if (record && note) await sendPayload(noteRecord);
-      const options = action.dataset.stayId ? boardingStayReferenceFromAction(action) : {};
-      options.allowEarly = true;
-      options.early = boardingTransitionIsEarly(noteRecord || {}, "Checked Out", options);
-      if (noteRecord) await saveBoardingStatusTransition(noteRecord, "Checked Out", options);
-      if (record) showDetailDialog("Checked Out", \`<p>\${escapeHtml(record.dogName || "Dog")} has been checked out.</p>\`);
+      await runPopupOperation(action, "Checking out...", async () => {
+        const record = boardingDogRecordForDisplay(action.dataset.id);
+        const note = $("#checkoutNote")?.value.trim() || "";
+        const noteRecord = record && note ? { ...record, checkoutNote: note, updatedAt: new Date().toISOString() } : record;
+        const options = action.dataset.stayId ? boardingStayReferenceFromAction(action) : {};
+        options.allowEarly = true;
+        options.early = boardingTransitionIsEarly(noteRecord || {}, "Checked Out", options);
+        const updated = noteRecord ? await saveBoardingStatusTransition(noteRecord, "Checked Out", options) : null;
+        if (updated) showDetailDialog("Checked Out", \`<p>\${escapeHtml(updated.dogName || "Dog")} has been checked out.</p>\`);
+        return updated;
+      }, "Checkout could not be completed");
       return;
     }
     if (action.dataset.action === "return-to-checkin") {

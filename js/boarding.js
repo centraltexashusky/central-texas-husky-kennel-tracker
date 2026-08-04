@@ -4743,11 +4743,42 @@ async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updat
       forceStatusSync: true,
     });
     if (!synced) continue;
-    const stored = upsertRecord("boardingDog", synced);
-    await sendPayload(stored);
-    syncedRecords.push(stored);
+    syncedRecords.push(synced);
   }
+  if (syncedRecords.length) await sendPayloadBatch(syncedRecords);
   return syncedRecords;
+}
+
+function queueBoardingLifecycleFollowUp(label = "Boarding lifecycle follow-up", operation = null) {
+  if (typeof operation !== "function") return;
+  Promise.resolve()
+    .then(operation)
+    .catch((error) => console.warn(label + " could not complete.", error));
+}
+
+async function syncDuplicateBoardingStatusWithFeedback(record = {}, updated = {}, targetStay = {}, nextStatus = "", options = {}) {
+  try {
+    return await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay, nextStatus, options);
+  } catch (error) {
+    console.warn("Duplicate boarding status sync failed.", error);
+    showToast("Status saved, but another copy of this profile could not be synchronized. Refresh and retry the status if it looks unchanged.");
+    return [];
+  }
+}
+
+function queueBoardingStatusFollowUps(updated = {}, options = {}) {
+  if (options.customerNotificationEvent) {
+    queueBoardingLifecycleFollowUp("Customer boarding notification", () => notifyIfNeeded(updated, options.customerNotificationEvent));
+  }
+  if (options.serviceReadyNotificationEvent) {
+    queueBoardingLifecycleFollowUp("Service ready notification", () => notifyIfNeeded(serviceRequestReadyForPickupNotificationRecord(updated, options.transitionOptions || {}), options.serviceReadyNotificationEvent));
+  }
+  if (typeof syncBoardingServiceTasksForRecord === "function") {
+    queueBoardingLifecycleFollowUp("Boarding service task sync", () => syncBoardingServiceTasksForRecord(updated, { render: false }));
+  }
+  if (options.auditAction) {
+    queueBoardingLifecycleFollowUp("Boarding audit log", () => addAuditLog(options.auditAction, "boardingDog", updated, options.auditDetails || ""));
+  }
 }
 
 async function saveBoardingStatusTransition(record = {}, nextStatus = "", options = {}) {
@@ -4770,22 +4801,13 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
     showToast("That boarding status transition is not allowed.");
     return null;
   }
-  const updated = upsertRecord(
-    "boardingDog",
-    customerNotificationEvent
-      ? customerRequestStatusNotificationRecord(transitioned, nextStatus, options)
-      : transitioned,
-  );
-  await sendPayload(updated);
-  if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
-  if (serviceReadyNotificationEvent) {
-    await notifyIfNeeded(serviceRequestReadyForPickupNotificationRecord(updated, options), serviceReadyNotificationEvent);
-  }
+  const candidate = customerNotificationEvent
+    ? customerRequestStatusNotificationRecord(transitioned, nextStatus, options)
+    : transitioned;
+  await sendPayload(candidate);
+  const updated = upsertRecord("boardingDog", candidate);
   if (options.stayId) {
-    await syncDuplicateBoardingStayStatusRecords(record, updated, boardingStayByReference(record, options) || boardingStayByReference(updated, options), nextStatus, options);
-  }
-  if (typeof syncBoardingServiceTasksForRecord === "function") {
-    await syncBoardingServiceTasksForRecord(updated, { render: false });
+    await syncDuplicateBoardingStatusWithFeedback(record, updated, boardingStayByReference(record, options) || boardingStayByReference(updated, options), nextStatus, options);
   }
   renderBoardingDogs();
   renderBoardingRequests();
@@ -4798,6 +4820,13 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
     setDogPhoto("boarding", updated);
   }
   showToast(\`Boarding status updated to \${nextStatus}.\`);
+  queueBoardingStatusFollowUps(updated, {
+    customerNotificationEvent,
+    serviceReadyNotificationEvent,
+    transitionOptions: options,
+    auditAction: "Changed boarding status",
+    auditDetails: (updated.dogName || "Dog") + ": " + nextStatus,
+  });
   return updated;
 }
 
@@ -5869,6 +5898,7 @@ function resetBoardingDogFormForRecord(record = {}) {
 function openBoardingDog(record = {}) {
   record = boardingDogWithCanonicalProfile(record);
   const boardingDogDetail = $("#boardingDogDetail");
+  clearPopupFeedback(boardingDogDetail);
   if (boardingDogDetail.parentElement !== document.body) {
     document.body.appendChild(boardingDogDetail);
   }
@@ -6175,17 +6205,9 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
     showToast("That stay status transition is not allowed.");
     return null;
   }
+  await sendPayload(transitioned);
   const updated = upsertRecord("boardingDog", transitioned);
-  await sendPayload(updated);
-  if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
-  if (serviceReadyNotificationEvent) {
-    await notifyIfNeeded(serviceRequestReadyForPickupNotificationRecord(updated, options), serviceReadyNotificationEvent);
-  }
-  await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay || boardingStayByReference(updated, options), nextStatus, options);
-  if (typeof syncBoardingServiceTasksForRecord === "function") {
-    await syncBoardingServiceTasksForRecord(updated, { render: false });
-  }
-  await addAuditLog("Changed boarding stay status", "boardingDog", updated, \`\${updated.dogName || "Dog"} stay \${options.stayId}: \${nextStatus}\`);
+  await syncDuplicateBoardingStatusWithFeedback(record, updated, targetStay || boardingStayByReference(updated, options), nextStatus, options);
   renderBoardingDogs();
   renderBoardingRequests();
   renderCustomerRequests();
@@ -6196,6 +6218,13 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
     renderBoardingKennelLocationControl(updated);
   }
   showToast(\`Stay status updated to \${nextStatus}.\`);
+  queueBoardingStatusFollowUps(updated, {
+    customerNotificationEvent,
+    serviceReadyNotificationEvent,
+    transitionOptions: options,
+    auditAction: "Changed boarding stay status",
+    auditDetails: (updated.dogName || "Dog") + " stay " + options.stayId + ": " + nextStatus,
+  });
   return updated;
 }
 
@@ -6275,19 +6304,12 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
     ],
     flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
   };
-  const updated = upsertRecord(
-    "boardingDog",
-    customerNotificationEvent
-      ? customerRequestStatusNotificationRecord(approvedRecord, "Approved", options)
-      : approvedRecord,
-  );
-  await sendPayload(updated);
-  if (customerNotificationEvent) await notifyIfNeeded(updated, customerNotificationEvent);
-  await syncDuplicateBoardingStayStatusRecords(record, updated, targetStay, "Approved", options);
-  if (typeof syncBoardingServiceTasksForRecord === "function") {
-    await syncBoardingServiceTasksForRecord(updated, { render: false });
-  }
-  await addAuditLog("Approved boarding stay", "boardingDog", updated, \`\${updated.dogName || "Dog"} stay \${boardingStayRequestCode(updated, targetStay)}: Approved\`);
+  const candidate = customerNotificationEvent
+    ? customerRequestStatusNotificationRecord(approvedRecord, "Approved", options)
+    : approvedRecord;
+  await sendPayload(candidate);
+  const updated = upsertRecord("boardingDog", candidate);
+  await syncDuplicateBoardingStatusWithFeedback(record, updated, targetStay, "Approved", options);
   renderBoardingDogs();
   renderBoardingRequests();
   renderCustomerRequests();
@@ -6298,6 +6320,12 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
     renderBoardingKennelLocationControl(updated);
   }
   showToast("Boarding request approved.");
+  queueBoardingStatusFollowUps(updated, {
+    customerNotificationEvent,
+    transitionOptions: options,
+    auditAction: "Approved boarding stay",
+    auditDetails: (updated.dogName || "Dog") + " stay " + boardingStayRequestCode(updated, targetStay) + ": Approved",
+  });
   return updated;
 }
 

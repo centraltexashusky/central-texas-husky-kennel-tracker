@@ -5323,6 +5323,35 @@ button:disabled {
   transform: translateX(-50%) translateY(0);
 }
 
+.popup-feedback {
+  background: #eaf4ff;
+  border: 1px solid #8ab9df;
+  border-radius: 10px;
+  color: #17324d;
+  font-weight: 800;
+  line-height: 1.45;
+  margin: 0 0 14px;
+  padding: 11px 13px;
+}
+
+.popup-feedback.is-error {
+  background: #fff1f0;
+  border-color: #d64b45;
+  color: #8f1f1a;
+}
+
+:root[data-theme="dark"] .popup-feedback {
+  background: rgba(39, 115, 169, 0.24);
+  border-color: rgba(104, 184, 238, 0.72);
+  color: #eaf7ff;
+}
+
+:root[data-theme="dark"] .popup-feedback.is-error {
+  background: rgba(156, 38, 38, 0.25);
+  border-color: rgba(255, 113, 108, 0.82);
+  color: #ffe5e3;
+}
+
 /* Liquid Glass theme layer preserved as Dark Mode. */
 :root[data-theme="dark"] {
   color-scheme: dark;
