@@ -38,7 +38,8 @@ if (!shared.includes('withRemoteRequestTimeout(\n      supabaseClient.functions.
 
 const statusTransitionSource = boarding.match(/async function saveBoardingStatusTransition[\s\S]*?\n\}/)?.[0] || "";
 const stayTransitionSource = boarding.match(/async function saveBoardingStayStatusTransition[\s\S]*?\n\}/)?.[0] || "";
-for (const [label, source] of [["profile", statusTransitionSource], ["stay", stayTransitionSource]]) {
+const approveStaySource = boarding.match(/async function approveBoardingStay[\s\S]*?\n\}/)?.[0] || "";
+for (const [label, source] of [["profile", statusTransitionSource], ["stay", stayTransitionSource], ["approval", approveStaySource]]) {
   const remoteIndex = source.indexOf("await sendPayload(");
   const localIndex = source.indexOf('upsertRecord("boardingDog"');
   if (!(remoteIndex >= 0 && localIndex > remoteIndex)) {
@@ -47,6 +48,44 @@ for (const [label, source] of [["profile", statusTransitionSource], ["stay", sta
   if (!source.includes("queueBoardingStatusFollowUps")) {
     failures.push(`The ${label} lifecycle transition still blocks on optional follow-up work.`);
   }
+  if (!source.includes("boardingDogForPersistence")) {
+    failures.push(`The ${label} lifecycle transition can overwrite a detached request's canonical dog link.`);
+  }
+}
+const persistenceGuardSource = boarding.match(/function boardingDogForPersistence[\s\S]*?\n\}/)?.[0] || "";
+if (!persistenceGuardSource.includes('!String(sourceRecord.linkedCustomerDogId || "").trim()')
+  || !persistenceGuardSource.includes('String(sourceRecord.sourceBoardingDogId || "").trim()')
+  || !persistenceGuardSource.includes('linkedCustomerDogId: ""')) {
+  failures.push("Detached boarding requests do not preserve their persistence identity.");
+}
+try {
+  const makeGuard = new Function("readRecords", `${persistenceGuardSource}; return boardingDogForPersistence;`);
+  const detached = {
+    id: "boarding-request",
+    linkedCustomerDogId: "",
+    sourceCustomerDogId: "customer-dog",
+    sourceBoardingDogId: "boarding-profile",
+  };
+  const guard = makeGuard(() => [detached]);
+  const protectedRequest = guard({
+    ...detached,
+    linkedCustomerDogId: "customer-dog",
+    boardingStatus: "Approved",
+  });
+  if (protectedRequest.linkedCustomerDogId !== "" || protectedRequest.boardingStatus !== "Approved") {
+    failures.push("The persistence guard does not protect a detached request while retaining its lifecycle update.");
+  }
+  const canonical = {
+    id: "boarding-profile",
+    linkedCustomerDogId: "customer-dog",
+    sourceBoardingDogId: "",
+  };
+  const canonicalGuard = makeGuard(() => [canonical]);
+  if (canonicalGuard(canonical) !== canonical) {
+    failures.push("The persistence guard changes a canonical boarding profile.");
+  }
+} catch (error) {
+  failures.push(`The detached boarding request regression fixture could not run: ${error.message}`);
 }
 if (!boarding.includes("if (syncedRecords.length) await sendPayloadBatch(syncedRecords)")) {
   failures.push("Duplicate boarding profiles are still synchronized through sequential network writes.");
@@ -56,7 +95,10 @@ if (!shared.includes('runPopupOperation(action, "Updating..."') || !shared.inclu
 }
 
 for (const [label, source] of [["shared module", main], ["boarding module", main], ["stylesheet", index], ["entrypoint", index]]) {
-  if (!source.includes("boarding-lifecycle-feedback-v33")) failures.push(`${label} is not cache-busted for this fix.`);
+  if (!source.includes("boarding-lifecycle-feedback-v33")) failures.push(`${label} is not cache-busted for the lifecycle feedback fix.`);
+}
+if (!main.includes("boarding-detached-profile-v34") || !index.includes("boarding-detached-profile-v34")) {
+  failures.push("The detached boarding-profile persistence fix is not cache-busted.");
 }
 
 if (failures.length) {

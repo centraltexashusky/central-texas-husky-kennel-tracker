@@ -3063,6 +3063,24 @@ function boardingDogWithCanonicalProfile(record = {}) {
   };
 }
 
+function boardingDogForPersistence(record = {}) {
+  if (!record?.id) return record || {};
+  const sourceRecord = readRecords("boardingDog")
+    .find((item) => item.id === record.id && !item.removed);
+  const isDetachedRequest = Boolean(
+    sourceRecord
+      && !String(sourceRecord.linkedCustomerDogId || "").trim()
+      && String(sourceRecord.sourceBoardingDogId || "").trim(),
+  );
+  if (!isDetachedRequest) return record;
+  return {
+    ...record,
+    linkedCustomerDogId: "",
+    sourceCustomerDogId: sourceRecord.sourceCustomerDogId || record.sourceCustomerDogId || record.linkedCustomerDogId || "",
+    sourceBoardingDogId: sourceRecord.sourceBoardingDogId || record.sourceBoardingDogId || "",
+  };
+}
+
 function boardingDogWithCustomerProfilePatch(record = {}, customerDog = {}) {
   const profilePatch = dogProfileFieldPatch(customerDog);
   return {
@@ -4801,9 +4819,10 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
     showToast("That boarding status transition is not allowed.");
     return null;
   }
-  const candidate = customerNotificationEvent
+  const notificationCandidate = customerNotificationEvent
     ? customerRequestStatusNotificationRecord(transitioned, nextStatus, options)
     : transitioned;
+  const candidate = boardingDogForPersistence(notificationCandidate);
   await sendPayload(candidate);
   const updated = upsertRecord("boardingDog", candidate);
   if (options.stayId) {
@@ -5988,7 +6007,7 @@ async function updateBoardingKennelLocation(locationId = "") {
       updatedAt: timestamp,
     };
   });
-  const updated = upsertRecord("boardingDog", {
+  const candidate = boardingDogForPersistence({
     ...record,
     boardingStatus: "In Kennel",
     kennelLocationId: location.id,
@@ -5998,7 +6017,8 @@ async function updateBoardingKennelLocation(locationId = "") {
     stays,
     updatedAt: timestamp,
   });
-  await sendPayload(updated);
+  await sendPayload(candidate);
+  const updated = upsertRecord("boardingDog", candidate);
   await addAuditLog("Changed kennel location", "boardingDog", updated, \`\${updated.dogName || "Dog"} | \${location.building || ""} \${location.name || ""}\`.trim());
   renderBoardingKennelLocationControl(updated);
   renderBoardingStays(updated);
@@ -6205,8 +6225,9 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
     showToast("That stay status transition is not allowed.");
     return null;
   }
-  await sendPayload(transitioned);
-  const updated = upsertRecord("boardingDog", transitioned);
+  const candidate = boardingDogForPersistence(transitioned);
+  await sendPayload(candidate);
+  const updated = upsertRecord("boardingDog", candidate);
   await syncDuplicateBoardingStatusWithFeedback(record, updated, targetStay || boardingStayByReference(updated, options), nextStatus, options);
   renderBoardingDogs();
   renderBoardingRequests();
@@ -6304,9 +6325,10 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
     ],
     flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
   };
-  const candidate = customerNotificationEvent
+  const notificationCandidate = customerNotificationEvent
     ? customerRequestStatusNotificationRecord(approvedRecord, "Approved", options)
     : approvedRecord;
+  const candidate = boardingDogForPersistence(notificationCandidate);
   await sendPayload(candidate);
   const updated = upsertRecord("boardingDog", candidate);
   await syncDuplicateBoardingStatusWithFeedback(record, updated, targetStay, "Approved", options);
