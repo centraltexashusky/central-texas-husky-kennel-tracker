@@ -23,6 +23,14 @@ if (!shared.includes('host.addEventListener("close", () => clearPopupFeedback(ho
 if (!boarding.includes("clearPopupFeedback(boardingDogDetail)")) {
   failures.push("Reopening a boarding profile can show stale popup feedback from an earlier action.");
 }
+const requestCardSource = boarding.match(/function boardingRequestCardHtml[\s\S]*?\n\}/)?.[0] || "";
+const openBoardingDogSource = boarding.match(/function openBoardingDog\(record = \{\}\)[\s\S]*?\n\}/)?.[0] || "";
+if (!requestCardSource.includes('data-action="change-boarding"')) {
+  failures.push("Staff can no longer open the request editor for an active stay.");
+}
+if (!openBoardingDogSource.includes("setBoardingFormLocked(false)")) {
+  failures.push("Staff boarding profiles are unexpectedly locked during an active stay.");
+}
 
 const sendPayloadSource = shared.match(/async function sendPayload\([\s\S]*?\n\}/)?.[0] || "";
 const sendPayloadBatchSource = shared.match(/async function sendPayloadBatch\([\s\S]*?\n\}/)?.[0] || "";
@@ -99,6 +107,9 @@ for (const [label, source] of [["shared module", main], ["boarding module", main
 }
 if (!main.includes("boarding-detached-profile-v34") || !index.includes("boarding-detached-profile-v34")) {
   failures.push("The detached boarding-profile persistence fix is not cache-busted.");
+}
+if (!main.includes("maintenance-alert-detail-active-request-lock-v36") || !index.includes("maintenance-alert-detail-active-request-lock-v36")) {
+  failures.push("The maintenance alert and active-stay request lock fix is not cache-busted.");
 }
 
 if (failures.length) {

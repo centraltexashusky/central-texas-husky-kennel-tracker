@@ -1824,9 +1824,32 @@ async function saveNotificationReadReceipt(id = "") {
   return readRecords("notificationLog").find((item) => item.id === id) || null;
 }
 
-function openOperationalNotificationRecord(sourceType = "", sourceId = "") {
+async function openOperationalNotificationRecord(sourceType = "", sourceId = "", notification = {}) {
   if (!["request", "maintenance"].includes(sourceType)) return false;
-  const record = readRecords(sourceType).find((item) => item.id === sourceId);
+  const pageId = sourceType === "maintenance" ? "maintenancePage" : "requestsPage";
+  let record = readRecords(sourceType).find((item) => item.id === sourceId);
+  if (!record && !localTestMode && supabaseClient) {
+    switchPage(pageId);
+    try {
+      for (let attempt = 0; attempt < 2 && !record; attempt += 1) {
+        await loadRemoteRecords({
+          types: [sourceType],
+          pageId,
+          fullRefresh: true,
+          render: false,
+          showLoader: false,
+          quiet: true,
+        });
+        record = readRecords(sourceType).find((item) => item.id === sourceId);
+      }
+    } catch (error) {
+      console.warn("The " + sourceType + " alert record could not be refreshed.", error);
+    }
+  }
+  if (!record) {
+    const snapshot = notificationSourceSnapshot(notification);
+    if (snapshot?.id === sourceId && snapshot?.type === sourceType) record = snapshot;
+  }
   if (!record) return false;
   if (sourceType === "maintenance") {
     switchPage("maintenancePage");
@@ -2032,7 +2055,7 @@ async function openNotification(id = "") {
     }
   }
   if (sourceType === "request" || sourceType === "maintenance") {
-    if (openOperationalNotificationRecord(sourceType, sourceId)) return;
+    if (await openOperationalNotificationRecord(sourceType, sourceId, notification)) return;
   }
   if (sourceType === "careLog") {
     if (openCareLogNotificationRecord(sourceId)) return;

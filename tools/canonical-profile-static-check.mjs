@@ -41,6 +41,21 @@ assert.match(
 );
 assert.match(
   customer,
+  /refreshCustomerBoardingRecordsBeforeEditSubmit\(editingId\)[\s\S]*customerBoardingEditCanStillSubmit\(editingRecord \|\| \{\}, editingStayId\)/,
+  "customer amendments must refresh and re-check the stay status immediately before the final save",
+);
+assert.match(
+  customer,
+  /Could Not Verify Request Status[\s\S]*Your changes were not submitted because the current stay status could not be verified/,
+  "customer amendments must fail closed when the current stay status cannot be verified",
+);
+assert.match(
+  customer,
+  /Request Changes Locked[\s\S]*Kennel staff can still update the active stay/,
+  "an already-open customer amendment must be blocked after staff activates the stay",
+);
+assert.match(
+  customer,
   /editingRecord \? editingRecordCanAcceptRequestWrite : customerBoardingRecordCanAcceptRequestWrite\(existingTarget\)/,
   "customer edits must apply the request-safe history guard instead of automatically reusing the source row",
 );
@@ -75,8 +90,8 @@ assert.equal(
   false,
   "a merged profile with pending and historical stays must detach the new request",
 );
-assert.match(main, /customer-request-amendment-v35/, "the customer module amendment fix is not cache-busted");
-assert.match(index, /customer-request-amendment-v35/, "the app entrypoint amendment fix is not cache-busted");
+assert.match(main, /customer-request-amendment-v35[\s\S]*maintenance-alert-detail-active-request-lock-v36/, "the customer module active-stay lock is not cache-busted");
+assert.match(index, /customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36/, "the app entrypoint active-stay lock is not cache-busted");
 assert.match(
   schema,
   /create unique index if not exists kennel_records_one_active_settings_user_email_idx/,

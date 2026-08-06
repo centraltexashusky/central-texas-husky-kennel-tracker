@@ -2943,6 +2943,26 @@ function customerBoardingEditableRequestRecord(recordId = "", stayId = "") {
   return exact;
 }
 
+async function refreshCustomerBoardingRecordsBeforeEditSubmit(editingId = "") {
+  if (!editingId || localTestMode || !supabaseClient) return;
+  const options = {
+    types: ["boardingDog"],
+    pageId: "customerRequestsPage",
+    fullRefresh: true,
+    render: false,
+    showLoader: false,
+    quiet: true,
+  };
+  await loadRemoteRecords(options);
+  await loadRemoteRecords(options);
+}
+
+function customerBoardingEditCanStillSubmit(record = {}, stayId = "") {
+  const stay = boardingStayByReference(record, stayId) || {};
+  if (!record?.id || !stay?.id) return false;
+  return customerCanEditStayRequestStatus(boardingStayDisplayStatus(record, stay));
+}
+
 async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
   if (customerBookingSubmitInProgress) return;
@@ -2965,12 +2985,31 @@ async function submitPendingCustomerBooking() {
     $("#bookingConfirmDialog")?.close();
     return;
   }
+  const editingId = $("#editingCustomerRequestId")?.value;
+  const editingStayId = $("#editingCustomerStayId")?.value || "";
+  try {
+    await refreshCustomerBoardingRecordsBeforeEditSubmit(editingId);
+  } catch (error) {
+    $("#bookingConfirmDialog")?.close();
+    showDetailDialog(
+      "Could Not Verify Request Status",
+      "<p>Your changes were not submitted because the current stay status could not be verified. Please try again.</p>",
+    );
+    console.warn("Customer request status refresh failed.", error);
+    return;
+  }
+  const editingRecord = editingId ? customerBoardingEditableRequestRecord(editingId, editingStayId) : null;
+  if (editingId && !customerBoardingEditCanStillSubmit(editingRecord || {}, editingStayId)) {
+    $("#bookingConfirmDialog")?.close();
+    showDetailDialog(
+      "Request Changes Locked",
+      "<p>This stay is already active or no longer accepts customer changes. Kennel staff can still update the active stay.</p>",
+    );
+    return;
+  }
   customerBookingSubmitInProgress = true;
   const confirmButton = $("#confirmBookingRequestButton");
   if (confirmButton) confirmButton.disabled = true;
-  const editingId = $("#editingCustomerRequestId")?.value;
-  const editingStayId = $("#editingCustomerStayId")?.value || "";
-  const editingRecord = editingId ? customerBoardingEditableRequestRecord(editingId, editingStayId) : null;
   const requestGroupId = editingRecord?.requestGroupId || editingRecord?.reservationGroupId || estimate.requestGroupId || estimate.submissionId || uid("requestGroup");
   const groupDogNames = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.dogName || "Dog");
   const groupDogIds = uniqueCustomerBookingDogs(estimate.dogs).map((dog) => dog.id || dog.sourceBoardingDogId || "").filter(Boolean);

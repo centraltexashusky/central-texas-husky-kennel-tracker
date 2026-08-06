@@ -16,6 +16,7 @@ const fileRecord = section("function customerDogFileNotificationRecord", "functi
 const fileItems = section("function customerDogFileNotificationItems", "function customerDogFileNotificationHtml");
 const filePopup = section("function customerDogFileNotificationHtml", "function openCustomerDogFileNotification");
 const openNotification = section("async function openNotification", "function emailNow");
+const operationalAlert = section("async function openOperationalNotificationRecord", "function openCareLogNotificationRecord");
 
 if (!fileRecord.includes('readRecords("customerDog")') || !fileItems.includes("notificationFileItems")) failures.push("Customer file alerts do not resolve the live dog record and exact upload references.");
 if (!fileItems.includes("vaccinationRecords") || !fileItems.includes("record.documents") || !fileItems.includes("profilePhotoStoragePath")) failures.push("Legacy alerts cannot recover the customer's current uploaded files.");
@@ -25,8 +26,10 @@ if (!notifications.includes('if (name === "customerDogFileUploaded") return "Vie
 if (!shared.includes("compact.notificationFileItems = compactMediaItemsForStorage")) failures.push("Notification file references are not compacted safely for storage.");
 if (!shared.includes('notifyIfNeeded({ ...record, notificationFileItems }, "customerDogFileUploaded")')) failures.push("New customer upload alerts do not retain the exact uploaded files.");
 if (!shared.includes('action.dataset.action === "open-customer-notification-file"') || !shared.includes("await openMediaFromButton(action)")) failures.push("The customer notification file button is not handled inside the popup before event propagation.");
-if (!main.includes('notifications.js?v=20260723-customer-file-view-v2')) failures.push("The notification module is not cache-busted.");
-if (!index.includes('js/main.js?v=20260723-customer-file-view-v2')) failures.push("The application entrypoint is not cache-busted.");
+if (!operationalAlert.includes("fullRefresh: true") || !operationalAlert.includes("for (let attempt = 0; attempt < 2") || !operationalAlert.includes("notificationSourceSnapshot(notification)")) failures.push("Request and maintenance alerts can still race the scoped record loader and fall back to a generic popup.");
+if (!openNotification.includes("await openOperationalNotificationRecord(sourceType, sourceId, notification)")) failures.push("Operational alerts do not wait for the exact record popup.");
+if (!main.includes('notifications.js?v=20260723-customer-file-view-v2') || !main.includes("maintenance-alert-detail-active-request-lock-v36")) failures.push("The notification module is not cache-busted.");
+if (!index.includes('js/main.js?v=20260723-customer-file-view-v2') || !index.includes("maintenance-alert-detail-active-request-lock-v36")) failures.push("The application entrypoint is not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));
