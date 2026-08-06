@@ -39,6 +39,21 @@ assert.match(
   /customerBoardingEditableRequestRecord\(editingId, editingStayId\)/,
   "customer edits must write the raw pending request row instead of a merged record with staff history",
 );
+assert.match(
+  customer,
+  /editingRecord \? editingRecordCanAcceptRequestWrite : customerBoardingRecordCanAcceptRequestWrite\(existingTarget\)/,
+  "customer edits must apply the request-safe history guard instead of automatically reusing the source row",
+);
+assert.match(
+  customer,
+  /customerBookingAmendmentStableId\("stay", editingRecord, existingStay\)/,
+  "an edit to a mixed-history profile must use a detached amendment stay identity",
+);
+assert.match(
+  customer,
+  /customerBookingAmendmentStableId\("boardingDog", editingRecord, existingStay\)/,
+  "an edit to a mixed-history profile must use a detached amendment record identity",
+);
 const statusGuardSource = customer.match(/function customerBoardingStatusIsRequestWritable\(value = ""\) \{[\s\S]*?\n\}/)?.[0] || "";
 const recordGuardSource = customer.match(/function customerBoardingRecordCanAcceptRequestWrite\(record = \{\}\) \{[\s\S]*?\n\}/)?.[0] || "";
 const requestWriteGuard = new Function(
@@ -60,8 +75,8 @@ assert.equal(
   false,
   "a merged profile with pending and historical stays must detach the new request",
 );
-assert.match(main, /customer-request-history-detach-v23/, "the customer module fix is not cache-busted");
-assert.match(index, /customer-request-history-detach-v23/, "the app entrypoint fix is not cache-busted");
+assert.match(main, /customer-request-amendment-v35/, "the customer module amendment fix is not cache-busted");
+assert.match(index, /customer-request-amendment-v35/, "the app entrypoint amendment fix is not cache-busted");
 assert.match(
   schema,
   /create unique index if not exists kennel_records_one_active_settings_user_email_idx/,

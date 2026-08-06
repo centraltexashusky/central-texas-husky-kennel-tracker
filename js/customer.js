@@ -2760,6 +2760,15 @@ function customerBookingStableId(prefix = "customer-booking", estimate = {}, dog
   return \`\${prefix}-\${shortStableHash(seed, 10)}\`;
 }
 
+function customerBookingAmendmentStableId(prefix = "customer-booking-amendment", record = {}, stay = {}) {
+  const seed = [
+    record.id || "",
+    stay.requestCode || boardingStayRequestCode(record, stay),
+    stay.id || "",
+  ].join("|");
+  return \`\${prefix}-amendment-\${shortStableHash(seed, 10)}\`;
+}
+
 function openCustomerDogModal(record = {}) {
   openCustomerDog(record);
 }
@@ -3010,7 +3019,12 @@ async function submitPendingCustomerBooking() {
       const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1))
         ? editingRecord
         : sharedBoardingRecord;
-      const useExisting = Boolean(existingTarget && (editingRecord || customerBoardingRecordCanAcceptRequestWrite(existingTarget)));
+      const editingRecordCanAcceptRequestWrite = Boolean(
+        editingRecord && customerBoardingRecordCanAcceptRequestWrite(editingRecord),
+      );
+      const useExisting = Boolean(existingTarget && (
+        editingRecord ? editingRecordCanAcceptRequestWrite : customerBoardingRecordCanAcceptRequestWrite(existingTarget)
+      ));
       const detachedFromHistoricalProfile = Boolean(existingTarget && !useExisting);
       const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : {};
       const existingStayRequestCode = existingStay && Object.keys(existingStay).length
@@ -3100,7 +3114,11 @@ async function submitPendingCustomerBooking() {
           ]
         : [{ from: "", to: requestReviewStatus, date: new Date().toISOString(), by: currentUser?.name || dog.ownerName || "", source: "customer-request" }];
       const stay = {
-        id: editingRecord ? existingStay.id || editingStayId || uid("stay") : customerBookingStableId("stay", estimate, dog),
+        id: editingRecord
+          ? useExisting
+            ? existingStay.id || editingStayId || uid("stay")
+            : customerBookingAmendmentStableId("stay", editingRecord, existingStay)
+          : customerBookingStableId("stay", estimate, dog),
         status: requestReviewStatus,
         createdAt: editingRecord ? existingStay.createdAt || new Date().toISOString() : new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -3155,7 +3173,11 @@ async function submitPendingCustomerBooking() {
       const payload = {
         ...(useExisting ? existingTarget : {}),
         type: "boardingDog",
-        id: useExisting ? existingTarget.id : customerBookingStableId("boardingDog", estimate, dog),
+        id: useExisting
+          ? existingTarget.id
+          : editingRecord
+            ? customerBookingAmendmentStableId("boardingDog", editingRecord, existingStay)
+            : customerBookingStableId("boardingDog", estimate, dog),
         submittedAt: useExisting ? existingTarget.submittedAt || new Date().toISOString() : new Date().toISOString(),
         boardingStatus: requestStatus,
         statusHistory,
