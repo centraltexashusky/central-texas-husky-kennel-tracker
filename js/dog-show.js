@@ -1979,15 +1979,16 @@ function dogShowFinanceCustomerReports(period = dogShowFinancePeriod) {
   }).sort((left, right) => right.totals.totalCustomerCost - left.totals.totalCustomerCost || left.customer.name.localeCompare(right.customer.name));
 }
 
-function dogShowFinanceCustomerPeriodHtml(periodGroup = {}) {
+function dogShowFinanceCustomerPeriodHtml(periodGroup = {}, customerKey = "", customerEmail = "") {
   const dogGroups = new Map();
   periodGroup.ledgers.forEach((ledger) => {
     const key = `${ledger.entry.dogType || "dog"}:${ledger.entry.dogId || ledger.dogName}`;
     if (!dogGroups.has(key)) dogGroups.set(key, { dogName: ledger.dogName, ledgers: [] });
     dogGroups.get(key).ledgers.push(ledger);
   });
+  const canInvoice = Boolean(customerEmail) && periodGroup.totals.totalCustomerCost > 0;
   return `<section class="dog-show-customer-period">
-    <header><div><span>${dogShowFinancePeriod.toUpperCase()}</span><strong>${escapeHtml(periodGroup.label)}</strong></div>${dogShowDogCostPositionHtml(periodGroup.totals.totalCustomerCost, { positive: "customer cost", negative: "customer credit" })}</header>
+    <header><div><span>${dogShowFinancePeriod.toUpperCase()}</span><strong>${escapeHtml(periodGroup.label)}</strong></div><div>${dogShowDogCostPositionHtml(periodGroup.totals.totalCustomerCost, { positive: "customer cost", negative: "customer credit" })}<button type="button" class="secondary-button" data-action="create-show-invoice" data-customer-key="${escapeHtml(customerKey)}" data-period-key="${escapeHtml(periodGroup.key || "")}"${canInvoice ? "" : " disabled"}>Create &amp; Email Invoice</button></div></header>
     <div class="dog-show-customer-period-metrics">
       ${dogShowFinanceMetricHtml("Direct dog expenses", periodGroup.totals.directExpenseTotal)}
       ${dogShowFinanceMetricHtml("Income offsets", periodGroup.totals.assignedRewardTotal, "is-dog-credit")}
@@ -2033,9 +2034,95 @@ function dogShowFinanceCustomerReportHtml() {
     <p class="dog-show-customer-allocation-note">Show-wide shares are assigned to customer dogs first, up to the “Dogs sharing expenses” count saved for each show. Owned dogs fill any remaining sharing slots.</p>
     <div class="dog-show-customer-report-list">${reports.length ? reports.map((report, index) => `<details class="dog-show-customer-report-card"${index === 0 ? " open" : ""}>
       <summary><div><strong>${escapeHtml(report.customer.name)}</strong><small>${escapeHtml(report.customer.email || "No customer email saved")} · ${report.dogNames.size} dog${report.dogNames.size === 1 ? "" : "s"} · ${report.eventIds.size} show${report.eventIds.size === 1 ? "" : "s"}</small></div>${dogShowDogCostPositionHtml(report.totals.totalCustomerCost, { positive: "cost", negative: "credit" })}</summary>
-      <div>${report.periods.map(dogShowFinanceCustomerPeriodHtml).join("")}</div>
+      <div>${report.periods.map((periodGroup) => dogShowFinanceCustomerPeriodHtml(periodGroup, report.customer.key, report.customer.email)).join("")}</div>
     </details>`).join("") : `<p class="dog-show-expense-empty is-standalone">No customer dog expenses are available for this report yet.</p>`}</div>
   </section>`;
+}
+
+function dogShowInvoiceSelection(customerKey = "", periodKey = "") {
+  const report = dogShowFinanceCustomerReports().find((candidate) => candidate.customer.key === customerKey);
+  const period = report?.periods.find((candidate) => candidate.key === periodKey);
+  return report && period ? { report, period } : null;
+}
+
+function dogShowInvoiceLineItems(period = {}) {
+  return arrayValue(period.ledgers).map((ledger) => ({
+    dogName: ledger.dogName,
+    showName: ledger.event?.name || ledger.event?.club || "Dog Show",
+    showDate: ledger.event?.startDate || "",
+    directExpenses: Math.round(Number(ledger.directExpenseTotal || 0) * 100) / 100,
+    incomeOffsets: Math.round(Number(ledger.assignedRewardTotal || 0) * 100) / 100,
+    showWideShare: Math.round(Number(ledger.showWideShare || 0) * 100) / 100,
+    amount: Math.round(Number(ledger.totalCustomerCost || 0) * 100) / 100,
+  }));
+}
+
+function openDogShowInvoiceForm(customerKey = "", periodKey = "") {
+  const selection = dogShowInvoiceSelection(customerKey, periodKey);
+  if (!selection) return showToast("That customer finance period is no longer available.");
+  const { report, period } = selection;
+  if (!report.customer.email) return showToast("Add a customer email before creating an invoice.");
+  if (period.totals.totalCustomerCost <= 0) return showToast("This period does not have a positive customer balance to invoice.");
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + 14);
+  const lines = dogShowInvoiceLineItems(period);
+  openDogShowDialog("Create & Email Dog Show Invoice", `<form id="dogShowInvoiceForm" class="tracker-form" data-customer-key="${escapeHtml(customerKey)}" data-period-key="${escapeHtml(periodKey)}">
+    <div class="dog-show-form-note"><strong>${escapeHtml(report.customer.name)}</strong><span>${escapeHtml(report.customer.email)} · ${escapeHtml(period.label)}</span></div>
+    <div class="dog-show-customer-dog-table" role="table" aria-label="Invoice line items">
+      <div class="dog-show-customer-dog-row is-heading" role="row"><span>Dog</span><span>Direct</span><span>Offsets</span><span>Shared</span><span>Amount</span><span>Show</span></div>
+      ${lines.map((line) => `<div class="dog-show-customer-dog-row" role="row"><strong>${escapeHtml(line.dogName)}</strong><span>${dogShowExpenseCurrency(line.directExpenses)}</span><span>${dogShowExpenseCurrency(line.incomeOffsets)}</span><span>${dogShowExpenseCurrency(line.showWideShare)}</span><strong>${dogShowExpenseCurrency(line.amount)}</strong><span>${escapeHtml(line.showName)}</span></div>`).join("")}
+    </div>
+    <div class="field-grid">
+      <label>Invoice due date<input type="date" name="dueDate" value="${dogShowDateKey(dueDate)}" required/></label>
+      <label>Total due<input value="${dogShowExpenseCurrency(period.totals.totalCustomerCost)}" readonly/></label>
+    </div>
+    <label>Invoice note<textarea name="memo" rows="2">Dog show handling and related show expenses for ${escapeHtml(period.label)}.</textarea></label>
+    <label>Payment instructions<textarea name="paymentInstructions" rows="3" required>Please pay by the due date using your established Central Texas Husky payment method. Reply to this email if you need payment instructions or have already paid.</textarea></label>
+    <div class="button-row"><button type="submit">Save &amp; Email Invoice</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+  </form>`);
+}
+
+async function saveDogShowInvoice(form) {
+  const selection = dogShowInvoiceSelection(form.dataset.customerKey || "", form.dataset.periodKey || "");
+  if (!selection) return showToast("That customer finance period is no longer available.");
+  const { report, period } = selection;
+  const data = formPayload(form);
+  const total = Math.round(Number(period.totals.totalCustomerCost || 0) * 100) / 100;
+  if (!report.customer.email || total <= 0) return showToast("A customer email and positive balance are required.");
+  const id = uid("showInvoice");
+  const invoiceNumber = `SHOW-${todayDate().replaceAll("-", "")}-${id.slice(-6).toUpperCase()}`;
+  let invoice = await saveDogShowRecord("showInvoice", {
+    id,
+    invoiceNumber,
+    customerName: report.customer.name,
+    customerEmail: report.customer.email,
+    ownerEmail: report.customer.email,
+    periodKey: period.key,
+    periodLabel: period.label,
+    dogNames: [...new Set(period.ledgers.map((ledger) => ledger.dogName).filter(Boolean))],
+    showEventIds: [...new Set(period.ledgers.map((ledger) => ledger.event?.id).filter(Boolean))],
+    lineItems: dogShowInvoiceLineItems(period),
+    subtotal: total,
+    total,
+    status: "Issued",
+    issuedAt: new Date().toISOString(),
+    dueDate: data.dueDate,
+    memo: String(data.memo || "").trim(),
+    paymentInstructions: String(data.paymentInstructions || "").trim(),
+    submittedAt: new Date().toISOString(),
+    submittedBy: currentUser?.name || "Staff",
+    submittedEmail: currentUser?.email || "",
+  });
+  const notification = await notifyIfNeeded(invoice, "dogShowInvoiceSent");
+  invoice = await saveDogShowRecord("showInvoice", {
+    ...invoice,
+    emailDeliveryStatus: notification?.deliveryStatus || "in-app only",
+    emailedAt: notification?.deliveryStatus === "sent" ? new Date().toISOString() : "",
+    status: notification?.deliveryStatus === "sent" ? "Sent" : "Email Failed",
+    updatedAt: new Date().toISOString(),
+  });
+  document.getElementById("dogShowDialog")?.close();
+  showToast(notification?.deliveryStatus === "sent" ? `Invoice ${invoice.invoiceNumber} emailed to ${report.customer.email}.` : `Invoice ${invoice.invoiceNumber} saved, but the email was not delivered.`);
 }
 
 function dogShowFinanceDogReportData() {
@@ -3994,7 +4081,9 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
     </details>
     <label>Judge notes<textarea name="judgeNotes" rows="3">${escapeHtml(result.judgeNotes || "")}</textarea></label>
     <label>Owner-facing summary<textarea name="customerSummary" rows="3">${escapeHtml(result.customerSummary || "")}</textarea></label>
-    <label class="inline-check"><input type="checkbox" name="customerVisible"${emailOwner ? " checked" : ""}${ownerEmailAvailable ? "" : " disabled"}/> ${ownerEmailAvailable ? "Email owner immediately" : "Owner email unavailable"}</label>
+    <label>Win / result photo<input type="file" name="resultMedia" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"/></label>
+    ${arrayValue(result.mediaItems).length ? `<small class="muted-text">Saved photo: ${escapeHtml(arrayValue(result.mediaItems).map((item) => item.name || "Show result photo").join(", "))}. Choose a new photo only to replace it.</small>` : ""}
+    <label class="inline-check"><input type="checkbox" name="customerVisible"${emailOwner ? " checked" : ""}${ownerEmailAvailable ? "" : " disabled"}/> ${ownerEmailAvailable ? "Add to Customer Updates and email owner immediately" : "Owner email unavailable"}</label>
     <div class="button-row"><button type="submit">Save Result</button><button type="button" class="secondary-button" data-action="${schedule ? "back-to-show-results" : "back-to-show-dog"}" data-id="${escapeHtml(entry.id)}">Back</button></div>
   </form>`);
 }
@@ -4476,6 +4565,14 @@ async function saveDogShowResult(form) {
   const ownerEmails = [sourceDog.ownerEmail, sourceDog.customerEmail, sourceDog.linkedOwnerEmail, sourceDog.secondaryOwnerEmail]
     .map(normalizeEmail)
     .filter(Boolean);
+  const uploadedMedia = await uploadMediaFiles(form.elements.resultMedia, `dog-show-results/${entry.showEventId}/${entry.id}/${schedule?.id || "general"}`, {
+    allowedTypes: IMAGE_UPLOAD_TYPES,
+    allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+    imagePreset: "generalPhoto",
+    label: "show result photo",
+  });
+  const validUploadedMedia = uploadedMedia.filter((item) => item.url || item.storagePath || item.dataUrl);
+  const mediaItems = validUploadedMedia.length ? validUploadedMedia : arrayValue(existing.mediaItems);
   const result = await saveDogShowRecord("showResult", {
     ...existing,
     ...data,
@@ -4516,6 +4613,7 @@ async function saveDogShowResult(form) {
     showLocation: event.venueAddress || event.cityState || "",
     resultIsUpdate: Boolean(existing.id && existing.customerVisible),
     customerVisible,
+    mediaItems,
     loggedAt: existing.loggedAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     helperName: currentUser?.name || "Staff",
@@ -4532,7 +4630,7 @@ async function saveDogShowResult(form) {
   const savedMessage = schedule ? `Result saved for ${dogShowRingAppearanceTitle(schedule, schedules.indexOf(schedule))}.` : "Show result saved.";
   const ownerMessage = customerVisible
     ? ownerEmails.length
-      ? notification?.deliveryStatus === "sent" ? " Owner email sent." : " Owner notification queued."
+      ? notification?.deliveryStatus === "sent" ? " Customer Update saved and owner email sent." : ` Customer Update saved; owner email ${notification?.deliveryStatus === "failed" ? "failed" : "was not delivered"}.`
       : " No owner email is available for this dog."
     : "";
   showToast(`${savedMessage}${ownerMessage}`);
@@ -5096,6 +5194,7 @@ function setupDogShowEventListeners() {
         renderDogShow();
       }
     }
+    if (action.dataset.action === "create-show-invoice") openDogShowInvoiceForm(action.dataset.customerKey || "", action.dataset.periodKey || "");
     if (action.dataset.action === "new-show-expense") openDogShowExpenseForm();
     if (action.dataset.action === "edit-show-expense") {
       const expense = dogShowExpenses(dogShowActiveEvent()).find((candidate) => candidate.id === action.dataset.expenseId);
@@ -5238,6 +5337,7 @@ function setupDogShowEventListeners() {
     if (event.target.id === "dogShowTaskForm") await saveDogShowTask(event.target);
     if (event.target.id === "dogShowPlannerForm") await saveDogShowPlanner(event.target);
     if (event.target.id === "dogShowExpenseForm") await saveDogShowExpense(event.target);
+    if (event.target.id === "dogShowInvoiceForm") await saveDogShowInvoice(event.target);
   });
 
   dialog?.addEventListener("click", async (event) => {

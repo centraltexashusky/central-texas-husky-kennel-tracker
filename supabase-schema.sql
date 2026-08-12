@@ -687,6 +687,7 @@ as $$
     'showDayTask',
     'showCareLog',
     'showResult',
+    'showInvoice',
     'calendarNote',
     'dogVaccination',
     'dogInternalNote',

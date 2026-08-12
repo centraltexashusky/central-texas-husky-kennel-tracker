@@ -44,6 +44,7 @@ const ALLOWED_EVENT_NAMES = new Set([
   "customerDogFileUploaded",
   "customerStayUpdateSent",
   "dogShowResultPublished",
+  "dogShowInvoiceSent",
   "kennelRequestCreated",
   "maintenanceCreated",
   "scheduleChangedAfterPublish",
@@ -2055,6 +2056,8 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     const ringDate = formatEmailDateOnlyText(String(record.ringDate || ""), "long");
     const ringTime = formatEmailTimeOnlyText(record.ringTime);
     const appearance = [ringDate, ringTime].filter(Boolean).join(" at ");
+    const pointsEarned = Number(record.pointsEarned || 0);
+    const media = await recordMediaLines(adminClient, record);
     const subject = `${record.resultIsUpdate ? "Updated dog show result" : "Dog show result"}: ${dogName} - ${outcome}`;
     const body = [
       `Hi ${ownerName || "there"},`,
@@ -2081,10 +2084,11 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       record.ohGroupJudge ? `OH Group judge: ${record.ohGroupJudge}` : "",
       record.ohBisAward ? `OH BIS award: ${record.ohBisAward}` : "",
       record.ohBisJudge ? `OH BIS judge: ${record.ohBisJudge}` : "",
-      record.points ? `Points / major estimate: ${record.points}` : "",
+      pointsEarned ? `Championship points: ${pointsEarned}${record.isMajor ? " (major)" : ""}` : "",
       record.judge ? `Breed / variety judge: ${record.judge}` : "",
       record.judgeNotes ? `Judge / handler notes: ${record.judgeNotes}` : "",
       record.customerSummary ? `Update from the team: ${record.customerSummary}` : "",
+      ...(media.length ? ["", "Win / result photo:", ...media.map(mediaPlainTextLine)] : []),
       "",
       `Recorded by: ${record.helperName || record.helperEmail || "Central Texas Husky"}`,
       "",
@@ -2092,6 +2096,46 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
     ].filter(Boolean).join("\n");
     const rendered = renderPremiumTextEmail({
       audience: "Dog owner",
+      body,
+      mediaLinks: media,
+      priority: "normal",
+      subject,
+    });
+    return {
+      subject,
+      body,
+      html: rendered.html,
+      priority: "normal",
+      template: rendered.template,
+      to: customerEmailsForRecord(record),
+      sms: false,
+    };
+  }
+  if (eventName === "dogShowInvoiceSent") {
+    const customerName = String(record.customerName || record.ownerName || "there").trim();
+    const invoiceNumber = String(record.invoiceNumber || "Dog show invoice").trim();
+    const lineItems = arrayValue(record.lineItems).map((item) => (item && typeof item === "object" ? item : {}) as Record<string, unknown>);
+    const subject = `Dog show invoice ${invoiceNumber}: ${formatEmailMoneyText(record.total)}`;
+    const body = [
+      `Hi ${customerName || "there"},`,
+      "",
+      "Your Central Texas Husky dog show invoice is ready.",
+      "",
+      `Invoice: ${invoiceNumber}`,
+      record.periodLabel ? `Show / period: ${record.periodLabel}` : "",
+      `Issued: ${formatEmailDateOnlyText(String(record.issuedAt || "").slice(0, 10), "long")}`,
+      record.dueDate ? `Due: ${formatEmailDateOnlyText(record.dueDate, "long")}` : "",
+      `Total due: ${formatEmailMoneyText(record.total)}`,
+      "",
+      "Invoice items:",
+      ...lineItems.map((item) => `${item.dogName || "Dog"} - ${item.showName || "Dog Show"}: ${formatEmailMoneyText(item.amount)}`),
+      record.memo ? `Note: ${record.memo}` : "",
+      record.paymentInstructions ? `Payment: ${record.paymentInstructions}` : "",
+      "",
+      `Open Snuggle Stay: ${appLink("#customerPage")}`,
+    ].filter(Boolean).join("\n");
+    const rendered = renderPremiumTextEmail({
+      audience: "Customer",
       body,
       priority: "normal",
       subject,
@@ -2298,6 +2342,7 @@ Deno.serve(async (req) => {
   const staffOnlyCustomerEvents = new Set([
     "customerStayUpdateSent",
     "dogShowResultPublished",
+    "dogShowInvoiceSent",
     "boardingCustomerRequestApproved",
     "boardingCustomerRequestDeclined",
     "boardingCustomerRequestCancelled",

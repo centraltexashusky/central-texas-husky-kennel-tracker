@@ -1447,7 +1447,27 @@ function customerUpdatesForCurrentUser() {
         pickupTime: update.stayPickupTime || "",
       },
     })));
-  return [...boardingUpdates, ...customerDogUpdates]
+  const showUpdates = readRecords("showResult")
+    .filter((result) => !result.removed && result.customerVisible === true && [result.ownerEmail, result.customerEmail, result.linkedOwnerEmail, result.secondaryOwnerEmail].map(normalizeEmail).includes(email))
+    .map((result) => {
+      const outcome = result.outcome === "Scratched" ? "Withdrawn before judging" : result.outcome || "Result recorded";
+      const points = Math.max(0, Number(result.pointsEarned || 0));
+      const awards = [result.awards, result.groupAward, result.bisAward, result.ohGroupAward, result.ohBisAward].filter(Boolean).join(", ");
+      return {
+        id: "customerUpdate-" + result.id,
+        source: "showResult",
+        sourceLabel: "Dog Show",
+        sourceRecordId: result.id,
+        sourceRecordType: "showResult",
+        dogName: result.dogName || "Dog",
+        stayLabel: ["Dog Show", result.showName, result.ringDate || ""].filter(Boolean).join(" · "),
+        note: [(result.dogName || "Your dog") + " — " + outcome, result.placement, awards, points ? points + " championship point" + (points === 1 ? "" : "s") + (result.isMajor ? " (major)" : "") : "", result.customerSummary].filter(Boolean).join(" · "),
+        mediaItems: result.mediaItems || [],
+        createdAt: result.loggedAt || result.submittedAt || result.updatedAt,
+        byName: result.helperName || "Central Texas Husky",
+      };
+    });
+  return [...boardingUpdates, ...customerDogUpdates, ...showUpdates]
     .filter((update) => {
       const key = update.id || \`\${update.createdAt || ""}|\${update.note || ""}|\${update.stayId || ""}\`;
       if (updateKeys.has(key)) return false;
@@ -1462,7 +1482,7 @@ function renderCustomerUpdates() {
   if (!list) return;
   const updates = customerUpdatesForCurrentUser();
   if (!updates.length) {
-    list.innerHTML = "<p>No boarding updates have been sent yet.</p>";
+    list.innerHTML = "<p>No boarding or dog show updates have been sent yet.</p>";
     return;
   }
   const grouped = updates.reduce((groups, update) => {
@@ -1487,12 +1507,12 @@ function renderCustomerUpdates() {
           const isImage = String(item.type || "").startsWith("image/");
           const isVideo = String(item.type || "").startsWith("video/");
           const label = item.name || (isVideo ? "Open video" : isImage ? "Open photo" : "Open attachment");
-          return \`<button type="button" class="customer-update-media-button" data-action="view-media" data-src="\${escapeHtml(src)}" data-media-type="\${escapeHtml(item.type || "application/octet-stream")}" data-media-name="\${escapeHtml(item.name || "Customer update media")}"\${mediaAccessAttrs(item, { sourceRecordId: update.boardingDogId || item.sourceRecordId || "", sourceRecordType: "boardingDog" })}>\${isImage && src ? \`<img src="\${escapeHtml(src)}" alt="\${escapeHtml(item.name || "Customer update photo")}" />\` : ""}<span>\${escapeHtml(label)}</span></button>\`;
+          return \`<button type="button" class="customer-update-media-button" data-action="view-media" data-src="\${escapeHtml(src)}" data-media-type="\${escapeHtml(item.type || "application/octet-stream")}" data-media-name="\${escapeHtml(item.name || "Customer update media")}"\${mediaAccessAttrs(item, { sourceRecordId: update.sourceRecordId || update.boardingDogId || item.sourceRecordId || "", sourceRecordType: update.sourceRecordType || "boardingDog" })}>\${isImage && src ? \`<img src="\${escapeHtml(src)}" alt="\${escapeHtml(item.name || "Customer update photo")}" />\` : ""}<span>\${escapeHtml(label)}</span></button>\`;
         }).join("");
         return \`<article class="record-card compact-record-card customer-update-card">
           <strong>\${escapeHtml(formatDateTime(update.createdAt) || "Update")}</strong>
           <p>\${escapeHtml(update.note || "No note added.")}</p>
-          <small>\${escapeHtml([update.byName || "", requestCode ? \`Stay ID: \${requestCode}\` : ""].filter(Boolean).join(" | "))}</small>
+          <small>\${escapeHtml([update.sourceLabel || "Boarding", update.byName || "", requestCode ? \`Stay ID: \${requestCode}\` : ""].filter(Boolean).join(" | "))}</small>
           \${media ? \`<div class="customer-update-media-grid">\${media}</div>\` : ""}
         </article>\`;
       }).join("")}

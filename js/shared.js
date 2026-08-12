@@ -517,6 +517,7 @@ var stateKeys = {
   showDayTask: "cth-showDayTask-records",
   showCareLog: "cth-showCareLog-records",
   showResult: "cth-showResult-records",
+  showInvoice: "cth-showInvoice-records",
   customerDog: "cth-customerDog-records",
   dog: "cth-dog-records",
   userDogAccess: "cth-userDogAccess-records",
@@ -1674,7 +1675,7 @@ function initSupabaseClient() {
 
 function recordTypes() {
   return [
-    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "customerDog",
+    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "showInvoice", "customerDog",
     "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink", "boardingAgreement",
     "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
   ];
@@ -1710,7 +1711,7 @@ function remoteRecordTypesForPage(pageId = "") {
     settingsAuditLogPage: ["auditLog"],
     customerPage: ["customerDog", "boardingDog", "boardingAgreement", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
     customerRequestsPage: ["customerDog", "boardingDog", "boardingAgreement", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
-    customerUpdatesPage: ["boardingDog", "customerDog"],
+    customerUpdatesPage: ["boardingDog", "customerDog", "showResult"],
     customerFilesPage: ["boardingDog", "customerDog", "boardingAgreement"],
   };
   const normalizedPageId = normalizePageId(pageId || pageIdFromHash() || activePageId() || "");
@@ -1774,6 +1775,7 @@ var REMOTE_STAFF_WRITE_RECORD_TYPES = new Set([
   "showDayTask",
   "showCareLog",
   "showResult",
+  "showInvoice",
   "calendarNote",
   "dogVaccination",
   "dogInternalNote",
@@ -5075,7 +5077,7 @@ function renderAfterRealtimeTypes(types = []) {
   if (activePage === "settingsAuditLogPage" && typeSet.has("auditLog")) renderAuditLog();
   if (activePage === "customerPage" && hasAny(["customerDog", "boardingDog"])) renderCustomerDogs();
   if (activePage === "customerRequestsPage" && hasAny(["boardingDog", "boardingAgreement"])) renderCustomerRequests();
-  if (activePage === "customerUpdatesPage" && hasAny(["boardingDog", "reservationCustomerUpdate"])) renderCustomerUpdates();
+  if (activePage === "customerUpdatesPage" && hasAny(["boardingDog", "reservationCustomerUpdate", "showResult"])) renderCustomerUpdates();
   if (activePage === "customerFilesPage" && hasAny(["boardingDog", "customerDog", "boardingAgreement"])) renderCustomerFiles();
 
   if (typeSet.has("notificationLog") || typeSet.has("notificationRead")) renderNotifications();
