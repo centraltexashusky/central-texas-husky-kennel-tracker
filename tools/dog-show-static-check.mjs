@@ -22,7 +22,7 @@ const required = [
   ["index.html", 'data-dog-show-view="more"', "Missing More view."],
   ["js/main.js", 'import "./dog-show.js', "Dog Show module is not loaded."],
   ["js/main.js", 'owner-update-win-photo-invoice-v37', "Dog Show lifecycle changes are not cache-busted."],
-  ["index.html", 'dog-show-lifecycle-owner-update-photo-invoice-v37', "Dog Show lifecycle entrypoint changes are not cache-busted."],
+  ["index.html", 'dog-show-lifecycle-owner-update-photo-invoice-v38', "Dog Show lifecycle entrypoint changes are not cache-busted."],
   ["index.html", 'data-dog-show-more-action="progress"', "Dog Show More menu is missing Show Progress."],
   ["index.html", 'data-dog-show-more-action="calculator"', "Dog Show More menu is missing Calculator."],
   ["index.html", 'data-dog-show-more-action="expenses"', "Dog Show More menu is missing Expenses."],
