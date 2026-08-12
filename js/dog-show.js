@@ -2103,9 +2103,9 @@ function dogShowInvoiceIsActive(invoice = {}) {
   return !["Superseded", "Email Failed", "Cancelled", "Void"].includes(invoice.status || "");
 }
 
-function dogShowInvoiceSelection(invoiceScope = "customer", targetKey = "", periodKey = "") {
+function dogShowInvoiceSelection(invoiceScope = "customer", targetKey = "", periodKey = "", periodType = dogShowFinancePeriod) {
   if (invoiceScope === "dog") {
-    const { selected, periods } = dogShowFinanceDogReportData(targetKey);
+    const { selected, periods } = dogShowFinanceDogReportData(targetKey, periodType);
     const period = periods.find((candidate) => candidate.key === periodKey);
     if (!selected || !period) return null;
     const customers = new Map();
@@ -2120,7 +2120,7 @@ function dogShowInvoiceSelection(invoiceScope = "customer", targetKey = "", peri
       targetKey,
       customer,
       period,
-      periodType: dogShowFinancePeriod,
+      periodType,
       periodKey: period.key,
       periodLabel: period.label,
       dogKey: selected.key,
@@ -2130,7 +2130,7 @@ function dogShowInvoiceSelection(invoiceScope = "customer", targetKey = "", peri
       lineItems: dogShowDogInvoiceLineItems(period, selected),
     };
   }
-  const report = dogShowFinanceCustomerReports().find((candidate) => candidate.customer.key === targetKey);
+  const report = dogShowFinanceCustomerReports(periodType).find((candidate) => candidate.customer.key === targetKey);
   const period = report?.periods.find((candidate) => candidate.key === periodKey);
   if (!report || !period) return null;
   return {
@@ -2138,7 +2138,7 @@ function dogShowInvoiceSelection(invoiceScope = "customer", targetKey = "", peri
     targetKey,
     customer: report.customer,
     period,
-    periodType: dogShowFinancePeriod,
+    periodType,
     periodKey: period.key,
     periodLabel: period.label,
     dogNames: [...new Set(period.ledgers.map((ledger) => ledger.dogName).filter(Boolean))],
@@ -2164,17 +2164,21 @@ function dogShowInvoiceState(selection = {}) {
 function dogShowInvoiceStatusClass(invoice = {}) {
   if (invoice.status === "Paid") return "is-paid";
   if (invoice.status === "Email Failed") return "is-failed";
+  if (["Cancelled", "Void"].includes(invoice.status)) return "is-cancelled";
   return "is-open";
 }
 
 function dogShowInvoiceSummaryHtml(invoice = {}) {
   const paid = invoice.status === "Paid";
+  const cancelled = ["Cancelled", "Void"].includes(invoice.status);
   const detail = paid
-    ? `Paid ${dogShowFormatDate(invoice.paidDate || String(invoice.paidAt || "").slice(0, 10))}${invoice.paymentMethod ? ` · ${escapeHtml(invoice.paymentMethod)}` : ""}`
-    : `Due ${dogShowFormatDate(invoice.dueDate)}${invoice.emailDeliveryStatus === "sent" ? " · Email sent" : ""}`;
+    ? `Paid ${dogShowExpenseCurrency(invoice.paidAmount ?? invoice.total)} · ${dogShowFormatDate(invoice.paidDate || String(invoice.paidAt || "").slice(0, 10))}${invoice.paymentMethod ? ` · ${escapeHtml(invoice.paymentMethod)}` : ""}`
+    : cancelled
+      ? `Cancelled ${dogShowFormatDate(String(invoice.cancelledAt || "").slice(0, 10))}${invoice.cancelReason ? ` · ${escapeHtml(invoice.cancelReason)}` : ""}`
+      : `Due ${dogShowFormatDate(invoice.dueDate)}${invoice.emailDeliveryStatus === "sent" ? " · Email sent" : ""}`;
   return `<article class="dog-show-invoice-status ${dogShowInvoiceStatusClass(invoice)}">
     <div><span>${escapeHtml(invoice.status || "Issued")}</span><strong>${escapeHtml(invoice.invoiceNumber || "Dog show invoice")}</strong><small>${detail}</small></div>
-    <div><strong>${dogShowExpenseCurrency(invoice.total)}</strong><button type="button" class="secondary-button" data-action="record-show-invoice-payment" data-invoice-id="${escapeHtml(invoice.id || "")}">${paid ? "Edit Payment" : "Record Payment"}</button></div>
+    <div><strong>${dogShowExpenseCurrency(invoice.total)}</strong><span class="dog-show-invoice-card-actions">${cancelled ? "" : `<button type="button" class="secondary-button" data-action="record-show-invoice-payment" data-invoice-id="${escapeHtml(invoice.id || "")}">${paid ? "Edit Payment" : "Record Payment"}</button>`}<button type="button" class="secondary-button" data-action="manage-show-invoice" data-invoice-id="${escapeHtml(invoice.id || "")}">Manage</button></span></div>
   </article>`;
 }
 
@@ -2189,13 +2193,13 @@ function dogShowInvoiceControlsHtml(selection = {}) {
         ? state.relatedInvoices.length ? "All positive charges in this period are already invoiced." : "This period does not have a positive balance to invoice."
         : `${dogShowExpenseCurrency(state.billableTotal)} not yet invoiced.`;
   return `<div class="dog-show-invoice-controls">
-    <div class="dog-show-invoice-create"><button type="button" class="secondary-button" data-action="create-show-invoice" data-invoice-scope="${escapeHtml(selection.invoiceScope || "customer")}" data-target-key="${escapeHtml(selection.targetKey || "")}" data-period-key="${escapeHtml(selection.periodKey || "")}"${canInvoice ? "" : " disabled"}>Create &amp; Email Invoice</button><small>${escapeHtml(reason)}</small></div>
+    <div class="dog-show-invoice-create"><button type="button" class="secondary-button" data-action="create-show-invoice" data-invoice-scope="${escapeHtml(selection.invoiceScope || "customer")}" data-target-key="${escapeHtml(selection.targetKey || "")}" data-period-key="${escapeHtml(selection.periodKey || "")}" data-period-type="${escapeHtml(selection.periodType || dogShowFinancePeriod)}"${canInvoice ? "" : " disabled"}>Create &amp; Email Invoice</button><small>${escapeHtml(reason)}</small></div>
     ${state.relatedInvoices.length ? `<div class="dog-show-invoice-status-list">${state.relatedInvoices.map(dogShowInvoiceSummaryHtml).join("")}</div>` : ""}
   </div>`;
 }
 
-function openDogShowInvoiceForm(invoiceScope = "customer", targetKey = "", periodKey = "") {
-  const selection = dogShowInvoiceSelection(invoiceScope, targetKey, periodKey);
+function openDogShowInvoiceForm(invoiceScope = "customer", targetKey = "", periodKey = "", periodType = dogShowFinancePeriod) {
+  const selection = dogShowInvoiceSelection(invoiceScope, targetKey, periodKey, periodType);
   if (!selection) return showToast("That customer finance period is no longer available.");
   const state = dogShowInvoiceState(selection);
   if (!selection.customer?.email) return showToast("Link this dog to one customer email before creating an invoice.");
@@ -2203,7 +2207,7 @@ function openDogShowInvoiceForm(invoiceScope = "customer", targetKey = "", perio
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + 14);
   const lines = state.billableLineItems;
-  openDogShowDialog("Create & Email Dog Show Invoice", `<form id="dogShowInvoiceForm" class="tracker-form" data-invoice-scope="${escapeHtml(invoiceScope)}" data-target-key="${escapeHtml(targetKey)}" data-period-key="${escapeHtml(periodKey)}">
+  openDogShowDialog("Create & Email Dog Show Invoice", `<form id="dogShowInvoiceForm" class="tracker-form" data-invoice-scope="${escapeHtml(invoiceScope)}" data-target-key="${escapeHtml(targetKey)}" data-period-key="${escapeHtml(periodKey)}" data-period-type="${escapeHtml(periodType)}">
     <div class="dog-show-form-note"><strong>${escapeHtml(selection.customer.name)}</strong><span>${escapeHtml(selection.customer.email)} · ${escapeHtml(selection.periodLabel)}</span></div>
     <div class="dog-show-customer-dog-table" role="table" aria-label="Invoice line items">
       <div class="dog-show-customer-dog-row is-heading" role="row"><span>Dog</span><span>Direct</span><span>Offsets</span><span>Shared</span><span>Amount</span><span>Show</span></div>
@@ -2220,7 +2224,7 @@ function openDogShowInvoiceForm(invoiceScope = "customer", targetKey = "", perio
 }
 
 async function saveDogShowInvoice(form) {
-  const selection = dogShowInvoiceSelection(form.dataset.invoiceScope || "customer", form.dataset.targetKey || "", form.dataset.periodKey || "");
+  const selection = dogShowInvoiceSelection(form.dataset.invoiceScope || "customer", form.dataset.targetKey || "", form.dataset.periodKey || "", form.dataset.periodType || dogShowFinancePeriod);
   if (!selection) return showToast("That customer finance period is no longer available.");
   const state = dogShowInvoiceState(selection);
   const data = formPayload(form);
@@ -2281,12 +2285,12 @@ function openDogShowInvoicePaymentForm(invoiceId = "") {
     <div class="dog-show-form-note"><strong>${escapeHtml(invoice.invoiceNumber || "Dog show invoice")}</strong><span>${escapeHtml(invoice.customerName || invoice.customerEmail || "Customer")} · ${dogShowExpenseCurrency(invoice.total)}</span></div>
     <div class="field-grid">
       <label>Payment date<input type="date" name="paidDate" value="${escapeHtml(paidDate)}" required/></label>
-      <label>Amount paid<input value="${dogShowExpenseCurrency(invoice.total)}" readonly/></label>
+      <label>Amount paid<input type="number" name="paidAmount" min="0.01" step="0.01" inputmode="decimal" value="${escapeHtml(String(invoice.paidAmount ?? invoice.total ?? ""))}" required/></label>
       <label>Payment method<select name="paymentMethod" required><option value="">Select method</option>${methods.map((method) => `<option value="${escapeHtml(method)}"${invoice.paymentMethod === method ? " selected" : ""}>${escapeHtml(method)}</option>`).join("")}</select></label>
       <label>Reference / confirmation<input name="paymentReference" value="${escapeHtml(invoice.paymentReference || "")}" placeholder="Optional check or confirmation number"/></label>
     </div>
     <label>Payment note<textarea name="paymentNote" rows="2" placeholder="Optional internal note">${escapeHtml(invoice.paymentNote || "")}</textarea></label>
-    <div class="button-row"><button type="submit">${invoice.status === "Paid" ? "Update Payment" : "Mark Invoice Paid"}</button><button type="button" class="secondary-button" data-action="close-show-dialog">Cancel</button></div>
+    <div class="button-row dog-show-invoice-form-actions"><span><button type="submit">${invoice.status === "Paid" ? "Update Payment" : "Mark Invoice Paid"}</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></span>${invoice.status === "Paid" ? `<button type="button" class="secondary-button danger-button" data-action="cancel-show-invoice-payment" data-invoice-id="${escapeHtml(invoice.id)}">Cancel Payment</button>` : ""}</div>
   </form>`);
 }
 
@@ -2294,12 +2298,14 @@ async function saveDogShowInvoicePayment(form) {
   const invoice = dogShowInvoices({ includeSuperseded: true }).find((candidate) => candidate.id === form.dataset.invoiceId);
   if (!invoice || invoice.status === "Superseded") return showToast("That invoice is no longer available for payment.");
   const data = formPayload(form);
-  if (!data.paidDate || !data.paymentMethod) return showToast("Choose the payment date and method.");
+  const paidAmount = Math.round(Number(data.paidAmount || 0) * 100) / 100;
+  if (!data.paidDate || !data.paymentMethod || paidAmount <= 0) return showToast("Choose the payment date, amount, and method.");
   const timestamp = new Date().toISOString();
   const saved = await saveDogShowRecord("showInvoice", {
     ...invoice,
     status: "Paid",
-    paidAmount: Math.round(Number(invoice.total || 0) * 100) / 100,
+    statusBeforePayment: invoice.status === "Paid" ? invoice.statusBeforePayment || "Sent" : invoice.status || "Sent",
+    paidAmount,
     paidDate: data.paidDate,
     paidAt: invoice.paidAt || timestamp,
     paymentMethod: data.paymentMethod,
@@ -2318,7 +2324,262 @@ async function saveDogShowInvoicePayment(form) {
   showToast(`${saved.invoiceNumber || "Invoice"} marked paid.`);
 }
 
-function dogShowFinanceDogReportData(targetDogKey = dogShowFinanceDogKey) {
+function dogShowInvoiceById(invoiceId = "") {
+  return dogShowInvoices({ includeSuperseded: true }).find((candidate) => candidate.id === invoiceId) || null;
+}
+
+function dogShowInvoiceCenterData(invoiceScope = "customer", periodType = "show", targetKey = "") {
+  const scope = invoiceScope === "dog" ? "dog" : "customer";
+  const normalizedPeriod = ["show", "week", "month", "year"].includes(periodType) ? periodType : "show";
+  if (scope === "dog") {
+    const dogs = dogShowFinanceDogCostGroups(dogShowEvents().map(dogShowFinanceEventSummary));
+    const selectedKey = dogs.some((dog) => dog.key === targetKey) ? targetKey : dogs[0]?.key || "";
+    const { periods } = dogShowFinanceDogReportData(selectedKey, normalizedPeriod);
+    return {
+      scope,
+      periodType: normalizedPeriod,
+      targets: dogs.map((dog) => ({ key: dog.key, label: dog.label, detail: `${dog.showCount} show${dog.showCount === 1 ? "" : "s"}` })),
+      targetKey: selectedKey,
+      periods,
+    };
+  }
+  const reports = dogShowFinanceCustomerReports(normalizedPeriod);
+  const selectedKey = reports.some((report) => report.customer.key === targetKey) ? targetKey : reports[0]?.customer.key || "";
+  const selected = reports.find((report) => report.customer.key === selectedKey);
+  return {
+    scope,
+    periodType: normalizedPeriod,
+    targets: reports.map((report) => ({ key: report.customer.key, label: report.customer.name, detail: report.customer.email || "No email" })),
+    targetKey: selectedKey,
+    periods: selected?.periods || [],
+  };
+}
+
+function dogShowInvoiceCenterTargetOptions(data = {}) {
+  return data.targets.length
+    ? data.targets.map((target) => `<option value="${escapeHtml(target.key)}"${target.key === data.targetKey ? " selected" : ""}>${escapeHtml(target.label)} · ${escapeHtml(target.detail)}</option>`).join("")
+    : `<option value="">No ${data.scope === "dog" ? "dogs" : "customers"} available</option>`;
+}
+
+function dogShowInvoiceCenterPeriodOptions(data = {}, selectedPeriodKey = "") {
+  const periodKey = data.periods.some((period) => period.key === selectedPeriodKey) ? selectedPeriodKey : data.periods[0]?.key || "";
+  return data.periods.length
+    ? data.periods.map((period) => `<option value="${escapeHtml(period.key)}"${period.key === periodKey ? " selected" : ""}>${escapeHtml(period.label)}</option>`).join("")
+    : `<option value="">No billable periods available</option>`;
+}
+
+function dogShowInvoiceCenterPreview(data = {}, periodKey = "") {
+  const selection = dogShowInvoiceSelection(data.scope, data.targetKey, periodKey || data.periods[0]?.key || "", data.periodType);
+  if (!selection) return `<p class="dog-show-invoice-center-empty">Choose a customer or dog with show finance activity.</p>`;
+  const state = dogShowInvoiceState(selection);
+  const canInvoice = Boolean(selection.customer?.email) && state.billableTotal > 0;
+  const message = !selection.customer?.email
+    ? "A linked customer email is required before this invoice can be sent."
+    : state.billableTotal > 0
+      ? `${dogShowExpenseCurrency(state.billableTotal)} is ready to review and send.`
+      : "All positive charges for this selection are already invoiced.";
+  return `<div class="dog-show-invoice-center-preview ${canInvoice ? "is-ready" : ""}"><div><span>${canInvoice ? "READY TO INVOICE" : "INVOICE CHECK"}</span><strong>${escapeHtml(selection.customer?.name || selection.dogNames?.[0] || "Selection")}</strong><small>${escapeHtml(message)}</small></div><strong>${dogShowExpenseCurrency(state.billableTotal)}</strong></div>`;
+}
+
+function dogShowInvoiceCenterCanInvoice(data = {}, periodKey = "") {
+  const selection = dogShowInvoiceSelection(data.scope, data.targetKey, periodKey || data.periods[0]?.key || "", data.periodType);
+  if (!selection?.customer?.email) return false;
+  return dogShowInvoiceState(selection).billableTotal > 0;
+}
+
+function dogShowInvoiceCenterExistingHtml() {
+  const invoices = dogShowInvoices({ includeSuperseded: true }).filter((invoice) => invoice.status !== "Superseded").slice(0, 30);
+  return invoices.length
+    ? `<div class="dog-show-invoice-center-list">${invoices.map(dogShowInvoiceSummaryHtml).join("")}</div>`
+    : `<p class="dog-show-invoice-center-empty">No dog show invoices have been created yet.</p>`;
+}
+
+function openDogShowInvoiceCenter() {
+  const data = dogShowInvoiceCenterData("customer", dogShowFinancePeriod, dogShowFinanceCustomerKey === "all" ? "" : dogShowFinanceCustomerKey);
+  const periodKey = data.periods[0]?.key || "";
+  openDogShowDialog("Dog Show Invoices", `<section class="dog-show-invoice-center">
+    <form id="dogShowInvoiceCenterForm" class="tracker-form">
+      <div class="dog-show-form-note"><strong>Create and email an invoice</strong><span>Select a customer or dog first, then choose the report period to bill.</span></div>
+      <div class="field-grid">
+        <label>Invoice by<select name="invoiceScope"><option value="customer">Customer</option><option value="dog">Dog</option></select></label>
+        <label>Report period<select name="periodType">${[["show", "Show"], ["week", "Week"], ["month", "Month"], ["year", "Year"]].map(([value, label]) => `<option value="${value}"${value === data.periodType ? " selected" : ""}>${label}</option>`).join("")}</select></label>
+        <label data-invoice-center-target-label>${data.scope === "dog" ? "Dog" : "Customer"}<select name="targetKey">${dogShowInvoiceCenterTargetOptions(data)}</select></label>
+        <label>Invoice coverage<select name="periodKey">${dogShowInvoiceCenterPeriodOptions(data, periodKey)}</select></label>
+      </div>
+      <div data-invoice-center-preview>${dogShowInvoiceCenterPreview(data, periodKey)}</div>
+      <div class="button-row"><button type="submit"${dogShowInvoiceCenterCanInvoice(data, periodKey) ? "" : " disabled"}>Review &amp; Send Invoice</button><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></div>
+    </form>
+    <section class="dog-show-invoice-center-existing"><header><div><span>INVOICE HISTORY</span><h4>Manage invoices and payments</h4></div><small>Update amounts, record or reverse payments, cancel, or delete an invoice.</small></header>${dogShowInvoiceCenterExistingHtml()}</section>
+  </section>`);
+}
+
+function refreshDogShowInvoiceCenterForm(form) {
+  const data = dogShowInvoiceCenterData(form.elements.invoiceScope.value, form.elements.periodType.value, form.elements.targetKey.value);
+  const targetLabel = form.querySelector("[data-invoice-center-target-label]");
+  if (targetLabel) targetLabel.childNodes[0].textContent = data.scope === "dog" ? "Dog" : "Customer";
+  form.elements.targetKey.innerHTML = dogShowInvoiceCenterTargetOptions(data);
+  form.elements.targetKey.value = data.targetKey;
+  form.elements.periodKey.innerHTML = dogShowInvoiceCenterPeriodOptions(data, form.elements.periodKey.value);
+  const preview = form.querySelector("[data-invoice-center-preview]");
+  if (preview) preview.innerHTML = dogShowInvoiceCenterPreview(data, form.elements.periodKey.value);
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = !dogShowInvoiceCenterCanInvoice(data, form.elements.periodKey.value);
+}
+
+function openDogShowInvoiceManagement(invoiceId = "") {
+  const invoice = dogShowInvoiceById(invoiceId);
+  if (!invoice) return showToast("That invoice is no longer available.");
+  const cancelled = ["Cancelled", "Void"].includes(invoice.status);
+  openDogShowDialog(`Manage ${invoice.invoiceNumber || "Invoice"}`, `<form id="dogShowInvoiceEditForm" class="tracker-form" data-invoice-id="${escapeHtml(invoice.id)}">
+    <div class="dog-show-form-note"><strong>${escapeHtml(invoice.customerName || invoice.customerEmail || "Customer")}</strong><span>${escapeHtml(invoice.status || "Issued")} · ${escapeHtml(invoice.periodLabel || "Dog show invoice")}${invoice.customerEmail ? ` · ${escapeHtml(invoice.customerEmail)}` : ""}</span></div>
+    <div class="field-grid">
+      <label>Invoice amount<input type="number" name="total" min="0.01" step="0.01" inputmode="decimal" value="${escapeHtml(String(invoice.total ?? ""))}" required${cancelled ? " disabled" : ""}/></label>
+      <label>Due date<input type="date" name="dueDate" value="${escapeHtml(invoice.dueDate || "")}" required${cancelled ? " disabled" : ""}/></label>
+    </div>
+    <label>Invoice note<textarea name="memo" rows="2"${cancelled ? " disabled" : ""}>${escapeHtml(invoice.memo || "")}</textarea></label>
+    <label>Payment instructions<textarea name="paymentInstructions" rows="3"${cancelled ? " disabled" : ""}>${escapeHtml(invoice.paymentInstructions || "")}</textarea></label>
+    <label>Reason for amount or invoice update<textarea name="updateReason" rows="2" placeholder="Optional internal audit note"${cancelled ? " disabled" : ""}></textarea></label>
+    ${invoice.status === "Paid" ? `<p class="dog-show-invoice-paid-note">Recorded payment: <strong>${dogShowExpenseCurrency(invoice.paidAmount ?? invoice.total)}</strong> on ${escapeHtml(dogShowFormatDate(invoice.paidDate || String(invoice.paidAt || "").slice(0, 10)))}.</p>` : ""}
+    <div class="button-row dog-show-invoice-form-actions"><span>${cancelled ? "" : `<button type="submit" name="deliveryAction" value="save">Save Changes</button><button type="submit" class="secondary-button" name="deliveryAction" value="email">Save &amp; Email Update</button><button type="button" class="secondary-button" data-action="record-show-invoice-payment" data-invoice-id="${escapeHtml(invoice.id)}">${invoice.status === "Paid" ? "Edit Payment" : "Record Payment"}</button>`}<button type="button" class="secondary-button" data-action="close-show-dialog">Close</button></span><span>${cancelled ? "" : `<button type="button" class="secondary-button danger-button" data-action="cancel-show-invoice" data-invoice-id="${escapeHtml(invoice.id)}">Cancel Invoice</button>`}<button type="button" class="danger-button" data-action="delete-show-invoice" data-invoice-id="${escapeHtml(invoice.id)}">Delete Invoice</button></span></div>
+  </form>`);
+}
+
+async function saveDogShowInvoiceEdit(form, emailUpdate = false) {
+  const invoice = dogShowInvoiceById(form.dataset.invoiceId);
+  if (!invoice || ["Cancelled", "Void"].includes(invoice.status)) return showToast("That invoice can no longer be updated.");
+  const data = formPayload(form);
+  const total = Math.round(Number(data.total || 0) * 100) / 100;
+  if (total <= 0 || !data.dueDate) return showToast("Enter an invoice amount greater than $0 and a due date.");
+  const timestamp = new Date().toISOString();
+  const amountChanged = total !== Math.round(Number(invoice.total || 0) * 100) / 100;
+  const baseLineItems = arrayValue(invoice.lineItems).filter((line) => !line.isAmountAdjustment);
+  const baseLineTotal = Math.round(baseLineItems.reduce((sum, line) => sum + Number(line.amount || 0), 0) * 100) / 100;
+  const adjustmentAmount = Math.round((total - baseLineTotal) * 100) / 100;
+  const lineItems = adjustmentAmount
+    ? [...baseLineItems, { dogName: "Invoice adjustment", showName: String(data.updateReason || "Amount correction").trim() || "Amount correction", amount: adjustmentAmount, isAmountAdjustment: true }]
+    : baseLineItems;
+  let saved = await saveDogShowRecord("showInvoice", {
+    ...invoice,
+    lineItems,
+    total,
+    subtotal: amountChanged ? total : invoice.subtotal ?? total,
+    dueDate: data.dueDate,
+    memo: String(data.memo || "").trim(),
+    paymentInstructions: String(data.paymentInstructions || "").trim(),
+    amountHistory: amountChanged ? [...arrayValue(invoice.amountHistory), { previousAmount: Number(invoice.total || 0), amount: total, reason: String(data.updateReason || "").trim(), changedAt: timestamp, changedBy: currentUser?.name || "Staff", changedEmail: currentUser?.email || "" }] : arrayValue(invoice.amountHistory),
+    amountUpdatedAt: amountChanged ? timestamp : invoice.amountUpdatedAt || "",
+    amountUpdatedBy: amountChanged ? currentUser?.name || "Staff" : invoice.amountUpdatedBy || "",
+    amountUpdatedEmail: amountChanged ? currentUser?.email || "" : invoice.amountUpdatedEmail || "",
+    invoiceUpdateReason: String(data.updateReason || "").trim(),
+    updatedAt: timestamp,
+    updatedBy: currentUser?.name || "Staff",
+    updatedEmail: currentUser?.email || "",
+  });
+  let emailSent = false;
+  if (emailUpdate) {
+    const notification = await notifyIfNeeded(saved, "dogShowInvoiceSent");
+    const sent = notification?.deliveryStatus === "sent";
+    emailSent = sent;
+    saved = await saveDogShowRecord("showInvoice", {
+      ...saved,
+      emailDeliveryStatus: notification?.deliveryStatus || "in-app only",
+      emailedAt: sent ? timestamp : saved.emailedAt || "",
+      status: saved.status === "Email Failed" && sent ? "Sent" : saved.status,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast(emailUpdate ? emailSent ? `${saved.invoiceNumber} updated and emailed.` : `${saved.invoiceNumber} updated, but the email was not delivered.` : `${saved.invoiceNumber} updated.`);
+}
+
+function openDogShowInvoicePaymentCancellation(invoiceId = "") {
+  const invoice = dogShowInvoiceById(invoiceId);
+  if (!invoice || invoice.status !== "Paid") return showToast("Only a paid invoice has a payment to cancel.");
+  openDogShowDialog("Cancel Invoice Payment", `<form id="dogShowInvoicePaymentCancelForm" class="tracker-form" data-invoice-id="${escapeHtml(invoice.id)}"><div class="dog-show-form-note"><strong>${escapeHtml(invoice.invoiceNumber)}</strong><span>Reverse the recorded ${dogShowExpenseCurrency(invoice.paidAmount ?? invoice.total)} payment and return this invoice to unpaid.</span></div><label>Reason for canceling payment<textarea name="reason" rows="3" required placeholder="Accidental entry, testing payment, or other reason"></textarea></label><div class="button-row"><button type="submit" class="danger-button">Cancel Payment</button><button type="button" class="secondary-button" data-action="manage-show-invoice" data-invoice-id="${escapeHtml(invoice.id)}">Go Back</button></div></form>`);
+}
+
+async function cancelDogShowInvoicePayment(form) {
+  const invoice = dogShowInvoiceById(form.dataset.invoiceId);
+  const data = formPayload(form);
+  const reason = String(data.reason || "").trim();
+  if (!invoice || invoice.status !== "Paid" || !reason) return showToast("Enter why the payment is being canceled.");
+  const timestamp = new Date().toISOString();
+  const restoredStatus = ["Issued", "Sent", "Email Failed"].includes(invoice.statusBeforePayment) ? invoice.statusBeforePayment : invoice.emailDeliveryStatus === "sent" ? "Sent" : "Issued";
+  const saved = await saveDogShowRecord("showInvoice", {
+    ...invoice,
+    status: restoredStatus,
+    paymentHistory: [...arrayValue(invoice.paymentHistory), { action: "Payment Cancelled", amount: Number(invoice.paidAmount ?? invoice.total ?? 0), paidDate: invoice.paidDate || "", method: invoice.paymentMethod || "", reference: invoice.paymentReference || "", reason, changedAt: timestamp, changedBy: currentUser?.name || "Staff", changedEmail: currentUser?.email || "" }],
+    paidAmount: "",
+    paidDate: "",
+    paidAt: "",
+    paymentMethod: "",
+    paymentReference: "",
+    paymentNote: "",
+    paymentCancelledAt: timestamp,
+    paymentCancelledBy: currentUser?.name || "Staff",
+    paymentCancelledEmail: currentUser?.email || "",
+    paymentCancelReason: reason,
+    updatedAt: timestamp,
+  });
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast(`${saved.invoiceNumber} payment canceled. The invoice is unpaid again.`);
+}
+
+function openDogShowInvoiceCancellation(invoiceId = "") {
+  const invoice = dogShowInvoiceById(invoiceId);
+  if (!invoice || ["Cancelled", "Void"].includes(invoice.status)) return showToast("That invoice is already cancelled.");
+  openDogShowDialog("Cancel Invoice", `<form id="dogShowInvoiceCancelForm" class="tracker-form" data-invoice-id="${escapeHtml(invoice.id)}"><div class="dog-show-form-note"><strong>${escapeHtml(invoice.invoiceNumber)}</strong><span>Cancel this invoice and release its show charges so they can be invoiced again.</span></div>${invoice.status === "Paid" ? `<p class="dog-show-invoice-warning">This invoice is paid. Cancelling it will also reverse the current payment entry while preserving the payment history.</p>` : ""}<label>Reason for cancellation<textarea name="reason" rows="3" required placeholder="Testing invoice, billing correction, or other reason"></textarea></label><div class="button-row"><button type="submit" class="danger-button">Cancel Invoice</button><button type="button" class="secondary-button" data-action="manage-show-invoice" data-invoice-id="${escapeHtml(invoice.id)}">Go Back</button></div></form>`);
+}
+
+async function cancelDogShowInvoice(form) {
+  const invoice = dogShowInvoiceById(form.dataset.invoiceId);
+  const data = formPayload(form);
+  const reason = String(data.reason || "").trim();
+  if (!invoice || !reason) return showToast("Enter why the invoice is being cancelled.");
+  const timestamp = new Date().toISOString();
+  const wasPaid = invoice.status === "Paid";
+  const saved = await saveDogShowRecord("showInvoice", {
+    ...invoice,
+    status: "Cancelled",
+    paymentHistory: wasPaid ? [...arrayValue(invoice.paymentHistory), { action: "Payment Reversed With Invoice Cancellation", amount: Number(invoice.paidAmount ?? invoice.total ?? 0), paidDate: invoice.paidDate || "", method: invoice.paymentMethod || "", reference: invoice.paymentReference || "", reason, changedAt: timestamp, changedBy: currentUser?.name || "Staff", changedEmail: currentUser?.email || "" }] : arrayValue(invoice.paymentHistory),
+    paidAmount: wasPaid ? "" : invoice.paidAmount || "",
+    paidDate: wasPaid ? "" : invoice.paidDate || "",
+    paidAt: wasPaid ? "" : invoice.paidAt || "",
+    paymentMethod: wasPaid ? "" : invoice.paymentMethod || "",
+    paymentReference: wasPaid ? "" : invoice.paymentReference || "",
+    paymentNote: wasPaid ? "" : invoice.paymentNote || "",
+    cancelledAt: timestamp,
+    cancelledBy: currentUser?.name || "Staff",
+    cancelledEmail: currentUser?.email || "",
+    cancelReason: reason,
+    cancelledWhilePaid: wasPaid,
+    updatedAt: timestamp,
+  });
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast(`${saved.invoiceNumber} cancelled.`);
+}
+
+function openDogShowInvoiceDeletion(invoiceId = "") {
+  const invoice = dogShowInvoiceById(invoiceId);
+  if (!invoice) return showToast("That invoice is no longer available.");
+  openDogShowDialog("Delete Invoice", `<form id="dogShowInvoiceDeleteForm" class="tracker-form" data-invoice-id="${escapeHtml(invoice.id)}"><div class="dog-show-form-note"><strong>${escapeHtml(invoice.invoiceNumber)}</strong><span>Remove this invoice from Dog Show finance reports. Its deletion audit record will be retained.</span></div><label>Reason for deletion<textarea name="reason" rows="3" required placeholder="Testing record, duplicate invoice, or other reason"></textarea></label><div class="button-row"><button type="submit" class="danger-button">Delete Invoice</button><button type="button" class="secondary-button" data-action="manage-show-invoice" data-invoice-id="${escapeHtml(invoice.id)}">Go Back</button></div></form>`);
+}
+
+async function deleteDogShowInvoice(form) {
+  const invoice = dogShowInvoiceById(form.dataset.invoiceId);
+  const reason = String(formPayload(form).reason || "").trim();
+  if (!invoice || !reason) return showToast("Enter why the invoice is being deleted.");
+  const timestamp = new Date().toISOString();
+  await saveDogShowRecord("showInvoice", { ...invoice, removed: true, removedAt: timestamp, removedBy: currentUser?.name || "Staff", removedEmail: currentUser?.email || "", removalReason: reason, updatedAt: timestamp });
+  document.getElementById("dogShowDialog")?.close();
+  renderDogShow();
+  showToast(`${invoice.invoiceNumber} deleted.`);
+}
+
+function dogShowFinanceDogReportData(targetDogKey = dogShowFinanceDogKey, periodType = dogShowFinancePeriod) {
   const summaries = dogShowEvents().map(dogShowFinanceEventSummary);
   const dogs = dogShowFinanceDogCostGroups(summaries);
   const followsSavedSelection = targetDogKey === dogShowFinanceDogKey;
@@ -2330,7 +2591,7 @@ function dogShowFinanceDogReportData(targetDogKey = dogShowFinanceDogKey) {
     }
   }
   const selected = dogs.find((dog) => dog.key === targetDogKey) || null;
-  const periods = selected ? dogShowFinanceReportGroups().map((period) => {
+  const periods = selected ? dogShowFinanceReportGroups(periodType).map((period) => {
     const matches = period.summaries.map((summary) => {
       const dogGroup = summary.dogGroups.find((group) => dogShowFinanceDogGroupKey(group) === selected.key);
       return dogGroup ? { summary, dogGroup, costTotals: dogShowDogAttributableCostTotals(dogGroup.transactions) } : null;
@@ -2603,7 +2864,7 @@ function dogShowCompiledFinanceHtml() {
 
 function dogShowExpensesHtml(event) {
   const mode = event ? dogShowFinanceMode : "compiled";
-  const modeTabs = `<div class="dog-show-finance-mode-tabs" role="group" aria-label="Finance view"><button type="button" class="secondary-button${mode === "current" ? " is-active" : ""}" data-finance-mode="current" aria-pressed="${mode === "current"}"${event ? "" : " disabled"}>Current Show</button><button type="button" class="secondary-button${mode === "compiled" ? " is-active" : ""}" data-finance-mode="compiled" aria-pressed="${mode === "compiled"}">Compiled Reports</button></div>`;
+  const modeTabs = `<div class="dog-show-finance-mode-tabs" role="group" aria-label="Finance view"><button type="button" class="secondary-button${mode === "current" ? " is-active" : ""}" data-finance-mode="current" aria-pressed="${mode === "current"}"${event ? "" : " disabled"}>Current Show</button><button type="button" class="secondary-button${mode === "compiled" ? " is-active" : ""}" data-finance-mode="compiled" aria-pressed="${mode === "compiled"}">Compiled Reports</button><button type="button" class="secondary-button dog-show-invoice-center-button" data-action="open-show-invoice-center">Invoice</button></div>`;
   if (mode === "compiled") {
     return `<div class="dog-show-view dog-show-expenses-view">
       <section class="dog-show-expenses-heading"><div><span>SHOW FINANCES</span><h3>Income & Expenses</h3><p>Review one show or compile complete costs and rewards across every show.</p></div>${modeTabs}</section>
@@ -5178,6 +5439,13 @@ function setupDogShowEventListeners() {
   });
 
   dialog?.addEventListener("change", (event) => {
+    const invoiceCenterForm = event.target.closest("#dogShowInvoiceCenterForm");
+    if (invoiceCenterForm && event.target.matches('[name="invoiceScope"], [name="periodType"], [name="targetKey"], [name="periodKey"]')) {
+      refreshDogShowInvoiceCenterForm(invoiceCenterForm);
+    }
+  });
+
+  dialog?.addEventListener("change", (event) => {
     const plannerForm = event.target.closest("#dogShowPlannerForm");
     if (plannerForm && event.target.matches('[name="dogKeys"]') && event.target.checked) plannerForm.elements.searchMode.value = "dogs";
     if (plannerForm && event.target.matches('[name="breedName"]') && String(event.target.value || "").trim()) {
@@ -5399,8 +5667,13 @@ function setupDogShowEventListeners() {
         renderDogShow();
       }
     }
-    if (action.dataset.action === "create-show-invoice") openDogShowInvoiceForm(action.dataset.invoiceScope || "customer", action.dataset.targetKey || "", action.dataset.periodKey || "");
+    if (action.dataset.action === "open-show-invoice-center") openDogShowInvoiceCenter();
+    if (action.dataset.action === "create-show-invoice") openDogShowInvoiceForm(action.dataset.invoiceScope || "customer", action.dataset.targetKey || "", action.dataset.periodKey || "", action.dataset.periodType || dogShowFinancePeriod);
     if (action.dataset.action === "record-show-invoice-payment") openDogShowInvoicePaymentForm(action.dataset.invoiceId || "");
+    if (action.dataset.action === "manage-show-invoice") openDogShowInvoiceManagement(action.dataset.invoiceId || "");
+    if (action.dataset.action === "cancel-show-invoice-payment") openDogShowInvoicePaymentCancellation(action.dataset.invoiceId || "");
+    if (action.dataset.action === "cancel-show-invoice") openDogShowInvoiceCancellation(action.dataset.invoiceId || "");
+    if (action.dataset.action === "delete-show-invoice") openDogShowInvoiceDeletion(action.dataset.invoiceId || "");
     if (action.dataset.action === "new-show-expense") openDogShowExpenseForm();
     if (action.dataset.action === "edit-show-expense") {
       const expense = dogShowExpenses(dogShowActiveEvent()).find((candidate) => candidate.id === action.dataset.expenseId);
@@ -5543,8 +5816,16 @@ function setupDogShowEventListeners() {
     if (event.target.id === "dogShowTaskForm") await saveDogShowTask(event.target);
     if (event.target.id === "dogShowPlannerForm") await saveDogShowPlanner(event.target);
     if (event.target.id === "dogShowExpenseForm") await saveDogShowExpense(event.target);
+    if (event.target.id === "dogShowInvoiceCenterForm") {
+      const data = formPayload(event.target);
+      openDogShowInvoiceForm(data.invoiceScope || "customer", data.targetKey || "", data.periodKey || "", data.periodType || "show");
+    }
     if (event.target.id === "dogShowInvoiceForm") await saveDogShowInvoice(event.target);
+    if (event.target.id === "dogShowInvoiceEditForm") await saveDogShowInvoiceEdit(event.target, event.submitter?.value === "email");
     if (event.target.id === "dogShowInvoicePaymentForm") await saveDogShowInvoicePayment(event.target);
+    if (event.target.id === "dogShowInvoicePaymentCancelForm") await cancelDogShowInvoicePayment(event.target);
+    if (event.target.id === "dogShowInvoiceCancelForm") await cancelDogShowInvoice(event.target);
+    if (event.target.id === "dogShowInvoiceDeleteForm") await deleteDogShowInvoice(event.target);
   });
 
   dialog?.addEventListener("click", async (event) => {
@@ -5592,6 +5873,11 @@ function setupDogShowEventListeners() {
       return;
     }
     if (action.dataset.action === "close-show-dialog") dialog.close();
+    if (action.dataset.action === "record-show-invoice-payment") openDogShowInvoicePaymentForm(action.dataset.invoiceId || "");
+    if (action.dataset.action === "manage-show-invoice") openDogShowInvoiceManagement(action.dataset.invoiceId || "");
+    if (action.dataset.action === "cancel-show-invoice-payment") openDogShowInvoicePaymentCancellation(action.dataset.invoiceId || "");
+    if (action.dataset.action === "cancel-show-invoice") openDogShowInvoiceCancellation(action.dataset.invoiceId || "");
+    if (action.dataset.action === "delete-show-invoice") openDogShowInvoiceDeletion(action.dataset.invoiceId || "");
     if (action.dataset.action === "open-planner-judge-history") openDogShowJudgeEvidence(action.dataset.judge || "", "entries", dogShowPlannerRecord().dogKeys || []);
     if (action.dataset.action === "open-progress-result") openDogShowProgressResult(action.dataset.resultId || "");
     if (action.dataset.action === "edit-show-event") openDogShowEventForm(dogShowActiveEvent() || {});
