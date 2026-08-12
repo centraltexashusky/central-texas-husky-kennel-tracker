@@ -408,6 +408,7 @@ const required = [
   ["js/customer.js", 'readRecords("showResult")', "Owner-visible show results do not appear in Customer Updates."],
   ["js/dog-show.js", "showName: event.name", "Dog show result notifications do not preserve show context."],
   ["js/notifications.js", "dogShowResultPublished", "Dog show result notifications do not define an owner audience."],
+  ["js/notifications.js", "dogShowInvoiceSent", "Dog show invoice notifications do not define a customer audience."],
   ["supabase/functions/send-notification/index.ts", 'eventName === "dogShowResultPublished"', "The notification service does not render dog show result emails."],
   ["supabase/functions/send-notification/index.ts", 'eventName === "dogShowInvoiceSent"', "The notification service does not render dog show invoice emails."],
   ["supabase/functions/send-notification/index.ts", 'record.pointsEarned', "Dog show result emails do not use the saved championship points field."],

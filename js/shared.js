@@ -398,6 +398,7 @@ var alertTypeDefinitions = [
   { key: "customerApprovedStayCancelled", label: "Customer cancelled approved stay", group: "Customer" },
   { key: "customerDogFileUploaded", label: "Customer uploaded dog file", group: "Customer" },
   { key: "customerStayUpdateSent", label: "Customer stay update sent", group: "Customer" },
+  { key: "dogShowInvoiceSent", label: "Dog show invoice sent", group: "Dog Shows" },
   { key: "careLogAdminAlertCreated", label: "Medical/behavior care alert", group: "Operations" },
   { key: "kennelRequestCreated", label: "New staff request", group: "Operations" },
   { key: "maintenanceCreated", label: "New maintenance item", group: "Operations" },

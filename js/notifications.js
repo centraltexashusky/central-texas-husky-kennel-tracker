@@ -1498,6 +1498,13 @@ function notificationEventConfig(eventName = "", record = {}) {
       channels: ["email", "inApp"],
       audienceEmails: [record.ownerEmail, record.customerEmail, record.linkedOwnerEmail, record.secondaryOwnerEmail].filter(Boolean),
     },
+    dogShowInvoiceSent: {
+      title: \`Dog show invoice: \${record.invoiceNumber || record.dogNames?.join(", ") || "Customer"}\`,
+      message: \`\${record.customerName || "Customer"} was invoiced \${dogShowExpenseCurrency(record.total || 0)} for \${record.periodLabel || "dog show services"}.\`,
+      priority: "normal",
+      channels: ["email", "inApp"],
+      audienceEmails: [record.ownerEmail, record.customerEmail].filter(Boolean),
+    },
   };
   return configs[eventName] || null;
 }
