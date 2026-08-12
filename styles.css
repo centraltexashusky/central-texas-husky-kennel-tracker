@@ -16316,6 +16316,77 @@ details.dog-show-ring-schedules[hidden] {
   letter-spacing: 0.06em;
 }
 
+.dog-show-invoice-controls,
+.dog-show-invoice-status-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dog-show-invoice-create {
+  align-items: center;
+  background: color-mix(in srgb, var(--tint-gold) 38%, var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.dog-show-invoice-create small,
+.dog-show-invoice-status small {
+  color: var(--muted);
+}
+
+.dog-show-invoice-status {
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid #315F85;
+  border-radius: 10px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.dog-show-invoice-status.is-paid {
+  background: color-mix(in srgb, #DDF5E9 60%, var(--panel));
+  border-left-color: #16835B;
+}
+
+.dog-show-invoice-status.is-failed {
+  background: color-mix(in srgb, #FFE5E1 52%, var(--panel));
+  border-left-color: #B04A43;
+}
+
+.dog-show-invoice-status > div {
+  display: grid;
+  gap: 2px;
+}
+
+.dog-show-invoice-status > div:last-child {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.dog-show-invoice-status span {
+  color: #315F85;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dog-show-invoice-status.is-paid span {
+  color: #16835B;
+}
+
+.dog-show-invoice-status.is-failed span {
+  color: #B04A43;
+}
+
 .dog-show-customer-period-metrics {
   background: var(--tint-blue);
   border: 1px solid var(--line);
@@ -17412,6 +17483,18 @@ details.dog-show-ring-schedules[hidden] {
 
   .dog-show-customer-period-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dog-show-invoice-create,
+  .dog-show-invoice-status,
+  .dog-show-invoice-status > div:last-child {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dog-show-invoice-create button,
+  .dog-show-invoice-status button {
+    width: 100%;
   }
 
   .dog-show-customer-dog-row {
