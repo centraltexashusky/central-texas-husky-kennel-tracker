@@ -1697,7 +1697,7 @@ function remoteRecordTypesForPage(pageId = "") {
     dashboardPage: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", "careLog", "calendarNote", "notificationLog"],
     dailyPage: ["dailyTask", "careLog", "ownedDog", "boardingDog", "calendarNote"],
     taskSchedulerPage: ["scheduledCareTask", "ownedDog", "boardingDog", "customerDog", "service", "dailyTask", "careLog"],
-    dogShowPage: ["showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "ownedDog", "boardingDog", "customerDog", "settingsUser"],
+    dogShowPage: ["showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "showInvoice", "ownedDog", "boardingDog", "customerDog", "settingsUser"],
     ourDogsPage: ["ownedDog", "careLog", "customerDog", "boardingDog"],
     boardingDogsPage: ["boardingDog", "boardingAgreement", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
     requestsPage: ["request"],

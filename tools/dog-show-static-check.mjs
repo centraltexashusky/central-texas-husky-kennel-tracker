@@ -89,6 +89,7 @@ const required = [
   ["js/dog-show.js", 'status: "Paid"', "Dog Show invoice payments do not persist a Paid status."],
   ["js/dog-show.js", "paymentRecordedBy", "Dog Show invoice payments do not retain an audit trail."],
   ["js/dog-show.js", 'data-action="record-show-invoice-payment"', "Customer and dog invoice summaries do not expose the payment action."],
+  ["js/shared.js", 'dogShowPage: ["showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "showInvoice"', "The Dog Shows page does not load persisted invoice and payment records."],
   ["styles.css", ".dog-show-invoice-status.is-paid", "Paid Dog Show invoices are not visually distinguishable."],
   ["js/dog-show.js", 'data-progress-filter="dog"', "Show Progress dogs cannot be searched."],
   ["js/dog-show.js", 'data-progress-filter="judge"', "Show Progress judges cannot be searched."],
