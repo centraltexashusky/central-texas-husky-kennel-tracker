@@ -16515,6 +16515,19 @@ details.dog-show-ring-schedules[hidden] {
   font-weight: 700;
 }
 
+#dogShowDialog form[id^="dogShowInvoice"] .danger-button {
+  background: #B63E38;
+  border-color: #B63E38;
+  color: #FFFFFF;
+}
+
+#dogShowDialog form[id^="dogShowInvoice"] .danger-button:hover,
+#dogShowDialog form[id^="dogShowInvoice"] .danger-button:focus-visible {
+  background: #92312D;
+  border-color: #92312D;
+  color: #FFFFFF;
+}
+
 .dog-show-customer-period-metrics {
   background: var(--tint-blue);
   border: 1px solid var(--line);
