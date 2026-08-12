@@ -562,13 +562,45 @@ function boardingTasksGroupedHtml(record = {}) {
     </article>\`).join("")}</div></section>\`;
 }
 
+function dailyCareLogStaffName(log = {}, record = {}) {
+  const recordHelper = String(record.helperName || "").trim();
+  return String(
+    log.completedBy
+      || log.completedByName
+      || log.loggedBy
+      || log.byName
+      || (!/^team completed work$/i.test(recordHelper) ? recordHelper : "")
+      || "Staff not recorded",
+  ).trim();
+}
+
+function dailyCareLogWorkDate(log = {}, record = {}) {
+  return dateOnly(log.date || log.workDate || log.loggedAt || log.createdAt || record.date || record.submittedAt);
+}
+
+function dailyCareLogDateLabel(date = "") {
+  const workDate = dateOnly(date);
+  if (!workDate) return "Date not recorded";
+  const parsed = new Date(workDate + "T12:00:00");
+  if (Number.isNaN(parsed.getTime())) return workDate;
+  return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function dailyCareLogCompletionMetaHtml(log = {}, record = {}) {
+  const staffName = dailyCareLogStaffName(log, record);
+  const workDate = dailyCareLogDateLabel(dailyCareLogWorkDate(log, record));
+  const loggedAt = log.loggedAt || log.createdAt || log.updatedAt || "";
+  const loggedAtLabel = loggedAt ? formatDateTime(loggedAt) : "";
+  return "<span>Completed " + escapeHtml(workDate) + " by " + escapeHtml(staffName) + (loggedAtLabel ? " | Logged " + escapeHtml(loggedAtLabel) : "") + "</span>";
+}
+
 function dailyDetailHtml(record) {
   const careLogs = record.structuredCareLogs || record.careLogs || [];
   const completedTasks = completedTasksForRecord(record);
   const monthlyTasks = record.monthlyTasks || [];
   const completedHtml = completedTasksGroupedHtml(completedTasks);
   const careLogHtml = careLogs.length
-    ? \`<section class="popup-record-section"><h3>Structured care logs</h3>\${careLogs.map((log) => \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || log.category || "Care")}</strong><p>\${escapeHtml([log.minutes ? \`\${log.minutes} min\` : "", log.note || log.notes || ""].filter(Boolean).join(" | ") || "No extra details")}</p>\${mediaLinkHtml(log)}</article>\`).join("")}</section>\`
+    ? \`<section class="popup-record-section"><h3>Structured care logs</h3>\${careLogs.map((log) => \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || log.category || "Care")}</strong><p>\${escapeHtml([log.minutes ? \`\${log.minutes} min\` : "", log.note || log.notes || ""].filter(Boolean).join(" | ") || "No extra details")}</p>\${dailyCareLogCompletionMetaHtml(log, record)}\${mediaLinkHtml(log)}</article>\`).join("")}</section>\`
     : "";
   const monthlyTasksHtml = monthlyTasks.length
     ? \`<div class="detail-row"><strong>Monthly tasks</strong><span>\${escapeHtml(\`Building cleaned: \${monthlyDeepCleanBuildingForRecord(record)}\`)}<br>\${monthlyTasks.map(escapeHtml).join("<br>")}</span></div>\`
