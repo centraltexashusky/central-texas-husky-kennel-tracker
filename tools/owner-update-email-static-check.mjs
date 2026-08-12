@@ -22,7 +22,7 @@ if (!shared.includes('delivery.title')) failures.push("The owner-update popup do
 if (!shared.includes('delivery.reason')) failures.push("The owner-update popup does not display the delivery failure reason.");
 if (!main.includes('dog-show-invoice-record-v37')) failures.push("Shared notification handling is not cache-busted.");
 if (!main.includes('boarding.js?v=20260723-profile-ux-fixes-v2')) failures.push("Boarding owner-update handling is not cache-busted.");
-if (!index.includes('dog-show-lifecycle-owner-update-photo-invoice-v38')) failures.push("The production module entrypoint is not cache-busted.");
+if (!index.includes('dog-show-lifecycle-owner-update-photo-invoice-v39')) failures.push("The production module entrypoint is not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));
