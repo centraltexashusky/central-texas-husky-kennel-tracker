@@ -1,4 +1,4 @@
-import { DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026 } from "./dog-show-point-data.js?v=20260727-akc-all-breed-calculator";
+import { DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026 } from "./dog-show-point-data.js?v=20260730-dog-profile-registration-akc-breeds";
 
 const AKC_POINT_DIVISION_STATES_2026 = {
   1: ["CT", "ME", "MA", "NH", "RI", "VT"],

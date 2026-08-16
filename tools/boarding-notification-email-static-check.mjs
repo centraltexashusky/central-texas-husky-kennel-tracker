@@ -16,7 +16,8 @@ assert.match(submitSource, /requestGroupRequestedServices/, "grouped requests mu
 assert.match(submitSource, /dogNames: groupDogNames/, "grouped requests must retain every selected dog name");
 assert.match(submitSource, /const savedRecords = \[\]/, "request records must be collected before notification delivery");
 assert.match(submitSource, /const customerAccessProfiles = \[\]/, "customer access profile refreshes must be deferred until after the alert");
-assert.match(submitSource, /await sendPayload\(record\)/, "each dog request must persist before the grouped notification is sent");
+assert.match(submitSource, /await sendPayloadBatch\(savedRecords, \{ retryIndividually: false \}\)/, "the complete family request must persist atomically before notification delivery");
+assert.doesNotMatch(submitSource, /await sendPayload\(record\)/, "family request members must not persist one dog at a time");
 assert.match(submitSource, /notifyIfNeeded\(savedRecords\[0\]/, "one grouped notification must be sent from the first saved request");
 assert.doesNotMatch(submitSource, /saveAndNotify\(payload/, "multi-dog requests must not send one email per dog");
 assert.ok(

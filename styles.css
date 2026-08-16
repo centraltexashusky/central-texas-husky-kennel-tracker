@@ -5253,6 +5253,21 @@ button:disabled {
   border-left-color: var(--red);
 }
 
+.notification-item.has-delivery-error {
+  border-color: color-mix(in srgb, var(--red) 55%, var(--line));
+  border-left-color: var(--red);
+}
+
+.notification-item .notification-delivery-error {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.notification-item:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--teal) 48%, transparent);
+  outline-offset: 2px;
+}
+
 .notification-item.is-read {
   opacity: 0.72;
 }
@@ -7056,7 +7071,7 @@ button.boarding-dog-photo-thumb {
 .boarding-quick-list .boarding-action-grid button {
   border-radius: 999px;
   font-size: 0.84rem;
-  min-height: 34px;
+  min-height: 44px;
   padding: 7px 10px;
 }
 

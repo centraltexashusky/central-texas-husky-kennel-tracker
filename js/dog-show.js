@@ -3,7 +3,7 @@ import {
   akcPointCalculatorBreeds2026,
   akcPointCalculatorStates2026,
   calculateAkcBreedPointScenarios2026,
-} from "./dog-show-point-calculator.js?v=20260727-akc-all-breed-calculator-special-outcomes-v2";
+} from "./dog-show-point-calculator.js?v=20260727-akc-all-breed-calculator-special-outcomes-v2-canonical-point-data-v30";
 
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";

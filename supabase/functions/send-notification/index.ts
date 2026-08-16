@@ -1309,7 +1309,7 @@ function renderPremiumTextEmail(options: {
   const audienceLabel = premiumAudienceLabel(options.audience, options.priority);
   const isUrgent = String(options.priority || "").toLowerCase() === "urgent";
   const introText = parsed.intro.length
-    ? parsed.intro.join("<br>")
+    ? parsed.intro.map((line) => escapeHtml(line)).join("<br>")
     : "A Snuggle Stay notification needs your attention.";
   const mediaLinks = uniqueMediaEmailLinks([
     ...parsed.mediaLinks,
@@ -2155,6 +2155,7 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
 
 type EmailSendOptions = {
   html?: string;
+  idempotencyKey?: string;
   replyTo?: string;
   template?: string;
 };
@@ -2172,6 +2173,7 @@ async function sendEmail(to: string[], subject: string, body: string, options: E
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
       },
       body: JSON.stringify(payload),
     });
@@ -2364,16 +2366,44 @@ Deno.serve(async (req) => {
   let notificationPayload: Record<string, unknown> = {};
   let persistedNotificationPayload: Record<string, unknown> | null = null;
   if (body.notificationId) {
-    const { data } = await adminClient.from("kennel_records").select("payload").eq("id", body.notificationId).maybeSingle();
+    const { data, error: notificationLookupError } = await adminClient
+      .from("kennel_records")
+      .select("id,type,payload,user_id,helper_email")
+      .eq("id", body.notificationId)
+      .maybeSingle();
+    if (notificationLookupError) {
+      console.error("notification_log_lookup_failed", notificationLookupError);
+      return json({ error: "The notification record could not be checked." }, 500, req);
+    }
+    if (data && data.type !== "notificationLog") {
+      return json({ error: "That notification ID is already used by another record." }, 409, req);
+    }
     notificationPayload = (data?.payload && typeof data.payload === "object" ? data.payload : {}) as Record<string, unknown>;
     const notificationSourceId = String(notificationPayload.sourceId || "").trim();
     const notificationEventName = String(notificationPayload.eventName || "").trim();
-    if (!isStaff && ((notificationSourceId && notificationSourceId !== recordId) || (notificationEventName && notificationEventName !== eventName))) {
+    if (data && (notificationSourceId !== recordId || notificationEventName !== eventName)) {
       return json({ error: "Notification record does not match this request." }, 403, req);
+    }
+    if (!isStaff && data?.user_id && data.user_id !== user.id) {
+      return json({ error: "Notification record belongs to another user." }, 403, req);
+    }
+    if (data && String(notificationPayload.deliveryStatus || "").trim().toLowerCase() === "sent") {
+      return json({
+        ok: true,
+        alreadySent: true,
+        eventName,
+        emailResult: notificationPayload.emailResult || {},
+        smsResult: notificationPayload.smsResult || {},
+      }, 200, req);
     }
     const pendingAt = new Date().toISOString();
     persistedNotificationPayload = hydrateNotificationPayload(notificationPayload, eventName, sourceRecord, body.notificationId);
-    const { error: pendingNotificationError } = await adminClient.from("kennel_records").upsert({
+    if (!isStaff) {
+      // Customer-triggered events derive recipients server-side. Discard any
+      // caller-supplied audience so the kennel mail identity cannot be abused.
+      persistedNotificationPayload = { ...persistedNotificationPayload, audienceEmails: [] };
+    }
+    const pendingRow = {
       id: body.notificationId,
       type: "notificationLog",
       payload: {
@@ -2387,7 +2417,11 @@ Deno.serve(async (req) => {
       user_id: user.id,
       submitted_at: String(persistedNotificationPayload.submittedAt || pendingAt),
       updated_at: pendingAt,
-    });
+    };
+    const pendingSave = data
+      ? await adminClient.from("kennel_records").update(pendingRow).eq("id", body.notificationId).eq("type", "notificationLog")
+      : await adminClient.from("kennel_records").insert(pendingRow);
+    const pendingNotificationError = pendingSave.error;
     if (pendingNotificationError) {
       console.error("notification_log_pending_save_failed", pendingNotificationError);
       return json({ error: "The in-app notification could not be saved before delivery." }, 500, req);
@@ -2403,7 +2437,7 @@ Deno.serve(async (req) => {
     console.error("notification_content_failed", { eventName, recordId, deliveryError });
     if (body.notificationId && persistedNotificationPayload) {
       const failedAt = new Date().toISOString();
-      await adminClient.from("kennel_records").upsert({
+      await adminClient.from("kennel_records").update({
         id: body.notificationId,
         type: "notificationLog",
         payload: {
@@ -2418,7 +2452,7 @@ Deno.serve(async (req) => {
         user_id: user.id,
         submitted_at: String(persistedNotificationPayload.submittedAt || failedAt),
         updated_at: failedAt,
-      });
+      }).eq("id", body.notificationId).eq("type", "notificationLog");
     }
     return json({ error: "Notification content could not be prepared." }, 500, req);
   }
@@ -2435,7 +2469,7 @@ Deno.serve(async (req) => {
         template: (content as Record<string, unknown>).template,
       }];
   const emailResults: Record<string, unknown>[] = [];
-  for (const message of emailMessages) {
+  for (const [messageIndex, message] of emailMessages.entries()) {
     const messageSubject = String(message.subject || content.subject || "Snuggle Stay alert");
     const messageBody = String(message.body || content.body || "");
     const renderedFallback = typeof message.html === "string"
@@ -2454,6 +2488,9 @@ Deno.serve(async (req) => {
       messageBody,
       {
         html: messageHtml,
+        idempotencyKey: body.notificationId
+          ? `notification-${body.notificationId}-${String(message.audience || "default").replace(/[^a-zA-Z0-9_-]+/g, "-")}-${messageIndex}`.slice(0, 240)
+          : undefined,
         template: messageTemplate,
       },
     );
@@ -2478,7 +2515,7 @@ Deno.serve(async (req) => {
   if (body.notificationId) {
     const existingPayload = persistedNotificationPayload || hydrateNotificationPayload(notificationPayload, eventName, sourceRecord, body.notificationId);
     const now = new Date().toISOString();
-    const { error: completedNotificationError } = await adminClient.from("kennel_records").upsert({
+    const { error: completedNotificationError } = await adminClient.from("kennel_records").update({
       id: body.notificationId,
       type: "notificationLog",
       payload: {
@@ -2495,7 +2532,7 @@ Deno.serve(async (req) => {
       user_id: user.id,
       submitted_at: String(existingPayload.submittedAt || now),
       updated_at: now,
-    });
+    }).eq("id", body.notificationId).eq("type", "notificationLog");
     if (completedNotificationError) {
       console.error("notification_log_completion_save_failed", completedNotificationError);
       return json({ error: "Delivery completed, but its notification status could not be saved." }, 500, req);

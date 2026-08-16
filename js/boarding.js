@@ -693,7 +693,7 @@ function approveBoardingRecord(record = {}) {
         source: transitionActor.source,
       },
     ],
-    flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
+    flags: record.flags || [],
   };
 }
 
@@ -4810,6 +4810,10 @@ function queueBoardingStatusFollowUps(updated = {}, options = {}) {
 }
 
 async function saveBoardingStatusTransition(record = {}, nextStatus = "", options = {}) {
+  if (nextStatus === "Checked In") {
+    const targetStay = options.stayId ? boardingStayByReference(record, options) || {} : boardingPrimaryStay(record) || {};
+    if (!requireBoardingApprovalPreflight(record, targetStay)) return null;
+  }
   if (nextStatus === "Checked In" && !options.checkInSubmitted) {
     openBoardingCheckInPopup(record, nextStatus, options);
     return null;
@@ -4919,8 +4923,6 @@ function boardingFamilyOwnerKeys(record = {}) {
     .map((phone) => String(phone || "").replace(/\\D/g, ""))
     .filter(Boolean)
     .forEach((phone) => keys.push(\`phone:\${phone}\`));
-  const ownerName = String(record.ownerName || record.requestedByName || "").trim().toLowerCase();
-  if (ownerName) keys.push(\`name:\${ownerName}\`);
   return [...new Set(keys)];
 }
 
@@ -4961,7 +4963,10 @@ function boardingFamilyHouseholdStayKey(entry = {}) {
 }
 
 function boardingFamilyGroupKeys(entry = {}) {
-  return [...new Set([boardingFamilyExplicitGroupKey(entry), ...boardingFamilyHouseholdStayKeys(entry)].filter(Boolean))];
+  const explicitGroupKey = boardingFamilyExplicitGroupKey(entry);
+  // Explicit request IDs are authoritative. Never bridge two explicit groups
+  // through a shared fallback identity, and never group on owner name alone.
+  return explicitGroupKey ? [explicitGroupKey] : boardingFamilyHouseholdStayKeys(entry);
 }
 
 function boardingFamilyGroupKey(entry = {}) {
@@ -5253,7 +5258,6 @@ function boardingRequestEntriesForGroupKey(groupKey = "") {
 }
 
 async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approved") {
-  // TODO: Move group approve/cancel to a Supabase RPC transaction when boarding_request_groups is fully adopted.
   if (supabaseClient && !localTestMode) await loadRemoteRecords({ render: false, pageId: "boardingDogsPage" });
   const entries = boardingRequestEntriesForGroupKey(groupKey);
   if (!entries.length) {
@@ -5270,32 +5274,64 @@ async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approv
     showToast("This family request was already updated by another staff/admin.");
     return [];
   }
-  const updated = [];
-  for (const entry of actionableEntries) {
-    const record = entry.record || {};
-    const stay = entry.stay || {};
-    const reference = stay.id ? { stayId: stay.id, requestCode: boardingStayRequestCode(record, stay) } : {};
-    let result = null;
-    if (nextStatus === "Approved") {
-      result = stay.id
-        ? await approveBoardingStay(record, stay.id, reference)
-        : upsertRecord("boardingDog", approveBoardingRecord(record));
-      if (!stay.id && result) {
-        await sendPayload(result);
-        if (typeof syncBoardingServiceTasksForRecord === "function") await syncBoardingServiceTasksForRecord(result, { render: false });
-      }
-    } else if (nextStatus === "Cancelled") {
-      const cancelOptions = {
-        ...reference,
-        declineSubmitted: true,
-        declineNote: "Cancelled by staff for the family request.",
-      };
-      result = stay.id
-        ? await saveBoardingStayStatusTransition(record, stay.id, "Cancelled", cancelOptions)
-        : await saveBoardingStatusTransition(record, "Cancelled", cancelOptions);
+  if (nextStatus === "Approved") {
+    const blockedEntry = actionableEntries.find((entry) => boardingApprovalPreflightIssues(entry.record || {}, entry.stay || {}).length);
+    if (blockedEntry) {
+      requireBoardingApprovalPreflight(blockedEntry.record || {}, blockedEntry.stay || {});
+      return [];
     }
-    if (result) updated.push(result);
   }
+  const pendingByRecordId = new Map();
+  const transitionMeta = [];
+  for (const entry of actionableEntries) {
+    const originalRecord = entry.record || {};
+    const record = pendingByRecordId.get(originalRecord.id) || originalRecord;
+    const stay = boardingStayByReference(record, {
+      stayId: entry.stay?.id || "",
+      requestCode: boardingStayRequestCode(originalRecord, entry.stay || {}),
+    }) || entry.stay || {};
+    const reference = stay.id ? { stayId: stay.id, requestCode: boardingStayRequestCode(record, stay) } : {};
+    const options = nextStatus === "Approved"
+      ? { ...reference, forceStatusSync: true }
+      : {
+          ...reference,
+          declineSubmitted: true,
+          declineNote: "Cancelled by staff for the family request.",
+        };
+    const transitioned = withBoardingStatusTransition(record, nextStatus, options);
+    if (!transitioned) throw new Error(\`\${record.dogName || "A dog"} could not transition to \${nextStatus}. No family records were changed.\`);
+    const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, nextStatus, options);
+    const notificationCandidate = customerNotificationEvent
+      ? customerRequestStatusNotificationRecord(transitioned, nextStatus, options)
+      : transitioned;
+    const candidate = boardingDogForPersistence(notificationCandidate);
+    pendingByRecordId.set(candidate.id, candidate);
+    transitionMeta.push({ originalRecord, candidate, stay, options, customerNotificationEvent });
+  }
+  const candidates = [...pendingByRecordId.values()];
+  const batchResult = await sendPayloadBatch(candidates, { retryIndividually: false });
+  if (!batchResult?.ok || Number(batchResult.count || 0) !== candidates.length) {
+    throw new Error("The complete family status could not be saved. No dogs were changed.");
+  }
+  const updated = candidates.map((candidate) => upsertRecord("boardingDog", candidate));
+  transitionMeta.forEach((meta) => {
+    const finalRecord = pendingByRecordId.get(meta.candidate.id) || meta.candidate;
+    if (meta.stay?.id) {
+      queueBoardingLifecycleFollowUp("Duplicate boarding status sync", () => syncDuplicateBoardingStayStatusRecords(
+        meta.originalRecord,
+        finalRecord,
+        meta.stay,
+        nextStatus,
+        meta.options,
+      ));
+    }
+    queueBoardingStatusFollowUps(finalRecord, {
+      customerNotificationEvent: meta.customerNotificationEvent,
+      transitionOptions: meta.options,
+      auditAction: nextStatus === "Approved" ? "Approved boarding family stay" : "Cancelled boarding family stay",
+      auditDetails: (finalRecord.dogName || "Dog") + ": " + nextStatus,
+    });
+  });
   renderBoardingDogs();
   renderBoardingRequests();
   renderCustomerRequests();
@@ -6224,6 +6260,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   const options = typeof reference === "object" ? { ...reference, stayId: reference.stayId || stayId } : { stayId };
   if (!record?.id || !options.stayId || !boardingLifecycleStatuses.includes(nextStatus)) return null;
   const targetStay = boardingStayByReference(record, options);
+  if (nextStatus === "Checked In" && !requireBoardingApprovalPreflight(record, targetStay || {})) return null;
   if (shouldPromptBoardingDecline(record, nextStatus, options)) {
     openBoardingDeclineRequestPopup(record, nextStatus, options);
     return null;
@@ -6259,11 +6296,36 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   return updated;
 }
 
+function boardingApprovalPreflightIssues(record = {}, stay = {}) {
+  if (!record.customerRequest) return [];
+  const issues = [];
+  const pickupDate = String(stay.pickupTime || record.pickupTime || todayDate()).slice(0, 10);
+  const vaccineStatus = vaccinationStatusInfo(record, { asOfDate: pickupDate });
+  if (vaccineStatus.className !== "is-vaccine-ok") {
+    issues.push(\`Rabies, DHPP, and Bordetella must all remain current through \${formatDateOnly(pickupDate) || pickupDate}.\`);
+  }
+  const signedAgreement = boardingAgreementRecordsForDog(record)
+    .some((agreement) => Boolean(agreement.signedAt || agreement.signatureHash || agreement.documentHash));
+  if (!signedAgreement) issues.push("A signed boarding agreement must be on file for this request.");
+  return issues;
+}
+
+function requireBoardingApprovalPreflight(record = {}, stay = {}) {
+  const issues = boardingApprovalPreflightIssues(record, stay);
+  if (!issues.length) return true;
+  showDetailDialog(
+    "Approval Requirements Not Met",
+    \`<p>\${escapeHtml(record.dogName || "This dog")} cannot be approved yet.</p><ul class="compact-reason-list">\${issues.map((issue) => \`<li>\${escapeHtml(issue)}</li>\`).join("")}</ul><p>Update the customer record and review the supporting documents before approving.</p>\`,
+  );
+  return false;
+}
+
 async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
   const options = typeof reference === "object" ? { ...reference, stayId: reference.stayId || stayId, forceStatusSync: true } : { stayId, forceStatusSync: true };
   if (!record?.id || !options.stayId) return null;
   const targetStay = boardingStayByReference(record, options);
   if (!targetStay) return null;
+  if (!requireBoardingApprovalPreflight(record, targetStay)) return null;
   const currentStatus = boardingStayDisplayStatus(record, targetStay);
   const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", options);
   const timestamp = new Date().toISOString();
@@ -6333,7 +6395,7 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
         source: transitionActor.source,
       },
     ],
-    flags: (record.flags || []).filter((flag) => flag !== "Required update from owner"),
+    flags: record.flags || [],
   };
   const notificationCandidate = customerNotificationEvent
     ? customerRequestStatusNotificationRecord(approvedRecord, "Approved", options)

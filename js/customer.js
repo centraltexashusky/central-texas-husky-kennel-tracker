@@ -2203,34 +2203,47 @@ function vaccinationDateExpiry(record = {}, vaccineKey = "", keys = [], defaultY
   return expiry;
 }
 
-function legacyVaccinationDateStatus(record = {}) {
-  const expirations = [
-    vaccinationDateExpiry(record, "rabies", ["rabiesDate", "rabiesVaccinationDate", "lastRabiesVaccination"], 1),
-    vaccinationDateExpiry(record, "dhpp", ["dhppDate", "dhppVaccinationDate", "lastDhppVaccination"], 1),
-    vaccinationDateExpiry(record, "bordetella", ["bordetellaDate", "bordetellaVaccinationDate", "lastBordetellaVaccination"], 1),
-  ].filter(Boolean);
-  if (!expirations.length) return "";
-  const today = new Date(\`\${todayDate()}T00:00:00\`);
-  return expirations.some((date) => date >= today) ? "ok" : "expired";
+function legacyVaccinationDateStatus(record = {}, asOfDate = todayDate()) {
+  const expirations = {
+    rabies: vaccinationDateExpiry(record, "rabies", ["rabiesDate", "rabiesVaccinationDate", "lastRabiesVaccination"], 1),
+    dhpp: vaccinationDateExpiry(record, "dhpp", ["dhppDate", "dhppVaccinationDate", "lastDhppVaccination"], 1),
+    bordetella: vaccinationDateExpiry(record, "bordetella", ["bordetellaDate", "bordetellaVaccinationDate", "lastBordetellaVaccination"], 1),
+  };
+  if (!Object.values(expirations).some(Boolean)) return "";
+  const today = new Date(\`\${String(asOfDate || todayDate()).slice(0, 10)}T00:00:00\`);
+  return Object.values(expirations).every((date) => date && date >= today) ? "ok" : "incomplete";
 }
 
-function vaccinationStatusInfo(record = {}) {
+function vaccinationStatusInfo(record = {}, options = {}) {
   const records = arrayValue(record.vaccinationRecords);
-  const expirations = records.map(vaccinationExpiryDate).filter(Boolean);
-  const today = new Date(\`\${todayDate()}T00:00:00\`);
+  const asOfDate = String(options.asOfDate || todayDate()).slice(0, 10);
+  const today = new Date(\`\${asOfDate}T00:00:00\`);
   const hasVaccinationRecords = records.length > 0;
-  const legacyDateStatus = legacyVaccinationDateStatus(record);
+  const legacyDateStatus = legacyVaccinationDateStatus(record, asOfDate);
   if (legacyDateStatus === "ok") {
     return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
   }
-  if (hasVaccinationRecords && expirations.some((date) => date >= today)) {
+  const requiredVaccines = ["rabies", "dhpp", "bordetella"];
+  const currentRecordVaccines = new Set();
+  records.forEach((vaccination) => {
+    const descriptor = String(vaccination.vaccineType || vaccination.vaccine || vaccination.name || vaccination.label || vaccination.fileName || "").toLowerCase();
+    const expiry = vaccinationExpiryDate(vaccination);
+    if (!expiry || expiry < today) return;
+    requiredVaccines.forEach((vaccine) => {
+      const matches = vaccine === "dhpp"
+        ? /(dhpp|distemper|da2pp|dapp)/.test(descriptor)
+        : descriptor.includes(vaccine);
+      if (matches) currentRecordVaccines.add(vaccine);
+    });
+  });
+  if (requiredVaccines.every((vaccine) => currentRecordVaccines.has(vaccine))) {
     return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
   }
-  if (records.length || legacyDateStatus === "expired") {
-    return { label: "Vaccines Expired", customerLabel: "Vaccines on file", className: "is-vaccine-expired", customerClassName: "is-vaccine-ok" };
+  if (hasVaccinationRecords || legacyDateStatus === "incomplete") {
+    return { label: "Vaccines Incomplete", customerLabel: "Vaccines need review", className: "is-vaccine-expired", customerClassName: "is-vaccine-needed" };
   }
   const hasLegacyDates = Boolean(record.dhppDate || record.dhppVaccinationDate || record.lastDhppVaccination || record.rabiesDate || record.rabiesVaccinationDate || record.lastRabiesVaccination || record.bordetellaDate || record.bordetellaVaccinationDate || record.lastBordetellaVaccination || record.vaccinationFiles);
-  if (hasLegacyDates) return { label: "Vaccines OK", customerLabel: "Vaccines on file", className: "is-vaccine-ok", customerClassName: "is-vaccine-ok" };
+  if (hasLegacyDates) return { label: "Vaccines Incomplete", customerLabel: "Vaccines need review", className: "is-vaccine-expired", customerClassName: "is-vaccine-needed" };
   return { label: "No Vaccines on File", customerLabel: "Vaccines needed", className: "is-vaccine-needed", customerClassName: "is-vaccine-needed" };
 }
 
@@ -3049,9 +3062,11 @@ async function submitPendingCustomerBooking() {
   let savedCount = 0;
   let skippedCount = 0;
   const savedRecords = [];
+  const originalBoardingRecords = readRecords("boardingDog").map((record) => ({ ...record }));
   const customerAccessProfiles = [];
   const submittedDogKeys = new Set();
   let boardingAgreement = null;
+  let notificationDeliveryWarning = false;
   try {
     boardingAgreement = await ensureCustomerBoardingAgreementForEstimate(estimate);
     if (customerAgreementAppliesToEstimate(estimate) && !boardingAgreement) {
@@ -3315,7 +3330,6 @@ async function submitPendingCustomerBooking() {
         checkedOutAt: normalizeBoardingStatus({ boardingStatus: requestStatus, customerRequest: true }) === "Pending" ? "" : existingTarget?.checkedOutAt || "",
       };
       const record = upsertRecord(payload.type, payload);
-      await sendPayload(record);
       savedRecords.push(record);
       savedCount += 1;
       customerAccessProfiles.push({
@@ -3333,7 +3347,17 @@ async function submitPendingCustomerBooking() {
       }
     }
     if (savedRecords.length) {
-      await notifyIfNeeded(savedRecords[0], editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
+      // A family request is one business operation. PostgREST executes this
+      // array upsert as one statement, so either every dog persists or none do.
+      // Never fall back to per-dog retries here: that recreates the partial
+      // request / missing-alert incident this path is designed to prevent.
+      const batchResult = await sendPayloadBatch(savedRecords, { retryIndividually: false });
+      if (!batchResult?.ok || Number(batchResult.count || 0) !== savedRecords.length) {
+        throw new Error("The complete family request could not be saved. No dogs were submitted.");
+      }
+      const notificationResult = await notifyIfNeeded(savedRecords[0], editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
+      const deliveryStatus = String(notificationResult?.deliveryStatus || "").trim().toLowerCase();
+      notificationDeliveryWarning = Boolean(deliveryStatus && deliveryStatus !== "sent");
     }
     for (const profile of customerAccessProfiles) {
       try {
@@ -3354,7 +3378,9 @@ async function submitPendingCustomerBooking() {
     resetCustomerBookingForm();
     const inlineStatus = $("#customerBookingInlineStatus");
     if (inlineStatus) {
-      inlineStatus.textContent = editingId ? "Your request has been updated." : "Your request has been sent - we'll confirm within 24 hours.";
+      inlineStatus.textContent = notificationDeliveryWarning
+        ? "Your request was received. Email delivery is delayed, but the request is saved for staff review."
+        : editingId ? "Your request has been updated." : "Your request has been sent - we'll confirm within 24 hours.";
       inlineStatus.hidden = false;
       window.setTimeout(() => {
         inlineStatus.hidden = true;
@@ -3363,9 +3389,12 @@ async function submitPendingCustomerBooking() {
     if (!savedCount && skippedCount) {
       showDetailDialog("Request Already Exists", \`<p>A matching request already exists for the selected dog\${skippedCount === 1 ? "" : "s"} at that time.</p>\`);
     } else {
-      showToast(editingId ? "Request updated." : "Request sent.");
+      showToast(notificationDeliveryWarning
+        ? "Request received; email delivery needs attention."
+        : editingId ? "Request updated." : "Request sent.");
     }
   } catch (error) {
+    if (savedRecords.length) writeRecords("boardingDog", originalBoardingRecords);
     pendingCustomerBooking = estimate;
     showToast(\`Request could not be saved: \${error.message || error}\`);
   } finally {

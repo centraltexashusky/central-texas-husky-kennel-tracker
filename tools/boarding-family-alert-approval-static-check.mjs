@@ -9,10 +9,10 @@ const inlineStart = shared.indexOf("async function handleInlineBoardingStatusCli
 const inlineEnd = shared.indexOf("// Extracted to js/boarding.js: handleBoardingTransition", inlineStart);
 const inlineSource = shared.slice(inlineStart, inlineEnd);
 
-assert.match(inlineSource, /boardingDogForPersistence\(optimisticRecord\)/, "inline approval must strip display-only customer profile links before saving");
+assert.match(inlineSource, /boardingDogForPersistence\(notificationCandidate\)/, "inline approval must strip display-only customer profile links before saving");
 assert.match(inlineSource, /boardingDogForPersistence\(originalRecord\)/, "failed inline approval must restore the persistence-safe source record");
 assert.ok(
-  inlineSource.indexOf("boardingDogForPersistence(optimisticRecord)") < inlineSource.indexOf("sendPayload(savedLocal)"),
+  inlineSource.indexOf("boardingDogForPersistence(notificationCandidate)") < inlineSource.indexOf("sendPayload(savedLocal)"),
   "inline approval must normalize the record before its remote upsert",
 );
 

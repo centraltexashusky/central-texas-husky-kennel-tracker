@@ -811,7 +811,28 @@ function notificationVisibleToCurrentUser(notification = {}) {
   return currentRole() === "admin";
 }
 
+function notificationHasUnresolvedBoardingAction(notification = {}) {
+  const isBoardingRequestAlert = ["customerBoardingRequestCreated", "customerBoardingRequestUpdated"].includes(notification.eventName)
+    || Boolean(recoveredBoardingRequestNotification(notification));
+  if (!isBoardingRequestAlert) return false;
+  const recovered = recoveredBoardingRequestNotification(notification);
+  const source = notificationSourceSnapshot(notification);
+  const sourceId = notification.sourceId || source.id || recovered?.record?.id || "";
+  const record = recovered?.record
+    || boardingDogRecordForDisplay(sourceId)
+    || readRecords("boardingDog").find((item) => item.id === sourceId && !item.removed)
+    || (source?.type === "boardingDog" && source.id ? source : null);
+  if (!record) return false;
+  const reference = boardingRequestNotificationReference(notification, recovered);
+  const group = boardingRequestAlertGroup(record, reference);
+  const entries = group?.entries || [boardingStayEntryForRecord(record, boardingStayByReference(record, reference) || boardingPrimaryStay(record) || {})];
+  return entries.some((entry) => entry?.status === "Pending");
+}
+
 function notificationIsRead(notification = {}) {
+  // Reading an approval alert does not resolve the work. Keep it in the action
+  // queue until every linked request has actually left Pending.
+  if (notificationHasUnresolvedBoardingAction(notification)) return false;
   const key = currentUserNotificationKey();
   if (!key) return false;
   if ((notification.readBy || []).includes(key)) return true;
@@ -1730,6 +1751,79 @@ function pruneExpiredNotifications(options = {}) {
   return expired;
 }
 
+var boardingRequestRecoverySyncKeys = new Set();
+
+function ensurePendingBoardingRequestRecoveryAlerts() {
+  if (currentRole() !== "admin") return [];
+  const pendingEntries = uniqueBoardingStayEntries(boardingStayEntries(consolidatedBoardingDogRecords(
+    readRecords("boardingDog").filter((record) => record.customerRequest && !record.removed),
+  ))).filter((entry) => entry.status === "Pending");
+  const groups = boardingFamilyGroups(pendingEntries);
+  const notifications = readRecords("notificationLog").filter((item) => !item.removed);
+  const recovered = [];
+
+  groups.forEach((group) => {
+    const entries = group.type === "family" ? group.entries : [group.entry];
+    const first = entries[0];
+    const record = first?.record || {};
+    const stay = first?.stay || {};
+    if (!record.id) return;
+    const explicitGroupId = String(stay.requestGroupId || record.requestGroupId || stay.reservationGroupId || record.reservationGroupId || "").trim();
+    const requestKey = explicitGroupId || [record.id, stay.id || boardingStayRequestCode(record, stay)].filter(Boolean).join(":");
+    if (!requestKey) return;
+    const hasOriginalAlert = notifications.some((notification) => {
+      if (!["customerBoardingRequestCreated", "customerBoardingRequestUpdated"].includes(notification.eventName)) return false;
+      const source = notificationSourceSnapshot(notification);
+      const sourceGroupId = String(source.requestGroupId || source.reservationGroupId || source.stays?.[0]?.requestGroupId || "").trim();
+      if (explicitGroupId) return sourceGroupId === explicitGroupId;
+      return notification.sourceId === record.id
+        && boardingRequestNotificationReference(notification).requestCode === boardingStayRequestCode(record, stay);
+    });
+    if (hasOriginalAlert) return;
+
+    const safeKey = requestKey.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 120);
+    const notificationId = \`notification-recovery-\${safeKey}\`;
+    if (boardingRequestRecoverySyncKeys.has(notificationId) || notifications.some((item) => item.id === notificationId)) return;
+    boardingRequestRecoverySyncKeys.add(notificationId);
+    const now = new Date().toISOString();
+    const sourceSnapshot = typeof compactNotificationSnapshotForStorage === "function"
+      ? compactNotificationSnapshotForStorage(payloadForSheet(record))
+      : payloadForSheet(record);
+    const alert = upsertRecord("notificationLog", {
+      id: notificationId,
+      type: "notificationLog",
+      submittedAt: now,
+      eventName: "customerBoardingRequestCreated",
+      dedupeKey: \`boarding-request-recovery:\${requestKey}\`,
+      title: \`Recovered pending boarding request: \${boardingRequestDogNames(record)}\`,
+      message: "A pending boarding request had no matching staff alert record. Review and approve or decline it now.",
+      priority: "urgent",
+      channels: ["inApp"],
+      audienceRoles: ["admin"],
+      audienceEmails: getAdminEmails(),
+      alertCategory: "Boarding",
+      alertReason: "Missing boarding request alert recovered",
+      actionLabel: "Review Request",
+      actionTarget: notificationActionTarget("customerBoardingRequestCreated", record),
+      sourceType: "boardingDog",
+      sourceId: record.id,
+      sourceSnapshot,
+      readBy: [],
+      deliveryStatus: "in-app only",
+      deliveryError: "The original boarding request alert record was not found. This recovery alert was created automatically.",
+      recoveredAlert: true,
+    });
+    recovered.push(alert);
+    if (!localTestMode && supabaseClient) {
+      sendPayload(alert, { quiet: true }).catch((error) => {
+        boardingRequestRecoverySyncKeys.delete(notificationId);
+        console.warn("Recovered boarding request alert could not be persisted.", error);
+      });
+    }
+  });
+  return recovered;
+}
+
 function renderNotifications() {
   const button = $("#notificationBellButton");
   const badge = $("#notificationUnreadBadge");
@@ -1739,6 +1833,7 @@ function renderNotifications() {
   const readButton = $("#showReadNotificationsButton");
   if (!button || !badge || !panel || !list || !summary) return;
   ensureDogShowClosingNotifications();
+  ensurePendingBoardingRequestRecoveryAlerts();
   pruneExpiredNotifications();
   scheduleRemoteNotificationRetentionCleanup();
   const available = readRecords("notificationLog")
@@ -1754,7 +1849,12 @@ function renderNotifications() {
     const stayId = item.stayId || notificationStayIdText(notificationSourceSnapshot(item));
     const actionLabel = isTimeOffReview ? "Review Time Off" : (item.actionLabel || notificationActionLabel(item.eventName, item));
     const meta = [category, reason, stayId ? "Stay ID: " + stayId : "", actionLabel].filter(Boolean).join(" | ");
-    return \`<article class="notification-item \${notificationIsRead(item) ? "is-read" : ""} \${item.priority === "urgent" ? "is-urgent" : ""}" data-action="open-notification" data-id="\${escapeHtml(item.id)}"><strong>\${escapeHtml(notificationDisplayTitle(item))}</strong><p>\${escapeHtml(notificationDisplayMessage(item))}</p><span>\${escapeHtml(meta)}</span><span>\${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | \${escapeHtml(notificationChannelsText(item))}</span></article>\`;
+    const deliveryStatus = String(item.deliveryStatus || "").trim().toLowerCase();
+    const deliveryNeedsAttention = ["failed", "in-app only", "pending", "error"].includes(deliveryStatus) || deliveryStatus.includes("email failed");
+    const deliveryMeta = deliveryNeedsAttention
+      ? \`<span class="notification-delivery-error" role="alert">Delivery needs attention: \${escapeHtml(item.deliveryStatus || "Unknown")}\${item.deliveryError ? \` - \${escapeHtml(item.deliveryError)}\` : ""}</span>\`
+      : "";
+    return \`<article class="notification-item \${notificationIsRead(item) ? "is-read" : ""} \${item.priority === "urgent" ? "is-urgent" : ""} \${deliveryNeedsAttention ? "has-delivery-error" : ""}" data-action="open-notification" data-id="\${escapeHtml(item.id)}" role="button" tabindex="0"><strong>\${escapeHtml(notificationDisplayTitle(item))}</strong><p>\${escapeHtml(notificationDisplayMessage(item))}</p><span>\${escapeHtml(meta)}</span><span>\${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | \${escapeHtml(notificationChannelsText(item))}</span>\${deliveryMeta}</article>\`;
   };
   button.hidden = !helperIsLoggedIn();
   const panelOpen = !panel.hidden;
@@ -2081,9 +2181,12 @@ function openTimeOffNotificationReview(notification = {}) {
 }
 
 async function openNotification(id = "") {
-  const notification = await markNotificationRead(id);
+  const notification = readRecords("notificationLog").find((item) => item.id === id);
   if (!notification) return;
   $("#notificationPanel").hidden = true;
+  // A read-receipt network failure must never block the review UI. Pending
+  // boarding actions remain visibly unresolved via notificationIsRead().
+  markNotificationRead(id).catch((error) => console.warn("Alert read receipt could not be saved.", error));
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;
   const recoveredRequest = recoveredBoardingRequestNotification(notification);

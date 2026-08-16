@@ -4962,8 +4962,16 @@ async function sendPayloadBatch(payloads = [], options = {}) {
               error: remoteSaveErrorMessage(failure.error),
             })),
           );
-          if (!options.quiet) showToast(\`\${successCount} records saved. \${failures.length} could not save; sign out and back in if this continues.\`);
-          return { ok: false, count: successCount, failed: failures.length, skippedRemote: skippedCount };
+          const partialError = new Error(\`\${successCount} records saved, but \${failures.length} could not be saved.\`);
+          partialError.code = "PARTIAL_BATCH_SAVE";
+          partialError.savedCount = successCount;
+          partialError.failedCount = failures.length;
+          partialError.failures = failures;
+          if (!options.quiet) showToast(\`\${successCount} records saved. \${failures.length} could not save; refresh and retry.\`);
+          if (options.allowPartialSuccess === true) {
+            return { ok: false, count: successCount, failed: failures.length, skippedRemote: skippedCount };
+          }
+          throw partialError;
         }
         if (skippedCount) console.warn("Skipped remote batch save for record types disallowed by this session.", records.filter((record) => !remoteRecords.includes(record)).map((record) => record.type));
         return { ok: true, count: successCount, skippedRemote: skippedCount };
@@ -8847,6 +8855,7 @@ function updateInlineBoardingStatusDom(button, optimisticRecord = {}) {
 function setInlineBoardingStatusMessage(recordId = "", text = "", className = "") {
   $$(\`[data-inline-status-message="\${cssEscapeValue(recordId)}"]\`).forEach((message) => {
     message.textContent = text;
+    message.setAttribute("role", className === "error" ? "alert" : "status");
     message.classList.toggle("is-error", className === "error");
     message.classList.toggle("is-saved", className === "saved");
   });
@@ -8874,6 +8883,10 @@ async function handleInlineBoardingStatusClick(button) {
     await handleBoardingTransition(record, nextStatus, options);
     return;
   }
+  if (nextStatus === "Approved") {
+    const targetStay = options.stayId ? boardingStayByReference(record, options) || {} : boardingPrimaryStay(record) || {};
+    if (!requireBoardingApprovalPreflight(record, targetStay)) return;
+  }
   const optimisticRecord = withInlineBoardingStatusTransition(record, nextStatus, options);
   if (!optimisticRecord) {
     showToast("That boarding status transition is not allowed.");
@@ -8886,7 +8899,11 @@ async function handleInlineBoardingStatusClick(button) {
   // request rows must keep that link empty or they collide with the customer's
   // existing active boarding profile during the remote upsert.
   const originalRecord = readRecords("boardingDog").find((item) => item.id === record.id && !item.removed) || record;
-  const persistedRecord = boardingDogForPersistence(optimisticRecord);
+  const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, nextStatus, options);
+  const notificationCandidate = customerNotificationEvent
+    ? customerRequestStatusNotificationRecord(optimisticRecord, nextStatus, options)
+    : optimisticRecord;
+  const persistedRecord = boardingDogForPersistence(notificationCandidate);
   const savedLocal = upsertRecord("boardingDog", persistedRecord);
   try {
     await sendPayload(savedLocal);
@@ -8894,19 +8911,35 @@ async function handleInlineBoardingStatusClick(button) {
       await syncDuplicateBoardingStayStatusRecords(record, savedLocal, boardingStayByReference(record, options) || boardingStayByReference(savedLocal, options), nextStatus, options);
     }
     await addAuditLog("Changed boarding status", "boardingDog", savedLocal, \`\${savedLocal.dogName || "Dog"}: \${nextStatus}\`);
+    let notificationResult = null;
+    if (customerNotificationEvent) {
+      try {
+        notificationResult = await notifyIfNeeded(savedLocal, customerNotificationEvent);
+      } catch (notificationError) {
+        console.warn("Boarding status saved, but its customer notification could not be persisted.", notificationError);
+        notificationResult = { deliveryStatus: "in-app only", deliveryError: notificationError?.message || String(notificationError) };
+      }
+    }
     renderBoardingDogs();
     renderBoardingRequests();
     renderCustomerRequests();
     renderDashboard();
-    setInlineBoardingStatusMessage(savedLocal.id, "Saved", "saved");
-    window.setTimeout(() => setInlineBoardingStatusMessage(savedLocal.id, "", ""), 2200);
+    const deliveryStatus = String(notificationResult?.deliveryStatus || "").trim().toLowerCase();
+    const deliveryNeedsAttention = Boolean(deliveryStatus && deliveryStatus !== "sent");
+    setInlineBoardingStatusMessage(
+      savedLocal.id,
+      deliveryNeedsAttention ? "Saved; notification delivery needs attention." : "Saved",
+      deliveryNeedsAttention ? "error" : "saved",
+    );
+    if (deliveryNeedsAttention) showToast("Status saved, but notification delivery needs attention in Alerts.");
+    else window.setTimeout(() => setInlineBoardingStatusMessage(savedLocal.id, "", ""), 2200);
   } catch (error) {
     upsertRecord("boardingDog", boardingDogForPersistence(originalRecord));
     renderBoardingDogs();
     renderBoardingRequests();
     renderCustomerRequests();
     renderDashboard();
-    setInlineBoardingStatusMessage(record.id, "Save failed - tap to retry.", "error");
+    setInlineBoardingStatusMessage(record.id, "Save failed - retry the status button.", "error");
     showToast(\`Status save failed: \${error.message || error}\`);
   }
 }
@@ -11743,6 +11776,39 @@ function exportCareLogs() {
   downloadCsv(\`care-logs-\${todayDate()}.csv\`, rows);
 }
 
+function boardingOutstandingCriticalCareTasks(record = {}, stay = {}) {
+  if (!record?.id) return [];
+  const recordIds = new Set([record.id, ...arrayValue(record.sourceRecordIds)].filter(Boolean).map(String));
+  const stayId = String(stay.id || "");
+  const requestCode = String(stay.requestCode || record.requestCode || "");
+  const now = new Date();
+  const today = todayDate();
+  const currentTime = now.toTimeString().slice(0, 5);
+  const criticalTypes = new Set(["medication", "feeding note", "feeding", "feed"]);
+
+  return readRecords("scheduledCareTask")
+    .filter((task) => {
+      if (task.removed || ["Completed", "Cancelled"].includes(task.status)) return false;
+      if (task.dogType !== "boardingDog" || !recordIds.has(String(task.dogId || task.sourceDogId || ""))) return false;
+      const activity = String(task.activityType || task.title || "").toLowerCase().trim();
+      if (!criticalTypes.has(activity)) return false;
+      if (task.boardingStayId && stayId && String(task.boardingStayId) !== stayId) return false;
+      if (task.boardingRequestCode && requestCode && String(task.boardingRequestCode) !== requestCode) return false;
+      const taskDate = dateOnly(task.date || "");
+      if (!taskDate || taskDate > today) return false;
+      if (taskDate === today && task.startTime && String(task.startTime).slice(0, 5) > currentTime) return false;
+      return true;
+    })
+    .sort((left, right) => String(left.date || "").localeCompare(String(right.date || "")) || String(left.startTime || "").localeCompare(String(right.startTime || "")));
+}
+
+function showOutstandingCriticalCareBlock(record = {}, tasks = [], transitionLabel = "continue") {
+  showDetailDialog(
+    "Outstanding Care Must Be Resolved",
+    \`<p>\${escapeHtml(record.dogName || "This dog")} cannot \${escapeHtml(transitionLabel)} while due medication or feeding tasks remain open.</p><ul class="compact-reason-list">\${tasks.map((task) => \`<li>\${escapeHtml(task.activityType || task.title || "Care task")} — \${escapeHtml(formatDateOnly(task.date || "") || task.date || "Due")} \${escapeHtml(displayTime(task.startTime || ""))}</li>\`).join("")}</ul><p>Complete and log each task, or have an admin correct/cancel it with an audit note.</p>\`,
+  );
+}
+
 function initEvents() {
   syncMobileReviewSections();
   $("#boardingRequestsDetails")?.addEventListener("toggle", rememberBoardingRequestsDetailsState);
@@ -12526,6 +12592,15 @@ function initEvents() {
         showToast("Choose a kennel location before assigning this dog.");
         return;
       }
+      const occupancyOptions = { excludeRecordId: record.id || "", excludeStayId: kennelAssignmentForm.dataset.stayId || "" };
+      const occupants = kennelLocationOccupants(location.id, occupancyOptions);
+      if (!kennelLocationHasCapacity(location, occupancyOptions)) {
+        showDetailDialog(
+          "Kennel Is Occupied",
+          \`<p>\${escapeHtml(location.building || "Kennel")} - \${escapeHtml(location.name || "Kennel")} is already assigned to \${escapeHtml(occupants.map((entry) => entry.record?.dogName || "another dog").join(", "))}. Choose a different kennel.</p>\`,
+        );
+        return;
+      }
       const updated = await runPopupOperation(event.submitter || kennelAssignmentForm.querySelector('button[type="submit"]'), "Assigning...", () => saveBoardingStatusTransition(record, kennelAssignmentForm.dataset.nextStatus || "In Kennel", {
         allowEarly: kennelAssignmentForm.dataset.allowEarly === "true",
         early: kennelAssignmentForm.dataset.early === "true",
@@ -12823,6 +12898,11 @@ function initEvents() {
           showToast("Complete requested stay services before marking ready.");
           return null;
         }
+        const outstandingCare = record ? boardingOutstandingCriticalCareTasks(record, targetStay) : [];
+        if (outstandingCare.length) {
+          showOutstandingCriticalCareBlock(record, outstandingCare, "ready for pickup");
+          return null;
+        }
         const note = $("#pickupReadyNote")?.value.trim() || "";
         const noteRecord = record && note ? { ...record, pickupReadyNote: note, updatedAt: new Date().toISOString() } : record;
         const updated = noteRecord ? await saveBoardingStatusTransition(noteRecord, "Ready For Pickup", options) : null;
@@ -12839,9 +12919,15 @@ function initEvents() {
     if (action.dataset.action === "confirm-check-out") {
       await runPopupOperation(action, "Checking out...", async () => {
         const record = boardingDogRecordForDisplay(action.dataset.id);
+        const options = action.dataset.stayId ? boardingStayReferenceFromAction(action) : {};
+        const targetStay = record ? (boardingStayByReference(record, options) || activeBoardingStay(record) || currentOrNextStay(record) || {}) : {};
+        const outstandingCare = record ? boardingOutstandingCriticalCareTasks(record, targetStay) : [];
+        if (outstandingCare.length) {
+          showOutstandingCriticalCareBlock(record, outstandingCare, "check out");
+          return null;
+        }
         const note = $("#checkoutNote")?.value.trim() || "";
         const noteRecord = record && note ? { ...record, checkoutNote: note, updatedAt: new Date().toISOString() } : record;
-        const options = action.dataset.stayId ? boardingStayReferenceFromAction(action) : {};
         options.allowEarly = true;
         options.early = boardingTransitionIsEarly(noteRecord || {}, "Checked Out", options);
         const updated = noteRecord ? await saveBoardingStatusTransition(noteRecord, "Checked Out", options) : null;
@@ -13559,7 +13645,17 @@ function initEvents() {
 	      return;
 	    }
 	    const item = event.target.closest('[data-action="open-notification"]');
-	    if (item) openNotification(item.dataset.id);
+	    if (item) openNotification(item.dataset.id).catch((error) => {
+	      console.warn("Alert could not be opened.", error);
+	      showToast("The alert could not be opened. Refresh and try again.");
+	    });
+	  });
+	  $("#notificationList")?.addEventListener("keydown", (event) => {
+	    if (!['Enter', ' '].includes(event.key)) return;
+	    const item = event.target.closest('[data-action="open-notification"]');
+	    if (!item) return;
+	    event.preventDefault();
+	    item.click();
 	  });
 	  $("#timesheetRows").addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="edit-time"]');
@@ -14085,6 +14181,7 @@ function initEvents() {
         if (stayId) {
           await approveBoardingStay(record, stayId, reference);
         } else {
+          if (!requireBoardingApprovalPreflight(record, boardingPrimaryStay(record) || {})) return;
           const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", {});
           const updated = upsertRecord("boardingDog", approveBoardingRecord(record));
           await sendPayload(updated);
@@ -14157,6 +14254,7 @@ function initEvents() {
       if (stayId) {
         await approveBoardingStay(record, stayId, reference);
       } else {
+        if (!requireBoardingApprovalPreflight(record, boardingPrimaryStay(record) || {})) return;
         const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", {});
         const updated = upsertRecord("boardingDog", approveBoardingRecord(record));
         await sendPayload(updated);
