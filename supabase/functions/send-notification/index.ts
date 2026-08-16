@@ -2362,6 +2362,7 @@ Deno.serve(async (req) => {
   }
 
   let notificationPayload: Record<string, unknown> = {};
+  let persistedNotificationPayload: Record<string, unknown> | null = null;
   if (body.notificationId) {
     const { data } = await adminClient.from("kennel_records").select("payload").eq("id", body.notificationId).maybeSingle();
     notificationPayload = (data?.payload && typeof data.payload === "object" ? data.payload : {}) as Record<string, unknown>;
@@ -2370,9 +2371,57 @@ Deno.serve(async (req) => {
     if (!isStaff && ((notificationSourceId && notificationSourceId !== recordId) || (notificationEventName && notificationEventName !== eventName))) {
       return json({ error: "Notification record does not match this request." }, 403, req);
     }
+    const pendingAt = new Date().toISOString();
+    persistedNotificationPayload = hydrateNotificationPayload(notificationPayload, eventName, sourceRecord, body.notificationId);
+    const { error: pendingNotificationError } = await adminClient.from("kennel_records").upsert({
+      id: body.notificationId,
+      type: "notificationLog",
+      payload: {
+        ...persistedNotificationPayload,
+        id: body.notificationId,
+        type: "notificationLog",
+        updatedAt: pendingAt,
+        deliveryStatus: "pending",
+      },
+      helper_email: user.email,
+      user_id: user.id,
+      submitted_at: String(persistedNotificationPayload.submittedAt || pendingAt),
+      updated_at: pendingAt,
+    });
+    if (pendingNotificationError) {
+      console.error("notification_log_pending_save_failed", pendingNotificationError);
+      return json({ error: "The in-app notification could not be saved before delivery." }, 500, req);
+    }
+    notificationPayload = persistedNotificationPayload;
   }
 
-  const content = await notificationContent(adminClient, eventName, sourceRecord, notificationPayload);
+  let content;
+  try {
+    content = await notificationContent(adminClient, eventName, sourceRecord, notificationPayload);
+  } catch (error) {
+    const deliveryError = error instanceof Error ? error.message : String(error);
+    console.error("notification_content_failed", { eventName, recordId, deliveryError });
+    if (body.notificationId && persistedNotificationPayload) {
+      const failedAt = new Date().toISOString();
+      await adminClient.from("kennel_records").upsert({
+        id: body.notificationId,
+        type: "notificationLog",
+        payload: {
+          ...persistedNotificationPayload,
+          id: body.notificationId,
+          type: "notificationLog",
+          updatedAt: failedAt,
+          deliveryStatus: "failed",
+          deliveryError,
+        },
+        helper_email: user.email,
+        user_id: user.id,
+        submitted_at: String(persistedNotificationPayload.submittedAt || failedAt),
+        updated_at: failedAt,
+      });
+    }
+    return json({ error: "Notification content could not be prepared." }, 500, req);
+  }
   if (!content) return json({ error: "Unsupported notification event." }, 400, req);
 
   const emailMessages = Array.isArray((content as Record<string, unknown>).emails)
@@ -2427,9 +2476,9 @@ Deno.serve(async (req) => {
     : "sent";
 
   if (body.notificationId) {
-    const existingPayload = hydrateNotificationPayload(notificationPayload, eventName, sourceRecord, body.notificationId);
+    const existingPayload = persistedNotificationPayload || hydrateNotificationPayload(notificationPayload, eventName, sourceRecord, body.notificationId);
     const now = new Date().toISOString();
-    await adminClient.from("kennel_records").upsert({
+    const { error: completedNotificationError } = await adminClient.from("kennel_records").upsert({
       id: body.notificationId,
       type: "notificationLog",
       payload: {
@@ -2447,6 +2496,10 @@ Deno.serve(async (req) => {
       submitted_at: String(existingPayload.submittedAt || now),
       updated_at: now,
     });
+    if (completedNotificationError) {
+      console.error("notification_log_completion_save_failed", completedNotificationError);
+      return json({ error: "Delivery completed, but its notification status could not be saved." }, 500, req);
+    }
   }
 
   return json({ ok: true, eventName, emailResult, smsResult }, 200, req);

@@ -3049,6 +3049,7 @@ async function submitPendingCustomerBooking() {
   let savedCount = 0;
   let skippedCount = 0;
   const savedRecords = [];
+  const customerAccessProfiles = [];
   const submittedDogKeys = new Set();
   let boardingAgreement = null;
   try {
@@ -3317,14 +3318,14 @@ async function submitPendingCustomerBooking() {
       await sendPayload(record);
       savedRecords.push(record);
       savedCount += 1;
-      await ensureCustomerAccessProfile({
+      customerAccessProfiles.push({
         email: record.ownerEmail,
         name: record.ownerName,
         customerDogId: dog.isSharedBoardingDog ? record.linkedCustomerDogId : dog.id,
         boardingDogId: record.id,
       });
       if (record.secondaryOwnerEmail) {
-        await ensureCustomerAccessProfile({
+        customerAccessProfiles.push({
           email: record.secondaryOwnerEmail,
           name: record.secondaryOwnerName || record.ownerName,
           boardingDogId: record.id,
@@ -3333,6 +3334,13 @@ async function submitPendingCustomerBooking() {
     }
     if (savedRecords.length) {
       await notifyIfNeeded(savedRecords[0], editingId ? "customerBoardingRequestUpdated" : "customerBoardingRequestCreated");
+    }
+    for (const profile of customerAccessProfiles) {
+      try {
+        await ensureCustomerAccessProfile(profile);
+      } catch (error) {
+        console.warn("The boarding request was saved and staff were alerted, but a customer access profile could not be refreshed.", error);
+      }
     }
     pendingCustomerBooking = null;
     $("#bookingConfirmDialog").close();

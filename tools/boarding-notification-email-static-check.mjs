@@ -15,9 +15,14 @@ const submitSource = customer.slice(submitStart, submitEnd);
 assert.match(submitSource, /requestGroupRequestedServices/, "grouped requests must retain services for every selected dog");
 assert.match(submitSource, /dogNames: groupDogNames/, "grouped requests must retain every selected dog name");
 assert.match(submitSource, /const savedRecords = \[\]/, "request records must be collected before notification delivery");
+assert.match(submitSource, /const customerAccessProfiles = \[\]/, "customer access profile refreshes must be deferred until after the alert");
 assert.match(submitSource, /await sendPayload\(record\)/, "each dog request must persist before the grouped notification is sent");
 assert.match(submitSource, /notifyIfNeeded\(savedRecords\[0\]/, "one grouped notification must be sent from the first saved request");
 assert.doesNotMatch(submitSource, /saveAndNotify\(payload/, "multi-dog requests must not send one email per dog");
+assert.ok(
+  submitSource.indexOf("notifyIfNeeded(savedRecords[0]") < submitSource.indexOf("for (const profile of customerAccessProfiles)"),
+  "staff alert delivery must run before customer access profile housekeeping",
+);
 assert.match(
   shared,
   /if\s*\(isStaffRole\(\)\s*\|\|\s*notificationVisibleToCurrentUser\(notification\)\)\s*\{[\s\S]*?await\s+sendPayload\(notification\)/,
@@ -31,6 +36,13 @@ assert.match(edge, /html: adminRendered\.html/, "admin agreement messages must i
 assert.match(edge, /html: customerRendered\.html/, "customer agreement messages must include the dedicated HTML");
 assert.match(edge, /record\.requestGroupRequestedServices/, "admin request emails must use grouped service details");
 assert.match(edge, /record\.requestGroupDogNames/, "admin request emails must use grouped dog names");
+const edgeHandlerStart = edge.indexOf("Deno.serve(async (req) =>");
+const edgeHandlerSource = edge.slice(edgeHandlerStart);
+assert.ok(
+  edgeHandlerSource.indexOf('deliveryStatus: "pending"') < edgeHandlerSource.indexOf("await notificationContent"),
+  "the in-app notification must be persisted before email content or delivery can fail",
+);
+assert.match(edgeHandlerSource, /deliveryStatus: "failed"[\s\S]*deliveryError/, "email preparation failures must remain visible in the notification log");
 assert.match(
   edge,
   /record\.requestGroupTotal\s*\|\|\s*stay\.requestGroupTotal\s*\|\|\s*record\.estimatedTotal/,
@@ -76,7 +88,7 @@ assert.match(html, /☐.*I agree\./, "agreement selections must remain readable"
 assert.doesNotMatch(html, /\*\*|# CUDDLE/, "raw Markdown markers must not reach the HTML email");
 assert.doesNotMatch(text, /\*\*|^#/m, "plain-text agreement copies must remove Markdown markers");
 
-assert.match(main, /boarding-request-notification-rls-v25/, "grouped request modules are not cache-busted");
-assert.match(index, /boarding-request-notification-rls-v25/, "the app entrypoint is not cache-busted");
+assert.match(main, /boarding-request-alert-reliability-v26/, "grouped request modules are not cache-busted");
+assert.match(index, /boarding-request-alert-reliability-v26/, "the app entrypoint is not cache-busted");
 
 console.log("Boarding notification email checks passed.");
