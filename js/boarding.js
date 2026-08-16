@@ -466,6 +466,9 @@ function boardingStatusScopedStays(record = {}, nextStatus = "", timestamp = new
       ...stay,
       requestCode: stay.requestCode || boardingStayRequestCode(record, stay),
       status: nextStatus,
+      requestGroupStatus: (stay.requestGroupId || stay.reservationGroupId || stay.familyReservationId)
+        ? reservationStatusFromLegacy({ ...record, boardingStatus: nextStatus }, { ...stay, status: nextStatus })
+        : stay.requestGroupStatus || "",
       dropoffTime: stay.dropoffTime || scheduledDropoffTime,
       pickupTime: stay.pickupTime || scheduledPickupTime,
       scheduledDropoffTime,
@@ -579,9 +582,15 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
   });
   const summaryStatus = options.stayId ? boardingSummaryStatusFromStays(record, scopedStays, nextStatus) : nextStatus;
   const clearsDogLocation = summaryStatus === "Approved" || summaryStatus === "Checked In";
+  const scopedTargetStay = (options.stayId || options.requestCode)
+    ? boardingStayByReference({ ...record, stays: scopedStays }, options)
+    : boardingStatusTargetStay({ ...record, stays: scopedStays }, nextStatus, options) || {};
   return {
     ...record,
     boardingStatus: summaryStatus,
+    requestGroupStatus: (record.requestGroupId || record.reservationGroupId || record.familyReservationId || scopedTargetStay.requestGroupId)
+      ? reservationStatusFromLegacy({ ...record, boardingStatus: summaryStatus }, scopedTargetStay)
+      : record.requestGroupStatus || "",
     statusHistory: [
       ...(record.statusHistory || []),
       {

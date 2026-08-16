@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const shared = fs.readFileSync("js/shared.js", "utf8");
 const notifications = fs.readFileSync("js/notifications.js", "utf8");
+const boarding = fs.readFileSync("js/boarding.js", "utf8");
 
 const inlineStart = shared.indexOf("async function handleInlineBoardingStatusClick");
 const inlineEnd = shared.indexOf("// Extracted to js/boarding.js: handleBoardingTransition", inlineStart);
@@ -19,5 +20,6 @@ assert.match(notifications, /function boardingRequestAlertGroup\(/, "boarding al
 assert.match(notifications, /function boardingRequestAlertGroupReviewHtml\(/, "boarding alerts must render grouped review content");
 assert.match(notifications, /data-action="transition-boarding-family-group"/, "grouped alerts must offer one group approval action");
 assert.match(shared, /action\.dataset\.action === "transition-boarding-family-group"[\s\S]*saveBoardingFamilyGroupStatus/, "the popup action must update the whole family request group");
+assert.match(boarding, /requestGroupStatus:[\s\S]*reservationStatusFromLegacy/, "boarding transitions must keep the saved family-group status aligned with the stay status");
 
 console.log("Boarding family alert approval checks passed.");
