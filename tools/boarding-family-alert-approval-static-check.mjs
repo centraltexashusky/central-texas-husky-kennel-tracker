@@ -21,5 +21,6 @@ assert.match(notifications, /function boardingRequestAlertGroupReviewHtml\(/, "b
 assert.match(notifications, /data-action="transition-boarding-family-group"/, "grouped alerts must offer one group approval action");
 assert.match(shared, /action\.dataset\.action === "transition-boarding-family-group"[\s\S]*saveBoardingFamilyGroupStatus/, "the popup action must update the whole family request group");
 assert.match(boarding, /requestGroupStatus:[\s\S]*reservationStatusFromLegacy/, "boarding transitions must keep the saved family-group status aligned with the stay status");
+assert.match(boarding, /function withBoardingStatusTransition[\s\S]*updatedAt: timestamp,[\s\S]*boardingStatus: summaryStatus/, "boarding transitions must advance the record revision timestamp for remote reloads");
 
 console.log("Boarding family alert approval checks passed.");

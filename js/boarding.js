@@ -587,6 +587,7 @@ function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
     : boardingStatusTargetStay({ ...record, stays: scopedStays }, nextStatus, options) || {};
   return {
     ...record,
+    updatedAt: timestamp,
     boardingStatus: summaryStatus,
     requestGroupStatus: (record.requestGroupId || record.reservationGroupId || record.familyReservationId || scopedTargetStay.requestGroupId)
       ? reservationStatusFromLegacy({ ...record, boardingStatus: summaryStatus }, scopedTargetStay)
