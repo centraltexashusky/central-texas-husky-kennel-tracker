@@ -1927,7 +1927,85 @@ function boardingRequestNotificationReference(notification = {}, recoveredReques
   };
 }
 
+function boardingRequestAlertGroup(record = {}, reference = {}) {
+  const stay = boardingStayByReference(record, reference) || boardingPrimaryStay(record) || {};
+  if (!stay?.id) return null;
+  const seedEntry = boardingStayEntryForRecord(record, stay);
+  const explicitGroupKey = boardingFamilyExplicitGroupKey(seedEntry);
+  const seedKeys = boardingFamilyGroupKeys(seedEntry);
+  if (!seedKeys.length) return null;
+  const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
+    .filter((item) => item.customerRequest && !item.removed));
+  const entries = uniqueBoardingStayEntries(boardingStayEntries(records)).filter((entry) => {
+    const entryKeys = boardingFamilyGroupKeys(entry);
+    return explicitGroupKey ? entryKeys.includes(explicitGroupKey) : entryKeys.some((key) => seedKeys.includes(key));
+  });
+  if (entries.length <= 1) return null;
+  return {
+    entries,
+    groupKey: boardingFamilySharedGroupKey(entries) || explicitGroupKey || seedKeys[0] || "",
+  };
+}
+
+function boardingRequestAlertGroupEntryHtml(entry = {}) {
+  const record = entry.record || {};
+  const stay = entry.stay || {};
+  const serviceRows = stay.id ? boardingRequestServiceRowsHtml(record, stay) : "";
+  const pricingSnapshot = stay.id ? boardingCurrentPricingSnapshotForStay(record, stay) : null;
+  const total = stay.id ? boardingStayInvoiceTotal(record, stay, pricingSnapshot ? { pricingSnapshot } : {}) : record.estimatedTotal || "";
+  const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
+  const declineAction = entry.status === "Pending"
+    ? \`<button type="button" class="secondary-button danger-button" data-action="transition-boarding-stay" data-dog-id="\${escapeHtml(record.id || "")}"\${stayAttrs} data-next-status="Cancelled">Decline</button>\`
+    : "";
+  return \`<article class="record-card compact-record-card boarding-request-card">
+    <div class="boarding-request-card-main">
+      \${boardingDogThumbnailHtml(record, { className: "boarding-request-photo", interactive: false })}
+      <div class="boarding-request-card-content">
+        <strong class="boarding-request-dog-name">\${escapeHtml(record.dogName || "Boarding dog")}</strong>
+        <div class="chip-row boarding-request-chip-row">\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}\${stay.id ? boardingStayStatusChipHtml(record, stay) : boardingStatusChipHtml(record)}</div>
+      </div>
+    </div>
+    \${serviceRows}
+    \${total ? boardingRequestEstimatedTotalHtml(total) : ""}
+    \${declineAction ? \`<div class="record-actions">\${declineAction}</div>\` : ""}
+  </article>\`;
+}
+
+function boardingRequestAlertGroupReviewHtml(group = {}) {
+  const entries = group.entries || [];
+  const first = entries[0] || {};
+  const firstRecord = first.record || {};
+  const firstStay = first.stay || {};
+  const pendingEntries = entries.filter((entry) => entry.status === "Pending");
+  const dogNames = entries.map((entry) => entry.record?.dogName || "Dog").filter(Boolean);
+  const familyName = boardingFamilyName(firstRecord);
+  const total = boardingFamilyGroupSavedTotal(entries);
+  const approveLabel = pendingEntries.length === entries.length
+    ? \`Approve All \${entries.length} Requests\`
+    : \`Approve \${pendingEntries.length} Pending Request\${pendingEntries.length === 1 ? "" : "s"}\`;
+  const statusMessage = pendingEntries.length
+    ? \`Review this family request. Approving will update \${pendingEntries.length === entries.length ? "both dogs together" : "the remaining pending dog"}.\`
+    : "Every dog in this family request has already been reviewed.";
+  const approveAction = pendingEntries.length
+    ? \`<button type="button" class="secondary-button" data-action="transition-boarding-family-group" data-group-key="\${escapeHtml(group.groupKey || "")}" data-next-status="Approved">\${escapeHtml(approveLabel)}</button>\`
+    : "";
+  return \`<section class="popup-record-section boarding-request-alert-review boarding-family-alert-review">
+    <article class="record-card compact-record-card">
+      <strong>\${escapeHtml(familyName)} Family Stay</strong>
+      <p>\${escapeHtml(dogNames.join(", "))}</p>
+      <p>\${escapeHtml(stayScheduleRangeLabel(firstRecord, firstStay))}</p>
+      \${total ? \`<p><strong>Group total:</strong> \${money(total)}</p>\` : ""}
+      <div class="chip-row"><span class="status-chip boarding-family-chip">\${entries.length} dogs</span><span class="status-chip">\${escapeHtml(boardingFamilyStatusSummary(entries))}</span></div>
+      <p>\${escapeHtml(statusMessage)}</p>
+    </article>
+    <div class="boarding-family-dogs">\${entries.map((entry) => boardingRequestAlertGroupEntryHtml(entry)).join("")}</div>
+    <div class="record-actions boarding-request-primary-actions">\${approveAction}<button type="button" class="secondary-button" data-action="close-dialog">Close</button></div>
+  </section>\`;
+}
+
 function boardingRequestAlertReviewHtml(record = {}, reference = {}) {
+  const group = boardingRequestAlertGroup(record, reference);
+  if (group) return boardingRequestAlertGroupReviewHtml(group);
   const displayRecord = boardingDogWithStayStatus(record || {});
   const stay = boardingStayByReference(displayRecord, reference) || boardingPrimaryStay(displayRecord) || {};
   const status = stay?.id ? boardingStayDisplayStatus(displayRecord, stay) : normalizeBoardingStatus(displayRecord);

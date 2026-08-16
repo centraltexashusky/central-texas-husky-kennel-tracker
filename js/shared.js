@@ -8882,7 +8882,12 @@ async function handleInlineBoardingStatusClick(button) {
   button.disabled = true;
   button.classList.add("is-loading");
   updateInlineBoardingStatusDom(button, optimisticRecord);
-  const savedLocal = upsertRecord("boardingDog", optimisticRecord);
+  // Display records may be hydrated with a canonical customer-dog link. Detached
+  // request rows must keep that link empty or they collide with the customer's
+  // existing active boarding profile during the remote upsert.
+  const originalRecord = readRecords("boardingDog").find((item) => item.id === record.id && !item.removed) || record;
+  const persistedRecord = boardingDogForPersistence(optimisticRecord);
+  const savedLocal = upsertRecord("boardingDog", persistedRecord);
   try {
     await sendPayload(savedLocal);
     if (options.stayId) {
@@ -8896,7 +8901,7 @@ async function handleInlineBoardingStatusClick(button) {
     setInlineBoardingStatusMessage(savedLocal.id, "Saved", "saved");
     window.setTimeout(() => setInlineBoardingStatusMessage(savedLocal.id, "", ""), 2200);
   } catch (error) {
-    upsertRecord("boardingDog", record);
+    upsertRecord("boardingDog", boardingDogForPersistence(originalRecord));
     renderBoardingDogs();
     renderBoardingRequests();
     renderCustomerRequests();
@@ -12743,6 +12748,13 @@ function initEvents() {
     if (action.dataset.action === "open-boarding-medical-behavior-note") {
       const dog = boardingDogRecordForDisplay(action.dataset.dogId || action.dataset.id);
       if (dog) openBoardingMedicalBehaviorNotePopup(dog, boardingStayReferenceFromAction(action));
+      return;
+    }
+    if (action.dataset.action === "transition-boarding-family-group") {
+      const updated = await runPopupOperation(action, "Updating family request...", () => (
+        saveBoardingFamilyGroupStatus(action.dataset.groupKey || "", action.dataset.nextStatus || "Approved")
+      ), "Family request update could not be completed");
+      if (updated?.length) $("#detailDialog").close();
       return;
     }
     if (action.dataset.action === "transition-boarding-stay") {

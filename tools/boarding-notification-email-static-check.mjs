@@ -88,7 +88,7 @@ assert.match(html, /☐.*I agree\./, "agreement selections must remain readable"
 assert.doesNotMatch(html, /\*\*|# CUDDLE/, "raw Markdown markers must not reach the HTML email");
 assert.doesNotMatch(text, /\*\*|^#/m, "plain-text agreement copies must remove Markdown markers");
 
-assert.match(main, /boarding-request-alert-reliability-v26/, "grouped request modules are not cache-busted");
-assert.match(index, /boarding-request-alert-reliability-v26/, "the app entrypoint is not cache-busted");
+assert.match(main, /boarding-family-alert-approval-v27/, "grouped request modules are not cache-busted");
+assert.match(index, /boarding-family-alert-approval-v27/, "the app entrypoint is not cache-busted");
 
 console.log("Boarding notification email checks passed.");
