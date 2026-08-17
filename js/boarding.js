@@ -6329,7 +6329,7 @@ function boardingRequirementOverrideFormHtml(record = {}, stay = {}, nextStatus 
     <p>This exception will be attached to this stay and written to the Audit Log with your staff identity.</p>
     <ul class="compact-reason-list">\${issues.map((issue) => \`<li>\${escapeHtml(issue)}</li>\`).join("")}</ul>
     <label>Override reason<textarea name="reason" rows="4" minlength="10" maxlength="500" required placeholder="Explain why this dog may proceed without the listed requirements."></textarea></label>
-    <label class="checkbox-row"><input type="checkbox" name="confirmed" value="Yes" required /> I reviewed the available records and accept responsibility for this exception.</label>
+    <label class="inline-check"><input type="checkbox" name="confirmed" value="Yes" required /> I reviewed the available records and accept responsibility for this exception.</label>
     <div class="button-row"><button type="submit">Save Override & Continue</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </form>\`;
 }

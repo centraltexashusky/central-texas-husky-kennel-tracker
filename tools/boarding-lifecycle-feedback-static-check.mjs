@@ -160,6 +160,9 @@ if (!main.includes("boarding-checkin-preflight-v38") || !index.includes("boardin
 if (!main.includes("boarding-requirement-override-v39") || !index.includes("boarding-requirement-override-v39")) {
   failures.push("The staff boarding-requirement override is not cache-busted.");
 }
+if (!main.includes("boarding-override-confirmation-v40") || !index.includes("boarding-override-confirmation-v40")) {
+  failures.push("The staff override confirmation layout is not cache-busted.");
+}
 if (!main.includes("maintenance-alert-detail-active-request-lock-v36") || !index.includes("maintenance-alert-detail-active-request-lock-v36")) {
   failures.push("The maintenance alert and active-stay request lock fix is not cache-busted.");
 }
