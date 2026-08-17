@@ -745,6 +745,7 @@ as $$
   select case
     when kennel_private.kennel_is_admin() then true
     when not kennel_private.kennel_is_staff_member() then false
+    when record_type = 'financialTransaction' then false
     when public.kennel_private_staff_record_type(record_type) then public.kennel_staff_record_belongs_to_auth(payload)
     else true
   end

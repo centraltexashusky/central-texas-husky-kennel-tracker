@@ -24,6 +24,10 @@ var financialLineItemSearch = "";
 var financialStatusFilter = "all";
 var financialIncomeFilter = "all";
 var financialLineItemSort = "date-desc";
+var financialTransactionSearch = "";
+var financialTransactionTypeFilter = "all";
+var financialTransactionAreaFilter = "all";
+var financialTransactionSort = "date-desc";
 var DEFAULT_APP_ORGANIZATION_NAME = "Central Texas Husky";
 var APP_BRANDING_CONFIG_ID = "workspace-branding";
 var DEFAULT_WORKSPACE_AGREEMENT_CONFIG = {
@@ -1453,13 +1457,93 @@ function financialRangeLabel(range = financialRangeValues()) {
   return financialShortDateLabel(range.start) + ", " + range.start.slice(0, 4) + " to " + financialShortDateLabel(range.end) + ", " + range.end.slice(0, 4);
 }
 
-function financialBuildBuckets(entries = [], range = financialRangeValues(), period = financialPeriodView, payrollEntries = []) {
+function financialDogShowEntries() {
+  return readRecords("showEvent")
+    .filter((event) => !event.removed)
+    .flatMap((event) => (Array.isArray(event.expenses) ? event.expenses : [])
+      .filter((transaction) => transaction && !transaction.removed)
+      .map((transaction) => ({
+      key: "show:" + event.id + ":" + transaction.id,
+      sourceType: "showEvent",
+      sourceEventId: event.id,
+      sourceTransactionId: transaction.id,
+      date: dateOnly(transaction.incurredDate || transaction.submittedAt || event.startDate),
+      entryType: transaction.entryType === "income" ? "income" : "expense",
+      businessArea: "Dog Shows",
+      category: transaction.category || (transaction.entryType === "income" ? "Other income" : "Other expense"),
+      description: transaction.description || event.name || event.club || "Dog Show transaction",
+      counterparty: transaction.counterparty || "",
+      paymentMethod: transaction.paymentMethod || "",
+      reference: transaction.reference || "",
+      notes: transaction.notes || "",
+      amount: Math.max(0, Number(transaction.amount) || 0),
+      sourceLabel: event.name || event.club || "Dog Show",
+      editable: true,
+    })))
+    .filter((entry) => entry.date && entry.amount > 0);
+}
+
+function financialManualEntries() {
+  return readRecords("financialTransaction")
+    .filter((record) => !record.removed)
+    .map((record) => ({
+      ...record,
+      key: "manual:" + record.id,
+      sourceType: "financialTransaction",
+      sourceRecordId: record.id,
+      date: dateOnly(record.transactionDate || record.submittedAt),
+      entryType: record.entryType === "income" ? "income" : "expense",
+      businessArea: record.businessArea || "General",
+      category: record.category || (record.entryType === "income" ? "Other income" : "Other expense"),
+      description: record.description || "Manual transaction",
+      amount: Math.max(0, Number(record.amount) || 0),
+      sourceLabel: "Manual entry",
+      editable: true,
+    }))
+    .filter((entry) => entry.date && entry.amount > 0);
+}
+
+function financialOperationalLedgerEntries(boardingEntries = [], payrollEntries = []) {
+  const income = boardingEntries.flatMap((entry) => [
+    { suffix: "boarding", amount: entry.boarding, businessArea: "Boarding", category: "Boarding income" },
+    { suffix: "services", amount: entry.services, businessArea: "Services", category: "Service income" },
+    { suffix: "other", amount: entry.other, businessArea: "Other", category: "Other booking income" },
+  ].filter((part) => Number(part.amount || 0) > 0).map((part) => ({
+    key: "boarding:" + entry.key + ":" + part.suffix,
+    date: entry.date,
+    entryType: "income",
+    businessArea: part.businessArea,
+    category: part.category,
+    description: [entry.label, entry.ownerName, entry.dogName].filter(Boolean).join(" · "),
+    amount: Number(part.amount || 0),
+    sourceLabel: entry.requestCode ? "Boarding · " + entry.requestCode : "Boarding stay",
+    editable: false,
+  })));
+  const payroll = payrollEntries.map((entry) => ({
+    key: "payroll:" + entry.id,
+    date: entry.date,
+    entryType: "expense",
+    businessArea: "Payroll",
+    category: "Employee hourly pay",
+    description: entry.staffName + " · " + Number(entry.hours || 0).toFixed(2) + " hours at " + payrollMoney(entry.rate || 0) + "/hr",
+    amount: Number(entry.total || 0),
+    sourceLabel: "Completed timesheet",
+    editable: false,
+  })).filter((entry) => entry.date && entry.amount > 0);
+  return [...income, ...payroll];
+}
+
+function financialLedgerEntries(boardingEntries = [], payrollEntries = []) {
+  return [...financialOperationalLedgerEntries(boardingEntries, payrollEntries), ...financialDogShowEntries(), ...financialManualEntries()];
+}
+
+function financialBuildBuckets(entries = [], range = financialRangeValues(), period = financialPeriodView) {
   const buckets = new Map();
   let key = financialPeriodKey(range.start, period);
   const endKey = financialPeriodKey(range.end, period);
   let guard = 0;
   while (key && guard < 260) {
-    buckets.set(key, { key, label: financialPeriodLabel(key, period), total: 0, boarding: 0, services: 0, payroll: 0, net: 0, count: 0 });
+    buckets.set(key, { key, label: financialPeriodLabel(key, period), income: 0, expenses: 0, net: 0, boarding: 0, services: 0, payroll: 0, dogShowIncome: 0, dogShowExpenses: 0, manualIncome: 0, manualExpenses: 0, count: 0 });
     if (key === endKey) break;
     key = financialNextPeriodKey(key, period);
     guard += 1;
@@ -1467,20 +1551,25 @@ function financialBuildBuckets(entries = [], range = financialRangeValues(), per
   entries.forEach((entry) => {
     if (entry.date < range.start || entry.date > range.end) return;
     const entryKey = financialPeriodKey(entry.date, period);
-    if (!buckets.has(entryKey)) buckets.set(entryKey, { key: entryKey, label: financialPeriodLabel(entryKey, period), total: 0, boarding: 0, services: 0, payroll: 0, net: 0, count: 0 });
+    if (!buckets.has(entryKey)) buckets.set(entryKey, { key: entryKey, label: financialPeriodLabel(entryKey, period), income: 0, expenses: 0, net: 0, boarding: 0, services: 0, payroll: 0, dogShowIncome: 0, dogShowExpenses: 0, manualIncome: 0, manualExpenses: 0, count: 0 });
     const bucket = buckets.get(entryKey);
-    bucket.total += Number(entry.total || 0);
-    bucket.boarding += Number(entry.boarding || 0);
-    bucket.services += Number(entry.services || 0);
-    bucket.count += Number(entry.count || 1);
+    const amount = Number(entry.amount || 0);
+    if (entry.entryType === "income") bucket.income += amount;
+    else bucket.expenses += amount;
+    if (entry.businessArea === "Boarding" && entry.entryType === "income") bucket.boarding += amount;
+    if (entry.businessArea === "Services" && entry.entryType === "income") bucket.services += amount;
+    if (entry.businessArea === "Payroll" && entry.entryType === "expense") bucket.payroll += amount;
+    if (entry.businessArea === "Dog Shows") {
+      if (entry.entryType === "income") bucket.dogShowIncome += amount;
+      else bucket.dogShowExpenses += amount;
+    }
+    if (entry.sourceType === "financialTransaction") {
+      if (entry.entryType === "income") bucket.manualIncome += amount;
+      else bucket.manualExpenses += amount;
+    }
+    bucket.count += 1;
   });
-  payrollEntries.forEach((entry) => {
-    if (entry.date < range.start || entry.date > range.end) return;
-    const entryKey = financialPeriodKey(entry.date, period);
-    if (!buckets.has(entryKey)) buckets.set(entryKey, { key: entryKey, label: financialPeriodLabel(entryKey, period), total: 0, boarding: 0, services: 0, payroll: 0, net: 0, count: 0 });
-    buckets.get(entryKey).payroll += Number(entry.total || 0);
-  });
-  return [...buckets.values()].map((bucket) => ({ ...bucket, net: Number(bucket.total || 0) - Number(bucket.payroll || 0) })).sort((a, b) => String(a.key).localeCompare(String(b.key)));
+  return [...buckets.values()].map((bucket) => ({ ...bucket, net: Number(bucket.income || 0) - Number(bucket.expenses || 0) })).sort((a, b) => String(a.key).localeCompare(String(b.key)));
 }
 
 function financialCompactMoney(value = 0) {
@@ -1496,20 +1585,23 @@ function financialChartPolyline(points = "", className = "") {
 }
 
 function financialIncomeChartSvg(buckets = []) {
-  if (!buckets.length) return '<div class="financial-empty-state">No income found for this date range.</div>';
+  if (!buckets.length) return '<div class="financial-empty-state">No financial activity found for this date range.</div>';
   const width = 820;
   const height = 300;
   const left = 64;
   const right = 24;
   const top = 28;
   const bottom = 54;
-  const maxValue = Math.max(1, ...buckets.flatMap((bucket) => [bucket.total, bucket.boarding, bucket.services, bucket.payroll]));
+  const values = buckets.flatMap((bucket) => [bucket.income, bucket.expenses, bucket.net]);
+  const maxValue = Math.max(1, ...values);
+  const minValue = Math.min(0, ...values);
+  const span = Math.max(1, maxValue - minValue);
   const xFor = (index) => buckets.length === 1
     ? left + ((width - left - right) / 2)
     : left + ((width - left - right) * index / Math.max(1, buckets.length - 1));
-  const yFor = (value) => top + (height - top - bottom) * (1 - (Number(value || 0) / maxValue));
+  const yFor = (value) => top + (height - top - bottom) * (1 - ((Number(value || 0) - minValue) / span));
   const pointsFor = (field) => buckets.map((bucket, index) => xFor(index).toFixed(1) + "," + yFor(bucket[field]).toFixed(1)).join(" ");
-  const tickValues = [0, maxValue / 2, maxValue];
+  const tickValues = minValue < 0 ? [minValue, 0, maxValue] : [0, maxValue / 2, maxValue];
   const tickLines = tickValues.map((value) => {
     const y = yFor(value).toFixed(1);
     return '<g><line class="chart-grid-line" x1="' + left + '" y1="' + y + '" x2="' + (width - right) + '" y2="' + y + '" /><text class="chart-axis-label" x="' + (left - 12) + '" y="' + (Number(y) + 4) + '" text-anchor="end">' + escapeHtml(financialCompactMoney(value)) + '</text></g>';
@@ -1521,15 +1613,14 @@ function financialIncomeChartSvg(buckets = []) {
     return '<text class="chart-axis-label" x="' + x + '" y="' + (height - 18) + '" text-anchor="middle">' + escapeHtml(bucket.label) + '</text>';
   }).join("");
   const pointDots = buckets.length <= 20
-    ? buckets.map((bucket, index) => '<circle class="chart-point" cx="' + xFor(index).toFixed(1) + '" cy="' + yFor(bucket.total).toFixed(1) + '" r="4"><title>' + escapeHtml(bucket.label + ": " + money(bucket.total)) + '</title></circle>').join("")
+    ? buckets.map((bucket, index) => '<circle class="chart-point" cx="' + xFor(index).toFixed(1) + '" cy="' + yFor(bucket.income).toFixed(1) + '" r="4"><title>' + escapeHtml(bucket.label + " income: " + payrollMoney(bucket.income)) + '</title></circle>').join("")
     : "";
   return '<svg viewBox="0 0 ' + width + ' ' + height + '" aria-hidden="true" focusable="false">'
     + tickLines
-    + '<line class="chart-axis-line" x1="' + left + '" y1="' + (height - bottom) + '" x2="' + (width - right) + '" y2="' + (height - bottom) + '" />'
-    + financialChartPolyline(pointsFor("services"), "chart-line is-service")
-    + financialChartPolyline(pointsFor("boarding"), "chart-line is-boarding")
-    + financialChartPolyline(pointsFor("payroll"), "chart-line is-payroll")
-    + financialChartPolyline(pointsFor("total"), "chart-line is-total")
+    + '<line class="chart-axis-line" x1="' + left + '" y1="' + yFor(0).toFixed(1) + '" x2="' + (width - right) + '" y2="' + yFor(0).toFixed(1) + '" />'
+    + financialChartPolyline(pointsFor("expenses"), "chart-line is-expense")
+    + financialChartPolyline(pointsFor("net"), "chart-line is-net")
+    + financialChartPolyline(pointsFor("income"), "chart-line is-income")
     + pointDots
     + xLabels
     + '</svg>';
@@ -1540,26 +1631,27 @@ function financialSummaryCardHtml(label = "", value = "", note = "") {
 }
 
 function financialBreakdownHtml(buckets = []) {
-  const activeBuckets = buckets.filter((bucket) => bucket.total || bucket.boarding || bucket.services || bucket.payroll);
-  if (!activeBuckets.length) return '<article class="financial-period-card"><strong>No income in range</strong><p>Adjust the dates or choose a different view.</p></article>';
+  const activeBuckets = buckets.filter((bucket) => bucket.income || bucket.expenses);
+  if (!activeBuckets.length) return '<article class="financial-period-card"><strong>No financial activity in range</strong><p>Add a transaction or adjust the selected dates.</p></article>';
   return activeBuckets.map((bucket) => '<article class="financial-period-card">'
     + '<span>' + escapeHtml(bucket.label) + '</span>'
-    + '<strong>' + escapeHtml(money(bucket.total)) + '</strong>'
-    + '<p><b>Boarding</b> ' + escapeHtml(money(bucket.boarding)) + '</p>'
-    + '<p><b>Services</b> ' + escapeHtml(money(bucket.services)) + '</p>'
+    + '<strong class="' + (bucket.net < 0 ? "is-financial-negative" : "") + '">' + escapeHtml(payrollMoney(bucket.net)) + ' net</strong>'
+    + '<p><b>Income</b> ' + escapeHtml(payrollMoney(bucket.income)) + '</p>'
+    + '<p><b>Expenses</b> ' + escapeHtml(payrollMoney(bucket.expenses)) + '</p>'
+    + '<p><b>Boarding / Services</b> ' + escapeHtml(payrollMoney(bucket.boarding)) + ' / ' + escapeHtml(payrollMoney(bucket.services)) + '</p>'
+    + '<p><b>Dog Shows</b> ' + escapeHtml(payrollMoney(bucket.dogShowIncome)) + ' in / ' + escapeHtml(payrollMoney(bucket.dogShowExpenses)) + ' out</p>'
     + '<p><b>Payroll</b> ' + escapeHtml(payrollMoney(bucket.payroll)) + '</p>'
-    + '<p><b>Net after payroll</b> ' + escapeHtml(payrollMoney(bucket.net)) + '</p>'
-    + '<small>' + escapeHtml(String(bucket.count)) + ' stay' + (bucket.count === 1 ? "" : "s") + '</small>'
+    + '<small>' + escapeHtml(String(bucket.count)) + ' transaction' + (bucket.count === 1 ? "" : "s") + '</small>'
     + '</article>').join("");
 }
 
 function financialCalculationNoteHtml() {
-  return '<strong>How totals are calculated</strong>'
-    + '<p>Financials use every non-cancelled boarding stay with a pickup date in the selected date range. Saved pricing snapshots and saved family totals are used first; if a stay has no saved snapshot, the app falls back to the current Services & Pricing catalog. Payroll uses completed clock records multiplied by the hourly rate saved on each Staff/Admin user profile. Boarding income is reported by pickup date so the stay appears in the month it ends.</p>';
+  return '<strong>One financial picture, without duplicate records</strong>'
+    + '<p>Boarding and service income comes from non-cancelled stays and is reported by pickup date. Payroll comes from completed clock records and saved hourly rates. Dog Show income and expenses remain attached to each show but are included here automatically. Use Add Transaction for any other income or expense.</p>';
 }
 
 function financialSyncViewState() {
-  const mode = financialViewMode === "lineItems" ? "lineItems" : "overview";
+  const mode = ["overview", "transactions", "lineItems"].includes(financialViewMode) ? financialViewMode : "overview";
   $$("#financialViewTabs [data-financial-view]").forEach((button) => {
     const active = button.dataset.financialView === mode;
     button.classList.toggle("is-active", active);
@@ -1570,7 +1662,7 @@ function financialSyncViewState() {
     panel.hidden = !active;
     panel.classList.toggle("is-active", active);
   });
-  $("#financialPeriodControl")?.closest(".financial-toolbar")?.classList.toggle("is-line-items", mode === "lineItems");
+  $("#financialPeriodControl")?.closest(".financial-toolbar")?.classList.toggle("is-line-items", mode !== "overview");
 }
 
 function financialLineItemSearchText(item = {}) {
@@ -1653,6 +1745,211 @@ function renderFinancialLineItems(entries = [], range = financialRangeValues()) 
   if ($("#financialLineItemTotal")) $("#financialLineItemTotal").textContent = money(total);
 }
 
+function financialTransactionSearchText(entry = {}) {
+  return [entry.date, entry.entryType, entry.businessArea, entry.category, entry.description, entry.sourceLabel, entry.counterparty, entry.paymentMethod, entry.reference, entry.notes].join(" ").toLowerCase();
+}
+
+function financialFilteredTransactions(entries = []) {
+  const search = String(financialTransactionSearch || "").trim().toLowerCase();
+  return entries.filter((entry) => {
+    if (search && !financialTransactionSearchText(entry).includes(search)) return false;
+    if (financialTransactionTypeFilter !== "all" && entry.entryType !== financialTransactionTypeFilter) return false;
+    if (financialTransactionAreaFilter !== "all" && entry.businessArea !== financialTransactionAreaFilter) return false;
+    return true;
+  });
+}
+
+function financialSortedTransactions(entries = []) {
+  return [...entries].sort((left, right) => {
+    if (financialTransactionSort === "date-asc") return String(left.date || "").localeCompare(String(right.date || ""));
+    if (financialTransactionSort === "amount-desc") return Number(right.amount || 0) - Number(left.amount || 0);
+    return String(right.date || "").localeCompare(String(left.date || ""));
+  });
+}
+
+function financialTransactionRowHtml(entry = {}) {
+  const isIncome = entry.entryType === "income";
+  const actions = entry.editable
+    ? '<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-financial-transaction" data-key="' + escapeHtml(entry.key || "") + '">Edit</button><button type="button" class="secondary-button danger-button" data-action="delete-financial-transaction" data-key="' + escapeHtml(entry.key || "") + '">Delete</button></div>'
+    : '<span class="financial-calculated-label">Calculated</span>';
+  return '<tr>'
+    + '<td><strong>' + escapeHtml(financialShortDateLabel(entry.date) + ", " + String(entry.date || "").slice(0, 4)) + '</strong></td>'
+    + '<td><span class="financial-type-chip is-' + (isIncome ? "income" : "expense") + '">' + (isIncome ? "Income" : "Expense") + '</span></td>'
+    + '<td><strong>' + escapeHtml(entry.businessArea || "General") + '</strong></td>'
+    + '<td class="financial-line-primary"><strong>' + escapeHtml(entry.category || "Uncategorized") + '</strong><span>' + escapeHtml(entry.description || "No description") + '</span>' + (entry.counterparty ? '<small>' + escapeHtml(entry.counterparty) + '</small>' : "") + '</td>'
+    + '<td><strong>' + escapeHtml(entry.sourceLabel || "Manual entry") + '</strong>' + (entry.reference ? '<span>Ref: ' + escapeHtml(entry.reference) + '</span>' : "") + '</td>'
+    + '<td><strong class="financial-amount is-' + (isIncome ? "income" : "expense") + '">' + (isIncome ? "+" : "-") + escapeHtml(payrollMoney(entry.amount || 0)) + '</strong></td>'
+    + '<td>' + actions + '</td>'
+    + '</tr>';
+}
+
+function syncFinancialTransactionFilterControls() {
+  if ($("#financialTransactionSearch")) $("#financialTransactionSearch").value = financialTransactionSearch;
+  if ($("#financialTransactionTypeFilter")) $("#financialTransactionTypeFilter").value = financialTransactionTypeFilter;
+  if ($("#financialTransactionAreaFilter")) $("#financialTransactionAreaFilter").value = financialTransactionAreaFilter;
+  if ($("#financialTransactionSort")) $("#financialTransactionSort").value = financialTransactionSort;
+}
+
+function renderFinancialTransactions(entries = [], range = financialRangeValues()) {
+  syncFinancialTransactionFilterControls();
+  const filtered = financialSortedTransactions(financialFilteredTransactions(entries));
+  const income = filtered.filter((entry) => entry.entryType === "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const expenses = filtered.filter((entry) => entry.entryType !== "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  if ($("#financialTransactionsBody")) $("#financialTransactionsBody").innerHTML = filtered.length ? filtered.map(financialTransactionRowHtml).join("") : '<tr><td colspan="7"><div class="financial-empty-state">No transactions match the selected filters.</div></td></tr>';
+  if ($("#financialTransactionMeta")) $("#financialTransactionMeta").textContent = filtered.length + " of " + entries.length + " transactions | " + financialRangeLabel(range);
+  if ($("#financialTransactionTotals")) $("#financialTransactionTotals").innerHTML = '<span>Income <strong>' + escapeHtml(payrollMoney(income)) + '</strong></span><span>Expenses <strong>' + escapeHtml(payrollMoney(expenses)) + '</strong></span><span>Net <strong class="' + (income - expenses < 0 ? "is-financial-negative" : "") + '">' + escapeHtml(payrollMoney(income - expenses)) + '</strong></span>';
+}
+
+function financialEditableEntry(key = "") {
+  return [...financialDogShowEntries(), ...financialManualEntries()].find((entry) => entry.key === key) || null;
+}
+
+function financialShowEventOptions(selectedId = "") {
+  return '<option value="">Not linked to a show</option>' + readRecords("showEvent")
+    .filter((event) => !event.removed)
+    .sort((left, right) => String(right.startDate || "").localeCompare(String(left.startDate || "")))
+    .map((event) => '<option value="' + escapeHtml(event.id || "") + '"' + (event.id === selectedId ? " selected" : "") + '>' + escapeHtml((event.name || event.club || "Dog Show") + (event.startDate ? " · " + event.startDate : "")) + '</option>')
+    .join("");
+}
+
+function openFinancialTransactionDialog(entry = {}) {
+  if (currentRole() !== "admin") return;
+  const dialog = $("#financialTransactionDialog");
+  const form = $("#financialTransactionForm");
+  if (!dialog || !form) return;
+  form.reset();
+  const sourceIsShow = entry.sourceType === "showEvent";
+  const sourceIsManual = entry.sourceType === "financialTransaction";
+  form.elements.recordId.value = sourceIsManual ? entry.sourceRecordId || "" : "";
+  form.elements.sourceType.value = entry.sourceType || "";
+  form.elements.sourceEventId.value = entry.sourceEventId || "";
+  form.elements.sourceTransactionId.value = entry.sourceTransactionId || "";
+  form.elements.entryType.value = entry.entryType || "income";
+  form.elements.transactionDate.value = entry.date || localDateKey(new Date());
+  form.elements.businessArea.value = sourceIsShow ? "Dog Shows" : entry.businessArea || "General";
+  form.elements.category.value = entry.category || "";
+  form.elements.amount.value = entry.amount || "";
+  form.elements.counterparty.value = entry.counterparty || "";
+  form.elements.paymentMethod.value = entry.paymentMethod || "";
+  form.elements.reference.value = entry.reference || "";
+  form.elements.description.value = entry.description || "";
+  form.elements.notes.value = entry.notes || "";
+  form.elements.showEventId.innerHTML = financialShowEventOptions(entry.sourceEventId || "");
+  form.elements.showEventId.disabled = Boolean(entry.key);
+  const sourceNote = $("#financialTransactionSourceNote");
+  if (sourceNote) {
+    sourceNote.hidden = !entry.key;
+    sourceNote.textContent = sourceIsShow ? "This transaction remains attached to its Dog Show and updates there too." : sourceIsManual ? "This is a manually entered financial transaction." : "";
+  }
+  if ($("#financialTransactionDialogTitle")) $("#financialTransactionDialogTitle").textContent = entry.key ? "Edit Transaction" : "Add Transaction";
+  dialog.showModal();
+}
+
+function closeFinancialTransactionDialog() {
+  $("#financialTransactionDialog")?.close();
+}
+
+async function saveFinancialTransaction(form) {
+  if (currentRole() !== "admin" || !validateForm(form)) return;
+  const data = formPayload(form);
+  const amount = Math.round(Math.max(0, Number(data.amount) || 0) * 100) / 100;
+  if (!amount || !String(data.description || "").trim()) {
+    showToast("Enter a description and an amount greater than $0.");
+    return;
+  }
+  const sourceType = data.sourceType || (data.showEventId ? "showEvent" : "financialTransaction");
+  const now = new Date().toISOString();
+  const common = {
+    entryType: data.entryType === "income" ? "income" : "expense",
+    businessArea: sourceType === "showEvent" ? "Dog Shows" : data.businessArea || "General",
+    category: String(data.category || "").trim(),
+    description: String(data.description || "").trim(),
+    amount,
+    transactionDate: data.transactionDate || localDateKey(new Date()),
+    incurredDate: data.transactionDate || localDateKey(new Date()),
+    counterparty: String(data.counterparty || "").trim(),
+    paymentMethod: String(data.paymentMethod || "").trim(),
+    reference: String(data.reference || "").trim(),
+    notes: String(data.notes || "").trim(),
+    updatedAt: now,
+    updatedBy: currentUser?.name || "Admin",
+    updatedEmail: currentUser?.email || "",
+  };
+  const submitButton = form.querySelector('button[type="submit"]');
+  setSubmitState(submitButton, true, "Saving...");
+  try {
+    if (sourceType === "showEvent") {
+      const eventId = data.sourceEventId || data.showEventId;
+      const event = readRecords("showEvent").find((candidate) => candidate.id === eventId && !candidate.removed);
+      if (!event) throw new Error("Choose an active Dog Show for this transaction.");
+      const existingTransactions = Array.isArray(event.expenses) ? event.expenses : [];
+      const existing = existingTransactions.find((candidate) => candidate.id === data.sourceTransactionId);
+      const transaction = {
+        ...(existing || {}),
+        ...common,
+        id: existing?.id || uid("showExpense"),
+        submittedAt: existing?.submittedAt || now,
+        submittedBy: existing?.submittedBy || currentUser?.name || "Admin",
+        submittedEmail: existing?.submittedEmail || currentUser?.email || "",
+      };
+      const expenses = existing ? existingTransactions.map((candidate) => candidate.id === existing.id ? transaction : candidate) : [...existingTransactions, transaction];
+      const saved = { ...event, type: "showEvent", expenses, updatedAt: now, updatedBy: currentUser?.name || "Admin", updatedEmail: currentUser?.email || "" };
+      await sendPayload(saved);
+      upsertRecord("showEvent", saved);
+      addAuditLog(existing ? "Updated Dog Show transaction" : "Added Dog Show transaction", "showEvent", event, common.description + " · " + money(amount)).catch((error) => console.warn("Financial audit log failed.", error));
+    } else {
+      const existing = data.recordId ? readRecords("financialTransaction").find((candidate) => candidate.id === data.recordId) || {} : {};
+      const record = {
+        ...existing,
+        ...common,
+        type: "financialTransaction",
+        id: existing.id || uid("financialTransaction"),
+        submittedAt: existing.submittedAt || now,
+        submittedBy: existing.submittedBy || currentUser?.name || "Admin",
+        submittedEmail: existing.submittedEmail || currentUser?.email || "",
+        removed: false,
+      };
+      await sendPayload(record);
+      upsertRecord("financialTransaction", record);
+      addAuditLog(existing.id ? "Updated financial transaction" : "Added financial transaction", "financialTransaction", record, common.description + " · " + money(amount)).catch((error) => console.warn("Financial audit log failed.", error));
+    }
+    closeFinancialTransactionDialog();
+    renderFinancials();
+    if (typeof renderDogShow === "function") renderDogShow();
+    showToast("Transaction saved.");
+  } catch (error) {
+    showToast(error?.message || "Transaction could not be saved.");
+  } finally {
+    setSubmitState(submitButton, false);
+  }
+}
+
+async function deleteFinancialTransaction(entry = {}) {
+  if (!entry?.editable || !window.confirm("Delete " + (entry.description || "this transaction") + "?")) return;
+  try {
+    if (entry.sourceType === "showEvent") {
+      const event = readRecords("showEvent").find((candidate) => candidate.id === entry.sourceEventId && !candidate.removed);
+      if (!event) throw new Error("The related Dog Show could not be found.");
+      const saved = { ...event, type: "showEvent", expenses: (Array.isArray(event.expenses) ? event.expenses : []).filter((candidate) => candidate.id !== entry.sourceTransactionId), updatedAt: new Date().toISOString(), updatedBy: currentUser?.name || "Admin", updatedEmail: currentUser?.email || "" };
+      await sendPayload(saved);
+      upsertRecord("showEvent", saved);
+      addAuditLog("Deleted Dog Show transaction", "showEvent", event, entry.description + " · " + money(entry.amount)).catch((error) => console.warn("Financial audit log failed.", error));
+    } else {
+      const existing = readRecords("financialTransaction").find((candidate) => candidate.id === entry.sourceRecordId);
+      if (!existing) throw new Error("The transaction could not be found.");
+      const removed = { ...existing, type: "financialTransaction", removed: true, removedAt: new Date().toISOString(), removedBy: currentUser?.email || "", updatedAt: new Date().toISOString() };
+      await sendPayload(removed);
+      upsertRecord("financialTransaction", removed);
+      addAuditLog("Deleted financial transaction", "financialTransaction", removed, entry.description + " · " + money(entry.amount)).catch((error) => console.warn("Financial audit log failed.", error));
+    }
+    renderFinancials();
+    if (typeof renderDogShow === "function") renderDogShow();
+    showToast("Transaction deleted.");
+  } catch (error) {
+    showToast(error?.message || "Transaction could not be deleted.");
+  }
+}
+
 function renderFinancials() {
   const cardsEl = $("#financialCards");
   if (!cardsEl) return;
@@ -1676,31 +1973,39 @@ function renderFinancials() {
   const range = financialRangeValues();
   const entries = financialIncomeEntries().filter((entry) => entry.date >= range.start && entry.date <= range.end);
   const payrollSummary = staffPayrollSummaryForRange(range, { includeAll: true });
-  const buckets = financialBuildBuckets(entries, range, period, payrollSummary.entries);
-  const total = entries.reduce((sum, entry) => sum + Number(entry.total || 0), 0);
-  const boarding = entries.reduce((sum, entry) => sum + Number(entry.boarding || 0), 0);
-  const services = entries.reduce((sum, entry) => sum + Number(entry.services || 0), 0);
-  const payroll = payrollSummary.totalPayroll;
-  const net = total - payroll;
-  const payrollPercent = total > 0 ? Math.round((payroll / total) * 100) + "%" : "0%";
-  const peakBucket = buckets.reduce((best, bucket) => bucket.total > (best?.total || 0) ? bucket : best, null);
+  const ledger = financialLedgerEntries(entries, payrollSummary.entries).filter((entry) => entry.date >= range.start && entry.date <= range.end);
+  const buckets = financialBuildBuckets(ledger, range, period);
+  const totalIncome = ledger.filter((entry) => entry.entryType === "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const totalExpenses = ledger.filter((entry) => entry.entryType !== "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const areaAmount = (area, entryType) => ledger.filter((entry) => entry.businessArea === area && (!entryType || entry.entryType === entryType)).reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const boarding = areaAmount("Boarding", "income");
+  const services = areaAmount("Services", "income");
+  const payroll = areaAmount("Payroll", "expense");
+  const dogShowIncome = areaAmount("Dog Shows", "income");
+  const dogShowExpenses = areaAmount("Dog Shows", "expense");
+  const manualIncome = ledger.filter((entry) => entry.sourceType === "financialTransaction" && entry.entryType === "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const manualExpenses = ledger.filter((entry) => entry.sourceType === "financialTransaction" && entry.entryType !== "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const net = totalIncome - totalExpenses;
+  const peakBucket = buckets.reduce((best, bucket) => bucket.income > (best?.income || 0) ? bucket : best, null);
   cardsEl.innerHTML = [
-    financialSummaryCardHtml("Total income", money(total), financialRangeLabel(range)),
-    financialSummaryCardHtml("Boarding income", money(boarding), "Overnight stays and boarding programs."),
-    financialSummaryCardHtml("Services income", money(services), "Stay add-ons and service-only requests."),
+    financialSummaryCardHtml("Total income", payrollMoney(totalIncome), financialRangeLabel(range)),
+    financialSummaryCardHtml("Total expenses", payrollMoney(totalExpenses), "Payroll, Dog Shows, and entered expenses."),
+    financialSummaryCardHtml("Net income", payrollMoney(net), "All income minus all expenses."),
+    financialSummaryCardHtml("Boarding income", payrollMoney(boarding), "Overnight stays and boarding programs."),
+    financialSummaryCardHtml("Services income", payrollMoney(services), "Stay add-ons and service-only requests."),
     financialSummaryCardHtml("Payroll expense", payrollMoney(payroll), payrollSummary.totalHours.toFixed(2) + " completed clock hours."),
-    financialSummaryCardHtml("Net after payroll", payrollMoney(net), "Income minus estimated payroll."),
-    financialSummaryCardHtml("Payroll %", payrollPercent, payrollSummary.missingRateCount ? payrollSummary.missingRateCount + " staff rate" + (payrollSummary.missingRateCount === 1 ? "" : "s") + " missing." : "Payroll divided by income."),
-    financialSummaryCardHtml("Stays counted", String(entries.reduce((sum, entry) => sum + Number(entry.count || 1), 0)), "Cancelled stays are excluded."),
-    financialSummaryCardHtml("Peak " + period.replace("ly", ""), peakBucket ? money(peakBucket.total) : money(0), peakBucket ? peakBucket.label : "No income yet."),
+    financialSummaryCardHtml("Dog Shows net", payrollMoney(dogShowIncome - dogShowExpenses), payrollMoney(dogShowIncome) + " income · " + payrollMoney(dogShowExpenses) + " expenses."),
+    financialSummaryCardHtml("Entered transactions", payrollMoney(manualIncome - manualExpenses), payrollMoney(manualIncome) + " income · " + payrollMoney(manualExpenses) + " expenses."),
+    financialSummaryCardHtml("Peak " + period.replace("ly", ""), peakBucket ? payrollMoney(peakBucket.income) : payrollMoney(0), peakBucket ? peakBucket.label : "No income yet."),
   ].join("");
-  if ($("#financialChartTitle")) $("#financialChartTitle").textContent = period.charAt(0).toUpperCase() + period.slice(1) + " income and payroll trend";
-  if ($("#financialChartMeta")) $("#financialChartMeta").textContent = financialRangeLabel(range) + " | " + entries.length + " booking group" + (entries.length === 1 ? "" : "s") + " | " + payrollSummary.entries.length + " payroll record" + (payrollSummary.entries.length === 1 ? "" : "s");
+  if ($("#financialChartTitle")) $("#financialChartTitle").textContent = period.charAt(0).toUpperCase() + period.slice(1) + " income, expenses, and net";
+  if ($("#financialChartMeta")) $("#financialChartMeta").textContent = financialRangeLabel(range) + " | " + ledger.length + " unified transaction" + (ledger.length === 1 ? "" : "s");
   if (chartEl) {
     chartEl.innerHTML = financialIncomeChartSvg(buckets);
-    chartEl.setAttribute("aria-label", period + " income trend from " + range.start + " to " + range.end);
+    chartEl.setAttribute("aria-label", period + " income, expenses, and net from " + range.start + " to " + range.end);
   }
   if (breakdownEl) breakdownEl.innerHTML = financialBreakdownHtml(buckets);
+  renderFinancialTransactions(ledger, range);
   renderFinancialLineItems(entries, range);
 }
 

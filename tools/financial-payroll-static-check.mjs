@@ -6,10 +6,10 @@ const main = fs.readFileSync("js/main.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 const failures = [];
 
-if (!shared.includes('financialsPage: ["boardingDog", "service", "timesheet"]')) {
+if (!shared.includes('financialsPage: ["boardingDog", "service", "timesheet", "showEvent", "financialTransaction"]')) {
   failures.push("Financials does not load completed timesheet records.");
 }
-if (!shared.includes('activePage === "financialsPage" && hasAny(["boardingDog", "service", "timesheet", "settingsUser"])')) {
+if (!shared.includes('activePage === "financialsPage" && hasAny(["boardingDog", "service", "timesheet", "settingsUser", "showEvent", "financialTransaction"])')) {
   failures.push("Financials does not refresh when hours or hourly rates change.");
 }
 if (!timesheet.includes('Number(record.hours || 0) > 0 && record.clockOutTime')) {

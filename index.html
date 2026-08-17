@@ -17,7 +17,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-optional-acknowledgements-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v3-compiled-finance-reports-v4-dog-attributable-costs-v5-customer-finance-reports-upcoming-status-ux-v6-dog-profile-registration-akc-breeds-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-timesheet-payroll-review-v26-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-dog-show-invoice-period-payment-v40-invoice-center-management-v42-danger-actions-v43-notification-health-v30" />
+    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-optional-acknowledgements-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v3-compiled-finance-reports-v4-dog-attributable-costs-v5-customer-finance-reports-upcoming-status-ux-v6-dog-profile-registration-akc-breeds-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-timesheet-payroll-review-v26-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-dog-show-invoice-period-payment-v40-invoice-center-management-v42-danger-actions-v43-notification-health-v30-unified-financial-ledger-v31" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -1455,10 +1455,11 @@
 
       <section class="page-view" id="financialsPage">
         <section class="form-section financial-overview-section">
-          <div class="section-heading"><span>F</span><div><h2>Financials</h2><p>Boarding, services, and payroll overview from saved stays and clock records.</p></div></div>
+          <div class="section-heading financial-section-heading"><span>F</span><div><h2>Financials</h2><p>One ledger for boarding, services, payroll, Dog Shows, and all other business income and expenses.</p></div><button type="button" id="newFinancialTransactionButton">Add Transaction</button></div>
           <div class="financial-view-tabs" id="financialViewTabs" role="tablist" aria-label="Financial sections">
             <button type="button" class="is-active" data-financial-view="overview" role="tab" aria-selected="true">Overview</button>
-            <button type="button" data-financial-view="lineItems" role="tab" aria-selected="false">Line items</button>
+            <button type="button" data-financial-view="transactions" role="tab" aria-selected="false">Transactions</button>
+            <button type="button" data-financial-view="lineItems" role="tab" aria-selected="false">Boarding details</button>
           </div>
           <div class="financial-toolbar">
             <div class="segmented-control financial-period-control" id="financialPeriodControl" role="group" aria-label="Financial view">
@@ -1476,19 +1477,60 @@
             <section class="financial-chart-panel" aria-labelledby="financialChartTitle">
               <div class="financial-chart-heading">
                 <div>
-                  <h3 id="financialChartTitle">Income trend</h3>
-                  <p id="financialChartMeta">Boarding and services grouped by selected view.</p>
+                  <h3 id="financialChartTitle">Income, expenses, and net</h3>
+                  <p id="financialChartMeta">All financial activity grouped by selected view.</p>
                 </div>
                 <div class="financial-chart-legend" aria-label="Chart legend">
-                  <span><i class="is-total"></i>Total</span>
-                  <span><i class="is-boarding"></i>Boarding</span>
-                  <span><i class="is-service"></i>Services</span>
-                  <span><i class="is-payroll"></i>Payroll</span>
+                  <span><i class="is-income"></i>Income</span>
+                  <span><i class="is-expense"></i>Expenses</span>
+                  <span><i class="is-net"></i>Net</span>
                 </div>
               </div>
               <div class="financial-income-chart" id="financialIncomeChart" role="img" aria-label="Income trend line chart"></div>
             </section>
             <div class="financial-breakdown-grid" id="financialBreakdown"></div>
+          </div>
+          <div class="financial-panel" data-financial-panel="transactions" hidden>
+            <div class="financial-line-items-header">
+              <div>
+                <h3>Unified transactions</h3>
+                <p id="financialTransactionMeta">Income and expenses from every part of the business.</p>
+              </div>
+              <div class="financial-transaction-totals" id="financialTransactionTotals"></div>
+            </div>
+            <div class="financial-line-items-filters financial-transaction-filters">
+              <input type="search" id="financialTransactionSearch" placeholder="Search description, category, area, show, customer, or staff" />
+              <label>Type<select id="financialTransactionTypeFilter">
+                <option value="all">Income &amp; expenses</option>
+                <option value="income">Income only</option>
+                <option value="expense">Expenses only</option>
+              </select></label>
+              <label>Area<select id="financialTransactionAreaFilter">
+                <option value="all">All business areas</option>
+                <option value="Boarding">Boarding</option>
+                <option value="Services">Services</option>
+                <option value="Dog Shows">Dog Shows</option>
+                <option value="Payroll">Payroll</option>
+                <option value="General">General</option>
+                <option value="Kennel Operations">Kennel Operations</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Travel">Travel</option>
+                <option value="Veterinary">Veterinary</option>
+                <option value="Other">Other</option>
+              </select></label>
+              <label>Sort<select id="financialTransactionSort">
+                <option value="date-desc">Newest first</option>
+                <option value="date-asc">Oldest first</option>
+                <option value="amount-desc">Highest amount</option>
+              </select></label>
+              <button type="button" class="secondary-button" id="financialTransactionResetButton">Reset filters</button>
+            </div>
+            <div class="table-wrap financial-line-items-table-wrap">
+              <table class="data-table financial-transactions-table">
+                <thead><tr><th>Date</th><th>Type</th><th>Business area</th><th>Category / description</th><th>Source</th><th>Amount</th><th>Actions</th></tr></thead>
+                <tbody id="financialTransactionsBody"></tbody>
+              </table>
+            </div>
           </div>
           <div class="financial-panel" data-financial-panel="lineItems" hidden>
             <div class="financial-line-items-header">
@@ -1750,6 +1792,37 @@
       </div>
       <div id="dogShowDialogBody" class="detail-dialog-body"></div>
     </dialog>
+    <dialog id="financialTransactionDialog" class="detail-dialog financial-transaction-dialog">
+      <div class="dialog-header">
+        <h2 id="financialTransactionDialogTitle">Add Transaction</h2>
+        <button type="button" class="secondary-button" id="closeFinancialTransactionDialogButton">Close</button>
+      </div>
+      <form id="financialTransactionForm" class="tracker-form">
+        <input type="hidden" name="recordId" />
+        <input type="hidden" name="sourceType" />
+        <input type="hidden" name="sourceEventId" />
+        <input type="hidden" name="sourceTransactionId" />
+        <div class="field-grid">
+          <label>Type<select name="entryType" required><option value="income">Income</option><option value="expense">Expense</option></select></label>
+          <label>Date<input type="date" name="transactionDate" required /></label>
+          <label>Business area<select name="businessArea" required>
+            <option>General</option><option>Boarding</option><option>Services</option><option>Dog Shows</option><option>Payroll</option><option>Kennel Operations</option><option>Marketing</option><option>Travel</option><option>Veterinary</option><option>Other</option>
+          </select></label>
+          <label>Category<input name="category" list="financialTransactionCategoryOptions" required placeholder="Choose or enter a category" /><datalist id="financialTransactionCategoryOptions">
+            <option value="Boarding adjustment"></option><option value="Service income"></option><option value="Prize money"></option><option value="Reimbursement"></option><option value="Product sale"></option><option value="Payroll adjustment"></option><option value="Entry fees"></option><option value="Kennel supplies"></option><option value="Repairs & maintenance"></option><option value="Veterinary"></option><option value="Travel"></option><option value="Marketing"></option><option value="Utilities"></option><option value="Insurance"></option><option value="Taxes & fees"></option><option value="Refund"></option><option value="Other income"></option><option value="Other expense"></option>
+          </datalist></label>
+          <label>Amount<input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" required /></label>
+          <label>Related Dog Show (optional)<select name="showEventId"><option value="">Not linked to a show</option></select></label>
+          <label>Paid by / received from<input name="counterparty" placeholder="Customer, vendor, employee, or organization" /></label>
+          <label>Payment method<input name="paymentMethod" placeholder="Cash, card, ACH, check, etc." /></label>
+          <label>Reference<input name="reference" placeholder="Receipt, invoice, or confirmation number" /></label>
+        </div>
+        <label>Description<input name="description" required placeholder="What was this transaction for?" /></label>
+        <label>Notes<textarea name="notes" rows="3" placeholder="Optional internal details"></textarea></label>
+        <p class="financial-source-lock-note" id="financialTransactionSourceNote" hidden></p>
+        <div class="button-row"><button type="submit">Save Transaction</button><button type="button" class="secondary-button" id="cancelFinancialTransactionButton">Cancel</button></div>
+      </form>
+    </dialog>
     <dialog id="bookingConfirmDialog" class="detail-dialog">
       <div class="dialog-header">
         <h2>Confirm Boarding Request</h2>
@@ -1761,6 +1834,6 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-optional-acknowledgements-customer-agreement-records-dual-email-show-wide-expense-split-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v6-compiled-finance-reports-v7-dog-attributable-costs-v8-customer-finance-reports-upcoming-status-ux-v9-dog-profile-registration-akc-breeds-net-dog-credits-v10-collapsible-ledgers-dog-reports-v11-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-customer-request-history-detach-v23-boarding-request-notification-rls-v25-timesheet-payroll-review-v28-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-boarding-detached-profile-v34-customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36d-dog-show-lifecycle-owner-update-photo-invoice-v39-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-daily-care-log-staff-date-v44-boarding-request-alert-reliability-v26-boarding-family-alert-approval-v27-boarding-group-status-v28-boarding-transition-revision-v29-transaction-security-v30"></script>
+    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-optional-acknowledgements-customer-agreement-records-dual-email-show-wide-expense-split-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v6-compiled-finance-reports-v7-dog-attributable-costs-v8-customer-finance-reports-upcoming-status-ux-v9-dog-profile-registration-akc-breeds-net-dog-credits-v10-collapsible-ledgers-dog-reports-v11-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-customer-request-history-detach-v23-boarding-request-notification-rls-v25-timesheet-payroll-review-v28-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-boarding-detached-profile-v34-customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36d-dog-show-lifecycle-owner-update-photo-invoice-v39-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-daily-care-log-staff-date-v44-boarding-request-alert-reliability-v26-boarding-family-alert-approval-v27-boarding-group-status-v28-boarding-transition-revision-v29-transaction-security-v30-unified-financial-ledger-v31"></script>
 </body>
 </html>

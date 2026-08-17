@@ -21551,14 +21551,27 @@ button.dog-show-planner-score:focus-visible {
   gap: 18px;
 }
 
+.financial-section-heading {
+  align-items: center;
+}
+
+.financial-section-heading > div {
+  flex: 1;
+}
+
+.financial-section-heading > button {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 .financial-view-tabs {
   background: rgba(15, 42, 67, 0.08);
   border: 1px solid var(--glass-border);
   border-radius: 50px;
   display: grid;
   gap: 4px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-width: 420px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 620px;
   padding: 4px;
 }
 
@@ -21719,40 +21732,31 @@ button.dog-show-planner-score:focus-visible {
   width: 22px;
 }
 
-.financial-chart-legend .is-total,
-.financial-income-chart .chart-line.is-total {
+.financial-chart-legend .is-income,
+.financial-income-chart .chart-line.is-income {
   stroke: #1B7CE8;
 }
 
-.financial-chart-legend .is-boarding,
-.financial-income-chart .chart-line.is-boarding {
-  stroke: #D89A2B;
-}
-
-.financial-chart-legend .is-service,
-.financial-income-chart .chart-line.is-service {
-  stroke: #1A9F63;
-}
-
-.financial-chart-legend .is-payroll,
-.financial-income-chart .chart-line.is-payroll {
+.financial-chart-legend .is-expense,
+.financial-income-chart .chart-line.is-expense {
   stroke: #E05252;
 }
 
-.financial-chart-legend .is-total {
+.financial-chart-legend .is-net,
+.financial-income-chart .chart-line.is-net {
+  stroke: #1A9F63;
+}
+
+.financial-chart-legend .is-income {
   background: #1B7CE8;
 }
 
-.financial-chart-legend .is-boarding {
-  background: #D89A2B;
-}
-
-.financial-chart-legend .is-service {
-  background: #1A9F63;
-}
-
-.financial-chart-legend .is-payroll {
+.financial-chart-legend .is-expense {
   background: #E05252;
+}
+
+.financial-chart-legend .is-net {
+  background: #1A9F63;
 }
 
 .financial-income-chart {
@@ -21788,9 +21792,8 @@ button.dog-show-planner-score:focus-visible {
   stroke-width: 4;
 }
 
-.financial-income-chart .chart-line.is-boarding,
-.financial-income-chart .chart-line.is-service,
-.financial-income-chart .chart-line.is-payroll {
+.financial-income-chart .chart-line.is-expense,
+.financial-income-chart .chart-line.is-net {
   stroke-width: 3;
 }
 
@@ -21935,6 +21938,100 @@ button.dog-show-planner-score:focus-visible {
   min-height: 120px;
 }
 
+.financial-transactions-table {
+  min-width: 1040px;
+}
+
+.financial-transactions-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.financial-transactions-table td {
+  vertical-align: top;
+}
+
+.financial-transactions-table .record-actions {
+  flex-wrap: nowrap;
+}
+
+.financial-transactions-table .record-actions button {
+  min-height: 34px;
+  padding: 7px 11px;
+}
+
+.financial-transaction-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  justify-content: flex-end;
+}
+
+.financial-transaction-totals span {
+  color: var(--muted);
+  display: grid;
+  font-size: 0.78rem;
+  font-weight: 800;
+  gap: 2px;
+  letter-spacing: 0.04em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.financial-transaction-totals strong {
+  color: var(--ink);
+  font-size: 1.25rem;
+  letter-spacing: 0;
+}
+
+.financial-type-chip,
+.financial-calculated-label {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 900;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+
+.financial-type-chip.is-income {
+  background: rgba(26, 159, 99, 0.12);
+  color: #117748;
+}
+
+.financial-type-chip.is-expense {
+  background: rgba(224, 82, 82, 0.12);
+  color: #B12F2F;
+}
+
+.financial-calculated-label {
+  background: rgba(49, 95, 133, 0.11);
+  color: var(--muted);
+}
+
+.financial-amount.is-income {
+  color: #117748;
+}
+
+.financial-amount.is-expense,
+.is-financial-negative {
+  color: #B12F2F !important;
+}
+
+.financial-source-lock-note {
+  background: rgba(49, 95, 133, 0.09);
+  border: 1px solid rgba(49, 95, 133, 0.2);
+  border-radius: 9px;
+  color: var(--muted);
+  margin: 0;
+  padding: 11px 13px;
+}
+
+.financial-transaction-dialog {
+  max-width: 860px;
+}
+
 :root[data-theme="dark"] .financial-view-tabs {
   background: rgba(2, 15, 27, 0.7);
 }
@@ -22006,6 +22103,24 @@ button.dog-show-planner-score:focus-visible {
 
   .financial-line-items-header {
     display: grid;
+  }
+
+  .financial-section-heading {
+    align-items: start;
+    display: grid;
+  }
+
+  .financial-section-heading > button {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .financial-transaction-totals {
+    justify-content: flex-start;
+  }
+
+  .financial-transaction-totals span {
+    text-align: left;
   }
 }
 

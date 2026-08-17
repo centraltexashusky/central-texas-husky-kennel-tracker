@@ -519,6 +519,7 @@ var stateKeys = {
   showCareLog: "cth-showCareLog-records",
   showResult: "cth-showResult-records",
   showInvoice: "cth-showInvoice-records",
+  financialTransaction: "cth-financialTransaction-records",
   customerDog: "cth-customerDog-records",
   dog: "cth-dog-records",
   userDogAccess: "cth-userDogAccess-records",
@@ -1676,7 +1677,7 @@ function initSupabaseClient() {
 
 function recordTypes() {
   return [
-    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "showInvoice", "customerDog",
+    "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "showInvoice", "financialTransaction", "customerDog",
     "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink", "boardingAgreement",
     "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
   ];
@@ -1704,7 +1705,7 @@ function remoteRecordTypesForPage(pageId = "") {
     maintenancePage: ["maintenance"],
     timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
     servicesPage: ["service"],
-    financialsPage: ["boardingDog", "service", "timesheet"],
+    financialsPage: ["boardingDog", "service", "timesheet", "showEvent", "financialTransaction"],
     settingsUsersPage: ["settingsUser", "boardingAgreement", "boardingDog"],
     settingsKennelLocationsPage: ["kennelLocation", "kennelBuilding"],
     settingsHoursPage: ["operationHours", "operationDateOverride"],
@@ -5076,7 +5077,7 @@ function renderAfterRealtimeTypes(types = []) {
     updateTimeDisplays();
   }
   if (activePage === "servicesPage" && typeSet.has("service")) renderServices();
-  if (activePage === "financialsPage" && hasAny(["boardingDog", "service", "timesheet", "settingsUser"])) {
+  if (activePage === "financialsPage" && hasAny(["boardingDog", "service", "timesheet", "settingsUser", "showEvent", "financialTransaction"])) {
     renderFinancials();
   }
   if (activePage === "settingsUsersPage" && hasAny(["settingsUser", "boardingAgreement", "boardingDog"])) renderSettingsUsers();
@@ -14997,6 +14998,44 @@ function initEvents() {
     financialIncomeFilter = "all";
     financialLineItemSort = "date-desc";
     renderFinancials();
+  });
+  $("#newFinancialTransactionButton")?.addEventListener("click", () => openFinancialTransactionDialog());
+  $("#closeFinancialTransactionDialogButton")?.addEventListener("click", closeFinancialTransactionDialog);
+  $("#cancelFinancialTransactionButton")?.addEventListener("click", closeFinancialTransactionDialog);
+  $("#financialTransactionForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await saveFinancialTransaction(event.currentTarget);
+  });
+  $("#financialTransactionSearch")?.addEventListener("input", (event) => {
+    financialTransactionSearch = event.currentTarget.value || "";
+    renderFinancials();
+  });
+  $("#financialTransactionTypeFilter")?.addEventListener("change", (event) => {
+    financialTransactionTypeFilter = event.currentTarget.value || "all";
+    renderFinancials();
+  });
+  $("#financialTransactionAreaFilter")?.addEventListener("change", (event) => {
+    financialTransactionAreaFilter = event.currentTarget.value || "all";
+    renderFinancials();
+  });
+  $("#financialTransactionSort")?.addEventListener("change", (event) => {
+    financialTransactionSort = event.currentTarget.value || "date-desc";
+    renderFinancials();
+  });
+  $("#financialTransactionResetButton")?.addEventListener("click", () => {
+    financialTransactionSearch = "";
+    financialTransactionTypeFilter = "all";
+    financialTransactionAreaFilter = "all";
+    financialTransactionSort = "date-desc";
+    renderFinancials();
+  });
+  $("#financialTransactionsBody")?.addEventListener("click", async (event) => {
+    const action = event.target.closest("[data-action]");
+    if (!action) return;
+    const entry = financialEditableEntry(action.dataset.key || "");
+    if (!entry) return;
+    if (action.dataset.action === "edit-financial-transaction") openFinancialTransactionDialog(entry);
+    if (action.dataset.action === "delete-financial-transaction") await deleteFinancialTransaction(entry);
   });
 
   $("#settingsUserForm")?.addEventListener("submit", async (event) => {
