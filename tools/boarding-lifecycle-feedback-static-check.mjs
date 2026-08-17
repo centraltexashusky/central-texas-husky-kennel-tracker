@@ -7,6 +7,23 @@ const main = fs.readFileSync("js/main.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 const failures = [];
 
+const dateOnlySource = shared.match(/function dateOnly\([\s\S]*?\n\}/)?.[0] || "";
+const formatDateOnlySource = shared.match(/function formatDateOnly\([\s\S]*?\n\}/)?.[0] || "";
+if (!formatDateOnlySource || !formatDateOnlySource.includes("dateOnly(value)")) {
+  failures.push("The boarding preflight date formatter is missing or bypasses the date-only parser.");
+} else {
+  try {
+    const localDateKey = (value) => String(value || "").slice(0, 10);
+    const executableFormatDateOnlySource = formatDateOnlySource.replaceAll("\\`", "`").replaceAll("\\${", "${");
+    const formatDateOnly = new Function("localDateKey", `${dateOnlySource}; ${executableFormatDateOnlySource}; return formatDateOnly;`)(localDateKey);
+    if (formatDateOnly("2026-08-23") !== "Aug 23, 2026") {
+      failures.push("The boarding preflight date formatter changes calendar dates across time zones.");
+    }
+  } catch (error) {
+    failures.push(`The boarding preflight date formatter could not run: ${error.message}`);
+  }
+}
+
 const toastSource = shared.match(/function showToast[\s\S]*?\n\}/)?.[0] || "";
 if (!shared.includes("function activePopupFeedbackHost") || !toastSource.includes("showPopupFeedback(message)")) {
   failures.push("Global feedback is not mirrored inside the active popup.");
@@ -124,6 +141,9 @@ if (!main.includes("boarding-detached-profile-v34") || !index.includes("boarding
 }
 if (!main.includes("boarding-stay-revision-v37") || !index.includes("boarding-stay-revision-v37")) {
   failures.push("The boarding stay row-revision fix is not cache-busted.");
+}
+if (!main.includes("boarding-checkin-preflight-v38") || !index.includes("boarding-checkin-preflight-v38")) {
+  failures.push("The boarding check-in preflight runtime fix is not cache-busted.");
 }
 if (!main.includes("maintenance-alert-detail-active-request-lock-v36") || !index.includes("maintenance-alert-detail-active-request-lock-v36")) {
   failures.push("The maintenance alert and active-stay request lock fix is not cache-busted.");

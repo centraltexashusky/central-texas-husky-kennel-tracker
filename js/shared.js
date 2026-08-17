@@ -669,6 +669,18 @@ function dateOnly(value) {
   return localDateKey(value);
 }
 
+function formatDateOnly(value) {
+  const cleanDate = dateOnly(value);
+  if (!cleanDate) return "";
+  const parsed = new Date(\`\${cleanDate}T12:00:00\`);
+  if (Number.isNaN(parsed.getTime())) return cleanDate;
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function dateOnlyTime(value) {
   const date = dateOnly(value);
   return date ? new Date(\`\${date}T12:00:00\`).getTime() : 0;
