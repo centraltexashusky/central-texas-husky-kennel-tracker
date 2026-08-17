@@ -103,7 +103,9 @@ try {
 const staySaveSource = boarding.match(/async function saveBoardingStayFromForm[\s\S]*?\n\}/)?.[0] || "";
 const stayRemoteIndex = staySaveSource.indexOf("await sendPayload(candidate)");
 const stayLocalIndex = staySaveSource.indexOf('upsertRecord("boardingDog", candidate)');
-if (!staySaveSource.includes("boardingDogForPersistence") || !(stayRemoteIndex >= 0 && stayLocalIndex > stayRemoteIndex)) {
+if (!staySaveSource.includes("boardingDogForPersistence")
+  || !staySaveSource.includes("stays, updatedAt: timestamp")
+  || !(stayRemoteIndex >= 0 && stayLocalIndex > stayRemoteIndex)) {
   failures.push("Boarding stay edits can still save a merged display record or change local state before remote persistence succeeds.");
 }
 if (!boarding.includes("if (syncedRecords.length) await sendPayloadBatch(syncedRecords)")) {
@@ -119,6 +121,9 @@ for (const [label, source] of [["shared module", main], ["boarding module", main
 }
 if (!main.includes("boarding-detached-profile-v34") || !index.includes("boarding-detached-profile-v34")) {
   failures.push("The detached boarding-profile persistence fix is not cache-busted.");
+}
+if (!main.includes("boarding-stay-revision-v37") || !index.includes("boarding-stay-revision-v37")) {
+  failures.push("The boarding stay row-revision fix is not cache-busted.");
 }
 if (!main.includes("maintenance-alert-detail-active-request-lock-v36") || !index.includes("maintenance-alert-detail-active-request-lock-v36")) {
   failures.push("The maintenance alert and active-stay request lock fix is not cache-busted.");
