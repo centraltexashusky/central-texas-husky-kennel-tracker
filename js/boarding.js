@@ -4813,7 +4813,7 @@ function queueBoardingStatusFollowUps(updated = {}, options = {}) {
 async function saveBoardingStatusTransition(record = {}, nextStatus = "", options = {}) {
   if (nextStatus === "Checked In") {
     const targetStay = options.stayId ? boardingStayByReference(record, options) || {} : boardingPrimaryStay(record) || {};
-    if (!requireBoardingApprovalPreflight(record, targetStay)) return null;
+    if (!requireBoardingApprovalPreflight(record, targetStay, { nextStatus, options })) return null;
   }
   if (nextStatus === "Checked In" && !options.checkInSubmitted) {
     openBoardingCheckInPopup(record, nextStatus, options);
@@ -6261,7 +6261,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   const options = typeof reference === "object" ? { ...reference, stayId: reference.stayId || stayId } : { stayId };
   if (!record?.id || !options.stayId || !boardingLifecycleStatuses.includes(nextStatus)) return null;
   const targetStay = boardingStayByReference(record, options);
-  if (nextStatus === "Checked In" && !requireBoardingApprovalPreflight(record, targetStay || {})) return null;
+  if (nextStatus === "Checked In" && !requireBoardingApprovalPreflight(record, targetStay || {}, { nextStatus, options })) return null;
   if (shouldPromptBoardingDecline(record, nextStatus, options)) {
     openBoardingDeclineRequestPopup(record, nextStatus, options);
     return null;
@@ -6311,12 +6311,127 @@ function boardingApprovalPreflightIssues(record = {}, stay = {}) {
   return issues;
 }
 
-function requireBoardingApprovalPreflight(record = {}, stay = {}) {
+function boardingRequirementOverrideMatches(record = {}, stay = {}, nextStatus = "", override = {}) {
+  if (!isStaffRole() || !override?.id) return false;
+  if (String(override.recordId || "") !== String(record.id || "")) return false;
+  if (String(override.intendedStatus || "") !== String(nextStatus || "Approved")) return false;
+  const stayId = String(stay.id || "");
+  const requestCode = String(boardingStayRequestCode(record, stay) || "");
+  return Boolean(
+    (stayId && String(override.stayId || "") === stayId)
+    || (requestCode && String(override.requestCode || "") === requestCode)
+  );
+}
+
+function boardingRequirementOverrideFormHtml(record = {}, stay = {}, nextStatus = "Approved", issues = []) {
+  return \`<form id="boardingRequirementOverrideForm" class="tracker-form" data-id="\${escapeHtml(record.id || "")}" data-stay-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(boardingStayRequestCode(record, stay) || "")}" data-next-status="\${escapeHtml(nextStatus)}">
+    <p><strong>Staff safety override</strong></p>
+    <p>This exception will be attached to this stay and written to the Audit Log with your staff identity.</p>
+    <ul class="compact-reason-list">\${issues.map((issue) => \`<li>\${escapeHtml(issue)}</li>\`).join("")}</ul>
+    <label>Override reason<textarea name="reason" rows="4" minlength="10" maxlength="500" required placeholder="Explain why this dog may proceed without the listed requirements."></textarea></label>
+    <label class="checkbox-row"><input type="checkbox" name="confirmed" value="Yes" required /> I reviewed the available records and accept responsibility for this exception.</label>
+    <div class="button-row"><button type="submit">Save Override & Continue</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+  </form>\`;
+}
+
+function openBoardingRequirementOverride(record = {}, stay = {}, nextStatus = "Approved") {
+  if (!isStaffRole()) {
+    showToast("Staff access is required to override boarding requirements.");
+    return;
+  }
+  const issues = boardingApprovalPreflightIssues(record, stay);
+  if (!issues.length) {
+    showToast("This stay no longer needs an override.");
+    return;
+  }
+  showDetailDialog("Override Boarding Requirements", boardingRequirementOverrideFormHtml(record, stay, nextStatus, issues));
+}
+
+async function persistBoardingRequirementOverride(record = {}, stay = {}, nextStatus = "Approved", reason = "") {
+  if (!isStaffRole()) throw new Error("Staff access is required to override boarding requirements.");
+  const cleanReason = String(reason || "").trim();
+  if (cleanReason.length < 10) throw new Error("Enter an override reason with at least 10 characters.");
+  const issues = boardingApprovalPreflightIssues(record, stay);
+  if (!issues.length) throw new Error("This stay no longer needs an override.");
+  if (!supabaseClient || localTestMode) {
+    const timestamp = new Date().toISOString();
+    const requirementsOverride = {
+      id: uid("boardingOverride"),
+      recordId: record.id || "",
+      stayId: stay.id || "",
+      requestCode: boardingStayRequestCode(record, stay),
+      intendedStatus: nextStatus,
+      reason: cleanReason,
+      issues,
+      actorName: currentUser?.name || helperName?.value || "Staff",
+      actorEmail: currentUser?.email || helperEmail?.value || "",
+      actorRole: currentRole(),
+      createdAt: timestamp,
+    };
+    const updated = upsertRecord("boardingDog", {
+      ...record,
+      stays: (record.stays || []).map((item) => boardingStayMatchesIdentity(item, stay) ? { ...item, requirementsOverride } : item),
+      updatedAt: timestamp,
+    });
+    return { record: updated, requirementsOverride };
+  }
+  const { data, error } = await supabaseClient.rpc("kennel_apply_boarding_requirement_override", {
+    p_record_id: record.id || "",
+    p_stay_id: stay.id || "",
+    p_request_code: boardingStayRequestCode(record, stay) || "",
+    p_reason: cleanReason,
+    p_issues: issues,
+    p_intended_status: nextStatus,
+  });
+  if (error) throw error;
+  const updatedPayload = data?.payload;
+  const requirementsOverride = data?.requirementsOverride;
+  if (!updatedPayload?.id || !requirementsOverride?.id) throw new Error("The override was not confirmed by the server.");
+  const updated = upsertRecord("boardingDog", updatedPayload);
+  return { record: boardingDogRecordForDisplay(updated.id) || updated, requirementsOverride };
+}
+
+async function continueAfterBoardingRequirementOverride(record = {}, stay = {}, nextStatus = "Approved", requirementsOverride = {}) {
+  const options = {
+    stayId: stay.id || "",
+    requestCode: boardingStayRequestCode(record, stay) || "",
+    requirementsOverride,
+  };
+  if (nextStatus === "Checked In") {
+    options.allowEarly = true;
+    options.early = boardingTransitionIsEarly(record, nextStatus, options);
+    return handleBoardingTransition(record, nextStatus, options);
+  }
+  if (nextStatus === "Approved" && options.stayId) {
+    return approveBoardingStay(record, options.stayId, options);
+  }
+  return saveBoardingStatusTransition(record, nextStatus, options);
+}
+
+async function submitBoardingRequirementOverride(formEl) {
+  if (!validateForm(formEl)) return null;
+  const record = boardingDogRecordForDisplay(formEl.dataset.id);
+  if (!record) throw new Error("This boarding record could not be found.");
+  const reference = boardingStayReferenceFromAction(formEl);
+  const stay = boardingStayByReference(record, reference);
+  if (!stay) throw new Error("This boarding stay could not be found.");
+  const result = await persistBoardingRequirementOverride(record, stay, formEl.dataset.nextStatus || "Approved", formPayload(formEl).reason || "");
+  return continueAfterBoardingRequirementOverride(result.record, boardingStayByReference(result.record, reference) || stay, formEl.dataset.nextStatus || "Approved", result.requirementsOverride);
+}
+
+function requireBoardingApprovalPreflight(record = {}, stay = {}, context = {}) {
   const issues = boardingApprovalPreflightIssues(record, stay);
   if (!issues.length) return true;
+  const nextStatus = context.nextStatus || "Approved";
+  const requirementsOverride = context.requirementsOverride || context.options?.requirementsOverride || {};
+  if (boardingRequirementOverrideMatches(record, stay, nextStatus, requirementsOverride)) return true;
+  const actionLabel = nextStatus === "Checked In" ? "checked in" : "approved";
+  const overrideButton = isStaffRole()
+    ? \`<button type="button" data-action="open-boarding-requirement-override" data-id="\${escapeHtml(record.id || "")}" data-stay-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(boardingStayRequestCode(record, stay) || "")}" data-next-status="\${escapeHtml(nextStatus)}">Override Requirements</button>\`
+    : "";
   showDetailDialog(
-    "Approval Requirements Not Met",
-    \`<p>\${escapeHtml(record.dogName || "This dog")} cannot be approved yet.</p><ul class="compact-reason-list">\${issues.map((issue) => \`<li>\${escapeHtml(issue)}</li>\`).join("")}</ul><p>Update the customer record and review the supporting documents before approving.</p>\`,
+    nextStatus === "Checked In" ? "Check-In Requirements Not Met" : "Approval Requirements Not Met",
+    \`<p>\${escapeHtml(record.dogName || "This dog")} cannot be \${escapeHtml(actionLabel)} yet.</p><ul class="compact-reason-list">\${issues.map((issue) => \`<li>\${escapeHtml(issue)}</li>\`).join("")}</ul><p>Update the customer record and review the supporting documents, or use a documented staff override.</p><div class="button-row">\${overrideButton}<button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>\`,
   );
   return false;
 }
@@ -6326,7 +6441,7 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
   if (!record?.id || !options.stayId) return null;
   const targetStay = boardingStayByReference(record, options);
   if (!targetStay) return null;
-  if (!requireBoardingApprovalPreflight(record, targetStay)) return null;
+  if (!requireBoardingApprovalPreflight(record, targetStay, { nextStatus: "Approved", options })) return null;
   const currentStatus = boardingStayDisplayStatus(record, targetStay);
   const customerNotificationEvent = boardingCustomerRequestStatusEventName(record, "Approved", options);
   const timestamp = new Date().toISOString();

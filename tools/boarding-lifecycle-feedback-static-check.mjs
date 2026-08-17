@@ -24,6 +24,18 @@ if (!formatDateOnlySource || !formatDateOnlySource.includes("dateOnly(value)")) 
   }
 }
 
+const preflightSource = boarding.match(/function requireBoardingApprovalPreflight[\s\S]*?\n\}/)?.[0] || "";
+if (!preflightSource.includes("boardingRequirementOverrideMatches")
+  || !preflightSource.includes('data-action="open-boarding-requirement-override"')
+  || !boarding.includes("async function persistBoardingRequirementOverride")
+  || !boarding.includes('supabaseClient.rpc("kennel_apply_boarding_requirement_override"')) {
+  failures.push("Staff cannot securely override a blocked boarding approval or check-in.");
+}
+const checkInSubmitSource = shared.match(/async function submitBoardingCheckIn[\s\S]*?\n\}/)?.[0] || "";
+if (!checkInSubmitSource.includes("pendingBoardingCheckIn?.options?.requirementsOverride")) {
+  failures.push("A saved boarding override is lost before the check-in transition completes.");
+}
+
 const toastSource = shared.match(/function showToast[\s\S]*?\n\}/)?.[0] || "";
 if (!shared.includes("function activePopupFeedbackHost") || !toastSource.includes("showPopupFeedback(message)")) {
   failures.push("Global feedback is not mirrored inside the active popup.");
@@ -144,6 +156,9 @@ if (!main.includes("boarding-stay-revision-v37") || !index.includes("boarding-st
 }
 if (!main.includes("boarding-checkin-preflight-v38") || !index.includes("boarding-checkin-preflight-v38")) {
   failures.push("The boarding check-in preflight runtime fix is not cache-busted.");
+}
+if (!main.includes("boarding-requirement-override-v39") || !index.includes("boarding-requirement-override-v39")) {
+  failures.push("The staff boarding-requirement override is not cache-busted.");
 }
 if (!main.includes("maintenance-alert-detail-active-request-lock-v36") || !index.includes("maintenance-alert-detail-active-request-lock-v36")) {
   failures.push("The maintenance alert and active-stay request lock fix is not cache-busted.");

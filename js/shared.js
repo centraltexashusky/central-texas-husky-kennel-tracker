@@ -8395,6 +8395,7 @@ async function submitBoardingCheckIn(formEl) {
     requestCode: formEl.dataset.requestCode || "",
     checkInSubmitted: true,
     checkInDetails,
+    requirementsOverride: pendingBoardingCheckIn?.options?.requirementsOverride || null,
   });
   if (!updated) return;
   queueBoardingLifecycleFollowUp("Boarding check-in audit log", () => addAuditLog("Checked in boarding dog", "boardingDog", updated, (updated.dogName || "Dog") + " belongings: " + (data.belongings || "none")));
@@ -12316,6 +12317,7 @@ function initEvents() {
     const dailyTaskEditForm = event.target.closest("#dailyTaskEditForm");
     const kennelBuildingTabForm = event.target.closest("#kennelBuildingTabForm");
     const ownedDogPhotoUploadForm = event.target.closest("#ownedDogPhotoUploadForm");
+    const boardingRequirementOverrideForm = event.target.closest("#boardingRequirementOverrideForm");
     const boardingCheckInForm = event.target.closest("#boardingCheckInForm");
     const boardingCheckInServiceForm = event.target.closest("#boardingCheckInServiceForm");
     const boardingDeclineRequestForm = event.target.closest("#boardingDeclineRequestForm");
@@ -12325,7 +12327,7 @@ function initEvents() {
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
     const boardingRequestFilterForm = event.target.closest("#boardingRequestFilterForm");
     const customerCancellationReasonForm = event.target.closest("#customerCancellationReasonForm");
-    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, holidayForm, operationDateOverrideForm, taskTabForm, dailyTaskEditForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, boardingMedicalBehaviorNoteForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
+    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, holidayForm, operationDateOverrideForm, taskTabForm, dailyTaskEditForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingRequirementOverrideForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, boardingMedicalBehaviorNoteForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
     if (!handledDetailForms.some(Boolean)) return;
     event.preventDefault();
     if (customerCancellationReasonForm) {
@@ -12379,6 +12381,15 @@ function initEvents() {
         showDetailDialog("Payment Recorded", \`<p>\${escapeHtml(updated.dogName || "Dog")} was marked paid by \${escapeHtml(updated.paymentMethod)} and checked out.</p>\`);
         return updated;
       }, "Checkout could not be completed");
+      return;
+    }
+    if (boardingRequirementOverrideForm) {
+      await runPopupOperation(
+        event.submitter || boardingRequirementOverrideForm.querySelector('button[type="submit"]'),
+        "Saving override...",
+        () => submitBoardingRequirementOverride(boardingRequirementOverrideForm),
+        "Boarding requirement override could not be saved",
+      );
       return;
     }
     if (boardingCheckInForm) {
@@ -12680,6 +12691,12 @@ function initEvents() {
     }
     const action = event.target.closest("[data-action]");
     if (!action) return;
+    if (action.dataset.action === "open-boarding-requirement-override") {
+      const record = boardingDogRecordForDisplay(action.dataset.id);
+      const stay = record ? boardingStayByReference(record, boardingStayReferenceFromAction(action)) : null;
+      if (record && stay) openBoardingRequirementOverride(record, stay, action.dataset.nextStatus || "Approved");
+      return;
+    }
     if (action.dataset.action === "close-detail-dialog") {
       $("#detailDialog").close();
       return;

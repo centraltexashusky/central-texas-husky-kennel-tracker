@@ -11,6 +11,7 @@ const shared = read("js/shared.js");
 const settings = read("js/settings.js");
 const edge = read("supabase/functions/send-notification/index.ts");
 const migration = read("supabase/migrations/20260816013000_harden_kennel_record_authorization.sql");
+const overrideMigration = read("supabase/migrations/20260817174936_add_staff_boarding_requirement_override.sql");
 
 function requireMatch(source, pattern, message) {
   if (!pattern.test(source)) throw new Error(message);
@@ -55,5 +56,10 @@ requireMatch(edge, /parsed\.intro\.map\(\(line\) => escapeHtml\(line\)\)/, "Emai
 requireMatch(migration, /type <> 'boardingDog' or public\.kennel_customer_boarding_payload_is_request\(payload\)/, "Customer RLS must reject updates to already-active boarding rows.");
 requireMatch(migration, /incoming_payload ->> 'isMember'/, "Self-profile RLS must protect membership entitlements.");
 requireMatch(migration, /incoming_payload ->> 'hourlyRate'/, "Self-profile RLS must protect payroll rates.");
+requireMatch(overrideMigration, /auth\.uid\(\) is null or not kennel_private\.kennel_is_staff_member\(\)/, "Boarding requirement overrides must enforce staff authorization on the server.");
+requireMatch(overrideMigration, /char_length\(v_reason\) < 10/, "Boarding requirement overrides must require a meaningful reason.");
+requireMatch(overrideMigration, /insert into public\.kennel_records[\s\S]*'auditLog'/, "Boarding requirement overrides must create an immutable staff audit record.");
+requireMatch(overrideMigration, /security invoker[\s\S]*kennel_apply_boarding_requirement_override_internal/, "The public override RPC must remain an invoker wrapper around the checked private function.");
+requireMatch(overrideMigration, /revoke all on function public\.kennel_apply_boarding_requirement_override[\s\S]*from anon/, "Anonymous users must not execute the boarding override RPC.");
 
 console.log("Boarding transaction and authorization regression checks passed.");
