@@ -5349,6 +5349,17 @@ button:disabled {
   padding: 11px 13px;
 }
 
+.popup-feedback.is-dialog-overlay {
+  box-shadow: 0 12px 30px rgba(15, 36, 58, 0.28);
+  left: 50%;
+  margin: 0;
+  max-width: min(640px, calc(100% - 32px));
+  position: absolute;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 2;
+}
+
 .popup-feedback.is-error {
   background: #fff1f0;
   border-color: #d64b45;

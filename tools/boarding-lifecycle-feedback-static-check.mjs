@@ -17,6 +17,11 @@ if (!shared.includes('"dialog[open]"') || !shared.includes('".boarding-dog-modal
 if (!shared.includes("clearPopupFeedback(dialog)") || !styles.includes(".popup-feedback.is-error")) {
   failures.push("Popup feedback is not reset or styled as a visible error state.");
 }
+if (!styles.includes(".popup-feedback.is-dialog-overlay")
+  || !shared.includes('feedback.classList.toggle("is-dialog-overlay", isDialogOverlay)')
+  || !shared.includes('feedback.style.top = String(host.scrollTop + 16) + "px"')) {
+  failures.push("Popup feedback is not positioned in the visible portion of the active native dialog.");
+}
 if (!shared.includes('host.addEventListener("close", () => clearPopupFeedback(host), { once: true })') || !shared.includes('hiddenObserver.observe(host, { attributes: true, attributeFilter: ["hidden"] })')) {
   failures.push("Popup feedback can survive after a native or custom modal is closed.");
 }
@@ -95,6 +100,12 @@ try {
 } catch (error) {
   failures.push(`The detached boarding request regression fixture could not run: ${error.message}`);
 }
+const staySaveSource = boarding.match(/async function saveBoardingStayFromForm[\s\S]*?\n\}/)?.[0] || "";
+const stayRemoteIndex = staySaveSource.indexOf("await sendPayload(candidate)");
+const stayLocalIndex = staySaveSource.indexOf('upsertRecord("boardingDog", candidate)');
+if (!staySaveSource.includes("boardingDogForPersistence") || !(stayRemoteIndex >= 0 && stayLocalIndex > stayRemoteIndex)) {
+  failures.push("Boarding stay edits can still save a merged display record or change local state before remote persistence succeeds.");
+}
 if (!boarding.includes("if (syncedRecords.length) await sendPayloadBatch(syncedRecords)")) {
   failures.push("Duplicate boarding profiles are still synchronized through sequential network writes.");
 }
@@ -104,6 +115,7 @@ if (!shared.includes('runPopupOperation(action, "Updating..."') || !shared.inclu
 
 for (const [label, source] of [["shared module", main], ["boarding module", main], ["stylesheet", index], ["entrypoint", index]]) {
   if (!source.includes("boarding-lifecycle-feedback-v33")) failures.push(`${label} is not cache-busted for the lifecycle feedback fix.`);
+  if (!source.includes("boarding-stay-edit-feedback-v36")) failures.push(`${label} is not cache-busted for the boarding stay edit and modal feedback fix.`);
 }
 if (!main.includes("boarding-detached-profile-v34") || !index.includes("boarding-detached-profile-v34")) {
   failures.push("The detached boarding-profile persistence fix is not cache-busted.");

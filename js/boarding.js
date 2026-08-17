@@ -4195,8 +4195,9 @@ async function saveBoardingStayFromForm(formEl) {
         statusHistory: [...(dog.statusHistory || []), { from: currentDogStatus, to: "Approved", date: timestamp, by: currentUser?.name || helperName?.value || "" }],
       }
     : {};
-  const record = upsertRecord("boardingDog", { ...dog, ...statusUpdates, ...restoreCancelledStatusUpdates, stays });
-  await sendPayload(record);
+  const candidate = boardingDogForPersistence({ ...dog, ...statusUpdates, ...restoreCancelledStatusUpdates, stays });
+  await sendPayload(candidate);
+  const record = upsertRecord("boardingDog", candidate);
   if (shouldRestoreCancelledStay) {
     await addAuditLog("Restored cancelled boarding stay", "boardingDog", record, "Stay ID: " + boardingStayRequestCode(record, stay) + " | Approved");
   }

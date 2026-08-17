@@ -3419,8 +3419,12 @@ function showPopupFeedback(message = "") {
   }
   window.clearTimeout(Number(feedback.dataset.hideTimer || 0));
   const isError = popupFeedbackIsError(message);
+  const isDialogOverlay = host.matches?.("dialog");
   feedback.textContent = message;
   feedback.classList.toggle("is-error", isError);
+  feedback.classList.toggle("is-dialog-overlay", isDialogOverlay);
+  if (isDialogOverlay) feedback.style.top = String(host.scrollTop + 16) + "px";
+  else feedback.style.removeProperty("top");
   feedback.setAttribute("role", isError ? "alert" : "status");
   feedback.setAttribute("aria-live", isError ? "assertive" : "polite");
   delete feedback.dataset.hideTimer;
