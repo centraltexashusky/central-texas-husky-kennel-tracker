@@ -18,6 +18,7 @@ if (!callerIsStaff) failures.push("The notification staff authorization helper c
 if (callerIsStaff.includes(".maybeSingle()")) failures.push("Notification staff authorization still assumes one settings user row per email.");
 if (!callerIsStaff.includes("return (data || []).some")) failures.push("Notification staff authorization does not accept any active matching staff profile.");
 if (!callerIsStaff.includes('return !removed && ["admin", "helper", "staff"].includes(role);')) failures.push("Notification staff authorization does not reject removed profiles while accepting staff roles.");
+if (!edgeFunction.includes("deliveryError: emailFailed || emailSkipped")) failures.push("Successful notification retries retain stale delivery errors.");
 for (const [label, source] of [
   ["notification", edgeFunction],
   ["private media", mediaAccessFunction],

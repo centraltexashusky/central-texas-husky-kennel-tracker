@@ -2533,6 +2533,9 @@ Deno.serve(async (req) => {
         type: "notificationLog",
         updatedAt: now,
         deliveryStatus,
+        deliveryError: emailFailed || emailSkipped
+          ? String((emailResult as Record<string, unknown>)?.reason || "")
+          : "",
         emailResult,
         smsResult,
         sentAt: now,
