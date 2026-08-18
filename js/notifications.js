@@ -1718,17 +1718,9 @@ var notificationRetentionRemoteCleanupStarted = false;
 function scheduleRemoteNotificationRetentionCleanup() {
   if (notificationRetentionRemoteCleanupStarted || localTestMode || !supabaseClient || !isStaffRole()) return;
   notificationRetentionRemoteCleanupStarted = true;
-  cuddleStayRequest((db) => db.from("kennel_records")
-    .delete()
-    .eq("type", "notificationLog")
-    .lt("submitted_at", notificationRetentionCutoffIso()))
-    .then(({ error }) => {
-      if (error) throw error;
-    })
-    .catch((error) => {
-      notificationRetentionRemoteCleanupStarted = false;
-      console.warn("Expired remote alert cleanup failed.", error);
-    });
+  // The UI prunes expired alerts from its in-memory view. Database history is
+  // retained for delivery troubleshooting and audit; browser clients have no
+  // hard-delete grant.
 }
 
 function pruneExpiredNotifications(options = {}) {

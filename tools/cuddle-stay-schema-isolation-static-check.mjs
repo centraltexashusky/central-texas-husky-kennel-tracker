@@ -1,7 +1,9 @@
 import fs from "node:fs";
 
 const migration = fs.readFileSync("supabase/migrations/20260818190000_isolate_cuddle_stay_schema.sql", "utf8");
+const deleteSecurityMigration = fs.readFileSync("supabase/migrations/20260818194500_tighten_cuddle_stay_delete_and_function_security.sql", "utf8");
 const shared = fs.readFileSync("js/shared.js", "utf8");
+const notifications = fs.readFileSync("js/notifications.js", "utf8");
 const edgeFiles = [
   "supabase/functions/admin-set-password/index.ts",
   "supabase/functions/media-access/index.ts",
@@ -32,10 +34,22 @@ if (!shared.includes('var CUDDLE_STAY_SCHEMA = "cuddle_stay"') || !shared.includ
 if (!shared.includes('schema: CUDDLE_STAY_SCHEMA, table: "kennel_records"')) {
   failures.push("Realtime does not subscribe to the Cuddle Stay schema.");
 }
+if (shared.includes('schema: "public", table: "kennel_records"') || shared.includes('cuddleStayDb(client, "public")')) {
+  failures.push("Browser code still contains a public-schema fallback.");
+}
 for (const [index, source] of edgeFiles.entries()) {
-  if (!source.includes("function cuddleStayDb") || !source.includes('.schema("cuddle_stay")')) {
+  if (!source.includes('const CUDDLE_STAY_SCHEMA = "cuddle_stay"') || !source.includes("client.schema(CUDDLE_STAY_SCHEMA)")) {
     failures.push(`Edge Function ${index + 1} does not target cuddle_stay explicitly.`);
   }
+  if (source.includes('schema("public")') || source.includes("resolveCuddleStaySchema")) {
+    failures.push(`Edge Function ${index + 1} still contains a public-schema fallback.`);
+  }
+}
+if (notifications.includes('.from("kennel_records")\n    .delete()')) {
+  failures.push("Browser notification retention still performs a hard delete.");
+}
+if (!deleteSecurityMigration.includes("revoke delete on cuddle_stay.kennel_records from authenticated")) {
+  failures.push("Authenticated hard deletes are not revoked by migration.");
 }
 if (/SUPABASE_SERVICE_ROLE_KEY/.test(shared)) failures.push("A service-role secret reference reached browser code.");
 

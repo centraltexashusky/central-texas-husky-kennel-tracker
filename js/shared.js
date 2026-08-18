@@ -1687,10 +1687,7 @@ function initSupabaseClient() {
   });
 }
 
-// Every Cuddle Stay Data API call goes through this boundary. During the
-// production migration the custom schema is attempted first and legacy public
-// is used only when PostgREST has not exposed cuddle_stay yet. The fallback is
-// removed after the schema migration is verified in production.
+// Every Cuddle Stay Data API call goes through this explicit schema boundary.
 var CUDDLE_STAY_SCHEMA = "cuddle_stay";
 
 function cuddleStayDb(client = supabaseClient, schema = CUDDLE_STAY_SCHEMA) {
@@ -1698,24 +1695,14 @@ function cuddleStayDb(client = supabaseClient, schema = CUDDLE_STAY_SCHEMA) {
   return typeof client.schema === "function" ? client.schema(schema) : client;
 }
 
-function cuddleStaySchemaUnavailable(error) {
-  const code = String(error?.code || "");
-  const message = String(error?.message || "");
-  return code === "PGRST106"
-    || code === "PGRST202"
-    || /schema .*cuddle_stay|must be one of the following schemas|could not find the (table|function)|relation .* does not exist/i.test(message);
-}
-
 async function cuddleStayRequest(requestFactory, client = supabaseClient) {
-  const primary = await requestFactory(cuddleStayDb(client));
-  if (!primary?.error || !cuddleStaySchemaUnavailable(primary.error)) return primary;
-  return requestFactory(cuddleStayDb(client, "public"));
+  return requestFactory(cuddleStayDb(client));
 }
 
 async function ensureCuddleStayCustomerMembership() {
   if (!supabaseClient || localTestMode) return;
   const { error } = await cuddleStayRequest((db) => db.rpc("register_customer_membership"));
-  if (error && !cuddleStaySchemaUnavailable(error)) throw error;
+  if (error) throw error;
 }
 
 function recordTypes() {
@@ -5659,17 +5646,12 @@ function startAutoSync(options = {}) {
   const channelName = "kennel-records-" + identityKey + "-" + Date.now().toString(36);
   realtimeChannel = supabaseClient
     .channel(channelName)
-    .on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "kennel_records" }, handleRealtimeKennelRecordChange)
-    .on("postgres_changes", { event: "*", schema: "public", table: "kennel_records" }, handleRealtimeKennelRecordChange);
+    .on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "kennel_records" }, handleRealtimeKennelRecordChange);
   if (dailyTaskCompletionSyncAvailable) {
-    realtimeChannel = realtimeChannel
-      .on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "daily_task_completions" }, handleRealtimeTaskCompletionChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "daily_task_completions" }, handleRealtimeTaskCompletionChange);
+    realtimeChannel = realtimeChannel.on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "daily_task_completions" }, handleRealtimeTaskCompletionChange);
   }
   if (typeof handleRealtimeNotificationReadChange === "function") {
-    realtimeChannel = realtimeChannel
-      .on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "notification_reads" }, handleRealtimeNotificationReadChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "notification_reads" }, handleRealtimeNotificationReadChange);
+    realtimeChannel = realtimeChannel.on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "notification_reads" }, handleRealtimeNotificationReadChange);
   }
   realtimeChannel = realtimeChannel
     .subscribe((status) => {

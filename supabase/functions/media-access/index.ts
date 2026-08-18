@@ -1,15 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-let cuddleStaySchema = "cuddle_stay";
+const CUDDLE_STAY_SCHEMA = "cuddle_stay";
 
 function cuddleStayDb(client: ReturnType<typeof createClient>) {
-  return client.schema(cuddleStaySchema);
-}
-
-async function resolveCuddleStaySchema(client: ReturnType<typeof createClient>) {
-  const { error } = await client.schema("cuddle_stay").from("app_settings").select("id").limit(1);
-  cuddleStaySchema = error ? "public" : "cuddle_stay";
+  return client.schema(CUDDLE_STAY_SCHEMA);
 }
 
 const MEDIA_BUCKET = "kennel-media";
@@ -228,7 +223,6 @@ Deno.serve(async (req) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  await resolveCuddleStaySchema(adminClient);
 
   const isStaff = await callerIsStaff(adminClient, user.email);
   let allowed = isStaff || storageOwnerUserId(storagePath) === user.id;

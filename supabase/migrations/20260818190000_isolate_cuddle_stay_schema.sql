@@ -137,6 +137,7 @@ create index if not exists notification_reads_organization_id_idx on cuddle_stay
 -- catalog so later production hotfixes are preserved rather than overwritten.
 alter schema kennel_private rename to cuddle_stay_private;
 revoke all on schema cuddle_stay_private from public, anon, authenticated;
+grant usage on schema cuddle_stay_private to authenticated, service_role;
 
 do $migration$
 declare
@@ -224,7 +225,7 @@ as $$
   select cuddle_stay_private.kennel_user_role() in ('owner', 'admin', 'manager', 'staff')
 $$;
 
-create or replace function cuddle_stay_private.kennel_settings_user_self_write_allowed(incoming_payload jsonb)
+create or replace function cuddle_stay_private.kennel_settings_user_self_write_allowed(payload jsonb)
 returns boolean
 language sql
 stable
@@ -233,10 +234,10 @@ set search_path = ''
 as $$
   with incoming as (
     select
-      lower(coalesce(incoming_payload ->> 'email', '')) as email,
-      lower(coalesce(incoming_payload ->> 'role', 'customer')) as role,
-      coalesce(incoming_payload ->> 'id', '') as payload_id,
-      lower(coalesce(incoming_payload ->> 'removed', 'false')) as removed
+      lower(coalesce($1 ->> 'email', '')) as email,
+      lower(coalesce($1 ->> 'role', 'customer')) as role,
+      coalesce($1 ->> 'id', '') as payload_id,
+      lower(coalesce($1 ->> 'removed', 'false')) as removed
   ), existing as (
     select kr.payload
     from cuddle_stay.kennel_records kr, incoming i
@@ -255,20 +256,20 @@ as $$
       (
         exists (select 1 from existing)
         and i.role = lower(coalesce((select payload ->> 'role' from existing), 'customer'))
-        and lower(coalesce(incoming_payload ->> 'isMember', 'false')) = lower(coalesce((select payload ->> 'isMember' from existing), 'false'))
-        and coalesce(incoming_payload ->> 'hourlyRate', '') = coalesce((select payload ->> 'hourlyRate' from existing), '')
-        and coalesce(incoming_payload ->> 'authId', '') = coalesce((select payload ->> 'authId' from existing), '')
-        and coalesce(incoming_payload ->> 'passwordChangeRequired', '') = coalesce((select payload ->> 'passwordChangeRequired' from existing), '')
-        and coalesce(incoming_payload ->> 'passwordResetRequired', '') = coalesce((select payload ->> 'passwordResetRequired' from existing), '')
-        and coalesce(incoming_payload ->> 'temporaryPassword', '') = coalesce((select payload ->> 'temporaryPassword' from existing), '')
+        and lower(coalesce($1 ->> 'isMember', 'false')) = lower(coalesce((select payload ->> 'isMember' from existing), 'false'))
+        and coalesce($1 ->> 'hourlyRate', '') = coalesce((select payload ->> 'hourlyRate' from existing), '')
+        and coalesce($1 ->> 'authId', '') = coalesce((select payload ->> 'authId' from existing), '')
+        and coalesce($1 ->> 'passwordChangeRequired', '') = coalesce((select payload ->> 'passwordChangeRequired' from existing), '')
+        and coalesce($1 ->> 'passwordResetRequired', '') = coalesce((select payload ->> 'passwordResetRequired' from existing), '')
+        and coalesce($1 ->> 'temporaryPassword', '') = coalesce((select payload ->> 'temporaryPassword' from existing), '')
       )
       or (
         not exists (select 1 from existing)
         and i.role = 'customer'
-        and lower(coalesce(incoming_payload ->> 'isMember', 'false')) <> 'true'
-        and coalesce(incoming_payload ->> 'hourlyRate', '') in ('', '0')
-        and coalesce(incoming_payload ->> 'authId', '') in ('', (select auth.uid())::text)
-        and coalesce(incoming_payload ->> 'temporaryPassword', '') = ''
+        and lower(coalesce($1 ->> 'isMember', 'false')) <> 'true'
+        and coalesce($1 ->> 'hourlyRate', '') in ('', '0')
+        and coalesce($1 ->> 'authId', '') in ('', (select auth.uid())::text)
+        and coalesce($1 ->> 'temporaryPassword', '') = ''
       )
     )
   from incoming i
@@ -282,16 +283,16 @@ security definer
 set search_path = ''
 as $$
 declare
-  user_id uuid := (select auth.uid());
-  organization_id uuid := cuddle_stay_private.cuddle_stay_organization_id();
+  v_user_id uuid := (select auth.uid());
+  v_organization_id uuid := cuddle_stay_private.cuddle_stay_organization_id();
 begin
-  if user_id is null or nullif(lower(coalesce(auth.jwt() ->> 'email', '')), '') is null then
+  if v_user_id is null or nullif(lower(coalesce(auth.jwt() ->> 'email', '')), '') is null then
     raise exception 'A verified Cuddle Stay login is required.' using errcode = '42501';
   end if;
   insert into shared.organization_members (organization_id, user_id, role)
-  values (organization_id, user_id, 'customer')
+  values (v_organization_id, v_user_id, 'customer')
   on conflict (organization_id, user_id) do nothing;
-  return organization_id;
+  return v_organization_id;
 end
 $$;
 
