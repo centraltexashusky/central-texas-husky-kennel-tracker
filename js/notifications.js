@@ -1743,9 +1743,14 @@ function pruneExpiredNotifications(options = {}) {
 }
 
 var boardingRequestRecoverySyncKeys = new Set();
+var BOARDING_REQUEST_ALERT_RECOVERY_GRACE_MS = 2 * 60 * 1000;
 
 function ensurePendingBoardingRequestRecoveryAlerts() {
   if (currentRole() !== "admin") return [];
+  // Wait until this tab has a complete notification snapshot. A boarding row
+  // can arrive through Realtime before its notification row, and generating a
+  // recovery alert from that partial view creates a false duplicate.
+  if (!localTestMode && supabaseClient && !remoteTypesFullyLoadedInMemory.has("notificationLog")) return [];
   const pendingEntries = uniqueBoardingStayEntries(boardingStayEntries(consolidatedBoardingDogRecords(
     readRecords("boardingDog").filter((record) => record.customerRequest && !record.removed),
   ))).filter((entry) => entry.status === "Pending");
@@ -1759,6 +1764,8 @@ function ensurePendingBoardingRequestRecoveryAlerts() {
     const record = first?.record || {};
     const stay = first?.stay || {};
     if (!record.id) return;
+    const requestCreatedAt = Date.parse(stay.submittedAt || stay.createdAt || record.submittedAt || record.createdAt || record.updatedAt || "");
+    if (!localTestMode && Number.isFinite(requestCreatedAt) && Date.now() - requestCreatedAt < BOARDING_REQUEST_ALERT_RECOVERY_GRACE_MS) return;
     const explicitGroupId = String(stay.requestGroupId || record.requestGroupId || stay.reservationGroupId || record.reservationGroupId || "").trim();
     const requestKey = explicitGroupId || [record.id, stay.id || boardingStayRequestCode(record, stay)].filter(Boolean).join(":");
     if (!requestKey) return;
@@ -1766,9 +1773,11 @@ function ensurePendingBoardingRequestRecoveryAlerts() {
       if (!["customerBoardingRequestCreated", "customerBoardingRequestUpdated"].includes(notification.eventName)) return false;
       const source = notificationSourceSnapshot(notification);
       const sourceGroupId = String(source.requestGroupId || source.reservationGroupId || source.stays?.[0]?.requestGroupId || "").trim();
-      if (explicitGroupId) return sourceGroupId === explicitGroupId;
-      return notification.sourceId === record.id
-        && boardingRequestNotificationReference(notification).requestCode === boardingStayRequestCode(record, stay);
+      const notificationReference = boardingRequestNotificationReference(notification);
+      const sameSourceRequest = notification.sourceId === record.id
+        && notificationReference.requestCode === boardingStayRequestCode(record, stay);
+      if (sameSourceRequest) return true;
+      return Boolean(explicitGroupId && sourceGroupId === explicitGroupId);
     });
     if (hasOriginalAlert) return;
 
