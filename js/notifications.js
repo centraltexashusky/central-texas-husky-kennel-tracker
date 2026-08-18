@@ -1723,6 +1723,63 @@ function scheduleRemoteNotificationRetentionCleanup() {
   // hard-delete grant.
 }
 
+function notificationDeliveryCanRetry(notification = {}) {
+  if (!isStaffRole() || !notification?.id || !notification?.sourceId || !notification?.eventName) return false;
+  const status = String(notification.deliveryStatus || "").trim().toLowerCase();
+  const channels = arrayValue(notification.channels).map((channel) => String(channel || "").trim().toLowerCase());
+  const emailExpected = channels.includes("email") || Boolean(notification.emailResult) || status.includes("email");
+  return emailExpected && (["failed", "in-app only", "error"].includes(status) || status.includes("email failed"));
+}
+
+async function retryNotificationDelivery(notificationId = "") {
+  const notification = readRecords("notificationLog").find((item) => item.id === notificationId && !item.removed);
+  if (!notificationDeliveryCanRetry(notification)) throw new Error("This notification is not eligible for email retry.");
+  if (!supabaseClient || localTestMode) throw new Error("A live staff login is required to retry email delivery.");
+  const pending = upsertRecord("notificationLog", {
+    ...notification,
+    deliveryStatus: "pending",
+    deliveryError: "",
+    updatedAt: new Date().toISOString(),
+  });
+  renderNotifications();
+  try {
+    const { data, error } = await withRemoteRequestTimeout(
+      supabaseClient.functions.invoke("send-notification", {
+        body: {
+          eventName: notification.eventName,
+          recordId: notification.sourceId,
+          notificationId: notification.id,
+        },
+      }),
+      "Notification retry",
+    );
+    if (error) throw error;
+    const emailSkipped = Boolean(data?.emailResult?.skipped);
+    const emailFailed = Boolean(data?.emailResult?.failed);
+    const updated = upsertRecord("notificationLog", {
+      ...pending,
+      deliveryStatus: emailFailed ? "failed" : emailSkipped ? "skipped" : "sent",
+      deliveryError: emailFailed ? String(data?.emailResult?.reason || "Email delivery failed.") : "",
+      emailResult: data?.emailResult || {},
+      smsResult: data?.smsResult || {},
+      sentAt: emailFailed || emailSkipped ? pending.sentAt || "" : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    renderNotifications();
+    return updated;
+  } catch (error) {
+    const deliveryError = await edgeFunctionErrorMessage(error, "Notification delivery could not complete.");
+    const failed = upsertRecord("notificationLog", {
+      ...pending,
+      deliveryStatus: "in-app only",
+      deliveryError,
+      updatedAt: new Date().toISOString(),
+    });
+    renderNotifications();
+    return failed;
+  }
+}
+
 function pruneExpiredNotifications(options = {}) {
   const records = readRecords("notificationLog");
   const now = new Date().toISOString();
@@ -1854,7 +1911,10 @@ function renderNotifications() {
     const deliveryMeta = deliveryNeedsAttention
       ? \`<span class="notification-delivery-error" role="alert">Delivery needs attention: \${escapeHtml(item.deliveryStatus || "Unknown")}\${item.deliveryError ? \` - \${escapeHtml(item.deliveryError)}\` : ""}</span>\`
       : "";
-    return \`<article class="notification-item \${notificationIsRead(item) ? "is-read" : ""} \${item.priority === "urgent" ? "is-urgent" : ""} \${deliveryNeedsAttention ? "has-delivery-error" : ""}" data-action="open-notification" data-id="\${escapeHtml(item.id)}" role="button" tabindex="0"><strong>\${escapeHtml(notificationDisplayTitle(item))}</strong><p>\${escapeHtml(notificationDisplayMessage(item))}</p><span>\${escapeHtml(meta)}</span><span>\${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | \${escapeHtml(notificationChannelsText(item))}</span>\${deliveryMeta}</article>\`;
+    const retryAction = notificationDeliveryCanRetry(item)
+      ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="retry-notification-delivery" data-id="\${escapeHtml(item.id)}">Retry Email</button></div>\`
+      : "";
+    return \`<article class="notification-item \${notificationIsRead(item) ? "is-read" : ""} \${item.priority === "urgent" ? "is-urgent" : ""} \${deliveryNeedsAttention ? "has-delivery-error" : ""}" data-action="open-notification" data-id="\${escapeHtml(item.id)}" role="button" tabindex="0"><strong>\${escapeHtml(notificationDisplayTitle(item))}</strong><p>\${escapeHtml(notificationDisplayMessage(item))}</p><span>\${escapeHtml(meta)}</span><span>\${escapeHtml(formatDateTime(item.submittedAt || item.updatedAt))} | \${escapeHtml(notificationChannelsText(item))}</span>\${deliveryMeta}\${retryAction}</article>\`;
   };
   button.hidden = !helperIsLoggedIn();
   const panelOpen = !panel.hidden;

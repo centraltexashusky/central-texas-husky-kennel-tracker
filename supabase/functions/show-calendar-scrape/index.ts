@@ -342,7 +342,10 @@ Deno.serve(async (req) => {
     global: { headers: { Authorization: authHeader } },
     auth: { persistSession: false },
   });
-  const { data: { user }, error: userError } = await userClient.auth.getUser();
+  const accessToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const { data: { user }, error: userError } = accessToken
+    ? await userClient.auth.getUser(accessToken)
+    : { data: { user: null }, error: new Error("Authorization token missing.") };
   if (userError || !user?.email) return json({ error: "Login required." }, 401);
   const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
   if (!(await callerIsStaff(adminClient, user.email))) return json({ error: "Staff access required." }, 403);

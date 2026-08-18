@@ -13764,6 +13764,27 @@ function initEvents() {
 	      renderNotifications();
 	      return;
 	    }
+	    const retry = event.target.closest('[data-action="retry-notification-delivery"]');
+	    if (retry) {
+	      event.preventDefault();
+	      event.stopPropagation();
+	      const originalLabel = retry.textContent;
+	      retry.disabled = true;
+	      retry.textContent = "Sending...";
+	      retryNotificationDelivery(retry.dataset.id).then((notification) => {
+	        const sent = String(notification?.deliveryStatus || "").toLowerCase() === "sent";
+	        showDetailDialog(
+	          sent ? "Email Sent" : "Email Not Sent",
+	          \`<p>\${escapeHtml(sent ? "The saved customer update email was sent successfully." : "The email retry did not complete.")}</p>\${notification?.deliveryError ? \`<p>\${escapeHtml(notification.deliveryError)}</p>\` : ""}\`,
+	        );
+	      }).catch((error) => {
+	        showDetailDialog("Email Not Sent", \`<p>\${escapeHtml(error.message || String(error))}</p>\`);
+	      }).finally(() => {
+	        retry.disabled = false;
+	        retry.textContent = originalLabel;
+	      });
+	      return;
+	    }
 	    const item = event.target.closest('[data-action="open-notification"]');
 	    if (item) openNotification(item.dataset.id).catch((error) => {
 	      console.warn("Alert could not be opened.", error);
