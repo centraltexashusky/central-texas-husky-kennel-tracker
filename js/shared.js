@@ -2737,7 +2737,10 @@ function mergeRecords(type, incomingRecords, options = {}) {
 function upsertRecord(type, payload) {
   let records = readRecords(type);
   let record = { ...payload, id: payload.id || uid(type), updatedAt: new Date().toISOString() };
-  if (type === "settingsUser" && normalizeEmail(record.email)) {
+  // Removal must bypass canonical-profile merging. The merge helper intentionally
+  // normalizes active profiles with removed=false; running a removal through
+  // it would silently keep app access active while the UI reported success.
+  if (type === "settingsUser" && !record.removed && normalizeEmail(record.email)) {
     const email = normalizeEmail(record.email);
     const sameEmailUsers = records.filter((item) => !item.removed && normalizeEmail(item.email) === email);
     if (sameEmailUsers.length) {

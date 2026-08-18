@@ -18,6 +18,7 @@ if (!settings.includes("payInput.disabled = !showPayrollFields")) failures.push(
 if (!auth.includes('data.id = String(field("recordId")?.value || field("id")?.value || "").trim();')) failures.push("User form record identity is not read safely through form.elements.");
 if (!auth.includes('data.name = String(field("name")?.value || "").trim();')) failures.push("The editable user name is not explicitly included in the saved profile.");
 if (!shared.includes('record.name = requestedName;')) failures.push("Duplicate-profile reconciliation can still restore an old user name.");
+if (!shared.includes('type === "settingsUser" && !record.removed && normalizeEmail(record.email)')) failures.push("User removal is still routed through active-profile merging and can silently restore app access.");
 if (!shared.includes("settingsUserPayloadBelongsToCurrentSession(record)")) failures.push("Saving the signed-in user does not refresh the active session name.");
 if (!auth.includes("const name = saved?.name || supabaseUser.user_metadata?.full_name")) failures.push("Authentication refresh can still replace a saved Settings name with stale auth metadata.");
 if (!shared.includes("name: existing.name || user.name || user.email")) failures.push("Login profile refresh can still overwrite the saved profile name.");
