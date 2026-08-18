@@ -73,6 +73,9 @@ auth ID, or password-control fields.
 - The revocation backfill ignores removed duplicate profiles whenever an active
   canonical profile exists. A production repair restored the affected active
   memberships and prevents duplicate retirement from revoking live access.
+- `cuddle_stay_private.assert_schema_integrity()` now runs as a production
+  migration guard. It aborts migrations if RLS/table placement, browser grants,
+  memberships, revocations, organization IDs, or the membership trigger drift.
 - All four Edge Functions are active with JWT verification and use
   `cuddle_stay` explicitly. Browser reads/writes and Realtime subscriptions
   have no `public` fallback.

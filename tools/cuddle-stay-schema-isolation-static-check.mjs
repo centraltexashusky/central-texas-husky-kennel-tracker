@@ -4,6 +4,7 @@ const migration = fs.readFileSync("supabase/migrations/20260818190000_isolate_cu
 const deleteSecurityMigration = fs.readFileSync("supabase/migrations/20260818194500_tighten_cuddle_stay_delete_and_function_security.sql", "utf8");
 const revocationMigration = fs.readFileSync("supabase/migrations/20260818204500_prevent_removed_user_self_reregistration.sql", "utf8");
 const membershipRepairMigration = fs.readFileSync("supabase/migrations/20260818210000_repair_active_profile_memberships.sql", "utf8");
+const integrityGuardMigration = fs.readFileSync("supabase/migrations/20260818212000_add_cuddle_stay_integrity_guard.sql", "utf8");
 const shared = fs.readFileSync("js/shared.js", "utf8");
 const notifications = fs.readFileSync("js/notifications.js", "utf8");
 const edgeFiles = [
@@ -61,6 +62,10 @@ if (!revocationMigration.includes("shared.organization_member_revocations")
 if (!membershipRepairMigration.includes("clear_false_revocations")
   || !membershipRepairMigration.includes("insert into shared.organization_members")) {
   failures.push("Active profiles are not repaired after duplicate-profile revocation.");
+}
+if (!integrityGuardMigration.includes("cuddle_stay_private.assert_schema_integrity")
+  || !integrityGuardMigration.includes("select cuddle_stay_private.assert_schema_integrity();")) {
+  failures.push("Production migrations do not have a Cuddle Stay schema-integrity guard.");
 }
 if (/SUPABASE_SERVICE_ROLE_KEY/.test(shared)) failures.push("A service-role secret reference reached browser code.");
 

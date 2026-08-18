@@ -57,6 +57,10 @@ identifier, not a per-environment generated value.
 13. Store every DDL change in `supabase/migrations`. Run schema-isolation,
     cross-customer, anonymous, advisor, and full application lifecycle tests
     before production promotion.
+14. Cuddle Stay migrations must finish with
+    `select cuddle_stay_private.assert_schema_integrity();`. The assertion
+    aborts migrations when table placement, RLS/grants, membership roles,
+    revocations, tenant IDs, or the membership trigger drift.
 
 ## New-app acceptance checklist
 
