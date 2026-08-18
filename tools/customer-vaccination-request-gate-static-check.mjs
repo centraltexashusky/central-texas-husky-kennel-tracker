@@ -27,6 +27,12 @@ for (const vaccine of ["dhpp", "rabies", "bordetella"]) {
 requireSource(styles, ".customer-vaccine-cards", "Customer vaccine card layout styles are missing.");
 requireSource(styles, ".customer-vaccine-date-pair", "Customer vaccine date-pair styles are missing.");
 requireSource(index, "customer-vaccine-card-layout-v42", "Customer vaccine card stylesheet is not cache-busted.");
+requireSource(index, "Required for approval: upload a PDF, PNG, JPG, or WebP vaccination document", "Customer vaccine document requirement is not explained.");
+requireSource(boarding, "const hasVaccinationDocument = arrayValue(record.vaccinationRecords)", "Staff approval does not inspect uploaded vaccination records.");
+requireSource(boarding, "Boolean(String(record.vaccinationFiles || \"\").trim())", "Staff approval does not recognize legacy vaccination files.");
+requireSource(boarding, "A vaccination document must be on file for staff verification before approval.", "Staff approval does not require a vaccination document.");
+requireSource(main, "vaccination-document-approval-v43", "Boarding approval document check is not cache-busted.");
+requireSource(index, "vaccination-document-approval-v43", "Application entrypoint is not cache-busted for the vaccination document approval check.");
 requireSource(customer, "function customerBoardingVaccinationIssues", "Customer request vaccine issue calculation is missing.");
 requireSource(customer, "if (nextDate < requiredThrough)", "Customer request gate does not require vaccines through pickup.");
 requireSource(customer, "function validateCustomerBookingVaccinations", "Customer request vaccine blocker is missing.");

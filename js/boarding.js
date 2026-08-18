@@ -6311,6 +6311,12 @@ function boardingApprovalPreflightIssues(record = {}, stay = {}) {
   if (vaccineStatus.className !== "is-vaccine-ok") {
     issues.push(\`Rabies, DHPP, and Bordetella must all remain current through \${formatDateOnly(pickupDate) || pickupDate}.\`);
   }
+  const hasVaccinationDocument = arrayValue(record.vaccinationRecords)
+    .some((document) => document && !document.removed)
+    || Boolean(String(record.vaccinationFiles || "").trim());
+  if (!hasVaccinationDocument) {
+    issues.push("A vaccination document must be on file for staff verification before approval.");
+  }
   const signedAgreement = boardingAgreementRecordsForDog(record)
     .some((agreement) => Boolean(agreement.signedAt || agreement.signatureHash || agreement.documentHash));
   if (!signedAgreement) issues.push("A signed boarding agreement must be on file for this request.");
