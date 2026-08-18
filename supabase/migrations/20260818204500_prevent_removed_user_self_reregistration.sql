@@ -32,6 +32,14 @@ from cuddle_stay.kennel_records kr
 join auth.users u on lower(u.email) = lower(kr.payload ->> 'email')
 where kr.type = 'settingsUser'
   and lower(coalesce(kr.payload ->> 'removed', 'false')) = 'true'
+  and not exists (
+    select 1
+    from cuddle_stay.kennel_records active_profile
+    where active_profile.organization_id = kr.organization_id
+      and active_profile.type = 'settingsUser'
+      and lower(active_profile.payload ->> 'email') = lower(kr.payload ->> 'email')
+      and lower(coalesce(active_profile.payload ->> 'removed', 'false')) <> 'true'
+  )
 order by kr.organization_id, u.id,
          coalesce(nullif(kr.payload ->> 'removedAt', '')::timestamptz, kr.updated_at) desc
 on conflict (organization_id, user_id) do update
@@ -96,6 +104,19 @@ begin
   if target_user_id is null then return new; end if;
 
   if lower(coalesce(new.payload ->> 'removed', 'false')) = 'true' then
+    -- Retiring an old duplicate must never revoke the canonical active profile.
+    if exists (
+      select 1
+      from cuddle_stay.kennel_records active_profile
+      where active_profile.organization_id = new.organization_id
+        and active_profile.type = 'settingsUser'
+        and active_profile.id <> new.id
+        and lower(active_profile.payload ->> 'email') = lower(new.payload ->> 'email')
+        and lower(coalesce(active_profile.payload ->> 'removed', 'false')) <> 'true'
+    ) then
+      return new;
+    end if;
+
     insert into shared.organization_member_revocations (organization_id, user_id, reason, revoked_at)
     values (new.organization_id, target_user_id, 'settings_user_removed', now())
     on conflict (organization_id, user_id) do update

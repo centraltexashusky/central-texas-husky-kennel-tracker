@@ -70,6 +70,9 @@ auth ID, or password-control fields.
 - Admin user removal was regression-tested after fixing active-profile merging
   and adding durable revocation enforcement. Removed users cannot recreate a
   membership through the customer registration RPC.
+- The revocation backfill ignores removed duplicate profiles whenever an active
+  canonical profile exists. A production repair restored the affected active
+  memberships and prevents duplicate retirement from revoking live access.
 - All four Edge Functions are active with JWT verification and use
   `cuddle_stay` explicitly. Browser reads/writes and Realtime subscriptions
   have no `public` fallback.
