@@ -137,11 +137,11 @@ async function loadRemoteAppBranding() {
     return appBrandingConfig();
   }
   try {
-    const { data, error } = await supabaseClient
+    const { data, error } = await cuddleStayRequest((db) => db
       .from("app_settings")
       .select("id, organization_name, agreement_config, updated_at, updated_by")
       .eq("id", "workspace")
-      .maybeSingle();
+      .maybeSingle());
     if (error) throw error;
     if (data?.organization_name) {
       upsertRecord("appConfig", {
@@ -164,7 +164,7 @@ async function loadRemoteAppBranding() {
 
 async function persistAppBrandingConfig(record = {}) {
   if (localTestMode || !supabaseClient) return { ok: true, local: true };
-  const { error } = await supabaseClient
+  const { error } = await cuddleStayRequest((db) => db
     .from("app_settings")
     .upsert({
       id: "workspace",
@@ -172,7 +172,7 @@ async function persistAppBrandingConfig(record = {}) {
       agreement_config: sanitizeWorkspaceAgreementConfig(record.agreementConfig || {}),
       updated_at: record.updatedAt || new Date().toISOString(),
       updated_by: currentUser?.email || "",
-    });
+    }));
   if (error) throw error;
   return { ok: true };
 }

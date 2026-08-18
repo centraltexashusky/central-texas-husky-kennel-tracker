@@ -26,6 +26,8 @@ const headers = {
   apikey: SERVICE_ROLE_KEY,
   Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
   "Content-Type": "application/json",
+  "Accept-Profile": "cuddle_stay",
+  "Content-Profile": "cuddle_stay",
 };
 
 const lifecycleStatuses = ["Pending", "Approved", "Checked In", "In Kennel", "Ready For Pickup", "Checked Out", "Cancelled"];

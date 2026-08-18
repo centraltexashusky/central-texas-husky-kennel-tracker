@@ -28,7 +28,7 @@ const preflightSource = boarding.match(/function requireBoardingApprovalPrefligh
 if (!preflightSource.includes("boardingRequirementOverrideMatches")
   || !preflightSource.includes('data-action="open-boarding-requirement-override"')
   || !boarding.includes("async function persistBoardingRequirementOverride")
-  || !boarding.includes('supabaseClient.rpc("kennel_apply_boarding_requirement_override"')) {
+  || !boarding.includes('db.rpc("kennel_apply_boarding_requirement_override"')) {
   failures.push("Staff cannot securely override a blocked boarding approval or check-in.");
 }
 const checkInSubmitSource = shared.match(/async function submitBoardingCheckIn[\s\S]*?\n\}/)?.[0] || "";

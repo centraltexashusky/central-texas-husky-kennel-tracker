@@ -1,6 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+let cuddleStaySchema = "cuddle_stay";
+
+function cuddleStayDb(client: ReturnType<typeof createClient>) {
+  return client.schema(cuddleStaySchema);
+}
+
+async function resolveCuddleStaySchema(client: ReturnType<typeof createClient>) {
+  const { error } = await client.schema("cuddle_stay").from("app_settings").select("id").limit(1);
+  cuddleStaySchema = error ? "public" : "cuddle_stay";
+}
+
 const AKC_API_URL = "https://webapps.akc.org/event-search/api/";
 const AKC_EVENT_URL = "https://www.apps.akc.org/apps/events/search/index_results.cfm";
 const AKC_DOCUMENT_URL = "https://www.apps.akc.org/apps/eventplans/eventsearch/blocks/dsp_generate_pdf.cfm";
@@ -144,7 +155,7 @@ async function callerIsStaff(adminClient: ReturnType<typeof createClient>, email
   const normalized = normalizeEmail(email);
   if (!normalized) return false;
   if (adminEmails().includes(normalized) || ["centraltexashusky@gmail.com", "cthusky05@gmail.com"].includes(normalized)) return true;
-  const { data, error } = await adminClient
+  const { data, error } = await cuddleStayDb(adminClient)
     .from("kennel_records")
     .select("payload")
     .eq("type", "settingsUser")
@@ -339,6 +350,7 @@ Deno.serve(async (req) => {
   const { data: { user }, error: userError } = await userClient.auth.getUser();
   if (userError || !user?.email) return json({ error: "Login required." }, 401);
   const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  await resolveCuddleStaySchema(adminClient);
   if (!(await callerIsStaff(adminClient, user.email))) return json({ error: "Staff access required." }, 403);
 
   const body = await req.json().catch(() => ({})) as CalendarRequest;

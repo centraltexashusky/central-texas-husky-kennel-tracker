@@ -14,7 +14,7 @@ if (!shared.includes("const productionMemoryOnly = Boolean(supabaseClient && !lo
 if (!shared.includes("localStorage.removeItem(stateKeys[type]);")) failures.push("Legacy record caches are not removed.");
 if (!auth.includes("prepareProductionMemoryRecordCache()")) failures.push("Production login does not run record-cache cleanup.");
 if (!shared.includes("remoteTypesFullyLoadedInMemory.has(type)")) failures.push("A new tab can incorrectly start with a delta-only load.");
-if (!shared.includes('supabaseClient.rpc("kennel_scheduled_care_tasks_window"')) failures.push("Scheduled care tasks do not use the bounded database query.");
+if (!shared.includes('db.rpc("kennel_scheduled_care_tasks_window"')) failures.push("Scheduled care tasks do not use the bounded database query.");
 if (!scheduler.includes("scheduledCareTaskDateIsLoaded(nextBathDate)")) failures.push("Owned-dog auto tasks can be duplicated outside the loaded date window.");
 if (!main.includes('task-scheduler.js?v=20260722-compact-week-grid-fit')) failures.push("Automatic task identity fix is not cache-busted.");
 if (!index.includes('js/main.js?v=20260723-customer-file-view-v2')) failures.push("Application entrypoint does not expose the automatic task identity fix.");
@@ -57,7 +57,7 @@ if (!migration.includes("kennel_records_active_scheduled_task_date_updated_idx")
 if (!migration.includes("sourceManualOverride")) failures.push("Windowed reads do not prefer a staff-adjusted auto task.");
 if (!migration.includes("where ranked.source_rank = 1")) failures.push("Windowed reads do not collapse duplicate active auto tasks.");
 if (!migration.includes("and (p_since_updated_at is null or ranked.updated_at >= p_since_updated_at)")) failures.push("Delta filtering happens before canonical task selection.");
-if (!shared.includes('supabaseClient.rpc("kennel_active_boarding_records"')) failures.push("Boarding Dogs does not load the active roster first.");
+if (!shared.includes('db.rpc("kennel_active_boarding_records"')) failures.push("Boarding Dogs does not load the active roster first.");
 if (!shared.includes("boardingFullHistory: true")) failures.push("Boarding history cannot be loaded on demand.");
 if (!shared.includes('boardingDogRosterFilter === "All Boarding Dogs"')) failures.push("All Boarding Dogs does not trigger the historical load.");
 if (!boardingMigration.includes("current_date + 365")) failures.push("Active boarding scope does not include upcoming reservations.");

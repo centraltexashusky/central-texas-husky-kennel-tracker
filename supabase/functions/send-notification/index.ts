@@ -1,6 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+let cuddleStaySchema = "cuddle_stay";
+
+function cuddleStayDb(client: ReturnType<typeof createClient>) {
+  return client.schema(cuddleStaySchema);
+}
+
+async function resolveCuddleStaySchema(client: ReturnType<typeof createClient>) {
+  const { error } = await client.schema("cuddle_stay").from("app_settings").select("id").limit(1);
+  cuddleStaySchema = error ? "public" : "cuddle_stay";
+}
+
 function getCorsHeaders(req: Request): Record<string, string> {
   const allowedOrigin =
     Deno.env.get("APP_PRODUCTION_URL")?.replace(/\/$/, "") ||
@@ -116,7 +127,7 @@ async function callerIsStaff(adminClient: ReturnType<typeof createClient>, email
   const normalized = normalizeEmail(email);
   if (!normalized) return false;
   if (adminEmails().map(normalizeEmail).includes(normalized)) return true;
-  const { data, error } = await adminClient
+  const { data, error } = await cuddleStayDb(adminClient)
     .from("kennel_records")
     .select("payload")
     .eq("type", "settingsUser")
@@ -151,7 +162,7 @@ function recordIsRemoved(record: Record<string, unknown>) {
 async function settingsUserEmailsByRoles(adminClient: ReturnType<typeof createClient>, roles: string[]) {
   const roleSet = new Set(roles.map(normalizedStaffRole).filter(Boolean));
   if (!roleSet.size) return [];
-  const { data, error } = await adminClient
+  const { data, error } = await cuddleStayDb(adminClient)
     .from("kennel_records")
     .select("payload")
     .eq("type", "settingsUser");
@@ -2271,6 +2282,7 @@ Deno.serve(async (req) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  await resolveCuddleStaySchema(adminClient);
   const body = await req.json().catch(() => ({})) as NotifyBody;
   const isStaff = await callerIsStaff(adminClient, user.email);
 
@@ -2323,7 +2335,7 @@ Deno.serve(async (req) => {
     return json({ error: "Unsupported notification event." }, 400, req);
   }
 
-  const { data: sourceRow, error: sourceError } = await adminClient
+  const { data: sourceRow, error: sourceError } = await cuddleStayDb(adminClient)
     .from("kennel_records")
     .select("id,type,payload,submitted_at,updated_at")
     .eq("id", recordId)
@@ -2366,7 +2378,7 @@ Deno.serve(async (req) => {
   let notificationPayload: Record<string, unknown> = {};
   let persistedNotificationPayload: Record<string, unknown> | null = null;
   if (body.notificationId) {
-    const { data, error: notificationLookupError } = await adminClient
+    const { data, error: notificationLookupError } = await cuddleStayDb(adminClient)
       .from("kennel_records")
       .select("id,type,payload,user_id,helper_email")
       .eq("id", body.notificationId)
@@ -2419,8 +2431,8 @@ Deno.serve(async (req) => {
       updated_at: pendingAt,
     };
     const pendingSave = data
-      ? await adminClient.from("kennel_records").update(pendingRow).eq("id", body.notificationId).eq("type", "notificationLog")
-      : await adminClient.from("kennel_records").insert(pendingRow);
+      ? await cuddleStayDb(adminClient).from("kennel_records").update(pendingRow).eq("id", body.notificationId).eq("type", "notificationLog")
+      : await cuddleStayDb(adminClient).from("kennel_records").insert(pendingRow);
     const pendingNotificationError = pendingSave.error;
     if (pendingNotificationError) {
       console.error("notification_log_pending_save_failed", pendingNotificationError);
@@ -2437,7 +2449,7 @@ Deno.serve(async (req) => {
     console.error("notification_content_failed", { eventName, recordId, deliveryError });
     if (body.notificationId && persistedNotificationPayload) {
       const failedAt = new Date().toISOString();
-      await adminClient.from("kennel_records").update({
+      await cuddleStayDb(adminClient).from("kennel_records").update({
         id: body.notificationId,
         type: "notificationLog",
         payload: {
@@ -2515,7 +2527,7 @@ Deno.serve(async (req) => {
   if (body.notificationId) {
     const existingPayload = persistedNotificationPayload || hydrateNotificationPayload(notificationPayload, eventName, sourceRecord, body.notificationId);
     const now = new Date().toISOString();
-    const { error: completedNotificationError } = await adminClient.from("kennel_records").update({
+    const { error: completedNotificationError } = await cuddleStayDb(adminClient).from("kennel_records").update({
       id: body.notificationId,
       type: "notificationLog",
       payload: {

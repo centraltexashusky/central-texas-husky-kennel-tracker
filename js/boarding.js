@@ -1382,12 +1382,12 @@ var boardingPricingCatalogLoadPromise = null;
 
 async function fetchBoardingPricingCatalogServices() {
   if (!supabaseClient) return [];
-  const { data, error } = await supabaseClient
+  const { data, error } = await cuddleStayRequest((db) => db
     .from("kennel_records")
     .select("id,type,payload,updated_at")
     .eq("type", "service")
     .order("updated_at", { ascending: false })
-    .limit(1000);
+    .limit(1000));
   if (error) throw error;
   return arrayValue(data)
     .filter((row) => row.type === "service")
@@ -6387,14 +6387,14 @@ async function persistBoardingRequirementOverride(record = {}, stay = {}, nextSt
     });
     return { record: updated, requirementsOverride };
   }
-  const { data, error } = await supabaseClient.rpc("kennel_apply_boarding_requirement_override", {
+  const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_apply_boarding_requirement_override", {
     p_record_id: record.id || "",
     p_stay_id: stay.id || "",
     p_request_code: boardingStayRequestCode(record, stay) || "",
     p_reason: cleanReason,
     p_issues: issues,
     p_intended_status: nextStatus,
-  });
+  }));
   if (error) throw error;
   const updatedPayload = data?.payload;
   const requirementsOverride = data?.requirementsOverride;

@@ -2,6 +2,13 @@
 
 Use this after reviewing the local page.
 
+> Multi-app projects: Cuddle Stay no longer stores application tables in
+> `public`. Read [`docs/supabase-multi-app-schema-contract.md`](docs/supabase-multi-app-schema-contract.md)
+> before adding an app to this Supabase account. Existing installations must
+> apply all files in `supabase/migrations`, including the Cuddle Stay schema
+> isolation migration; `supabase-schema.sql` is a legacy bootstrap snapshot and
+> is not the final multi-app architecture by itself.
+
 ## 1. Create The Database Table
 
 1. Open Supabase.
@@ -11,7 +18,7 @@ Use this after reviewing the local page.
 5. Copy the full SQL into Supabase.
 6. Run it.
 
-This creates one table named `kennel_records` for daily tasks, timesheets, staff schedules, time-off requests, holidays, notifications, dogs, boarding dogs, requests, maintenance, services, app users, and calendar notes. It also creates the Supabase Storage bucket named `kennel-media` for dog profile photos, request/maintenance images, and vaccination record uploads.
+The legacy bootstrap creates one table named `kennel_records` for daily tasks, timesheets, staff schedules, time-off requests, holidays, notifications, dogs, boarding dogs, requests, maintenance, services, app users, and calendar notes. The current migrations move it and the other runtime tables into `cuddle_stay`, introduce database-backed organization membership under `shared`, and apply least-privilege grants. The setup also creates the Supabase Storage bucket named `kennel-media` for dog profile photos, request/maintenance images, and vaccination record uploads.
 
 For production hardening, also review `docs/production-hardening-runbook.md`. It includes the duplicate boarding-data cleanup script, signed-media Edge Function, optional private-media SQL, and the staged normalized boarding schema.
 
@@ -88,7 +95,7 @@ Important: Google and Facebook login will not complete from a `file://` preview.
 
 1. In Supabase, go to Storage.
 2. Confirm there is a bucket named `kennel-media`.
-3. Keep it public until the `media-access` Edge Function has been deployed and tested.
+3. Keep it private. Deploy and test the `media-access` Edge Function before production use.
 4. Use a file size limit around 50 MB.
 5. Allow JPG, PNG, and PDF uploads. Request and Maintenance forms accept only JPG/PNG; customer dog vaccination records also accept PDF.
 6. Do not allow anon/public uploads. Authenticated users should upload only to their own `users/<auth uid>/...` folder.

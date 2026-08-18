@@ -1687,6 +1687,37 @@ function initSupabaseClient() {
   });
 }
 
+// Every Cuddle Stay Data API call goes through this boundary. During the
+// production migration the custom schema is attempted first and legacy public
+// is used only when PostgREST has not exposed cuddle_stay yet. The fallback is
+// removed after the schema migration is verified in production.
+var CUDDLE_STAY_SCHEMA = "cuddle_stay";
+
+function cuddleStayDb(client = supabaseClient, schema = CUDDLE_STAY_SCHEMA) {
+  if (!client) return null;
+  return typeof client.schema === "function" ? client.schema(schema) : client;
+}
+
+function cuddleStaySchemaUnavailable(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+  return code === "PGRST106"
+    || code === "PGRST202"
+    || /schema .*cuddle_stay|must be one of the following schemas|could not find the (table|function)|relation .* does not exist/i.test(message);
+}
+
+async function cuddleStayRequest(requestFactory, client = supabaseClient) {
+  const primary = await requestFactory(cuddleStayDb(client));
+  if (!primary?.error || !cuddleStaySchemaUnavailable(primary.error)) return primary;
+  return requestFactory(cuddleStayDb(client, "public"));
+}
+
+async function ensureCuddleStayCustomerMembership() {
+  if (!supabaseClient || localTestMode) return;
+  const { error } = await cuddleStayRequest((db) => db.rpc("register_customer_membership"));
+  if (error && !cuddleStaySchemaUnavailable(error)) throw error;
+}
+
 function recordTypes() {
   return [
     "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "showInvoice", "financialTransaction", "customerDog",
@@ -2438,6 +2469,9 @@ async function syncAuthenticatedSupabaseUser(supabaseUser, options = {}) {
   authSessionSyncStartedAt = Date.now();
   pendingAuthUserForRemoteWrite = user;
   authSessionSyncPromise = (async () => {
+    await ensureCuddleStayCustomerMembership().catch((error) => {
+      console.warn("Could not confirm Cuddle Stay organization membership.", error);
+    });
     const previousRole = currentRole();
     const initialPageId = normalizePageId(options.initialPageId || pageIdFromHash() || rememberedPageForRole(user.role));
     const remoteLoad = loadRemoteRecords({
@@ -4422,7 +4456,7 @@ async function completeDailyTaskRemote(completion = {}) {
     p_completed_by: completion.completedBy,
     p_completed_email: completion.completedEmail,
   };
-  const { data, error } = await supabaseClient.rpc("complete_daily_task_atomic", params);
+  const { data, error } = await cuddleStayRequest((db) => db.rpc("complete_daily_task_atomic", params));
   if (error) {
     if (dailyTaskAtomicCompletionSetupMissing(error)) {
       console.warn("Daily task atomic completion setup is missing; saving through daily work record fallback.", error);
@@ -4900,7 +4934,7 @@ async function sendPayload(payload, options = {}) {
   try {
     const now = new Date().toISOString();
     const identity = await remoteWriteIdentity(payload);
-    const query = supabaseClient.from("kennel_records").upsert(remoteWriteRow(payload, now, identity));
+    const query = cuddleStayRequest((db) => db.from("kennel_records").upsert(remoteWriteRow(payload, now, identity)));
     const signal = remoteRequestAbortSignal();
     const request = signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
     const { error } = await withRemoteRequestTimeout(request, "Save");
@@ -4953,7 +4987,7 @@ async function sendPayloadBatch(payloads = [], options = {}) {
     const rows = remoteRecords.map((payload) => remoteWriteRow(payload, now, identity));
 
     // Timesheet efficiency: one Supabase upsert keeps bulk scheduling fast and avoids one network round trip per shift.
-    const query = supabaseClient.from("kennel_records").upsert(rows);
+    const query = cuddleStayRequest((db) => db.from("kennel_records").upsert(rows));
     const signal = remoteRequestAbortSignal();
     const request = signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
     const { error } = await withRemoteRequestTimeout(request, "Batch save");
@@ -5168,9 +5202,9 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
   const sinceUpdatedAt = normalizeIsoTimestamp(options.sinceUpdatedAt || "");
   try {
     if (type === "boardingDog" && options.boardingActiveOnly === true) {
-      const { data, error } = await supabaseClient.rpc("kennel_active_boarding_records", {
+      const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_active_boarding_records", {
         p_since_updated_at: sinceUpdatedAt || null,
-      });
+      }));
       if (error) throw error;
       const scopedRows = data || [];
       const reportedTotal = Number(scopedRows[0]?.total_count || 0);
@@ -5184,11 +5218,11 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
     }
     if (type === "scheduledCareTask") {
       const windowBounds = scheduledCareTaskRemoteWindow(options.scheduledCareTaskAnchorDate || "");
-      const { data, error } = await supabaseClient.rpc("kennel_scheduled_care_tasks_window", {
+      const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_scheduled_care_tasks_window", {
         p_start_date: windowBounds.start,
         p_end_date: windowBounds.end,
         p_since_updated_at: sinceUpdatedAt || null,
-      });
+      }));
       if (error) throw error;
       rows.push(...(data || []));
       scheduledCareTaskRemoteWindowStart = windowBounds.start;
@@ -5196,15 +5230,17 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
       return rows;
     }
     while (true) {
-      let query = supabaseClient
-        .from("kennel_records")
-        .select("id,type,payload,helper_email,user_id,submitted_at,updated_at")
-        .eq("type", type);
-      if (sinceUpdatedAt) query = query.gte("updated_at", sinceUpdatedAt);
-      if (type === "notificationLog") query = query.gte("submitted_at", notificationRetentionCutoffIso());
-      const { data, error } = await query
-        .order("updated_at", { ascending: false })
-        .range(from, from + pageSize - 1);
+      const { data, error } = await cuddleStayRequest((db) => {
+        let query = db
+          .from("kennel_records")
+          .select("id,type,payload,helper_email,user_id,submitted_at,updated_at")
+          .eq("type", type);
+        if (sinceUpdatedAt) query = query.gte("updated_at", sinceUpdatedAt);
+        if (type === "notificationLog") query = query.gte("submitted_at", notificationRetentionCutoffIso());
+        return query
+          .order("updated_at", { ascending: false })
+          .range(from, from + pageSize - 1);
+      });
       if (error) throw error;
       rows.push(...(data || []));
       if (!data || data.length < pageSize) {
@@ -5268,12 +5304,12 @@ async function fetchRemoteDailyTaskCompletionRows() {
   let from = 0;
   const sinceDate = addDays(todayDate(), -TASK_COMPLETION_LOOKBACK_DAYS);
   while (true) {
-    const { data, error } = await supabaseClient
+    const { data, error } = await cuddleStayRequest((db) => db
       .from("daily_task_completions")
       .select("id,work_date,shift,task_id,task_text,completed_by,completed_email,completed_user_id,completed_at,inserted_at,updated_at")
       .gte("work_date", sinceDate)
       .order("completed_at", { ascending: false })
-      .range(from, from + pageSize - 1);
+      .range(from, from + pageSize - 1));
     if (error) throw error;
     rows.push(...(data || []));
     if (!data || data.length < pageSize) return rows;
@@ -5317,12 +5353,12 @@ function mergeNotificationReadRows(rows = [], options = {}) {
 async function fetchRemoteNotificationReadRows() {
   if (!notificationReadSyncAvailable || localTestMode || !supabaseClient) return [];
   const since = addDays(todayDate(), -120);
-  const { data, error } = await supabaseClient
+  const { data, error } = await cuddleStayRequest((db) => db
     .from("notification_reads")
     .select("id,notification_id,reader_key,reader_email,read_at")
     .gte("read_at", since)
     .order("read_at", { ascending: false })
-    .limit(2000);
+    .limit(2000));
 
   if (error) {
     const message = String(error.message || "");
@@ -5623,12 +5659,17 @@ function startAutoSync(options = {}) {
   const channelName = "kennel-records-" + identityKey + "-" + Date.now().toString(36);
   realtimeChannel = supabaseClient
     .channel(channelName)
+    .on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "kennel_records" }, handleRealtimeKennelRecordChange)
     .on("postgres_changes", { event: "*", schema: "public", table: "kennel_records" }, handleRealtimeKennelRecordChange);
   if (dailyTaskCompletionSyncAvailable) {
-    realtimeChannel = realtimeChannel.on("postgres_changes", { event: "*", schema: "public", table: "daily_task_completions" }, handleRealtimeTaskCompletionChange);
+    realtimeChannel = realtimeChannel
+      .on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "daily_task_completions" }, handleRealtimeTaskCompletionChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "daily_task_completions" }, handleRealtimeTaskCompletionChange);
   }
   if (typeof handleRealtimeNotificationReadChange === "function") {
-    realtimeChannel = realtimeChannel.on("postgres_changes", { event: "*", schema: "public", table: "notification_reads" }, handleRealtimeNotificationReadChange);
+    realtimeChannel = realtimeChannel
+      .on("postgres_changes", { event: "*", schema: CUDDLE_STAY_SCHEMA, table: "notification_reads" }, handleRealtimeNotificationReadChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "notification_reads" }, handleRealtimeNotificationReadChange);
   }
   realtimeChannel = realtimeChannel
     .subscribe((status) => {

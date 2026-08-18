@@ -1718,11 +1718,10 @@ var notificationRetentionRemoteCleanupStarted = false;
 function scheduleRemoteNotificationRetentionCleanup() {
   if (notificationRetentionRemoteCleanupStarted || localTestMode || !supabaseClient || !isStaffRole()) return;
   notificationRetentionRemoteCleanupStarted = true;
-  supabaseClient
-    .from("kennel_records")
+  cuddleStayRequest((db) => db.from("kennel_records")
     .delete()
     .eq("type", "notificationLog")
-    .lt("submitted_at", notificationRetentionCutoffIso())
+    .lt("submitted_at", notificationRetentionCutoffIso()))
     .then(({ error }) => {
       if (error) throw error;
     })
@@ -1912,11 +1911,11 @@ async function saveNotificationReadReceipt(id = "") {
     reader_email: normalizeEmail(currentUser?.email || helperEmail?.value || ""),
   };
 
-  const { data, error } = await supabaseClient
+  const { data, error } = await cuddleStayRequest((db) => db
     .from("notification_reads")
     .upsert(row, { onConflict: "notification_id,reader_key" })
     .select("id,notification_id,reader_key,reader_email,read_at")
-    .maybeSingle();
+    .maybeSingle());
 
   if (error) {
     const message = String(error.message || "");

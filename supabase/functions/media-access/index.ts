@@ -1,6 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+let cuddleStaySchema = "cuddle_stay";
+
+function cuddleStayDb(client: ReturnType<typeof createClient>) {
+  return client.schema(cuddleStaySchema);
+}
+
+async function resolveCuddleStaySchema(client: ReturnType<typeof createClient>) {
+  const { error } = await client.schema("cuddle_stay").from("app_settings").select("id").limit(1);
+  cuddleStaySchema = error ? "public" : "cuddle_stay";
+}
+
 const MEDIA_BUCKET = "kennel-media";
 const SIGNED_URL_SECONDS = 600;
 const PROFILE_THUMB_VARIANT = "profileThumb";
@@ -84,7 +95,7 @@ async function callerIsStaff(adminClient: ReturnType<typeof createClient>, email
   const normalized = normalizeEmail(email);
   if (!normalized) return false;
   if (adminEmails().map(normalizeEmail).includes(normalized) || normalized === "centraltexashusky@gmail.com" || normalized === "cthusky05@gmail.com") return true;
-  const { data, error } = await adminClient
+  const { data, error } = await cuddleStayDb(adminClient)
     .from("kennel_records")
     .select("payload")
     .eq("type", "settingsUser")
@@ -177,7 +188,7 @@ async function workspaceAgreementReferencesExactPath(
   adminClient: ReturnType<typeof createClient>,
   storagePath: string,
 ) {
-  const { data, error } = await adminClient
+  const { data, error } = await cuddleStayDb(adminClient)
     .from("app_settings")
     .select("agreement_config")
     .eq("id", "workspace")
@@ -217,6 +228,7 @@ Deno.serve(async (req) => {
   const adminClient = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  await resolveCuddleStaySchema(adminClient);
 
   const isStaff = await callerIsStaff(adminClient, user.email);
   let allowed = isStaff || storageOwnerUserId(storagePath) === user.id;
@@ -230,7 +242,7 @@ Deno.serve(async (req) => {
 
   if (!allowed && body.recordId) {
     // Efficiency flow: non-staff source-record authorization must go through the user client so RLS still applies.
-    const { data: sourceRow, error: sourceError } = await userClient
+    const { data: sourceRow, error: sourceError } = await cuddleStayDb(userClient)
       .from("kennel_records")
       .select("id,type,user_id,payload")
       .eq("id", String(body.recordId))
