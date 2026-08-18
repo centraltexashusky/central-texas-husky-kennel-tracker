@@ -1161,6 +1161,18 @@ body.owned-dog-modal-open {
   width: 100%;
 }
 
+#customerDogForm .field-grid > label,
+#customerDogForm .field-grid > label > small {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#customerVaccinationFiles {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
 #customerDogPopupMount .customer-dog-modal:not([hidden]) {
   box-shadow: none;
   inset: auto;

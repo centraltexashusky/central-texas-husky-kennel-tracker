@@ -2537,9 +2537,12 @@ function boardingCarePacketHtml(record = {}, stay = {}) {
   const merged = { ...record, ...snapshot };
   const pricingSnapshot = boardingCurrentPricingSnapshotForStay(record, stay) || stay.pricingSnapshot || {};
   const vaccineRows = [
-    ["DHPP", boardingCarePacketValue(record, snapshot, "dhppDate")],
-    ["Rabies", boardingCarePacketValue(record, snapshot, "rabiesDate")],
-    ["Bordetella", boardingCarePacketValue(record, snapshot, "bordetellaDate")],
+    ["DHPP last", boardingCarePacketValue(record, snapshot, "dhppDate")],
+    ["DHPP due", boardingCarePacketValue(record, snapshot, "nextDhppDate")],
+    ["Rabies last", boardingCarePacketValue(record, snapshot, "rabiesDate")],
+    ["Rabies due", boardingCarePacketValue(record, snapshot, "nextRabiesDate")],
+    ["Bordetella last", boardingCarePacketValue(record, snapshot, "bordetellaDate")],
+    ["Bordetella due", boardingCarePacketValue(record, snapshot, "nextBordetellaDate")],
     ["Heartworm", boardingCarePacketValue(record, snapshot, "heartwormDate")],
   ];
   const careRows = [
@@ -3037,11 +3040,14 @@ function boardingDraftFromCustomerDog(dog = {}) {
     vetInfo: dog.vetInfo || "",
     rabiesDate: dog.rabiesDate || "",
     dhppDate: dog.dhppDate || "",
+    nextRabiesDate: dog.nextRabiesDate || "",
+    nextDhppDate: dog.nextDhppDate || "",
     rabiesGoodThreeYears: dog.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(dog, "rabies") ? "Yes" : ""),
     dhppGoodThreeYears: dog.dhppGoodThreeYears || (vaccineDurationIsThreeYears(dog, "dhpp") ? "Yes" : ""),
     rabiesDuration: dog.rabiesDuration || (vaccineDurationIsThreeYears(dog, "rabies") ? "3 years" : ""),
     dhppDuration: dog.dhppDuration || (vaccineDurationIsThreeYears(dog, "dhpp") ? "3 years" : ""),
     bordetellaDate: dog.bordetellaDate || "",
+    nextBordetellaDate: dog.nextBordetellaDate || "",
     heartwormDate: dog.heartwormDate || "",
     specialCare: dog.specialCare || "",
     profilePhotoUrl: dog.profilePhotoUrl || "",

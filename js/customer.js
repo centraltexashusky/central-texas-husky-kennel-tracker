@@ -1305,6 +1305,9 @@ function customerDogFromBoardingDog(record = {}, email = currentUser?.email, opt
     dhppDate: record.dhppDate || linked.dhppDate || "",
     rabiesDate: record.rabiesDate || linked.rabiesDate || "",
     bordetellaDate: record.bordetellaDate || linked.bordetellaDate || "",
+    nextDhppDate: record.nextDhppDate || linked.nextDhppDate || "",
+    nextRabiesDate: record.nextRabiesDate || linked.nextRabiesDate || "",
+    nextBordetellaDate: record.nextBordetellaDate || linked.nextBordetellaDate || "",
     heartwormDate: record.heartwormDate || linked.heartwormDate || "",
     rabiesDuration: record.rabiesDuration || linked.rabiesDuration || "",
     dhppDuration: record.dhppDuration || linked.dhppDuration || "",
@@ -1679,6 +1682,13 @@ function vaccinationPayloadsForDog(dog = {}) {
       dogId: dog.id,
       vaccineType: label,
       vaccinationDate: dog[field],
+      expiresAt: field === "rabiesDate"
+        ? dog.nextRabiesDate || ""
+        : field === "dhppDate"
+          ? dog.nextDhppDate || ""
+          : field === "bordetellaDate"
+            ? dog.nextBordetellaDate || ""
+            : "",
       duration: field === "rabiesDate"
         ? dog.rabiesDuration || (vaccineDurationIsThreeYears(dog, "rabies") ? "3 years" : "")
         : field === "dhppDate"
@@ -1961,6 +1971,33 @@ function customerVisibleStepFields(container) {
     .filter((field) => field.name && !field.disabled && field.type !== "hidden" && field.type !== "file");
 }
 
+function syncCustomerVaccinationDateConstraints(formEl = $("#customerDogForm")) {
+  if (!formEl) return;
+  requiredCustomerVaccines.forEach((vaccine) => {
+    const lastField = formFieldByName(formEl, vaccine.dateField);
+    const nextField = formFieldByName(formEl, vaccine.nextField);
+    if (lastField) lastField.max = todayDate();
+    if (nextField) nextField.min = dateOnly(lastField?.value || "");
+  });
+}
+
+function customerVaccinationDateRangeError(formEl = $("#customerDogForm")) {
+  syncCustomerVaccinationDateConstraints(formEl);
+  for (const vaccine of requiredCustomerVaccines) {
+    const lastField = formFieldByName(formEl, vaccine.dateField);
+    const nextField = formFieldByName(formEl, vaccine.nextField);
+    const lastDate = dateOnly(lastField?.value || "");
+    const nextDate = dateOnly(nextField?.value || "");
+    if (lastDate && lastDate > todayDate()) {
+      return { field: lastField, message: "Last " + vaccine.label + " vaccination cannot be in the future." };
+    }
+    if (lastDate && nextDate && nextDate < lastDate) {
+      return { field: nextField, message: "Next " + vaccine.label + " vaccination due must be on or after the last vaccination." };
+    }
+  }
+  return null;
+}
+
 function validateCustomerDogWizardStep() {
   const panel = document.querySelector(\`[data-customer-dog-step="\${cssEscapeValue(customerDogWizardStep)}"]\`);
   let firstInvalid = null;
@@ -1973,6 +2010,13 @@ function validateCustomerDogWizardStep() {
       firstInvalid = firstInvalid || field;
     }
   });
+  if (customerDogWizardStep === "records") {
+    const vaccineError = customerVaccinationDateRangeError($("#customerDogForm"));
+    if (vaccineError?.field) {
+      setFieldError(vaccineError.field, vaccineError.message);
+      firstInvalid = firstInvalid || vaccineError.field;
+    }
+  }
   if (!firstInvalid) return true;
   firstInvalid.focus({ preventScroll: true });
   firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -2050,7 +2094,8 @@ function validateCustomerBookingWizardStep() {
       showToast("Please choose the dog and requested times before continuing.");
       return false;
     }
-    return validateCustomerBookingAvailability(formEl);
+    if (!validateCustomerBookingAvailability(formEl)) return false;
+    return validateCustomerBookingVaccinations(customerEstimateDetails());
   }
   return true;
 }
@@ -2123,6 +2168,11 @@ function updateCustomerStickyBookNow() {
   const dogs = customerDogsForCurrentUser();
   const requestPageActive = activePageId() === "customerRequestsPage";
   const bookingOpen = $("#customerBookingForm") && !$("#customerBookingForm").hidden;
+  const dogEditorOpen = $("#customerDogForm") && !$("#customerDogForm").hidden;
+  if (dogEditorOpen) {
+    button.hidden = true;
+    return;
+  }
   button.hidden = false;
   if (!dogs.length && requestPageActive) {
     button.textContent = "Add Your First Dog";
@@ -2203,15 +2253,33 @@ function vaccinationDateExpiry(record = {}, vaccineKey = "", keys = [], defaultY
   return expiry;
 }
 
+var requiredCustomerVaccines = [
+  { key: "dhpp", label: "DHPP", dateField: "dhppDate", dateKeys: ["dhppDate", "dhppVaccinationDate", "lastDhppVaccination"], nextField: "nextDhppDate", nextKeys: ["nextDhppDate", "dhppExpirationDate", "dhppExpiresAt"] },
+  { key: "rabies", label: "Rabies", dateField: "rabiesDate", dateKeys: ["rabiesDate", "rabiesVaccinationDate", "lastRabiesVaccination"], nextField: "nextRabiesDate", nextKeys: ["nextRabiesDate", "rabiesExpirationDate", "rabiesExpiresAt"] },
+  { key: "bordetella", label: "Bordetella", dateField: "bordetellaDate", dateKeys: ["bordetellaDate", "bordetellaVaccinationDate", "lastBordetellaVaccination"], nextField: "nextBordetellaDate", nextKeys: ["nextBordetellaDate", "bordetellaExpirationDate", "bordetellaExpiresAt"] },
+];
+
+function vaccinationDueDate(record = {}, vaccineKey = "") {
+  const vaccine = requiredCustomerVaccines.find((item) => item.key === vaccineKey);
+  if (!vaccine) return null;
+  return vaccinationFieldDate(record, vaccine.nextKeys)
+    || vaccinationDateExpiry(record, vaccine.key, vaccine.dateKeys, 1);
+}
+
 function legacyVaccinationDateStatus(record = {}, asOfDate = todayDate()) {
-  const expirations = {
-    rabies: vaccinationDateExpiry(record, "rabies", ["rabiesDate", "rabiesVaccinationDate", "lastRabiesVaccination"], 1),
-    dhpp: vaccinationDateExpiry(record, "dhpp", ["dhppDate", "dhppVaccinationDate", "lastDhppVaccination"], 1),
-    bordetella: vaccinationDateExpiry(record, "bordetella", ["bordetellaDate", "bordetellaVaccinationDate", "lastBordetellaVaccination"], 1),
+  const vaccinationDates = {
+    rabies: vaccinationFieldDate(record, ["rabiesDate", "rabiesVaccinationDate", "lastRabiesVaccination"]),
+    dhpp: vaccinationFieldDate(record, ["dhppDate", "dhppVaccinationDate", "lastDhppVaccination"]),
+    bordetella: vaccinationFieldDate(record, ["bordetellaDate", "bordetellaVaccinationDate", "lastBordetellaVaccination"]),
   };
-  if (!Object.values(expirations).some(Boolean)) return "";
+  const expirations = {
+    rabies: vaccinationDueDate(record, "rabies"),
+    dhpp: vaccinationDueDate(record, "dhpp"),
+    bordetella: vaccinationDueDate(record, "bordetella"),
+  };
+  if (!Object.values(vaccinationDates).some(Boolean) && !Object.values(expirations).some(Boolean)) return "";
   const today = new Date(\`\${String(asOfDate || todayDate()).slice(0, 10)}T00:00:00\`);
-  return Object.values(expirations).every((date) => date && date >= today) ? "ok" : "incomplete";
+  return Object.keys(expirations).every((key) => vaccinationDates[key] && expirations[key] && expirations[key] >= today) ? "ok" : "incomplete";
 }
 
 function vaccinationStatusInfo(record = {}, options = {}) {
@@ -2255,6 +2323,14 @@ function vaccinationStatusBadgeHtml(record = {}, options = {}) {
 }
 
 function customerFacingVaccineStatus(dog = {}) {
+  const strictIssues = customerBoardingVaccinationIssues(dog, todayDate());
+  if (strictIssues.length) {
+    return {
+      label: "Vaccination update required",
+      className: "is-vaccine-needed",
+      hasVaccines: false,
+    };
+  }
   const info = vaccinationStatusInfo(dog);
   return {
     label: info.customerLabel || info.label,
@@ -2267,10 +2343,53 @@ function vaccinationExpiresSoon(record = {}, days = 30) {
   const today = new Date(\`\${todayDate()}T00:00:00\`);
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() + days);
-  return arrayValue(record.vaccinationRecords)
+  return [
+    ...requiredCustomerVaccines.map((vaccine) => vaccinationDueDate(record, vaccine.key)),
+    ...arrayValue(record.vaccinationRecords)
     .map(vaccinationExpiryDate)
+  ]
     .filter(Boolean)
     .some((date) => date >= today && date <= cutoff);
+}
+
+function customerBoardingVaccinationIssues(dog = {}, asOfDate = todayDate()) {
+  const requiredThrough = dateOnly(asOfDate) || todayDate();
+  return requiredCustomerVaccines.flatMap((vaccine) => {
+    const lastDate = dateOnly(dog[vaccine.dateField] || "");
+    const nextDate = dateOnly(dog[vaccine.nextField] || "");
+    if (!lastDate && !nextDate) return [vaccine.label + ": add the last vaccination and next-due date."];
+    if (!lastDate) return [vaccine.label + ": add the last vaccination date."];
+    if (!nextDate) return [vaccine.label + ": add the next-due date from the veterinarian record."];
+    if (nextDate < requiredThrough) return [vaccine.label + ": expires " + nextDate + " before pickup " + requiredThrough + "."];
+    return [];
+  });
+}
+
+function customerBookingVaccinationFailures(estimate = {}) {
+  if (estimate.isServiceRequest) return [];
+  const requiredThrough = dateOnly(estimate.pickupTime || estimate.dropoffTime) || todayDate();
+  return uniqueCustomerBookingDogs(estimate.dogs || [])
+    .map((dog) => ({ dog, issues: customerBoardingVaccinationIssues(dog, requiredThrough) }))
+    .filter((entry) => entry.issues.length);
+}
+
+function customerBookingVaccinationGateHtml(failures = [], requiredThrough = "") {
+  return \`<p>Each selected dog must have current DHPP, rabies, and Bordetella dates through pickup\${requiredThrough ? \` on \${escapeHtml(requiredThrough)}\` : ""}.</p>
+    <div class="record-grid compact-record-grid">\${failures.map(({ dog, issues }) => \`<article class="record-card compact-record-card">
+      <strong>\${escapeHtml(dog.dogName || "Dog")}</strong>
+      <ul>\${issues.map((issue) => \`<li>\${escapeHtml(issue)}</li>\`).join("")}</ul>
+      <div class="record-actions"><button type="button" data-action="open-customer-vaccine-update" data-id="\${escapeHtml(dog.id || "")}" data-boarding-id="\${escapeHtml(dog.sourceBoardingDogId || dog.linkedBoardingDogId || "")}">Update Vaccination Dates</button></div>
+    </article>\`).join("")}</div>\`;
+}
+
+function validateCustomerBookingVaccinations(estimate = {}, options = {}) {
+  const failures = customerBookingVaccinationFailures(estimate);
+  if (!failures.length) return true;
+  if (options.showDialog !== false) {
+    const requiredThrough = dateOnly(estimate.pickupTime || estimate.dropoffTime) || todayDate();
+    showDetailDialog("Vaccination Update Required", customerBookingVaccinationGateHtml(failures, requiredThrough));
+  }
+  return false;
 }
 
 function dogAgeText(dog = {}) {
@@ -2374,7 +2493,7 @@ function customerDogWelcomeHtml() {
     </div>
     <span class="customer-flow-kicker">Welcome\${currentUser?.name ? \`, \${escapeHtml(currentUser.name.split(" ")[0])}\` : ""}</span>
     <h3>Add your first dog to start booking</h3>
-    <p>Add the basics now. Vaccines and records can be uploaded here and staff can review them before check-in.</p>
+    <p>Add the profile, care details, and current vaccination dates now. Required vaccine dates must remain current through pickup before a boarding request can be submitted.</p>
     <div class="customer-welcome-checklist">
       <span>Dog profile</span>
       <span>Care notes</span>
@@ -2818,6 +2937,7 @@ function openCustomerDogInline(record = {}) {
   $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
   $("#customerDogFormTitle").textContent = record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog";
   setDogPhoto("customer", record);
+  syncCustomerVaccinationDateConstraints(formEl);
   setCustomerDogWizardStep("profile");
   if (formEl.parentElement !== home) home.appendChild(formEl);
   formEl.hidden = false;
@@ -2834,6 +2954,7 @@ function openCustomerDog(record = {}) {
   $("#saveCustomerDogButton").textContent = record.id ? "Update Changes" : "Save Dog";
   $("#customerDogFormTitle").textContent = record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog";
   setDogPhoto("customer", record);
+  syncCustomerVaccinationDateConstraints(formEl);
   setCustomerDogWizardStep("profile");
   showDetailDialog(record.id ? \`Edit \${record.dogName || "Dog"}\` : "Add Dog", \`<div id="customerDogPopupMount"></div>\`, null, { dialogClass: "is-customer-dog-editor" });
   $("#customerDogPopupMount")?.appendChild(formEl);
@@ -3000,6 +3121,10 @@ async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
   if (customerBookingSubmitInProgress) return;
   if (!estimate?.dogs?.length) return;
+  if (!validateCustomerBookingVaccinations(estimate)) {
+    $("#bookingConfirmDialog")?.close();
+    return;
+  }
   const dogSelectionMessage = customerDogSelectionErrorMessage(uniqueCustomerBookingDogs(estimate.dogs || []).length);
   if (dogSelectionMessage) {
     showToast(dogSelectionMessage);
@@ -3145,6 +3270,9 @@ async function submitPendingCustomerBooking() {
         dhppDate: dog.dhppDate || "",
         rabiesDate: dog.rabiesDate || "",
         bordetellaDate: dog.bordetellaDate || "",
+        nextDhppDate: dog.nextDhppDate || "",
+        nextRabiesDate: dog.nextRabiesDate || "",
+        nextBordetellaDate: dog.nextBordetellaDate || "",
         heartwormDate: dog.heartwormDate || "",
         profilePhotoUrl: dog.profilePhotoUrl || "",
         profilePhotoPath: dog.profilePhotoPath || "",
@@ -3301,6 +3429,9 @@ async function submitPendingCustomerBooking() {
         dhppDate: dog.dhppDate,
         rabiesDate: dog.rabiesDate,
         bordetellaDate: dog.bordetellaDate || existingTarget?.bordetellaDate || "",
+        nextDhppDate: dog.nextDhppDate || existingTarget?.nextDhppDate || "",
+        nextRabiesDate: dog.nextRabiesDate || existingTarget?.nextRabiesDate || "",
+        nextBordetellaDate: dog.nextBordetellaDate || existingTarget?.nextBordetellaDate || "",
         heartwormDate: dog.heartwormDate || existingTarget?.heartwormDate || "",
         rabiesDuration: dog.rabiesDuration,
         dhppDuration: dog.dhppDuration,

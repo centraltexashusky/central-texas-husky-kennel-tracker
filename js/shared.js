@@ -7635,6 +7635,9 @@ var canonicalDogProfileFields = [
   "rabiesDate",
   "dhppDate",
   "bordetellaDate",
+  "nextRabiesDate",
+  "nextDhppDate",
+  "nextBordetellaDate",
   "heartwormDate",
   "leptospirosisDate",
   "rabiesGoodThreeYears",
@@ -7801,11 +7804,14 @@ function canonicalDogPayloadFromLegacy(dogId = "", sources = {}) {
     vaccinationFiles: customerDog.vaccinationFiles || boardingDog.vaccinationFiles || "",
     dhppDate: customerDog.dhppDate || boardingDog.dhppDate || "",
     rabiesDate: customerDog.rabiesDate || boardingDog.rabiesDate || "",
+    nextDhppDate: customerDog.nextDhppDate || boardingDog.nextDhppDate || "",
+    nextRabiesDate: customerDog.nextRabiesDate || boardingDog.nextRabiesDate || "",
     rabiesDuration: customerDog.rabiesDuration || boardingDog.rabiesDuration || "",
     dhppDuration: customerDog.dhppDuration || boardingDog.dhppDuration || "",
     rabiesGoodThreeYears: customerDog.rabiesGoodThreeYears || boardingDog.rabiesGoodThreeYears || "",
     dhppGoodThreeYears: customerDog.dhppGoodThreeYears || boardingDog.dhppGoodThreeYears || "",
     bordetellaDate: customerDog.bordetellaDate || boardingDog.bordetellaDate || "",
+    nextBordetellaDate: customerDog.nextBordetellaDate || boardingDog.nextBordetellaDate || "",
     heartwormDate: customerDog.heartwormDate || boardingDog.heartwormDate || "",
     profilePhotoUrl: customerDog.profilePhotoUrl || profilePhotoDirectSource(boardingDog) || "",
     profilePhotoPath: profilePhotoStoragePath(customerDog) || profilePhotoStoragePath(boardingDog) || "",
@@ -8447,11 +8453,14 @@ async function linkBoardingDogOwnerAccount(record = {}) {
     vetInfo: record.vetInfo || existingCustomerDog.vetInfo || "",
     rabiesDate: record.rabiesDate || existingCustomerDog.rabiesDate || "",
     dhppDate: record.dhppDate || existingCustomerDog.dhppDate || "",
+    nextRabiesDate: record.nextRabiesDate || existingCustomerDog.nextRabiesDate || "",
+    nextDhppDate: record.nextDhppDate || existingCustomerDog.nextDhppDate || "",
     rabiesGoodThreeYears: record.rabiesGoodThreeYears || existingCustomerDog.rabiesGoodThreeYears || (vaccineDurationIsThreeYears(record, "rabies") || vaccineDurationIsThreeYears(existingCustomerDog, "rabies") ? "Yes" : ""),
     dhppGoodThreeYears: record.dhppGoodThreeYears || existingCustomerDog.dhppGoodThreeYears || (vaccineDurationIsThreeYears(record, "dhpp") || vaccineDurationIsThreeYears(existingCustomerDog, "dhpp") ? "Yes" : ""),
     rabiesDuration: record.rabiesDuration || existingCustomerDog.rabiesDuration || (vaccineDurationIsThreeYears(record, "rabies") || vaccineDurationIsThreeYears(existingCustomerDog, "rabies") ? "3 years" : ""),
     dhppDuration: record.dhppDuration || existingCustomerDog.dhppDuration || (vaccineDurationIsThreeYears(record, "dhpp") || vaccineDurationIsThreeYears(existingCustomerDog, "dhpp") ? "3 years" : ""),
     bordetellaDate: record.bordetellaDate || existingCustomerDog.bordetellaDate || "",
+    nextBordetellaDate: record.nextBordetellaDate || existingCustomerDog.nextBordetellaDate || "",
     heartwormDate: record.heartwormDate || existingCustomerDog.heartwormDate || "",
     specialCare: record.specialCare || existingCustomerDog.specialCare || "",
     profilePhotoUrl: record.profilePhotoUrl || existingCustomerDog.profilePhotoUrl || "",
@@ -8728,7 +8737,7 @@ function mergeBoardingProfileGroup(records = []) {
     "dogName", "breedDescription", "akcRegistrationNumber", "microchipNumber", "sireName", "damName", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "profilePhotoMeta", "profilePhotoSourceRecordId", "profilePhotoSourceRecordType", "sex", "spayNeuterStatus",
     "ownerName", "ownerPhone", "ownerEmail", "customerEmail", "linkedOwnerEmail", "secondaryOwnerEmail",
     "emergencyName", "emergencyPhone", "vetInfo", "foodInstructions", "specialCare", "boardingHistory",
-    "rabiesDate", "dhppDate", "bordetellaDate", "heartwormDate", "vaccinationFiles",
+    "rabiesDate", "dhppDate", "bordetellaDate", "nextRabiesDate", "nextDhppDate", "nextBordetellaDate", "heartwormDate", "vaccinationFiles",
   ].forEach((field) => {
     if (merged[field]) return;
     const fallback = records.find((record) => record[field]);
@@ -10947,6 +10956,7 @@ function validateCustomerDogSelection(options = {}) {
 
 function resetCustomerDogForm() {
   $("#customerDogForm").reset();
+  if (typeof syncCustomerVaccinationDateConstraints === "function") syncCustomerVaccinationDateConstraints($("#customerDogForm"));
   $("#customerDogId").value = "";
   $("#saveCustomerDogButton").textContent = "Save Dog";
   $("#customerDogFormTitle").textContent = "Add Dog";
@@ -12695,6 +12705,17 @@ function initEvents() {
       const record = boardingDogRecordForDisplay(action.dataset.id);
       const stay = record ? boardingStayByReference(record, boardingStayReferenceFromAction(action)) : null;
       if (record && stay) openBoardingRequirementOverride(record, stay, action.dataset.nextStatus || "Approved");
+      return;
+    }
+    if (action.dataset.action === "open-customer-vaccine-update") {
+      const record = editableCustomerDogForCurrentUser(action.dataset.id || "", action.dataset.boardingId || "");
+      if (!record) {
+        showToast("This dog profile could not be opened for vaccination updates.");
+        return;
+      }
+      openCustomerDogModal(record);
+      setCustomerDogWizardStep("records");
+      syncCustomerVaccinationDateConstraints($("#customerDogForm"));
       return;
     }
     if (action.dataset.action === "close-detail-dialog") {
@@ -14734,6 +14755,11 @@ function initEvents() {
 
   $("#customerDogPhotoButton").addEventListener("click", () => handleDogPhotoClick("customer"));
   $("#customerDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("customer"));
+  $("#customerDogForm")?.addEventListener("input", (event) => {
+    if (requiredCustomerVaccines.some((vaccine) => [vaccine.dateField, vaccine.nextField].includes(event.target.name))) {
+      syncCustomerVaccinationDateConstraints(event.currentTarget);
+    }
+  });
   $("#customerDogBackButton")?.addEventListener("click", goToPreviousCustomerDogStep);
   $("#customerDogNextButton")?.addEventListener("click", goToNextCustomerDogStep);
   $("#customerBookingBackButton")?.addEventListener("click", goToPreviousCustomerBookingStep);
@@ -14743,6 +14769,15 @@ function initEvents() {
     event.preventDefault();
     const formEl = event.currentTarget;
     if (!validateForm(formEl)) return;
+    const vaccineDateError = customerVaccinationDateRangeError(formEl);
+    if (vaccineDateError?.field) {
+      setCustomerDogWizardStep("records");
+      setFieldError(vaccineDateError.field, vaccineDateError.message);
+      vaccineDateError.field.focus({ preventScroll: true });
+      vaccineDateError.field.scrollIntoView({ behavior: "smooth", block: "center" });
+      showToast("Please correct the vaccination dates before saving.");
+      return;
+    }
     const uploadStatus = $("#customerUploadStatus");
     try {
       const data = formPayload(formEl);
@@ -14973,6 +15008,7 @@ function initEvents() {
         showToast("Select at least one dog for the boarding request.");
         return;
       }
+      if (!validateCustomerBookingVaccinations(estimate)) return;
       showBookingConfirmDialog(estimate);
     } finally {
       if (submitButton) {
