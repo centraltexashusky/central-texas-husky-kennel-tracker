@@ -5847,6 +5847,30 @@ function boardingCustomerUpdateDeliverySummary(notification = {}) {
   };
 }
 
+async function persistBoardingCustomerUpdate(record = {}, update = {}, clearOwnerUpdate = false) {
+  if (!supabaseClient || localTestMode) {
+    const flags = clearOwnerUpdate ? (record.flags || []).filter((flag) => flag !== "Required update from owner") : record.flags || [];
+    return upsertRecord("boardingDog", {
+      ...record,
+      dailyActivity: "",
+      flags,
+      customerUpdates: [update, ...(record.customerUpdates || []).filter((item) => item.id !== update.id)],
+      latestCustomerUpdate: update,
+      updatedAt: update.createdAt || new Date().toISOString(),
+    });
+  }
+  const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_save_boarding_customer_update", {
+    p_record_id: record.id || "",
+    p_update: update,
+    p_clear_owner_update: Boolean(clearOwnerUpdate),
+  }));
+  if (error) throw error;
+  const savedPayload = data?.payload;
+  const savedUpdate = data?.customerUpdate;
+  if (!savedPayload?.id || !savedUpdate?.id) throw new Error("The owner update was not confirmed by the server.");
+  return upsertRecord("boardingDog", savedPayload);
+}
+
 async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options = {}) {
   const displayRecord = boardingDogRecordForDisplay(record.id) || record;
   const targetStay = stay?.id ? stay : ownerUpdateStayForRecord(displayRecord, options.reference || {});
@@ -5871,12 +5895,16 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
   }
   const timestamp = new Date().toISOString();
   const requestCode = boardingStayRequestCode(displayRecord, targetStay);
-  const mediaItems = options.mediaItems || await uploadMediaFiles(input, \`boarding-customer-updates/\${displayRecord.id}/\${targetStay.id}\`, {
+  const uploadedMediaItems = options.mediaItems || await uploadMediaFiles(input, \`boarding-customer-updates/\${displayRecord.id}/\${targetStay.id}\`, {
     allowedTypes: CUSTOMER_UPDATE_MEDIA_TYPES,
     allowedExtensions: CUSTOMER_UPDATE_MEDIA_EXTENSIONS,
     imagePreset: "generalPhoto",
     label: "customer update media",
   });
+  const mediaItems = uploadedMediaItems.filter((item) => mediaItemHasOpenableSource(item));
+  if (uploadedMediaItems.length > mediaItems.length) {
+    showToast("One or more owner update files were not uploaded. They were not attached to the update.");
+  }
   if (!note && !mediaItems.length) {
     showToast("Add a note or upload a valid photo or video before saving a customer update.");
     return null;
@@ -5897,19 +5925,16 @@ async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options
     byName: staff.name,
     byEmail: staff.email,
   };
-  const flags = options.clearOwnerUpdate ? (displayRecord.flags || []).filter((flag) => flag !== "Required update from owner") : displayRecord.flags || [];
-  const updated = upsertRecord("boardingDog", {
-    ...displayRecord,
-    dailyActivity: "",
-    flags,
-    customerUpdates: [update, ...(displayRecord.customerUpdates || []).filter((item) => item.id !== update.id)],
-    latestCustomerUpdate: update,
-    updatedAt: timestamp,
-  });
-  await sendPayload(updated);
+  const updated = await persistBoardingCustomerUpdate(displayRecord, update, Boolean(options.clearOwnerUpdate));
   const notification = await notifyIfNeeded(updated, "customerStayUpdateSent");
-  await mirrorBoardingCustomerUpdateToCustomerDog(updated, update);
-  await addAuditLog("Added customer boarding update", "boardingDog", updated, \`\${updated.dogName || "Dog"} | \${requestCode} | \${note || mediaItems.map((item) => item.name).join(", ")}\`);
+  try {
+    await mirrorBoardingCustomerUpdateToCustomerDog(updated, updated.latestCustomerUpdate || update);
+  } catch (error) {
+    console.warn("The owner update was saved, but the legacy customer-dog mirror could not be refreshed.", error);
+  }
+  if (!supabaseClient || localTestMode) {
+    await addAuditLog("Added customer boarding update", "boardingDog", updated, \`\${updated.dogName || "Dog"} | \${requestCode} | \${note || mediaItems.map((item) => item.name).join(", ")}\`);
+  }
   if (input) input.value = "";
   renderBoardingCustomerUpdates(updated);
   renderBoardingDogFiles(updated);
