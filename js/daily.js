@@ -596,7 +596,8 @@ function dailyCareLogCompletionMetaHtml(log = {}, record = {}) {
 
 function dailyDetailHtml(record) {
   const careLogs = record.structuredCareLogs || record.careLogs || [];
-  const completedTasks = completedTasksForRecord(record);
+  const reportDate = dailySubmissionDate(record);
+  const completedTasks = reportDate ? completedTasksForDate(reportDate) : completedTasksForRecord(record);
   const monthlyTasks = record.monthlyTasks || [];
   const completedHtml = completedTasksGroupedHtml(completedTasks);
   const careLogHtml = careLogs.length

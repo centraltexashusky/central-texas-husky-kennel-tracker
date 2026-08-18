@@ -10037,6 +10037,50 @@ function renderDashboardReminders(metrics = dashboardMetrics()) {
     : \`<strong>Reminders for \${escapeHtml(selectedDate)}</strong><p>No vaccine or boarding reminders for this date.</p>\`;
 }
 
+function dashboardDailyWorkRecordForDate(date = "") {
+  const workDate = dateOnly(date);
+  if (!workDate) return null;
+  const storedRecords = dailyTaskRecordsForDate(workDate);
+  const storedRecord = dailyTaskRecordForDate(workDate) || {};
+  const completedTasks = completedTasksForDate(workDate);
+  const structuredCareLogs = structuredCareLogsForDate(workDate);
+  if (!storedRecords.length && !completedTasks.length && !structuredCareLogs.length) return null;
+  const activityTimestamps = [
+    ...storedRecords.flatMap((record) => [record.updatedAt, record.submittedAt]),
+    ...completedTasks.map((completion) => completion.completedAt || completion.updatedAt || completion.insertedAt),
+    ...structuredCareLogs.map((log) => log.loggedAt || log.updatedAt || log.createdAt),
+  ].filter(Boolean).sort((a, b) => new Date(b) - new Date(a));
+  const storedId = storedRecord.id || "";
+  return {
+    ...storedRecord,
+    type: "dailyTask",
+    id: storedId || dailyTaskRecordId(workDate),
+    date: workDate,
+    helperName: "Team completed work",
+    completedTasks,
+    structuredCareLogs,
+    careLogs: structuredCareLogs,
+    submittedAt: storedRecord.submittedAt || activityTimestamps[activityTimestamps.length - 1] || activityTimestamps[0] || workDate + "T12:00:00",
+    updatedAt: activityTimestamps[0] || storedRecord.updatedAt || storedRecord.submittedAt || workDate + "T12:00:00",
+    dashboardStoredRecordId: storedId,
+    dashboardDerived: !storedId,
+  };
+}
+
+function dashboardDailyWorkRecords() {
+  const workDates = new Set();
+  readRecords("dailyTask").forEach((record) => {
+    if (!record.removed) workDates.add(dailySubmissionDate(record));
+  });
+  readRecords("dailyTaskCompletion").forEach((completion) => {
+    if (!completion.removed) workDates.add(dateOnly(completion.date || completion.workDate));
+  });
+  return [...workDates]
+    .filter(Boolean)
+    .map(dashboardDailyWorkRecordForDate)
+    .filter(Boolean);
+}
+
 function renderDashboardTaskCalendar() {
   const calendar = $("#dashboardTaskCalendar");
   if (!calendar) return;
@@ -10045,9 +10089,8 @@ function renderDashboardTaskCalendar() {
   const year = selected.getFullYear();
   const month = selected.getMonth();
   const monthName = selected.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const reportCounts = readRecords("dailyTask").filter((record) => !record.removed).reduce((counts, record) => {
-    const date = record.date || record.submittedAt?.slice(0, 10);
-    if (date) counts[date] = (counts[date] || 0) + 1;
+  const reportCounts = dashboardDailyWorkRecords().reduce((counts, record) => {
+    if (record.date) counts[record.date] = 1;
     return counts;
   }, {});
   const noteCounts = groupedCalendarNotesForDisplay(readRecords("calendarNote")
@@ -10123,30 +10166,24 @@ function renderCalendarNotes() {
 
 function renderDashboardTimeline() {
   const selectedDate = $("#dashboardDate")?.value || todayDate();
-  const items = [];
-  ["dailyTask"].forEach((type) => {
-    readRecords(type).forEach((record) => {
-      if (record.removed) return;
-      const timestamp = record.updatedAt || record.submittedAt || record.clockInTime;
-      const date = record.date || timestamp?.slice(0, 10);
-      if (date !== selectedDate) return;
-      items.push({ type, record, timestamp });
-    });
-  });
+  const items = dashboardDailyWorkRecords()
+    .filter((record) => record.date === selectedDate)
+    .map((record) => ({ type: "dailyTask", record, timestamp: record.updatedAt || record.submittedAt }));
   items.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
   $("#dashboardTimeline").innerHTML = items.length
     ? items
         .map(({ type, record, timestamp }) => {
           const helper = record.helperName || record.requestedBy || record.reportedBy || currentUser?.name || "Unknown";
           const title = type === "dailyTask" ? "Daily completed work" : type === "timesheet" ? "Timesheet" : type === "request" ? "Request" : type === "maintenance" ? "Maintenance" : type === "boardingDog" ? "Boarding dog update" : type === "service" ? "Service/pricing update" : "Dog update";
-          const completedCount = type === "dailyTask" ? completedTasksForRecord(record).length : 0;
+          const completedCount = type === "dailyTask" ? completedTasksForDate(record.date).length : 0;
           const careCount = type === "dailyTask" ? (record.structuredCareLogs || record.careLogs || []).length : 0;
           const summary = record.requestText || record.issue || record.dogName || record.callName || record.serviceName || (type === "dailyTask" ? \`\${completedCount} tasks completed, \${careCount} care logs\` : \`\${record.dailyTasks?.length || 0} AM tasks, \${record.pmTasks?.length || 0} PM tasks checked\`);
           const notes = record.ownerNotes || record.reason || record.suggestedAction || record.pricingNotes || "";
           const safeType = escapeHtml(type);
           const safeId = escapeHtml(record.id);
-          const removeAction = currentRole() === "admin" ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-timeline-record" data-type="\${safeType}" data-id="\${safeId}">Remove</button></div>\` : "";
-          return \`<article class="record-card clickable-card" data-action="view-record" data-type="\${safeType}" data-id="\${safeId}"><strong>\${formatDateTime(timestamp)} - \${escapeHtml(title)}</strong><span>\${escapeHtml(helper)}</span><p>\${escapeHtml(summary || "")}</p>\${notes ? \`<p>\${escapeHtml(notes)}</p>\` : ""}\${mediaLinkHtml(record)}\${removeAction}</article>\`;
+          const safeDate = escapeHtml(record.date || "");
+          const removeAction = currentRole() === "admin" && record.dashboardStoredRecordId ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-timeline-record" data-type="\${safeType}" data-id="\${escapeHtml(record.dashboardStoredRecordId)}">Remove</button></div>\` : "";
+          return \`<article class="record-card clickable-card" data-action="view-record" data-type="\${safeType}" data-id="\${safeId}" data-date="\${safeDate}"><strong>\${formatDateTime(timestamp)} - \${escapeHtml(title)}</strong><span>\${escapeHtml(helper)}</span><p>\${escapeHtml(summary || "")}</p>\${notes ? \`<p>\${escapeHtml(notes)}</p>\` : ""}\${mediaLinkHtml(record)}\${removeAction}</article>\`;
         })
         .join("")
     : "<p>No activity recorded for this date yet.</p>";
@@ -12041,7 +12078,9 @@ function initEvents() {
     }
     const card = event.target.closest('[data-action="view-record"]');
     if (!card) return;
-    const record = readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
+    const record = card.dataset.type === "dailyTask"
+      ? dashboardDailyWorkRecordForDate(card.dataset.date || dailySubmissionDate(readRecords("dailyTask").find((item) => item.id === card.dataset.id) || {}))
+      : readRecords(card.dataset.type).find((item) => item.id === card.dataset.id);
     if (record) showDetailDialog(titleForRecord(card.dataset.type, record), detailForRecord(card.dataset.type, record));
   });
   $("#dashboardAlerts")?.addEventListener("click", async (event) => {
