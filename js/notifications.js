@@ -805,6 +805,10 @@ function currentUserNotificationKey() {
 
 function notificationVisibleToCurrentUser(notification = {}) {
   if (!currentUser) return false;
+  const deliveryStatus = String(notification.deliveryStatus || "").trim().toLowerCase();
+  const staffDeliveryFailure = isStaffRole()
+    && (["failed", "in-app only", "error"].includes(deliveryStatus) || deliveryStatus.includes("email failed"));
+  if (staffDeliveryFailure) return true;
   const audienceEmails = (notification.audienceEmails || []).map(normalizeEmail);
   const userEmail = normalizeEmail(currentUser.email || helperEmail.value);
   if (audienceEmails.length) return audienceEmails.includes(userEmail);

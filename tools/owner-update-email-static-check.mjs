@@ -38,13 +38,14 @@ if (!shared.includes('delivery.title')) failures.push("The owner-update popup do
 if (!shared.includes('delivery.reason')) failures.push("The owner-update popup does not display the delivery failure reason.");
 if (!notifications.includes('data-action="retry-notification-delivery"')) failures.push("Failed notification cards do not expose an email retry action.");
 if (!notifications.includes('async function retryNotificationDelivery')) failures.push("Failed notification delivery cannot be retried without duplicating the customer update.");
+if (!notifications.includes("if (staffDeliveryFailure) return true;")) failures.push("Staff cannot see failed customer deliveries that need retry attention.");
 if (!shared.includes("retryNotificationDelivery(retry.dataset.id)")) failures.push("The notification retry control is not wired to the delivery retry handler.");
 if (!main.includes('dog-show-invoice-record-v37')) failures.push("Shared notification handling is not cache-busted.");
 if (!main.includes('atomic-owner-update-v45')) failures.push("Boarding owner-update handling is not cache-busted.");
 if (!index.includes('dog-show-lifecycle-owner-update-photo-invoice-v39')) failures.push("The production module entrypoint is not cache-busted.");
 if (!index.includes('atomic-owner-update-v49')) failures.push("The production entrypoint does not load the atomic owner-update release.");
-if (!main.includes('notification-delivery-retry-v47') || !main.includes('notification-delivery-retry-v49')) failures.push("The notification retry modules are not cache-busted.");
-if (!index.includes('notification-delivery-retry-v50')) failures.push("The production entrypoint does not load the notification retry release.");
+if (!main.includes('notification-delivery-retry-v48') || !main.includes('notification-delivery-retry-v49')) failures.push("The notification retry modules are not cache-busted.");
+if (!index.includes('notification-delivery-retry-v51')) failures.push("The production entrypoint does not load the notification retry release.");
 if (!atomicUpdateMigration.includes("auth.uid() is null or not cuddle_stay_private.kennel_is_staff_member()")) failures.push("Atomic owner updates do not enforce staff authorization.");
 if (!atomicUpdateMigration.includes("for update")) failures.push("Atomic owner updates do not lock the boarding row before appending.");
 if (!atomicUpdateMigration.includes("object_record.owner_id = auth.uid()::text")) failures.push("Atomic owner updates do not validate uploaded media ownership.");
