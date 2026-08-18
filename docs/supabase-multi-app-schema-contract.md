@@ -14,6 +14,11 @@ security as independent controls.
 | `cuddle_stay_private` | Privileged Cuddle Stay authorization, triggers, and cron helpers | Not exposed |
 | `auth`, `storage`, `realtime` | Supabase-managed resources | Supabase-managed |
 
+`shared.organization_members` is the cross-app membership boundary.
+`shared.organization_member_revocations` preserves an administrator's removal
+decision: self-registration must reject a matching revocation, and only an
+explicit administrator profile save may clear it.
+
 The Cuddle Stay organization ID is
 `c0dd1e57-a7a9-4f58-9f2a-0ca2d15e0001`. It is an intentional stable
 identifier, not a per-environment generated value.
@@ -72,4 +77,3 @@ Use
 [`20260818190000_isolate_cuddle_stay_schema.sql`](../supabase/migrations/20260818190000_isolate_cuddle_stay_schema.sql)
 as the working example. Do not copy its Cuddle Stay organization ID or policy
 rules into another app; create that app's own organization and access matrix.
-

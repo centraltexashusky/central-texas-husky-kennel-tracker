@@ -2,6 +2,7 @@ import fs from "node:fs";
 
 const migration = fs.readFileSync("supabase/migrations/20260818190000_isolate_cuddle_stay_schema.sql", "utf8");
 const deleteSecurityMigration = fs.readFileSync("supabase/migrations/20260818194500_tighten_cuddle_stay_delete_and_function_security.sql", "utf8");
+const revocationMigration = fs.readFileSync("supabase/migrations/20260818204500_prevent_removed_user_self_reregistration.sql", "utf8");
 const shared = fs.readFileSync("js/shared.js", "utf8");
 const notifications = fs.readFileSync("js/notifications.js", "utf8");
 const edgeFiles = [
@@ -50,6 +51,10 @@ if (notifications.includes('.from("kennel_records")\n    .delete()')) {
 }
 if (!deleteSecurityMigration.includes("revoke delete on cuddle_stay.kennel_records from authenticated")) {
   failures.push("Authenticated hard deletes are not revoked by migration.");
+}
+if (!revocationMigration.includes("shared.organization_member_revocations")
+  || !revocationMigration.includes("Cuddle Stay access has been removed")) {
+  failures.push("Removed users can still self-register a new Cuddle Stay membership.");
 }
 if (/SUPABASE_SERVICE_ROLE_KEY/.test(shared)) failures.push("A service-role secret reference reached browser code.");
 

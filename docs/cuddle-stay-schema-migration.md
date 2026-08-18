@@ -16,6 +16,8 @@ RLS.
 - `shared.organizations`: the Cuddle Stay organization row.
 - `shared.organization_members`: database-backed owner/admin/manager/staff/
   customer authority.
+- `shared.organization_member_revocations`: private, durable access revocations
+  that prevent a removed account from self-registering again.
 - `public`: no Cuddle Stay tables or kennel RPCs; existing website/CRM objects
   remain untouched.
 - `kennel-media`: retained as the dedicated private Cuddle Stay Storage bucket;
@@ -59,6 +61,15 @@ auth ID, or password-control fields.
   request, then used a staff identity to advance it through Approved, In
   Kennel, Ready for Pickup, and Checked Out. The staff atomic-task RPC also
   succeeded.
+- A separate real-browser lifecycle used disposable staff and customer logins
+  to create a dog with required vaccine dates and an uploaded record, submit a
+  signed boarding agreement and request, deliver the admin/customer emails,
+  approve, check in with a kennel assignment, mark ready, record cash payment,
+  check out, and confirm the completed request in the customer portal. The QA
+  business records were then soft-removed and both app memberships revoked.
+- Admin user removal was regression-tested after fixing active-profile merging
+  and adding durable revocation enforcement. Removed users cannot recreate a
+  membership through the customer registration RPC.
 - All four Edge Functions are active with JWT verification and use
   `cuddle_stay` explicitly. Browser reads/writes and Realtime subscriptions
   have no `public` fallback.
