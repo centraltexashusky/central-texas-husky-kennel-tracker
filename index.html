@@ -17,7 +17,7 @@
         document.documentElement.dataset.theme = theme;
       })();
     </script>
-    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-optional-acknowledgements-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v3-compiled-finance-reports-v4-dog-attributable-costs-v5-customer-finance-reports-upcoming-status-ux-v6-dog-profile-registration-akc-breeds-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-timesheet-payroll-review-v26-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-dog-show-invoice-period-payment-v40-invoice-center-management-v42-danger-actions-v43-notification-health-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-customer-vaccine-self-service-v41" />
+    <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-optional-acknowledgements-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v3-compiled-finance-reports-v4-dog-attributable-costs-v5-customer-finance-reports-upcoming-status-ux-v6-dog-profile-registration-akc-breeds-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-timesheet-payroll-review-v26-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-dog-show-invoice-period-payment-v40-invoice-center-management-v42-danger-actions-v43-notification-health-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-customer-vaccine-self-service-v41-customer-vaccine-card-layout-v42" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -354,15 +354,39 @@
             </div>
             <div class="customer-form-step customer-dog-wizard-panel" data-customer-dog-step="records" hidden>
               <strong>Vaccines and records</strong>
-              <div class="field-grid">
-                <label>Last DHPP vaccination<input type="date" name="dhppDate" required /></label>
-                <label>Next DHPP vaccination due<input type="date" name="nextDhppDate" required /><small>Use the expiration or renewal date provided by your veterinarian.</small></label>
-                <label>Last rabies vaccination<input type="date" name="rabiesDate" required /></label>
-                <label>Next rabies vaccination due<input type="date" name="nextRabiesDate" required /><small>Use the expiration or renewal date provided by your veterinarian.</small></label>
-                <label>Last Bordetella vaccination<input type="date" name="bordetellaDate" required /></label>
-                <label>Next Bordetella vaccination due<input type="date" name="nextBordetellaDate" required /><small>Use the expiration or renewal date provided by your veterinarian.</small></label>
-                <label>Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp" multiple /><small>Optional PDF, PNG, JPG, or WebP records.</small></label>
+              <div class="customer-vaccine-cards" aria-label="Required vaccination dates">
+                <section class="customer-vaccine-card" data-customer-vaccine="dhpp" aria-labelledby="customerDhppCardTitle">
+                  <div class="customer-vaccine-card-heading">
+                    <span aria-hidden="true">D</span>
+                    <div><h3 id="customerDhppCardTitle">DHPP</h3><p>Vaccination period</p></div>
+                  </div>
+                  <div class="customer-vaccine-date-pair">
+                    <label>Last vaccination<input type="date" name="dhppDate" aria-label="Last DHPP vaccination" required /></label>
+                    <label>Next vaccination due<input type="date" name="nextDhppDate" aria-label="Next DHPP vaccination due" required /><small>Use the expiration or renewal date from your veterinarian.</small></label>
+                  </div>
+                </section>
+                <section class="customer-vaccine-card" data-customer-vaccine="rabies" aria-labelledby="customerRabiesCardTitle">
+                  <div class="customer-vaccine-card-heading">
+                    <span aria-hidden="true">R</span>
+                    <div><h3 id="customerRabiesCardTitle">Rabies</h3><p>Vaccination period</p></div>
+                  </div>
+                  <div class="customer-vaccine-date-pair">
+                    <label>Last vaccination<input type="date" name="rabiesDate" aria-label="Last rabies vaccination" required /></label>
+                    <label>Next vaccination due<input type="date" name="nextRabiesDate" aria-label="Next rabies vaccination due" required /><small>Use the expiration or renewal date from your veterinarian.</small></label>
+                  </div>
+                </section>
+                <section class="customer-vaccine-card" data-customer-vaccine="bordetella" aria-labelledby="customerBordetellaCardTitle">
+                  <div class="customer-vaccine-card-heading">
+                    <span aria-hidden="true">B</span>
+                    <div><h3 id="customerBordetellaCardTitle">Bordetella</h3><p>Vaccination period</p></div>
+                  </div>
+                  <div class="customer-vaccine-date-pair">
+                    <label>Last vaccination<input type="date" name="bordetellaDate" aria-label="Last Bordetella vaccination" required /></label>
+                    <label>Next vaccination due<input type="date" name="nextBordetellaDate" aria-label="Next Bordetella vaccination due" required /><small>Use the expiration or renewal date from your veterinarian.</small></label>
+                  </div>
+                </section>
               </div>
+              <label class="customer-vaccine-record-upload">Vaccination records<input type="file" name="vaccinationFiles" id="customerVaccinationFiles" accept="application/pdf,image/png,image/jpeg,image/webp,.pdf,.png,.jpg,.jpeg,.webp" multiple /><small>Optional PDF, PNG, JPG, or WebP records.</small></label>
               <p class="customer-flow-note is-vaccine-warning">All three vaccination and next-due dates are required. They must remain current through pickup before you can submit a boarding request. Staff sees the same dates in the boarding profile.</p>
             </div>
             <div class="upload-status" id="customerUploadStatus" role="status"></div>

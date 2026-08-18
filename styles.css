@@ -1173,6 +1173,77 @@ body.owned-dog-modal-open {
   width: 100%;
 }
 
+.customer-vaccine-cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.customer-vaccine-card {
+  background: var(--color-background-info);
+  border: 1px solid #C8D8F6;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(23, 32, 51, 0.04);
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.customer-vaccine-card-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.customer-vaccine-card-heading > span {
+  align-items: center;
+  background: #DCE8FF;
+  border-radius: 999px;
+  color: var(--color-text-info);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  font-weight: 900;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.customer-vaccine-card-heading h3 {
+  color: var(--ink);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.customer-vaccine-card-heading p {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin: 2px 0 0;
+}
+
+.customer-vaccine-date-pair {
+  display: grid;
+  gap: 12px;
+}
+
+.customer-vaccine-date-pair label {
+  align-content: start;
+}
+
+.customer-vaccine-date-pair small {
+  color: var(--muted);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.customer-vaccine-record-upload {
+  background: var(--glass-fill-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+}
+
 #customerDogPopupMount .customer-dog-modal:not([hidden]) {
   box-shadow: none;
   inset: auto;
@@ -7610,6 +7681,10 @@ button.is-loading {
   .inline-login-form,
   .checklist.two-column,
   .checklist.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-vaccine-cards {
     grid-template-columns: 1fr;
   }
 
