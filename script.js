@@ -13119,10 +13119,38 @@ function renderKennelBuildingTabs() {
   tabs.innerHTML = `${names.map((name) => `<span class="task-tab-pill"><button type="button" data-kennel-building-tab="${escapeHtml(name)}" role="tab" aria-selected="${name === active ? "true" : "false"}" class="${name === active ? "is-active" : ""}">${escapeHtml(name)}</button></span>`).join("")}${canManage ? `<button type="button" class="secondary-button task-add-tab-button" data-action="add-kennel-building-tab">Add Tab</button>` : ""}`;
 }
 
-function kennelLocationOptionsForBuilding(building = "", selectedId = "") {
+function kennelLocationOccupancyMap(options = {}) {
+  const excludedRecordId = String(options.excludeRecordId || "");
+  const excludedStayId = String(options.excludeStayId || "");
+  const activeStatuses = new Set(["Checked In", "In Kennel", "Ready For Pickup"]);
+  const records = consolidatedBoardingDogRecords(readRecords("boardingDog").filter((record) => !record.removed));
+  const occupantsByLocation = new Map();
+  uniqueBoardingStayEntries(boardingStayEntries(records)).forEach((entry) => {
+    const record = entry.record || {};
+    const stay = entry.stay || {};
+    if (record.id === excludedRecordId && (!excludedStayId || stay.id === excludedStayId)) return;
+    const assignedLocationId = stay.kennelLocationId || (boardingPrimaryStay(record)?.id === stay.id ? record.kennelLocationId : "");
+    if (!assignedLocationId || !activeStatuses.has(entry.status)) return;
+    if (!occupantsByLocation.has(assignedLocationId)) occupantsByLocation.set(assignedLocationId, []);
+    occupantsByLocation.get(assignedLocationId).push(entry);
+  });
+  return occupantsByLocation;
+}
+
+function kennelLocationOccupants(locationId = "", options = {}) {
+  if (!locationId) return [];
+  return kennelLocationOccupancyMap(options).get(locationId) || [];
+}
+
+function kennelLocationOptionsForBuilding(building = "", selectedId = "", options = {}) {
   const matching = kennelLocations({ activeOnly: true }).filter((location) => (location.building || "") === building);
+  const occupantsByLocation = kennelLocationOccupancyMap(options);
   return matching.length
-    ? matching.map((location) => `<option value="${escapeHtml(location.id)}" ${location.id === selectedId ? "selected" : ""}>${escapeHtml(location.name || "Kennel")}</option>`).join("")
+    ? matching.map((location) => {
+        const occupants = occupantsByLocation.get(location.id) || [];
+        const occupiedLabel = occupants.length ? ` - occupied by ${occupants.map((entry) => entry.record?.dogName || "dog").join(", ")}` : "";
+        return `<option value="${escapeHtml(location.id)}" ${location.id === selectedId ? "selected" : ""}>${escapeHtml((location.name || "Kennel") + occupiedLabel)}</option>`;
+      }).join("")
     : `<option value="">No active kennels saved for ${escapeHtml(building || "this building")}</option>`;
 }
 
@@ -13724,14 +13752,15 @@ function kennelAssignmentPopupHtml(record = {}, nextStatus = "In Kennel", option
   const targetStay = boardingStatusTargetStay(record, nextStatus, options) || {};
   const selectedBuilding = targetStay.kennelBuilding || record.kennelBuilding || buildings[0] || "Shed";
   const buildingOptions = buildings.map((building) => `<option value="${escapeHtml(building)}" ${building === selectedBuilding ? "selected" : ""}>${escapeHtml(building)}</option>`).join("");
-  const locationOptions = kennelLocationOptionsForBuilding(selectedBuilding, targetStay.kennelLocationId || record.kennelLocationId || "");
+  const occupancyOptions = { excludeRecordId: record.id || "", excludeStayId: targetStay.id || options.stayId || "" };
+  const locationOptions = kennelLocationOptionsForBuilding(selectedBuilding, targetStay.kennelLocationId || record.kennelLocationId || "", occupancyOptions);
   const hasLocationsForBuilding = locations.some((location) => (location.building || "") === selectedBuilding);
   const help = locations.length ? "Choose the building first, then the exact kennel assignment." : "Add active kennel locations in Settings first.";
   return `<form id="kennelAssignmentForm" class="tracker-form" data-dog-id="${escapeHtml(record.id || "")}" data-stay-id="${escapeHtml(options.stayId || "")}" data-request-code="${escapeHtml(options.requestCode || "")}" data-next-status="${escapeHtml(nextStatus)}" data-allow-early="${options.allowEarly ? "true" : "false"}" data-early="${options.early ? "true" : "false"}">
     <article class="record-card compact-record-card"><strong>${escapeHtml(record.dogName || "Boarding dog")}</strong><p>${escapeHtml(boardingScheduleText(record))}</p></article>
     <div class="field-grid">
       <label>Building<select name="kennelBuilding" id="kennelAssignmentBuilding" required ${locations.length ? "" : "disabled"}>${buildingOptions}</select><small>${escapeHtml(help)}</small></label>
-      <label>Kennel<select name="kennelLocationId" id="kennelAssignmentLocation" required ${hasLocationsForBuilding ? "" : "disabled"}><option value="">Select kennel</option>${locationOptions}</select><small id="kennelAssignmentHelp">${hasLocationsForBuilding ? "Available active kennels for this building." : "No active kennels are saved for this building."}</small></label>
+      <label>Kennel<select name="kennelLocationId" id="kennelAssignmentLocation" required ${hasLocationsForBuilding ? "" : "disabled"}><option value="">Select kennel</option>${locationOptions}</select><small id="kennelAssignmentHelp">${hasLocationsForBuilding ? "Active kennels for this building. Occupied kennels can be shared." : "No active kennels are saved for this building."}</small></label>
     </div>
     <div class="button-row"><button type="submit" ${hasLocationsForBuilding ? "" : "disabled"}>Assign Kennel</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </form>`;
@@ -13749,10 +13778,11 @@ function updateKennelAssignmentLocations(formEl) {
   const submitButton = formEl.querySelector('button[type="submit"]');
   const help = $("#kennelAssignmentHelp");
   if (!locationSelect) return;
-  locationSelect.innerHTML = `<option value="">Select kennel</option>${kennelLocationOptionsForBuilding(building)}`;
+  const occupancyOptions = { excludeRecordId: formEl.dataset.dogId || "", excludeStayId: formEl.dataset.stayId || "" };
+  locationSelect.innerHTML = `<option value="">Select kennel</option>${kennelLocationOptionsForBuilding(building, "", occupancyOptions)}`;
   locationSelect.disabled = !locations.length;
   if (submitButton) submitButton.disabled = !locations.length;
-  if (help) help.textContent = locations.length ? "Available active kennels for this building." : "No active kennels are saved for this building.";
+  if (help) help.textContent = locations.length ? "Active kennels for this building. Occupied kennels can be shared." : "No active kennels are saved for this building.";
 }
 
 function openSettingsUser(record = {}) {

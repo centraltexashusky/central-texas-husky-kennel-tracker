@@ -41,8 +41,10 @@ const inlineStatus = shared.slice(shared.indexOf("async function handleInlineBoa
 requireMatch(inlineStatus, /boardingCustomerRequestStatusEventName/, "Quick-card approvals must resolve the customer notification event.");
 requireMatch(inlineStatus, /await notifyIfNeeded\(savedLocal, customerNotificationEvent\)/, "Quick-card approvals must send the customer status notification after persistence.");
 requireMatch(shared, /notificationList[\s\S]*addEventListener\("keydown"/, "Alert cards must be keyboard operable.");
-requireMatch(settings, /function kennelLocationOccupants/, "Kennel assignment must calculate current occupancy.");
-requireMatch(shared, /Kennel Is Occupied/, "Kennel assignment must recheck capacity when the form is submitted.");
+requireMatch(settings, /function kennelLocationOccupancyMap/, "Kennel assignment must calculate occupancy in one pass.");
+requireMatch(settings, /occupied by/, "Kennel assignment options must identify current occupants.");
+requireMatch(settings, /Occupied kennels can be shared/, "Kennel assignment must explain that occupied kennels remain available.");
+if (/Kennel Is Occupied/.test(shared)) throw new Error("Shared kennels must not be rejected during assignment.");
 requireMatch(shared, /function boardingOutstandingCriticalCareTasks/, "Release safety must inspect overdue medication and feeding tasks.");
 requireMatch(shared, /showOutstandingCriticalCareBlock\(record, outstandingCare, "ready for pickup"\)/, "Ready-for-pickup must block on overdue critical care.");
 requireMatch(shared, /showOutstandingCriticalCareBlock\(record, outstandingCare, "check out"\)/, "Checkout must block on overdue critical care.");

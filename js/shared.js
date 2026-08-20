@@ -12695,15 +12695,6 @@ function initEvents() {
         showToast("Choose a kennel location before assigning this dog.");
         return;
       }
-      const occupancyOptions = { excludeRecordId: record.id || "", excludeStayId: kennelAssignmentForm.dataset.stayId || "" };
-      const occupants = kennelLocationOccupants(location.id, occupancyOptions);
-      if (!kennelLocationHasCapacity(location, occupancyOptions)) {
-        showDetailDialog(
-          "Kennel Is Occupied",
-          \`<p>\${escapeHtml(location.building || "Kennel")} - \${escapeHtml(location.name || "Kennel")} is already assigned to \${escapeHtml(occupants.map((entry) => entry.record?.dogName || "another dog").join(", "))}. Choose a different kennel.</p>\`,
-        );
-        return;
-      }
       const updated = await runPopupOperation(event.submitter || kennelAssignmentForm.querySelector('button[type="submit"]'), "Assigning...", () => saveBoardingStatusTransition(record, kennelAssignmentForm.dataset.nextStatus || "In Kennel", {
         allowEarly: kennelAssignmentForm.dataset.allowEarly === "true",
         early: kennelAssignmentForm.dataset.early === "true",
