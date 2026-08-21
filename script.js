@@ -15081,6 +15081,33 @@ function showBookingConfirmDialog(estimate) {
   $("#bookingConfirmDialog").showModal();
 }
 
+function customerBoardingRequestTargetForDog(dog = {}) {
+  const displayRecords = consolidatedBoardingDogRecords();
+  const customerDogIds = [...new Set([
+    dog.id,
+    dog.linkedCustomerDogId,
+    dog.sourceCustomerDogId,
+  ].filter((id) => String(id || "").startsWith("customerDog-")))];
+  const linkedProfile = displayRecords.find((record) => (
+    customerDogIds.includes(String(record.linkedCustomerDogId || ""))
+  ));
+  if (linkedProfile) return linkedProfile;
+
+  const sourceBoardingDogIds = [...new Set([
+    dog.sourceBoardingDogId,
+    dog.linkedBoardingDogId,
+    boardingDogIdFromCustomerDogValue(dog.id),
+  ].map(boardingDogIdFromCustomerDogValue).filter(Boolean))];
+  for (const sourceId of sourceBoardingDogIds) {
+    const sourceProfile = boardingDogRecordForDisplay(sourceId);
+    if (sourceProfile) return sourceProfile;
+  }
+  return displayRecords.find((record) => (
+    sourceBoardingDogIds.includes(String(record.sourceBoardingDogId || ""))
+    || arrayValue(record.sourceRecordIds).some((id) => sourceBoardingDogIds.includes(String(id || "")))
+  )) || null;
+}
+
 async function submitPendingCustomerBooking() {
   const estimate = pendingCustomerBooking;
   if (customerBookingSubmitInProgress) return;
@@ -15122,8 +15149,8 @@ async function submitPendingCustomerBooking() {
         skippedCount += 1;
         continue;
       }
-      const sharedBoardingRecord = dog.sourceBoardingDogId ? readRecords("boardingDog").find((record) => record.id === dog.sourceBoardingDogId && !record.removed) : null;
-      const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : null;
+      const sharedBoardingRecord = customerBoardingRequestTargetForDog(dog);
+      const existingTarget = (editingRecord && (editingRecord.dogName === dog.dogName || estimate.dogs.length === 1)) ? editingRecord : sharedBoardingRecord;
       const useExisting = Boolean(existingTarget);
       const existingStay = editingStayId ? boardingStayByReference(existingTarget || {}, editingStayId) || {} : existingTarget?.stays?.[0] || {};
       const stayRequests = dogServices.map((service) => ({

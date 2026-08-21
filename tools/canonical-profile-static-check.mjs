@@ -31,6 +31,16 @@ assert.match(
 );
 assert.match(
   customer,
+  /function customerBoardingRequestTargetForDog\(dog = \{\}\)[\s\S]*linkedCustomerDogId[\s\S]*sourceBoardingDogId/,
+  "customer requests must resolve the active linked profile before relying on a possibly retired boarding source id",
+);
+assert.match(
+  customer,
+  /const sharedBoardingRecord = customerBoardingRequestTargetForDog\(dog\)/,
+  "customer request submission must use canonical profile fallback resolution",
+);
+assert.match(
+  customer,
   /detachedFromHistoricalProfile[\s\S]*linkedCustomerDogId: detachedFromHistoricalProfile[\s\S]*sourceBoardingDogId:/,
   "new requests must detach from completed boarding history while keeping source links to the dog profile",
 );
@@ -80,6 +90,29 @@ assert.equal(
   true,
   "a request-only boarding profile should remain reusable",
 );
+const requestTargetSource = customer.match(/function customerBoardingRequestTargetForDog\(dog = \{\}\) \{[\s\S]*?\n\}/)?.[0] || "";
+const requestTargetForDog = new Function(
+  "consolidatedBoardingDogRecords",
+  "boardingDogRecordForDisplay",
+  "boardingDogIdFromCustomerDogValue",
+  "arrayValue",
+  `${requestTargetSource}\nreturn customerBoardingRequestTargetForDog;`,
+)(
+  () => [{
+    id: "boardingDog-canonical",
+    linkedCustomerDogId: "customerDog-mango",
+    sourceBoardingDogId: "boardingDog-retired",
+    sourceRecordIds: ["boardingDog-canonical"],
+  }],
+  () => null,
+  (value) => String(value || "").startsWith("boardingDog-") ? String(value) : "",
+  (value) => Array.isArray(value) ? value : [],
+);
+assert.equal(
+  requestTargetForDog({ id: "customerDog-mango", sourceBoardingDogId: "boardingDog-retired" })?.id,
+  "boardingDog-canonical",
+  "a stale source boarding id must fall back to the active profile linked to the customer dog",
+);
 assert.equal(
   requestWriteGuard({ id: "historical-profile", boardingStatus: "Checked Out", checkedOutAt: "2026-07-17T14:00:00Z", stays: [{ status: "Checked Out" }], statusHistory: [{ from: "Ready For Pickup", to: "Checked Out" }] }),
   false,
@@ -92,6 +125,8 @@ assert.equal(
 );
 assert.match(main, /customer-request-amendment-v35[\s\S]*maintenance-alert-detail-active-request-lock-v36/, "the customer module active-stay lock is not cache-busted");
 assert.match(index, /customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36/, "the app entrypoint active-stay lock is not cache-busted");
+assert.match(main, /customer-canonical-profile-fallback-v42/, "the customer canonical-profile fallback is not cache-busted");
+assert.match(index, /customer-canonical-profile-fallback-v42/, "the app entrypoint canonical-profile fallback is not cache-busted");
 assert.match(
   schema,
   /create unique index if not exists kennel_records_one_active_settings_user_email_idx/,
