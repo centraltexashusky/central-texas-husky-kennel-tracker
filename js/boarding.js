@@ -3903,7 +3903,7 @@ function boardingStayFormHtml(record = {}, stay = {}) {
 async function openBoardingStayPopup(record = activeBoardingDog(), stayId = "") {
   if (!record?.id) return;
   const displayRecord = boardingDogWithStayStatus(record);
-  const stay = boardingStayByReference(displayRecord, stayId) || {};
+  const stay = boardingStayByReference(displayRecord, stayId) || (stayId ? {} : { stayType: "Boarding" });
   if (!isServiceRequestStay(displayRecord, stay)) await ensureBoardingPricingCatalogLoaded();
   const title = isServiceRequestStay(displayRecord, stay)
     ? \`\${displayRecord.dogName || "Dog"} Service Request\`

@@ -130,6 +130,10 @@ try {
   failures.push(`The detached boarding request regression fixture could not run: ${error.message}`);
 }
 const staySaveSource = boarding.match(/async function saveBoardingStayFromForm[\s\S]*?\n\}/)?.[0] || "";
+const stayPopupSource = boarding.match(/async function openBoardingStayPopup[\s\S]*?\n\}/)?.[0] || "";
+if (!stayPopupSource.includes('stayId ? {} : { stayType: "Boarding" }')) {
+  failures.push("A blank staff boarding stay can still inherit a historical service-request type from the dog profile.");
+}
 const stayRemoteIndex = staySaveSource.indexOf("await sendPayload(candidate)");
 const stayLocalIndex = staySaveSource.indexOf('upsertRecord("boardingDog", candidate)');
 if (!staySaveSource.includes("boardingDogForPersistence")
@@ -162,6 +166,9 @@ if (!main.includes("boarding-requirement-override-v39") || !index.includes("boar
 }
 if (!main.includes("boarding-override-confirmation-v40") || !index.includes("boarding-override-confirmation-v40")) {
   failures.push("The staff override confirmation layout is not cache-busted.");
+}
+if (!main.includes("staff-new-boarding-default-v53") || !index.includes("staff-new-boarding-default-v53")) {
+  failures.push("The staff new-boarding default fix is not cache-busted.");
 }
 if (!main.includes("maintenance-alert-detail-active-request-lock-v36") || !index.includes("maintenance-alert-detail-active-request-lock-v36")) {
   failures.push("The maintenance alert and active-stay request lock fix is not cache-busted.");

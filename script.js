@@ -8989,7 +8989,7 @@ function openOwnerUpdateAlert(recordId, reference = {}) {
 function openBoardingStayPopup(record = activeBoardingDog(), stayId = "") {
   if (!record?.id) return;
   const displayRecord = boardingDogWithStayStatus(record);
-  const stay = boardingStayByReference(displayRecord, stayId) || {};
+  const stay = boardingStayByReference(displayRecord, stayId) || (stayId ? {} : { stayType: "Boarding" });
   showDetailDialog(`${displayRecord.dogName || "Boarding Dog"} Boarding Request`, boardingStayFormHtml(displayRecord, stay));
 }
 
