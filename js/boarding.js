@@ -8,6 +8,9 @@ var boardingCalendarInactiveStatuses = new Set(["Cancelled", "Checked Out"]);
 var boardingCalendarHiddenLegendStatuses = new Set(["Cancelled"]);
 var boardingRosterRenderSequence = 0;
 var BOARDING_ROSTER_RENDER_CHUNK_SIZE = 3;
+var boardingRequestRenderSequence = 0;
+var boardingRequestIntersectionObserver = null;
+var boardingRequestLazyTimer = null;
 
 function dogTypeBadgeHtml(type) {
   const labels = {
@@ -5336,9 +5339,8 @@ function boardingFamilyGroupHtml(entries = [], options = {}) {
 
 function boardingRequestEntriesForGroupKey(groupKey = "") {
   if (!groupKey) return [];
-  const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
-    .filter((record) => record.customerRequest)
-    .filter((record) => !record.removed));
+  const records = consolidatedBoardingDogRecords()
+    .filter((record) => record.customerRequest && !record.removed);
   return uniqueBoardingStayEntries(boardingStayEntries(records))
     .filter((entry) => boardingFamilyGroupKeys(entry).includes(groupKey));
 }
@@ -5429,6 +5431,37 @@ async function saveBoardingFamilyGroupStatus(groupKey = "", nextStatus = "Approv
   return updated;
 }
 
+function cancelBoardingRequestRender() {
+  boardingRequestRenderSequence += 1;
+  if (boardingRequestIntersectionObserver) boardingRequestIntersectionObserver.disconnect();
+  boardingRequestIntersectionObserver = null;
+  if (boardingRequestLazyTimer) window.clearTimeout(boardingRequestLazyTimer);
+  boardingRequestLazyTimer = null;
+}
+
+function scheduleBoardingRequestsLazyRender() {
+  cancelBoardingRequestRender();
+  const section = $("#boardingRequestsSection");
+  if (!section || currentRole() !== "admin") {
+    renderBoardingRequests();
+    return;
+  }
+  if (typeof window.IntersectionObserver !== "function") {
+    boardingRequestLazyTimer = window.setTimeout(() => {
+      boardingRequestLazyTimer = null;
+      if (activePageId() === "boardingDogsPage") renderBoardingRequests();
+    }, 600);
+    return;
+  }
+  boardingRequestIntersectionObserver = new IntersectionObserver((entries) => {
+    if (!entries.some((entry) => entry.isIntersecting)) return;
+    boardingRequestIntersectionObserver?.disconnect();
+    boardingRequestIntersectionObserver = null;
+    if (activePageId() === "boardingDogsPage") renderBoardingRequests();
+  }, { rootMargin: "600px 0px" });
+  boardingRequestIntersectionObserver.observe(section);
+}
+
 function renderBoardingRequests() {
   const mark = efficiencyPerfStart("renderBoardingRequests");
   const list = $("#boardingRequestRecords");
@@ -5442,20 +5475,39 @@ function renderBoardingRequests() {
   }
   try {
     if (!list) return;
+    const sequence = ++boardingRequestRenderSequence;
     const statusFilters = readBoardingRequestStatusFilter();
     syncBoardingRequestFilterUi(statusFilters);
-    const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
-      .filter((record) => record.customerRequest)
-      .filter((record) => !record.removed));
+    const records = consolidatedBoardingDogRecords()
+      .filter((record) => record.customerRequest && !record.removed);
     const entries = uniqueBoardingStayEntries(boardingStayEntries(records))
       .filter((entry) => !statusFilters.length || statusFilters.includes(entry.status))
       .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
-    list.innerHTML = entries.length
-      ? boardingFamilyGroups(entries)
-          .map((item) => (item.type === "family" ? boardingFamilyGroupHtml(item.entries, { groupKey: item.groupKey }) : boardingRequestCardHtml(item.entry)))
-          .join("")
-      : \`<p>No \${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>\`;
-    hydrateProfilePhotoElements(list);
+    const groups = boardingFamilyGroups(entries);
+    if (!groups.length) {
+      list.innerHTML = \`<p>No \${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>\`;
+      return;
+    }
+    list.innerHTML = boardingSkeletonCardsHtml(2);
+    let rendered = 0;
+    const renderNextRequest = () => {
+      if (sequence !== boardingRequestRenderSequence || activePageId() !== "boardingDogsPage") return;
+      if (!rendered) list.innerHTML = "";
+      const item = groups[rendered];
+      const html = item.type === "family"
+        ? boardingFamilyGroupHtml(item.entries, { groupKey: item.groupKey })
+        : boardingRequestCardHtml(item.entry);
+      list.insertAdjacentHTML("beforeend", html);
+      rendered += 1;
+      setPageActivityProgress("boardingDogsPage", 72 + (rendered / groups.length) * 25, \`Loading boarding requests \${rendered} of \${groups.length}\`);
+      if (rendered < groups.length) {
+        window.requestAnimationFrame(renderNextRequest);
+        return;
+      }
+      hydrateProfilePhotoElements(list);
+      finishBoardingRosterRender(boardingRosterRenderSequence);
+    };
+    window.requestAnimationFrame(renderNextRequest);
   } finally {
     efficiencyPerfEnd(mark);
   }

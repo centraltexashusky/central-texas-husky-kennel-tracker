@@ -49,6 +49,16 @@ const checks = [
     message: "boarding list batches must stay small enough to yield between frames.",
   },
   {
+    path: "js/boarding.js",
+    mustInclude: "scheduleBoardingRequestsLazyRender",
+    message: "boarding request history must wait until its section approaches the viewport.",
+  },
+  {
+    path: "js/boarding.js",
+    mustInclude: "window.requestAnimationFrame(renderNextRequest)",
+    message: "boarding request cards must yield between rendered groups.",
+  },
+  {
     path: "styles.css",
     mustInclude: "bottom: calc(98px + env(safe-area-inset-bottom));",
     message: "mobile loading progress must remain visible above bottom navigation.",

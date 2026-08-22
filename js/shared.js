@@ -11356,12 +11356,9 @@ function scheduleBoardingPageRecordsRender() {
     scheduleBoardingPageRecordsRender.frame = null;
     if (activePageId() !== "boardingDogsPage") return;
     renderBoardingDogs();
-    window.requestAnimationFrame(() => {
-      if (activePageId() !== "boardingDogsPage") return;
-      renderBoardingRequests();
-      const openDog = activeBoardingDog();
-      if (openDog?.id) renderBoardingDogAgreements(openDog);
-    });
+    scheduleBoardingRequestsLazyRender();
+    const openDog = activeBoardingDog();
+    if (openDog?.id) renderBoardingDogAgreements(openDog);
   });
 }
 
