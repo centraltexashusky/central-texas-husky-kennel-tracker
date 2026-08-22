@@ -2304,6 +2304,17 @@ function startPageActivityProgress(pageId = "", label = "Loading latest data") {
   }, 220);
 }
 
+function setPageActivityProgress(pageId = "", percent = 0, label = "Working") {
+  pageId = normalizePageId(pageId);
+  if (!pageActivityProgressEligible(pageId)) return;
+  const state = pageActivityProgressState.get(pageId) || {};
+  clearPageActivityProgressTimers(state);
+  state.percent = Math.max(0, Math.min(99, Math.round(Number(percent) || 0)));
+  state.label = label || "Working";
+  pageActivityProgressState.set(pageId, state);
+  updatePageActivityProgressUi(pageId, state.percent, state.label, "active");
+}
+
 function settlePageActivityProgress(pageId = "", label = "Updated", phase = "complete") {
   pageId = normalizePageId(pageId);
   if (!pageActivityProgressEligible(pageId)) return;
@@ -5417,19 +5428,14 @@ async function loadBoardingDogHistoryRecords() {
   boardingDogHistoryLoadPromise = (async () => {
     if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
     if (boardingDogFullHistoryLoaded) return;
-    setAppPageLoading("boardingDogsPage", true, "Loading boarding history");
-    try {
-      await loadRemoteRecords({
-        types: ["boardingDog"],
-        pageId: "boardingDogsPage",
-        boardingFullHistory: true,
-        fullRefresh: true,
-        showLoader: false,
-        quiet: true,
-      });
-    } finally {
-      setAppPageLoading("boardingDogsPage", false);
-    }
+    await loadRemoteRecords({
+      types: ["boardingDog"],
+      pageId: "boardingDogsPage",
+      boardingFullHistory: true,
+      fullRefresh: true,
+      showLoader: false,
+      quiet: true,
+    });
   })();
   try {
     return await boardingDogHistoryLoadPromise;
@@ -5494,6 +5500,7 @@ async function loadRemoteRecords(options = {}) {
         boardingFullHistory: options.boardingFullHistory === true,
         scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
       }), REMOTE_LOAD_STALE_MS, "Remote record load");
+      if (showPageActivityProgress) setPageActivityProgress(loadingPageId, 52, "Preparing latest dog records");
       const failedRemoteTypes = new Set(lastRemoteRecordFetchFailedTypes || []);
       const loadedRemoteTypes = requestedRemoteTypes.filter((type) => !failedRemoteTypes.has(type));
       loadedRemoteTypes.forEach((type) => {
@@ -5580,6 +5587,7 @@ async function loadRemoteRecords(options = {}) {
       if (options.syncCustomerAccessProfiles === true) await syncMissingCustomerAccessProfiles();
       if (options.syncLegacyDogModel === true) await syncLegacyDogModelRecords();
       if (remoteLoadShouldRenderActivePage(options, loadedRemoteTypes, loadingPageId)) {
+        if (showPageActivityProgress) setPageActivityProgress(loadingPageId, 58, "Rendering latest dog records");
         renderAllRecordsFromRemoteLoad();
       } else if (efficiencyPerfEnabled()) {
         console.info(\`[efficiency] skipped stale remote render #\${loadRequestId}: \${loadingPageId} -> \${activePageId()}\`);
@@ -11341,6 +11349,22 @@ function renderSharedRecords() {
   renderGlobalSearchResults();
 }
 
+function scheduleBoardingPageRecordsRender() {
+  if (scheduleBoardingPageRecordsRender.frame) window.cancelAnimationFrame(scheduleBoardingPageRecordsRender.frame);
+  setPageActivityProgress("boardingDogsPage", 16, "Loading boarding dogs");
+  scheduleBoardingPageRecordsRender.frame = window.requestAnimationFrame(() => {
+    scheduleBoardingPageRecordsRender.frame = null;
+    if (activePageId() !== "boardingDogsPage") return;
+    renderBoardingDogs();
+    window.requestAnimationFrame(() => {
+      if (activePageId() !== "boardingDogsPage") return;
+      renderBoardingRequests();
+      const openDog = activeBoardingDog();
+      if (openDog?.id) renderBoardingDogAgreements(openDog);
+    });
+  });
+}
+
 function scheduleRender(options = {}) {
   if (renderDebounceOptions) {
     renderDebounceOptions = {
@@ -11368,12 +11392,7 @@ function renderActivePageRecords(pageId = activePageId()) {
     taskSchedulerPage: () => renderTaskScheduler(),
     dogShowPage: () => renderDogShow(),
     ourDogsPage: () => renderOwnedDogs(),
-    boardingDogsPage: () => {
-      renderBoardingDogs();
-      renderBoardingRequests();
-      const openDog = activeBoardingDog();
-      if (openDog?.id) renderBoardingDogAgreements(openDog);
-    },
+    boardingDogsPage: () => scheduleBoardingPageRecordsRender(),
     requestsPage: () => renderRequests(),
     maintenancePage: () => renderMaintenance(),
     timesheetPage: () => renderTimesheet(),

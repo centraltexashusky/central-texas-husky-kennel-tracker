@@ -30,6 +30,31 @@ const checks = [
   },
   {
     path: "js/shared.js",
+    mustInclude: "setPageActivityProgress",
+    message: "large page loads must expose deterministic progress updates.",
+  },
+  {
+    path: "js/shared.js",
+    mustInclude: "scheduleBoardingPageRecordsRender",
+    message: "boarding navigation must paint the page shell before large record sections.",
+  },
+  {
+    path: "js/boarding.js",
+    mustInclude: "renderBoardingListInBatches",
+    message: "boarding list rendering must be split into responsive batches.",
+  },
+  {
+    path: "js/boarding.js",
+    mustInclude: "BOARDING_ROSTER_RENDER_CHUNK_SIZE = 3",
+    message: "boarding list batches must stay small enough to yield between frames.",
+  },
+  {
+    path: "styles.css",
+    mustInclude: "bottom: calc(98px + env(safe-area-inset-bottom));",
+    message: "mobile loading progress must remain visible above bottom navigation.",
+  },
+  {
+    path: "js/shared.js",
     mustInclude: "PROFILE_PHOTO_HYDRATION_CONCURRENCY",
     message: "profile photo hydration must be queued.",
   },

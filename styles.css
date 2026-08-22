@@ -63,15 +63,9 @@
   --tint-red: #FBE6E4;
 }
 
-/* Prevent content flash during bulk DOM updates from remote sync. */
-body.is-bulk-rendering .page-view.is-active > *:not(.app-inline-loader):not(.page-loader):not(.page-activity-progress) {
-  opacity: 0;
-  transition: none;
-}
-
-body:not(.is-bulk-rendering) .page-view.is-active > * {
-  opacity: 1;
-  transition: opacity 0.12s ease;
+/* Remote updates keep the current page interactive while fresh content is merged. */
+body.is-bulk-rendering .page-view.is-active {
+  pointer-events: auto;
 }
 
 @keyframes skeletonPulse {
@@ -301,11 +295,22 @@ iframe {
   box-shadow: var(--shadow);
   display: grid;
   gap: 8px;
-  margin: 0 0 14px;
+  bottom: 18px;
+  left: 50%;
+  margin: 0;
+  max-width: 680px;
   padding: 10px 12px;
-  position: sticky;
-  top: max(10px, env(safe-area-inset-top));
-  z-index: 68;
+  position: fixed;
+  transform: translateX(-50%);
+  width: calc(100vw - 32px);
+  z-index: 72;
+}
+
+@media (max-width: 980px) {
+  .page-activity-progress {
+    bottom: calc(98px + env(safe-area-inset-bottom));
+    width: calc(100vw - 28px);
+  }
 }
 
 .page-activity-progress-copy {
