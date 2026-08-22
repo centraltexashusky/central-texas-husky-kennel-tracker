@@ -30,6 +30,11 @@ const checks = [
   },
   {
     path: "js/shared.js",
+    mustInclude: "linkedCustomerDogLookupCache",
+    message: "boarding profile consolidation must not rescan every customer dog for every record.",
+  },
+  {
+    path: "js/shared.js",
     mustInclude: "setPageActivityProgress",
     message: "large page loads must expose deterministic progress updates.",
   },

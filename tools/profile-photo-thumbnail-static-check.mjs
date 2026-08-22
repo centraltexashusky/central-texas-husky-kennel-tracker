@@ -70,7 +70,7 @@ const checks = [
   },
   {
     path: "js/shared.js",
-    includes: "const explicitlyLinked = customerDogs.find((dog) => dog.id === record.linkedCustomerDogId)",
+    includes: "const explicitlyLinked = lookup.byId.get(record.linkedCustomerDogId)",
     message: "Boarding Dogs must resolve explicit customer links without requiring an owner email.",
   },
   {

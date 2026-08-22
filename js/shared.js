@@ -7511,30 +7511,58 @@ function sameDateValue(value, date = todayDate()) {
 // Extracted to js/boarding.js: renderBoardingQueueGroups
 
 
-function linkedCustomerDogForBoarding(record = {}) {
+var linkedCustomerDogLookupCache = {
+  signature: "",
+  byId: new Map(),
+  byBoardingId: new Map(),
+  byOwnerDog: new Map(),
+};
+
+function linkedCustomerDogLookup() {
+  const signature = recordRevisionSignatureFor(["customerDog"]);
+  if (linkedCustomerDogLookupCache.signature === signature) return linkedCustomerDogLookupCache;
   const customerDogs = readRecords("customerDog").filter((dog) => !dog.removed);
+  const byId = new Map();
+  const byBoardingId = new Map();
+  const byOwnerDog = new Map();
+  customerDogs.forEach((dog) => {
+    if (dog.id) byId.set(dog.id, dog);
+    [
+      dog.linkedBoardingDogId,
+      dog.sourceBoardingDogId,
+      ...arrayValue(dog.legacyBoardingDogIds),
+    ].filter(Boolean).forEach((id) => {
+      const key = String(id).replace(/^boarding:/, "");
+      if (!byBoardingId.has(key)) byBoardingId.set(key, dog);
+    });
+    const dogName = String(dog.dogName || "").trim().toLowerCase();
+    [dog.ownerEmail, dog.customerEmail].map(normalizeEmail).filter(Boolean).forEach((email) => {
+      const key = email + "|" + dogName;
+      if (!byOwnerDog.has(key)) byOwnerDog.set(key, dog);
+    });
+  });
+  linkedCustomerDogLookupCache = { signature, byId, byBoardingId, byOwnerDog };
+  return linkedCustomerDogLookupCache;
+}
+
+function linkedCustomerDogForBoarding(record = {}) {
+  const lookup = linkedCustomerDogLookup();
   if (record.linkedCustomerDogId) {
-    const explicitlyLinked = customerDogs.find((dog) => dog.id === record.linkedCustomerDogId);
+    const explicitlyLinked = lookup.byId.get(record.linkedCustomerDogId);
     if (explicitlyLinked) return explicitlyLinked;
   }
-  const boardingIds = new Set([
+  const boardingIds = [
     record.id,
     ...arrayValue(record.sourceRecordIds),
     ...arrayValue(record.duplicateProfileIds),
     ...arrayValue(record.legacyBoardingDogIds),
-  ].filter(Boolean).map((id) => String(id).replace(/^boarding:/, "")));
-  const linkedByBoardingId = customerDogs.find((dog) => [
-    dog.linkedBoardingDogId,
-    dog.sourceBoardingDogId,
-    ...arrayValue(dog.legacyBoardingDogIds),
-  ].filter(Boolean).some((id) => boardingIds.has(String(id).replace(/^boarding:/, ""))));
+  ].filter(Boolean).map((id) => String(id).replace(/^boarding:/, ""));
+  const linkedByBoardingId = boardingIds.map((id) => lookup.byBoardingId.get(id)).find(Boolean);
   if (linkedByBoardingId) return linkedByBoardingId;
   const ownerEmails = boardingOwnerEmails(record);
   if (!ownerEmails.length) return null;
-  return customerDogs.find((dog) => {
-    return ownerEmails.includes(normalizeEmail(dog.ownerEmail || dog.customerEmail))
-      && String(dog.dogName || "").trim().toLowerCase() === String(record.dogName || "").trim().toLowerCase();
-  }) || null;
+  const dogName = String(record.dogName || "").trim().toLowerCase();
+  return ownerEmails.map((email) => lookup.byOwnerDog.get(email + "|" + dogName)).find(Boolean) || null;
 }
 
 // Extracted to js/boarding.js: boardingDogForCustomerDog
