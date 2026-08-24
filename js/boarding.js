@@ -5548,6 +5548,7 @@ function setBoardingDogActiveTab(tabName = "Dog Info") {
     }
     section.hidden = !isActive;
   });
+  if (availableTab === "Boarding History") renderBoardingHistory(activeBoardingDog());
 }
 
 function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
@@ -6148,7 +6149,7 @@ function openBoardingDog(record = {}) {
     input.checked = (record.flags || []).includes(input.value);
   });
   renderBoardingStays(record);
-  renderBoardingHistory(record);
+  if ($("#boardingHistoryList")) $("#boardingHistoryList").replaceChildren();
   setBoardingFormLocked(false);
   setBoardingDogActiveTab("Dog Info");
 }
@@ -6237,19 +6238,34 @@ async function updateBoardingKennelLocation(locationId = "") {
   showToast("Kennel location updated.");
 }
 
+function boardingStayCardHtml(displayRecord = {}, stay = {}) {
+  const requestCode = boardingStayRequestCode(displayRecord, stay);
+  const ownerUpdateButton = boardingOwnerUpdateButtonHtml(displayRecord, stay);
+  const serviceOnly = isServiceRequestStay(displayRecord, stay);
+  const articleClass = serviceOnly ? "record-card boarding-stay-card is-service-only-request" : "record-card boarding-stay-card";
+  const editLabel = serviceOnly ? "Edit Service" : "Edit Stay";
+  const removeLabel = serviceOnly ? "Remove Service" : "Remove Stay";
+  return \`<article class="\${articleClass}"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingServiceOnlyChipHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p>\${boardingStayBelongingsLineHtml(stay)}<p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${editLabel}</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${removeLabel}</button></div></article>\`;
+}
+
+function renderPastBoardingStays(record = activeBoardingDog()) {
+  const list = $("#boardingPastStayList");
+  const details = list?.closest(".past-boarding-stays");
+  if (!list || !details || details.dataset.loaded === "true") return;
+  const displayRecord = boardingDogWithStayStatus(record || {});
+  const stays = dedupeBoardingStaysForDisplay(displayRecord, displayRecord?.stays || []).slice(1);
+  list.innerHTML = stays.length
+    ? stays.map((stay) => boardingStayCardHtml(displayRecord, stay)).join("")
+    : "<p>No past boarding stays are available.</p>";
+  details.dataset.loaded = "true";
+}
+
 function renderBoardingStays(record = activeBoardingDog()) {
   const displayRecord = boardingDogWithStayStatus(record || {});
   const stays = dedupeBoardingStaysForDisplay(displayRecord, displayRecord?.stays || []);
-  $("#boardingStayHistory").innerHTML = stays.length
-    ? stays.map((stay) => {
-      const requestCode = boardingStayRequestCode(displayRecord, stay);
-      const ownerUpdateButton = boardingOwnerUpdateButtonHtml(displayRecord, stay);
-      const serviceOnly = isServiceRequestStay(displayRecord, stay);
-      const articleClass = serviceOnly ? "record-card boarding-stay-card is-service-only-request" : "record-card boarding-stay-card";
-      const editLabel = serviceOnly ? "Edit Service" : "Edit Stay";
-      const removeLabel = serviceOnly ? "Remove Service" : "Remove Stay";
-      return \`<article class="\${articleClass}"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingServiceOnlyChipHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p>\${boardingStayBelongingsLineHtml(stay)}<p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${editLabel}</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${removeLabel}</button></div></article>\`;
-    }).join("")
+  const [firstStay, ...pastStays] = stays;
+  $("#boardingStayHistory").innerHTML = firstStay
+    ? \`\${boardingStayCardHtml(displayRecord, firstStay)}\${pastStays.length ? \`<details class="past-boarding-stays"><summary data-action="show-past-boarding"><span>Past boarding</span><span class="past-boarding-count">\${pastStays.length}</span></summary><div id="boardingPastStayList" class="record-grid compact-record-grid" aria-live="polite"><p class="profile-empty-note">Older stays load when this section is opened.</p></div></details>\` : ""}\`
     : "<p>No boarding stays logged yet.</p>";
 }
 

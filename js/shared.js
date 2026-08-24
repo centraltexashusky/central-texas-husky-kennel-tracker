@@ -14682,9 +14682,13 @@ function initEvents() {
     openBoardingStayPopup(dog);
   });
   $("#boardingStayHistory").addEventListener("click", async (event) => {
-    const button = event.target.closest('[data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"], [data-action="complete-stay-service"], [data-action="confirm-undo-stay-service"], [data-action="open-owner-update-for-stay"]');
+    const button = event.target.closest('[data-action="show-past-boarding"], [data-action="edit-stay"], [data-action="remove-stay"], [data-action="change-stay-status"], [data-action="complete-stay-service"], [data-action="confirm-undo-stay-service"], [data-action="open-owner-update-for-stay"]');
     if (!button) return;
     const dog = activeBoardingDog();
+    if (button.dataset.action === "show-past-boarding") {
+      renderPastBoardingStays(dog);
+      return;
+    }
     const reference = boardingStayReferenceFromAction(button);
     if (button.dataset.action === "change-stay-status") openBoardingStayStatusMenu(dog, reference);
     if (button.dataset.action === "edit-stay") openBoardingStayPopup(dog, reference);

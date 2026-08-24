@@ -51,11 +51,17 @@ const boardingFileItems = sectionBetween(boarding, "function boardingDogFileItem
 if (boardingFileItems.includes("boardingCustomerUpdate") || boardingFileItems.includes("boardingDogDocumentItems(record)")) failures.push("Uploaded Files still mixes customer-update media or staff documents into customer files.");
 if (!boardingFileItems.includes("customerVaccination") || !boardingFileItems.includes("customerDocuments")) failures.push("Uploaded Files is not sourced from customer-provided records.");
 
-const renderStays = sectionBetween(boarding, "function renderBoardingStays", "function boardingStayStatusMenuHtml");
+const renderStays = sectionBetween(boarding, "function boardingStayCardHtml", "function boardingStayStatusMenuHtml");
 if (!renderStays.includes("boarding-stay-card")) failures.push("Boarding stay history cards do not have a dedicated visual class.");
+if (!renderStays.includes("const [firstStay, ...pastStays] = stays;")) failures.push("Boarding profile does not render only the first stay initially.");
+if (!renderStays.includes('data-action="show-past-boarding"')) failures.push("Past boarding stays do not have an on-demand disclosure control.");
 if (renderStays.includes("boardingStayServicesText(stay")) failures.push("Redundant requested-service sentence is still rendered above the estimate.");
+if (!boarding.includes("function renderPastBoardingStays") || !boarding.includes(".slice(1)")) failures.push("Past boarding stays are not lazy-rendered after the first stay.");
+if (!boarding.includes('if (availableTab === "Boarding History") renderBoardingHistory(activeBoardingDog());')) failures.push("Lifecycle history still renders while its tab is hidden.");
+if (!shared.includes('button.dataset.action === "show-past-boarding"')) failures.push("Past boarding disclosure is not wired to its lazy renderer.");
 if (!styles.includes('#boardingStayHistory > .boarding-stay-card')) failures.push("Dark-mode boarding stay background is not explicitly styled.");
 if (!styles.includes("background: #E8F0F8 !important;")) failures.push("Light-mode boarding stay background is not visually distinct.");
+if (!styles.includes("body.boarding-dog-modal-open::after") || !styles.includes("box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34) !important;")) failures.push("Mobile boarding profile still relies on the oversized scrolling shadow backdrop.");
 
 if (!main.includes('shared.js?v=20260723-customer-file-view-v2')
   || !main.includes('boarding.js?v=20260723-profile-ux-fixes-v2')

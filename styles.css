@@ -63,6 +63,59 @@
   --tint-red: #FBE6E4;
 }
 
+/* Boarding profiles keep older stays out of the initial render and use a stable mobile backdrop. */
+.past-boarding-stays {
+  border: 1px solid rgba(142, 171, 193, 0.72);
+  border-radius: 12px;
+  overflow: clip;
+}
+
+.past-boarding-stays > summary {
+  align-items: center;
+  background: rgba(49, 95, 133, 0.10);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-weight: 850;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 52px;
+  padding: 12px 14px;
+}
+
+.past-boarding-stays > summary::-webkit-details-marker {
+  display: none;
+}
+
+.past-boarding-stays > summary::after {
+  content: "Show";
+  font-size: 0.78rem;
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.past-boarding-stays[open] > summary::after {
+  content: "Hide";
+}
+
+.past-boarding-count {
+  align-items: center;
+  background: rgba(49, 95, 133, 0.14);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.78rem;
+  justify-content: center;
+  margin-left: 8px;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 4px 8px;
+}
+
+.past-boarding-stays > .record-grid {
+  gap: 12px;
+  padding: 12px;
+}
+
 /* Remote updates keep the current page interactive while fresh content is merged. */
 body.is-bulk-rendering .page-view.is-active {
   pointer-events: auto;
@@ -748,6 +801,10 @@ body.is-impersonating .user-card {
 }
 
 body.owned-dog-modal-open {
+  overflow: hidden;
+}
+
+body.boarding-dog-modal-open {
   overflow: hidden;
 }
 
@@ -22293,5 +22350,26 @@ button.dog-show-planner-score:focus-visible {
 
   .dog-show-master-month-grid .weekday-short {
     display: inline;
+  }
+}
+
+@media (max-width: 980px) {
+  body.boarding-dog-modal-open::after {
+    background: rgba(0, 0, 0, 0.62);
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: fixed;
+    z-index: 999;
+  }
+
+  body:not(.is-login-view) .boarding-dog-modal:not([hidden]) {
+    background: #07101d !important;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34) !important;
+    isolation: isolate;
+  }
+
+  :root[data-theme="light"] body:not(.is-login-view) .boarding-dog-modal:not([hidden]) {
+    background: #ffffff !important;
   }
 }
