@@ -1697,6 +1697,17 @@ function boardingCurrentDogRoleForStay(stay = {}, ratePlan = {}, options = {}) {
   const stayProgram = options.stayProgram || stay.stayProgram || stay.pricingSnapshot?.stayProgram || null;
   if (stayProgram) return "boarding-program";
   if (!ratePlan.isMemberPricing) return "non-member";
+  const snapshot = stay.pricingSnapshot || {};
+  const currentDogKey = String(snapshot.currentDogKey || "").trim();
+  const currentDogName = String(snapshot.currentDogName || "").trim().toLowerCase();
+  const matchingBreakdownLine = arrayValue(snapshot.perDogBreakdown).find((line) => {
+    const lineDogKey = String(line?.dogKey || "").trim();
+    const lineDogName = String(line?.dogName || "").trim().toLowerCase();
+    return Boolean((currentDogKey && lineDogKey === currentDogKey) || (currentDogName && lineDogName === currentDogName));
+  });
+  const breakdownRole = normalizedBoardingRateRole(matchingBreakdownLine?.role || "");
+  if (breakdownRole === "shared-crate-additional") return "shared-crate-additional";
+  if (breakdownRole === "primary") return "primary";
   const savedRole = normalizedBoardingRateRole(stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.role || "");
   return savedRole === "shared-crate-additional" ? "shared-crate-additional" : "primary";
 }
@@ -2959,12 +2970,10 @@ function scrollBoardingCalendarToToday() {
   });
 }
 
-function boardingCalendarEntryHtml(entry = {}, index = 0, days = []) {
+function boardingCalendarEntryBarHtml(entry = {}, row = 2, days = []) {
   const record = entry.record || {};
   const stay = entry.stay || {};
-  const row = index + 2;
   const dogName = record.dogName || "Dog";
-  const dogMeta = boardingCalendarDogMeta(record, stay);
   const monthStart = days[0] || "";
   const offset = Math.max(0, daysBetweenDates(monthStart, entry.visibleStart) || 0);
   const inclusiveSpan = Math.max(1, daysBetweenDates(entry.visibleStart, addDays(entry.visibleEnd, 1)) || 1);
@@ -2976,10 +2985,38 @@ function boardingCalendarEntryHtml(entry = {}, index = 0, days = []) {
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const title = dogName + " | " + stayScheduleRangeLabel(record, stay);
   const barMeta = [boardingCalendarStatusLabel(entry.status), requestCode, dueInfo?.label || ""].filter(Boolean).join(" | ");
+  return '<button type="button" class="boarding-calendar-bar ' + escapeHtml(statusClass) + '" data-action="open-calendar-stay" data-id="' + escapeHtml(record.id || "") + '"' + stayAttrs + ' style="grid-row: ' + row + '; grid-column: ' + startColumn + ' / span ' + span + ';" title="' + escapeHtml(title) + '"><span>' + escapeHtml(dogName) + '</span><small>' + escapeHtml(barMeta) + '</small></button>';
+}
+
+function boardingCalendarDogKey(entry = {}) {
+  const record = entry.record || {};
+  return boardingDogIdentityKey(record)
+    || [normalizedDogIdentityName(record), normalizeEmail(record.ownerEmail || record.customerEmail)].filter(Boolean).join("|")
+    || record.id
+    || normalizedDogIdentityName(record);
+}
+
+function boardingCalendarDogGroups(entries = []) {
+  const groups = new Map();
+  entries.forEach((entry) => {
+    const key = boardingCalendarDogKey(entry) || uid("boarding-calendar-dog");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  });
+  return [...groups.values()];
+}
+
+function boardingCalendarDogRowHtml(entries = [], index = 0, days = []) {
+  const first = entries[0] || {};
+  const record = first.record || {};
+  const stay = first.stay || {};
+  const row = index + 2;
+  const dogName = record.dogName || "Dog";
+  const dogMeta = boardingCalendarDogMeta(record, stay);
   const dayCells = days.map((day, dayIndex) => '<span class="boarding-calendar-day-cell" style="grid-row: ' + row + '; grid-column: ' + (dayIndex + 2) + ';"></span>').join("");
   return '<button type="button" class="boarding-calendar-dog-cell" data-action="open-calendar-dog" data-id="' + escapeHtml(record.id || "") + '" style="grid-row: ' + row + '; grid-column: 1;" title="' + escapeHtml(dogName) + '"><strong>' + escapeHtml(dogName) + '</strong><span>' + escapeHtml(dogMeta || "Boarding stay") + '</span></button>'
     + dayCells
-    + '<button type="button" class="boarding-calendar-bar ' + escapeHtml(statusClass) + '" data-action="open-calendar-stay" data-id="' + escapeHtml(record.id || "") + '"' + stayAttrs + ' style="grid-row: ' + row + '; grid-column: ' + startColumn + ' / span ' + span + ';" title="' + escapeHtml(title) + '"><span>' + escapeHtml(dogName) + '</span><small>' + escapeHtml(barMeta) + '</small></button>';
+    + entries.map((entry) => boardingCalendarEntryBarHtml(entry, row, days)).join("");
 }
 
 function renderBoardingCalendar(records = []) {
@@ -2989,14 +3026,15 @@ function renderBoardingCalendar(records = []) {
   const days = boardingCalendarDays(boardingCalendarMonth);
   const allEntries = boardingCalendarEntries(records, boardingCalendarMonth);
   const entries = allEntries.filter((entry) => !boardingCalendarInactiveStatuses.has(entry.status || "Approved"));
-  const dogCount = new Set(entries.map((entry) => entry.record?.id || entry.record?.dogName || "")).size;
+  const dogGroups = boardingCalendarDogGroups(entries);
+  const dogCount = dogGroups.length;
   const dayHeadings = days.map(boardingCalendarDayHeadingHtml).join("");
-  const rows = entries.map((entry, index) => boardingCalendarEntryHtml(entry, index, days)).join("");
-  const nowLine = boardingCalendarCurrentTimeLineHtml(days, entries.length);
+  const rows = dogGroups.map((group, index) => boardingCalendarDogRowHtml(group, index, days)).join("");
+  const nowLine = boardingCalendarCurrentTimeLineHtml(days, dogGroups.length);
   const emptyMessage = allEntries.length ? "No stays match the active status flags." : "No stays match the current month and filters.";
   const emptyState = entries.length ? "" : '<article class="record-card compact-record-card boarding-calendar-empty"><strong>No boarding stays in ' + escapeHtml(boardingCalendarMonthLabel(boardingCalendarMonth)) + '</strong><p>' + escapeHtml(emptyMessage) + '</p></article>';
   const grid = entries.length
-    ? '<div class="boarding-calendar-scroll" tabindex="0"><div class="boarding-calendar-grid" style="--boarding-calendar-days: ' + days.length + '; --boarding-calendar-rows: ' + entries.length + ';"><div class="boarding-calendar-corner">Dog</div>' + dayHeadings + rows + nowLine + '</div></div>'
+    ? '<div class="boarding-calendar-scroll" tabindex="0"><div class="boarding-calendar-grid" style="--boarding-calendar-days: ' + days.length + '; --boarding-calendar-rows: ' + dogGroups.length + ';"><div class="boarding-calendar-corner">Dog</div>' + dayHeadings + rows + nowLine + '</div></div>'
     : emptyState;
   container.innerHTML = '<section class="boarding-calendar-card">'
     + '<div class="boarding-calendar-header"><div><strong>Monthly Stay Timeline</strong><span>' + escapeHtml(entries.length + " stay" + (entries.length === 1 ? "" : "s") + " | " + dogCount + " dog" + (dogCount === 1 ? "" : "s")) + '</span></div>'
@@ -5155,7 +5193,7 @@ function boardingFamilyPricingSnapshots(entries = []) {
   const lines = useSavedMemberRoles
     ? activeEntries.map((entry) => {
       const record = entry.record || {};
-      const savedRole = entry.stay?.pricingSnapshot?.currentDogRole === "shared-crate-additional" ? "shared-crate-additional" : "primary";
+      const savedRole = boardingCurrentDogRoleForStay(entry.stay || {}, ratePlan);
       const rate = isServiceRequest ? 0 : savedRole === "shared-crate-additional" ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
       return {
         dogKey: boardingPricingDogKey(record),
