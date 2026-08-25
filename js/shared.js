@@ -4091,8 +4091,11 @@ function boardingRequestsDetailsStateKey() {
 
 function rememberBoardingRequestsDetailsState() {
   const details = $("#boardingRequestsDetails");
-  if (!details || !window.matchMedia("(max-width: 760px)").matches) return;
-  localStorage.setItem(boardingRequestsDetailsStateKey(), details.open ? "open" : "closed");
+  if (!details) return;
+  if (window.matchMedia("(max-width: 760px)").matches) {
+    localStorage.setItem(boardingRequestsDetailsStateKey(), details.open ? "open" : "closed");
+  }
+  if (activePageId() === "boardingDogsPage") scheduleBoardingRequestsLazyRender();
 }
 
 // === MODULE: DAILY ===
@@ -11385,8 +11388,6 @@ function scheduleBoardingPageRecordsRender() {
     if (activePageId() !== "boardingDogsPage") return;
     renderBoardingDogs();
     scheduleBoardingRequestsLazyRender();
-    const openDog = activeBoardingDog();
-    if (openDog?.id) renderBoardingDogAgreements(openDog);
   });
 }
 
@@ -11451,8 +11452,7 @@ function renderAllRecords(options = {}) {
   if (activePageId() === "dogShowPage") renderDogShow();
   renderDashboard();
   renderOwnedDogs();
-  renderBoardingDogs();
-  renderBoardingRequests();
+  if (activePageId() === "boardingDogsPage") scheduleBoardingPageRecordsRender();
   renderRequests();
   renderMaintenance();
   renderTimesheet();
@@ -11949,6 +11949,7 @@ function initEvents() {
   $("#boardingRequestsDetails")?.addEventListener("toggle", rememberBoardingRequestsDetailsState);
   window.addEventListener("resize", () => {
     syncMobileReviewSections();
+    syncBoardingRosterLayoutForViewport();
     resetDailyTaskTabPointerDrag();
     renderDailyTaskTabs();
     setDailyTaskTab(dailyTaskTab);

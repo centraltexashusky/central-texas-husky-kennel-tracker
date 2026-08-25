@@ -11,6 +11,18 @@ var BOARDING_ROSTER_RENDER_CHUNK_SIZE = 3;
 var boardingRequestRenderSequence = 0;
 var boardingRequestIntersectionObserver = null;
 var boardingRequestLazyTimer = null;
+var boardingProfileTabRenderSequence = 0;
+var boardingRosterMobileLayout = null;
+
+var BOARDING_PROFILE_LAZY_TARGETS = {
+  Vaccination: "boardingDogVaccinationList",
+  "Customer Update": "boardingCustomerUpdateList",
+  "Uploaded Files": "boardingDogUploadedFileList",
+  "Contract/Agreement": "boardingDogAgreementList",
+  "Customer Info": "boardingOwnerAccountContent",
+  "Boarding History": "boardingHistoryList",
+  "Boarding & Request": "boardingStayHistory",
+};
 
 function dogTypeBadgeHtml(type) {
   const labels = {
@@ -3172,6 +3184,7 @@ function boardingOwnerLinkButtonHtml(record = {}) {
 }
 
 function renderBoardingOwnerAccountPanel(record = activeBoardingDog()) {
+  if (!boardingProfileTabIsActive("Customer Info")) return;
   const panel = $("#boardingOwnerAccountPanel");
   const content = $("#boardingOwnerAccountContent");
   if (!panel || !content) return;
@@ -4668,11 +4681,12 @@ function boardingStayEntrySortTime(entry = {}) {
 
 function handleBoardingViewToggle(view = "board") {
   boardingViewMode = ["calendar", "list"].includes(view) ? view : "board";
+  const mobileList = boardingRosterUsesMobileCards();
   $$("#boardingViewToggle [data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === boardingViewMode));
   $("#boardingQueueGroups")?.classList.toggle("is-hidden", boardingViewMode !== "board");
   $("#boardingCalendarView")?.classList.toggle("is-hidden", boardingViewMode !== "calendar");
-  $("#boardingDogsPage .table-settings-shell")?.classList.toggle("is-hidden", boardingViewMode !== "list");
-  $("#boardingDogQuickCards")?.classList.toggle("is-hidden", boardingViewMode !== "list");
+  $("#boardingDogsPage .table-settings-shell")?.classList.toggle("is-hidden", boardingViewMode !== "list" || mobileList);
+  $("#boardingDogQuickCards")?.classList.toggle("is-hidden", boardingViewMode !== "list" || !mobileList);
 }
 
 function boardingSkeletonCardsHtml(count = 3) {
@@ -4721,12 +4735,14 @@ function boardingTableRowHtml(record = {}, columns = []) {
 function renderBoardingListInBatches(records = [], columns = [], options = {}) {
   const tableBody = $("#boardingDogTableBody");
   const quickCardsContainer = $("#boardingDogQuickCards");
+  const renderMobileCards = boardingRosterUsesMobileCards();
+  const renderDesktopRows = !renderMobileCards;
   const sequence = beginBoardingRosterRender(records.length, "Preparing boarding dog list");
   if (tableBody) tableBody.innerHTML = "";
   if (quickCardsContainer) quickCardsContainer.innerHTML = "";
   if (!records.length) {
-    if (tableBody) tableBody.innerHTML = \`<tr><td colspan="\${(columns.length || 1) + 1}">\${options.emptyTableText || "No boarding dogs match this view."}</td></tr>\`;
-    if (quickCardsContainer) quickCardsContainer.innerHTML = \`<article class="record-card mobile-roster-card"><strong>No boarding dogs</strong><p>No boarding dog records match this view.</p></article>\`;
+    if (tableBody && renderDesktopRows) tableBody.innerHTML = \`<tr><td colspan="\${(columns.length || 1) + 1}">\${options.emptyTableText || "No boarding dogs match this view."}</td></tr>\`;
+    if (quickCardsContainer && renderMobileCards) quickCardsContainer.innerHTML = \`<article class="record-card mobile-roster-card"><strong>No boarding dogs</strong><p>No boarding dog records match this view.</p></article>\`;
     finishBoardingRosterRender(sequence);
     return;
   }
@@ -4735,23 +4751,39 @@ function renderBoardingListInBatches(records = [], columns = [], options = {}) {
   const renderNextChunk = () => {
     if (sequence !== boardingRosterRenderSequence) return;
     const batch = records.slice(rendered, rendered + BOARDING_ROSTER_RENDER_CHUNK_SIZE);
-    if (tableBody) tableBody.insertAdjacentHTML("beforeend", batch.map((record) => boardingTableRowHtml(record, columns)).join(""));
-    if (quickCardsContainer) quickCardsContainer.insertAdjacentHTML("beforeend", batch.map(boardingQuickCardHtml).join(""));
+    if (tableBody && renderDesktopRows) tableBody.insertAdjacentHTML("beforeend", batch.map((record) => boardingTableRowHtml(record, columns)).join(""));
+    if (quickCardsContainer && renderMobileCards) quickCardsContainer.insertAdjacentHTML("beforeend", batch.map(boardingQuickCardHtml).join(""));
     rendered += batch.length;
     updateBoardingRosterRenderProgress(sequence, rendered, records.length);
     if (rendered < records.length) {
       scheduleBoardingRosterFrame(sequence, renderNextChunk);
       return;
     }
-    if (tableBody) hydrateProfilePhotoElements(tableBody);
-    if (quickCardsContainer) hydrateProfilePhotoElements(quickCardsContainer);
+    if (tableBody && renderDesktopRows) hydrateProfilePhotoElements(tableBody);
+    if (quickCardsContainer && renderMobileCards) hydrateProfilePhotoElements(quickCardsContainer);
     renderCustomerDogUploadCards();
     finishBoardingRosterRender(sequence);
   };
   scheduleBoardingRosterFrame(sequence, renderNextChunk);
 }
 
+function boardingRosterUsesMobileCards() {
+  return window.matchMedia("(max-width: 760px)").matches;
+}
+
+function syncBoardingRosterLayoutForViewport() {
+  const nextMobileLayout = boardingRosterUsesMobileCards();
+  if (boardingRosterMobileLayout === nextMobileLayout) return;
+  boardingRosterMobileLayout = nextMobileLayout;
+  if (activePageId() === "boardingDogsPage" && boardingViewMode === "list") renderBoardingDogs();
+}
+
 function renderBoardingDogs() {
+  if (activePageId() !== "boardingDogsPage") {
+    boardingRosterRenderSequence += 1;
+    return;
+  }
+  boardingRosterMobileLayout = boardingRosterUsesMobileCards();
   const mark = efficiencyPerfStart("renderBoardingDogs");
   try {
     const searchInput = $("#boardingDogSearch");
@@ -4837,11 +4869,18 @@ function renderBoardingDogs() {
 
     if (activeView === "list") {
       const columns = activeColumns("boardingDog");
-      if (tableHead) tableHead.innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="boardingDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
+      if (tableHead) tableHead.innerHTML = boardingRosterUsesMobileCards() ? "" : \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="boardingDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
       renderBoardingListInBatches(records, columns, {
         emptyTableText: hasSearchQuery ? "No boarding dog records match this search." : \`No \${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.\`,
       });
-      renderColumnManager("boardingDog", "#boardingDogColumnManager");
+      if (boardingRosterUsesMobileCards()) {
+        if (columnManager) {
+          columnManager.innerHTML = "";
+          columnManager.hidden = true;
+        }
+      } else {
+        renderColumnManager("boardingDog", "#boardingDogColumnManager");
+      }
     } else {
       if (tableHead) tableHead.innerHTML = "";
       if (tableBody) tableBody.innerHTML = "";
@@ -5477,17 +5516,42 @@ function cancelBoardingRequestRender() {
   boardingRequestLazyTimer = null;
 }
 
+function boardingRequestsSectionReadyForRender() {
+  const section = $("#boardingRequestsSection");
+  const details = $("#boardingRequestsDetails");
+  if (!section || section.hidden || (details && !details.open)) return false;
+  const rect = section.getBoundingClientRect();
+  return rect.top <= window.innerHeight + 600 && rect.bottom >= -600;
+}
+
+function boardingRequestsWaitingHtml() {
+  return '<article class="record-card compact-record-card boarding-requests-deferred"><strong>Boarding requests are ready on demand.</strong><p>The active dog roster loads first. Request cards load when this section is opened and approaches the screen.</p></article>';
+}
+
 function scheduleBoardingRequestsLazyRender() {
   cancelBoardingRequestRender();
   const section = $("#boardingRequestsSection");
+  const details = $("#boardingRequestsDetails");
+  const list = $("#boardingRequestRecords");
   if (!section || currentRole() !== "admin") {
-    renderBoardingRequests();
+    renderBoardingRequests({ force: true });
     return;
+  }
+  if (details && !details.open) {
+    if (list) {
+      list.dataset.requestRenderState = "deferred";
+      list.innerHTML = boardingRequestsWaitingHtml();
+    }
+    return;
+  }
+  if (list && list.dataset.requestRenderState !== "ready") {
+    list.dataset.requestRenderState = "waiting";
+    list.innerHTML = boardingRequestsWaitingHtml();
   }
   if (typeof window.IntersectionObserver !== "function") {
     boardingRequestLazyTimer = window.setTimeout(() => {
       boardingRequestLazyTimer = null;
-      if (activePageId() === "boardingDogsPage") renderBoardingRequests();
+      if (activePageId() === "boardingDogsPage" && (!details || details.open)) renderBoardingRequests({ force: true });
     }, 600);
     return;
   }
@@ -5495,24 +5559,29 @@ function scheduleBoardingRequestsLazyRender() {
     if (!entries.some((entry) => entry.isIntersecting)) return;
     boardingRequestIntersectionObserver?.disconnect();
     boardingRequestIntersectionObserver = null;
-    if (activePageId() === "boardingDogsPage") renderBoardingRequests();
+    if (activePageId() === "boardingDogsPage" && (!details || details.open)) renderBoardingRequests({ force: true });
   }, { rootMargin: "600px 0px" });
   boardingRequestIntersectionObserver.observe(section);
 }
 
-function renderBoardingRequests() {
-  const mark = efficiencyPerfStart("renderBoardingRequests");
+function renderBoardingRequests(options = {}) {
   const list = $("#boardingRequestRecords");
   const section = $("#boardingRequestsSection");
   const isAdmin = currentRole() === "admin";
   if (section) section.hidden = !isAdmin;
+  if (activePageId() !== "boardingDogsPage") return;
   if (!isAdmin) {
     if (list) list.innerHTML = "";
-    efficiencyPerfEnd(mark);
     return;
   }
+  if (!options.force && !boardingRequestsSectionReadyForRender()) {
+    scheduleBoardingRequestsLazyRender();
+    return;
+  }
+  const mark = efficiencyPerfStart("renderBoardingRequests");
   try {
     if (!list) return;
+    list.dataset.requestRenderState = "loading";
     const sequence = ++boardingRequestRenderSequence;
     const statusFilters = readBoardingRequestStatusFilter();
     syncBoardingRequestFilterUi(statusFilters);
@@ -5524,6 +5593,7 @@ function renderBoardingRequests() {
     const groups = boardingFamilyGroups(entries);
     if (!groups.length) {
       list.innerHTML = \`<p>No \${statusFilters.length ? statusFilters.join(", ").toLowerCase() + " " : ""}boarding requests yet.</p>\`;
+      list.dataset.requestRenderState = "ready";
       return;
     }
     list.innerHTML = boardingSkeletonCardsHtml(2);
@@ -5543,6 +5613,7 @@ function renderBoardingRequests() {
         return;
       }
       hydrateProfilePhotoElements(list);
+      list.dataset.requestRenderState = "ready";
       finishBoardingRosterRender(boardingRosterRenderSequence);
     };
     window.requestAnimationFrame(renderNextRequest);
@@ -5573,6 +5644,81 @@ function currentOrNextStay(record) {
     .find((stay) => new Date(stay.pickupTime) >= now) || null;
 }
 
+function boardingProfileSection(tabName = "Dog Info") {
+  return $$('.boarding-profile-section[data-boarding-profile-section]').find((section) => section.dataset.boardingProfileSection === tabName) || null;
+}
+
+function boardingProfileTabIsActive(tabName = "Dog Info") {
+  const detail = $("#boardingDogDetail");
+  const section = boardingProfileSection(tabName);
+  return Boolean(detail && !detail.hidden && section && !section.hidden);
+}
+
+function boardingProfileRecordRenderKey(record = {}) {
+  return [
+    record.id || "new",
+    record.updatedAt || record.submittedAt || "",
+    arrayValue(record.stays).length,
+    arrayValue(record.customerUpdates).length,
+    arrayValue(record.careLogs).length,
+  ].join("|");
+}
+
+function boardingProfileLazyPlaceholderHtml(tabName = "") {
+  return '<p class="profile-empty-note boarding-profile-lazy-note">' + escapeHtml(tabName) + ' loads when this tab is opened.</p>';
+}
+
+function resetBoardingProfileLazySections(record = {}) {
+  boardingProfileTabRenderSequence += 1;
+  Object.entries(BOARDING_PROFILE_LAZY_TARGETS).forEach(([tabName, targetId]) => {
+    const section = boardingProfileSection(tabName);
+    const target = document.getElementById(targetId);
+    if (section) {
+      section.dataset.profileRenderKey = "";
+      section.dataset.profileRenderState = "deferred";
+      section.removeAttribute("aria-busy");
+    }
+    if (target) target.innerHTML = boardingProfileLazyPlaceholderHtml(tabName);
+  });
+  const ownerPanel = $("#boardingOwnerAccountPanel");
+  if (ownerPanel) ownerPanel.hidden = !record.id;
+}
+
+function renderBoardingProfileTabContent(tabName = "Dog Info", record = activeBoardingDog() || {}) {
+  if (tabName === "Vaccination") renderBoardingVaccinationFiles(record);
+  else if (tabName === "Customer Update") renderBoardingCustomerUpdates(record);
+  else if (tabName === "Uploaded Files") renderBoardingDogFiles(record);
+  else if (tabName === "Contract/Agreement") renderBoardingDogAgreements(record);
+  else if (tabName === "Customer Info") renderBoardingOwnerAccountPanel(record);
+  else if (tabName === "Boarding History") renderBoardingHistory(record);
+  else if (tabName === "Boarding & Request") {
+    renderBoardingKennelLocationControl(record);
+    renderBoardingStays(record);
+  }
+}
+
+function scheduleBoardingProfileTabRender(tabName = "Dog Info", record = activeBoardingDog() || {}) {
+  if (tabName === "Dog Info" || !boardingProfileTabIsActive(tabName)) return;
+  const section = boardingProfileSection(tabName);
+  const targetId = BOARDING_PROFILE_LAZY_TARGETS[tabName] || "";
+  const target = targetId ? document.getElementById(targetId) : null;
+  const renderKey = boardingProfileRecordRenderKey(record);
+  if (!section || section.dataset.profileRenderKey === renderKey) return;
+  const sequence = ++boardingProfileTabRenderSequence;
+  section.dataset.profileRenderState = "loading";
+  section.setAttribute("aria-busy", "true");
+  if (target) target.innerHTML = boardingSkeletonCardsHtml(1);
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      if (sequence !== boardingProfileTabRenderSequence || !boardingProfileTabIsActive(tabName)) return;
+      renderBoardingProfileTabContent(tabName, record);
+      section.dataset.profileRenderKey = renderKey;
+      section.dataset.profileRenderState = "ready";
+      section.removeAttribute("aria-busy");
+    });
+  });
+}
+
 function setBoardingDogActiveTab(tabName = "Dog Info") {
   const tabs = $$("#boardingDogProfileTabs [data-boarding-profile-tab]");
   const sections = $$(".boarding-profile-section[data-boarding-profile-section]");
@@ -5586,10 +5732,11 @@ function setBoardingDogActiveTab(tabName = "Dog Info") {
     }
     section.hidden = !isActive;
   });
-  if (availableTab === "Boarding History") renderBoardingHistory(activeBoardingDog());
+  scheduleBoardingProfileTabRender(availableTab, activeBoardingDog() || {});
 }
 
 function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
+  if (!boardingProfileTabIsActive("Vaccination")) return;
   const list = $("#boardingDogVaccinationList");
   if (!list) return;
   const files = record.vaccinationRecords || [];
@@ -5602,6 +5749,7 @@ function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
 }
 
 function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
+  if (!boardingProfileTabIsActive("Customer Update")) return;
   const list = $("#boardingCustomerUpdateList");
   if (!list) return;
   const displayRecord = boardingDogWithStayStatus(record || {});
@@ -5746,6 +5894,7 @@ function boardingAgreementCardHtml(agreement = {}) {
 }
 
 function renderBoardingDogAgreements(record = activeBoardingDog() || {}) {
+  if (!boardingProfileTabIsActive("Contract/Agreement")) return;
   const list = $("#boardingDogAgreementList");
   if (!list) return;
   if (!record?.id) {
@@ -5827,6 +5976,7 @@ function boardingDogFileItems(record = {}) {
 }
 
 function renderBoardingDogFiles(record = activeBoardingDog() || {}) {
+  if (!boardingProfileTabIsActive("Uploaded Files")) return;
   const list = $("#boardingDogUploadedFileList");
   if (!list) return;
   if (!record?.id) {
@@ -6177,19 +6327,12 @@ function openBoardingDog(record = {}) {
   resetBoardingDogFormForRecord(record);
   setDogPhoto("boarding", record);
   $("#boardingSchedulePanel").hidden = !record.id;
-  renderBoardingOwnerAccountPanel(record);
-  renderBoardingVaccinationFiles(record);
-  renderBoardingCustomerUpdates(record);
-  renderBoardingDogFiles(record);
-  renderBoardingDogAgreements(record);
-  renderBoardingKennelLocationControl(record);
+  resetBoardingProfileLazySections(record);
   $$('input[name="boardingFlags"]').forEach((input) => {
     input.checked = (record.flags || []).includes(input.value);
   });
-  renderBoardingStays(record);
-  if ($("#boardingHistoryList")) $("#boardingHistoryList").replaceChildren();
-  setBoardingFormLocked(false);
   setBoardingDogActiveTab("Dog Info");
+  setBoardingFormLocked(false);
 }
 
 function openBoardingDogToTab(record = {}, tabName = "Boarding & Request") {
@@ -6224,6 +6367,7 @@ function activeBoardingDog(options = {}) {
 }
 
 function renderBoardingKennelLocationControl(record = activeBoardingDog()) {
+  if (!boardingProfileTabIsActive("Boarding & Request")) return;
   const label = $("#boardingKennelLocationLabel");
   const select = $("#boardingKennelLocationSelect");
   const status = boardingDisplayStatus(record || {});
@@ -6299,6 +6443,7 @@ function renderPastBoardingStays(record = activeBoardingDog()) {
 }
 
 function renderBoardingStays(record = activeBoardingDog()) {
+  if (!boardingProfileTabIsActive("Boarding & Request")) return;
   const displayRecord = boardingDogWithStayStatus(record || {});
   const stays = dedupeBoardingStaysForDisplay(displayRecord, displayRecord?.stays || []);
   const [firstStay, ...pastStays] = stays;
@@ -6795,6 +6940,7 @@ function boardingStayHistoryPopupHtml(record = {}, stay = {}) {
 }
 
 function renderBoardingHistory(record = activeBoardingDog()) {
+  if (!boardingProfileTabIsActive("Boarding History")) return;
   const list = $("#boardingHistoryList");
   if (!list) return;
   const displayRecord = boardingDogWithStayStatus(record || {});

@@ -57,7 +57,8 @@ if (!renderStays.includes("const [firstStay, ...pastStays] = stays;")) failures.
 if (!renderStays.includes('data-action="show-past-boarding"')) failures.push("Past boarding stays do not have an on-demand disclosure control.");
 if (renderStays.includes("boardingStayServicesText(stay")) failures.push("Redundant requested-service sentence is still rendered above the estimate.");
 if (!boarding.includes("function renderPastBoardingStays") || !boarding.includes(".slice(1)")) failures.push("Past boarding stays are not lazy-rendered after the first stay.");
-if (!boarding.includes('if (availableTab === "Boarding History") renderBoardingHistory(activeBoardingDog());')) failures.push("Lifecycle history still renders while its tab is hidden.");
+if (!boarding.includes('if (!boardingProfileTabIsActive("Boarding History")) return;')
+  || !boarding.includes("scheduleBoardingProfileTabRender(availableTab, activeBoardingDog() || {});")) failures.push("Lifecycle history still renders while its tab is hidden.");
 if (!shared.includes('button.dataset.action === "show-past-boarding"')) failures.push("Past boarding disclosure is not wired to its lazy renderer.");
 if (!styles.includes('#boardingStayHistory > .boarding-stay-card')) failures.push("Dark-mode boarding stay background is not explicitly styled.");
 if (!styles.includes("background: #E8F0F8 !important;")) failures.push("Light-mode boarding stay background is not visually distinct.");
