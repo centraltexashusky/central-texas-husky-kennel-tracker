@@ -3134,21 +3134,26 @@ function boardingDogWithCanonicalProfile(record = {}) {
   };
 }
 
+function boardingDogHasDetachedRequestProvenance(record = {}) {
+  const sourceCustomerDogId = String(record.sourceCustomerDogId || "").trim();
+  const sourceBoardingDogId = String(record.sourceBoardingDogId || "").trim();
+  if (!sourceCustomerDogId || !sourceBoardingDogId) return false;
+  const linkedCustomerDogId = String(record.linkedCustomerDogId || "").trim();
+  return !linkedCustomerDogId || linkedCustomerDogId === sourceCustomerDogId;
+}
+
 function boardingDogForPersistence(record = {}) {
   if (!record?.id) return record || {};
   const sourceRecord = readRecords("boardingDog")
     .find((item) => item.id === record.id && !item.removed);
-  const isDetachedRequest = Boolean(
-    sourceRecord
-      && !String(sourceRecord.linkedCustomerDogId || "").trim()
-      && String(sourceRecord.sourceBoardingDogId || "").trim(),
-  );
+  const persistenceIdentity = sourceRecord || record;
+  const isDetachedRequest = boardingDogHasDetachedRequestProvenance(persistenceIdentity);
   if (!isDetachedRequest) return record;
   return {
     ...record,
     linkedCustomerDogId: "",
-    sourceCustomerDogId: sourceRecord.sourceCustomerDogId || record.sourceCustomerDogId || record.linkedCustomerDogId || "",
-    sourceBoardingDogId: sourceRecord.sourceBoardingDogId || record.sourceBoardingDogId || "",
+    sourceCustomerDogId: persistenceIdentity.sourceCustomerDogId || record.sourceCustomerDogId || record.linkedCustomerDogId || "",
+    sourceBoardingDogId: persistenceIdentity.sourceBoardingDogId || record.sourceBoardingDogId || "",
   };
 }
 
@@ -4937,7 +4942,7 @@ async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updat
       forceStatusSync: true,
     });
     if (!synced) continue;
-    syncedRecords.push(synced);
+    syncedRecords.push(boardingDogForPersistence(synced));
   }
   if (syncedRecords.length) await sendPayloadBatch(syncedRecords);
   return syncedRecords;

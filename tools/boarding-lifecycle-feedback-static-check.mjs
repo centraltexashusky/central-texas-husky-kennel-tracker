@@ -95,13 +95,16 @@ for (const [label, source] of [["profile", statusTransitionSource], ["stay", sta
   }
 }
 const persistenceGuardSource = boarding.match(/function boardingDogForPersistence[\s\S]*?\n\}/)?.[0] || "";
-if (!persistenceGuardSource.includes('!String(sourceRecord.linkedCustomerDogId || "").trim()')
-  || !persistenceGuardSource.includes('String(sourceRecord.sourceBoardingDogId || "").trim()')
+const detachedProvenanceSource = boarding.match(/function boardingDogHasDetachedRequestProvenance[\s\S]*?\n\}/)?.[0] || "";
+if (!persistenceGuardSource.includes("sourceRecord || record")
+  || !persistenceGuardSource.includes("boardingDogHasDetachedRequestProvenance")
+  || !detachedProvenanceSource.includes("sourceCustomerDogId")
+  || !detachedProvenanceSource.includes("sourceBoardingDogId")
   || !persistenceGuardSource.includes('linkedCustomerDogId: ""')) {
   failures.push("Detached boarding requests do not preserve their persistence identity.");
 }
 try {
-  const makeGuard = new Function("readRecords", `${persistenceGuardSource}; return boardingDogForPersistence;`);
+  const makeGuard = new Function("readRecords", `${detachedProvenanceSource}; ${persistenceGuardSource}; return boardingDogForPersistence;`);
   const detached = {
     id: "boarding-request",
     linkedCustomerDogId: "",
@@ -117,6 +120,15 @@ try {
   if (protectedRequest.linkedCustomerDogId !== "" || protectedRequest.boardingStatus !== "Approved") {
     failures.push("The persistence guard does not protect a detached request while retaining its lifecycle update.");
   }
+  const partialLoadGuard = makeGuard(() => []);
+  const protectedPartialLoadRequest = partialLoadGuard({
+    ...detached,
+    linkedCustomerDogId: "customer-dog",
+    boardingStatus: "Approved",
+  });
+  if (protectedPartialLoadRequest.linkedCustomerDogId !== "" || protectedPartialLoadRequest.boardingStatus !== "Approved") {
+    failures.push("The persistence guard does not protect a detached request when its raw row has not been loaded yet.");
+  }
   const canonical = {
     id: "boarding-profile",
     linkedCustomerDogId: "customer-dog",
@@ -128,6 +140,10 @@ try {
   }
 } catch (error) {
   failures.push(`The detached boarding request regression fixture could not run: ${error.message}`);
+}
+const duplicateSyncSource = boarding.match(/async function syncDuplicateBoardingStayStatusRecords[\s\S]*?\n\}/)?.[0] || "";
+if (!duplicateSyncSource.includes("syncedRecords.push(boardingDogForPersistence(synced))")) {
+  failures.push("Duplicate boarding status synchronization can restore a detached request's canonical dog link.");
 }
 const staySaveSource = boarding.match(/async function saveBoardingStayFromForm[\s\S]*?\n\}/)?.[0] || "";
 const stayPopupSource = boarding.match(/async function openBoardingStayPopup[\s\S]*?\n\}/)?.[0] || "";
@@ -169,6 +185,9 @@ if (!main.includes("boarding-override-confirmation-v40") || !index.includes("boa
 }
 if (!main.includes("staff-new-boarding-default-v53") || !index.includes("staff-new-boarding-default-v53")) {
   failures.push("The staff new-boarding default fix is not cache-busted.");
+}
+if (!main.includes("approval-persistence-identity-v61") || !index.includes("approval-persistence-identity-v61")) {
+  failures.push("The detached-request approval persistence fix is not cache-busted.");
 }
 if (!main.includes("maintenance-alert-detail-active-request-lock-v36") || !index.includes("maintenance-alert-detail-active-request-lock-v36")) {
   failures.push("The maintenance alert and active-stay request lock fix is not cache-busted.");
