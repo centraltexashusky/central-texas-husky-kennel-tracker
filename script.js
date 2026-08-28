@@ -4598,13 +4598,18 @@ function showMediaDialog(src, type, name, context = null) {
   }
   const safeSrc = escapeHtml(src || "");
   const safeName = escapeHtml(name || "Uploaded media");
-  const openLink = `<p><a href="${safeSrc}" target="_blank" rel="noopener">Open uploaded file in database</a></p>`;
+  const isPdf = String(type || "").toLowerCase().includes("pdf")
+    || /\.pdf(?:[?#]|$)/i.test(src)
+    || /\.pdf$/i.test(name || "");
+  const openLink = `<p><a href="${safeSrc}" target="_blank" rel="noopener">${isPdf ? "Open PDF in a new tab" : "Open uploaded file in database"}</a></p>`;
   $("#mediaDialogBody").innerHTML = (type?.startsWith("video/")
     ? `<video src="${safeSrc}" controls playsinline></video>`
     : type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|#|$)/i.test(src)
       ? `<div class="media-zoom-controls"><button type="button" class="secondary-button" data-action="media-zoom-out">Zoom Out</button><span id="mediaZoomLabel">100%</span><button type="button" class="secondary-button" data-action="media-zoom-in">Zoom In</button></div><div class="media-zoom-frame"><img id="zoomableMediaImage" src="${safeSrc}" alt="${safeName}" /></div>`
       : /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(src)
         ? `<video src="${safeSrc}" controls playsinline></video>`
+        : isPdf
+          ? `<iframe class="media-iframe media-pdf-iframe" src="${safeSrc}" title="${safeName}"></iframe>`
         : type === "external/link"
           ? `<iframe class="media-iframe" src="${safeSrc}" title="${safeName}"></iframe><a href="${safeSrc}" target="_blank" rel="noopener">Open in a new tab</a>`
           : `<p>This file type cannot be previewed here.</p>`) + openLink;

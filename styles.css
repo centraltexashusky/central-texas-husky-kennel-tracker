@@ -1546,6 +1546,11 @@ body.boarding-dog-modal-open {
   width: 100%;
 }
 
+.media-pdf-iframe {
+  display: block;
+  height: min(72vh, 820px);
+}
+
 .task-calendar {
   background: #f6f8f7;
   border: 1px solid var(--line);
