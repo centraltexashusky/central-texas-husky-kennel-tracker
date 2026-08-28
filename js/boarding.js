@@ -4359,8 +4359,22 @@ function boardingRecordSortTime(record = {}) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+function boardingStayPricingItemForMerge(items = []) {
+  // Approval/check-in can touch an older duplicate after an amendment was priced.
+  // Use the pricing revision clock, not the lifecycle clock, for commercial data.
+  return items.reduce((latest, item) => {
+    const snapshot = item.stay?.pricingSnapshot;
+    const pricedAt = Date.parse(snapshot?.calculatedAt || "");
+    if (!Number.isFinite(pricedAt) || snapshot?.total === undefined || !Array.isArray(item.stay?.requests)) return latest;
+    const latestPricedAt = Date.parse(latest?.stay?.pricingSnapshot?.calculatedAt || "");
+    return !latest || pricedAt > latestPricedAt ? item : latest;
+  }, null);
+}
+
 function boardingStayRequestsForMergedItems(items = [], best = {}) {
   const bestRequests = mergeBoardingStayRequestList(best.stay?.requests || []);
+  // An explicitly empty service list in a priced revision means services were removed.
+  if (boardingStayPricingItemForMerge([best])) return bestRequests;
   if (bestRequests.length) return bestRequests;
   const fallback = items.find(({ stay }) => arrayValue(stay.requests).length);
   return fallback ? mergeBoardingStayRequestList(fallback.stay.requests) : [];

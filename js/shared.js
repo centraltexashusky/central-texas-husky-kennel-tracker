@@ -8771,8 +8771,19 @@ function mergeBoardingStays(records = [], primary = {}) {
         merged[field] = value;
       });
     });
-    merged.requests = boardingStayRequestsForMergedItems(rankedItems, best);
-    merged.serviceTasks = mergeBoardingStayServiceTasksForRequests(rankedItems, best, merged.requests);
+    const pricingItem = boardingStayPricingItemForMerge(rankedItems);
+    if (pricingItem) {
+      // Keep requests, invoice lines, adjustments, and totals from one saved revision.
+      // Do not reprice against today's catalog or use status timestamps for pricing.
+      for (const field of ["pricingSnapshot", "billingDays", "groupTotal", "requestGroupTotal",
+        "invoiceAdjustments", "invoiceEvents", "stayProgram", "stayProgramId", "stayProgramName", "stayProgramRate"]) {
+        if (Object.prototype.hasOwnProperty.call(pricingItem.stay, field)) merged[field] = pricingItem.stay[field];
+      }
+      merged.estimatedTotal = pricingItem.stay.pricingSnapshot.total;
+    }
+    const requestSource = pricingItem || best;
+    merged.requests = boardingStayRequestsForMergedItems(rankedItems, requestSource);
+    merged.serviceTasks = mergeBoardingStayServiceTasksForRequests(rankedItems, requestSource, merged.requests);
     merged.requestCode = boardingStayRequestCode(best.record, merged);
     if (merged.status !== "In Kennel") {
       merged.kennelLocationId = "";
