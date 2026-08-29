@@ -22104,7 +22104,7 @@ button.dog-show-planner-score:focus-visible {
 }
 
 .financial-transactions-table {
-  min-width: 1040px;
+  min-width: 1200px;
 }
 
 .financial-transactions-table th {
@@ -22115,6 +22115,31 @@ button.dog-show-planner-score:focus-visible {
 
 .financial-transactions-table td {
   vertical-align: top;
+}
+
+.financial-transactions-table .financial-category-cell {
+  min-width: 170px;
+}
+
+.financial-transactions-table .financial-description-cell {
+  min-width: 270px;
+}
+
+.financial-transactions-table .financial-category-cell strong,
+.financial-transactions-table .financial-description-cell span,
+.financial-transactions-table .financial-description-cell small {
+  display: block;
+}
+
+.financial-transactions-table .financial-description-cell span,
+.financial-transactions-table .financial-description-cell small {
+  line-height: 1.35;
+}
+
+.financial-transactions-table .financial-description-cell small {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin-top: 3px;
 }
 
 .financial-transactions-table .record-actions {

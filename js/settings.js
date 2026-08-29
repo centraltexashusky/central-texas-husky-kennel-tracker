@@ -1776,7 +1776,8 @@ function financialTransactionRowHtml(entry = {}) {
     + '<td><strong>' + escapeHtml(financialShortDateLabel(entry.date) + ", " + String(entry.date || "").slice(0, 4)) + '</strong></td>'
     + '<td><span class="financial-type-chip is-' + (isIncome ? "income" : "expense") + '">' + (isIncome ? "Income" : "Expense") + '</span></td>'
     + '<td><strong>' + escapeHtml(entry.businessArea || "General") + '</strong></td>'
-    + '<td class="financial-line-primary"><strong>' + escapeHtml(entry.category || "Uncategorized") + '</strong><span>' + escapeHtml(entry.description || "No description") + '</span>' + (entry.counterparty ? '<small>' + escapeHtml(entry.counterparty) + '</small>' : "") + '</td>'
+    + '<td class="financial-category-cell"><strong>' + escapeHtml(entry.category || "Uncategorized") + '</strong></td>'
+    + '<td class="financial-description-cell"><span>' + escapeHtml(entry.description || "No description") + '</span>' + (entry.counterparty ? '<small>' + escapeHtml(entry.counterparty) + '</small>' : "") + '</td>'
     + '<td><strong>' + escapeHtml(entry.sourceLabel || "Manual entry") + '</strong>' + (entry.reference ? '<span>Ref: ' + escapeHtml(entry.reference) + '</span>' : "") + '</td>'
     + '<td><strong class="financial-amount is-' + (isIncome ? "income" : "expense") + '">' + (isIncome ? "+" : "-") + escapeHtml(payrollMoney(entry.amount || 0)) + '</strong></td>'
     + '<td>' + actions + '</td>'
@@ -1795,7 +1796,7 @@ function renderFinancialTransactions(entries = [], range = financialRangeValues(
   const filtered = financialSortedTransactions(financialFilteredTransactions(entries));
   const income = filtered.filter((entry) => entry.entryType === "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const expenses = filtered.filter((entry) => entry.entryType !== "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-  if ($("#financialTransactionsBody")) $("#financialTransactionsBody").innerHTML = filtered.length ? filtered.map(financialTransactionRowHtml).join("") : '<tr><td colspan="7"><div class="financial-empty-state">No transactions match the selected filters.</div></td></tr>';
+  if ($("#financialTransactionsBody")) $("#financialTransactionsBody").innerHTML = filtered.length ? filtered.map(financialTransactionRowHtml).join("") : '<tr><td colspan="8"><div class="financial-empty-state">No transactions match the selected filters.</div></td></tr>';
   if ($("#financialTransactionMeta")) $("#financialTransactionMeta").textContent = filtered.length + " of " + entries.length + " transactions | " + financialRangeLabel(range);
   if ($("#financialTransactionTotals")) $("#financialTransactionTotals").innerHTML = '<span>Income <strong>' + escapeHtml(payrollMoney(income)) + '</strong></span><span>Expenses <strong>' + escapeHtml(payrollMoney(expenses)) + '</strong></span><span>Net <strong class="' + (income - expenses < 0 ? "is-financial-negative" : "") + '">' + escapeHtml(payrollMoney(income - expenses)) + '</strong></span>';
 }

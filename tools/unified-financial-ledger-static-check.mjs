@@ -21,12 +21,19 @@ requireSource(settings, 'function saveFinancialTransaction(form)', "Manual incom
 requireSource(settings, 'const sourceType = data.sourceType || (data.showEventId ? "showEvent" : "financialTransaction")', "Related Dog Show transactions do not preserve their source of truth.");
 requireSource(settings, 'await sendPayload(record);', "Manual financial transactions are not saved remotely.");
 requireSource(index, 'data-financial-view="transactions"', "The unified transactions view is missing.");
+requireSource(index, '<th>Category</th><th>Description</th>', "Financial transaction category and description are not separate columns.");
 requireSource(index, 'id="newFinancialTransactionButton"', "The financial entry action is missing.");
 requireSource(index, 'name="entryType"', "The transaction form cannot distinguish income from expense.");
 requireSource(schema, "when record_type = 'financialTransaction' then false", "The canonical RLS schema does not keep financial entries admin-only.");
 requireSource(migration, "when record_type = 'financialTransaction' then false", "The financial privacy migration does not restrict non-admin staff.");
 requireSource(main, "unified-financial-ledger-v31", "Changed financial modules are not cache-busted.");
 requireSource(index, "unified-financial-ledger-v31", "The application entrypoint and styles are not cache-busted.");
+requireSource(settings, 'class="financial-category-cell"', "Financial transaction categories do not render in their own cell.");
+requireSource(settings, 'class="financial-description-cell"', "Financial transaction descriptions do not render in their own cell.");
+requireSource(settings, 'colspan="8"', "The empty transaction state does not span the separated columns.");
+requireSource(main, "financial-category-description-columns-v53", "The financial column renderer is not cache-busted.");
+requireSource(index, "financial-category-description-columns-v65", "The application entrypoint is not cache-busted for the financial columns.");
+requireSource(index, "financial-transaction-columns-v61", "The financial column styles are not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));
