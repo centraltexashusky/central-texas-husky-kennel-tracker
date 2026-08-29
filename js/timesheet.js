@@ -170,7 +170,21 @@ function payrollRoundToHundredth(value = 0) {
   return Math.round((number + Number.EPSILON) * 100) / 100;
 }
 
-function staffPayrollUserForRecord(record = {}, users = settingsUsers()) {
+function payrollSettingsUserTimestamp(user = {}) {
+  const timestamp = new Date(user.updatedAt || user.removedAt || user.submittedAt || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function payrollSettingsUsers() {
+  return readRecords("settingsUser")
+    .filter((user) => isStaffRole(user.role || ""))
+    .sort((a, b) => {
+      if (Boolean(a.removed) !== Boolean(b.removed)) return a.removed ? 1 : -1;
+      return payrollSettingsUserTimestamp(b) - payrollSettingsUserTimestamp(a);
+    });
+}
+
+function staffPayrollUserForRecord(record = {}, users = payrollSettingsUsers()) {
   const recordEmail = normalizeEmail(record.helperEmail || record.staffEmail || "");
   const recordName = normalizeHelperName(record.helperName || record.staffName || "");
   return users.find((user) => recordEmail && normalizeEmail(user.email) === recordEmail)
@@ -179,7 +193,9 @@ function staffPayrollUserForRecord(record = {}, users = settingsUsers()) {
 }
 
 function staffPayrollRecordsForRange(range = timesheetActiveRange(), options = {}) {
-  const users = settingsUsers().filter((user) => isStaffRole(user.role || ""));
+  // Removed profiles retain their saved rate for completed payroll history even
+  // though settingsUsers() correctly hides them from active account access.
+  const users = payrollSettingsUsers();
   return readRecords("timesheet")
     .filter((record) => !record.removed)
     .filter((record) => options.includeAll || timesheetBelongsToCurrentUser(record))
