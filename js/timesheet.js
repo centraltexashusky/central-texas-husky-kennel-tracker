@@ -856,7 +856,9 @@ function staffScheduleMonthDates(value = scheduleWeekDate) {
   const source = dateOnly(value) || todayDate();
   const firstOfMonth = new Date(source + "T12:00:00");
   firstOfMonth.setDate(1);
-  const gridStart = weekStart(firstOfMonth).toISOString().slice(0, 10);
+  // The month headers run Sunday through Saturday. Keep this calendar grid
+  // independent from weekStart(), which intentionally starts payroll weeks on Monday.
+  const gridStart = addDays(localDateKey(firstOfMonth), -firstOfMonth.getDay());
   return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
 }
 

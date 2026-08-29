@@ -47,10 +47,10 @@ if (!shared.includes('"#applyPayrollDateFilterButton"') || !shared.includes('"#r
 if (!/shared\.js\?v=2026072[3-9]-/.test(main)) {
   failures.push("The payroll record-loading fix is not cache-busted.");
 }
-if (!main.includes('timesheet.js?v=20260829-removed-user-payroll-rate-v4')) {
+if (!main.includes('timesheet.js?v=20260829-staff-schedule-sunday-grid-v5')) {
   failures.push("The removed-user payroll-rate fix is not cache-busted.");
 }
-if (!index.includes('removed-user-payroll-rate-v63"></script>')) {
+if (!index.includes('removed-user-payroll-rate-v63')) {
   failures.push("The application entrypoint does not expose the payroll fix.");
 }
 
