@@ -21813,11 +21813,27 @@ button.dog-show-planner-score:focus-visible {
 }
 
 .financial-summary-grid {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  align-items: stretch;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.financial-summary-card {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .financial-summary-card strong {
-  font-size: clamp(1.45rem, 2.2vw, 2rem);
+  font-size: clamp(1.45rem, 2vw, 1.9rem);
+  font-variant-numeric: tabular-nums;
+  max-width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.financial-summary-card p {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .financial-panel {
@@ -22256,7 +22272,7 @@ button.dog-show-planner-score:focus-visible {
   }
 
   .financial-summary-grid {
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   }
 
   .financial-line-items-filters {
@@ -22270,6 +22286,10 @@ button.dog-show-planner-score:focus-visible {
 }
 
 @media (max-width: 640px) {
+  .financial-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
   .financial-toolbar {
     grid-template-columns: 1fr;
   }

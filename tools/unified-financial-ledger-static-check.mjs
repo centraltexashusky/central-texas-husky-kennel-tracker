@@ -6,6 +6,7 @@ const index = fs.readFileSync("index.html", "utf8");
 const schema = fs.readFileSync("supabase-schema.sql", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260817002442_restrict_financial_transactions_to_admin.sql", "utf8");
 const main = fs.readFileSync("js/main.js", "utf8");
+const styles = fs.readFileSync("styles.css", "utf8");
 const failures = [];
 
 const requireSource = (source, needle, message) => {
@@ -34,6 +35,14 @@ requireSource(settings, 'colspan="8"', "The empty transaction state does not spa
 requireSource(main, "financial-category-description-columns-v53", "The financial column renderer is not cache-busted.");
 requireSource(index, "financial-category-description-columns-v65", "The application entrypoint is not cache-busted for the financial columns.");
 requireSource(index, "financial-transaction-columns-v61", "The financial column styles are not cache-busted.");
+requireSource(shared, '["ourDogsPage", "boardingDogsPage", "financialsPage"]', "Financials is not connected to the remote-load progress bar.");
+requireSource(shared, 'loading: "Loading financial records"', "The Financials progress bar does not explain that financial records are loading.");
+requireSource(shared, 'rendering: "Updating financial views"', "The Financials progress bar does not cover the rendered-view phase.");
+requireSource(styles, "minmax(210px, 1fr)", "Financial summary cards are still allowed to collapse below their safe content width.");
+requireSource(styles, ".financial-summary-card p", "Financial summary descriptions do not have containment rules.");
+requireSource(main, "financial-loading-progress-v63", "The Financials loading progress code is not cache-busted.");
+requireSource(index, "financial-loading-progress-v67", "The Financials loading progress entrypoint is not cache-busted.");
+requireSource(index, "financial-summary-containment-v66", "The Financial summary card styles are not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

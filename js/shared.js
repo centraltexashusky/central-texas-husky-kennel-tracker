@@ -2232,7 +2232,28 @@ function appInlineLoaderHtml(label = "Loading") {
 }
 
 function pageActivityProgressEligible(pageId = "") {
-  return ["ourDogsPage", "boardingDogsPage"].includes(normalizePageId(pageId));
+  return ["ourDogsPage", "boardingDogsPage", "financialsPage"].includes(normalizePageId(pageId));
+}
+
+function pageActivityProgressLabel(pageId = "", phase = "loading") {
+  if (normalizePageId(pageId) !== "financialsPage") {
+    return {
+      loading: "Loading latest dog records",
+      preparing: "Preparing latest dog records",
+      rendering: "Rendering latest dog records",
+      updated: "Updated",
+      partial: "Partial sync",
+      failed: "Load failed",
+    }[phase] || "Loading latest data";
+  }
+  return {
+    loading: "Loading financial records",
+    preparing: "Preparing financial records",
+    rendering: "Updating financial views",
+    updated: "Financials updated",
+    partial: "Some financial records could not load",
+    failed: "Financial records could not load",
+  }[phase] || "Loading financial records";
 }
 
 function ensurePageActivityProgress(pageId = "") {
@@ -5484,7 +5505,7 @@ async function loadRemoteRecords(options = {}) {
   if (syncNowButton) syncNowButton.disabled = true;
   if (showPageLoader) setAppPageLoading(loadingPageId, true, "Syncing records");
   const showPageActivityProgress = pageActivityProgressEligible(loadingPageId) && options.render !== false && options.silent !== true;
-  if (showPageActivityProgress) startPageActivityProgress(loadingPageId, "Loading latest dog records");
+  if (showPageActivityProgress) startPageActivityProgress(loadingPageId, pageActivityProgressLabel(loadingPageId, "loading"));
   if (options.silent !== true) setSyncBadgeState("refreshing");
   let pageActivityProgressSettled = false;
   const settleRemotePageProgress = (label, failed = false) => {
@@ -5503,7 +5524,7 @@ async function loadRemoteRecords(options = {}) {
         boardingFullHistory: options.boardingFullHistory === true,
         scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
       }), REMOTE_LOAD_STALE_MS, "Remote record load");
-      if (showPageActivityProgress) setPageActivityProgress(loadingPageId, 52, "Preparing latest dog records");
+      if (showPageActivityProgress) setPageActivityProgress(loadingPageId, 52, pageActivityProgressLabel(loadingPageId, "preparing"));
       const failedRemoteTypes = new Set(lastRemoteRecordFetchFailedTypes || []);
       const loadedRemoteTypes = requestedRemoteTypes.filter((type) => !failedRemoteTypes.has(type));
       loadedRemoteTypes.forEach((type) => {
@@ -5556,7 +5577,7 @@ async function loadRemoteRecords(options = {}) {
           lastRemoteLoadFinishedAt = lastSuccessfulRemoteLoadFinishedAt;
         }
         setSyncBadgeState(failedRemoteTypes.size ? "partial" : "synced", { finishedAt: lastSuccessfulRemoteLoadFinishedAt });
-        settleRemotePageProgress(failedRemoteTypes.size ? "Partial sync" : "Updated");
+        settleRemotePageProgress(pageActivityProgressLabel(loadingPageId, failedRemoteTypes.size ? "partial" : "updated"));
         return;
       }
 
@@ -5590,7 +5611,7 @@ async function loadRemoteRecords(options = {}) {
       if (options.syncCustomerAccessProfiles === true) await syncMissingCustomerAccessProfiles();
       if (options.syncLegacyDogModel === true) await syncLegacyDogModelRecords();
       if (remoteLoadShouldRenderActivePage(options, loadedRemoteTypes, loadingPageId)) {
-        if (showPageActivityProgress) setPageActivityProgress(loadingPageId, 58, "Rendering latest dog records");
+        if (showPageActivityProgress) setPageActivityProgress(loadingPageId, 58, pageActivityProgressLabel(loadingPageId, "rendering"));
         renderAllRecordsFromRemoteLoad();
       } else if (efficiencyPerfEnabled()) {
         console.info(\`[efficiency] skipped stale remote render #\${loadRequestId}: \${loadingPageId} -> \${activePageId()}\`);
@@ -5602,9 +5623,9 @@ async function loadRemoteRecords(options = {}) {
         lastRemoteLoadFinishedAt = lastSuccessfulRemoteLoadFinishedAt;
       }
       setSyncBadgeState(failedRemoteTypes.size ? "partial" : "synced", { finishedAt: lastSuccessfulRemoteLoadFinishedAt });
-      settleRemotePageProgress(failedRemoteTypes.size ? "Partial sync" : "Updated");
+      settleRemotePageProgress(pageActivityProgressLabel(loadingPageId, failedRemoteTypes.size ? "partial" : "updated"));
     } catch (error) {
-      settleRemotePageProgress("Load failed", true);
+      settleRemotePageProgress(pageActivityProgressLabel(loadingPageId, "failed"), true);
       setSyncBadgeState("failed");
       if (quietLoad) console.warn("Records could not load.", error);
       else showToast(\`Records could not load: \${error.message}\`);
