@@ -6,6 +6,7 @@ const index = fs.readFileSync("index.html", "utf8");
 const schema = fs.readFileSync("supabase-schema.sql", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260817002442_restrict_financial_transactions_to_admin.sql", "utf8");
 const persistedMigration = fs.readFileSync("supabase/migrations/20260830195517_add_persisted_financial_ledger.sql", "utf8");
+const refinedDirtyTriggerMigration = fs.readFileSync("supabase/migrations/20260830232800_refine_financial_ledger_dirty_trigger.sql", "utf8");
 const main = fs.readFileSync("js/main.js", "utf8");
 const styles = fs.readFileSync("styles.css", "utf8");
 const failures = [];
@@ -38,6 +39,8 @@ requireSource(persistedMigration, 'create policy "Financial ledger admin read"',
 requireSource(persistedMigration, "kennel_records_mark_financial_ledger_dirty", "Financial source writes do not mark the saved ledger for reconciliation.");
 requireSource(persistedMigration, "financial_ledger_state_preserve_newer_dirty", "A newer financial source change can be cleared by an older reconciliation.");
 requireSource(persistedMigration, "financial_ledger_entries_org_date_idx", "The persisted financial ledger does not have an organization/date index.");
+requireSource(refinedDirtyTriggerMigration, "old.payload ->> 'hourlyRate'", "Routine user-profile writes still invalidate the financial ledger.");
+requireSource(refinedDirtyTriggerMigration, "old.payload ->> 'removed'", "User removal does not invalidate payroll projection rows.");
 requireSource(main, "unified-financial-ledger-v31", "Changed financial modules are not cache-busted.");
 requireSource(index, "unified-financial-ledger-v31", "The application entrypoint and styles are not cache-busted.");
 requireSource(settings, 'class="financial-category-cell"', "Financial transaction categories do not render in their own cell.");
