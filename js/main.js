@@ -26,7 +26,7 @@ const pageModuleDependencies = {
   boardingDogsPage: ["boarding", "customer", "settings"],
   timesheetPage: ["timesheet"],
   servicesPage: ["settings"],
-  financialsPage: ["settings", "timesheet", "dogShow"],
+  financialsPage: ["settings", "timesheet", "dogShow", "boarding", "customer"],
   settingsSetupPage: ["settings"],
   settingsUsersPage: ["settings"],
   settingsKennelLocationsPage: ["settings"],

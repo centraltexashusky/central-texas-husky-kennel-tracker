@@ -19,6 +19,7 @@ requireText(main, 'customer: () => import("./customer.js', "Customer code is not
 requireText(main, 'dogShow: () => import("./dog-show.js', "Dog Show code is not split from the startup shell.");
 requireText(main, 'window.loadAppPageModule =', "Page navigation cannot request its module on demand.");
 requireText(main, 'boardingDogsPage: ["boarding", "customer", "settings"]', "Boarding does not declare the Customer helpers it renders.");
+requireText(main, 'financialsPage: ["settings", "timesheet", "dogShow", "boarding", "customer"]', "Financial reconciliation does not declare its Boarding income dependencies.");
 requireText(main, "requestIdleCallback", "Unused page modules are not warmed during idle time.");
 requireText(main, 'loadNamedPageModule("boarding")', "Alert presentation helpers are not warmed during browser idle time.");
 if (main.includes("Object.keys(pageModuleLoaders)")) failures.push("Every heavy page module is still parsed during background warmup.");
