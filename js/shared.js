@@ -1,7 +1,7 @@
 // === MODULE: SHARED ===
-import { DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026 } from "./dog-show-point-data.js?v=20260730-dog-profile-registration-akc-breeds";
+import { DOG_SHOW_AKC_BREEDS_2026 } from "./akc-breed-names.js?v=20260830-scalable-page-loading-v77";
 
-globalThis.SNUGGLE_STAY_AKC_BREEDS = [...(DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026?.breeds || [])];
+globalThis.SNUGGLE_STAY_AKC_BREEDS = [...DOG_SHOW_AKC_BREEDS_2026];
 
 const __snuggleStayModuleSource = `// === MODULE: SHARED ===
 var SUPABASE_URL = "https://vwvkzniygessvwifrwvn.supabase.co";
@@ -226,8 +226,12 @@ var boardingDogHistoryLoadPromise = null;
 var boardingDogHistorySearchTimer = null;
 var remoteLoadRequestSequence = 0;
 var activePageRemoteLoadTimer = null;
+var deferredPageRemoteLoadTimer = null;
+var deferredPageRemoteLoadRequestId = 0;
 var activePageRemoteLoadLastKey = "";
 var activePageRemoteLoadLastAt = 0;
+var activePageRemoteLoadFinishedAtByKey = new Map();
+var dailyTaskCompletionCountByDate = new Map();
 var appHistoryNavigationInProgress = false;
 var appSurfaceHistoryStack = [];
 var activePageLoadingTargets = new Set();
@@ -295,6 +299,8 @@ var AUTH_SYNC_STALE_MS = 15000;
 var APP_RESUME_DEBOUNCE_MS = 900;
 var APP_RESUME_REMOTE_REFRESH_MS = 30000;
 var ACTIVE_PAGE_REMOTE_LOAD_THROTTLE_MS = 6000;
+var ACTIVE_PAGE_REMOTE_CACHE_TTL_MS = 60000;
+var DEFERRED_PAGE_REMOTE_LOAD_DELAY_MS = 700;
 var NOTIFICATION_BACKGROUND_LOAD_DELAY_MS = 1500;
 var NOTIFICATION_BACKGROUND_LOAD_THROTTLE_MS = 60000;
 var BACKGROUND_SYNC_INTERVAL_MS = 120000;
@@ -1722,32 +1728,66 @@ function remoteRecordTypesForCurrentApp() {
   return uniqueRemoteRecordTypes([...recordTypes(), TASK_TEMPLATE_RECORD_TYPE]);
 }
 
-function remoteRecordTypesForPage(pageId = "") {
-  const coreTypes = ["settingsUser", "notificationPreference", TASK_TEMPLATE_RECORD_TYPE];
-  const pageTypes = {
-    dashboardPage: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", "careLog", "calendarNote", "notificationLog"],
-    dailyPage: ["dailyTask", "careLog", "ownedDog", "boardingDog", "calendarNote"],
-    taskSchedulerPage: ["scheduledCareTask", "ownedDog", "boardingDog", "customerDog", "service", "dailyTask", "careLog"],
-    dogShowPage: ["showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "showInvoice", "ownedDog", "boardingDog", "customerDog", "settingsUser"],
-    ourDogsPage: ["ownedDog", "careLog", "customerDog", "boardingDog"],
-    boardingDogsPage: ["boardingDog", "boardingAgreement", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
-    requestsPage: ["request"],
-    maintenancePage: ["maintenance"],
-    timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
-    servicesPage: ["service"],
-    financialsPage: ["showEvent", "financialTransaction"],
-    settingsUsersPage: ["settingsUser", "boardingAgreement", "boardingDog"],
-    settingsKennelLocationsPage: ["kennelLocation", "kennelBuilding"],
-    settingsHoursPage: ["operationHours", "operationDateOverride"],
-    settingsAlertsPage: ["notificationPreference", "notificationLog"],
-    settingsAuditLogPage: ["auditLog"],
-    customerPage: ["customerDog", "boardingDog", "boardingAgreement", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
-    customerRequestsPage: ["customerDog", "boardingDog", "boardingAgreement", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
-    customerUpdatesPage: ["boardingDog", "customerDog", "showResult"],
-    customerFilesPage: ["boardingDog", "customerDog", "boardingAgreement"],
+function remoteRecordLoadPlanForPage(pageId = "") {
+  const plans = {
+    dashboardPage: {
+      critical: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", TASK_TEMPLATE_RECORD_TYPE],
+      deferred: ["careLog", "calendarNote", "notificationLog", "notificationPreference"],
+    },
+    dailyPage: {
+      critical: ["dailyTask", "ownedDog", TASK_TEMPLATE_RECORD_TYPE],
+      deferred: ["boardingDog", "careLog", "calendarNote"],
+    },
+    taskSchedulerPage: {
+      critical: ["scheduledCareTask", "service"],
+      deferred: ["ownedDog", "boardingDog", "customerDog", "dailyTask", "careLog"],
+    },
+    dogShowPage: {
+      critical: ["showEvent", "showEntry"],
+      deferred: ["showDayTask", "showCareLog", "showResult", "showInvoice", "ownedDog", "boardingDog", "customerDog", "settingsUser"],
+    },
+    ourDogsPage: { critical: ["ownedDog"], deferred: ["careLog", "customerDog", "boardingDog"] },
+    boardingDogsPage: {
+      critical: ["boardingDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+      deferred: ["boardingAgreement", "customerDog"],
+    },
+    requestsPage: { critical: ["request"], deferred: [] },
+    maintenancePage: { critical: ["maintenance"], deferred: [] },
+    timesheetPage: {
+      critical: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "settingsUser"],
+      deferred: [],
+    },
+    servicesPage: { critical: ["service"], deferred: [] },
+    financialsPage: { critical: ["showEvent", "financialTransaction"], deferred: [] },
+    settingsUsersPage: { critical: ["settingsUser"], deferred: ["boardingAgreement", "boardingDog"] },
+    settingsKennelLocationsPage: { critical: ["kennelLocation", "kennelBuilding"], deferred: [] },
+    settingsHoursPage: { critical: ["operationHours", "operationDateOverride"], deferred: [] },
+    settingsAlertsPage: { critical: ["notificationPreference", "notificationLog"], deferred: [] },
+    settingsAuditLogPage: { critical: ["auditLog"], deferred: [] },
+    customerPage: {
+      critical: ["customerDog", "boardingDog", "service"],
+      deferred: ["boardingAgreement", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    },
+    customerRequestsPage: {
+      critical: ["customerDog", "boardingDog", "service"],
+      deferred: ["boardingAgreement", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    },
+    customerUpdatesPage: { critical: ["boardingDog", "customerDog"], deferred: ["showResult"] },
+    customerFilesPage: { critical: ["boardingDog", "customerDog"], deferred: ["boardingAgreement"] },
   };
   const normalizedPageId = normalizePageId(pageId || pageIdFromHash() || activePageId() || "");
-  return uniqueRemoteRecordTypes([...coreTypes, ...(pageTypes[normalizedPageId] || [])]);
+  const plan = plans[normalizedPageId] || { critical: [], deferred: [] };
+  const critical = uniqueRemoteRecordTypes(plan.critical);
+  const criticalSet = new Set(critical);
+  return {
+    critical,
+    deferred: uniqueRemoteRecordTypes(plan.deferred).filter((type) => !criticalSet.has(type)),
+  };
+}
+
+function remoteRecordTypesForPage(pageId = "") {
+  const plan = remoteRecordLoadPlanForPage(pageId);
+  return uniqueRemoteRecordTypes([...plan.critical, ...plan.deferred]);
 }
 
 function authProfileRemoteTypes() {
@@ -2405,6 +2445,9 @@ function clearLocalRecordCaches() {
   lastRemoteRecordsSignatureByRequest.clear();
   lastRemoteRecordFetchModesByType.clear();
   remoteTypesFullyLoadedInMemory.clear();
+  activePageRemoteLoadFinishedAtByKey.clear();
+  dailyTaskCompletionCountByDate.clear();
+  deferredPageRemoteLoadRequestId += 1;
   scheduledCareTaskRemoteWindowStart = "";
   scheduledCareTaskRemoteWindowEnd = "";
   boardingDogFullHistoryLoaded = false;
@@ -4036,10 +4079,12 @@ function updateConditionalSections() {
   tuesdaySection.classList.toggle("is-muted", daySelect.value !== "Tuesday");
 }
 
-function updateCompletionCount() {
+function updateCompletionCount(completionIndex = null) {
   const date = currentDailyDate();
-  const completed = dailyTaskCompletionIndex(date).size;
-  const total = totalConfiguredTaskCount();
+  const resolvedCompletionIndex = completionIndex
+    || (typeof dailyTaskCompletionIndex === "function" ? dailyTaskCompletionIndex(date) : new Map());
+  const completed = resolvedCompletionIndex.size;
+  const total = typeof taskTabMeta === "function" ? totalConfiguredTaskCount() : 0;
   const remaining = Math.max(total - completed, 0);
   const summary = $("#dailyTaskProgress");
   if (summary) summary.textContent = \`\${completed} completed | \${remaining} still open\`;
@@ -4728,10 +4773,10 @@ function restoreDailyTaskDraftState(state = {}) {
   }
 }
 
-function renderCustomTaskPanels(config = readTaskConfig()) {
+function renderCustomTaskPanels(config = readTaskConfig(), completionIndex = null) {
   const container = $("#customTaskPanels");
   if (!container) return;
-  container.innerHTML = (config._tabs || []).map((tab) => customTaskPanelHtml(tab, config[tab.id] || [])).join("");
+  container.innerHTML = (config._tabs || []).map((tab) => customTaskPanelHtml(tab, config[tab.id] || [], completionIndex)).join("");
   container.querySelectorAll("[data-custom-task-list]").forEach(bindTaskListInteractions);
 }
 
@@ -5190,6 +5235,32 @@ function scheduledCareTaskRemoteWindow(anchorDate = "") {
   };
 }
 
+function dailyTaskWorkspaceWindow(pageId = activePageId()) {
+  const normalizedPageId = normalizePageId(pageId || activePageId());
+  if (normalizedPageId === "dashboardPage") {
+    const detailDate = dateOnly($("#dashboardDate")?.value || todayDate()) || todayDate();
+    const selected = new Date(\`\${detailDate}T12:00:00\`);
+    const start = localDateKey(new Date(selected.getFullYear(), selected.getMonth(), 1, 12));
+    const end = localDateKey(new Date(selected.getFullYear(), selected.getMonth() + 1, 0, 12));
+    return { start, end, detailDate };
+  }
+  if (normalizedPageId === "taskSchedulerPage") {
+    const detailDate = dateOnly(typeof taskSchedulerAnchorDate !== "undefined" ? taskSchedulerAnchorDate : todayDate()) || todayDate();
+    return { start: addDays(detailDate, -7), end: addDays(detailDate, 7), detailDate };
+  }
+  const detailDate = dateOnly(normalizedPageId === "dailyPage" ? currentDailyDate() : todayDate()) || todayDate();
+  return { start: detailDate, end: detailDate, detailDate };
+}
+
+function pageRemoteScopeKey(pageId = activePageId()) {
+  const normalizedPageId = normalizePageId(pageId || activePageId());
+  if (["dashboardPage", "dailyPage", "taskSchedulerPage"].includes(normalizedPageId)) {
+    const windowBounds = dailyTaskWorkspaceWindow(normalizedPageId);
+    return \`\${normalizedPageId}:\${windowBounds.start}:\${windowBounds.end}:\${windowBounds.detailDate}\`;
+  }
+  return normalizedPageId;
+}
+
 function scheduledCareTaskDateIsLoaded(date = "") {
   const taskDate = dateOnly(date);
   if (!taskDate || localTestMode || !supabaseClient) return true;
@@ -5238,6 +5309,18 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
         if (row && Object.prototype.hasOwnProperty.call(row, "total_count")) delete row.total_count;
       });
       rows.push(...scopedRows);
+      lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "scoped-full");
+      return rows;
+    }
+    if (type === "dailyTask" && options.dailyTaskWindow) {
+      const windowBounds = options.dailyTaskWindow;
+      const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_daily_task_records_window", {
+        p_start_date: windowBounds.start,
+        p_end_date: windowBounds.end,
+        p_since_updated_at: sinceUpdatedAt || null,
+      }));
+      if (error) throw error;
+      rows.push(...(data || []));
       lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "scoped-full");
       return rows;
     }
@@ -5302,8 +5385,9 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
         return await withTimeout(fetchRemoteRecordRowsForType(type, {
           sinceUpdatedAt,
           scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
+          dailyTaskWindow: type === "dailyTask" ? dailyTaskWorkspaceWindow(options.pageId || activePageId()) : null,
           boardingActiveOnly: type === "boardingDog"
-            && options.pageId === "boardingDogsPage"
+            && ["dashboardPage", "dailyPage", "taskSchedulerPage", "boardingDogsPage"].includes(options.pageId)
             && options.boardingFullHistory !== true
             && !boardingDogFullHistoryLoaded,
         }), REMOTE_TYPE_LOAD_TIMEOUT_MS, \`Remote \${type} records load\`);
@@ -5323,30 +5407,31 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
   }
 }
 
-async function fetchRemoteDailyTaskCompletionRows() {
-  const pageSize = 1000;
-  const rows = [];
-  let from = 0;
-  const sinceDate = addDays(todayDate(), -TASK_COMPLETION_LOOKBACK_DAYS);
-  while (true) {
-    const { data, error } = await cuddleStayRequest((db) => db
-      .from("daily_task_completions")
-      .select("id,work_date,shift,task_id,task_text,completed_by,completed_email,completed_user_id,completed_at,inserted_at,updated_at")
-      .gte("work_date", sinceDate)
-      .order("completed_at", { ascending: false })
-      .range(from, from + pageSize - 1));
-    if (error) throw error;
-    rows.push(...(data || []));
-    if (!data || data.length < pageSize) return rows;
-    from += pageSize;
-  }
+async function fetchRemoteDailyTaskCompletionRows(pageId = activePageId()) {
+  const windowBounds = dailyTaskWorkspaceWindow(pageId);
+  const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_daily_task_completion_snapshot", {
+    p_start_date: windowBounds.start,
+    p_end_date: windowBounds.end,
+    p_detail_date: windowBounds.detailDate,
+  }));
+  if (error) throw error;
+  const snapshot = Array.isArray(data) ? data[0] || {} : data || {};
+  dailyTaskCompletionCountByDate = new Map(
+    Object.entries(snapshot.counts || {}).map(([date, count]) => [dateOnly(date), Number(count || 0)]),
+  );
+  return arrayValue(snapshot.details);
 }
 
 function remoteTaskCompletionSignature(rows = []) {
-  return rows
+  const detailSignature = rows
     .map((row) => [row.id || "", row.work_date || "", row.shift || "", row.task_id || "", row.updated_at || row.completed_at || ""].join(":"))
     .sort()
     .join("|");
+  const countSignature = [...dailyTaskCompletionCountByDate.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([date, count]) => \`\${date}:\${count}\`)
+    .join("|");
+  return \`\${detailSignature}||counts:\${countSignature}\`;
 }
 
 function remoteDailyTaskCompletionSetupMissing(error) {
@@ -5539,7 +5624,7 @@ async function loadRemoteRecords(options = {}) {
       let taskCompletionRowsLoaded = false;
       if (dailyTaskCompletionSyncAvailable && requestedRemoteTypes.includes("dailyTask") && !failedRemoteTypes.has("dailyTask")) {
         try {
-          taskCompletionRows = await withTimeout(fetchRemoteDailyTaskCompletionRows(), 6000, "Daily task completion load");
+          taskCompletionRows = await withTimeout(fetchRemoteDailyTaskCompletionRows(loadingPageId), 6000, "Daily task completion load");
           taskCompletionRowsLoaded = true;
           mergeDailyTaskCompletionRecords(taskCompletionRows, { replaceLocal: true });
         } catch (completionError) {
@@ -5668,7 +5753,12 @@ function handleRealtimeKennelRecordChange(change = {}) {
 function handleRealtimeTaskCompletionChange(change = {}) {
   const row = change.new || change.record || change.old || {};
   if (!row?.id) return;
+  const existed = readRecords("dailyTaskCompletion").some((record) => record.id === row.id);
   mergeDailyTaskCompletionRecords([row], { replaceLocal: false });
+  const workDate = dateOnly(row.work_date || row.workDate || row.date || "");
+  if (workDate && !existed) {
+    dailyTaskCompletionCountByDate.set(workDate, Number(dailyTaskCompletionCountByDate.get(workDate) || 0) + 1);
+  }
   if (!realtimeSourceIsCurrentUser(row)) scheduleRealtimeRender(["dailyTaskCompletion"]);
 }
 
@@ -5807,7 +5897,7 @@ function setupRequiredFields() {
     field.addEventListener("input", () => clearFieldError(field));
     field.addEventListener("change", () => clearFieldError(field));
   });
-  setupServiceFormInfoIcons();
+  if (typeof setupServiceFormInfoIcons === "function") setupServiceFormInfoIcons();
 }
 
 // Extracted to js/settings.js: setupServiceFormInfoIcons
@@ -10127,8 +10217,9 @@ function dashboardDailyWorkRecordForDate(date = "") {
   const storedRecords = dailyTaskRecordsForDate(workDate);
   const storedRecord = dailyTaskRecordForDate(workDate) || {};
   const completedTasks = completedTasksForDate(workDate);
+  const completionCount = Math.max(completedTasks.length, Number(dailyTaskCompletionCountByDate.get(workDate) || 0));
   const structuredCareLogs = structuredCareLogsForDate(workDate);
-  if (!storedRecords.length && !completedTasks.length && !structuredCareLogs.length) return null;
+  if (!storedRecords.length && !completionCount && !structuredCareLogs.length) return null;
   const activityTimestamps = [
     ...storedRecords.flatMap((record) => [record.updatedAt, record.submittedAt]),
     ...completedTasks.map((completion) => completion.completedAt || completion.updatedAt || completion.insertedAt),
@@ -10142,6 +10233,7 @@ function dashboardDailyWorkRecordForDate(date = "") {
     date: workDate,
     helperName: "Team completed work",
     completedTasks,
+    completedTaskCount: completionCount,
     structuredCareLogs,
     careLogs: structuredCareLogs,
     submittedAt: storedRecord.submittedAt || activityTimestamps[activityTimestamps.length - 1] || activityTimestamps[0] || workDate + "T12:00:00",
@@ -10158,6 +10250,9 @@ function dashboardDailyWorkRecords() {
   });
   readRecords("dailyTaskCompletion").forEach((completion) => {
     if (!completion.removed) workDates.add(dateOnly(completion.date || completion.workDate));
+  });
+  dailyTaskCompletionCountByDate.forEach((count, date) => {
+    if (Number(count || 0) > 0) workDates.add(dateOnly(date));
   });
   return [...workDates]
     .filter(Boolean)
@@ -10177,6 +10272,9 @@ function renderDashboardTaskCalendar() {
     if (record.date) counts[record.date] = 1;
     return counts;
   }, {});
+  dailyTaskCompletionCountByDate.forEach((count, date) => {
+    if (Number(count || 0) > 0) reportCounts[date] = 1;
+  });
   const noteCounts = groupedCalendarNotesForDisplay(readRecords("calendarNote")
     .filter((record) => !record.removed && calendarNoteDate(record))
     .map((record) => ({ ...record, noteDate: calendarNoteDate(record) }))).reduce((counts, record) => {
@@ -10259,7 +10357,7 @@ function renderDashboardTimeline() {
         .map(({ type, record, timestamp }) => {
           const helper = record.helperName || record.requestedBy || record.reportedBy || currentUser?.name || "Unknown";
           const title = type === "dailyTask" ? "Daily completed work" : type === "timesheet" ? "Timesheet" : type === "request" ? "Request" : type === "maintenance" ? "Maintenance" : type === "boardingDog" ? "Boarding dog update" : type === "service" ? "Service/pricing update" : "Dog update";
-          const completedCount = type === "dailyTask" ? completedTasksForDate(record.date).length : 0;
+          const completedCount = type === "dailyTask" ? Number(record.completedTaskCount || completedTasksForDate(record.date).length) : 0;
           const careCount = type === "dailyTask" ? (record.structuredCareLogs || record.careLogs || []).length : 0;
           const summary = record.requestText || record.issue || record.dogName || record.callName || record.serviceName || (type === "dailyTask" ? \`\${completedCount} tasks completed, \${careCount} care logs\` : \`\${record.dailyTasks?.length || 0} AM tasks, \${record.pmTasks?.length || 0} PM tasks checked\`);
           const notes = record.ownerNotes || record.reason || record.suggestedAction || record.pricingNotes || "";
@@ -10976,7 +11074,9 @@ var CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION = "Upgrade your dog's stay with a 
 // Extracted to js/customer.js: customerServiceInfoText
 
 
-// Extracted to js/customer.js: customerServiceInfoIconHtml
+function customerServiceInfoIconHtml(infoText = "") {
+  return infoText ? \`<span class="service-info-icon" role="button" tabindex="0" aria-label="\${escapeHtml(infoText)}" title="\${escapeHtml(infoText)}" data-tooltip="\${escapeHtml(infoText)}"><img src="assets/icons/service-info-icon.png?v=20260526-info-icon-replacement" alt="" aria-hidden="true" /></span>\` : "";
+}
 
 
 // Extracted to js/settings.js: serviceInfoTooltipText
@@ -11667,6 +11767,11 @@ function normalizeHelperName(value = "") {
 
 
 function updateTimeDisplays() {
+  if (typeof timesheetBelongsToCurrentUser !== "function" || typeof syncActiveClockInFromOpenRecord !== "function") {
+    $("#clockInDisplay").textContent = "Not clocked in";
+    $("#clockInButton").textContent = "Clock In";
+    return;
+  }
   if (activeClockIn?.clockInTime && currentUser?.email) {
     const openRecord = readRecords("timesheet").find((record) => record.id === activeClockIn.id);
     if (openRecord && !timesheetBelongsToCurrentUser(openRecord)) {
@@ -11994,10 +12099,10 @@ function initEvents() {
   $("#boardingRequestsDetails")?.addEventListener("toggle", rememberBoardingRequestsDetailsState);
   window.addEventListener("resize", () => {
     syncMobileReviewSections();
-    syncBoardingRosterLayoutForViewport();
-    resetDailyTaskTabPointerDrag();
-    renderDailyTaskTabs();
-    setDailyTaskTab(dailyTaskTab);
+    if (typeof syncBoardingRosterLayoutForViewport === "function") syncBoardingRosterLayoutForViewport();
+    if (typeof resetDailyTaskTabPointerDrag === "function") resetDailyTaskTabPointerDrag();
+    if (typeof renderDailyTaskTabs === "function") renderDailyTaskTabs();
+    if (typeof setDailyTaskTab === "function" && typeof dailyTaskTab !== "undefined") setDailyTaskTab(dailyTaskTab);
     positionServiceInfoTooltip();
   });
   window.addEventListener("scroll", () => {
@@ -12048,8 +12153,8 @@ function initEvents() {
   if (typeof setupTaskSchedulerEventListeners === "function") setupTaskSchedulerEventListeners();
   if (typeof setupDogShowEventListeners === "function") setupDogShowEventListeners();
   $("#exportBoardingQueueButton")?.addEventListener("click", exportBoardingQueue);
-  $("#exportTimesheetButton")?.addEventListener("click", exportTimesheet);
-  $("#viewTimesheetButton")?.addEventListener("click", openTimesheetViewPopup);
+  $("#exportTimesheetButton")?.addEventListener("click", (...args) => exportTimesheet(...args));
+  $("#viewTimesheetButton")?.addEventListener("click", (...args) => openTimesheetViewPopup(...args));
   $("#applyTimesheetDateFilterButton")?.addEventListener("click", () => {
     const start = dateOnly($("#timesheetStartDate")?.value);
     const end = dateOnly($("#timesheetEndDate")?.value);
@@ -12136,6 +12241,7 @@ function initEvents() {
   $("#dashboardDate").addEventListener("change", () => {
     $("#calendarNoteForm").elements.noteDate.value = $("#dashboardDate").value || todayDate();
     renderDashboard();
+    refreshDateScopedWorkspace("dashboardPage");
   });
   $("#dashboardTaskCalendar").addEventListener("click", (event) => {
     const button = event.target.closest("[data-date]");
@@ -12143,6 +12249,7 @@ function initEvents() {
     $("#dashboardDate").value = button.dataset.date;
     $("#calendarNoteForm").elements.noteDate.value = button.dataset.date;
     renderDashboard();
+    refreshDateScopedWorkspace("dashboardPage");
   });
   $("#dashboardPriorityCards")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
@@ -12375,7 +12482,10 @@ function initEvents() {
   $("#showPasswordRecoveryButton").addEventListener("click", () => {
     openPasswordRecoveryForm($("#passwordLoginForm").elements.email.value || "");
   });
-  $("#showCustomerSignupButton").addEventListener("click", () => {
+  $("#showCustomerSignupButton").addEventListener("click", async () => {
+    if (typeof fillCustomerDefaults !== "function" && typeof window.loadAppPageModule === "function") {
+      await window.loadAppPageModule("customerPage");
+    }
     $("#customerSignupForm").hidden = false;
     $("#customerSignupForm").elements.firstName.focus();
   });
@@ -13530,6 +13640,8 @@ function initEvents() {
     updateConditionalSections();
     if ($("#dailyStaffNoteForm")) $("#dailyStaffNoteForm").elements.noteDate.value = form.elements.date.value || todayDate();
     if ($("#careQuickDate") && !$("#careQuickDate").value) $("#careQuickDate").value = form.elements.date.value || todayDate();
+    renderDailyTaskLists();
+    refreshDateScopedWorkspace("dailyPage");
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -13817,10 +13929,10 @@ function initEvents() {
 	    }
 	  });
 	  $("#openScheduleShiftButton")?.addEventListener("click", () => openScheduleShiftPopup());
-	  $("#openBulkScheduleButton")?.addEventListener("click", openBulkSchedulePopup);
-	  $("#copyScheduleDayButton")?.addEventListener("click", openCopyDaySchedulePopup);
-	  $("#openScheduleTemplatesButton")?.addEventListener("click", openScheduleTemplatesPopup);
-	  $("#copyLastWeekScheduleButton")?.addEventListener("click", copyLastWeekSchedule);
+	  $("#openBulkScheduleButton")?.addEventListener("click", (...args) => openBulkSchedulePopup(...args));
+	  $("#copyScheduleDayButton")?.addEventListener("click", (...args) => openCopyDaySchedulePopup(...args));
+	  $("#openScheduleTemplatesButton")?.addEventListener("click", (...args) => openScheduleTemplatesPopup(...args));
+	  $("#copyLastWeekScheduleButton")?.addEventListener("click", (...args) => copyLastWeekSchedule(...args));
 	  $("#publishScheduleButton")?.addEventListener("click", async () => {
 	    const published = await publishScheduleWeek();
 	    if (published) showToast("Schedule published.");
@@ -13894,9 +14006,12 @@ function initEvents() {
   $("#ourDogForm").elements.bathIntervalDays.addEventListener("change", () => ($("#ownedNextBath").value = nextBathFromFrequency($("#ownedLastBath").value, numberFrom($("#ourDogForm").elements.bathIntervalDays?.value, careDefaults.bathIntervalDays))));
   $("#ownedLastHeat").addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, numberFrom($("#ourDogForm").elements.heatCycleLengthDays?.value, careDefaults.heatCycleLengthDays))));
   $("#ourDogForm").elements.heatCycleLengthDays.addEventListener("change", () => ($("#ownedNextHeat").value = addDays($("#ownedLastHeat").value, numberFrom($("#ourDogForm").elements.heatCycleLengthDays?.value, careDefaults.heatCycleLengthDays))));
-  $("#ownedDogSex").addEventListener("change", syncOwnedDogTabAvailability);
+  $("#ownedDogSex").addEventListener("change", (...args) => syncOwnedDogTabAvailability(...args));
   ["ownedNextRabiesDate", "ownedNextDhppDate", "ownedNextBordetellaDate"].forEach((id) => document.getElementById(id)?.addEventListener("change", updateOwnedHealthDueWarnings));
-  $("#ownedDogSearch").addEventListener("input", renderOwnedDogs);
+  $("#ownedDogSearch").addEventListener("input", () => {
+    ownedDogVisibleLimit = OWNED_DOG_RENDER_PAGE_SIZE;
+    renderOwnedDogs();
+  });
   $("#ownedDogCareFilters").addEventListener("click", (event) => {
     const infoButton = event.target.closest('[data-action="owned-special-care-info"]');
     if (infoButton) {
@@ -13908,7 +14023,13 @@ function initEvents() {
     const button = event.target.closest("[data-filter]");
     if (!button) return;
     ownedDogCareFilter = button.dataset.filter || "All";
+    ownedDogVisibleLimit = OWNED_DOG_RENDER_PAGE_SIZE;
     $$("#ownedDogCareFilters [data-filter]").forEach((item) => item.classList.toggle("is-active", item === button));
+    renderOwnedDogs();
+  });
+  $("#ownedDogListStatus")?.addEventListener("click", (event) => {
+    if (!event.target.closest('[data-action="load-more-owned-dogs"]')) return;
+    ownedDogVisibleLimit += OWNED_DOG_RENDER_PAGE_SIZE;
     renderOwnedDogs();
   });
   $("#ownedDogProfileTabs").addEventListener("click", (event) => {
@@ -13950,10 +14071,10 @@ function initEvents() {
     const header = event.target.closest("[data-sort-column]");
     if (header) setTableSort("ownedDog", header.dataset.sortColumn);
   });
-  $("#ownedDogTableHead").addEventListener("dragstart", handleTableHeaderDragStart);
-  $("#ownedDogTableHead").addEventListener("dragover", handleTableHeaderDragOver);
-  $("#ownedDogTableHead").addEventListener("drop", handleTableHeaderDrop);
-  $("#ownedDogTableHead").addEventListener("dragend", handleTableHeaderDragEnd);
+  $("#ownedDogTableHead").addEventListener("dragstart", (...args) => handleTableHeaderDragStart(...args));
+  $("#ownedDogTableHead").addEventListener("dragover", (...args) => handleTableHeaderDragOver(...args));
+  $("#ownedDogTableHead").addEventListener("drop", (...args) => handleTableHeaderDrop(...args));
+  $("#ownedDogTableHead").addEventListener("dragend", (...args) => handleTableHeaderDragEnd(...args));
   $("#addOwnedDogButton").addEventListener("click", () => openOwnedDog());
   $("#closeOwnedDogDialogButton")?.addEventListener("click", closeOwnedDogModal);
   $("#cancelOwnedDogEdit").addEventListener("click", closeOwnedDogModal);
@@ -14188,6 +14309,7 @@ function initEvents() {
   });
 
   $("#boardingDogSearch").addEventListener("input", () => {
+    boardingRosterVisibleLimit = BOARDING_ROSTER_RENDER_PAGE_SIZE;
     renderBoardingDogs();
     if (boardingDogHistorySearchTimer) window.clearTimeout(boardingDogHistorySearchTimer);
     if (!$("#boardingDogSearch").value.trim() || boardingDogFullHistoryLoaded || localTestMode || !supabaseClient) return;
@@ -14201,6 +14323,7 @@ function initEvents() {
     if (!button) return;
     boardingDogRosterFilter = button.dataset.boardingFilter;
     boardingDogPriorityFilter = "";
+    boardingRosterVisibleLimit = BOARDING_ROSTER_RENDER_PAGE_SIZE;
     renderBoardingDogs();
     if (boardingDogRosterFilter === "All Boarding Dogs" && !boardingDogFullHistoryLoaded) {
       await loadBoardingDogHistoryRecords();
@@ -14212,6 +14335,11 @@ function initEvents() {
       handleBoardingViewToggle(button.dataset.view);
       renderBoardingDogs();
     }
+  });
+  $("#boardingRosterStatus")?.addEventListener("click", (event) => {
+    if (!event.target.closest('[data-action="load-more-boarding-dogs"]')) return;
+    boardingRosterVisibleLimit += BOARDING_ROSTER_RENDER_PAGE_SIZE;
+    renderBoardingDogs();
   });
   $("#boardingQueueGroups")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
@@ -14226,6 +14354,7 @@ function initEvents() {
       };
       boardingDogRosterFilter = filterMap[button.dataset.filter || ""] || "All Boarding Dogs";
       boardingDogPriorityFilter = "";
+      boardingRosterVisibleLimit = BOARDING_ROSTER_RENDER_PAGE_SIZE;
       handleBoardingViewToggle("list");
       renderBoardingDogs();
       return;
@@ -14304,10 +14433,10 @@ function initEvents() {
     const header = event.target.closest("[data-sort-column]");
     if (header) setTableSort("boardingDog", header.dataset.sortColumn);
   });
-  $("#boardingDogTableHead").addEventListener("dragstart", handleTableHeaderDragStart);
-  $("#boardingDogTableHead").addEventListener("dragover", handleTableHeaderDragOver);
-  $("#boardingDogTableHead").addEventListener("drop", handleTableHeaderDrop);
-  $("#boardingDogTableHead").addEventListener("dragend", handleTableHeaderDragEnd);
+  $("#boardingDogTableHead").addEventListener("dragstart", (...args) => handleTableHeaderDragStart(...args));
+  $("#boardingDogTableHead").addEventListener("dragover", (...args) => handleTableHeaderDragOver(...args));
+  $("#boardingDogTableHead").addEventListener("drop", (...args) => handleTableHeaderDrop(...args));
+  $("#boardingDogTableHead").addEventListener("dragend", (...args) => handleTableHeaderDragEnd(...args));
   $("#addBoardingDogButton").addEventListener("click", () => openBoardingDog());
   $("#closeBoardingDogDialogButton")?.addEventListener("click", closeBoardingDogModal);
   $("#cancelBoardingDogEdit").addEventListener("click", closeBoardingDogModal);
@@ -14324,7 +14453,7 @@ function initEvents() {
     syncDogPhotoSexClass($("#boardingDogPhotoPicker"), { spayNeuterStatus: event.target.value || "" });
   });
   $("#boardingDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("boarding"));
-  $("#addBoardingCustomerUpdateButton")?.addEventListener("click", addBoardingCustomerUpdate);
+  $("#addBoardingCustomerUpdateButton")?.addEventListener("click", (...args) => addBoardingCustomerUpdate(...args));
   $("#uploadBoardingDogFilesButton")?.addEventListener("click", async () => {
     const dog = activeBoardingDog({ raw: true }) || activeBoardingDog();
     if (!dog?.id) {
@@ -14894,9 +15023,9 @@ function initEvents() {
     showToast("Service pricing saved.");
   });
   $("#addServiceButton")?.addEventListener("click", () => openService());
-  $("#closeServiceModalButton")?.addEventListener("click", closeServiceModal);
-  $("#resetServiceForm").addEventListener("click", closeServiceModal);
-  $("#serviceRequiresServiceId")?.addEventListener("change", syncServiceDependencyFields);
+  $("#closeServiceModalButton")?.addEventListener("click", (...args) => closeServiceModal(...args));
+  $("#resetServiceForm").addEventListener("click", (...args) => closeServiceModal(...args));
+  $("#serviceRequiresServiceId")?.addEventListener("change", (...args) => syncServiceDependencyFields(...args));
   $("#removeServiceButton")?.addEventListener("click", () => {
     const id = $("#serviceForm")?.elements.id.value;
     const record = readRecords("service").find((item) => item.id === id && !item.removed);
@@ -14907,7 +15036,7 @@ function initEvents() {
     if (!button) return;
     setServicePricingFilter(button.dataset.servicePricingFilter || "all");
   });
-  $("#serviceSearch").addEventListener("input", renderServices);
+  $("#serviceSearch").addEventListener("input", (...args) => renderServices(...args));
   $("#serviceTableHead").addEventListener("click", (event) => {
     const header = event.target.closest("[data-sort-column]");
     if (header) setTableSort("service", header.dataset.sortColumn);
@@ -14931,11 +15060,11 @@ function initEvents() {
       syncCustomerVaccinationDateConstraints(event.currentTarget);
     }
   });
-  $("#customerDogBackButton")?.addEventListener("click", goToPreviousCustomerDogStep);
-  $("#customerDogNextButton")?.addEventListener("click", goToNextCustomerDogStep);
-  $("#customerBookingBackButton")?.addEventListener("click", goToPreviousCustomerBookingStep);
-  $("#customerBookingNextButton")?.addEventListener("click", goToNextCustomerBookingStep);
-  $("#customerStickyBookNowButton")?.addEventListener("click", handleCustomerBookNowClick);
+  $("#customerDogBackButton")?.addEventListener("click", (...args) => goToPreviousCustomerDogStep(...args));
+  $("#customerDogNextButton")?.addEventListener("click", (...args) => goToNextCustomerDogStep(...args));
+  $("#customerBookingBackButton")?.addEventListener("click", (...args) => goToPreviousCustomerBookingStep(...args));
+  $("#customerBookingNextButton")?.addEventListener("click", (...args) => goToNextCustomerBookingStep(...args));
+  $("#customerStickyBookNowButton")?.addEventListener("click", (...args) => handleCustomerBookNowClick(...args));
   $("#customerDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
@@ -15134,7 +15263,7 @@ function initEvents() {
       openCustomerDogRemoveConfirm(record);
     }
   });
-  $("#customerRequestStatusFilter").addEventListener("change", renderCustomerRequests);
+  $("#customerRequestStatusFilter").addEventListener("change", (...args) => renderCustomerRequests(...args));
   $("#customerFilesPage")?.addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="view-customer-agreement"]');
     if (!button) return;
@@ -15193,7 +15322,7 @@ function initEvents() {
     pendingCustomerBooking = null;
     closeAppSurfaceFromUi("booking-confirm-dialog", () => $("#bookingConfirmDialog").close());
   });
-  $("#confirmBookingRequestButton").addEventListener("click", submitPendingCustomerBooking);
+  $("#confirmBookingRequestButton").addEventListener("click", (...args) => submitPendingCustomerBooking(...args));
   $("#resetCustomerBookingButton").addEventListener("click", resetCustomerBookingForm);
 
   $("#financialPeriodControl")?.addEventListener("click", (event) => {
@@ -15208,8 +15337,8 @@ function initEvents() {
     financialViewMode = button.dataset.financialView || "overview";
     renderFinancials();
   });
-  $("#financialStartDate")?.addEventListener("change", renderFinancials);
-  $("#financialEndDate")?.addEventListener("change", renderFinancials);
+  $("#financialStartDate")?.addEventListener("change", (...args) => renderFinancials(...args));
+  $("#financialEndDate")?.addEventListener("change", (...args) => renderFinancials(...args));
   $("#financialResetRangeButton")?.addEventListener("click", () => {
     const range = financialCurrentYearRange();
     if ($("#financialStartDate")) $("#financialStartDate").value = range.start;
@@ -15240,8 +15369,8 @@ function initEvents() {
     renderFinancials();
   });
   $("#newFinancialTransactionButton")?.addEventListener("click", () => openFinancialTransactionDialog());
-  $("#closeFinancialTransactionDialogButton")?.addEventListener("click", closeFinancialTransactionDialog);
-  $("#cancelFinancialTransactionButton")?.addEventListener("click", closeFinancialTransactionDialog);
+  $("#closeFinancialTransactionDialogButton")?.addEventListener("click", (...args) => closeFinancialTransactionDialog(...args));
+  $("#cancelFinancialTransactionButton")?.addEventListener("click", (...args) => closeFinancialTransactionDialog(...args));
   $("#financialTransactionForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     await saveFinancialTransaction(event.currentTarget);
@@ -15303,10 +15432,10 @@ function initEvents() {
   $("#adminSendPasswordResetButton")?.addEventListener("click", () => adminSendPasswordResetEmail());
   $("#newSettingsUserButton")?.addEventListener("click", () => openSettingsUser());
   $("#openSettingsUserButton")?.addEventListener("click", () => openSettingsUserPopup(defaultSettingsUserForActiveTab()));
-  $("#settingsSetupForm")?.addEventListener("submit", saveSettingsSetup);
-  $("#settingsOrganizationName")?.addEventListener("input", updateSettingsSetupPreview);
-  $("#resetSettingsSetupButton")?.addEventListener("click", resetSettingsSetup);
-  $("#settingsAgreementForm")?.addEventListener("submit", saveSettingsAgreement);
+  $("#settingsSetupForm")?.addEventListener("submit", (...args) => saveSettingsSetup(...args));
+  $("#settingsOrganizationName")?.addEventListener("input", (...args) => updateSettingsSetupPreview(...args));
+  $("#resetSettingsSetupButton")?.addEventListener("click", (...args) => resetSettingsSetup(...args));
+  $("#settingsAgreementForm")?.addEventListener("submit", (...args) => saveSettingsAgreement(...args));
   $("#settingsAgreementDocument")?.addEventListener("change", (event) => {
     if (!event.currentTarget.files?.length) return;
     const source = document.querySelector('input[name="agreementSource"][value="document"]');
@@ -15315,7 +15444,7 @@ function initEvents() {
     if (enabled) enabled.checked = true;
     syncSettingsAgreementOptionFields();
   });
-  $$('input[name="agreementSource"]').forEach((input) => input.addEventListener("change", syncSettingsAgreementOptionFields));
+  $$('input[name="agreementSource"]').forEach((input) => input.addEventListener("change", (...args) => syncSettingsAgreementOptionFields(...args)));
   $("#settingsAgreementText")?.addEventListener("input", (event) => {
     if (!String(event.currentTarget.value || "").trim()) return;
     const source = document.querySelector('input[name="agreementSource"][value="text"]');
@@ -15324,15 +15453,15 @@ function initEvents() {
     if (enabled) enabled.checked = true;
     syncSettingsAgreementOptionFields();
   });
-  $("#settingsAgreementAcknowledgementEnabled")?.addEventListener("change", syncSettingsAgreementOptionFields);
-  $("#settingsAgreementCustomerFieldEnabled")?.addEventListener("change", syncSettingsAgreementOptionFields);
+  $("#settingsAgreementAcknowledgementEnabled")?.addEventListener("change", (...args) => syncSettingsAgreementOptionFields(...args));
+  $("#settingsAgreementCustomerFieldEnabled")?.addEventListener("change", (...args) => syncSettingsAgreementOptionFields(...args));
   $("#addSettingsAgreementAcknowledgementButton")?.addEventListener("click", () => addSettingsAgreementItem("acknowledgement"));
   $("#addSettingsAgreementCustomerFieldButton")?.addEventListener("click", () => addSettingsAgreementItem("customer-field"));
   $("#settingsAgreementForm")?.addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="remove-agreement-item"]');
     if (button) removeSettingsAgreementItem(button);
   });
-  $("#resetSettingsAgreementButton")?.addEventListener("click", resetSettingsAgreement);
+  $("#resetSettingsAgreementButton")?.addEventListener("click", (...args) => resetSettingsAgreement(...args));
   $("#settingsUserTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-settings-user-tab]");
     if (!button) return;
@@ -15393,7 +15522,7 @@ function initEvents() {
     const action = event.target.closest('[data-action="remove-kennel-building-tab"]');
     if (action) openKennelBuildingRemoveConfirm(action.dataset.building);
   });
-  $("#addKennelLocationButton")?.addEventListener("click", addKennelLocationToActiveBuilding);
+  $("#addKennelLocationButton")?.addEventListener("click", (...args) => addKennelLocationToActiveBuilding(...args));
   $("#newKennelLocationText")?.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
@@ -15432,8 +15561,8 @@ function initEvents() {
       syncOperationTimeWindowLabels(card);
     }
   });
-  $("#saveOperationHoursButton")?.addEventListener("click", saveOperationHoursSettings);
-  $("#resetOperationHoursButton")?.addEventListener("click", resetOperationHoursSettings);
+  $("#saveOperationHoursButton")?.addEventListener("click", (...args) => saveOperationHoursSettings(...args));
+  $("#resetOperationHoursButton")?.addEventListener("click", (...args) => resetOperationHoursSettings(...args));
   $("#prevOperationMonthButton")?.addEventListener("click", () => {
     const current = new Date(\`\${operationCalendarMonth}-01T12:00:00\`);
     current.setMonth(current.getMonth() - 1);
@@ -15456,27 +15585,95 @@ function initEvents() {
   });
 }
 
+function pageRemoteLoadCacheKey(pageId = activePageId(), types = []) {
+  return \`\${pageRemoteScopeKey(pageId)}||\${remoteLoadRequestKey(types)}\`;
+}
+
+function pageRemoteLoadIsFresh(pageId = activePageId(), types = []) {
+  const finishedAt = Number(activePageRemoteLoadFinishedAtByKey.get(pageRemoteLoadCacheKey(pageId, types)) || 0);
+  return finishedAt > 0 && Date.now() - finishedAt < ACTIVE_PAGE_REMOTE_CACHE_TTL_MS;
+}
+
+function markPageRemoteLoadFinished(pageId = activePageId(), types = []) {
+  if (!types.length || uniqueRemoteRecordTypes(types).some((type) => lastRemoteRecordFetchFailedTypes.has(type))) return;
+  activePageRemoteLoadFinishedAtByKey.set(pageRemoteLoadCacheKey(pageId, types), Date.now());
+}
+
+function scheduleDeferredPageRemoteLoad(pageId = activePageId(), types = []) {
+  const deferredTypes = uniqueRemoteRecordTypes(types);
+  deferredPageRemoteLoadRequestId += 1;
+  const requestId = deferredPageRemoteLoadRequestId;
+  if (deferredPageRemoteLoadTimer) window.clearTimeout(deferredPageRemoteLoadTimer);
+  deferredPageRemoteLoadTimer = null;
+  if (!deferredTypes.length || pageRemoteLoadIsFresh(pageId, deferredTypes)) return;
+  const run = () => {
+    if (requestId !== deferredPageRemoteLoadRequestId || activePageId() !== normalizePageId(pageId)) return;
+    loadRemoteRecords({
+      types: deferredTypes,
+      render: true,
+      pageId,
+      showLoader: false,
+      quiet: true,
+      silent: true,
+    }).then(() => markPageRemoteLoadFinished(pageId, deferredTypes)).catch((error) => {
+      console.warn(\`Deferred page sync failed for \${pageId}.\`, error);
+    });
+  };
+  deferredPageRemoteLoadTimer = window.setTimeout(() => {
+    deferredPageRemoteLoadTimer = null;
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run, { timeout: 1200 });
+    else run();
+  }, DEFERRED_PAGE_REMOTE_LOAD_DELAY_MS);
+}
+
 function scheduleActivePageRemoteLoad(pageId = activePageId()) {
   if (!helperIsLoggedIn() || pageId === "loginPage" || localTestMode || !supabaseClient) return;
-  const requestKey = \`\${pageId}||\${remoteLoadRequestKey(remoteRecordTypesForPage(pageId))}\`;
+  const plan = remoteRecordLoadPlanForPage(pageId);
+  const criticalTypes = plan.critical;
+  const requestKey = pageRemoteLoadCacheKey(pageId, criticalTypes);
   const now = Date.now();
+  if (pageRemoteLoadIsFresh(pageId, criticalTypes)) {
+    scheduleDeferredPageRemoteLoad(pageId, plan.deferred);
+    scheduleNotificationBackgroundLoad(pageId);
+    return;
+  }
   if (requestKey === activePageRemoteLoadLastKey && now - activePageRemoteLoadLastAt < ACTIVE_PAGE_REMOTE_LOAD_THROTTLE_MS) return;
   activePageRemoteLoadLastKey = requestKey;
   activePageRemoteLoadLastAt = now;
   if (activePageRemoteLoadTimer) window.clearTimeout(activePageRemoteLoadTimer);
-  // Efficiency flow: render from local cache first, then refresh only the active page's remote types.
+  // Paint cached data first. Only the active page's essential records block its
+  // ready state; secondary history and relationship data arrive while idle.
   activePageRemoteLoadTimer = window.setTimeout(() => {
     activePageRemoteLoadTimer = null;
     const loadingFinancialLedger = normalizePageId(pageId) === "financialsPage";
     if (loadingFinancialLedger && typeof loadPersistedFinancialLedger === "function") {
       loadPersistedFinancialLedger().catch((error) => console.warn("Saved financial ledger load failed.", error));
     }
-    loadRemoteRecords({ render: true, pageId, showLoader: false, quiet: true, silent: loadingFinancialLedger }).catch((error) => {
+    const load = criticalTypes.length
+      ? loadRemoteRecords({ types: criticalTypes, render: true, pageId, showLoader: false, quiet: true, silent: loadingFinancialLedger })
+      : Promise.resolve();
+    load.then(() => markPageRemoteLoadFinished(pageId, criticalTypes)).catch((error) => {
       console.warn(\`Active page sync failed for \${pageId}.\`, error);
     }).finally(() => {
+      scheduleDeferredPageRemoteLoad(pageId, plan.deferred);
       scheduleNotificationBackgroundLoad(pageId);
     });
   }, 80);
+}
+
+function refreshDateScopedWorkspace(pageId = activePageId()) {
+  const normalizedPageId = normalizePageId(pageId);
+  if (!helperIsLoggedIn() || localTestMode || !supabaseClient || !["dailyPage", "dashboardPage"].includes(normalizedPageId)) return;
+  loadRemoteRecords({
+    types: ["dailyTask"],
+    render: true,
+    pageId: normalizedPageId,
+    fullRefresh: true,
+    showLoader: false,
+    quiet: true,
+  }).then(() => markPageRemoteLoadFinished(normalizedPageId, ["dailyTask"])).catch((error) => {
+    console.warn(\`Date-scoped sync failed for \${normalizedPageId}.\`, error);
+  });
 }
 
 function scheduleNotificationBackgroundLoad(pageId = activePageId()) {
@@ -15499,13 +15696,60 @@ function scheduleNotificationBackgroundLoad(pageId = activePageId()) {
   }, NOTIFICATION_BACKGROUND_LOAD_DELAY_MS);
 }
 
+var INACTIVE_PAGE_DYNAMIC_TARGETS = {
+  dailyPage: ["morningTaskList", "pmTaskList", "weeklyTaskList", "tuesdayTaskList", "monthlyTaskList", "customTaskPanels", "structuredCareLogList", "recentSubmissions"],
+  taskSchedulerPage: ["taskSchedulerMiniCalendar", "taskSchedulerLegend", "taskSchedulerBoard"],
+  dogShowPage: ["dogShowContent"],
+  timesheetPage: ["timesheetRows", "weeklyHelperTotals", "scheduleWeekGrid", "timeOffRequestList", "holidayList", "scheduleReviewSummary", "scheduleReviewIssues", "payrollSummary", "payrollRows"],
+  ourDogsPage: ["ownedDogMobileCards", "ownedDogColumnManager", "ownedDogTableHead", "ownedDogTableBody", "ownedDogListStatus"],
+  boardingDogsPage: ["boardingQueueGroups", "boardingCalendarView", "boardingDogQuickCards", "boardingDogColumnManager", "boardingDogTableHead", "boardingDogTableBody", "boardingRosterStatus", "boardingRequestRecords"],
+  financialsPage: ["financialCards", "financialIncomeChart", "financialBreakdown", "financialTransactionsBody", "financialLineItemsBody"],
+};
+
+function releaseInactivePageDom(pageId = "") {
+  const normalizedPageId = normalizePageId(pageId);
+  if (!normalizedPageId || activePageId() === normalizedPageId) return;
+  if (normalizedPageId === "boardingDogsPage") {
+    boardingRosterRenderSequence += 1;
+    if (typeof cancelBoardingRequestRender === "function") cancelBoardingRequestRender();
+  }
+  arrayValue(INACTIVE_PAGE_DYNAMIC_TARGETS[normalizedPageId]).forEach((id) => {
+    const target = document.getElementById(id);
+    if (target) target.replaceChildren();
+  });
+}
+
+function scheduleInactivePageDomRelease(pageId = "") {
+  const normalizedPageId = normalizePageId(pageId);
+  if (!normalizedPageId || normalizedPageId === activePageId()) return;
+  const release = () => releaseInactivePageDom(normalizedPageId);
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(release, { timeout: 1800 });
+  else window.setTimeout(release, 250);
+}
+
 function switchPage(pageId, options = {}) {
+  const previousPageId = activePageId();
   pageId = normalizePageId(pageId);
   const historyMode = options.history || "replace";
   if (!pageAllowed(pageId)) {
     showToast(helperIsLoggedIn() ? "Your login does not have access to that page." : "Sign in first.");
     const fallback = helperIsLoggedIn() ? defaultPageForRole(currentRole()) : "loginPage";
     pageId = pageAllowed(fallback) ? fallback : "loginPage";
+  }
+  if (pageId !== "loginPage"
+      && options.moduleReady !== true
+      && typeof window.isAppPageModuleLoaded === "function"
+      && !window.isAppPageModuleLoaded(pageId)
+      && typeof window.loadAppPageModule === "function") {
+    setSyncBadgeState("refreshing");
+    window.loadAppPageModule(pageId).then(() => {
+      switchPage(pageId, { ...options, moduleReady: true });
+    }).catch((error) => {
+      console.error(\`Could not load the \${pageId} page module.\`, error);
+      setSyncBadgeState("failed");
+      showToast("That page could not load. Refresh and try again.");
+    });
+    return;
   }
   if (helperIsLoggedIn() && pageId !== "loginPage") {
     // Navigation must keep working when large record caches fill browser storage.
@@ -15536,6 +15780,7 @@ function switchPage(pageId, options = {}) {
   }
   if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
   if (pageId === "ourDogsPage") window.setTimeout(() => $("#ownedDogSearch")?.focus(), 100);
+  if (previousPageId !== pageId) scheduleInactivePageDomRelease(previousPageId);
   if (options.scroll !== false) window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -15600,7 +15845,6 @@ async function initializeApp() {
     updateRotationBanner();
     updateCompletionCount();
     updateTimeDisplays();
-    renderDailyTaskLists();
     setupRequiredFields();
     initEvents();
     showAuthRedirectError();

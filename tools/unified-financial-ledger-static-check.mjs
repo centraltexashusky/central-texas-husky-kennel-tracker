@@ -16,7 +16,7 @@ const requireSource = (source, needle, message) => {
 
 requireSource(shared, 'financialTransaction: "cth-financialTransaction-records"', "Manual financial transactions do not have local persistence.");
 requireSource(shared, '"financialTransaction", "customerDog"', "Manual financial transactions are not registered for remote persistence.");
-requireSource(shared, 'financialsPage: ["showEvent", "financialTransaction"]', "Financials still downloads all operational histories during normal navigation.");
+requireSource(shared, 'financialsPage: { critical: ["showEvent", "financialTransaction"], deferred: [] }', "Financials still downloads all operational histories during normal navigation.");
 requireSource(settings, 'FINANCIAL_LEDGER_SOURCE_TYPES = ["boardingDog", "service", "timesheet", "settingsUser", "showEvent", "financialTransaction"]', "Financial reconciliation does not cover every ledger source.");
 requireSource(settings, 'from("financial_ledger_entries")', "Financials does not read the persisted ledger table.");
 requireSource(settings, 'db.rpc("replace_financial_ledger_entries"', "Financial reconciliation does not write the persisted ledger atomically.");

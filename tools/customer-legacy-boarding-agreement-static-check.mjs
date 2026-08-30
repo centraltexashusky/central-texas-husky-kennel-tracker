@@ -18,7 +18,7 @@ for (const expected of [
   }
 }
 
-if (!shared.includes('settingsUsersPage: ["settingsUser", "boardingAgreement", "boardingDog"]')) {
+if (!shared.includes('settingsUsersPage: { critical: ["settingsUser"], deferred: ["boardingAgreement", "boardingDog"] }')) {
   throw new Error("The Settings Users page must load boarding records that contain legacy signed agreements.");
 }
 if (!shared.includes('hasAny(["settingsUser", "boardingAgreement", "boardingDog"])')) {

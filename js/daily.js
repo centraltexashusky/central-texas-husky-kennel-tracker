@@ -6,6 +6,9 @@ const __snuggleStayModuleSource = `function careDueFromDate(lastDate, intervalDa
   return days === null ? false : days >= intervalDays;
 }
 
+var OWNED_DOG_RENDER_PAGE_SIZE = 50;
+var ownedDogVisibleLimit = OWNED_DOG_RENDER_PAGE_SIZE;
+
 function ownedDogExerciseDue(record, date = todayDate()) {
   const dog = normalizeOwnedDogCare(record);
   return careDueFromDate(dog.lastExerciseDate, dog.exerciseFrequencyDays, date);
@@ -248,10 +251,10 @@ function dailyWorkPayload(date = currentDailyDate(), updates = {}) {
   };
 }
 
-function taskLabel(task, shift) {
+function taskLabel(task, shift, completionIndex = null) {
   const canManageTasks = currentRole() === "admin";
   const taskText = escapeHtml(task.text);
-  const completed = dailyTaskCompletionIndex(currentDailyDate()).get(taskKey(shift, task.id));
+  const completed = (completionIndex || dailyTaskCompletionIndex(currentDailyDate())).get(taskKey(shift, task.id));
   if (completed && showRemainingTasksOnly) return "";
   const adminTools =
     canManageTasks
@@ -379,7 +382,7 @@ function taskTabDeleteRowHtml(tab = {}) {
   return \`<div class="button-row task-tab-delete-row" data-task-tab-delete-row><button type="button" class="secondary-button danger-button task-delete-tab-button" data-action="remove-task-tab" data-task-tab-id="\${escapeHtml(tab.id)}">Delete Tab</button></div>\`;
 }
 
-function customTaskPanelHtml(tab = {}, tasks = []) {
+function customTaskPanelHtml(tab = {}, tasks = [], completionIndex = null) {
   const description = String(tab.description || "").trim();
   return \`<section class="form-section collapsible-section" data-task-panel="\${escapeHtml(tab.id)}" data-custom-task-panel data-collapsible-section hidden>
     <div class="section-heading">
@@ -391,7 +394,7 @@ function customTaskPanelHtml(tab = {}, tasks = []) {
       <button type="button" class="secondary-button section-toggle-button" data-action="toggle-section">Minimize</button>
     </div>
     <div class="section-body">
-      <div class="checklist managed-task-list" data-custom-task-list data-shift="\${escapeHtml(tab.id)}">\${tasks.map((task) => taskLabel(task, tab.id)).join("")}</div>
+      <div class="checklist managed-task-list" data-custom-task-list data-shift="\${escapeHtml(tab.id)}">\${tasks.map((task) => taskLabel(task, tab.id, completionIndex)).join("")}</div>
       <div class="admin-task-controls" \${currentRole() === "admin" ? "" : "hidden"}>
         <input type="text" data-custom-task-input="\${escapeHtml(tab.id)}" placeholder="Add a task to \${escapeHtml(tab.label)}" />
         <button type="button" data-action="add-custom-tab-task" data-shift="\${escapeHtml(tab.id)}">Add Task</button>
@@ -423,6 +426,7 @@ function dailyTaskDraftInputKey(input) {
 function renderDailyTaskLists(selected = {}) {
   const draftState = captureDailyTaskDraftState();
   const config = readTaskConfig();
+  const completionIndex = dailyTaskCompletionIndex(currentDailyDate());
   renderDailyTaskTabs(config);
   const staticLists = {
     morningTaskList: "morning",
@@ -434,11 +438,11 @@ function renderDailyTaskLists(selected = {}) {
   Object.entries(staticLists).forEach(([listId, shift]) => {
     const list = $(\`#\${listId}\`);
     if (!list) return;
-    list.innerHTML = (config[shift] || []).map((task) => taskLabel(task, shift)).join("");
+    list.innerHTML = (config[shift] || []).map((task) => taskLabel(task, shift, completionIndex)).join("");
     bindTaskListInteractions(list);
   });
   parkTaskFilterToggle();
-  renderCustomTaskPanels(config);
+  renderCustomTaskPanels(config, completionIndex);
   syncStaticTaskTabDeleteRows(config);
   const canManageTasks = currentRole() === "admin";
   $("#dailyTaskAdminControls").hidden = !canManageTasks;
@@ -451,7 +455,7 @@ function renderDailyTaskLists(selected = {}) {
   renderStructuredCareLogs();
   setDailyTaskTab(dailyTaskTab);
   restoreDailyTaskDraftState(draftState);
-  updateCompletionCount();
+  updateCompletionCount(completionIndex);
 }
 
 function setDailyTaskTab(tab = "morning") {
@@ -964,6 +968,19 @@ function renderOwnedDogSpecialCareTable(records = []) {
     : '<tr><td colspan="2">No matching Special Care dogs. Try a shorter search or another care filter.</td></tr>';
 }
 
+function renderOwnedDogListStatus(total = 0, shown = 0) {
+  const status = $("#ownedDogListStatus");
+  if (!status) return;
+  if (!total) {
+    status.innerHTML = "";
+    return;
+  }
+  const label = "Showing " + shown + " of " + total + " matching dogs.";
+  status.innerHTML = shown < total
+    ? '<span>' + escapeHtml(label) + '</span><button type="button" class="secondary-button" data-action="load-more-owned-dogs">Load 50 more</button>'
+    : '<span>' + escapeHtml(label) + '</span>';
+}
+
 function renderOwnedDogs() {
   const query = ($("#ownedDogSearch").value || "").trim();
   const isAdmin = currentRole() === "admin";
@@ -971,6 +988,7 @@ function renderOwnedDogs() {
   if (addButton) addButton.hidden = !isAdmin;
   const allDogs = readRecords("ownedDog").filter((record) => !record.removed);
   const records = sortRecordsForTable("ownedDog", allDogs.filter((record) => query ? matches(record, query) : ownedDogMatchesCareFilter(record)));
+  const visibleRecords = records.slice(0, Math.max(OWNED_DOG_RENDER_PAGE_SIZE, ownedDogVisibleLimit));
   const columns = activeColumns("ownedDog");
   const isSpecialCareView = ownedDogCareFilter === "Special Care";
   $("#ownedDogTable")?.classList.toggle("is-special-care-table", isSpecialCareView);
@@ -996,11 +1014,11 @@ function renderOwnedDogs() {
   }
   renderOwnedDogFilterCounts(summary);
   if (isSpecialCareView) {
-    renderOwnedDogSpecialCareTable(records);
+    renderOwnedDogSpecialCareTable(visibleRecords);
   } else {
     $("#ownedDogTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="ownedDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
-    $("#ownedDogTableBody").innerHTML = records.length
-      ? records
+    $("#ownedDogTableBody").innerHTML = visibleRecords.length
+      ? visibleRecords
           .map((record) => {
             const heat = ownedDogHeatStatus(record);
             const hasRosterAlert = ownedDogHasRosterAlert(record);
@@ -1016,7 +1034,8 @@ function renderOwnedDogs() {
           .join("")
       : \`<tr><td colspan="\${(columns.length || 1) + 1}">No matching dogs. Use Add New Dog.</td></tr>\`;
   }
-  renderOwnedDogMobileCards(records);
+  renderOwnedDogMobileCards(visibleRecords);
+  renderOwnedDogListStatus(records.length, visibleRecords.length);
   if (!isSpecialCareView) renderColumnManager("ownedDog", "#ownedDogColumnManager");
   renderCareDogOptions();
 }

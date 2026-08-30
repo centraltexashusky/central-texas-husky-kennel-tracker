@@ -251,8 +251,8 @@ function setHelper(user, options = {}) {
   $("#clearHelperButton").hidden = false;
   updateNavigationAccess();
   if (options.render !== false) {
-    renderDailyTaskLists();
-    fillCustomerDefaults();
+    if (typeof renderDailyTaskLists === "function") renderDailyTaskLists();
+    if (typeof fillCustomerDefaults === "function") fillCustomerDefaults();
     scheduleRender({ activeOnly: true });
     scheduleProfilePhotoHydrationSweep(300);
   }
@@ -288,7 +288,7 @@ function clearLocalAppSession(options = {}) {
   loginHelp.textContent = "Sign in with email and password, Google, or another enabled account provider.";
   $("#clearHelperButton").hidden = true;
   updateNavigationAccess();
-  fillCustomerDefaults();
+  if (typeof fillCustomerDefaults === "function") fillCustomerDefaults();
   renderGlobalSearchResults();
   if (options.switchToLogin !== false) switchPage("loginPage");
   else document.body.classList.add("is-login-view");

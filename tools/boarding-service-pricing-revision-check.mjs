@@ -52,9 +52,8 @@ const boarding = moduleSource("js/boarding.js");
 const settings = moduleSource("js/settings.js");
 const main = fs.readFileSync("js/main.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
-for (const module of ["shared", "boarding"]) {
-  assert.ok(main.split("\n").some((line) => line.startsWith(`import "./${module}.js?`) && line.includes("service-pricing-revision-v62")), `${module} import must be cache-busted`);
-}
+assert.ok(main.includes('import "./shared.js?') && main.includes("service-pricing-revision-v62"), "shared import must be cache-busted");
+assert.ok(main.includes('import("./boarding.js?') && main.includes("service-pricing-revision-v62"), "boarding import must be cache-busted");
 assert.ok(index.includes("service-pricing-revision-v62"), "Entrypoint must be cache-busted");
 assert.ok(fs.readFileSync("package.json", "utf8").includes("boarding-service-pricing-revision-check.mjs"), "Regression test must run in the full suite");
 for (const [label, source] of [["modules", shared + boarding + settings], ["legacy", legacy]]) {

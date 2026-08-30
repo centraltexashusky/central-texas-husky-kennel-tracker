@@ -8,7 +8,7 @@ const main = fs.readFileSync("js/main.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 const failures = [];
 
-if (!shared.includes('financialsPage: ["showEvent", "financialTransaction"]')) {
+if (!shared.includes('financialsPage: { critical: ["showEvent", "financialTransaction"], deferred: [] }')) {
   failures.push("Financials still downloads completed timesheet history during normal navigation.");
 }
 const settings = fs.readFileSync("js/settings.js", "utf8");

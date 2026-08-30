@@ -311,6 +311,22 @@ iframe {
   display: block;
 }
 
+.bounded-list-status {
+  align-items: center;
+  color: var(--muted, #5d6b82);
+  display: flex;
+  font-size: 0.9rem;
+  gap: 12px;
+  justify-content: center;
+  min-height: 28px;
+  padding: 10px 0 2px;
+  text-align: center;
+}
+
+.bounded-list-status:empty {
+  display: none;
+}
+
 .app-inline-loader {
   align-items: center;
   background: rgba(255, 255, 255, 0.90);

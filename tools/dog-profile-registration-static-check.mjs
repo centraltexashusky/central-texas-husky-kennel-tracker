@@ -2,6 +2,8 @@
 
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { DOG_SHOW_AKC_BREEDS_2026 } from "../js/akc-breed-names.js";
+import { DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026 } from "../js/dog-show-point-data.js";
 
 const index = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const shared = fs.readFileSync(new URL("../js/shared.js", import.meta.url), "utf8");
@@ -9,6 +11,7 @@ const boarding = fs.readFileSync(new URL("../js/boarding.js", import.meta.url), 
 const customer = fs.readFileSync(new URL("../js/customer.js", import.meta.url), "utf8");
 const maintenance = fs.readFileSync(new URL("./boarding-data-maintenance.mjs", import.meta.url), "utf8");
 const main = fs.readFileSync(new URL("../js/main.js", import.meta.url), "utf8");
+const breedNames = fs.readFileSync(new URL("../js/akc-breed-names.js", import.meta.url), "utf8");
 
 for (const field of ["akcRegistrationNumber", "microchipNumber", "sireName", "damName"]) {
   assert.equal(
@@ -37,7 +40,9 @@ assert.equal(
   2,
   "customer and boarding dog forms must expose custom breed text for Other type",
 );
-assert.match(shared, /DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026/, "breed choices must reuse the official AKC schedule dataset");
+assert.match(shared, /DOG_SHOW_AKC_BREEDS_2026/, "breed choices must reuse the lightweight AKC breed-name catalog");
+assert.match(breedNames, /"Siberian Huskies"/, "the shared breed-name catalog must retain official Siberian Husky choices");
+assert.deepEqual(DOG_SHOW_AKC_BREEDS_2026, DOG_SHOW_AKC_BREED_POINT_SCHEDULES_2026.breeds, "the lightweight catalog must exactly match the official point schedule breed list");
 assert.match(shared, /select\.add\(new Option\("Other type", AKC_OTHER_BREED_VALUE\)\)/, "breed selector must include Other type");
 assert.match(shared, /function syncAkcBreedControl/, "existing breed values must be restored into the breed selector");
 assert.match(shared, /function handleAkcBreedSelection/, "Other type must reveal the custom breed input");

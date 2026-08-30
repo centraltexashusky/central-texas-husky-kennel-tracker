@@ -65,7 +65,7 @@ const required = [
   [boarding, "Customer selections and information", "boarding profile response summary"],
   [boarding, "customAcknowledgementResponses", "boarding profile acknowledgement responses"],
   [boarding, "customerFieldResponses", "boarding profile customer information responses"],
-  [shared, 'boardingDogsPage: ["boardingDog", "boardingAgreement"', "boarding agreement remote loading"],
+  [shared, 'deferred: ["boardingAgreement", "customerDog"]', "boarding agreement remote loading"],
   [schema, "agreement_config jsonb", "workspace agreement schema"],
   [migration, "app_settings_agreement_config_object", "agreement configuration migration"],
   [migration, "customAcknowledgementRequired", "custom agreement RLS validation"],
