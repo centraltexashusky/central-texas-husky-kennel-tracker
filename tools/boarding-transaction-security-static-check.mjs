@@ -30,7 +30,7 @@ if (/await (approveBoardingStay|saveBoardingStayStatusTransition|saveBoardingSta
 }
 requireMatch(boarding, /return explicitGroupKey \? \[explicitGroupKey\] : boardingFamilyHouseholdStayKeys\(entry\)/, "Explicit group IDs must be authoritative.");
 requireMatch(boarding, /function requireBoardingApprovalPreflight/, "Approval and check-in must share a safety preflight.");
-requireMatch(customer, /requiredVaccines\.every\(\(vaccine\) => currentRecordVaccines\.has\(vaccine\)\)/, "Vaccines OK must require every configured core vaccine, not any one current record.");
+requireMatch(shared, /requiredVaccines\.every\(\(vaccine\) => currentRecordVaccines\.has\(vaccine\)\)/, "Vaccines OK must require every configured core vaccine, not any one current record.");
 if (/keys\.push\(\\`name:/.test(boarding)) throw new Error("Owner name alone must never group boarding requests.");
 
 requireMatch(notifications, /notificationHasUnresolvedBoardingAction/, "Pending boarding actions must remain visible independently of read receipts.");
