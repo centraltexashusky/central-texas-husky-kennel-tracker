@@ -21,6 +21,8 @@ requireText(main, "requestIdleCallback", "Unused page modules are not warmed dur
 requireText(main, 'loadNamedPageModule("boarding")', "Alert presentation helpers are not warmed during browser idle time.");
 if (main.includes("Object.keys(pageModuleLoaders)")) failures.push("Every heavy page module is still parsed during background warmup.");
 requireText(shared, "profile = profile || {};", "A missing optional user profile can still break shell restoration.");
+const switchPageBody = shared.slice(shared.indexOf("function switchPage("), shared.indexOf("function ensureAppShellVisible("));
+if (switchPageBody.includes("renderSharedRecords();")) failures.push("Page navigation still rebuilds unrelated shared alerts and search UI.");
 requireText(main, 'name === "boarding"', "Notifications are not refreshed when the lazy Boarding module becomes ready.");
 requireText(notifications, "boardingNotificationHelpersAvailable", "The notification shell can call Boarding helpers before their lazy module loads.");
 requireText(notifications, "Loading alerts in background", "Notification rendering is not deferred until its Boarding helpers are ready.");

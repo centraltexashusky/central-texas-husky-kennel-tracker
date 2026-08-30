@@ -15776,7 +15776,9 @@ function switchPage(pageId, options = {}) {
   document.body.classList.toggle("is-login-view", pageId === "loginPage" && !helperIsLoggedIn());
   if (helperIsLoggedIn() && pageId !== "loginPage") {
     renderActivePageRecords(pageId);
-    renderSharedRecords();
+    // Shared alerts, search, and clocks update through their own remote,
+    // realtime, and timer paths. Rebuilding them on every route change made a
+    // lightweight page switch repeat unrelated Boarding/notification work.
     scheduleActivePageRemoteLoad(pageId);
   }
   if (typeof updateCustomerStickyBookNow === "function") updateCustomerStickyBookNow();
