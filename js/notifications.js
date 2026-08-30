@@ -1906,6 +1906,16 @@ function renderNotifications() {
   const summary = $("#notificationPanelSummary");
   const readButton = $("#showReadNotificationsButton");
   if (!button || !badge || !panel || !list || !summary) return;
+  // The alert panel uses rich Boarding request summaries. Keep that work in
+  // the background with the Boarding chunk instead of making every page wait
+  // for it or allowing partial shell renders to call missing helpers.
+  if (!boardingNotificationHelpersAvailable()) {
+    badge.hidden = true;
+    summary.textContent = "Loading alerts in background...";
+    list.innerHTML = '<p class="empty-state">Alerts will appear when background loading finishes.</p>';
+    if (readButton) readButton.hidden = true;
+    return;
+  }
   ensureDogShowClosingNotifications();
   ensurePendingBoardingRequestRecoveryAlerts();
   pruneExpiredNotifications();

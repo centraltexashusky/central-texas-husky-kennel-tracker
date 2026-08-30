@@ -20,6 +20,7 @@ requireText(main, 'window.loadAppPageModule =', "Page navigation cannot request 
 requireText(main, "requestIdleCallback", "Unused page modules are not warmed during idle time.");
 requireText(main, 'name === "boarding"', "Notifications are not refreshed when the lazy Boarding module becomes ready.");
 requireText(notifications, "boardingNotificationHelpersAvailable", "The notification shell can call Boarding helpers before their lazy module loads.");
+requireText(notifications, "Loading alerts in background", "Notification rendering is not deferred until its Boarding helpers are ready.");
 requireText(notifications, 'await window.loadAppPageModule("boardingDogsPage")', "Opening a boarding alert does not wait for its lazy module.");
 requireText(shared, "remoteRecordLoadPlanForPage", "Remote records have no page-specific loading plan.");
 requireText(shared, "critical:", "Page loading does not distinguish critical data.");
