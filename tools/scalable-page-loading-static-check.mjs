@@ -18,6 +18,9 @@ requireText(main, 'customer: () => import("./customer.js', "Customer code is not
 requireText(main, 'dogShow: () => import("./dog-show.js', "Dog Show code is not split from the startup shell.");
 requireText(main, 'window.loadAppPageModule =', "Page navigation cannot request its module on demand.");
 requireText(main, "requestIdleCallback", "Unused page modules are not warmed during idle time.");
+requireText(main, 'loadNamedPageModule("boarding")', "Alert presentation helpers are not warmed during browser idle time.");
+if (main.includes("Object.keys(pageModuleLoaders)")) failures.push("Every heavy page module is still parsed during background warmup.");
+requireText(shared, "profile = profile || {};", "A missing optional user profile can still break shell restoration.");
 requireText(main, 'name === "boarding"', "Notifications are not refreshed when the lazy Boarding module becomes ready.");
 requireText(notifications, "boardingNotificationHelpersAvailable", "The notification shell can call Boarding helpers before their lazy module loads.");
 requireText(notifications, "Loading alerts in background", "Notification rendering is not deferred until its Boarding helpers are ready.");

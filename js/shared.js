@@ -83,6 +83,7 @@ function rememberCuddleStayTheme(theme) {
 }
 
 function themePreferenceFromUserProfile(profile = {}) {
+  profile = profile || {};
   return optionalCuddleStayTheme(
     profile.themePreference
       || profile.preferences?.theme
