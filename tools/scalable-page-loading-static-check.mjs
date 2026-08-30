@@ -5,6 +5,7 @@ const shared = read("js/shared.js");
 const main = read("js/main.js");
 const daily = read("js/daily.js");
 const boarding = read("js/boarding.js");
+const notifications = read("js/notifications.js");
 const index = read("index.html");
 const migration = read("supabase/migrations/20260830222218_optimize_daily_workspace_reads.sql");
 const failures = [];
@@ -17,6 +18,9 @@ requireText(main, 'customer: () => import("./customer.js', "Customer code is not
 requireText(main, 'dogShow: () => import("./dog-show.js', "Dog Show code is not split from the startup shell.");
 requireText(main, 'window.loadAppPageModule =', "Page navigation cannot request its module on demand.");
 requireText(main, "requestIdleCallback", "Unused page modules are not warmed during idle time.");
+requireText(main, 'name === "boarding"', "Notifications are not refreshed when the lazy Boarding module becomes ready.");
+requireText(notifications, "boardingNotificationHelpersAvailable", "The notification shell can call Boarding helpers before their lazy module loads.");
+requireText(notifications, 'await window.loadAppPageModule("boardingDogsPage")', "Opening a boarding alert does not wait for its lazy module.");
 requireText(shared, "remoteRecordLoadPlanForPage", "Remote records have no page-specific loading plan.");
 requireText(shared, "critical:", "Page loading does not distinguish critical data.");
 requireText(shared, "deferred:", "Non-critical page data is not deferred.");

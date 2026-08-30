@@ -4,7 +4,7 @@
 import "./boarding-agreement.js?v=20260712-cuddle-stay-agreement-copy";
 import "./shared.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-dashboard-timeline-restore-guarded-inline-status-profile-name-persistence-organization-setup-branding-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-customer-agreement-records-dog-profile-registration-akc-breeds-dog-show-closing-alerts-v29-boarding-lifecycle-feedback-v33-dog-show-invoice-record-v37-dog-show-invoice-load-v41-boarding-family-alert-approval-v27-partial-batch-errors-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-boarding-checkin-preflight-v38-boarding-requirement-override-v39-customer-vaccine-self-service-v41-cuddle-schema-isolated-v45-user-removal-v47-dashboard-daily-completion-v48-notification-delivery-retry-v49-shared-kennels-v52-boarding-progressive-load-v54-request-history-lazy-v55-profile-lookup-cache-v56-profile-history-v57-profile-request-isolation-v59-pdf-media-preview-v60-service-pricing-revision-v62-financial-loading-progress-v63-persisted-financial-ledger-v68-scalable-page-loading-v77";
 import "./auth.js?v=20260721-dog-show-nav-user-profile-name-persistence-scalable-page-loading-v71";
-import "./notifications.js?v=20260723-customer-file-view-v2-dashboard-vaccine-queues-signed-agreement-profile-email-boarding-request-notification-rls-v25-dog-show-closing-alerts-v29-maintenance-alert-detail-active-request-lock-v36-dog-show-invoice-v39-boarding-family-alert-approval-v27-action-delivery-health-v30-cuddle-schema-isolated-v45-boarding-alert-recovery-v46-notification-delivery-retry-v48";
+import "./notifications.js?v=20260723-customer-file-view-v2-dashboard-vaccine-queues-signed-agreement-profile-email-boarding-request-notification-rls-v25-dog-show-closing-alerts-v29-maintenance-alert-detail-active-request-lock-v36-dog-show-invoice-v39-boarding-family-alert-approval-v27-action-delivery-health-v30-cuddle-schema-isolated-v45-boarding-alert-recovery-v46-notification-delivery-retry-v48-lazy-boarding-boundary-v50";
 import "./search.js?v=20260623-efficiency-guardrails";
 
 const pageModuleLoaders = {
@@ -54,6 +54,9 @@ function loadNamedPageModule(name) {
     }
     if (name === "dogShow" && typeof window.setupDogShowEventListeners === "function") {
       window.setupDogShowEventListeners();
+    }
+    if (name === "boarding" && typeof renderNotifications === "function" && typeof helperIsLoggedIn === "function" && helperIsLoggedIn()) {
+      renderNotifications();
     }
   }).catch((error) => {
     pageModulePromises.delete(name);

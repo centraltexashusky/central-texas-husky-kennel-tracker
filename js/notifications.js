@@ -819,6 +819,10 @@ function notificationHasUnresolvedBoardingAction(notification = {}) {
   const isBoardingRequestAlert = ["customerBoardingRequestCreated", "customerBoardingRequestUpdated"].includes(notification.eventName)
     || Boolean(recoveredBoardingRequestNotification(notification));
   if (!isBoardingRequestAlert) return false;
+  // Boarding is intentionally code-split from the authenticated shell. Until
+  // that module is ready, keep approval alerts conservatively unread instead
+  // of calling helpers that have not been installed yet.
+  if (!boardingNotificationHelpersAvailable()) return true;
   const recovered = recoveredBoardingRequestNotification(notification);
   const source = notificationSourceSnapshot(notification);
   const sourceId = notification.sourceId || source.id || recovered?.record?.id || "";
@@ -1806,8 +1810,17 @@ function pruneExpiredNotifications(options = {}) {
 var boardingRequestRecoverySyncKeys = new Set();
 var BOARDING_REQUEST_ALERT_RECOVERY_GRACE_MS = 2 * 60 * 1000;
 
+function boardingNotificationHelpersAvailable() {
+  return typeof boardingStayEntries === "function"
+    && typeof boardingStayByReference === "function"
+    && typeof boardingPrimaryStay === "function"
+    && typeof boardingDogRecordForDisplay === "function"
+    && typeof boardingFamilyGroups === "function";
+}
+
 function ensurePendingBoardingRequestRecoveryAlerts() {
   if (currentRole() !== "admin") return [];
+  if (!boardingNotificationHelpersAvailable()) return [];
   // Wait until this tab has a complete notification snapshot. A boarding row
   // can arrive through Realtime before its notification row, and generating a
   // recovery alert from that partial view creates a false duplicate.
@@ -2092,6 +2105,7 @@ function boardingRequestNotificationReference(notification = {}, recoveredReques
 }
 
 function boardingRequestAlertGroup(record = {}, reference = {}) {
+  if (!boardingNotificationHelpersAvailable()) return null;
   const stay = boardingStayByReference(record, reference) || boardingPrimaryStay(record) || {};
   if (!stay?.id) return null;
   const seedEntry = boardingStayEntryForRecord(record, stay);
@@ -2254,6 +2268,16 @@ async function openNotification(id = "") {
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;
   const recoveredRequest = recoveredBoardingRequestNotification(notification);
+  const needsBoardingModule = Boolean(recoveredRequest) || sourceType === "boardingDog";
+  if (needsBoardingModule && !boardingNotificationHelpersAvailable() && typeof window.loadAppPageModule === "function") {
+    try {
+      await window.loadAppPageModule("boardingDogsPage");
+    } catch (error) {
+      console.error("Could not load boarding tools for this alert.", error);
+      showToast("Boarding details could not load. Refresh and try again.");
+      return;
+    }
+  }
   if (notification.eventName === "dogShowClosingSoon") {
     openDogShowClosingNotification(notification);
     renderDashboard();
