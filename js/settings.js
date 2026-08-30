@@ -1660,12 +1660,12 @@ async function fetchPersistedFinancialLedger() {
   return financialPersistedLedgerRows;
 }
 
-async function ensureFinancialProjectionSourcesLoaded() {
+async function ensureFinancialProjectionSourcesLoaded(forceRefresh = false) {
   const missing = () => FINANCIAL_LEDGER_SOURCE_TYPES.filter((type) => !remoteTypesFullyLoadedInMemory.has(type));
-  if (!missing().length) return;
+  if (!forceRefresh && !missing().length) return;
   if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
   await loadRemoteRecords({
-    types: FINANCIAL_LEDGER_SOURCE_TYPES,
+    types: forceRefresh ? FINANCIAL_LEDGER_SOURCE_TYPES : missing(),
     pageId: "financialsPage",
     fullRefresh: true,
     delta: false,
@@ -1698,16 +1698,19 @@ async function rebuildPersistedFinancialLedger() {
     startPageActivityProgress("financialsPage", "Updating saved financial ledger");
     setPageActivityProgress("financialsPage", 18, "Loading financial source changes");
     try {
-      await ensureFinancialProjectionSourcesLoaded();
-      setPageActivityProgress("financialsPage", 72, "Writing financial ledger");
-      const payload = financialProjectionPayload();
-      const sourceUpdatedAt = financialSourceUpdatedAt();
-      const { error } = await cuddleStayRequest((db) => db.rpc("replace_financial_ledger_entries", {
-        p_entries: payload,
-        p_source_updated_at: sourceUpdatedAt,
-      }));
-      if (error) throw error;
-      await fetchPersistedFinancialLedger();
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await ensureFinancialProjectionSourcesLoaded(attempt > 0);
+        setPageActivityProgress("financialsPage", attempt ? 82 : 72, attempt ? "Rechecking recent financial changes" : "Writing financial ledger");
+        const payload = financialProjectionPayload();
+        const sourceUpdatedAt = financialSourceUpdatedAt();
+        const { error } = await cuddleStayRequest((db) => db.rpc("replace_financial_ledger_entries", {
+          p_entries: payload,
+          p_source_updated_at: sourceUpdatedAt,
+        }));
+        if (error) throw error;
+        await fetchPersistedFinancialLedger();
+        if (!financialPersistedLedgerState?.needs_rebuild) break;
+      }
       finishPageActivityProgress("financialsPage", "Financial ledger updated");
       renderFinancials();
     } catch (error) {
@@ -2258,7 +2261,7 @@ function renderFinancials() {
     financialSummaryCardHtml("Net income", payrollMoney(net), "All income minus all expenses."),
     financialSummaryCardHtml("Boarding income", payrollMoney(boarding), "Overnight stays and boarding programs."),
     financialSummaryCardHtml("Services income", payrollMoney(services), "Stay add-ons and service-only requests."),
-    financialSummaryCardHtml("Payroll expense", payrollMoney(payroll), payrollSummary.totalHours.toFixed(2) + " completed clock hours."),
+    financialSummaryCardHtml("Payroll expense", payrollMoney(payroll), payrollSummary.totalHours.toFixed(2) + (persistedMode ? " paid clock hours." : " completed clock hours.")),
     financialSummaryCardHtml("Dog Shows net", payrollMoney(dogShowIncome - dogShowExpenses), payrollMoney(dogShowIncome) + " income · " + payrollMoney(dogShowExpenses) + " expenses."),
     financialSummaryCardHtml("Entered transactions", payrollMoney(manualIncome - manualExpenses), payrollMoney(manualIncome) + " income · " + payrollMoney(manualExpenses) + " expenses."),
     financialSummaryCardHtml("Peak " + period.replace("ly", ""), peakBucket ? payrollMoney(peakBucket.income) : payrollMoney(0), peakBucket ? peakBucket.label : "No income yet."),

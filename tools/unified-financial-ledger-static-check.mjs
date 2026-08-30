@@ -20,6 +20,7 @@ requireSource(shared, 'financialsPage: ["showEvent", "financialTransaction"]', "
 requireSource(settings, 'FINANCIAL_LEDGER_SOURCE_TYPES = ["boardingDog", "service", "timesheet", "settingsUser", "showEvent", "financialTransaction"]', "Financial reconciliation does not cover every ledger source.");
 requireSource(settings, 'from("financial_ledger_entries")', "Financials does not read the persisted ledger table.");
 requireSource(settings, 'db.rpc("replace_financial_ledger_entries"', "Financial reconciliation does not write the persisted ledger atomically.");
+requireSource(settings, 'for (let attempt = 0; attempt < 2; attempt += 1)', "Financial reconciliation does not retry when a source changes during its snapshot.");
 requireSource(settings, 'FINANCIAL_TRANSACTION_PAGE_SIZE = 50', "Financial transactions are not paginated to protect browser rendering.");
 requireSource(settings, 'function financialDogShowEntries()', "Dog Show transactions are not merged into the main ledger.");
 requireSource(settings, 'function financialOperationalLedgerEntries(boardingEntries = [], payrollEntries = [])', "Boarding and payroll are not normalized into ledger entries.");
