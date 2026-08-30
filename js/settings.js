@@ -28,6 +28,14 @@ var financialTransactionSearch = "";
 var financialTransactionTypeFilter = "all";
 var financialTransactionAreaFilter = "all";
 var financialTransactionSort = "date-desc";
+var financialTransactionPage = 1;
+var FINANCIAL_TRANSACTION_PAGE_SIZE = 50;
+var FINANCIAL_LEDGER_SOURCE_TYPES = ["boardingDog", "service", "timesheet", "settingsUser", "showEvent", "financialTransaction"];
+var financialPersistedLedgerRows = [];
+var financialPersistedLedgerState = null;
+var financialPersistedLedgerLoaded = false;
+var financialPersistedLedgerLoadPromise = null;
+var financialPersistedLedgerRebuildPromise = null;
 var DEFAULT_APP_ORGANIZATION_NAME = "Central Texas Husky";
 var APP_BRANDING_CONFIG_ID = "workspace-branding";
 var DEFAULT_WORKSPACE_AGREEMENT_CONFIG = {
@@ -1537,6 +1545,214 @@ function financialLedgerEntries(boardingEntries = [], payrollEntries = []) {
   return [...financialOperationalLedgerEntries(boardingEntries, payrollEntries), ...financialDogShowEntries(), ...financialManualEntries()];
 }
 
+function financialLedgerSetupMissing(error = {}) {
+  return /financial_ledger_entries|financial_ledger_state|replace_financial_ledger_entries|schema cache|relation .* does not exist|could not find/i.test(String(error?.message || ""));
+}
+
+function financialPersistedRowToEntry(row = {}) {
+  const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  return {
+    key: row.source_key || row.sourceKey || "",
+    sourceType: row.source_type || row.sourceType || "",
+    sourceRecordId: row.source_record_id || row.sourceRecordId || "",
+    sourceEventId: row.source_type === "showEvent" ? row.source_record_id || "" : "",
+    sourceTransactionId: row.source_type === "showEvent" ? row.source_item_id || "" : "",
+    date: row.transaction_date || row.transactionDate || "",
+    entryType: row.entry_type || row.entryType || "expense",
+    businessArea: row.business_area || row.businessArea || "General",
+    category: row.category || "Uncategorized",
+    description: row.description || "",
+    amount: Math.max(0, Number(row.amount_cents ?? row.amountCents ?? 0) / 100),
+    sourceLabel: row.source_label || row.sourceLabel || "",
+    counterparty: row.counterparty || "",
+    paymentMethod: row.payment_method || row.paymentMethod || "",
+    reference: row.reference || "",
+    notes: row.notes || "",
+    editable: Boolean(row.editable),
+    metadata,
+  };
+}
+
+function financialPersistedEntries() {
+  return financialPersistedLedgerRows.map(financialPersistedRowToEntry).filter((entry) => entry.key && entry.date && entry.amount > 0);
+}
+
+function financialPersistedBookingEntries() {
+  const unique = new Map();
+  financialPersistedEntries().forEach((entry) => {
+    const booking = entry.metadata?.booking;
+    if (!booking?.key || unique.has(booking.key)) return;
+    unique.set(booking.key, booking);
+  });
+  return [...unique.values()];
+}
+
+function financialSourceUpdatedAt() {
+  return FINANCIAL_LEDGER_SOURCE_TYPES
+    .flatMap((type) => readRecords(type))
+    .map((record) => record.updatedAt || record.submittedAt || record.removedAt || "")
+    .filter(Boolean)
+    .sort()
+    .pop() || new Date().toISOString();
+}
+
+function financialProjectionPayload() {
+  const bookingEntries = financialIncomeEntries();
+  const payrollEntries = staffPayrollSummaryForRange({ start: "1900-01-01", end: "2999-12-31" }, { includeAll: true }).entries;
+  const bookingByLedgerKey = new Map();
+  financialOperationalLedgerEntries(bookingEntries, []).forEach((entry) => {
+    const suffix = String(entry.key || "").split(":").pop() || "";
+    const bookingKey = String(entry.key || "").slice("boarding:".length, -(suffix.length + 1));
+    const booking = bookingEntries.find((candidate) => candidate.key === bookingKey);
+    if (booking) bookingByLedgerKey.set(entry.key, booking);
+  });
+  const payrollByLedgerKey = new Map(payrollEntries.map((entry) => ["payroll:" + entry.id, entry]));
+  return financialLedgerEntries(bookingEntries, payrollEntries).map((entry) => {
+    const key = String(entry.key || "");
+    const booking = bookingByLedgerKey.get(key) || null;
+    const payroll = payrollByLedgerKey.get(key) || null;
+    const sourceType = entry.sourceType || (key.startsWith("boarding:") ? "boardingDog" : key.startsWith("payroll:") ? "timesheet" : "unknown");
+    const sourceRecordId = entry.sourceRecordId || entry.sourceEventId || (payroll?.id || "");
+    const sourceItemId = entry.sourceTransactionId || "";
+    return {
+      source_key: key,
+      source_type: sourceType,
+      source_record_id: sourceRecordId,
+      source_item_id: sourceItemId,
+      component: key.startsWith("boarding:") ? key.split(":").pop() || "" : "",
+      transaction_date: entry.date,
+      entry_type: entry.entryType === "income" ? "income" : "expense",
+      business_area: entry.businessArea || "General",
+      category: entry.category || "Uncategorized",
+      description: entry.description || "",
+      amount_cents: Math.max(0, Math.round(Number(entry.amount || 0) * 100)),
+      source_label: entry.sourceLabel || "",
+      counterparty: entry.counterparty || "",
+      payment_method: entry.paymentMethod || "",
+      reference: entry.reference || "",
+      notes: entry.notes || "",
+      editable: Boolean(entry.editable),
+      metadata: {
+        booking: booking ? { ...booking } : null,
+        payroll: payroll ? { hours: Number(payroll.hours || 0), rate: Number(payroll.rate || 0), staffName: payroll.staffName || "", staffEmail: payroll.staffEmail || "" } : null,
+      },
+    };
+  }).filter((entry) => entry.source_key && entry.transaction_date && entry.amount_cents > 0);
+}
+
+async function fetchPersistedFinancialLedger() {
+  const [entriesResult, stateResult] = await Promise.all([
+    cuddleStayRequest((db) => db
+      .from("financial_ledger_entries")
+      .select("source_key,source_type,source_record_id,source_item_id,component,transaction_date,entry_type,business_area,category,description,amount_cents,source_label,counterparty,payment_method,reference,notes,editable,metadata,source_updated_at,updated_at")
+      .order("transaction_date", { ascending: false })
+      .order("source_key", { ascending: true })),
+    cuddleStayRequest((db) => db
+      .from("financial_ledger_state")
+      .select("needs_rebuild,source_changed_at,rebuilt_at,entry_count,updated_at")
+      .maybeSingle()),
+  ]);
+  if (entriesResult.error) throw entriesResult.error;
+  if (stateResult.error) throw stateResult.error;
+  financialPersistedLedgerRows = entriesResult.data || [];
+  financialPersistedLedgerState = stateResult.data || { needs_rebuild: true, entry_count: 0 };
+  financialPersistedLedgerLoaded = true;
+  return financialPersistedLedgerRows;
+}
+
+async function ensureFinancialProjectionSourcesLoaded() {
+  const missing = () => FINANCIAL_LEDGER_SOURCE_TYPES.filter((type) => !remoteTypesFullyLoadedInMemory.has(type));
+  if (!missing().length) return;
+  if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
+  await loadRemoteRecords({
+    types: FINANCIAL_LEDGER_SOURCE_TYPES,
+    pageId: "financialsPage",
+    fullRefresh: true,
+    delta: false,
+    boardingFullHistory: true,
+    render: false,
+    showLoader: false,
+    quiet: true,
+    silent: true,
+  });
+  if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
+  if (missing().length) {
+    await loadRemoteRecords({
+      types: missing(),
+      pageId: "financialsPage",
+      fullRefresh: true,
+      delta: false,
+      boardingFullHistory: true,
+      render: false,
+      showLoader: false,
+      quiet: true,
+      silent: true,
+    });
+  }
+  if (missing().length) throw new Error("Some financial source records could not be loaded for reconciliation.");
+}
+
+async function rebuildPersistedFinancialLedger() {
+  if (financialPersistedLedgerRebuildPromise || localTestMode || !supabaseClient || currentRole() !== "admin") return financialPersistedLedgerRebuildPromise;
+  financialPersistedLedgerRebuildPromise = (async () => {
+    startPageActivityProgress("financialsPage", "Updating saved financial ledger");
+    setPageActivityProgress("financialsPage", 18, "Loading financial source changes");
+    try {
+      await ensureFinancialProjectionSourcesLoaded();
+      setPageActivityProgress("financialsPage", 72, "Writing financial ledger");
+      const payload = financialProjectionPayload();
+      const sourceUpdatedAt = financialSourceUpdatedAt();
+      const { error } = await cuddleStayRequest((db) => db.rpc("replace_financial_ledger_entries", {
+        p_entries: payload,
+        p_source_updated_at: sourceUpdatedAt,
+      }));
+      if (error) throw error;
+      await fetchPersistedFinancialLedger();
+      finishPageActivityProgress("financialsPage", "Financial ledger updated");
+      renderFinancials();
+    } catch (error) {
+      financialPersistedLedgerState = { ...(financialPersistedLedgerState || {}), needs_rebuild: true, error: error?.message || "Financial ledger update failed." };
+      failPageActivityProgress("financialsPage", "Financial ledger update failed");
+      renderFinancials();
+      console.warn("Financial ledger reconciliation failed.", error);
+    } finally {
+      financialPersistedLedgerRebuildPromise = null;
+    }
+  })();
+  return financialPersistedLedgerRebuildPromise;
+}
+
+async function loadPersistedFinancialLedger() {
+  if (financialPersistedLedgerLoadPromise || localTestMode || !supabaseClient || currentRole() !== "admin") return financialPersistedLedgerLoadPromise;
+  financialPersistedLedgerLoadPromise = (async () => {
+    startPageActivityProgress("financialsPage", "Loading saved financial ledger");
+    setPageActivityProgress("financialsPage", 28, "Reading saved transactions");
+    try {
+      await fetchPersistedFinancialLedger();
+      setPageActivityProgress("financialsPage", 64, "Preparing financial view");
+      renderFinancials();
+      if (financialPersistedLedgerState?.needs_rebuild) {
+        if (financialPersistedLedgerRows.length) {
+          finishPageActivityProgress("financialsPage", "Saved ledger loaded; updating changes");
+          window.setTimeout(() => rebuildPersistedFinancialLedger(), 0);
+        } else {
+          await rebuildPersistedFinancialLedger();
+        }
+      } else {
+        finishPageActivityProgress("financialsPage", "Saved ledger loaded");
+      }
+    } catch (error) {
+      financialPersistedLedgerState = { needs_rebuild: true, error: error?.message || "Saved financial ledger could not load." };
+      failPageActivityProgress("financialsPage", financialLedgerSetupMissing(error) ? "Financial ledger setup required" : "Financial ledger could not load");
+      console.warn("Saved financial ledger could not load.", error);
+      renderFinancials();
+    } finally {
+      financialPersistedLedgerLoadPromise = null;
+    }
+  })();
+  return financialPersistedLedgerLoadPromise;
+}
+
 function financialBuildBuckets(entries = [], range = financialRangeValues(), period = financialPeriodView) {
   const buckets = new Map();
   let key = financialPeriodKey(range.start, period);
@@ -1647,7 +1863,23 @@ function financialBreakdownHtml(buckets = []) {
 
 function financialCalculationNoteHtml() {
   return '<strong>One financial picture, without duplicate records</strong>'
-    + '<p>Boarding and service income comes from non-cancelled stays and is reported by pickup date. Payroll comes from completed clock records and saved hourly rates. Dog Show income and expenses remain attached to each show but are included here automatically. Use Add Transaction for any other income or expense.</p>';
+    + '<p>Financials reads a saved, indexed ledger instead of rebuilding every transaction from operational records on each visit. Source changes are reconciled in the background; boarding and service income is reported by pickup date, and payroll uses completed clock records with saved hourly rates.</p>';
+}
+
+function financialLedgerStatusHtml() {
+  if (localTestMode || !supabaseClient) return "";
+  if (!financialPersistedLedgerLoaded) {
+    const message = financialPersistedLedgerState?.error || "Loading saved transactions…";
+    return '<span class="is-loading">' + escapeHtml(message) + '</span>';
+  }
+  if (financialPersistedLedgerState?.needs_rebuild) {
+    const message = financialPersistedLedgerState?.error
+      ? "Saved ledger needs attention: " + financialPersistedLedgerState.error
+      : "Showing the saved ledger while recent source changes are reconciled.";
+    return '<span class="is-updating">' + escapeHtml(message) + '</span>';
+  }
+  const rebuiltAt = financialPersistedLedgerState?.rebuilt_at || financialPersistedLedgerState?.rebuiltAt || "";
+  return '<span class="is-current">Saved ledger current' + (rebuiltAt ? " · updated " + formatDateTime(rebuiltAt) : "") + '</span>';
 }
 
 function financialSyncViewState() {
@@ -1794,10 +2026,20 @@ function syncFinancialTransactionFilterControls() {
 function renderFinancialTransactions(entries = [], range = financialRangeValues()) {
   syncFinancialTransactionFilterControls();
   const filtered = financialSortedTransactions(financialFilteredTransactions(entries));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / FINANCIAL_TRANSACTION_PAGE_SIZE));
+  financialTransactionPage = Math.min(Math.max(1, financialTransactionPage), pageCount);
+  const pageStart = (financialTransactionPage - 1) * FINANCIAL_TRANSACTION_PAGE_SIZE;
+  const visible = filtered.slice(pageStart, pageStart + FINANCIAL_TRANSACTION_PAGE_SIZE);
   const income = filtered.filter((entry) => entry.entryType === "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const expenses = filtered.filter((entry) => entry.entryType !== "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-  if ($("#financialTransactionsBody")) $("#financialTransactionsBody").innerHTML = filtered.length ? filtered.map(financialTransactionRowHtml).join("") : '<tr><td colspan="8"><div class="financial-empty-state">No transactions match the selected filters.</div></td></tr>';
-  if ($("#financialTransactionMeta")) $("#financialTransactionMeta").textContent = filtered.length + " of " + entries.length + " transactions | " + financialRangeLabel(range);
+  if ($("#financialTransactionsBody")) $("#financialTransactionsBody").innerHTML = visible.length ? visible.map(financialTransactionRowHtml).join("") : '<tr><td colspan="8"><div class="financial-empty-state">No transactions match the selected filters.</div></td></tr>';
+  if ($("#financialTransactionMeta")) {
+    const visibleLabel = filtered.length ? (pageStart + 1) + "-" + (pageStart + visible.length) : "0";
+    $("#financialTransactionMeta").textContent = "Showing " + visibleLabel + " of " + filtered.length + " matching transactions (" + entries.length + " total) | " + financialRangeLabel(range);
+  }
+  if ($("#financialTransactionPageLabel")) $("#financialTransactionPageLabel").textContent = "Page " + financialTransactionPage + " of " + pageCount;
+  if ($("#financialTransactionPrevButton")) $("#financialTransactionPrevButton").disabled = financialTransactionPage <= 1;
+  if ($("#financialTransactionNextButton")) $("#financialTransactionNextButton").disabled = financialTransactionPage >= pageCount;
   if ($("#financialTransactionTotals")) $("#financialTransactionTotals").innerHTML = '<span>Income <strong>' + escapeHtml(payrollMoney(income)) + '</strong></span><span>Expenses <strong>' + escapeHtml(payrollMoney(expenses)) + '</strong></span><span>Net <strong class="' + (income - expenses < 0 ? "is-financial-negative" : "") + '">' + escapeHtml(payrollMoney(income - expenses)) + '</strong></span>';
 }
 
@@ -1915,6 +2157,8 @@ async function saveFinancialTransaction(form) {
       addAuditLog(existing.id ? "Updated financial transaction" : "Added financial transaction", "financialTransaction", record, common.description + " · " + money(amount)).catch((error) => console.warn("Financial audit log failed.", error));
     }
     closeFinancialTransactionDialog();
+    financialPersistedLedgerState = { ...(financialPersistedLedgerState || {}), needs_rebuild: true };
+    await rebuildPersistedFinancialLedger();
     renderFinancials();
     if (typeof renderDogShow === "function") renderDogShow();
     showToast("Transaction saved.");
@@ -1943,6 +2187,8 @@ async function deleteFinancialTransaction(entry = {}) {
       upsertRecord("financialTransaction", removed);
       addAuditLog("Deleted financial transaction", "financialTransaction", removed, entry.description + " · " + money(entry.amount)).catch((error) => console.warn("Financial audit log failed.", error));
     }
+    financialPersistedLedgerState = { ...(financialPersistedLedgerState || {}), needs_rebuild: true };
+    await rebuildPersistedFinancialLedger();
     renderFinancials();
     if (typeof renderDogShow === "function") renderDogShow();
     showToast("Transaction deleted.");
@@ -1967,14 +2213,32 @@ function renderFinancials() {
   ensureFinancialRangeInputs();
   financialSyncViewState();
   if ($("#financialCalculationNote")) $("#financialCalculationNote").innerHTML = financialCalculationNoteHtml();
+  if ($("#financialLedgerStatus")) $("#financialLedgerStatus").innerHTML = financialLedgerStatusHtml();
   const period = ["weekly", "monthly", "yearly"].includes(financialPeriodView) ? financialPeriodView : "monthly";
   $$("#financialPeriodControl [data-financial-period]").forEach((button) => {
     button.classList.toggle("is-active", button.dataset.financialPeriod === period);
   });
   const range = financialRangeValues();
-  const entries = financialIncomeEntries().filter((entry) => entry.date >= range.start && entry.date <= range.end);
-  const payrollSummary = staffPayrollSummaryForRange(range, { includeAll: true });
-  const ledger = financialLedgerEntries(entries, payrollSummary.entries).filter((entry) => entry.date >= range.start && entry.date <= range.end);
+  const persistedMode = !localTestMode && Boolean(supabaseClient);
+  if (persistedMode && !financialPersistedLedgerLoaded) {
+    cardsEl.innerHTML = '<article class="dashboard-card financial-summary-card financial-loading-card"><span>Saved ledger</span><strong>Loading…</strong><p>Your financial totals will appear as soon as the indexed ledger is ready.</p></article>';
+    if (chartEl) chartEl.innerHTML = '<div class="financial-empty-state">Loading saved financial activity…</div>';
+    if (breakdownEl) breakdownEl.innerHTML = "";
+    if ($("#financialTransactionsBody")) $("#financialTransactionsBody").innerHTML = '<tr><td colspan="8"><div class="financial-empty-state">Loading saved transactions…</div></td></tr>';
+    if (lineItemsEl) lineItemsEl.innerHTML = '<tr><td colspan="10"><div class="financial-empty-state">Loading saved boarding details…</div></td></tr>';
+    return;
+  }
+  const allPersistedEntries = persistedMode ? financialPersistedEntries() : [];
+  const entries = (persistedMode ? financialPersistedBookingEntries() : financialIncomeEntries()).filter((entry) => entry.date >= range.start && entry.date <= range.end);
+  const payrollSummary = persistedMode
+    ? {
+      entries: [],
+      totalHours: allPersistedEntries
+        .filter((entry) => entry.businessArea === "Payroll" && entry.date >= range.start && entry.date <= range.end)
+        .reduce((sum, entry) => sum + Number(entry.metadata?.payroll?.hours || 0), 0),
+    }
+    : staffPayrollSummaryForRange(range, { includeAll: true });
+  const ledger = (persistedMode ? allPersistedEntries : financialLedgerEntries(entries, payrollSummary.entries)).filter((entry) => entry.date >= range.start && entry.date <= range.end);
   const buckets = financialBuildBuckets(ledger, range, period);
   const totalIncome = ledger.filter((entry) => entry.entryType === "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const totalExpenses = ledger.filter((entry) => entry.entryType !== "income").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);

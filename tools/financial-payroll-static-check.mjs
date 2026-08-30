@@ -8,8 +8,15 @@ const main = fs.readFileSync("js/main.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 const failures = [];
 
-if (!shared.includes('financialsPage: ["boardingDog", "service", "timesheet", "showEvent", "financialTransaction"]')) {
-  failures.push("Financials does not load completed timesheet records.");
+if (!shared.includes('financialsPage: ["showEvent", "financialTransaction"]')) {
+  failures.push("Financials still downloads completed timesheet history during normal navigation.");
+}
+const settings = fs.readFileSync("js/settings.js", "utf8");
+if (!settings.includes('FINANCIAL_LEDGER_SOURCE_TYPES = ["boardingDog", "service", "timesheet", "settingsUser", "showEvent", "financialTransaction"]')) {
+  failures.push("Saved-ledger reconciliation does not include timesheets and retained staff rates.");
+}
+if (!settings.includes('payroll: payroll ? { hours: Number(payroll.hours || 0)')) {
+  failures.push("Persisted payroll entries do not retain completed hours for the payroll summary.");
 }
 if (!shared.includes('activePage === "financialsPage" && hasAny(["boardingDog", "service", "timesheet", "settingsUser", "showEvent", "financialTransaction"])')) {
   failures.push("Financials does not refresh when hours or hourly rates change.");

@@ -21864,6 +21864,44 @@ button.dog-show-planner-score:focus-visible {
   margin: 0;
 }
 
+.financial-ledger-status {
+  align-items: center;
+  display: flex;
+  min-height: 22px;
+}
+
+.financial-ledger-status span {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+
+.financial-ledger-status .is-current {
+  background: rgba(26, 159, 99, 0.11);
+  color: #117748;
+}
+
+.financial-ledger-status .is-loading,
+.financial-ledger-status .is-updating {
+  background: rgba(49, 95, 133, 0.11);
+  color: var(--muted);
+}
+
+.financial-pagination {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.financial-pagination span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
 .financial-chart-panel {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   border: 1px solid var(--glass-border);

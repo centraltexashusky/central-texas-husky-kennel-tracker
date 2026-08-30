@@ -1735,7 +1735,7 @@ function remoteRecordTypesForPage(pageId = "") {
     maintenancePage: ["maintenance"],
     timesheetPage: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish"],
     servicesPage: ["service"],
-    financialsPage: ["boardingDog", "service", "timesheet", "showEvent", "financialTransaction"],
+    financialsPage: ["showEvent", "financialTransaction"],
     settingsUsersPage: ["settingsUser", "boardingAgreement", "boardingDog"],
     settingsKennelLocationsPage: ["kennelLocation", "kennelBuilding"],
     settingsHoursPage: ["operationHours", "operationDateOverride"],
@@ -5528,7 +5528,7 @@ async function loadRemoteRecords(options = {}) {
       const failedRemoteTypes = new Set(lastRemoteRecordFetchFailedTypes || []);
       const loadedRemoteTypes = requestedRemoteTypes.filter((type) => !failedRemoteTypes.has(type));
       loadedRemoteTypes.forEach((type) => {
-        if (["full", "scoped-full"].includes(lastRemoteRecordFetchModesByType.get(type))) remoteTypesFullyLoadedInMemory.add(type);
+        if (lastRemoteRecordFetchModesByType.get(type) === "full") remoteTypesFullyLoadedInMemory.add(type);
       });
       if (!loadedRemoteTypes.length) {
         updateSyncMetaForLoad(requestedRemoteTypes, data || [], failedRemoteTypes, { delta: deltaLoad });
@@ -5652,6 +5652,14 @@ function handleRealtimeKennelRecordChange(change = {}) {
   if (!type) return;
   if (recordTypes().includes(type) && row.payload) {
     mergeRecords(type, [row.payload], { replaceLocal: false });
+  }
+  if (["boardingDog", "service", "timesheet", "settingsUser", "showEvent", "financialTransaction"].includes(type)) {
+    if (typeof financialPersistedLedgerState !== "undefined") {
+      financialPersistedLedgerState = { ...(financialPersistedLedgerState || {}), needs_rebuild: true, source_changed_at: row.updated_at || new Date().toISOString() };
+    }
+    if (activePageId() === "financialsPage" && currentRole() === "admin" && typeof rebuildPersistedFinancialLedger === "function") {
+      rebuildPersistedFinancialLedger();
+    }
   }
   if (type === TASK_TEMPLATE_RECORD_TYPE && row.payload) applyRemoteTaskTemplate([row]);
   if (!realtimeSourceIsCurrentUser(row)) scheduleRealtimeRender([type]);
@@ -15240,18 +15248,22 @@ function initEvents() {
   });
   $("#financialTransactionSearch")?.addEventListener("input", (event) => {
     financialTransactionSearch = event.currentTarget.value || "";
+    financialTransactionPage = 1;
     renderFinancials();
   });
   $("#financialTransactionTypeFilter")?.addEventListener("change", (event) => {
     financialTransactionTypeFilter = event.currentTarget.value || "all";
+    financialTransactionPage = 1;
     renderFinancials();
   });
   $("#financialTransactionAreaFilter")?.addEventListener("change", (event) => {
     financialTransactionAreaFilter = event.currentTarget.value || "all";
+    financialTransactionPage = 1;
     renderFinancials();
   });
   $("#financialTransactionSort")?.addEventListener("change", (event) => {
     financialTransactionSort = event.currentTarget.value || "date-desc";
+    financialTransactionPage = 1;
     renderFinancials();
   });
   $("#financialTransactionResetButton")?.addEventListener("click", () => {
@@ -15259,6 +15271,15 @@ function initEvents() {
     financialTransactionTypeFilter = "all";
     financialTransactionAreaFilter = "all";
     financialTransactionSort = "date-desc";
+    financialTransactionPage = 1;
+    renderFinancials();
+  });
+  $("#financialTransactionPrevButton")?.addEventListener("click", () => {
+    financialTransactionPage = Math.max(1, financialTransactionPage - 1);
+    renderFinancials();
+  });
+  $("#financialTransactionNextButton")?.addEventListener("click", () => {
+    financialTransactionPage += 1;
     renderFinancials();
   });
   $("#financialTransactionsBody")?.addEventListener("click", async (event) => {
@@ -15446,7 +15467,11 @@ function scheduleActivePageRemoteLoad(pageId = activePageId()) {
   // Efficiency flow: render from local cache first, then refresh only the active page's remote types.
   activePageRemoteLoadTimer = window.setTimeout(() => {
     activePageRemoteLoadTimer = null;
-    loadRemoteRecords({ render: true, pageId, showLoader: false, quiet: true }).catch((error) => {
+    const loadingFinancialLedger = normalizePageId(pageId) === "financialsPage";
+    if (loadingFinancialLedger && typeof loadPersistedFinancialLedger === "function") {
+      loadPersistedFinancialLedger().catch((error) => console.warn("Saved financial ledger load failed.", error));
+    }
+    loadRemoteRecords({ render: true, pageId, showLoader: false, quiet: true, silent: loadingFinancialLedger }).catch((error) => {
       console.warn(\`Active page sync failed for \${pageId}.\`, error);
     }).finally(() => {
       scheduleNotificationBackgroundLoad(pageId);
