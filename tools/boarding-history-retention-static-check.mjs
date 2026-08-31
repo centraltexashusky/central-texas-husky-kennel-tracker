@@ -42,7 +42,7 @@ for (const functionName of [
 assert.match(migration, /security definer[\s\S]*Staff access is required to manage boarding update retention/, "privileged retention functions enforce staff membership");
 assert.match(migration, /revoke all on function cuddle_stay\.kennel_apply_boarding_customer_update_retention\(text\[\]\) from public, anon/, "retention execution is not public");
 assert.match(migration, /with scoped_records as[\s\S]*latest_stay as/, "owner-update reads select one newest stay across the consolidated profile");
-assert.match(main, /boarding-roster-counts-v87/, "boarding and shared module cache keys are current");
-assert.match(index, /boarding-roster-counts-v87/, "application entrypoint cache key is current");
+assert.match(main, /boarding-roster-counts-v88/, "boarding module cache key is current");
+assert.match(index, /boarding-roster-counts-v88/, "application entrypoint cache key is current");
 
 console.log("Boarding lazy history and retention checks passed.");
