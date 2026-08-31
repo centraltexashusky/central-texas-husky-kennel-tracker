@@ -2727,22 +2727,34 @@ function boardingDogMatchesRosterFilter(record = {}, filter = boardingDogRosterF
   return hasActiveStay || (!hasStays && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status));
 }
 
+function boardingRosterCountMapFromRecords(records = []) {
+  const consolidated = consolidatedBoardingDogRecords(arrayValue(records).filter((record) => !record.removed));
+  return boardingRosterFilters().reduce((counts, filter) => {
+    counts[filter] = consolidated.filter((record) => boardingDogMatchesRosterFilter(record, filter)).length;
+    return counts;
+  }, {});
+}
+
+function boardingRosterCountForFilter(filter = boardingDogRosterFilter, fallbackRecords = []) {
+  const savedCount = Number(boardingRosterCounts?.[filter]);
+  if (Number.isFinite(savedCount)) return savedCount;
+  return arrayValue(fallbackRecords).filter((record) => boardingDogMatchesRosterFilter(record, filter)).length;
+}
+
 function renderBoardingRosterTabs(records = []) {
   const container = $("#boardingDogRosterTabs");
   if (!container) return;
   const filters = boardingRosterFilters();
   if (!filters.includes(boardingDogRosterFilter)) boardingDogRosterFilter = "Active dogs";
-  const counts = filters.reduce((acc, filter) => {
-    acc[filter] = records.filter((record) => boardingDogMatchesRosterFilter(record, filter)).length;
-    return acc;
-  }, {});
-  if (!boardingDogFullHistoryLoaded && boardingDogRemoteTotalCount > counts["All Boarding Dogs"]) {
-    counts["All Boarding Dogs"] = boardingDogRemoteTotalCount;
-  }
+  const counts = boardingRosterCountsLoadedAt
+    ? boardingRosterCounts
+    : (supabaseClient && !localTestMode ? {} : boardingRosterCountMapFromRecords(records));
   container.innerHTML = filters
     .map((filter) => {
-      const active = filter === boardingDogRosterFilter;
-      return \`<button type="button" class="\${active ? "is-active" : ""}" data-boarding-filter="\${escapeHtml(filter)}" role="tab" aria-selected="\${active ? "true" : "false"}">\${escapeHtml(boardingRosterFilterLabel(filter))} <span>\${counts[filter] || 0}</span></button>\`;
+      const active = filter === boardingRosterRequestedFilter;
+      const count = Number(counts?.[filter]);
+      const countLabel = Number.isFinite(count) ? count : "–";
+      return \`<button type="button" class="\${active ? "is-active" : ""}" data-boarding-filter="\${escapeHtml(filter)}" role="tab" aria-selected="\${active ? "true" : "false"}">\${escapeHtml(boardingRosterFilterLabel(filter))} <span>\${countLabel}</span></button>\`;
     })
     .join("");
 }
@@ -4721,14 +4733,20 @@ function boardingSkeletonCardsHtml(count = 3) {
   </div>\`).join("");
 }
 
-function renderBoardingRosterStatus(total = 0, shown = 0) {
+function renderBoardingRosterStatus(total = 0, shown = 0, options = {}) {
   const status = $("#boardingRosterStatus");
-  if (!status || !total) {
+  if (!status) return;
+  if (options.message) {
+    status.innerHTML = '<span>' + escapeHtml(options.message) + '</span>';
+    return;
+  }
+  if (!total) {
     if (status) status.innerHTML = "";
     return;
   }
   const label = "Showing " + shown + " of " + total + " matching boarding dogs.";
-  status.innerHTML = shown < total
+  const canLoadMore = shown < total || boardingRosterRemoteRowCount < boardingRosterRemoteTotalRows;
+  status.innerHTML = canLoadMore
     ? '<span>' + escapeHtml(label) + '</span><button type="button" class="secondary-button" data-action="load-more-boarding-dogs">Load 60 more</button>'
     : '<span>' + escapeHtml(label) + '</span>';
 }
@@ -4824,8 +4842,11 @@ function renderBoardingDogs() {
   try {
     const searchInput = $("#boardingDogSearch");
     const query = searchInput?.value || "";
-    const allRecords = consolidatedBoardingDogRecords();
-    renderBoardingRosterTabs(allRecords);
+    const demandRequired = Boolean(supabaseClient && !localTestMode);
+    const rosterRequested = !demandRequired || Boolean(boardingRosterRequestedFilter);
+    const rosterReady = !demandRequired || boardingRosterLoadedFilter === boardingRosterRequestedFilter;
+    const localRecords = demandRequired ? [] : consolidatedBoardingDogRecords();
+    renderBoardingRosterTabs(localRecords);
     const activeView = ["calendar", "list"].includes(boardingViewMode) ? boardingViewMode : "board";
     const queueContainer = $("#boardingQueueGroups");
     const calendarContainer = $("#boardingCalendarView");
@@ -4834,7 +4855,30 @@ function renderBoardingDogs() {
     const tableBody = $("#boardingDogTableBody");
     const columnManager = $("#boardingDogColumnManager");
 
-    if (!allRecords.length && remoteLoadInProgress) {
+    if (searchInput) {
+      searchInput.disabled = !rosterReady;
+      searchInput.placeholder = rosterReady
+        ? "Search boarding dogs by dog, owner, phone, schedule, or notes"
+        : "Select a status above to load boarding dogs";
+    }
+
+    if (!rosterRequested) {
+      boardingRosterRenderSequence += 1;
+      if (queueContainer) queueContainer.innerHTML = "";
+      if (calendarContainer) calendarContainer.innerHTML = "";
+      if (quickCardsContainer) quickCardsContainer.innerHTML = "";
+      if (tableHead) tableHead.innerHTML = "";
+      if (tableBody) tableBody.innerHTML = "";
+      if (columnManager) {
+        columnManager.innerHTML = "";
+        columnManager.hidden = true;
+      }
+      handleBoardingViewToggle(activeView);
+      renderBoardingRosterStatus(0, 0, { message: "Select a status tab to load only those boarding dogs." });
+      return;
+    }
+
+    if (!rosterReady || boardingRosterLoadingFilter) {
       boardingRosterRenderSequence += 1;
       const skeleton = boardingSkeletonCardsHtml();
       if (activeView === "board" && queueContainer) queueContainer.innerHTML = skeleton;
@@ -4855,12 +4899,16 @@ function renderBoardingDogs() {
         columnManager.hidden = true;
       }
       handleBoardingViewToggle(activeView);
-      renderBoardingRosterStatus(0, 0);
+      renderBoardingRosterStatus(0, 0, { message: "Loading " + boardingRosterFilterLabel(boardingDogRosterFilter).toLowerCase() + "…" });
       return;
     }
 
+    const allRecords = consolidatedBoardingDogRecords();
+    const selectedRecords = allRecords.filter((record) => boardingDogMatchesRosterFilter(record));
+    const selectedTotal = Math.max(boardingRosterCountForFilter(boardingDogRosterFilter, selectedRecords), selectedRecords.length);
+
     if (activeView === "board") {
-      const visibleBoardRecords = allRecords.slice(0, Math.max(BOARDING_ROSTER_RENDER_PAGE_SIZE, boardingRosterVisibleLimit));
+      const visibleBoardRecords = selectedRecords.slice(0, Math.max(BOARDING_ROSTER_RENDER_PAGE_SIZE, boardingRosterVisibleLimit));
       const sequence = beginBoardingRosterRender(visibleBoardRecords.length, "Preparing boarding queue");
       if (queueContainer) queueContainer.innerHTML = boardingSkeletonCardsHtml(2);
       if (calendarContainer) calendarContainer.innerHTML = "";
@@ -4876,7 +4924,7 @@ function renderBoardingDogs() {
         renderBoardingQueueGroups(visibleBoardRecords);
         renderCustomerDogUploadCards();
         updateBoardingRosterRenderProgress(sequence, visibleBoardRecords.length, visibleBoardRecords.length);
-        renderBoardingRosterStatus(allRecords.length, visibleBoardRecords.length);
+        renderBoardingRosterStatus(selectedTotal, visibleBoardRecords.length);
         finishBoardingRosterRender(sequence);
       });
       return;
@@ -4884,7 +4932,7 @@ function renderBoardingDogs() {
 
     if (queueContainer) queueContainer.innerHTML = "";
     const hasSearchQuery = Boolean(query.trim());
-    const matchingRecords = allRecords.filter((record) => boardingDogMatchesSearch(record, query));
+    const matchingRecords = selectedRecords.filter((record) => boardingDogMatchesSearch(record, query));
     const rosterRecords = hasSearchQuery ? matchingRecords : matchingRecords.filter((record) => boardingDogMatchesRosterFilter(record));
     const filteredRecords = boardingDogPriorityFilter === "vaccines-expiring-soon"
       ? rosterRecords.filter((record) => vaccinationExpiresSoon(record, 30))
@@ -4901,7 +4949,7 @@ function renderBoardingDogs() {
         renderBoardingCalendar(visibleRecords);
         renderCustomerDogUploadCards();
         updateBoardingRosterRenderProgress(sequence, visibleRecords.length, visibleRecords.length);
-        renderBoardingRosterStatus(records.length, visibleRecords.length);
+        renderBoardingRosterStatus(hasSearchQuery ? records.length : selectedTotal, visibleRecords.length);
         finishBoardingRosterRender(sequence);
       });
     } else if (calendarContainer) {
@@ -4933,7 +4981,7 @@ function renderBoardingDogs() {
     }
 
     if (activeView !== "list" && activeView !== "calendar") renderCustomerDogUploadCards();
-    if (activeView === "list") renderBoardingRosterStatus(records.length, visibleRecords.length);
+    if (activeView === "list") renderBoardingRosterStatus(hasSearchQuery ? records.length : selectedTotal, visibleRecords.length);
     handleBoardingViewToggle(activeView);
   } finally {
     efficiencyPerfEnd(mark);
@@ -5586,7 +5634,8 @@ function scheduleBoardingRequestsLazyRender() {
   const section = $("#boardingRequestsSection");
   const details = $("#boardingRequestsDetails");
   const list = $("#boardingRequestRecords");
-  if (!section || currentRole() !== "admin") {
+  if (!section || !list) return;
+  if (currentRole() !== "admin") {
     renderBoardingRequests({ force: true });
     return;
   }
@@ -5620,6 +5669,7 @@ function scheduleBoardingRequestsLazyRender() {
 function renderBoardingRequests(options = {}) {
   const list = $("#boardingRequestRecords");
   const section = $("#boardingRequestsSection");
+  if (!section || !list) return;
   const isAdmin = currentRole() === "admin";
   if (section) section.hidden = !isAdmin;
   if (activePageId() !== "boardingDogsPage") return;
@@ -5721,8 +5771,33 @@ function boardingProfileLazyPlaceholderHtml(tabName = "") {
   return '<p class="profile-empty-note boarding-profile-lazy-note">' + escapeHtml(tabName) + ' loads when this tab is opened.</p>';
 }
 
+function boardingProfileRemoteTypes(tabName = "") {
+  if (tabName === "Contract/Agreement") return ["boardingAgreement", "customerDog"];
+  if (tabName === "Customer Info") return ["customerDog"];
+  return [];
+}
+
+async function loadBoardingProfileRemoteTypes(tabName = "") {
+  const types = boardingProfileRemoteTypes(tabName);
+  if (!types.length || localTestMode || !supabaseClient) return;
+  if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
+  await loadRemoteRecords({
+    types,
+    pageId: "boardingDogsPage",
+    fullRefresh: true,
+    render: false,
+    showLoader: false,
+    quiet: true,
+    silent: true,
+  });
+}
+
 function boardingDeferredSourceRecordIds(record = {}) {
-  return [...new Set([record.id, ...arrayValue(record.sourceRecordIds)].filter(Boolean).map(String))];
+  return [...new Set([
+    record.id,
+    ...arrayValue(record.sourceRecordIds),
+    ...arrayValue(record.duplicateProfileIds),
+  ].filter(Boolean).map(String))];
 }
 
 function boardingDeferredSectionCacheKey(record = {}, section = "") {
@@ -5841,7 +5916,9 @@ function scheduleBoardingProfileTabRender(tabName = "Dog Info", record = activeB
     window.requestAnimationFrame(async () => {
       if (sequence !== boardingProfileTabRenderSequence || !boardingProfileTabIsActive(tabName)) return;
       try {
-        await Promise.resolve(renderBoardingProfileTabContent(tabName, record));
+        await loadBoardingProfileRemoteTypes(tabName);
+        const latestRecord = boardingDogRecordForDisplay(record.id) || record;
+        await Promise.resolve(renderBoardingProfileTabContent(tabName, latestRecord));
       } catch (error) {
         if (target) target.innerHTML = '<p class="profile-empty-note">This section could not load. Try opening it again.</p>';
         console.warn(\`Boarding profile \${tabName} could not load.\`, error);

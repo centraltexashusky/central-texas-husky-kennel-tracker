@@ -225,6 +225,16 @@ var boardingDogFullHistoryLoaded = false;
 var boardingDogRemoteTotalCount = 0;
 var boardingDogHistoryLoadPromise = null;
 var boardingDogHistorySearchTimer = null;
+var boardingRosterCounts = {};
+var boardingRosterCountsLoadedAt = 0;
+var boardingRosterCountLoadPromise = null;
+var boardingRosterRequestedFilter = "";
+var boardingRosterLoadingFilter = "";
+var boardingRosterLoadedFilter = "";
+var boardingRosterRemoteRowCount = 0;
+var boardingRosterRemoteTotalRows = 0;
+var BOARDING_ROSTER_REMOTE_PAGE_SIZE = 120;
+var BOARDING_ROSTER_COUNTS_CACHE_TTL_MS = 30000;
 var remoteLoadRequestSequence = 0;
 var activePageRemoteLoadTimer = null;
 var deferredPageRemoteLoadTimer = null;
@@ -1749,10 +1759,7 @@ function remoteRecordLoadPlanForPage(pageId = "") {
       deferred: ["showDayTask", "showCareLog", "showResult", "showInvoice", "ownedDog", "boardingDog", "customerDog", "settingsUser"],
     },
     ourDogsPage: { critical: ["ownedDog"], deferred: ["careLog", "customerDog", "boardingDog"] },
-    boardingDogsPage: {
-      critical: ["boardingDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
-      deferred: ["boardingAgreement", "customerDog"],
-    },
+    boardingDogsPage: { critical: [], deferred: [] },
     requestsPage: { critical: ["request"], deferred: [] },
     maintenancePage: { critical: ["maintenance"], deferred: [] },
     timesheetPage: {
@@ -5352,6 +5359,25 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
   let from = 0;
   const sinceUpdatedAt = normalizeIsoTimestamp(options.sinceUpdatedAt || "");
   try {
+    if (type === "boardingDog" && options.boardingRosterFilter) {
+      const offset = Math.max(0, Number(options.boardingRosterOffset || 0));
+      const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_boarding_records_for_filter", {
+        p_filter: options.boardingRosterFilter,
+        p_limit: BOARDING_ROSTER_REMOTE_PAGE_SIZE,
+        p_offset: offset,
+      }));
+      if (error) throw error;
+      const scopedRows = data || [];
+      const reportedTotal = Number(scopedRows[0]?.total_count || 0);
+      if (Number.isFinite(reportedTotal)) boardingRosterRemoteTotalRows = reportedTotal;
+      scopedRows.forEach((row) => {
+        if (row && Object.prototype.hasOwnProperty.call(row, "total_count")) delete row.total_count;
+      });
+      rows.push(...scopedRows);
+      boardingRosterRemoteRowCount = offset + scopedRows.length;
+      lastRemoteRecordFetchModesByType.set(type, offset ? "scoped-append" : "scoped-full");
+      return rows;
+    }
     if (type === "boardingDog" && options.boardingActiveOnly === true) {
       const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_active_boarding_records", {
         p_since_updated_at: sinceUpdatedAt || null,
@@ -5474,6 +5500,8 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
               : dailyTaskWorkspaceWindow(options.pageId || activePageId()))
             : null,
           calendarNoteWindow: type === "calendarNote" ? dailyTaskWorkspaceWindow(options.pageId || activePageId()) : null,
+          boardingRosterFilter: type === "boardingDog" ? options.boardingRosterFilter || "" : "",
+          boardingRosterOffset: type === "boardingDog" ? Number(options.boardingRosterOffset || 0) : 0,
           boardingActiveOnly: type === "boardingDog"
             && ["dashboardPage", "dailyPage", "taskSchedulerPage", "boardingDogsPage"].includes(options.pageId)
             && options.boardingFullHistory !== true
@@ -5643,6 +5671,90 @@ async function loadBoardingDogHistoryRecords() {
   }
 }
 
+function resetBoardingRosterDemandState() {
+  boardingRosterRequestedFilter = localTestMode || !supabaseClient ? boardingDogRosterFilter : "";
+  boardingRosterLoadingFilter = "";
+  boardingRosterLoadedFilter = boardingRosterRequestedFilter;
+  boardingRosterRemoteRowCount = 0;
+  boardingRosterRemoteTotalRows = 0;
+  boardingRosterVisibleLimit = BOARDING_ROSTER_RENDER_PAGE_SIZE;
+  const search = $("#boardingDogSearch");
+  if (search) search.value = "";
+}
+
+async function loadBoardingRosterCounts(options = {}) {
+  if (localTestMode || !supabaseClient) {
+    if (typeof boardingRosterCountMapFromRecords === "function") {
+      boardingRosterCounts = boardingRosterCountMapFromRecords(readRecords("boardingDog").filter((record) => !record.removed));
+      boardingDogRemoteTotalCount = Number(boardingRosterCounts["All Boarding Dogs"] || 0);
+    }
+    boardingRosterCountsLoadedAt = Date.now();
+    if (activePageId() === "boardingDogsPage") renderBoardingDogs();
+    return boardingRosterCounts;
+  }
+  if (!options.force && boardingRosterCountsLoadedAt && Date.now() - boardingRosterCountsLoadedAt < BOARDING_ROSTER_COUNTS_CACHE_TTL_MS) {
+    if (activePageId() === "boardingDogsPage") renderBoardingDogs();
+    return boardingRosterCounts;
+  }
+  if (boardingRosterCountLoadPromise) return boardingRosterCountLoadPromise;
+  boardingRosterCountLoadPromise = (async () => {
+    const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_boarding_roster_summary"));
+    if (error) throw error;
+    const summary = Array.isArray(data) ? data[0] || {} : data || {};
+    const summaryRecords = arrayValue(summary.records).map((row) => ({
+      ...(row?.payload && typeof row.payload === "object" ? row.payload : {}),
+      id: row?.id || row?.payload?.id || "",
+      sourceType: "boardingDog",
+    })).filter((record) => record.id);
+    boardingRosterCounts = typeof boardingRosterCountMapFromRecords === "function"
+      ? boardingRosterCountMapFromRecords(summaryRecords)
+      : { "All Boarding Dogs": summaryRecords.length };
+    boardingDogRemoteTotalCount = Number(boardingRosterCounts["All Boarding Dogs"] || summary.rawCount || 0);
+    boardingRosterCountsLoadedAt = Date.now();
+    if (activePageId() === "boardingDogsPage") renderBoardingDogs();
+    return boardingRosterCounts;
+  })();
+  try {
+    return await boardingRosterCountLoadPromise;
+  } finally {
+    boardingRosterCountLoadPromise = null;
+  }
+}
+
+async function loadBoardingDogRosterRecords(filter = boardingDogRosterFilter, options = {}) {
+  const normalizedFilter = boardingRosterFilters().includes(filter) ? filter : boardingRosterFilterLabel(filter);
+  const append = options.append === true && boardingRosterLoadedFilter === normalizedFilter;
+  boardingDogRosterFilter = normalizedFilter;
+  boardingRosterRequestedFilter = normalizedFilter;
+  boardingRosterLoadingFilter = normalizedFilter;
+  if (!append) {
+    boardingRosterLoadedFilter = "";
+    boardingRosterRemoteRowCount = 0;
+    boardingRosterRemoteTotalRows = 0;
+    boardingRosterVisibleLimit = BOARDING_ROSTER_RENDER_PAGE_SIZE;
+  }
+  renderBoardingDogs();
+  if (localTestMode || !supabaseClient) {
+    boardingRosterLoadedFilter = normalizedFilter;
+    boardingRosterLoadingFilter = "";
+    renderBoardingDogs();
+    return;
+  }
+  if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
+  await loadRemoteRecords({
+    types: ["boardingDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"],
+    pageId: "boardingDogsPage",
+    boardingRosterFilter: normalizedFilter,
+    boardingRosterOffset: append ? boardingRosterRemoteRowCount : 0,
+    fullRefresh: true,
+    showLoader: false,
+    quiet: true,
+  });
+  if (!lastRemoteRecordFetchFailedTypes.has("boardingDog")) boardingRosterLoadedFilter = normalizedFilter;
+  boardingRosterLoadingFilter = "";
+  renderBoardingDogs();
+}
+
 async function loadRemoteRecords(options = {}) {
   const mark = efficiencyPerfStart("loadRemoteRecords");
   if (localTestMode || !supabaseClient) {
@@ -5697,6 +5809,8 @@ async function loadRemoteRecords(options = {}) {
         delta: deltaLoad,
         pageId: loadingPageId,
         boardingFullHistory: options.boardingFullHistory === true,
+        boardingRosterFilter: options.boardingRosterFilter || "",
+        boardingRosterOffset: Number(options.boardingRosterOffset || 0),
         scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
       }), REMOTE_LOAD_STALE_MS, "Remote record load");
       if (showPageActivityProgress) setPageActivityProgress(loadingPageId, 52, pageActivityProgressLabel(loadingPageId, "preparing"));
@@ -5775,7 +5889,8 @@ async function loadRemoteRecords(options = {}) {
       const taskTemplateLoaded = requestedRemoteTypes.includes(TASK_TEMPLATE_RECORD_TYPE) && !failedRemoteTypes.has(TASK_TEMPLATE_RECORD_TYPE);
       if (taskTemplateLoaded && !loadedRemoteTaskTemplate && currentRole() === "admin") await saveTaskTemplateConfig(readTaskConfig());
       remoteTypes.filter((type) => type !== TASK_TEMPLATE_RECORD_TYPE).forEach((type) => {
-        const replaceLocal = lastRemoteRecordFetchModesByType.get(type) !== "delta";
+        const fetchMode = lastRemoteRecordFetchModesByType.get(type);
+        const replaceLocal = !["delta", "scoped-append"].includes(fetchMode);
         mergeRecords(type, grouped[type] || [], { replaceLocal });
       });
       if (currentUser) {
@@ -5825,6 +5940,12 @@ function handleRealtimeKennelRecordChange(change = {}) {
   const row = change.new || change.record || change.old || {};
   const type = row.type || "";
   if (!type) return;
+  if (type === "boardingDog") {
+    boardingRosterCountsLoadedAt = 0;
+    if (activePageId() === "boardingDogsPage") {
+      loadBoardingRosterCounts({ force: true }).catch((error) => console.warn("Boarding roster totals could not refresh.", error));
+    }
+  }
   if (recordTypes().includes(type) && row.payload) {
     mergeRecords(type, [row.payload], { replaceLocal: false });
   }
@@ -14502,12 +14623,6 @@ function initEvents() {
   $("#boardingDogSearch").addEventListener("input", () => {
     boardingRosterVisibleLimit = BOARDING_ROSTER_RENDER_PAGE_SIZE;
     renderBoardingDogs();
-    if (boardingDogHistorySearchTimer) window.clearTimeout(boardingDogHistorySearchTimer);
-    if (!$("#boardingDogSearch").value.trim() || boardingDogFullHistoryLoaded || localTestMode || !supabaseClient) return;
-    boardingDogHistorySearchTimer = window.setTimeout(() => {
-      boardingDogHistorySearchTimer = null;
-      loadBoardingDogHistoryRecords().catch((error) => console.warn("Boarding history search load failed.", error));
-    }, 350);
   });
   $("#boardingDogRosterTabs")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-boarding-filter]");
@@ -14515,10 +14630,7 @@ function initEvents() {
     boardingDogRosterFilter = button.dataset.boardingFilter;
     boardingDogPriorityFilter = "";
     boardingRosterVisibleLimit = BOARDING_ROSTER_RENDER_PAGE_SIZE;
-    renderBoardingDogs();
-    if (boardingDogRosterFilter === "All Boarding Dogs" && !boardingDogFullHistoryLoaded) {
-      await loadBoardingDogHistoryRecords();
-    }
+    await loadBoardingDogRosterRecords(boardingDogRosterFilter);
   });
   $("#boardingViewToggle")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-view]");
@@ -14527,10 +14639,18 @@ function initEvents() {
       renderBoardingDogs();
     }
   });
-  $("#boardingRosterStatus")?.addEventListener("click", (event) => {
+  $("#boardingRosterStatus")?.addEventListener("click", async (event) => {
     if (!event.target.closest('[data-action="load-more-boarding-dogs"]')) return;
-    boardingRosterVisibleLimit += BOARDING_ROSTER_RENDER_PAGE_SIZE;
-    renderBoardingDogs();
+    const loadedRecords = consolidatedBoardingDogRecords().filter((record) => boardingDogMatchesRosterFilter(record));
+    if (boardingRosterVisibleLimit < loadedRecords.length) {
+      boardingRosterVisibleLimit += BOARDING_ROSTER_RENDER_PAGE_SIZE;
+      renderBoardingDogs();
+      return;
+    }
+    if (boardingRosterRemoteRowCount < boardingRosterRemoteTotalRows) {
+      boardingRosterVisibleLimit += BOARDING_ROSTER_RENDER_PAGE_SIZE;
+      await loadBoardingDogRosterRecords(boardingDogRosterFilter, { append: true });
+    }
   });
   $("#boardingQueueGroups")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
@@ -14703,7 +14823,7 @@ function initEvents() {
   $("#boardingRequestFilterButton")?.addEventListener("click", () => {
     showDetailDialog("Filter Boarding Requests", boardingRequestFilterPopupHtml());
   });
-  $("#boardingRequestRecords").addEventListener("click", async (event) => {
+  $("#boardingRequestRecords")?.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-action]");
     const action = button?.dataset.action;
     if (action === "view-media") return;
@@ -15837,12 +15957,18 @@ function scheduleActivePageRemoteLoad(pageId = activePageId()) {
   activePageRemoteLoadTimer = window.setTimeout(() => {
     activePageRemoteLoadTimer = null;
     const loadingFinancialLedger = normalizePageId(pageId) === "financialsPage";
+    const loadingBoardingCounts = normalizePageId(pageId) === "boardingDogsPage";
     if (loadingFinancialLedger && typeof loadPersistedFinancialLedger === "function") {
       loadPersistedFinancialLedger().catch((error) => console.warn("Saved financial ledger load failed.", error));
     }
-    const load = criticalTypes.length
+    const criticalLoad = criticalTypes.length
       ? loadRemoteRecords({ types: criticalTypes, render: true, pageId, showLoader: false, quiet: true, silent: loadingFinancialLedger })
       : Promise.resolve();
+    const load = loadingBoardingCounts
+      ? Promise.all([criticalLoad, loadBoardingRosterCounts().catch((error) => {
+        console.warn("Boarding roster totals could not load.", error);
+      })])
+      : criticalLoad;
     load.then(() => markPageRemoteLoadFinished(pageId, criticalTypes)).catch((error) => {
       console.warn(\`Active page sync failed for \${pageId}.\`, error);
     }).finally(() => {
@@ -15893,7 +16019,7 @@ var INACTIVE_PAGE_DYNAMIC_TARGETS = {
   dogShowPage: ["dogShowContent"],
   timesheetPage: ["timesheetRows", "weeklyHelperTotals", "scheduleWeekGrid", "timeOffRequestList", "holidayList", "scheduleReviewSummary", "scheduleReviewIssues", "payrollSummary", "payrollRows"],
   ourDogsPage: ["ownedDogMobileCards", "ownedDogColumnManager", "ownedDogTableHead", "ownedDogTableBody", "ownedDogListStatus"],
-  boardingDogsPage: ["boardingQueueGroups", "boardingCalendarView", "boardingDogQuickCards", "boardingDogColumnManager", "boardingDogTableHead", "boardingDogTableBody", "boardingRosterStatus", "boardingRequestRecords"],
+  boardingDogsPage: ["boardingQueueGroups", "boardingCalendarView", "boardingDogQuickCards", "boardingDogColumnManager", "boardingDogTableHead", "boardingDogTableBody", "boardingRosterStatus"],
   financialsPage: ["financialCards", "financialIncomeChart", "financialBreakdown", "financialTransactionsBody", "financialLineItemsBody"],
 };
 
@@ -15957,6 +16083,7 @@ function switchPage(pageId, options = {}) {
   });
   $$(".page-view").forEach((page) => page.classList.toggle("is-active", page.id === pageId));
   if (pageId === "boardingDogsPage") {
+    if (previousPageId !== pageId) resetBoardingRosterDemandState();
     boardingViewMode = window.innerWidth >= 768 ? "list" : "board";
     handleBoardingViewToggle(boardingViewMode);
   }

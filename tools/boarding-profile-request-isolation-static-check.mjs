@@ -33,9 +33,9 @@ if (!boarding.includes('if (!boardingProfileTabIsActive("Boarding History")) ret
 if (!boarding.includes('if (!boardingProfileTabIsActive("Boarding & Request")) return;')) failures.push("Stay history can still render while its tab is hidden.");
 if (!boarding.includes("const renderMobileCards = boardingRosterUsesMobileCards();")) failures.push("List view does not isolate mobile cards from desktop rows.");
 if (!boarding.includes("tableBody && renderDesktopRows") || !boarding.includes("quickCardsContainer && renderMobileCards")) failures.push("List batches still build both responsive DOM trees.");
-if (!boarding.includes("function boardingRequestsSectionReadyForRender")) failures.push("Boarding request cards are not isolated by viewport/open state.");
-if (!boarding.includes('list.dataset.requestRenderState = "deferred"')) failures.push("Collapsed request history does not release its rendered cards.");
-if (!boarding.includes("renderBoardingRequests({ force: true })")) failures.push("The request observer cannot explicitly render deferred requests.");
+if (index.includes('id="boardingRequestsSection"') || index.includes("Review Boarding Requests")) failures.push("The redundant Boarding Requests panel is still rendered.");
+if (!shared.includes('$("#boardingRequestRecords")?.addEventListener')) failures.push("Removed request-panel controls can still crash event initialization.");
+if (!boarding.includes("if (!section || !list) return;")) failures.push("Legacy request rendering does not stop when the removed panel is absent.");
 if (!shared.includes('if (activePageId() === "boardingDogsPage") scheduleBoardingPageRecordsRender();')) failures.push("Full app renders still eagerly build the hidden Boarding Dogs page.");
 if (shared.includes("if (openDog?.id) renderBoardingDogAgreements(openDog);")) failures.push("Background record refresh still eagerly renders profile agreements.");
 if (!shared.includes("syncBoardingRosterLayoutForViewport();")) failures.push("Responsive list isolation is not refreshed when the breakpoint changes.");
@@ -47,4 +47,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Boarding profile and request isolation checks passed.");
+console.log("Boarding profile isolation and redundant request-panel removal checks passed.");
