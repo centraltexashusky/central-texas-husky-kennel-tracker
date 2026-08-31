@@ -65,6 +65,7 @@ if (!shared.includes("loadBoardingDogRosterRecords(boardingDogRosterFilter)")) f
 if (!shared.includes("BOARDING_ROSTER_REMOTE_PAGE_SIZE = 120")) failures.push("Selected boarding rosters are not remotely paged.");
 if (!boarding.includes("searchInput.disabled = !rosterReady")) failures.push("Search can run before a roster tab has loaded its scoped records.");
 if (!boarding.includes('finishPageActivityProgress("boardingDogsPage", "Boarding totals ready")')) failures.push("Counts-only page entry can leave the loading indicator unfinished.");
+if (!boarding.includes('[[boardingRosterFilterLabel(boardingDogRosterFilter), records]]')) failures.push("The selected boarding tab can load records without rendering them in board view.");
 if (!shared.includes("boardingFullHistory: true")) failures.push("Boarding history cannot be loaded on demand.");
 if (shared.includes('boardingDogRosterFilter === "All Boarding Dogs" && !boardingDogFullHistoryLoaded')) failures.push("All Boarding Dogs still triggers the legacy eager history load.");
 if (!boardingMigration.includes("current_date + 365")) failures.push("Active boarding scope does not include upcoming reservations.");

@@ -2860,13 +2860,18 @@ function boardingQueueGroupHtml(title, records = []) {
 function renderBoardingQueueGroups(records = []) {
   const container = $("#boardingQueueGroups");
   if (!container) return;
-  const groups = [
+  const operationalGroups = [
     ["Pending Approval", records.filter((record) => boardingQueueRecordMatchesGroup("Pending Approval", record))],
     ["Tomorrow Arrivals", records.filter((record) => boardingQueueRecordMatchesGroup("Tomorrow Arrivals", record))],
     ["Today Drop-offs", records.filter((record) => boardingQueueRecordMatchesGroup("Today Drop-offs", record))],
     ["In Kennel", records.filter((record) => boardingQueueRecordMatchesGroup("In Kennel", record))],
     ["Today Pickups", records.filter((record) => boardingQueueRecordMatchesGroup("Today Pickups", record))],
   ].filter(([, groupRecords]) => groupRecords.length);
+  const groupedRecordIds = new Set(operationalGroups.flatMap(([, groupRecords]) => groupRecords.map((record) => record.id)));
+  const remainingActiveRecords = records.filter((record) => !groupedRecordIds.has(record.id));
+  const groups = boardingDogRosterFilter === "Active dogs"
+    ? [...operationalGroups, ...(remainingActiveRecords.length ? [["Other active dogs", remainingActiveRecords]] : [])]
+    : (records.length ? [[boardingRosterFilterLabel(boardingDogRosterFilter), records]] : []);
   container.innerHTML = groups
     .map(([title, groupRecords]) => boardingQueueGroupHtml(title, groupRecords))
     .join("");
