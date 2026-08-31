@@ -51,12 +51,13 @@ const boardingFileItems = sectionBetween(boarding, "function boardingDogFileItem
 if (boardingFileItems.includes("boardingCustomerUpdate") || boardingFileItems.includes("boardingDogDocumentItems(record)")) failures.push("Uploaded Files still mixes customer-update media or staff documents into customer files.");
 if (!boardingFileItems.includes("customerVaccination") || !boardingFileItems.includes("customerDocuments")) failures.push("Uploaded Files is not sourced from customer-provided records.");
 
-const renderStays = sectionBetween(boarding, "function boardingStayCardHtml", "function boardingStayStatusMenuHtml");
-if (!renderStays.includes("boarding-stay-card")) failures.push("Boarding stay history cards do not have a dedicated visual class.");
-if (!renderStays.includes("const [firstStay, ...pastStays] = stays;")) failures.push("Boarding profile does not render only the first stay initially.");
+const stayCard = sectionBetween(boarding, "function boardingStayCardHtml", "function boardingHistoricalServiceLog");
+const renderStays = sectionBetween(boarding, "function renderBoardingStays", "function boardingStayStatusMenuHtml");
+if (!stayCard.includes("boarding-stay-card")) failures.push("Boarding stay history cards do not have a dedicated visual class.");
+if (!renderStays.includes("const activeStays = stays.filter((stay) => !inactiveBoardingStayStatus(stay));")) failures.push("Boarding profile does not limit rich stay cards to active and upcoming stays.");
 if (!renderStays.includes('data-action="show-past-boarding"')) failures.push("Past boarding stays do not have an on-demand disclosure control.");
-if (renderStays.includes("boardingStayServicesText(stay")) failures.push("Redundant requested-service sentence is still rendered above the estimate.");
-if (!boarding.includes("function renderPastBoardingStays") || !boarding.includes(".slice(1)")) failures.push("Past boarding stays are not lazy-rendered after the first stay.");
+if (stayCard.includes("boardingStayServicesText(stay")) failures.push("Redundant requested-service sentence is still rendered above the live-stay estimate.");
+if (!boarding.includes("async function renderPastBoardingStays") || !boarding.includes("await loadBoardingPastStayData(displayRecord)")) failures.push("Past boarding stays are not fetched lazily when their disclosure opens.");
 if (!boarding.includes('if (!boardingProfileTabIsActive("Boarding History")) return;')
   || !boarding.includes("scheduleBoardingProfileTabRender(availableTab, activeBoardingDog() || {});")) failures.push("Lifecycle history still renders while its tab is hidden.");
 if (!shared.includes('button.dataset.action === "show-past-boarding"')) failures.push("Past boarding disclosure is not wired to its lazy renderer.");

@@ -116,6 +116,31 @@
   padding: 12px;
 }
 
+.boarding-past-stay-card {
+  background: var(--glass-fill-soft);
+  gap: 7px;
+}
+
+.boarding-past-service-log {
+  border-top: 1px solid var(--glass-border);
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 9px;
+}
+
+.boarding-past-service-log > p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.boarding-past-service-log small,
+.boarding-past-service-empty {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
 /* Remote updates keep the current page interactive while fresh content is merged. */
 body.is-bulk-rendering .page-view.is-active {
   pointer-events: auto;

@@ -85,12 +85,13 @@ assert.equal(augSixteen.completedTasks.length, 19, "atomic completions replace t
 assert.equal(augSixteen.structuredCareLogs.length, 4, "care logs remain in the combined daily work record");
 assert.deepEqual(buildAggregates.dashboardDailyWorkRecords().map((record) => record.date).sort(), ["2026-08-09", "2026-08-16"], "calendar work dates are the union of reports and atomic completions");
 
-for (const [label, source] of [["shared", shared], ["legacy", legacy]]) {
-  assert.match(source, /const reportCounts = dashboardDailyWorkRecords\(\)\.reduce/, `${label} calendar counts combined work dates`);
-  assert.match(source, /completedTasksForDate\(record\.date\)\.length/, `${label} timeline counts atomic completions`);
-  assert.match(source, /data-date=/, `${label} timeline cards retain the work date for derived details`);
-  assert.match(source, /dashboardDailyWorkRecordForDate\(card\.dataset\.date/, `${label} opens details for task-only dates`);
-}
+const calendarSource = extractFunction(shared, "renderDashboardTaskCalendar");
+assert.doesNotMatch(calendarSource, /reportCounts|calendar-report-count/, "dashboard calendar no longer computes or renders Daily Timeline counts");
+assert.match(calendarSource, /calendarNoteKindLabel\(record\) === "Special Note"/, "dashboard calendar counts only special notes");
+assert.match(shared, /dashboardTimelineRequestedDate !== selectedDate/, "Daily Timeline waits for an explicit date selection");
+assert.match(shared, /completedTasksForDate\(record\.date\)\.length/, "timeline counts atomic completions");
+assert.match(shared, /data-date=/, "timeline cards retain the work date for derived details");
+assert.match(shared, /dashboardDailyWorkRecordForDate\(card\.dataset\.date/, "timeline opens details for task-only dates");
 assert.match(daily, /const completedTasks = reportDate \? completedTasksForDate\(reportDate\)/, "daily report details use atomic completion rows");
 assert.match(main, /dashboard-daily-completion-v48/, "shared module cache key is updated");
 assert.match(index, /dashboard-daily-completion-v48/, "application cache key is updated");

@@ -233,6 +233,7 @@ var activePageRemoteLoadLastKey = "";
 var activePageRemoteLoadLastAt = 0;
 var activePageRemoteLoadFinishedAtByKey = new Map();
 var dailyTaskCompletionCountByDate = new Map();
+var dashboardTimelineRequestedDate = "";
 var appHistoryNavigationInProgress = false;
 var appSurfaceHistoryStack = [];
 var activePageLoadingTargets = new Set();
@@ -1732,7 +1733,7 @@ function remoteRecordTypesForCurrentApp() {
 function remoteRecordLoadPlanForPage(pageId = "") {
   const plans = {
     dashboardPage: {
-      critical: ["boardingDog", "ownedDog", "request", "maintenance", "dailyTask", TASK_TEMPLATE_RECORD_TYPE],
+      critical: ["boardingDog", "ownedDog", "request", "maintenance", TASK_TEMPLATE_RECORD_TYPE],
       deferred: ["careLog", "calendarNote", "notificationLog", "notificationPreference"],
     },
     dailyPage: {
@@ -4972,6 +4973,58 @@ function remoteRequestAbortSignal(timeoutMs = REMOTE_REQUEST_TIMEOUT_MS) {
   return controller.signal;
 }
 
+function remoteBoardingStayPersistenceKey(stay = {}, index = 0) {
+  const scheduleKey = [stay.dropoffTime || stay.scheduledDropoffTime || "", stay.pickupTime || stay.scheduledPickupTime || ""].join("|");
+  return String(
+    stay.id
+    || stay.requestCode
+    || (scheduleKey !== "|" ? scheduleKey : \`stay-\${index}\`)
+  );
+}
+
+function remoteBoardingStayIsHistorical(stay = {}) {
+  return ["checked out", "cancelled"].includes(String(stay.status || "").trim().toLowerCase());
+}
+
+function stripRemoteBoardingProjectionMarkers(payload = {}) {
+  const clean = { ...payload };
+  delete clean._remotePastBoardingCount;
+  delete clean._remotePastBoardingDeferred;
+  delete clean._remoteCustomerUpdatesDeferred;
+  return clean;
+}
+
+async function boardingPayloadForRemoteWrite(payload = {}) {
+  if (payload?.type !== "boardingDog" || !payload.id || payload._remotePastBoardingDeferred !== true) {
+    return stripRemoteBoardingProjectionMarkers(payload);
+  }
+  const { data, error } = await cuddleStayRequest((db) => db
+    .from("kennel_records")
+    .select("payload")
+    .eq("type", "boardingDog")
+    .eq("id", payload.id)
+    .limit(1)
+    .maybeSingle());
+  if (error) throw error;
+  const savedPayload = data?.payload && typeof data.payload === "object" ? data.payload : {};
+  const savedHistoricalStays = arrayValue(savedPayload.stays).filter(remoteBoardingStayIsHistorical);
+  const incomingStays = arrayValue(payload.stays);
+  const mergedStays = new Map();
+  savedHistoricalStays.forEach((stay, index) => mergedStays.set(remoteBoardingStayPersistenceKey(stay, index), stay));
+  incomingStays.forEach((stay, index) => mergedStays.set(remoteBoardingStayPersistenceKey(stay, index), stay));
+  return stripRemoteBoardingProjectionMarkers({
+    ...savedPayload,
+    ...payload,
+    stays: [...mergedStays.values()],
+    customerUpdates: payload._remoteCustomerUpdatesDeferred === true
+      ? arrayValue(savedPayload.customerUpdates)
+      : arrayValue(payload.customerUpdates),
+    latestCustomerUpdate: payload._remoteCustomerUpdatesDeferred === true
+      ? savedPayload.latestCustomerUpdate || null
+      : payload.latestCustomerUpdate || null,
+  });
+}
+
 async function sendPayload(payload, options = {}) {
   if (localTestMode || !supabaseClient) {
     modeLabel.textContent = localTestMode ? "Local test saved" : "Local saved";
@@ -5004,8 +5057,9 @@ async function sendPayload(payload, options = {}) {
   }
   try {
     const now = new Date().toISOString();
-    const identity = await remoteWriteIdentity(payload);
-    const query = cuddleStayRequest((db) => db.from("kennel_records").upsert(remoteWriteRow(payload, now, identity)));
+    const remotePayload = await boardingPayloadForRemoteWrite(payload);
+    const identity = await remoteWriteIdentity(remotePayload);
+    const query = cuddleStayRequest((db) => db.from("kennel_records").upsert(remoteWriteRow(remotePayload, now, identity)));
     const signal = remoteRequestAbortSignal();
     const request = signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
     const { error } = await withRemoteRequestTimeout(request, "Save");
@@ -5313,9 +5367,37 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
       lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "scoped-full");
       return rows;
     }
+    if (type === "boardingDog") {
+      const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_boarding_roster_records", {
+        p_since_updated_at: sinceUpdatedAt || null,
+      }));
+      if (error) throw error;
+      const scopedRows = data || [];
+      const reportedTotal = Number(scopedRows[0]?.total_count || 0);
+      if (Number.isFinite(reportedTotal)) boardingDogRemoteTotalCount = Math.max(boardingDogRemoteTotalCount, reportedTotal);
+      scopedRows.forEach((row) => {
+        if (row && Object.prototype.hasOwnProperty.call(row, "total_count")) delete row.total_count;
+      });
+      rows.push(...scopedRows);
+      boardingDogFullHistoryLoaded = !sinceUpdatedAt;
+      lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "scoped-full");
+      return rows;
+    }
     if (type === "dailyTask" && options.dailyTaskWindow) {
       const windowBounds = options.dailyTaskWindow;
       const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_daily_task_records_window", {
+        p_start_date: windowBounds.start,
+        p_end_date: windowBounds.end,
+        p_since_updated_at: sinceUpdatedAt || null,
+      }));
+      if (error) throw error;
+      rows.push(...(data || []));
+      lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "scoped-full");
+      return rows;
+    }
+    if (type === "calendarNote" && options.calendarNoteWindow) {
+      const windowBounds = options.calendarNoteWindow;
+      const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_calendar_notes_window", {
         p_start_date: windowBounds.start,
         p_end_date: windowBounds.end,
         p_since_updated_at: sinceUpdatedAt || null,
@@ -5386,7 +5468,12 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
         return await withTimeout(fetchRemoteRecordRowsForType(type, {
           sinceUpdatedAt,
           scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
-          dailyTaskWindow: type === "dailyTask" ? dailyTaskWorkspaceWindow(options.pageId || activePageId()) : null,
+          dailyTaskWindow: type === "dailyTask"
+            ? (options.pageId === "dashboardPage" && dashboardTimelineRequestedDate
+              ? { start: dashboardTimelineRequestedDate, end: dashboardTimelineRequestedDate, detailDate: dashboardTimelineRequestedDate }
+              : dailyTaskWorkspaceWindow(options.pageId || activePageId()))
+            : null,
+          calendarNoteWindow: type === "calendarNote" ? dailyTaskWorkspaceWindow(options.pageId || activePageId()) : null,
           boardingActiveOnly: type === "boardingDog"
             && ["dashboardPage", "dailyPage", "taskSchedulerPage", "boardingDogsPage"].includes(options.pageId)
             && options.boardingFullHistory !== true
@@ -5409,7 +5496,9 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
 }
 
 async function fetchRemoteDailyTaskCompletionRows(pageId = activePageId()) {
-  const windowBounds = dailyTaskWorkspaceWindow(pageId);
+  const windowBounds = pageId === "dashboardPage" && dashboardTimelineRequestedDate
+    ? { start: dashboardTimelineRequestedDate, end: dashboardTimelineRequestedDate, detailDate: dashboardTimelineRequestedDate }
+    : dailyTaskWorkspaceWindow(pageId);
   const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_daily_task_completion_snapshot", {
     p_start_date: windowBounds.start,
     p_end_date: windowBounds.end,
@@ -10269,15 +10358,9 @@ function renderDashboardTaskCalendar() {
   const year = selected.getFullYear();
   const month = selected.getMonth();
   const monthName = selected.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-  const reportCounts = dashboardDailyWorkRecords().reduce((counts, record) => {
-    if (record.date) counts[record.date] = 1;
-    return counts;
-  }, {});
-  dailyTaskCompletionCountByDate.forEach((count, date) => {
-    if (Number(count || 0) > 0) reportCounts[date] = 1;
-  });
   const noteCounts = groupedCalendarNotesForDisplay(readRecords("calendarNote")
     .filter((record) => !record.removed && calendarNoteDate(record))
+    .filter((record) => calendarNoteKindLabel(record) === "Special Note")
     .map((record) => ({ ...record, noteDate: calendarNoteDate(record) }))).reduce((counts, record) => {
     const noteDate = calendarNoteDate(record);
     counts[noteDate] = (counts[noteDate] || 0) + 1;
@@ -10289,14 +10372,9 @@ function renderDashboardTaskCalendar() {
   const days = Array.from({ length: daysInMonth }, (_, index) => {
     const day = index + 1;
     const date = \`\${year}-\${String(month + 1).padStart(2, "0")}-\${String(day).padStart(2, "0")}\`;
-    const reportCount = reportCounts[date] || 0;
     const noteCount = noteCounts[date] || 0;
-    const hasRecords = reportCount || noteCount;
-    const badges = [
-      noteCount ? \`<small class="calendar-note-count" aria-label="\${noteCount} note\${noteCount === 1 ? "" : "s"}">\${noteCount}</small>\` : "",
-      reportCount ? \`<small class="calendar-report-count" aria-label="\${reportCount} report\${reportCount === 1 ? "" : "s"}">\${reportCount}</small>\` : "",
-    ].join("");
-    return \`<button type="button" class="calendar-day \${date === selectedDate ? "is-selected" : ""} \${hasRecords ? "has-records" : ""} \${noteCount ? "has-notes" : ""}" data-date="\${date}"><span>\${day}</span>\${badges}</button>\`;
+    const badge = noteCount ? \`<small class="calendar-note-count" aria-label="\${noteCount} special note\${noteCount === 1 ? "" : "s"}">\${noteCount}</small>\` : "";
+    return \`<button type="button" class="calendar-day \${date === selectedDate ? "is-selected" : ""} \${noteCount ? "has-records has-notes" : ""}" data-date="\${date}"><span>\${day}</span>\${badge}</button>\`;
   });
   calendar.innerHTML = \`<div class="calendar-title"><strong>Task Calendar</strong><span>\${monthName}</span></div><div class="calendar-weekdays"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div><div class="calendar-grid">\${blanks.join("")}\${days.join("")}</div>\`;
   renderCalendarNotes();
@@ -10349,6 +10427,10 @@ function renderCalendarNotes() {
 
 function renderDashboardTimeline() {
   const selectedDate = $("#dashboardDate")?.value || todayDate();
+  if (dashboardTimelineRequestedDate !== selectedDate) {
+    $("#dashboardTimeline").innerHTML = "<p>Select a date in the Task Calendar to load its Daily Timeline.</p>";
+    return;
+  }
   const items = dashboardDailyWorkRecords()
     .filter((record) => record.date === selectedDate)
     .map((record) => ({ type: "dailyTask", record, timestamp: record.updatedAt || record.submittedAt }));
@@ -12330,15 +12412,19 @@ function initEvents() {
   clearLocalCacheButton?.addEventListener("click", clearLocalAppCache);
   headerLogoutButton.addEventListener("click", clearHelper);
   $("#dashboardDate").addEventListener("change", () => {
-    $("#calendarNoteForm").elements.noteDate.value = $("#dashboardDate").value || todayDate();
+    dashboardTimelineRequestedDate = $("#dashboardDate").value || todayDate();
+    dailyTaskCompletionCountByDate.clear();
+    $("#calendarNoteForm").elements.noteDate.value = dashboardTimelineRequestedDate;
     renderDashboard();
     refreshDateScopedWorkspace("dashboardPage");
   });
   $("#dashboardTaskCalendar").addEventListener("click", (event) => {
     const button = event.target.closest("[data-date]");
     if (!button) return;
-    $("#dashboardDate").value = button.dataset.date;
-    $("#calendarNoteForm").elements.noteDate.value = button.dataset.date;
+    dashboardTimelineRequestedDate = button.dataset.date;
+    dailyTaskCompletionCountByDate.clear();
+    $("#dashboardDate").value = dashboardTimelineRequestedDate;
+    $("#calendarNoteForm").elements.noteDate.value = dashboardTimelineRequestedDate;
     renderDashboard();
     refreshDateScopedWorkspace("dashboardPage");
   });
@@ -14952,7 +15038,7 @@ function initEvents() {
     if (!button) return;
     const dog = activeBoardingDog();
     if (button.dataset.action === "show-past-boarding") {
-      renderPastBoardingStays(dog);
+      await renderPastBoardingStays(dog);
       return;
     }
     const reference = boardingStayReferenceFromAction(button);
@@ -15756,13 +15842,13 @@ function refreshDateScopedWorkspace(pageId = activePageId()) {
   const normalizedPageId = normalizePageId(pageId);
   if (!helperIsLoggedIn() || localTestMode || !supabaseClient || !["dailyPage", "dashboardPage"].includes(normalizedPageId)) return;
   loadRemoteRecords({
-    types: ["dailyTask"],
+    types: normalizedPageId === "dashboardPage" ? ["dailyTask", "calendarNote"] : ["dailyTask"],
     render: true,
     pageId: normalizedPageId,
     fullRefresh: true,
     showLoader: false,
     quiet: true,
-  }).then(() => markPageRemoteLoadFinished(normalizedPageId, ["dailyTask"])).catch((error) => {
+  }).then(() => markPageRemoteLoadFinished(normalizedPageId, normalizedPageId === "dashboardPage" ? ["dailyTask", "calendarNote"] : ["dailyTask"])).catch((error) => {
     console.warn(\`Date-scoped sync failed for \${normalizedPageId}.\`, error);
   });
 }

@@ -15,6 +15,8 @@ var boardingRequestIntersectionObserver = null;
 var boardingRequestLazyTimer = null;
 var boardingProfileTabRenderSequence = 0;
 var boardingRosterMobileLayout = null;
+var boardingPastStayCache = new Map();
+var boardingCustomerUpdateCache = new Map();
 
 var BOARDING_PROFILE_LAZY_TARGETS = {
   Vaccination: "boardingDogVaccinationList",
@@ -437,7 +439,8 @@ function boardingOwnerUpdateButtonHtml(record = {}, stay = {}, options = {}) {
 function boardingOwnerUpdateLoggedToday(record = {}, stay = {}, date = todayDate()) {
   if (!stay?.id) return false;
   const requestCode = boardingStayRequestCode(record, stay);
-  return arrayValue(record.customerUpdates).some((update) => {
+  const updates = [record.latestCustomerUpdate, ...arrayValue(record.customerUpdates)].filter(Boolean);
+  return updates.some((update) => {
     const updateDate = dateOnly(update.createdAt || update.submittedAt || update.updatedAt || update.savedAt);
     if (updateDate !== date) return false;
     if (update.stayId && update.stayId === stay.id) return true;
@@ -5047,6 +5050,17 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   if (options.stayId) {
     await syncDuplicateBoardingStatusWithFeedback(record, updated, boardingStayByReference(record, options) || boardingStayByReference(updated, options), nextStatus, options);
   }
+  if (nextStatus === "Checked Out") {
+    try {
+      const retention = await enforceBoardingCustomerUpdateRetention(updated.id);
+      if (Number(retention?.removedUpdateCount || 0) > 0) {
+        showToast(\`Archived owner updates cleaned up: \${retention.removedUpdateCount}.\`);
+      }
+    } catch (error) {
+      console.warn("Older owner update media could not be cleaned up after checkout.", error);
+      showToast("Checkout saved. Older owner update media cleanup will retry later.");
+    }
+  }
   renderBoardingDogs();
   renderBoardingRequests();
   renderCustomerRequests();
@@ -5707,6 +5721,74 @@ function boardingProfileLazyPlaceholderHtml(tabName = "") {
   return '<p class="profile-empty-note boarding-profile-lazy-note">' + escapeHtml(tabName) + ' loads when this tab is opened.</p>';
 }
 
+function boardingDeferredSourceRecordIds(record = {}) {
+  return [...new Set([record.id, ...arrayValue(record.sourceRecordIds)].filter(Boolean).map(String))];
+}
+
+function boardingDeferredSectionCacheKey(record = {}, section = "") {
+  return [section, ...boardingDeferredSourceRecordIds(record), record.updatedAt || record.submittedAt || ""].join("|");
+}
+
+async function loadBoardingPastStayData(record = {}) {
+  const key = boardingDeferredSectionCacheKey(record, "past-stays");
+  if (boardingPastStayCache.has(key)) return boardingPastStayCache.get(key);
+  let stays = arrayValue(record.stays).filter((stay) => inactiveBoardingStayStatus(stay));
+  if (supabaseClient && !localTestMode && record.id) {
+    const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_boarding_past_stays", {
+      p_record_ids: boardingDeferredSourceRecordIds(record),
+    }));
+    if (error) throw error;
+    stays = arrayValue(data?.stays);
+  }
+  const displayRecord = { ...record, stays };
+  const result = dedupeBoardingStaysForDisplay(displayRecord, stays);
+  boardingPastStayCache.set(key, result);
+  return result;
+}
+
+async function loadBoardingCustomerUpdateData(record = {}) {
+  const key = boardingDeferredSectionCacheKey(record, "customer-updates");
+  if (boardingCustomerUpdateCache.has(key)) return boardingCustomerUpdateCache.get(key);
+  let updates = arrayValue(record.customerUpdates);
+  if (supabaseClient && !localTestMode && record.id) {
+    const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_boarding_customer_updates", {
+      p_record_ids: boardingDeferredSourceRecordIds(record),
+    }));
+    if (error) throw error;
+    updates = arrayValue(data?.updates);
+  }
+  updates = updates.sort((a, b) => new Date(b.createdAt || b.submittedAt || 0) - new Date(a.createdAt || a.submittedAt || 0));
+  boardingCustomerUpdateCache.set(key, updates);
+  return updates;
+}
+
+function clearBoardingDeferredSectionCaches() {
+  boardingPastStayCache.clear();
+  boardingCustomerUpdateCache.clear();
+}
+
+async function enforceBoardingCustomerUpdateRetention(recordId = "") {
+  if (!supabaseClient || localTestMode || !isStaffRole()) return { skipped: true };
+  const normalizedRecordId = String(recordId || "").trim();
+  const { data: plan, error: planError } = await cuddleStayRequest((db) => db.rpc("kennel_boarding_customer_update_retention_plan", {
+    p_record_id: normalizedRecordId || null,
+  }));
+  if (planError) throw planError;
+  const storagePaths = [...new Set(arrayValue(plan?.storagePaths).map((path) => String(path || "").trim()).filter(Boolean))];
+  const unsafePath = storagePaths.find((path) => !path.startsWith("users/") || !path.includes("/boarding-customer-updates/"));
+  if (unsafePath) throw new Error("Owner update cleanup stopped because an unexpected media path was returned.");
+  for (let index = 0; index < storagePaths.length; index += 1000) {
+    const { error } = await supabaseClient.storage.from(MEDIA_BUCKET).remove(storagePaths.slice(index, index + 1000));
+    if (error) throw error;
+  }
+  const { data: result, error: applyError } = await cuddleStayRequest((db) => db.rpc("kennel_apply_boarding_customer_update_retention", {
+    p_record_id: normalizedRecordId || null,
+  }));
+  if (applyError) throw applyError;
+  clearBoardingDeferredSectionCaches();
+  return { ...(result || {}), removedMediaCount: storagePaths.length };
+}
+
 function resetBoardingProfileLazySections(record = {}) {
   boardingProfileTabRenderSequence += 1;
   Object.entries(BOARDING_PROFILE_LAZY_TARGETS).forEach(([tabName, targetId]) => {
@@ -5725,11 +5807,11 @@ function resetBoardingProfileLazySections(record = {}) {
 
 function renderBoardingProfileTabContent(tabName = "Dog Info", record = activeBoardingDog() || {}) {
   if (tabName === "Vaccination") renderBoardingVaccinationFiles(record);
-  else if (tabName === "Customer Update") renderBoardingCustomerUpdates(record);
+  else if (tabName === "Customer Update") return renderBoardingCustomerUpdates(record);
   else if (tabName === "Uploaded Files") renderBoardingDogFiles(record);
   else if (tabName === "Contract/Agreement") renderBoardingDogAgreements(record);
   else if (tabName === "Customer Info") renderBoardingOwnerAccountPanel(record);
-  else if (tabName === "Boarding History") renderBoardingHistory(record);
+  else if (tabName === "Boarding History") return renderBoardingHistory(record);
   else if (tabName === "Boarding & Request") {
     renderBoardingKennelLocationControl(record);
     renderBoardingStays(record);
@@ -5748,9 +5830,15 @@ function scheduleBoardingProfileTabRender(tabName = "Dog Info", record = activeB
   section.setAttribute("aria-busy", "true");
   if (target) target.innerHTML = boardingSkeletonCardsHtml(1);
   window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(async () => {
       if (sequence !== boardingProfileTabRenderSequence || !boardingProfileTabIsActive(tabName)) return;
-      renderBoardingProfileTabContent(tabName, record);
+      try {
+        await Promise.resolve(renderBoardingProfileTabContent(tabName, record));
+      } catch (error) {
+        if (target) target.innerHTML = '<p class="profile-empty-note">This section could not load. Try opening it again.</p>';
+        console.warn(\`Boarding profile \${tabName} could not load.\`, error);
+      }
+      if (sequence !== boardingProfileTabRenderSequence || !boardingProfileTabIsActive(tabName)) return;
       section.dataset.profileRenderKey = renderKey;
       section.dataset.profileRenderState = "ready";
       section.removeAttribute("aria-busy");
@@ -5787,7 +5875,7 @@ function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
     : \`<article class="record-card compact-record-card"><strong>No health records uploaded yet.</strong><p>Choose files in this tab, then save the dog profile.</p></article>\`;
 }
 
-function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
+async function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
   if (!boardingProfileTabIsActive("Customer Update")) return;
   const list = $("#boardingCustomerUpdateList");
   if (!list) return;
@@ -5799,7 +5887,8 @@ function renderBoardingCustomerUpdates(record = activeBoardingDog() || {}) {
         return \`<article class="record-card compact-record-card customer-update-stay-card"><strong>\${escapeHtml(displayRecord.dogName || "Boarding dog")}</strong><div class="chip-row">\${customerStayIdChipHtml(displayRecord, stay)}\${boardingStayStatusChipHtml(displayRecord, stay)}</div><p>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="\${escapeHtml(displayRecord.id || "")}" data-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(requestCode)}">Update Owner</button></div></article>\`;
       }).join("")}</section>\`
     : \`<article class="record-card compact-record-card"><strong>No in-care stay available.</strong><p>Owner updates can be sent after a stay is checked in, in kennel, or ready for pickup.</p></article>\`;
-  const updates = [...(displayRecord.customerUpdates || [])].sort((a, b) => new Date(b.createdAt || b.submittedAt || 0) - new Date(a.createdAt || a.submittedAt || 0));
+  const updates = await loadBoardingCustomerUpdateData(displayRecord);
+  if (!boardingProfileTabIsActive("Customer Update") || activeBoardingDog()?.id !== displayRecord.id) return;
   const updateHistory = updates.length
     ? updates.map((update) => {
         const stay = boardingStayByReference(displayRecord, { stayId: update.stayId || "", requestCode: update.requestCode || "" }) || {};
@@ -6227,7 +6316,18 @@ async function persistBoardingCustomerUpdate(record = {}, update = {}, clearOwne
   const savedPayload = data?.payload;
   const savedUpdate = data?.customerUpdate;
   if (!savedPayload?.id || !savedUpdate?.id) throw new Error("The owner update was not confirmed by the server.");
-  return upsertRecord("boardingDog", savedPayload);
+  const savedStays = arrayValue(savedPayload.stays);
+  const compactPayload = {
+    ...savedPayload,
+    stays: savedStays.filter((stay) => !inactiveBoardingStayStatus(stay)),
+    customerUpdates: [],
+    latestCustomerUpdate: savedUpdate,
+    _remotePastBoardingCount: savedStays.filter((stay) => inactiveBoardingStayStatus(stay)).length,
+    _remotePastBoardingDeferred: true,
+    _remoteCustomerUpdatesDeferred: true,
+  };
+  clearBoardingDeferredSectionCaches();
+  return upsertRecord("boardingDog", compactPayload);
 }
 
 async function saveBoardingCustomerUpdateForStay(record = {}, stay = {}, options = {}) {
@@ -6469,14 +6569,53 @@ function boardingStayCardHtml(displayRecord = {}, stay = {}) {
   return \`<article class="\${articleClass}"><strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong><div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusButtonHtml(displayRecord, stay)}\${boardingServiceOnlyChipHtml(displayRecord, stay)}\${boardingStayServiceFlagHtml(displayRecord, stay)}</div>\${boardingStayInvoiceSummaryHtml(displayRecord, stay)}\${boardingStayServiceTaskListHtml(displayRecord, stay, { actions: true })}<p>\${escapeHtml(stay.bathPlan || "")}</p>\${boardingStayBelongingsLineHtml(stay)}<p>\${escapeHtml(stay.stayNotes || "")}</p>\${boardingCancellationAuditHtml(displayRecord, stay)}\${boardingCancellationReasonHtml(displayRecord, stay)}<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${editLabel}</button>\${ownerUpdateButton}<button type="button" class="secondary-button danger-button" data-action="remove-stay" data-id="\${escapeHtml(stay.id)}" data-request-code="\${escapeHtml(requestCode)}">\${removeLabel}</button></div></article>\`;
 }
 
-function renderPastBoardingStays(record = activeBoardingDog()) {
+function boardingHistoricalServiceLog(stay = {}) {
+  const savedLog = arrayValue(stay.serviceCompletionLog);
+  if (savedLog.length) return savedLog;
+  return arrayValue(stay.serviceTasks).flatMap((task) => boardingServiceTaskUnits(task)
+    .filter((unit) => unit.status === "completed")
+    .map((unit) => ({
+      label: unit.label || task.label || task.serviceName || "Service",
+      completedAt: unit.completedAt || task.completedAt || "",
+      completedBy: unit.completedBy || task.completedBy || "",
+    })));
+}
+
+function boardingPastStayCardHtml(displayRecord = {}, stay = {}) {
+  const services = boardingStayServicesText(stay, { user: boardingPricingUserForRecord(displayRecord), preferCatalogPricing: true });
+  const serviceLog = boardingHistoricalServiceLog(stay);
+  const total = boardingStayInvoiceTotal(displayRecord, stay);
+  const completedLogHtml = serviceLog.length
+    ? \`<div class="boarding-past-service-log"><strong>Completed service log</strong>\${serviceLog.map((entry) => \`<p><span>\${escapeHtml(entry.label || "Service")}</span><small>\${escapeHtml([formatDateTime(entry.completedAt) || "Completion time not recorded", entry.completedBy ? "by " + entry.completedBy : "Staff not recorded"].filter(Boolean).join(" · "))}</small></p>\`).join("")}</div>\`
+    : '<p class="boarding-past-service-empty">No completed stay services were recorded.</p>';
+  return \`<article class="record-card compact-record-card boarding-stay-card boarding-past-stay-card">
+    <strong>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</strong>
+    <div class="chip-row">\${boardingStayRequestCodeChipHtml(displayRecord, stay)}\${boardingStayStatusChipHtml(displayRecord, stay)}</div>
+    \${services ? \`<p>\${escapeHtml(services)}</p>\` : ""}
+    \${total ? \`<p><strong>Final total:</strong> \${escapeHtml(money(total))}</p>\` : ""}
+    \${completedLogHtml}
+  </article>\`;
+}
+
+async function renderPastBoardingStays(record = activeBoardingDog()) {
   const list = $("#boardingPastStayList");
   const details = list?.closest(".past-boarding-stays");
   if (!list || !details || details.dataset.loaded === "true") return;
   const displayRecord = boardingDogWithStayStatus(record || {});
-  const stays = dedupeBoardingStaysForDisplay(displayRecord, displayRecord?.stays || []).slice(1);
+  details.dataset.loaded = "loading";
+  list.innerHTML = boardingSkeletonCardsHtml(1);
+  let stays = [];
+  try {
+    stays = await loadBoardingPastStayData(displayRecord);
+  } catch (error) {
+    details.dataset.loaded = "";
+    list.innerHTML = '<p class="profile-empty-note">Past boarding could not load. Close and open this section to try again.</p>';
+    console.warn("Past boarding stays could not load.", error);
+    return;
+  }
+  if (!details.isConnected || !details.open) return;
   list.innerHTML = stays.length
-    ? stays.map((stay) => boardingStayCardHtml(displayRecord, stay)).join("")
+    ? stays.map((stay) => boardingPastStayCardHtml(displayRecord, stay)).join("")
     : "<p>No past boarding stays are available.</p>";
   details.dataset.loaded = "true";
 }
@@ -6485,10 +6624,16 @@ function renderBoardingStays(record = activeBoardingDog()) {
   if (!boardingProfileTabIsActive("Boarding & Request")) return;
   const displayRecord = boardingDogWithStayStatus(record || {});
   const stays = dedupeBoardingStaysForDisplay(displayRecord, displayRecord?.stays || []);
-  const [firstStay, ...pastStays] = stays;
-  $("#boardingStayHistory").innerHTML = firstStay
-    ? \`\${boardingStayCardHtml(displayRecord, firstStay)}\${pastStays.length ? \`<details class="past-boarding-stays"><summary data-action="show-past-boarding"><span>Past boarding</span><span class="past-boarding-count">\${pastStays.length}</span></summary><div id="boardingPastStayList" class="record-grid compact-record-grid" aria-live="polite"><p class="profile-empty-note">Older stays load when this section is opened.</p></div></details>\` : ""}\`
-    : "<p>No boarding stays logged yet.</p>";
+  const activeStays = stays.filter((stay) => !inactiveBoardingStayStatus(stay));
+  const localPastStays = stays.filter((stay) => inactiveBoardingStayStatus(stay));
+  const pastCount = Math.max(localPastStays.length, Number(displayRecord._remotePastBoardingCount || 0));
+  const activeHtml = activeStays.length
+    ? activeStays.map((stay) => boardingStayCardHtml(displayRecord, stay)).join("")
+    : '<p class="profile-empty-note">No active or upcoming boarding stay.</p>';
+  const pastHtml = pastCount
+    ? \`<details class="past-boarding-stays"><summary data-action="show-past-boarding"><span>Past boarding</span><span class="past-boarding-count">\${pastCount}</span></summary><div id="boardingPastStayList" class="record-grid compact-record-grid" aria-live="polite"><p class="profile-empty-note">Past stays load only when this section is opened.</p></div></details>\`
+    : "";
+  $("#boardingStayHistory").innerHTML = activeHtml + pastHtml;
 }
 
 function boardingStayStatusMenuHtml(record = {}, stay = {}) {
@@ -6978,12 +7123,15 @@ function boardingStayHistoryPopupHtml(record = {}, stay = {}) {
   </section>\`;
 }
 
-function renderBoardingHistory(record = activeBoardingDog()) {
+async function renderBoardingHistory(record = activeBoardingDog()) {
   if (!boardingProfileTabIsActive("Boarding History")) return;
   const list = $("#boardingHistoryList");
   if (!list) return;
   const displayRecord = boardingDogWithStayStatus(record || {});
-  const stays = displayRecord?.stays || [];
+  const currentStays = arrayValue(displayRecord?.stays).filter((stay) => !inactiveBoardingStayStatus(stay));
+  const pastStays = await loadBoardingPastStayData(displayRecord);
+  if (!boardingProfileTabIsActive("Boarding History") || activeBoardingDog()?.id !== displayRecord.id) return;
+  const stays = [...currentStays, ...pastStays];
   const careLogs = arrayValue(displayRecord.careLogs)
     .filter((log) => !log.removed)
     .sort((a, b) => new Date(b.loggedAt || b.date || 0) - new Date(a.loggedAt || a.date || 0));
@@ -7016,9 +7164,13 @@ function renderBoardingHistory(record = activeBoardingDog()) {
   list.innerHTML = careLogHtml + stayHtml;
 }
 
-function openBoardingStayHistory(record = activeBoardingDog(), stayId = "") {
+async function openBoardingStayHistory(record = activeBoardingDog(), stayId = "") {
   const displayRecord = boardingDogWithStayStatus(record || {});
-  const stay = boardingStayByReference(displayRecord, stayId);
+  let stay = boardingStayByReference(displayRecord, stayId);
+  if (!stay && displayRecord?.id) {
+    const pastStays = await loadBoardingPastStayData(displayRecord);
+    stay = boardingStayByReference({ ...displayRecord, stays: pastStays }, stayId);
+  }
   if (!displayRecord?.id || !stay) return;
   showDetailDialog("Boarding Stay History", boardingStayHistoryPopupHtml(displayRecord, stay));
 }
