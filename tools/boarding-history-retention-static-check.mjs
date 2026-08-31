@@ -3,7 +3,10 @@ import fs from "node:fs";
 
 const shared = fs.readFileSync("js/shared.js", "utf8");
 const boarding = fs.readFileSync("js/boarding.js", "utf8");
-const migration = fs.readFileSync("supabase/migrations/20260830235500_lazy_boarding_history_and_update_retention.sql", "utf8");
+const migration = [
+  fs.readFileSync("supabase/migrations/20260830235500_lazy_boarding_history_and_update_retention.sql", "utf8"),
+  fs.readFileSync("supabase/migrations/20260831050000_consolidated_boarding_update_retention.sql", "utf8"),
+].join("\n");
 const main = fs.readFileSync("js/main.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 
@@ -21,6 +24,7 @@ assert.match(boarding, /Completed service log/, "historical services retain simp
 assert.match(boarding, /kennel_boarding_customer_update_retention_plan/, "checkout plans exact historical owner-update cleanup");
 assert.match(boarding, /storage\.from\(MEDIA_BUCKET\)\.remove/, "historical media is deleted through the Storage API");
 assert.match(boarding, /kennel_apply_boarding_customer_update_retention/, "database references are pruned only after media deletion succeeds");
+assert.match(boarding, /p_record_ids: recordIds/, "retention spans every legacy source row in the displayed dog profile");
 
 for (const functionName of [
   "kennel_compact_boarding_payload",
@@ -34,8 +38,9 @@ for (const functionName of [
   assert.ok(migration.includes(functionName), `${functionName} is included in the migration`);
 }
 assert.match(migration, /security definer[\s\S]*Staff access is required to manage boarding update retention/, "privileged retention functions enforce staff membership");
-assert.match(migration, /revoke all on function cuddle_stay\.kennel_apply_boarding_customer_update_retention\(text\) from public, anon/, "retention execution is not public");
-assert.match(main, /boarding-history-retention-v84/, "boarding module cache key is current");
-assert.match(index, /boarding-history-retention-v84/, "application entrypoint cache key is current");
+assert.match(migration, /revoke all on function cuddle_stay\.kennel_apply_boarding_customer_update_retention\(text\[\]\) from public, anon/, "retention execution is not public");
+assert.match(migration, /with scoped_records as[\s\S]*latest_stay as/, "owner-update reads select one newest stay across the consolidated profile");
+assert.match(main, /boarding-history-retention-v85/, "boarding module cache key is current");
+assert.match(index, /boarding-history-retention-v85/, "application entrypoint cache key is current");
 
 console.log("Boarding lazy history and retention checks passed.");

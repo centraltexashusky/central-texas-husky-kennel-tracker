@@ -5052,7 +5052,7 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   }
   if (nextStatus === "Checked Out") {
     try {
-      const retention = await enforceBoardingCustomerUpdateRetention(updated.id);
+      const retention = await enforceBoardingCustomerUpdateRetention(updated);
       if (Number(retention?.removedUpdateCount || 0) > 0) {
         showToast(\`Archived owner updates cleaned up: \${retention.removedUpdateCount}.\`);
       }
@@ -5757,7 +5757,10 @@ async function loadBoardingCustomerUpdateData(record = {}) {
     if (error) throw error;
     updates = arrayValue(data?.updates);
   }
-  updates = updates.sort((a, b) => new Date(b.createdAt || b.submittedAt || 0) - new Date(a.createdAt || a.submittedAt || 0));
+  updates = [...new Map(updates.map((update, index) => [
+    String(update.id || update.customerUpdateId || [update.createdAt || update.submittedAt || "", update.stayId || update.requestCode || "", index].join("|")),
+    update,
+  ])).values()].sort((a, b) => new Date(b.createdAt || b.submittedAt || 0) - new Date(a.createdAt || a.submittedAt || 0));
   boardingCustomerUpdateCache.set(key, updates);
   return updates;
 }
@@ -5767,11 +5770,16 @@ function clearBoardingDeferredSectionCaches() {
   boardingCustomerUpdateCache.clear();
 }
 
-async function enforceBoardingCustomerUpdateRetention(recordId = "") {
+async function enforceBoardingCustomerUpdateRetention(recordOrIds = {}) {
   if (!supabaseClient || localTestMode || !isStaffRole()) return { skipped: true };
-  const normalizedRecordId = String(recordId || "").trim();
+  const recordIds = Array.isArray(recordOrIds)
+    ? [...new Set(recordOrIds.map((id) => String(id || "").trim()).filter(Boolean))]
+    : typeof recordOrIds === "object" && recordOrIds
+      ? boardingDeferredSourceRecordIds(recordOrIds)
+      : [String(recordOrIds || "").trim()].filter(Boolean);
+  if (!recordIds.length) return { skipped: true };
   const { data: plan, error: planError } = await cuddleStayRequest((db) => db.rpc("kennel_boarding_customer_update_retention_plan", {
-    p_record_id: normalizedRecordId || null,
+    p_record_ids: recordIds,
   }));
   if (planError) throw planError;
   const storagePaths = [...new Set(arrayValue(plan?.storagePaths).map((path) => String(path || "").trim()).filter(Boolean))];
@@ -5782,7 +5790,7 @@ async function enforceBoardingCustomerUpdateRetention(recordId = "") {
     if (error) throw error;
   }
   const { data: result, error: applyError } = await cuddleStayRequest((db) => db.rpc("kennel_apply_boarding_customer_update_retention", {
-    p_record_id: normalizedRecordId || null,
+    p_record_ids: recordIds,
   }));
   if (applyError) throw applyError;
   clearBoardingDeferredSectionCaches();
