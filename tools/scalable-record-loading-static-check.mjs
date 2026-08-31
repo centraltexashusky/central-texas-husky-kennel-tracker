@@ -8,6 +8,7 @@ const main = fs.readFileSync("js/main.js", "utf8");
 const index = fs.readFileSync("index.html", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260722190000_window_scheduled_care_task_reads.sql", "utf8");
 const boardingMigration = fs.readFileSync("supabase/migrations/20260722203000_load_active_boarding_records_first.sql", "utf8");
+const onDemandBoardingMigration = fs.readFileSync("supabase/migrations/20260831183935_boarding_roster_counts_on_demand.sql", "utf8");
 const failures = [];
 
 if (!shared.includes("const productionMemoryOnly = Boolean(supabaseClient && !localTestMode);")) failures.push("Production records are still persisted to browser storage.");
@@ -57,11 +58,21 @@ if (!migration.includes("kennel_records_active_scheduled_task_date_updated_idx")
 if (!migration.includes("sourceManualOverride")) failures.push("Windowed reads do not prefer a staff-adjusted auto task.");
 if (!migration.includes("where ranked.source_rank = 1")) failures.push("Windowed reads do not collapse duplicate active auto tasks.");
 if (!migration.includes("and (p_since_updated_at is null or ranked.updated_at >= p_since_updated_at)")) failures.push("Delta filtering happens before canonical task selection.");
-if (!shared.includes('db.rpc("kennel_active_boarding_records"')) failures.push("Boarding Dogs does not load the active roster first.");
+if (!shared.includes('db.rpc("kennel_boarding_roster_summary"')) failures.push("Boarding Dogs does not load lightweight roster totals first.");
+if (!shared.includes('db.rpc("kennel_boarding_records_for_filter"')) failures.push("Boarding tabs do not use a filtered on-demand roster query.");
+if (!shared.includes('boardingDogsPage: { critical: [], deferred: [] }')) failures.push("Boarding page entry still eagerly loads full record types.");
+if (!shared.includes("loadBoardingDogRosterRecords(boardingDogRosterFilter)")) failures.push("A roster tab click does not trigger its scoped data load.");
+if (!shared.includes("BOARDING_ROSTER_REMOTE_PAGE_SIZE = 120")) failures.push("Selected boarding rosters are not remotely paged.");
+if (!boarding.includes("searchInput.disabled = !rosterReady")) failures.push("Search can run before a roster tab has loaded its scoped records.");
+if (!boarding.includes('finishPageActivityProgress("boardingDogsPage", "Boarding totals ready")')) failures.push("Counts-only page entry can leave the loading indicator unfinished.");
 if (!shared.includes("boardingFullHistory: true")) failures.push("Boarding history cannot be loaded on demand.");
-if (!shared.includes('boardingDogRosterFilter === "All Boarding Dogs"')) failures.push("All Boarding Dogs does not trigger the historical load.");
+if (shared.includes('boardingDogRosterFilter === "All Boarding Dogs" && !boardingDogFullHistoryLoaded')) failures.push("All Boarding Dogs still triggers the legacy eager history load.");
 if (!boardingMigration.includes("current_date + 365")) failures.push("Active boarding scope does not include upcoming reservations.");
 if (!boardingMigration.includes("security invoker")) failures.push("Active boarding query does not preserve caller RLS.");
+if (!onDemandBoardingMigration.includes("kennel_boarding_roster_summary")) failures.push("Lightweight boarding count RPC is missing from the migration.");
+if (!onDemandBoardingMigration.includes("kennel_boarding_records_for_filter")) failures.push("Filtered boarding roster RPC is missing from the migration.");
+if ((onDemandBoardingMigration.match(/security invoker/g) || []).length < 2) failures.push("On-demand boarding RPCs do not preserve caller RLS.");
+if (!onDemandBoardingMigration.includes("p_offset integer default 0")) failures.push("Filtered boarding roster RPC cannot page through large rosters.");
 
 const countdownMatch = boarding.match(/function boardingServiceCountdownLabel\(dueInfo = null\) \{[\s\S]*?\n\}/);
 if (!countdownMatch) {

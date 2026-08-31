@@ -1,0 +1,236 @@
+create or replace function cuddle_stay.kennel_boarding_roster_summary()
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'rawCount', count(*),
+    'records', coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'id', kr.id,
+          'payload', jsonb_strip_nulls(jsonb_build_object(
+            'id', kr.id,
+            'dogName', kr.payload -> 'dogName',
+            'callName', kr.payload -> 'callName',
+            'showName', kr.payload -> 'showName',
+            'linkedCustomerDogId', kr.payload -> 'linkedCustomerDogId',
+            'sourceCustomerDogId', kr.payload -> 'sourceCustomerDogId',
+            'customerDogId', kr.payload -> 'customerDogId',
+            'dogId', kr.payload -> 'dogId',
+            'canonicalDogId', kr.payload -> 'canonicalDogId',
+            'legacyCustomerDogIds', kr.payload -> 'legacyCustomerDogIds',
+            'linkedBoardingDogId', kr.payload -> 'linkedBoardingDogId',
+            'sourceBoardingDogId', kr.payload -> 'sourceBoardingDogId',
+            'sourceRecordIds', kr.payload -> 'sourceRecordIds',
+            'duplicateProfileIds', kr.payload -> 'duplicateProfileIds',
+            'legacyBoardingDogIds', kr.payload -> 'legacyBoardingDogIds',
+            'ownerName', kr.payload -> 'ownerName',
+            'ownerEmail', kr.payload -> 'ownerEmail',
+            'customerEmail', kr.payload -> 'customerEmail',
+            'linkedOwnerEmail', kr.payload -> 'linkedOwnerEmail',
+            'secondaryOwnerEmail', kr.payload -> 'secondaryOwnerEmail',
+            'requestedByEmail', kr.payload -> 'requestedByEmail',
+            'ownerPhone', kr.payload -> 'ownerPhone',
+            'phone', kr.payload -> 'phone',
+            'customerPhone', kr.payload -> 'customerPhone',
+            'requestedByPhone', kr.payload -> 'requestedByPhone',
+            'emergencyPhone', kr.payload -> 'emergencyPhone',
+            'boardingStatus', kr.payload -> 'boardingStatus',
+            'status', kr.payload -> 'status',
+            'customerRequest', kr.payload -> 'customerRequest',
+            'entrySource', kr.payload -> 'entrySource',
+            'submittedAt', coalesce(kr.payload -> 'submittedAt', to_jsonb(kr.submitted_at)),
+            'updatedAt', coalesce(kr.payload -> 'updatedAt', to_jsonb(kr.updated_at)),
+            'stays', coalesce((
+              select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+                'id', stay -> 'id',
+                'requestCode', stay -> 'requestCode',
+                'status', stay -> 'status',
+                'dropoffTime', stay -> 'dropoffTime',
+                'pickupTime', stay -> 'pickupTime',
+                'requestedDropoffTime', stay -> 'requestedDropoffTime',
+                'requestedPickupTime', stay -> 'requestedPickupTime',
+                'scheduledPickupTime', stay -> 'scheduledPickupTime',
+                'checkedInAt', stay -> 'checkedInAt',
+                'actualCheckInAt', stay -> 'actualCheckInAt',
+                'actualPickupAt', stay -> 'actualPickupAt',
+                'checkedOutAt', stay -> 'checkedOutAt',
+                'customerRequest', stay -> 'customerRequest',
+                'createdAt', stay -> 'createdAt',
+                'updatedAt', stay -> 'updatedAt'
+              )))
+              from jsonb_array_elements(
+                case when jsonb_typeof(kr.payload -> 'stays') = 'array' then kr.payload -> 'stays' else '[]'::jsonb end
+              ) stay
+            ), '[]'::jsonb)
+          ))
+        )
+        order by kr.updated_at desc
+      ),
+      '[]'::jsonb
+    )
+  )
+  from cuddle_stay.kennel_records kr
+  where kr.organization_id = cuddle_stay_private.cuddle_stay_organization_id()
+    and kr.type = 'boardingDog'
+    and coalesce(lower(kr.payload ->> 'removed'), 'false') <> 'true'
+$$;
+
+create or replace function cuddle_stay.kennel_boarding_records_for_filter(
+  p_filter text,
+  p_limit integer default 120,
+  p_offset integer default 0
+)
+returns table (
+  id text,
+  type text,
+  payload jsonb,
+  helper_email text,
+  user_id uuid,
+  submitted_at timestamptz,
+  updated_at timestamptz,
+  total_count bigint
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  with base as (
+    select kr.*,
+      lower(coalesce(nullif(kr.payload ->> 'boardingStatus', ''), nullif(kr.payload ->> 'status', ''), '')) as record_status,
+      lower(coalesce(kr.payload ->> 'dogName', kr.payload ->> 'callName', kr.payload ->> 'showName', '')) as dog_name,
+      lower(coalesce(kr.payload ->> 'ownerEmail', kr.payload ->> 'customerEmail', '')) as owner_email,
+      regexp_replace(coalesce(kr.payload ->> 'ownerPhone', kr.payload ->> 'customerPhone', ''), '\\D', '', 'g') as owner_phone
+    from cuddle_stay.kennel_records kr
+    where kr.organization_id = cuddle_stay_private.cuddle_stay_organization_id()
+      and kr.type = 'boardingDog'
+      and coalesce(lower(kr.payload ->> 'removed'), 'false') <> 'true'
+  ), matched as (
+    select b.*
+    from base b
+    where case lower(trim(coalesce(p_filter, 'active dogs')))
+      when 'all boarding dogs' then true
+      when 'pending' then (
+        b.record_status = 'pending'
+        or exists (
+          select 1 from jsonb_array_elements(
+            case when jsonb_typeof(b.payload -> 'stays') = 'array' then b.payload -> 'stays' else '[]'::jsonb end
+          ) stay
+          where lower(coalesce(stay ->> 'status', '')) = 'pending'
+            and not cuddle_stay.kennel_boarding_stay_is_historical(stay)
+        )
+      )
+      when 'pending approval' then (
+        b.record_status = 'pending'
+        or exists (
+          select 1 from jsonb_array_elements(
+            case when jsonb_typeof(b.payload -> 'stays') = 'array' then b.payload -> 'stays' else '[]'::jsonb end
+          ) stay
+          where lower(coalesce(stay ->> 'status', '')) = 'pending'
+            and not cuddle_stay.kennel_boarding_stay_is_historical(stay)
+        )
+      )
+      when 'approved' then (
+        b.record_status = 'approved'
+        or exists (
+          select 1 from jsonb_array_elements(
+            case when jsonb_typeof(b.payload -> 'stays') = 'array' then b.payload -> 'stays' else '[]'::jsonb end
+          ) stay
+          where lower(coalesce(stay ->> 'status', '')) = 'approved'
+            and not cuddle_stay.kennel_boarding_stay_is_historical(stay)
+        )
+      )
+      when 'in kennel' then (
+        b.record_status = 'in kennel'
+        or exists (
+          select 1 from jsonb_array_elements(
+            case when jsonb_typeof(b.payload -> 'stays') = 'array' then b.payload -> 'stays' else '[]'::jsonb end
+          ) stay
+          where lower(coalesce(stay ->> 'status', '')) = 'in kennel'
+            and not cuddle_stay.kennel_boarding_stay_is_historical(stay)
+        )
+      )
+      when 'ready for pickup' then (
+        b.record_status = 'ready for pickup'
+        or exists (
+          select 1 from jsonb_array_elements(
+            case when jsonb_typeof(b.payload -> 'stays') = 'array' then b.payload -> 'stays' else '[]'::jsonb end
+          ) stay
+          where lower(coalesce(stay ->> 'status', '')) = 'ready for pickup'
+            and not cuddle_stay.kennel_boarding_stay_is_historical(stay)
+        )
+      )
+      else (
+        b.record_status in ('checked in', 'in kennel', 'ready for pickup')
+        or exists (
+          select 1 from jsonb_array_elements(
+            case when jsonb_typeof(b.payload -> 'stays') = 'array' then b.payload -> 'stays' else '[]'::jsonb end
+          ) stay
+          where lower(coalesce(stay ->> 'status', '')) in ('checked in', 'in kennel', 'ready for pickup')
+            and not cuddle_stay.kennel_boarding_stay_is_historical(stay)
+        )
+      )
+    end
+  ), selected as (
+    select distinct b.*
+    from base b
+    join matched m on (
+      b.id = m.id
+      or (
+        b.dog_name <> ''
+        and b.dog_name = m.dog_name
+        and (
+          (
+            nullif(b.payload ->> 'linkedCustomerDogId', '') is not null
+            and b.payload ->> 'linkedCustomerDogId' = m.payload ->> 'linkedCustomerDogId'
+          )
+          or (
+            nullif(b.payload ->> 'sourceCustomerDogId', '') is not null
+            and b.payload ->> 'sourceCustomerDogId' = m.payload ->> 'sourceCustomerDogId'
+          )
+          or (b.owner_email <> '' and b.owner_email = m.owner_email)
+          or (b.owner_phone <> '' and b.owner_phone = m.owner_phone)
+          or exists (
+            select 1
+            from jsonb_array_elements_text(
+              case when jsonb_typeof(m.payload -> 'duplicateProfileIds') = 'array' then m.payload -> 'duplicateProfileIds' else '[]'::jsonb end
+            ) duplicate_id
+            where duplicate_id = b.id
+          )
+          or exists (
+            select 1
+            from jsonb_array_elements_text(
+              case when jsonb_typeof(b.payload -> 'duplicateProfileIds') = 'array' then b.payload -> 'duplicateProfileIds' else '[]'::jsonb end
+            ) duplicate_id
+            where duplicate_id = m.id
+          )
+        )
+      )
+    )
+  ), counted as (
+    select s.*, count(*) over () as selected_total
+    from selected s
+  )
+  select
+    c.id,
+    c.type,
+    cuddle_stay.kennel_compact_boarding_payload(c.payload),
+    c.helper_email,
+    c.user_id,
+    c.submitted_at,
+    c.updated_at,
+    c.selected_total
+  from counted c
+  order by c.updated_at desc
+  limit greatest(1, least(coalesce(p_limit, 120), 240))
+  offset greatest(0, coalesce(p_offset, 0))
+$$;
+
+revoke all on function cuddle_stay.kennel_boarding_roster_summary() from public, anon;
+revoke all on function cuddle_stay.kennel_boarding_records_for_filter(text, integer, integer) from public, anon;
+grant execute on function cuddle_stay.kennel_boarding_roster_summary() to authenticated, service_role;
+grant execute on function cuddle_stay.kennel_boarding_records_for_filter(text, integer, integer) to authenticated, service_role;
