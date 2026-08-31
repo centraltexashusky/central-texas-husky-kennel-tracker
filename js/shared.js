@@ -6083,6 +6083,10 @@ function escapeHtml(value = "") {
     .replaceAll("'", "&#039;");
 }
 
+function statusChipHtml(label, className = "") {
+  return \`<span class="status-chip \${escapeHtml(className)}">\${escapeHtml(label)}</span>\`;
+}
+
 function multilineHtml(value = "") {
   return escapeHtml(value).replaceAll("\\n", "<br>");
 }
@@ -8510,7 +8514,17 @@ function ownerUpdateStaysForRecord(record = {}) {
     .sort((a, b) => new Date(a.pickupTime || a.dropoffTime || 0) - new Date(b.pickupTime || b.dropoffTime || 0));
 }
 
-// Extracted to js/customer.js: customerUpdateForStay
+function customerUpdateForStay(record = {}, stay = {}) {
+  if (!stay?.id) return null;
+  const requestCode = boardingStayRequestCode(record, stay);
+  const updates = [record.latestCustomerUpdate, ...arrayValue(record.customerUpdates)].filter(Boolean);
+  return updates.find((update) => {
+    if (update.stayId && update.stayId === stay.id) return true;
+    if (requestCode && update.requestCode === requestCode) return true;
+    if (stay.dropoffTime && stay.pickupTime && update.stayDropoffTime === stay.dropoffTime && update.stayPickupTime === stay.pickupTime) return true;
+    return false;
+  }) || null;
+}
 
 
 function ownerUpdateReasonItems(record = {}, stay = {}) {

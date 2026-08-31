@@ -1736,7 +1736,8 @@ function customerUpdatePayloadsForLegacyBoardingDog(record = {}, dogId = "", res
 function customerUpdateForStay(record = {}, stay = {}) {
   if (!stay?.id) return null;
   const requestCode = boardingStayRequestCode(record, stay);
-  return arrayValue(record.customerUpdates).find((update) => {
+  const updates = [record.latestCustomerUpdate, ...arrayValue(record.customerUpdates)].filter(Boolean);
+  return updates.find((update) => {
     if (update.stayId && update.stayId === stay.id) return true;
     if (requestCode && update.requestCode === requestCode) return true;
     if (stay.dropoffTime && stay.pickupTime && update.stayDropoffTime === stay.dropoffTime && update.stayPickupTime === stay.pickupTime) return true;
