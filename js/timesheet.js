@@ -570,6 +570,7 @@ function staffTimeOffForDate(staffEmail = "", date = "") {
   const normalized = normalizeEmail(staffEmail);
   return readRecords("timeOffRequest").filter((request) => {
     if (request.removed || !request.startDate || !request.endDate) return false;
+    if (!["Pending", "Approved"].includes(request.status || "Pending")) return false;
     return normalizeEmail(request.staffEmail) === normalized && date >= request.startDate && date <= request.endDate;
   });
 }
@@ -1463,9 +1464,23 @@ function renderTimeOffTab() {
   const isAdmin = currentRole() === "admin";
   list.innerHTML = records.length
     ? records.map((record) => {
-      const conflicts = readRecords("staffSchedule").filter((shift) => !shift.removed && shift.status !== "Cancelled" && normalizeEmail(shift.staffEmail) === normalizeEmail(record.staffEmail) && shift.date >= record.startDate && shift.date <= record.endDate);
-      const actions = isAdmin ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="review-time-off" data-id="\${escapeHtml(record.id)}">Review</button></div>\` : "";
-      return \`<article class="record-card compact-record-card \${record.status === "Pending" ? "is-urgent" : ""}"><strong>\${escapeHtml(record.staffName || "Staff")} - \${escapeHtml(record.status || "Pending")}</strong><span>\${escapeHtml(dateRangeText(record.startDate, record.endDate))}</span><p>\${escapeHtml(record.reason || "No reason recorded.")}</p>\${conflicts.length ? \`<p>\${conflicts.length} scheduled shift conflict\${conflicts.length === 1 ? "" : "s"}.</p>\` : ""}\${actions}</article>\`;
+      const status = record.status || "Pending";
+      const activeRequest = ["Pending", "Approved"].includes(status);
+      const conflicts = activeRequest
+        ? readRecords("staffSchedule").filter((shift) => !shift.removed && shift.status !== "Cancelled" && normalizeEmail(shift.staffEmail) === normalizeEmail(record.staffEmail) && shift.date >= record.startDate && shift.date <= record.endDate)
+        : [];
+      const staffActions = timeOffRequestCanStaffChange(record)
+        ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="revise-time-off" data-id="\${escapeHtml(record.id)}">Revise</button><button type="button" class="secondary-button danger-button" data-action="cancel-time-off-request" data-id="\${escapeHtml(record.id)}">Cancel Request</button></div>\`
+        : "";
+      const adminActions = isAdmin && status === "Pending"
+        ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="review-time-off" data-id="\${escapeHtml(record.id)}">Review</button></div>\`
+        : "";
+      const auditText = status === "Cancelled" && record.cancelledAt
+        ? \`<p>Cancelled \${escapeHtml(formatDateTime(record.cancelledAt))}\${record.cancelledBy ? \` by \${escapeHtml(record.cancelledBy)}\` : ""}\${record.cancellationReason ? \`: \${escapeHtml(record.cancellationReason)}\` : "."}</p>\`
+        : record.revisedAt
+          ? \`<p>Last revised \${escapeHtml(formatDateTime(record.revisedAt))}\${record.revisedBy ? \` by \${escapeHtml(record.revisedBy)}\` : ""}.</p>\`
+          : "";
+      return \`<article class="record-card compact-record-card \${status === "Pending" ? "is-urgent" : ""}"><strong>\${escapeHtml(record.staffName || "Staff")} - \${escapeHtml(status)}</strong><span>\${escapeHtml(dateRangeText(record.startDate, record.endDate))}</span><p>\${escapeHtml(record.reason || "No reason recorded.")}</p>\${auditText}\${conflicts.length ? \`<p>\${conflicts.length} scheduled shift conflict\${conflicts.length === 1 ? "" : "s"}.</p>\` : ""}\${adminActions || staffActions}</article>\`;
     }).join("")
     : "<p>No time off requests yet.</p>";
 }
@@ -1702,38 +1717,170 @@ async function saveScheduleShiftFromForm(formEl) {
   return saved;
 }
 
+function timeOffRequestChangeAllowed(record = {}) {
+  return ["Pending", "Approved"].includes(record.status || "Pending");
+}
+
+function timeOffRequestCanStaffChange(record = {}) {
+  return currentRole() !== "admin"
+    && staffRecordBelongsToCurrentUser(record)
+    && timeOffRequestChangeAllowed(record);
+}
+
+function timeOffRequestActor() {
+  return {
+    name: currentUser?.name || helperName.value || "Staff",
+    email: currentUser?.email || helperEmail.value || "",
+  };
+}
+
+function revisedTimeOffRequestRecord(existing = {}, data = {}, actor = {}, timestamp = new Date().toISOString()) {
+  const previousStatus = existing.status || "Pending";
+  const statusHistory = [...(existing.statusHistory || [])];
+  if (previousStatus !== "Pending") {
+    statusHistory.push({ from: previousStatus, to: "Pending", date: timestamp, by: actor.name || "Staff", source: "staff-revision" });
+  }
+  return {
+    ...existing,
+    startDate: data.startDate,
+    endDate: data.endDate,
+    reason: data.reason || "",
+    status: "Pending",
+    revisedAt: timestamp,
+    revisedBy: actor.name || "Staff",
+    revisedByEmail: actor.email || "",
+    revisionCount: Number(existing.revisionCount || 0) + 1,
+    revisionHistory: [
+      ...(existing.revisionHistory || []),
+      {
+        date: timestamp,
+        by: actor.name || "Staff",
+        byEmail: actor.email || "",
+        previousStartDate: existing.startDate || "",
+        previousEndDate: existing.endDate || "",
+        previousReason: existing.reason || "",
+        previousStatus,
+      },
+    ],
+    statusHistory,
+    reviewedBy: "",
+    reviewedAt: "",
+    reviewNote: "",
+    cancelledAt: "",
+    cancelledBy: "",
+    cancelledByEmail: "",
+    cancellationReason: "",
+  };
+}
+
+function cancelledTimeOffRequestRecord(existing = {}, reason = "", actor = {}, timestamp = new Date().toISOString()) {
+  const previousStatus = existing.status || "Pending";
+  return {
+    ...existing,
+    status: "Cancelled",
+    cancelledAt: timestamp,
+    cancelledBy: actor.name || "Staff",
+    cancelledByEmail: actor.email || "",
+    cancellationReason: String(reason || "").trim(),
+    statusHistory: [
+      ...(existing.statusHistory || []),
+      { from: previousStatus, to: "Cancelled", date: timestamp, by: actor.name || "Staff", source: "staff-cancellation" },
+    ],
+  };
+}
+
 function timeOffRequestFormHtml(record = {}) {
+  const revisionNotice = record.id
+    ? \`<p class="service-warning-text">Saving a revision returns this request to Pending so an admin can review the new dates and reason.</p>\`
+    : "";
   return \`<form id="timeOffRequestForm" class="tracker-form" data-id="\${escapeHtml(record.id || "")}">
+    \${revisionNotice}
     <div class="field-grid">
       <label>Start date<input type="date" name="startDate" value="\${escapeHtml(record.startDate || todayDate())}" required /></label>
       <label>End date<input type="date" name="endDate" value="\${escapeHtml(record.endDate || record.startDate || todayDate())}" required /></label>
     </div>
     <label>Reason<textarea name="reason" rows="3" required>\${escapeHtml(record.reason || "")}</textarea></label>
-    <div class="button-row"><button type="submit">Submit Request</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+    <div class="button-row"><button type="submit">\${record.id ? "Save Revision" : "Submit Request"}</button><button type="button" class="secondary-button" data-action="close-dialog">Close</button></div>
   </form>\`;
 }
 
 function openTimeOffRequestPopup(record = {}) {
-  showDetailDialog(record.id ? "Edit Time Off Request" : "Request Time Off", timeOffRequestFormHtml(record));
+  if (record.id && !timeOffRequestCanStaffChange(record)) {
+    showToast("Only your pending or approved requests can be revised.");
+    return;
+  }
+  showDetailDialog(record.id ? "Revise Time Off Request" : "Request Time Off", timeOffRequestFormHtml(record));
 }
 
 async function saveTimeOffRequestFromForm(formEl) {
   if (!validateForm(formEl)) return null;
   const data = formPayload(formEl);
   const existing = formEl.dataset.id ? readRecords("timeOffRequest").find((record) => record.id === formEl.dataset.id) : null;
-  const record = {
-    ...(existing || {}),
-    type: "timeOffRequest",
-    id: existing?.id || uid("timeOff"),
-    submittedAt: existing?.submittedAt || new Date().toISOString(),
-    staffName: existing?.staffName || currentUser?.name || helperName.value || "Unknown staff",
-    staffEmail: existing?.staffEmail || currentUser?.email || helperEmail.value || "",
-    startDate: data.startDate,
-    endDate: data.endDate,
-    reason: data.reason || "",
-    status: existing?.status || "Pending",
-  };
-  const saved = await saveAndNotify(record, existing ? "" : "timeOffRequested");
+  if (formEl.dataset.id && !existing) {
+    showToast("This time off request could not be found.");
+    return null;
+  }
+  if (existing && !timeOffRequestCanStaffChange(existing)) {
+    showToast("Only your pending or approved requests can be revised.");
+    return null;
+  }
+  if (data.endDate < data.startDate) {
+    showToast("End date must be on or after the start date.");
+    return null;
+  }
+  const timestamp = new Date().toISOString();
+  const actor = timeOffRequestActor();
+  const record = existing
+    ? revisedTimeOffRequestRecord(existing, data, actor, timestamp)
+    : {
+      type: "timeOffRequest",
+      id: uid("timeOff"),
+      submittedAt: timestamp,
+      staffName: actor.name || "Unknown staff",
+      staffEmail: actor.email || "",
+      startDate: data.startDate,
+      endDate: data.endDate,
+      reason: data.reason || "",
+      status: "Pending",
+      statusHistory: [],
+      revisionHistory: [],
+    };
+  const saved = await saveAndNotify(record, existing ? "timeOffRevised" : "timeOffRequested");
+  renderTimesheet();
+  return saved;
+}
+
+function timeOffCancellationFormHtml(record = {}) {
+  return \`<form id="timeOffCancellationForm" class="tracker-form" data-id="\${escapeHtml(record.id || "")}">
+    <article class="record-card compact-record-card">
+      <strong>\${escapeHtml(dateRangeText(record.startDate, record.endDate))}</strong>
+      <span>\${escapeHtml(record.status || "Pending")}</span>
+      <p>\${escapeHtml(record.reason || "No reason recorded.")}</p>
+    </article>
+    <p>Cancelling keeps this request in the history and removes it from active time-off conflicts.</p>
+    <label>Cancellation note<textarea name="cancellationReason" rows="3" required placeholder="Why are you cancelling this request?"></textarea></label>
+    <div class="button-row"><button type="submit" class="danger-button">Cancel Request</button><button type="button" class="secondary-button" data-action="close-dialog">Keep Request</button></div>
+  </form>\`;
+}
+
+function openTimeOffCancellationPopup(record = {}) {
+  if (!timeOffRequestCanStaffChange(record)) {
+    showToast("Only your pending or approved requests can be cancelled.");
+    return;
+  }
+  showDetailDialog("Cancel Time Off Request", timeOffCancellationFormHtml(record));
+}
+
+async function cancelTimeOffRequestFromForm(formEl) {
+  if (!validateForm(formEl)) return null;
+  const existing = readRecords("timeOffRequest").find((record) => record.id === formEl.dataset.id && !record.removed);
+  if (!existing || !timeOffRequestCanStaffChange(existing)) {
+    showToast("Only your pending or approved requests can be cancelled.");
+    return null;
+  }
+  const data = formPayload(formEl);
+  const updated = cancelledTimeOffRequestRecord(existing, data.cancellationReason, timeOffRequestActor(), new Date().toISOString());
+  const saved = await saveAndNotify(updated, "timeOffCancelled");
   renderTimesheet();
   return saved;
 }
@@ -1752,13 +1899,22 @@ function openTimeOffReviewPopup(record = {}) {
 async function reviewTimeOffRequest(id = "", status = "Approved") {
   const record = readRecords("timeOffRequest").find((item) => item.id === id && !item.removed);
   if (!record || currentRole() !== "admin") return null;
+  if ((record.status || "Pending") !== "Pending") {
+    showToast("Only pending time off requests can be reviewed.");
+    return null;
+  }
   const reviewNote = $("#timeOffReviewNote")?.value || "";
+  const timestamp = new Date().toISOString();
   const updated = await saveAndNotify({
     ...record,
     status,
     reviewedBy: currentUser?.name || helperName.value || "Admin",
-    reviewedAt: new Date().toISOString(),
+    reviewedAt: timestamp,
     reviewNote,
+    statusHistory: [
+      ...(record.statusHistory || []),
+      { from: record.status || "Pending", to: status, date: timestamp, by: currentUser?.name || helperName.value || "Admin", source: "admin-review" },
+    ],
   }, "timeOffReviewed");
   renderTimesheet();
   return updated;

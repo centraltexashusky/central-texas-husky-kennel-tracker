@@ -1042,6 +1042,8 @@ function notificationDisplayTitle(notification = {}) {
   if (eventName === "urgentKennelRequestCreated") return \`Urgent request: \${source.category || "Kennel request"}\`;
   if (eventName === "urgentMaintenanceCreated") return \`Urgent maintenance: \${source.location || "Kennel"}\`;
   if (eventName === "timeOffRequested") return \`Time off request: \${source.staffName || "Staff"}\`;
+  if (eventName === "timeOffRevised") return \`Time off revised: \${source.staffName || "Staff"}\`;
+  if (eventName === "timeOffCancelled") return \`Time off cancelled: \${source.staffName || "Staff"}\`;
   if (eventName === "timeOffReviewed") return \`Time off \${String(source.status || "reviewed").toLowerCase()}: \${dateRangeText(source.startDate, source.endDate)}\`;
   if (eventName === "schedulePublished") return "Kennel schedule published";
   if (eventName === "scheduleChangedAfterPublish") return \`Schedule changed: \${source.staffName || "Staff"}\`;
@@ -1088,6 +1090,8 @@ function notificationDisplayMessage(notification = {}) {
   if (eventName === "urgentKennelRequestCreated") return source.requestText || "An urgent kennel request was submitted.";
   if (eventName === "urgentMaintenanceCreated") return source.issue || "An urgent maintenance item was submitted.";
   if (eventName === "timeOffRequested") return \`\${source.staffName || "Staff"} requested \${dateRangeText(source.startDate, source.endDate)} off.\`;
+  if (eventName === "timeOffRevised") return \`\${source.staffName || "Staff"} revised their request to \${dateRangeText(source.startDate, source.endDate)}. It needs a new review.\`;
+  if (eventName === "timeOffCancelled") return \`\${source.staffName || "Staff"} cancelled their \${dateRangeText(source.startDate, source.endDate)} time off request.\`;
   if (eventName === "timeOffReviewed") return \`\${source.reviewedBy || "Admin"} marked your time off request \${source.status || "reviewed"}.\`;
   if (eventName === "schedulePublished") return \`The schedule for \${dateRangeText(source.weekStart, addDays(source.weekStart, 6))} has been published.\`;
   if (eventName === "scheduleChangedAfterPublish") return \`\${source.staffName || "A staff member"} has a schedule change on \${source.date || "the published schedule"}.\`;
@@ -1170,6 +1174,8 @@ function notificationReasonForEvent(eventName = "", recordOrNotification = {}) {
   if (name === "maintenanceCreated" || name === "urgentMaintenanceCreated") return source.issue || "Maintenance item needs review";
   if (name === "customerStayUpdateSent") return "Owner update sent";
   if (name === "timeOffRequested") return "Time off review needed";
+  if (name === "timeOffRevised") return "Revised time off needs review";
+  if (name === "timeOffCancelled") return "Time off request cancelled";
   if (name === "dogShowClosingSoon") return "Entry decision due before closing";
   return notificationEventDisplayLabel(name || source.type || "Alert");
 }
@@ -1464,6 +1470,20 @@ function notificationEventConfig(eventName = "", record = {}) {
     timeOffRequested: {
       title: \`Time off request: \${record.staffName || "Staff"}\`,
       message: \`\${record.staffName || "Staff"} requested \${dateRangeText(record.startDate, record.endDate)} off.\`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    timeOffRevised: {
+      title: \`Time off revised: \${record.staffName || "Staff"}\`,
+      message: \`\${record.staffName || "Staff"} revised their request to \${dateRangeText(record.startDate, record.endDate)}. It needs a new review.\`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+    },
+    timeOffCancelled: {
+      title: \`Time off cancelled: \${record.staffName || "Staff"}\`,
+      message: \`\${record.staffName || "Staff"} cancelled their \${dateRangeText(record.startDate, record.endDate)} time off request.\`,
       priority: "review",
       channels: ["email", "inApp"],
       audienceRoles: ["admin"],

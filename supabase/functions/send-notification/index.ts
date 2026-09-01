@@ -56,7 +56,9 @@ const ALLOWED_EVENT_NAMES = new Set([
   "scheduleChangedAfterPublish",
   "schedulePublished",
   "serviceRequestReadyForPickup",
+  "timeOffCancelled",
   "timeOffRequested",
+  "timeOffRevised",
   "timeOffReviewed",
   "urgentCustomerAlertSent",
   "urgentKennelRequestCreated",
@@ -1554,6 +1556,29 @@ function notificationFallbackFields(eventName: string, sourceRecord: Record<stri
       readBy: [],
     };
   }
+  if (["timeOffRequested", "timeOffRevised", "timeOffCancelled"].includes(eventName)) {
+    const staffName = String(sourceRecord.staffName || sourceRecord.staffEmail || "Staff");
+    const dates = `${sourceRecord.startDate || ""}${sourceRecord.endDate && sourceRecord.endDate !== sourceRecord.startDate ? ` to ${sourceRecord.endDate}` : ""}`;
+    const action = eventName === "timeOffRevised" ? "revised" : eventName === "timeOffCancelled" ? "cancelled" : "requested";
+    return {
+      id: notificationId,
+      type: "notificationLog",
+      eventName,
+      sourceType: "timeOffRequest",
+      sourceId,
+      sourceSnapshot: sourceRecord,
+      title: `Time off ${action}: ${staffName}`,
+      message: `${staffName} ${action} ${dates} time off.`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+      alertCategory: "Staff",
+      alertReason: eventName === "timeOffRevised" ? "Revised time off needs review" : eventName === "timeOffCancelled" ? "Time off request cancelled" : "Time off review needed",
+      actionLabel: "Review Time Off",
+      actionTarget: { eventName, sourceType: "timeOffRequest", sourceId },
+      readBy: [],
+    };
+  }
   return {
     id: notificationId,
     type: "notificationLog",
@@ -1950,17 +1975,24 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       sms: true,
     };
   }
-  if (eventName === "timeOffRequested") {
+  if (eventName === "timeOffRequested" || eventName === "timeOffRevised" || eventName === "timeOffCancelled") {
+    const action = eventName === "timeOffRevised" ? "revised" : eventName === "timeOffCancelled" ? "cancelled" : "submitted";
+    const heading = action === "revised"
+      ? "A revised staff time off request needs review."
+      : action === "cancelled"
+        ? "A staff time off request was cancelled."
+        : "A staff time off request needs review.";
     return {
-      subject: `Time off request: ${record.staffName || "Staff"}`,
+      subject: `Time off ${action}: ${record.staffName || "Staff"}`,
       body: [
-        "A staff time off request needs review.",
+        heading,
         "",
         `Staff: ${record.staffName || record.staffEmail || ""}`,
         `Dates: ${record.startDate || ""}${record.endDate && record.endDate !== record.startDate ? ` to ${record.endDate}` : ""}`,
         `Reason: ${record.reason || ""}`,
+        ...(eventName === "timeOffCancelled" ? [`Cancellation note: ${record.cancellationReason || ""}`] : []),
         "",
-        `Review request: ${appLink("#timesheetPage")}`,
+        `${eventName === "timeOffCancelled" ? "Open time off history" : "Review request"}: ${appLink("#timesheetPage")}`,
       ].join("\n"),
       priority: "review",
       to: audienceEmails.length ? audienceEmails : adminEmails(),
@@ -2366,6 +2398,8 @@ Deno.serve(async (req) => {
     "urgentCustomerAlertSent",
     "schedulePublished",
     "scheduleChangedAfterPublish",
+    "timeOffCancelled",
+    "timeOffRevised",
     "timeOffReviewed",
   ]);
   if (staffOnlyOperationalEvents.has(eventName) && !isStaff) {

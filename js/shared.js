@@ -423,6 +423,8 @@ var alertTypeDefinitions = [
   { key: "urgentKennelRequestCreated", label: "Urgent kennel request", group: "Operations" },
   { key: "urgentMaintenanceCreated", label: "Urgent maintenance request", group: "Operations" },
   { key: "timeOffRequested", label: "Staff time off request", group: "Staff" },
+  { key: "timeOffRevised", label: "Staff revised time off request", group: "Staff" },
+  { key: "timeOffCancelled", label: "Staff cancelled time off request", group: "Staff" },
   { key: "timeOffReviewed", label: "Time off approval/denial", group: "Staff" },
   { key: "schedulePublished", label: "Schedule published", group: "Schedule" },
   { key: "scheduleChangedAfterPublish", label: "Schedule changed after publish", group: "Schedule" },
@@ -441,6 +443,8 @@ var adminDefaultAlertTypes = new Set([
   "urgentKennelRequestCreated",
   "urgentMaintenanceCreated",
   "timeOffRequested",
+  "timeOffRevised",
+  "timeOffCancelled",
   "schedulePublished",
   "scheduleChangedAfterPublish",
   "dogShowClosingSoon",
@@ -12899,6 +12903,7 @@ function initEvents() {
     const scheduleTemplateForm = event.target.closest("#scheduleTemplateForm");
     const clockExceptionForm = event.target.closest("#clockExceptionForm");
     const timeOffRequestForm = event.target.closest("#timeOffRequestForm");
+    const timeOffCancellationForm = event.target.closest("#timeOffCancellationForm");
     const holidayForm = event.target.closest("#holidayForm");
     const operationDateOverrideForm = event.target.closest("#operationDateOverrideForm");
     const taskTabForm = event.target.closest("#taskTabForm");
@@ -12915,7 +12920,7 @@ function initEvents() {
     const alertPreferenceForm = event.target.closest("#alertPreferenceForm");
     const boardingRequestFilterForm = event.target.closest("#boardingRequestFilterForm");
     const customerCancellationReasonForm = event.target.closest("#customerCancellationReasonForm");
-    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, holidayForm, operationDateOverrideForm, taskTabForm, dailyTaskEditForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingRequirementOverrideForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, boardingMedicalBehaviorNoteForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
+    const handledDetailForms = [quickCareForm, stayPopupForm, settingsPopupForm, ownerUpdateForm, vaccineUpdateForm, careLogEditForm, kennelAssignmentForm, timesheetEditForm, scheduleShiftForm, bulkScheduleForm, bulkScheduleConfirmForm, copyLastWeekConfirmForm, copyShiftDaysForm, copyDayScheduleForm, scheduleCopyConfirmForm, applyScheduleTemplateConfirmForm, scheduleTemplateForm, clockExceptionForm, timeOffRequestForm, timeOffCancellationForm, holidayForm, operationDateOverrideForm, taskTabForm, dailyTaskEditForm, kennelBuildingTabForm, ownedDogPhotoUploadForm, boardingRequirementOverrideForm, boardingCheckInForm, boardingCheckInServiceForm, boardingDeclineRequestForm, boardingMedicalBehaviorNoteForm, paymentMethodForm, urgentAlertForm, alertPreferenceForm, boardingRequestFilterForm, customerCancellationReasonForm];
     if (!handledDetailForms.some(Boolean)) return;
     event.preventDefault();
     if (customerCancellationReasonForm) {
@@ -13052,7 +13057,15 @@ function initEvents() {
       const saved = await saveTimeOffRequestFromForm(timeOffRequestForm);
       if (saved) {
         $("#detailDialog").close();
-        showToast("Time off request saved.");
+        showToast(timeOffRequestForm.dataset.id ? "Time off revision submitted for review." : "Time off request saved.");
+      }
+      return;
+    }
+    if (timeOffCancellationForm) {
+      const saved = await cancelTimeOffRequestFromForm(timeOffCancellationForm);
+      if (saved) {
+        $("#detailDialog").close();
+        showToast("Time off request cancelled.");
       }
       return;
     }
@@ -14232,6 +14245,16 @@ function initEvents() {
 	      if (action.dataset.action === "review-time-off") {
 	        const record = readRecords("timeOffRequest").find((item) => item.id === action.dataset.id && !item.removed);
 	        if (record) openTimeOffReviewPopup(record);
+	        return;
+	      }
+	      if (action.dataset.action === "revise-time-off") {
+	        const record = readRecords("timeOffRequest").find((item) => item.id === action.dataset.id && !item.removed);
+	        if (record) openTimeOffRequestPopup(record);
+	        return;
+	      }
+	      if (action.dataset.action === "cancel-time-off-request") {
+	        const record = readRecords("timeOffRequest").find((item) => item.id === action.dataset.id && !item.removed);
+	        if (record) openTimeOffCancellationPopup(record);
 	        return;
 	      }
 	      if (action.dataset.action === "edit-holiday") {
