@@ -1470,7 +1470,7 @@ function renderTimeOffTab() {
         ? readRecords("staffSchedule").filter((shift) => !shift.removed && shift.status !== "Cancelled" && normalizeEmail(shift.staffEmail) === normalizeEmail(record.staffEmail) && shift.date >= record.startDate && shift.date <= record.endDate)
         : [];
       const staffActions = timeOffRequestCanStaffChange(record)
-        ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="revise-time-off" data-id="\${escapeHtml(record.id)}">Revise</button><button type="button" class="secondary-button danger-button" data-action="cancel-time-off-request" data-id="\${escapeHtml(record.id)}">Cancel Request</button></div>\`
+        ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="revise-time-off" data-id="\${escapeHtml(record.id)}">Change Request</button><button type="button" class="secondary-button danger-button" data-action="cancel-time-off-request" data-id="\${escapeHtml(record.id)}">Cancel Request</button></div>\`
         : "";
       const adminActions = isAdmin && status === "Pending"
         ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="review-time-off" data-id="\${escapeHtml(record.id)}">Review</button></div>\`
