@@ -1133,6 +1133,20 @@ function customerPricingScopeForUser(user = currentUser) {
   return isMemberUser(user) ? "member" : "non-member";
 }
 
+function dogPricingScopeOverride(dog = {}) {
+  return normalizedPricingScope(dog.pricingScopeOverride || dog.customerPricingScopeOverride || "") === "non-member"
+    ? "non-member"
+    : "";
+}
+
+function customerPricingScopeForDog(dog = {}, user = currentUser) {
+  return dogPricingScopeOverride(dog) || customerPricingScopeForUser(user);
+}
+
+function dogUsesRegularPricingOverride(dog = {}) {
+  return dogPricingScopeOverride(dog) === "non-member";
+}
+
 function serviceMatchesPricingScopeForResolution(service = {}, scope = "non-member") {
   const serviceScope = servicePricingScope(service);
   return serviceScope === "all" || serviceScope === scope;
@@ -1186,9 +1200,8 @@ function resolveStandardBoardingRate(options = {}) {
   };
 }
 
-function boardingRatePlanForCustomer(user = currentUser) {
-  const isMemberPricing = isMemberUser(user);
-  const scope = customerPricingScopeForUser(user);
+function boardingRatePlanForScope(user = currentUser, scope = customerPricingScopeForUser(user)) {
+  const isMemberPricing = scope === "member";
   const primaryRate = resolveStandardBoardingRate({ user, pricingScope: scope, role: "primary" });
   const sharedCrateRate = resolveStandardBoardingRate({ user, pricingScope: scope, role: "shared-crate-additional" });
   const errors = [primaryRate, sharedCrateRate].filter((item) => !item.ok).map((item) => item.error);
@@ -1205,9 +1218,17 @@ function boardingRatePlanForCustomer(user = currentUser) {
   };
 }
 
+function boardingRatePlanForCustomer(user = currentUser) {
+  return boardingRatePlanForScope(user, customerPricingScopeForUser(user));
+}
+
+function boardingRatePlanForDog(dog = {}, user = currentUser) {
+  return boardingRatePlanForScope(user, customerPricingScopeForDog(dog, user));
+}
+
 function boardingRatePlanForRecord(record = {}) {
   const owner = ownerAccountForBoarding(record) || savedUserFor({ email: record.ownerEmail || record.customerEmail }) || {};
-  return boardingRatePlanForCustomer(owner);
+  return boardingRatePlanForDog(record, owner);
 }
 
 function boardingPricingUserForRecord(record = {}, options = {}) {
@@ -1541,16 +1562,21 @@ function boardingLineDisplayLabel(line = {}) {
 }
 
 function boardingDogPricingLines(dogs = [], options = {}) {
-  const ratePlan = options.ratePlan || boardingRatePlanForCustomer();
+  const householdRatePlan = options.ratePlan || boardingRatePlanForCustomer(options.user || currentUser);
   const stayProgram = options.stayProgram || null;
   const days = Number(options.days || 0);
   const isServiceRequest = Boolean(options.isServiceRequest);
-  const sharedCrateRequested = Boolean(options.sharedCrateRequested && ratePlan.isMemberPricing && !stayProgram);
+  const sharedCrateRequested = Boolean(options.sharedCrateRequested && householdRatePlan.isMemberPricing && !stayProgram);
   const programRate = Number(stayProgram?.rate ?? stayProgram?.basePrice ?? 0);
+  let memberDogIndex = 0;
   return uniqueCustomerBookingDogs(dogs).map((dog, index) => {
-    const pairIndex = Math.floor(index / ratePlan.maxDogsPerCrate);
-    const position = index % ratePlan.maxDogsPerCrate;
-    const sharedGroup = sharedCrateRequested && position > 0;
+    const ratePlan = dogUsesRegularPricingOverride(dog)
+      ? boardingRatePlanForDog(dog, options.user || boardingPricingUserForRecord(dog) || currentUser)
+      : householdRatePlan;
+    const eligibleMemberIndex = ratePlan.isMemberPricing ? memberDogIndex++ : -1;
+    const pairIndex = eligibleMemberIndex >= 0 ? Math.floor(eligibleMemberIndex / ratePlan.maxDogsPerCrate) : index;
+    const position = eligibleMemberIndex >= 0 ? eligibleMemberIndex % ratePlan.maxDogsPerCrate : 0;
+    const sharedGroup = sharedCrateRequested && ratePlan.isMemberPricing && position > 0;
     const role = stayProgram ? "boarding-program" : ratePlan.isMemberPricing
       ? sharedGroup ? "shared-crate-additional" : "primary"
       : "non-member";
@@ -1563,17 +1589,18 @@ function boardingDogPricingLines(dogs = [], options = {}) {
       dogName: dog.dogName || "Dog",
       stayProgramId: stayProgram?.id || stayProgram?.serviceId || "",
       stayProgramName: stayProgram?.serviceName || stayProgram?.name || "",
-      crateGroupId: sharedCrateRequested ? \`crate-\${pairIndex + 1}\` : \`solo-\${boardingPricingDogKey(dog) || index}\`,
-      crateGroupPosition: sharedCrateRequested ? position + 1 : 1,
+      crateGroupId: sharedCrateRequested && ratePlan.isMemberPricing ? \`crate-\${pairIndex + 1}\` : \`solo-\${boardingPricingDogKey(dog) || index}\`,
+      crateGroupPosition: sharedCrateRequested && ratePlan.isMemberPricing ? position + 1 : 1,
       role,
       rate,
       days,
       total: pricingError || isServiceRequest ? 0 : days * rate,
-      sharedCrateRequested,
+      sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing,
       pricingError,
       boardingRateServiceId: rateConfig?.serviceId || "",
       boardingRateServiceName: rateConfig?.serviceName || "",
       pricingScope: rateConfig?.pricingScope || ratePlan.customerPricingScope || "",
+      pricingScopeOverride: dogPricingScopeOverride(dog),
     };
   });
 }
@@ -1595,6 +1622,10 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   const savedStayProgramName = hasExplicitStayProgram && !stayProgram ? "" : stay.stayProgramName || stay.pricingSnapshot?.stayProgramName || "";
   const stayProgramName = stayProgram?.serviceName || stayProgram?.name || savedStayProgramName;
   const stayProgramRate = Number(stayProgram?.rate ?? stayProgram?.basePrice ?? (stayProgram ? stay.stayProgramRate ?? stay.pricingSnapshot?.stayProgramRate : 0) ?? 0);
+  const hasExplicitSharedCrateRequest = Object.prototype.hasOwnProperty.call(options, "sharedCrateRequested");
+  const sharedCrateRequested = hasExplicitSharedCrateRequest
+    ? Boolean(options.sharedCrateRequested)
+    : Boolean(stay.pricingSnapshot?.sharedCrateRequested);
   const priorRole = stay.pricingSnapshot?.currentDogRole || stay.pricingSnapshot?.role || "";
   const role = options.currentDogRole || priorRole || (stayProgram ? "boarding-program" : ratePlan.isMemberPricing ? "primary" : "non-member");
   const defaultRateConfig = role === "shared-crate-additional" ? ratePlan.sharedCrateRateConfig : ratePlan.primaryRateConfig;
@@ -1627,6 +1658,7 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
     pricingSource: "admin-service-catalog",
     calculatedAt: new Date().toISOString(),
     customerPricingScope,
+    pricingScopeOverride: dogPricingScopeOverride(record),
     scheduledDropoffTime: stay.scheduledDropoffTime || stay.requestedDropoffTime || stay.dropoffTime || "",
     billableDropoffTime,
     billingStartPolicy: stay.billingStartPolicy || "",
@@ -1669,7 +1701,7 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
     currentDogName: options.currentDogName || stay.pricingSnapshot?.currentDogName || record.dogName || "",
     currentDogRole: role,
     currentDogRate: rate,
-    sharedCrateRequested: Boolean(options.sharedCrateRequested || stay.pricingSnapshot?.sharedCrateRequested),
+    sharedCrateRequested,
     crateGroupId: options.crateGroupId || stay.pricingSnapshot?.crateGroupId || "",
     boardingSubtotal,
     serviceSubtotal,
@@ -3136,6 +3168,7 @@ function boardingDraftFromCustomerDog(dog = {}) {
     vaccinationFiles: dog.vaccinationFiles || "",
     linkedCustomerDogId: dog.id || "",
     linkedOwnerEmail: dog.ownerEmail || dog.customerEmail || "",
+    pricingScopeOverride: dogPricingScopeOverride(dog),
     entrySource: "customer-profile",
   };
 }
@@ -3720,7 +3753,7 @@ function boardingQuickCardHtml(record = {}) {
       <div class="mobile-roster-card-main boarding-mobile-card-main">
         \${boardingDogMobilePhotoHtml(record)}
         <div class="boarding-mobile-card-content">
-          <div class="boarding-card-title-row"><strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong>\${vaccinationStatusBadgeHtml(record)}</div>
+          <div class="boarding-card-title-row"><strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong>\${dogUsesRegularPricingOverride(record) ? statusChipHtml("Regular pricing", "pricing-scope-chip") : ""}\${vaccinationStatusBadgeHtml(record)}</div>
           <div class="chip-row boarding-mobile-status-row">\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}\${boardingRecordStatusButtonHtml(record)}</div>
           \${boardingQuickFactsHtml(record, stay)}
           \${boardingMobileScheduleFlagsHtml(record, stay)}
@@ -5293,14 +5326,14 @@ function boardingFamilyGroupSavedTotal(entries = []) {
 function boardingFamilySharedCrateReviewHtml(entries = []) {
   const activeEntries = entries.filter((entry) => !["Cancelled", "Checked Out"].includes(entry.status));
   if (activeEntries.length <= 1) return "";
-  const first = activeEntries[0] || {};
-  const ratePlan = boardingRatePlanForRecord(first.record || {});
-  if (!ratePlan.isMemberPricing) return "";
-  const snapshots = activeEntries.map((entry) => entry.stay?.pricingSnapshot || {});
+  const memberEntries = activeEntries.filter((entry) => boardingRatePlanForRecord(entry.record || {}).isMemberPricing);
+  if (memberEntries.length <= 1) return "";
+  const ratePlan = boardingRatePlanForRecord(memberEntries[0]?.record || {});
+  const snapshots = memberEntries.map((entry) => entry.stay?.pricingSnapshot || {});
   const hasSharedRole = snapshots.some((snapshot) => snapshot.sharedCrateRequested || snapshot.currentDogRole === "shared-crate-additional");
   if (hasSharedRole) {
     const grouped = new Map();
-    activeEntries.forEach((entry, index) => {
+    memberEntries.forEach((entry, index) => {
       const snapshot = entry.stay?.pricingSnapshot || {};
       const groupId = snapshot.crateGroupId || "crate-" + Math.floor(index / BOARDING_MAX_DOGS_PER_CRATE + 1);
       if (!grouped.has(groupId)) grouped.set(groupId, []);
@@ -5328,19 +5361,22 @@ function boardingFamilyPricingSnapshots(entries = []) {
   const first = activeEntries[0] || {};
   const firstRecord = first.record || {};
   const firstStay = first.stay || {};
-  const ratePlan = boardingRatePlanForRecord(firstRecord);
+  const pricingUser = boardingPricingUserForRecord(firstRecord);
+  const ratePlan = boardingRatePlanForCustomer(pricingUser);
+  const memberEntryCount = activeEntries.filter((entry) => boardingRatePlanForRecord(entry.record || {}).isMemberPricing).length;
   const stayProgram = firstStay.stayProgram || firstStay.pricingSnapshot?.stayProgram || null;
   const isServiceRequest = String(firstStay.stayType || firstRecord.stayType || "").trim() === "Service Request";
   const days = isServiceRequest ? 0 : boardingDays(boardingBillableDropoffTime(firstStay), firstStay.pickupTime);
   const hadMemberSnapshot = activeEntries.some((entry) => entry.stay?.pricingSnapshot?.isMemberPricing);
   const explicitSharedCrate = activeEntries.some((entry) => entry.stay?.pricingSnapshot?.sharedCrateRequested);
-  const sharedCrateRequested = Boolean(ratePlan.isMemberPricing && !stayProgram && activeEntries.length > 1 && (explicitSharedCrate || !hadMemberSnapshot));
+  const sharedCrateRequested = Boolean(ratePlan.isMemberPricing && !stayProgram && memberEntryCount > 1 && (explicitSharedCrate || !hadMemberSnapshot));
   const useSavedMemberRoles = Boolean(ratePlan.isMemberPricing && activeEntries.some((entry) => entry.stay?.pricingSnapshot?.isMemberPricing && ["primary", "shared-crate-additional"].includes(entry.stay?.pricingSnapshot?.currentDogRole)));
   const lines = useSavedMemberRoles
     ? activeEntries.map((entry) => {
       const record = entry.record || {};
-      const savedRole = boardingCurrentDogRoleForStay(entry.stay || {}, ratePlan);
-      const rate = isServiceRequest ? 0 : savedRole === "shared-crate-additional" ? ratePlan.sharedCrateRate : ratePlan.primaryRate;
+      const dogRatePlan = boardingRatePlanForRecord(record);
+      const savedRole = boardingCurrentDogRoleForStay(entry.stay || {}, dogRatePlan);
+      const rate = isServiceRequest ? 0 : savedRole === "shared-crate-additional" ? dogRatePlan.sharedCrateRate : dogRatePlan.primaryRate;
       return {
         dogKey: boardingPricingDogKey(record),
         dogId: record.id || "",
@@ -5349,7 +5385,7 @@ function boardingFamilyPricingSnapshots(entries = []) {
         rate,
         days,
         total: days * rate,
-        sharedCrateRequested,
+        sharedCrateRequested: sharedCrateRequested && dogRatePlan.isMemberPricing,
         crateGroupId: entry.stay?.pricingSnapshot?.crateGroupId || "",
       };
     })
@@ -5370,13 +5406,14 @@ function boardingFamilyPricingSnapshots(entries = []) {
     const record = entry.record || {};
     const stay = entry.stay || {};
     const line = lines[index] || {};
+    const dogRatePlan = boardingRatePlanForRecord(record);
     snapshots.set(entry, boardingCurrentPricingSnapshotForStay(record, stay, {
       forceCurrentPricing: true,
-      ratePlan,
+      ratePlan: dogRatePlan,
       currentDogKey: line.dogKey || boardingPricingDogKey(record),
       currentDogName: line.dogName || record.dogName || "Dog",
       currentDogRole: line.role,
-      sharedCrateRequested,
+      sharedCrateRequested: Boolean(line.sharedCrateRequested),
       crateGroupId: line.crateGroupId || "",
       stayProgram,
       groupBoardingSubtotal,
@@ -7393,8 +7430,8 @@ function boardingBillingLabel(estimate = {}) {
   return \`\${days} boarding day/night\${days === 1 ? "" : "s"}\`;
 }
 
-function boardingPricingServiceForCustomer(user = currentUser) {
-  const rate = resolveStandardBoardingRate({ user, role: "primary" });
+function boardingPricingServiceForCustomer(user = currentUser, dog = {}) {
+  const rate = resolveStandardBoardingRate({ user, pricingScope: customerPricingScopeForDog(dog, user), role: "primary" });
   return rate.ok ? rate.service : null;
 }
 //# sourceURL=snuggle-stay/boarding.js

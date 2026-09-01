@@ -8018,6 +8018,7 @@ async function mirrorBoardingCustomerUpdateToCustomerDog(boardingRecord = {}, up
 
 var canonicalDogProfileFields = [
   "dogName",
+  "pricingScopeOverride",
   "breedDescription",
   "akcRegistrationNumber",
   "microchipNumber",
@@ -15119,6 +15120,10 @@ function initEvents() {
         }
         if (oldSecondaryOwnerEmail !== newSecondaryOwnerEmail) {
           await addAuditLog("Changed secondary owner email", "boardingDog", record, \`\${oldSecondaryOwnerEmail || "none"} -> \${newSecondaryOwnerEmail || "none"}\`);
+        }
+        if (dogPricingScopeOverride(record) !== dogPricingScopeOverride(existing)) {
+          const pricingLabel = dogUsesRegularPricingOverride(record) ? "Regular pricing" : "Household membership pricing";
+          await addAuditLog("Changed dog pricing eligibility", "boardingDog", record, \`\${record.dogName || "Dog"} -> \${pricingLabel}\`);
         }
         if ((record.profilePhotoUrl || "") !== (existing.profilePhotoUrl || "")) {
           await addAuditLog("Uploaded boarding dog profile photo", "boardingDog", record, record.dogName || "");

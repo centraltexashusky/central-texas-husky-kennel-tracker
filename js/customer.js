@@ -2218,7 +2218,7 @@ function renderCustomerDogs() {
   hydrateProfilePhotoElements($("#customerDogList"));
   if ($("#customerBookingDogList")) {
     $("#customerBookingDogList").innerHTML = dogs.length
-      ? dogs.map((dog) => \`<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="\${dog.id}" \${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>\${escapeHtml(dog.dogName)}</strong><span>\${escapeHtml(dog.breedDescription || "")}</span></label>\`).join("")
+      ? dogs.map((dog) => \`<label class="customer-dog-item"><input type="checkbox" name="customerDogSelect" value="\${dog.id}" \${checkedIds.has(dog.id) ? "checked" : ""} /> <strong>\${escapeHtml(dog.dogName)}</strong><span>\${escapeHtml(dog.breedDescription || "")}\${dogUsesRegularPricingOverride(dog) ? " | Regular pricing" : ""}</span></label>\`).join("")
       : \`<article class="record-card compact-record-card"><strong>Add a dog before requesting boarding.</strong><p>Boarding requests need at least one dog profile first.</p><button type="button" class="secondary-button" data-action="customer-add-dog-cta">Add Dog</button></article>\`;
   }
   $("#customerBookingForm")?.classList.toggle("has-no-customer-dogs", !dogs.length);
@@ -2359,6 +2359,7 @@ function customerDogSummaryCardHtml(dog = {}) {
         <div class="customer-dog-summary-title">
           <h3>\${escapeHtml(dog.dogName || "Your dog")}</h3>
           \${statusChipHtml(vaccine.label, \`vaccination-status-chip \${vaccine.className}\`)}
+          \${dogUsesRegularPricingOverride(dog) ? statusChipHtml("Regular pricing", "pricing-scope-chip") : ""}
         </div>
         <p>\${escapeHtml(facts || "Dog profile")}</p>
       </div>
@@ -2592,11 +2593,16 @@ function customerServiceOptionHtml(service = {}, checkedIds = new Set(), options
   return \`<label class="service-option\${options.addOn ? " service-option-addon" : ""}\${extraClass}"><span class="service-option-label"><input type="checkbox" name="\${escapeHtml(serviceFieldName)}" value="\${escapeHtml(service.id)}" \${checked ? "checked" : ""}\${dogAttrs} /><span class="service-option-copy"><span class="service-option-text">\${escapeHtml(addOnPrefix)}\${escapeHtml(displayName)} - \${priceText}</span>\${infoIcon}</span></span><input class="service-quantity" type="number" name="\${escapeHtml(quantityFieldName)}" min="1" step="1" value="\${escapeHtml(quantityValue)}" \${checked ? "" : "disabled"} aria-label="\${escapeHtml(displayName)} quantity"\${dogAttrs} /></label>\`;
 }
 
-function customerStayProgramServices(user = currentUser) {
+function customerServiceMatchesDogPricingScope(service = {}, dog = {}, user = currentUser) {
+  const scope = servicePricingScope(service);
+  return scope === "all" || scope === customerPricingScopeForDog(dog, user);
+}
+
+function customerStayProgramServices(user = currentUser, dogs = selectedCustomerDogs()) {
   applyLegacyBoardingProgramMigration();
   return readRecords("service")
     .filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && serviceIsBoardingProgram(service))
-    .filter((service) => serviceMatchesCustomerPricingScope(service, user))
+    .filter((service) => !dogs.length ? serviceMatchesCustomerPricingScope(service, user) : dogs.every((dog) => customerServiceMatchesDogPricingScope(service, dog, user)))
     .sort((a, b) => String(a.serviceName || "").localeCompare(String(b.serviceName || "")));
 }
 
@@ -2624,7 +2630,8 @@ function renderCustomerStayProgramOptions() {
   const container = $("#customerStayProgramOptions");
   if (!step || !container) return;
   const show = customerRequestMode() === "boarding";
-  const programs = show ? customerStayProgramServices() : [];
+  const dogs = selectedCustomerDogs();
+  const programs = show ? customerStayProgramServices(currentUser, dogs) : [];
   step.hidden = !show || !programs.length;
   if (step.hidden) {
     container.innerHTML = "";
@@ -2633,11 +2640,14 @@ function renderCustomerStayProgramOptions() {
   }
   const existing = selectedCustomerStayProgramId();
   const selectedId = existing && programs.some((program) => program.id === existing) ? existing : "standard";
-  const ratePlan = boardingRatePlanForCustomer(currentUser);
+  const pricingScopes = new Set(dogs.map((dog) => customerPricingScopeForDog(dog, currentUser)));
+  const ratePlan = dogs.length === 1 ? boardingRatePlanForDog(dogs[0], currentUser) : boardingRatePlanForCustomer(currentUser);
   const standardRate = ratePlan.primaryRateConfig || {};
   const standardService = standardRate.ok ? standardRate.service : null;
   const standardLabel = standardService?.serviceName || "Standard Overnight Boarding";
-  const standardPriceText = standardRate.ok
+  const standardPriceText = pricingScopes.size > 1
+    ? "per-dog member and regular rates"
+    : standardRate.ok
     ? \`\${money(standardRate.rate)} \${escapeHtml(standardRate.unit || "per night")}\`
     : "Pricing not configured";
   const options = [
@@ -2653,26 +2663,26 @@ function renderCustomerStayProgramOptions() {
   updateCustomerBookingOptionsEmptyState();
 }
 
-function customerImplicitDependencyIds() {
+function customerImplicitDependencyIds(dog = {}) {
   const ids = new Set();
   if (customerRequestMode() === "boarding") {
     const stayProgram = selectedCustomerStayProgram();
-    const dependencyService = stayProgram || boardingPricingServiceForCustomer(currentUser);
+    const dependencyService = stayProgram || boardingPricingServiceForCustomer(currentUser, dog);
     if (dependencyService?.id) ids.add(dependencyService.id);
   }
   return ids;
 }
 
-function customerDependencyIds(checkedIds = new Set()) {
-  return new Set([...checkedIds, ...customerImplicitDependencyIds()]);
+function customerDependencyIds(checkedIds = new Set(), dog = {}) {
+  return new Set([...checkedIds, ...customerImplicitDependencyIds(dog)]);
 }
 
-function customerServiceVisibleForCurrentUser(service = {}) {
+function customerServiceVisibleForCurrentUser(service = {}, dog = {}) {
   return !service.removed
     && serviceHasFlag(service, "Active")
     && !serviceHasFlag(service, "Admin only")
     && (service.category !== "Boarding" || serviceDependencyId(service))
-    && serviceMatchesCustomerPricingScope(service, currentUser);
+    && customerServiceMatchesDogPricingScope(service, dog, currentUser);
 }
 
 function renderCustomerServiceOptions() {
@@ -2681,20 +2691,21 @@ function renderCustomerServiceOptions() {
   applyLegacyBoardingProgramMigration();
   const formEl = $("#customerBookingForm");
   const dogs = selectedCustomerDogs();
-  const services = readRecords("service").filter(customerServiceVisibleForCurrentUser);
-  const visibleServices = services.filter((service) => !serviceDependencyId(service));
-  const groupedVisibleServices = visibleServices.reduce((groups, service) => {
-    const category = String(service.category || "Other Services").trim() || "Other Services";
-    groups[category] = [...(groups[category] || []), service];
-    return groups;
-  }, {});
+  const serviceCatalog = readRecords("service");
   if (!dogs.length) {
     $("#customerServiceOptions").innerHTML = "<p>Select dog(s) first to choose services for each dog.</p>";
     return;
   }
   const dogGroupsHtml = dogs.map((dog, index) => {
+    const services = serviceCatalog.filter((service) => customerServiceVisibleForCurrentUser(service, dog));
+    const visibleServices = services.filter((service) => !serviceDependencyId(service));
+    const groupedVisibleServices = visibleServices.reduce((groups, service) => {
+      const category = String(service.category || "Other Services").trim() || "Other Services";
+      groups[category] = [...(groups[category] || []), service];
+      return groups;
+    }, {});
     const checkedIds = new Set(checkedFrom(formEl, customerServiceFieldNameForDog(dog)));
-    const dependencyIds = customerDependencyIds(checkedIds);
+    const dependencyIds = customerDependencyIds(checkedIds, dog);
     const selectedCount = [...checkedIds].filter((id) => services.some((service) => service.id === id && serviceDependencySatisfied(service, dependencyIds))).length;
     const serviceBlockHtml = (service) => {
       const childServices = dependencyIds.has(service.id)
@@ -2735,7 +2746,8 @@ function renderCustomerCrateShareOptions() {
   const isBoardingRequest = customerRequestMode() === "boarding";
   const stayProgram = selectedCustomerStayProgram();
   const ratePlan = boardingRatePlanForCustomer();
-  const show = isBoardingRequest && !stayProgram && ratePlan.isMemberPricing && dogs.length > 1;
+  const memberDogs = dogs.filter((dog) => customerPricingScopeForDog(dog, currentUser) === "member");
+  const show = isBoardingRequest && !stayProgram && ratePlan.isMemberPricing && memberDogs.length > 1;
   step.hidden = !show;
   if (!show) {
     container.innerHTML = "";
@@ -2744,7 +2756,7 @@ function renderCustomerCrateShareOptions() {
   }
   const prior = $("#customerSharedCrateRequested");
   const checked = prior ? prior.checked : true;
-  const lines = boardingDogPricingLines(dogs, { ratePlan, days: 1, sharedCrateRequested: true })
+  const lines = boardingDogPricingLines(memberDogs, { ratePlan, user: currentUser, days: 1, sharedCrateRequested: true })
     .reduce((groups, line) => {
       groups[line.crateGroupId] = [...(groups[line.crateGroupId] || []), line.dogName];
       return groups;
@@ -2752,7 +2764,7 @@ function renderCustomerCrateShareOptions() {
   const groupSummary = Object.values(lines)
     .map((names, index) => \`Crate \${index + 1}: \${names.join(" + ")}\`)
     .join(" | ");
-  container.innerHTML = \`<label class="toggle-row"><input type="checkbox" id="customerSharedCrateRequested" name="customerSharedCrateRequested" \${checked ? "checked" : ""} /> Request shared-crate member pricing when staff approve it</label><p>\${escapeHtml(groupSummary)}. Max \${BOARDING_MAX_DOGS_PER_CRATE} dogs per crate.</p>\`;
+  container.innerHTML = \`<label class="toggle-row"><input type="checkbox" id="customerSharedCrateRequested" name="customerSharedCrateRequested" \${checked ? "checked" : ""} /> Request shared-crate member pricing when staff approve it</label><p>\${escapeHtml(groupSummary)}. Only member-priced dogs are eligible; max \${BOARDING_MAX_DOGS_PER_CRATE} dogs per crate.</p>\`;
   updateCustomerBookingOptionsEmptyState();
 }
 
@@ -2916,11 +2928,11 @@ function customerEstimateDetails() {
   const serviceCatalog = readRecords("service");
   const services = dogs.flatMap((dog) => {
     const selectedServiceIds = new Set(checkedFrom(formEl, customerServiceFieldNameForDog(dog)));
-    const dependencyIds = customerDependencyIds(selectedServiceIds);
+    const dependencyIds = customerDependencyIds(selectedServiceIds, dog);
     return [...selectedServiceIds]
       .map((id) => {
         const service = serviceCatalog.find((item) => item.id === id);
-        if (!service || !customerServiceVisibleForCurrentUser(service)) return null;
+        if (!service || !customerServiceVisibleForCurrentUser(service, dog)) return null;
         const quantity = Math.max(1, Number(formFieldByName(formEl, customerServiceQuantityFieldName(id, dog))?.value || 1));
         const pricingError = servicePriceError(service, customerServiceDisplayName(service));
         const unitPrice = pricingError ? 0 : servicePriceValue(service);
@@ -2944,7 +2956,7 @@ function customerEstimateDetails() {
   const ratePlan = boardingRatePlanForCustomer();
   const stayProgram = isServiceRequest ? null : customerStayProgramSnapshot(selectedCustomerStayProgram());
   const sharedCrateRequested = stayProgram ? false : customerSharedCrateRequested();
-  const boardingLines = boardingDogPricingLines(dogs, { ratePlan, days, isServiceRequest, sharedCrateRequested, stayProgram });
+  const boardingLines = boardingDogPricingLines(dogs, { ratePlan, user: currentUser, days, isServiceRequest, sharedCrateRequested, stayProgram });
   const boardingRate = stayProgram?.rate || ratePlan.primaryRate;
   const boardingCost = boardingLines.reduce((total, line) => total + Number(line.total || 0), 0);
   const serviceCost = services.reduce((total, service) => total + service.lineTotal, 0);
@@ -2965,7 +2977,7 @@ function customerEstimateDetails() {
     stayProgram,
     boardingRate,
     ratePlan,
-    sharedCrateRequested: sharedCrateRequested && ratePlan.isMemberPricing,
+    sharedCrateRequested: sharedCrateRequested && boardingLines.some((line) => line.sharedCrateRequested),
     boardingLines,
     boardingCost,
     serviceCost,
@@ -3189,6 +3201,7 @@ async function submitPendingCustomerBooking() {
         customerDogId: dog.id || "",
         sourceBoardingDogId: dog.sourceBoardingDogId || "",
         dogName: dog.dogName || "",
+        pricingScopeOverride: dogPricingScopeOverride(dog),
         breedDescription: dog.breedDescription || "",
         akcRegistrationNumber: dog.akcRegistrationNumber || "",
         microchipNumber: dog.microchipNumber || "",
@@ -3217,7 +3230,8 @@ async function submitPendingCustomerBooking() {
         vaccinationRecords: dog.vaccinationRecords || [],
         vaccinationFiles: dog.vaccinationFiles || "",
       };
-      const pricingSnapshot = boardingPricingSnapshotForStay(existingTarget || dog, {
+      const dogRatePlan = boardingRatePlanForDog(dog, currentUser);
+      const pricingSnapshot = boardingPricingSnapshotForStay({ ...(existingTarget || dog), pricingScopeOverride: dogPricingScopeOverride(dog) }, {
         ...existingStay,
         dropoffTime: estimate.dropoffTime,
         pickupTime: estimate.pickupTime,
@@ -3225,11 +3239,11 @@ async function submitPendingCustomerBooking() {
         requests: stayRequests,
         invoiceAdjustments,
       }, {
-        ratePlan: estimate.ratePlan,
+        ratePlan: dogRatePlan,
         currentDogKey: dogLine.dogKey || boardingPricingDogKey(dog),
         currentDogName: dogLine.dogName || dog.dogName || "Dog",
-        currentDogRole: dogLine.role || (estimate.ratePlan?.isMemberPricing ? "primary" : "non-member"),
-        sharedCrateRequested: estimate.sharedCrateRequested,
+        currentDogRole: dogLine.role || (dogRatePlan.isMemberPricing ? "primary" : "non-member"),
+        sharedCrateRequested: Boolean(dogLine.sharedCrateRequested),
         crateGroupId: dogLine.crateGroupId || "",
         stayProgram: estimate.stayProgram,
         groupBoardingSubtotal: estimate.boardingCost,
@@ -3335,6 +3349,7 @@ async function submitPendingCustomerBooking() {
         requestGroupStatus: requestReviewStatus,
         dogNames: groupDogNames,
         dogName: dog.dogName,
+        pricingScopeOverride: dogPricingScopeOverride(dog),
         breedDescription: dog.breedDescription,
         akcRegistrationNumber: dog.akcRegistrationNumber || existingTarget?.akcRegistrationNumber || "",
         microchipNumber: dog.microchipNumber || existingTarget?.microchipNumber || "",
