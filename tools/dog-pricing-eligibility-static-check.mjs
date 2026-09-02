@@ -132,6 +132,7 @@ const staleProfile = {
   id: "boardingDog-stale",
   linkedCustomerDogId: "",
   sourceCustomerDogId: "customerDog-coco",
+  sourceBoardingDogId: "boardingDog-canonical",
   sourceRecordIds: ["boardingDog-stale", "boardingDog-canonical"],
   stays: [{ id: "stay-new" }],
   pricingScopeOverride: "non-member",
@@ -151,6 +152,7 @@ assert.equal(
 const canonicalSave = canonicalContext.boardingDogWithCanonicalSaveIdentity(staleProfile, canonicalProfile, "customerDog-coco");
 assert.equal(canonicalSave.id, "boardingDog-canonical");
 assert.equal(canonicalSave.linkedCustomerDogId, "customerDog-coco");
+assert.equal(canonicalSave.sourceBoardingDogId, "", "detached amendment provenance is not copied onto the canonical profile");
 assert.equal(canonicalSave.pricingScopeOverride, "non-member");
 assert.deepEqual(Array.from(canonicalSave.stays, (stay) => stay.id), ["stay-new"], "the edited merged stay payload is preserved");
 assert.ok(Array.from(canonicalSave.duplicateProfileIds).includes("boardingDog-stale"), "the stale primary remains recorded as profile history");

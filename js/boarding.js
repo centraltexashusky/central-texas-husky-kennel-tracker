@@ -3240,6 +3240,7 @@ function canonicalActiveBoardingDogForCustomerDog(customerDogId = "", records = 
 function boardingDogWithCanonicalSaveIdentity(record = {}, canonicalRecord = {}, customerDogId = "") {
   if (!canonicalRecord?.id) return record || {};
   const linkedId = String(customerDogId || canonicalRecord.linkedCustomerDogId || record.linkedCustomerDogId || "").trim();
+  const canonicalSourceBoardingDogId = String(canonicalRecord.sourceBoardingDogId || "").trim();
   const sourceRecordIds = [...new Set([
     ...arrayValue(canonicalRecord.sourceRecordIds),
     ...arrayValue(record.sourceRecordIds),
@@ -3258,6 +3259,10 @@ function boardingDogWithCanonicalSaveIdentity(record = {}, canonicalRecord = {},
     type: "boardingDog",
     submittedAt: canonicalRecord.submittedAt || record.submittedAt || "",
     linkedCustomerDogId: linkedId,
+    sourceCustomerDogId: canonicalRecord.sourceCustomerDogId || record.sourceCustomerDogId || linkedId,
+    sourceBoardingDogId: canonicalSourceBoardingDogId && canonicalSourceBoardingDogId !== canonicalRecord.id
+      ? canonicalSourceBoardingDogId
+      : "",
     sourceRecordIds,
     duplicateProfileIds,
   };
