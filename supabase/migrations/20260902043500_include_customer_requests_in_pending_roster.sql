@@ -1,84 +1,3 @@
-create or replace function cuddle_stay.kennel_boarding_roster_summary()
-returns jsonb
-language sql
-stable
-security invoker
-set search_path = ''
-as $$
-  select jsonb_build_object(
-    'rawCount', count(*),
-    'records', coalesce(
-      jsonb_agg(
-        jsonb_build_object(
-          'id', kr.id,
-          'payload', jsonb_strip_nulls(jsonb_build_object(
-            'id', kr.id,
-            'dogName', kr.payload -> 'dogName',
-            'callName', kr.payload -> 'callName',
-            'showName', kr.payload -> 'showName',
-            'linkedCustomerDogId', kr.payload -> 'linkedCustomerDogId',
-            'sourceCustomerDogId', kr.payload -> 'sourceCustomerDogId',
-            'customerDogId', kr.payload -> 'customerDogId',
-            'dogId', kr.payload -> 'dogId',
-            'canonicalDogId', kr.payload -> 'canonicalDogId',
-            'legacyCustomerDogIds', kr.payload -> 'legacyCustomerDogIds',
-            'linkedBoardingDogId', kr.payload -> 'linkedBoardingDogId',
-            'sourceBoardingDogId', kr.payload -> 'sourceBoardingDogId',
-            'sourceRecordIds', kr.payload -> 'sourceRecordIds',
-            'duplicateProfileIds', kr.payload -> 'duplicateProfileIds',
-            'legacyBoardingDogIds', kr.payload -> 'legacyBoardingDogIds',
-            'ownerName', kr.payload -> 'ownerName',
-            'ownerEmail', kr.payload -> 'ownerEmail',
-            'customerEmail', kr.payload -> 'customerEmail',
-            'linkedOwnerEmail', kr.payload -> 'linkedOwnerEmail',
-            'secondaryOwnerEmail', kr.payload -> 'secondaryOwnerEmail',
-            'requestedByEmail', kr.payload -> 'requestedByEmail',
-            'ownerPhone', kr.payload -> 'ownerPhone',
-            'phone', kr.payload -> 'phone',
-            'customerPhone', kr.payload -> 'customerPhone',
-            'requestedByPhone', kr.payload -> 'requestedByPhone',
-            'emergencyPhone', kr.payload -> 'emergencyPhone',
-            'boardingStatus', kr.payload -> 'boardingStatus',
-            'status', kr.payload -> 'status',
-            'customerRequest', kr.payload -> 'customerRequest',
-            'entrySource', kr.payload -> 'entrySource',
-            'submittedAt', coalesce(kr.payload -> 'submittedAt', to_jsonb(kr.submitted_at)),
-            'updatedAt', coalesce(kr.payload -> 'updatedAt', to_jsonb(kr.updated_at)),
-            'stays', coalesce((
-              select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
-                'id', stay -> 'id',
-                'requestCode', stay -> 'requestCode',
-                'status', stay -> 'status',
-                'dropoffTime', stay -> 'dropoffTime',
-                'pickupTime', stay -> 'pickupTime',
-                'requestedDropoffTime', stay -> 'requestedDropoffTime',
-                'requestedPickupTime', stay -> 'requestedPickupTime',
-                'scheduledPickupTime', stay -> 'scheduledPickupTime',
-                'checkedInAt', stay -> 'checkedInAt',
-                'actualCheckInAt', stay -> 'actualCheckInAt',
-                'actualPickupAt', stay -> 'actualPickupAt',
-                'checkedOutAt', stay -> 'checkedOutAt',
-                'customerRequest', stay -> 'customerRequest',
-                'createdAt', stay -> 'createdAt',
-                'updatedAt', stay -> 'updatedAt'
-              )))
-              from jsonb_array_elements(
-                case when jsonb_typeof(kr.payload -> 'stays') = 'array' then kr.payload -> 'stays' else '[]'::jsonb end
-              ) stay
-            ), '[]'::jsonb)
-          ))
-        )
-        order by kr.updated_at desc
-      ),
-      '[]'::jsonb
-    )
-  )
-  from cuddle_stay.kennel_records kr
-  where kr.organization_id = cuddle_stay_private.cuddle_stay_organization_id()
-    and kr.type = 'boardingDog'
-    and coalesce(lower(kr.payload ->> 'removed'), 'false') <> 'true'
-$$;
-
 create or replace function cuddle_stay.kennel_boarding_records_for_filter(
   p_filter text,
   p_limit integer default 120,
@@ -230,7 +149,5 @@ as $$
   offset greatest(0, coalesce(p_offset, 0))
 $$;
 
-revoke all on function cuddle_stay.kennel_boarding_roster_summary() from public, anon;
 revoke all on function cuddle_stay.kennel_boarding_records_for_filter(text, integer, integer) from public, anon;
-grant execute on function cuddle_stay.kennel_boarding_roster_summary() to authenticated, service_role;
 grant execute on function cuddle_stay.kennel_boarding_records_for_filter(text, integer, integer) to authenticated, service_role;

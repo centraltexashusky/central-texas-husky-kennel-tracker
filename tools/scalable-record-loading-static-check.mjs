@@ -9,6 +9,7 @@ const index = fs.readFileSync("index.html", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260722190000_window_scheduled_care_task_reads.sql", "utf8");
 const boardingMigration = fs.readFileSync("supabase/migrations/20260722203000_load_active_boarding_records_first.sql", "utf8");
 const onDemandBoardingMigration = fs.readFileSync("supabase/migrations/20260831183935_boarding_roster_counts_on_demand.sql", "utf8");
+const pendingRequestFilterMigration = fs.readFileSync("supabase/migrations/20260902043500_include_customer_requests_in_pending_roster.sql", "utf8");
 const failures = [];
 
 if (!shared.includes("const productionMemoryOnly = Boolean(supabaseClient && !localTestMode);")) failures.push("Production records are still persisted to browser storage.");
@@ -74,6 +75,8 @@ if (!onDemandBoardingMigration.includes("kennel_boarding_roster_summary")) failu
 if (!onDemandBoardingMigration.includes("kennel_boarding_records_for_filter")) failures.push("Filtered boarding roster RPC is missing from the migration.");
 if ((onDemandBoardingMigration.match(/security invoker/g) || []).length < 2) failures.push("On-demand boarding RPCs do not preserve caller RLS.");
 if (!onDemandBoardingMigration.includes("p_offset integer default 0")) failures.push("Filtered boarding roster RPC cannot page through large rosters.");
+if ((onDemandBoardingMigration.match(/pending_customer_request/g) || []).length < 4) failures.push("Fresh installs exclude customer-submitted stays from Pending Approval.");
+if ((pendingRequestFilterMigration.match(/pending_customer_request/g) || []).length < 4) failures.push("Production migration does not include customer-submitted stays in Pending Approval.");
 
 const countdownMatch = boarding.match(/function boardingServiceCountdownLabel\(dueInfo = null\) \{[\s\S]*?\n\}/);
 if (!countdownMatch) {
