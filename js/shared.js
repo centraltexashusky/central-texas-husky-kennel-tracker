@@ -15565,6 +15565,7 @@ function initEvents() {
   });
   $("#customerBookingDogList").addEventListener("change", () => {
     validateCustomerDogSelection({ focus: false });
+    renderCustomerStayProgramOptions();
     renderCustomerCrateShareOptions();
     renderCustomerServiceOptions();
     updateCustomerEstimate();
