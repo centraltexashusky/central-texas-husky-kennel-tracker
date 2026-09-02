@@ -9164,7 +9164,7 @@ function mergeBoardingProfileGroup(records = []) {
     flags: mergePrimitiveList(records, "flags"),
   };
   [
-    "dogName", "breedDescription", "akcRegistrationNumber", "microchipNumber", "sireName", "damName", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "profilePhotoMeta", "profilePhotoSourceRecordId", "profilePhotoSourceRecordType", "sex", "spayNeuterStatus",
+    "dogName", "pricingScopeOverride", "linkedCustomerDogId", "sourceCustomerDogId", "breedDescription", "akcRegistrationNumber", "microchipNumber", "sireName", "damName", "dateOfBirth", "profilePhotoUrl", "profilePhotoPath", "profilePhotoData", "profilePhotoMeta", "profilePhotoSourceRecordId", "profilePhotoSourceRecordType", "sex", "spayNeuterStatus",
     "ownerName", "ownerPhone", "ownerEmail", "customerEmail", "linkedOwnerEmail", "secondaryOwnerEmail",
     "emergencyName", "emergencyPhone", "vetInfo", "foodInstructions", "specialCare", "boardingHistory",
     "rabiesDate", "dhppDate", "bordetellaDate", "nextRabiesDate", "nextDhppDate", "nextBordetellaDate", "heartwormDate", "vaccinationFiles",

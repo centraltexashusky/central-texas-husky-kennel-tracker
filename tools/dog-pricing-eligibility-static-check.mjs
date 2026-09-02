@@ -56,6 +56,7 @@ assert.match(shared, /canonicalDogProfileFields[\s\S]*"pricingScopeOverride"/, "
 assert.match(shared, /Changed dog pricing eligibility/, "staff eligibility changes are audited");
 assert.match(shared, /existing = await resolveCanonicalBoardingDogForSave\([\s\S]*saveCanonicalCustomerDogForBoarding\(payload, existing\)/, "boarding profile saves resolve the active linked row before syncing the customer profile");
 assert.match(shared, /const canonicalBoardingDog = [\s\S]*await resolveCanonicalBoardingDogForSave\([\s\S]*sourceBoardingDogId = canonicalBoardingDog\.id/, "customer dog saves repair stale boarding links before persisting the profile");
+assert.match(shared, /"dogName", "pricingScopeOverride", "linkedCustomerDogId", "sourceCustomerDogId"/, "merged boarding profiles preserve canonical pricing and customer links");
 assert.match(boarding, /function boardingRatePlanForRecord[\s\S]*boardingRatePlanForDog/, "staff pricing resolves the dog-level scope");
 assert.match(boarding, /function resolveCanonicalBoardingDogForSave[\s\S]*payload->>linkedCustomerDogId/, "profile saves perform a targeted canonical lookup when the linked row is not loaded");
 assert.match(boarding, /statusChipHtml\("Regular pricing", "pricing-scope-chip"\)/, "staff roster cards show the dog-level pricing designation");
@@ -118,6 +119,7 @@ for (const name of ["canonicalActiveBoardingDogForCustomerDog", "boardingDogWith
 const staleProfile = {
   id: "boardingDog-stale",
   linkedCustomerDogId: "",
+  sourceCustomerDogId: "customerDog-coco",
   sourceRecordIds: ["boardingDog-stale", "boardingDog-canonical"],
   stays: [{ id: "stay-new" }],
   pricingScopeOverride: "non-member",
@@ -154,7 +156,7 @@ const remoteChain = {
 };
 canonicalContext.cuddleStayRequest = async (request) => request(remoteChain);
 vm.runInContext("async " + balancedFunctionSource(boarding, "resolveCanonicalBoardingDogForSave"), canonicalContext);
-const remotelyResolvedSave = await canonicalContext.resolveCanonicalBoardingDogForSave(staleProfile, { id: "customerDog-coco" });
+const remotelyResolvedSave = await canonicalContext.resolveCanonicalBoardingDogForSave(staleProfile, {});
 assert.equal(remotelyResolvedSave.id, "boardingDog-canonical", "a save can recover the canonical identity when the row was not loaded");
 assert.ok(remoteFilters.some((entry) => entry[0] === "eq" && entry[1] === "payload->>linkedCustomerDogId" && entry[2] === "customerDog-coco"), "the fallback lookup is scoped to the linked customer dog");
 
@@ -185,5 +187,8 @@ assert.match(index, /main\.js\?[^"\n]*dog-pricing-eligibility-v90/, "application
 assert.match(main, /shared\.js\?[^"\n]*canonical-boarding-save-v94/, "the canonical save fix is cache-busted in shared code");
 assert.match(main, /boarding\.js\?[^"\n]*canonical-boarding-save-v94/, "the canonical save resolver is cache-busted");
 assert.match(index, /main\.js\?[^"\n]*canonical-boarding-save-v94/, "the canonical save fix is cache-busted at the entrypoint");
+assert.match(main, /shared\.js\?[^"\n]*canonical-linked-fallback-v95/, "the canonical merged-profile fallback is cache-busted in shared code");
+assert.match(main, /boarding\.js\?[^"\n]*canonical-linked-fallback-v95/, "the canonical linked-record fallback is cache-busted");
+assert.match(index, /main\.js\?[^"\n]*canonical-linked-fallback-v95/, "the canonical linked-record fallback is cache-busted at the entrypoint");
 
 console.log("Per-dog pricing eligibility checks passed.");

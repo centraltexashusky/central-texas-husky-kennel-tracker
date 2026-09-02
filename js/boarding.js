@@ -3264,7 +3264,24 @@ function boardingDogWithCanonicalSaveIdentity(record = {}, canonicalRecord = {},
 
 async function resolveCanonicalBoardingDogForSave(record = {}, customerDog = {}) {
   const matchedCustomerDog = customerDog?.id ? customerDog : matchingCustomerDogForBoardingProfile(record) || {};
-  const linkedId = String(matchedCustomerDog.id || record.linkedCustomerDogId || "").trim();
+  const sourceRecordIds = new Set([
+    record.id,
+    ...arrayValue(record.sourceRecordIds),
+    ...arrayValue(record.duplicateProfileIds),
+  ].filter(Boolean));
+  const linkedFromSourceRecord = readRecords("boardingDog").find((item) => (
+    !item.removed
+    && sourceRecordIds.has(item.id)
+    && String(item.linkedCustomerDogId || "").trim()
+  ))?.linkedCustomerDogId || "";
+  const linkedId = String(
+    matchedCustomerDog.id
+    || record.linkedCustomerDogId
+    || record.sourceCustomerDogId
+    || record.customerDogId
+    || linkedFromSourceRecord
+    || "",
+  ).trim();
   if (!linkedId) return record || {};
 
   const localCanonical = canonicalActiveBoardingDogForCustomerDog(linkedId);
