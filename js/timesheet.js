@@ -1410,6 +1410,55 @@ function ensureStaffSchedulePlannerBindings() {
   });
 }
 
+function schedulePublishRecordForWeek(start = scheduleWeekStartString()) {
+  return readRecords("schedulePublish")
+    .filter((record) => !record.removed && record.weekStart === start && record.status === "Published")
+    .sort((a, b) => new Date(b.publishedAt || b.updatedAt || b.submittedAt || 0) - new Date(a.publishedAt || a.updatedAt || a.submittedAt || 0))[0] || null;
+}
+
+function scheduleWeekHasUnpublishedChanges(start = scheduleWeekStartString()) {
+  const end = addDays(start, 7);
+  return readRecords("staffSchedule").some((record) => {
+    if (record.removed || !record.changedAfterPublish) return false;
+    return record.weekStart === start || (record.date >= start && record.date < end);
+  });
+}
+
+function renderStaffSchedulePublishStatus() {
+  const status = $("#staffSchedulePublishStatus");
+  const label = $("#staffSchedulePublishStatusLabel");
+  const meta = $("#staffSchedulePublishStatusMeta");
+  const button = $("#publishScheduleButton");
+  if (!status || !label || !meta) return;
+
+  const record = schedulePublishRecordForWeek();
+  const published = Boolean(record);
+  const hasChanges = published && scheduleWeekHasUnpublishedChanges();
+  status.classList.toggle("is-published", published && !hasChanges);
+  status.classList.toggle("has-unpublished-changes", hasChanges);
+  status.classList.toggle("is-unpublished", !published);
+
+  if (hasChanges) {
+    label.textContent = "Changes Need Publishing";
+    meta.textContent = "Last published " + formatDateTime(record.publishedAt || record.updatedAt) + ".";
+  } else if (published) {
+    label.textContent = "Published";
+    meta.textContent = [formatDateTime(record.publishedAt || record.updatedAt), record.publishedBy ? "by " + record.publishedBy : ""].filter(Boolean).join(" ");
+  } else {
+    label.textContent = "Not Published";
+    meta.textContent = "This week has not been shared.";
+  }
+
+  if (button) {
+    button.textContent = hasChanges ? "Publish Changes" : published ? "Republish Week" : "Publish Week";
+    button.title = hasChanges
+      ? "Publish the latest changes for this week"
+      : published
+        ? "Publish this week again"
+        : "Publish this week for staff";
+  }
+}
+
 function renderScheduleTab() {
   const grid = $("#scheduleWeekGrid");
   const summary = $("#scheduleSummaryGrid");
@@ -1428,6 +1477,7 @@ function renderScheduleTab() {
   $("#staffScheduleDayViewButton")?.classList.toggle("is-active", staffScheduleView === "day");
   $("#staffScheduleWeekViewButton")?.classList.toggle("is-active", staffScheduleView === "week");
   $("#staffScheduleMonthViewButton")?.classList.toggle("is-active", staffScheduleView === "month");
+  renderStaffSchedulePublishStatus();
   summary.innerHTML = [
     ["View", staffScheduleRangeLabel(), staffScheduleView.charAt(0).toUpperCase() + staffScheduleView.slice(1) + " planner"],
     ["Scheduled hours", totalHours.toFixed(2), "Across visible staff"],
@@ -1968,7 +2018,8 @@ async function saveHolidayFromForm(formEl) {
 async function cancelScheduleShift(id = "") {
   const record = readRecords("staffSchedule").find((item) => item.id === id && !item.removed);
   if (!record || currentRole() !== "admin") return null;
-  const updated = await saveAndNotify({ ...record, status: "Cancelled", cancelledAt: new Date().toISOString(), cancelledBy: currentUser?.name || "Admin" }, record.publishedAt ? "scheduleChangedAfterPublish" : "");
+  const changedAfterPublish = Boolean(record.publishedAt || weekIsPublished(record.weekStart || scheduleWeekStartString(record.date)));
+  const updated = await saveAndNotify({ ...record, status: "Cancelled", changedAfterPublish, cancelledAt: new Date().toISOString(), cancelledBy: currentUser?.name || "Admin" }, changedAfterPublish ? "scheduleChangedAfterPublish" : "");
   renderTimesheet();
   return updated;
 }

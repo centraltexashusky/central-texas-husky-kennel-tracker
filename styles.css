@@ -10766,6 +10766,72 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   color: #fff;
 }
 
+#timesheetSchedulePanel .staff-schedule-publish-status {
+  align-items: center;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  color: #334155;
+  display: inline-flex;
+  gap: 0.65rem;
+  min-height: 40px;
+  padding: 0.4rem 0.8rem;
+}
+
+#timesheetSchedulePanel .staff-schedule-publish-status-dot {
+  background: #94a3b8;
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgba(148, 163, 184, 0.15);
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+#timesheetSchedulePanel .staff-schedule-publish-status-copy {
+  display: grid;
+  line-height: 1.1;
+  min-width: 0;
+}
+
+#timesheetSchedulePanel .staff-schedule-publish-status strong {
+  color: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+#timesheetSchedulePanel .staff-schedule-publish-status small {
+  color: inherit;
+  font-size: 0.7rem;
+  margin-top: 0.2rem;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#timesheetSchedulePanel .staff-schedule-publish-status.is-published {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
+}
+
+#timesheetSchedulePanel .staff-schedule-publish-status.is-published .staff-schedule-publish-status-dot {
+  background: #16a34a;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.14);
+}
+
+#timesheetSchedulePanel .staff-schedule-publish-status.has-unpublished-changes {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+#timesheetSchedulePanel .staff-schedule-publish-status.has-unpublished-changes .staff-schedule-publish-status-dot {
+  background: #f97316;
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.14);
+}
+
 #timesheetSchedulePanel .staff-schedule-layout {
   grid-template-columns: clamp(200px, 18vw, 260px) minmax(0, 1fr) clamp(310px, 24vw, 360px);
 }
@@ -11121,6 +11187,11 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   #timesheetSchedulePanel #openScheduleTemplatesButton {
     grid-column: span 1;
     min-width: 0;
+  }
+
+  #timesheetSchedulePanel .staff-schedule-publish-status {
+    grid-column: 1 / -1;
+    justify-self: stretch;
   }
 
   #timesheetSchedulePanel .staff-schedule-layout,
