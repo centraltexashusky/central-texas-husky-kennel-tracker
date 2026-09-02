@@ -17,6 +17,7 @@ var boardingProfileTabRenderSequence = 0;
 var boardingRosterMobileLayout = null;
 var boardingPastStayCache = new Map();
 var boardingCustomerUpdateCache = new Map();
+var boardingDogEditorRecord = null;
 
 var BOARDING_PROFILE_LAZY_TARGETS = {
   Vaccination: "boardingDogVaccinationList",
@@ -6690,6 +6691,7 @@ function resetBoardingDogFormForRecord(record = {}) {
 
 function openBoardingDog(record = {}) {
   record = boardingDogWithCanonicalProfile(record);
+  boardingDogEditorRecord = record?.id ? record : null;
   const boardingDogDetail = $("#boardingDogDetail");
   clearPopupFeedback(boardingDogDetail);
   if (boardingDogDetail.parentElement !== document.body) {
@@ -6739,7 +6741,11 @@ function setBoardingFormLocked() {
 function activeBoardingDog(options = {}) {
   const id = boardingDogFormRecordId();
   const raw = readRecords("boardingDog").find((record) => record.id === id && !record.removed);
-  return options.raw ? raw : boardingDogRecordForDisplay(id) || raw;
+  const editorRecord = boardingDogEditorRecord?.id === id
+    || arrayValue(boardingDogEditorRecord?.sourceRecordIds).includes(id)
+    ? boardingDogEditorRecord
+    : null;
+  return options.raw ? raw || editorRecord : boardingDogRecordForDisplay(id) || raw || editorRecord;
 }
 
 function renderBoardingKennelLocationControl(record = activeBoardingDog()) {

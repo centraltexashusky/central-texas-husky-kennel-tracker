@@ -15181,6 +15181,7 @@ function initEvents() {
         }
       }
       setBoardingDogFormRecordId(formEl, record.id);
+      boardingDogEditorRecord = record;
       $("#boardingSchedulePanel").hidden = false;
       setDogPhoto("boarding", record);
       if ($("#boardingDogVaccinationFiles")) $("#boardingDogVaccinationFiles").value = "";
