@@ -3284,6 +3284,18 @@ async function resolveCanonicalBoardingDogForSave(record = {}, customerDog = {})
   ).trim();
   if (!linkedId) return record || {};
 
+  // Approved customer amendments are stored as detached request rows so the
+  // prior approved stay remains auditable. Staff profile edits must persist to
+  // the canonical boarding profile named by that amendment, never promote the
+  // detached row into a second active profile for the same customer dog.
+  const detachedCanonicalId = String(record.sourceBoardingDogId || "").trim();
+  const detachedCanonical = detachedCanonicalId
+    ? readRecords("boardingDog").find((item) => item.id === detachedCanonicalId && !item.removed)
+    : null;
+  if (detachedCanonical?.id) {
+    return boardingDogWithCanonicalSaveIdentity(record, detachedCanonical, linkedId || detachedCanonical.linkedCustomerDogId || "");
+  }
+
   const localCanonical = canonicalActiveBoardingDogForCustomerDog(linkedId);
   if (localCanonical?.id) return boardingDogWithCanonicalSaveIdentity(record, localCanonical, linkedId);
   if (localTestMode || !supabaseClient) return record || {};

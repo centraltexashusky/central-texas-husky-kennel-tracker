@@ -58,6 +58,8 @@ assert.match(shared, /existing = await resolveCanonicalBoardingDogForSave\([\s\S
 assert.match(shared, /const canonicalBoardingDog = [\s\S]*await resolveCanonicalBoardingDogForSave\([\s\S]*sourceBoardingDogId = canonicalBoardingDog\.id/, "customer dog saves repair stale boarding links before persisting the profile");
 assert.match(shared, /"dogName", "pricingScopeOverride", "linkedCustomerDogId", "sourceCustomerDogId"/, "merged boarding profiles preserve canonical pricing and customer links");
 assert.match(shared, /#customerBookingDogList[\s\S]*addEventListener\("change"[\s\S]*renderCustomerStayProgramOptions\(\)[\s\S]*renderCustomerCrateShareOptions\(\)/, "changing the selected dog set refreshes mixed member and regular stay-pricing options");
+assert.match(boarding, /record\.sourceBoardingDogId[\s\S]*boardingDogWithCanonicalSaveIdentity\(record, detachedCanonical/, "staff edits to detached amendments do not create a second active boarding profile");
+assert.match(shared, /pricingEligibilityChanged[\s\S]*forceCurrentPricing: true[\s\S]*estimatedTotal: pricingSnapshot\.total/, "staff pricing eligibility changes reprice active stay totals");
 assert.match(boarding, /function boardingRatePlanForRecord[\s\S]*boardingRatePlanForDog/, "staff pricing resolves the dog-level scope");
 assert.match(boarding, /function resolveCanonicalBoardingDogForSave[\s\S]*payload->>linkedCustomerDogId/, "profile saves perform a targeted canonical lookup when the linked row is not loaded");
 assert.match(boarding, /statusChipHtml\("Regular pricing", "pricing-scope-chip"\)/, "staff roster cards show the dog-level pricing designation");

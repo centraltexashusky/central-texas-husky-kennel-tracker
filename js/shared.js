@@ -15133,6 +15133,30 @@ function initEvents() {
         checkedOutAt: selectedStatus === "Checked Out" ? existing.checkedOutAt || timestamp : existing.checkedOutAt || "",
         cancelledAt: selectedStatus === "Cancelled" ? existing.cancelledAt || timestamp : existing.cancelledAt || "",
       };
+      const pricingEligibilityChanged = dogPricingScopeOverride(payload) !== dogPricingScopeOverride(existing);
+      if (pricingEligibilityChanged) {
+        payload.stays = arrayValue(payload.stays).map((stay) => {
+          const stayStatus = boardingStayDisplayStatus(payload, stay);
+          if (["Cancelled", "Checked Out", "Declined"].includes(stayStatus)) return stay;
+          const ratePlan = boardingRatePlanForRecord(payload);
+          const pricingSnapshot = boardingPricingSnapshotForStay(payload, stay, {
+            forceCurrentPricing: true,
+            preferCatalogPricing: true,
+            ratePlan,
+            currentDogRole: ratePlan.isMemberPricing ? "primary" : "non-member",
+            sharedCrateRequested: false,
+          });
+          return {
+            ...stay,
+            billingDays: pricingSnapshot.billingDays,
+            pricingSnapshot,
+            estimatedTotal: pricingSnapshot.total,
+            updatedAt: timestamp,
+          };
+        });
+        const pricedStay = activeBoardingStay(payload) || currentOrNextStay(payload) || payload.stays[0] || {};
+        payload.estimatedTotal = pricedStay.pricingSnapshot?.total ?? pricedStay.estimatedTotal ?? payload.estimatedTotal;
+      }
       const canonicalDog = await saveCanonicalCustomerDogForBoarding(payload, existing);
       if (canonicalDog) payload = boardingDogWithCustomerProfilePatch(payload, canonicalDog);
       const record = upsertRecord("boardingDog", payload);
