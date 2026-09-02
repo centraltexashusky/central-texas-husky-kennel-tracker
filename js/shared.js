@@ -8926,7 +8926,7 @@ async function linkBoardingDogOwnerAccount(record = {}) {
   renderCustomerDogs();
   renderCustomerRequests();
   renderSettingsUsers();
-  if ($("#boardingDogForm")?.elements.id.value === updated.id) {
+  if (boardingDogFormRecordId() === updated.id) {
     openBoardingDog(updated);
   }
   showDetailDialog("Customer Login Prepared", \`<p>\${escapeHtml(record.ownerName || ownerEmail)} can sign up or sign in with \${escapeHtml(ownerEmail)}. Snuggle Stay will link that customer account to \${escapeHtml(customerDog.dogName || record.dogName || "this dog")}.</p><p>This boarding dog can still have stays added by staff or admin even if the owner has not logged in yet.</p>\`);
@@ -9599,7 +9599,7 @@ function isCurrentlyBoarding(record) {
 
 
 function refreshBoardingDogFileViews(record = activeBoardingDog() || {}) {
-  const activeId = $("#boardingDogForm")?.elements.id.value || record?.id || "";
+  const activeId = boardingDogFormRecordId() || record?.id || "";
   const refreshed = boardingDogRecordForDisplay(activeId) || record;
   renderBoardingDogFiles(refreshed);
   renderBoardingVaccinationFiles(refreshed);
@@ -14581,7 +14581,7 @@ function initEvents() {
           console.warn("Owned dog bath task sync failed after dog save.", error);
         }
       }
-      formEl.elements.id.value = record.id;
+      formFieldByName(formEl, "id").value = record.id;
       setOwnedCareEntryVisibility(true);
       setDogPhoto("owned", record);
       renderOwnedActivity(record);
@@ -15180,7 +15180,7 @@ function initEvents() {
           await addAuditLog("Uploaded boarding dog profile photo", "boardingDog", record, record.dogName || "");
         }
       }
-      formEl.elements.id.value = record.id;
+      setBoardingDogFormRecordId(formEl, record.id);
       $("#boardingSchedulePanel").hidden = false;
       setDogPhoto("boarding", record);
       if ($("#boardingDogVaccinationFiles")) $("#boardingDogVaccinationFiles").value = "";

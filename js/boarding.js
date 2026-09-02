@@ -2537,7 +2537,7 @@ async function updateBoardingStayServiceTaskStatus(record = {}, reference = {}, 
   if (options.syncScheduler !== false && typeof syncBoardingServiceTasksForRecord === "function") {
     await syncBoardingServiceTasksForRecord(latest, { render: false });
   }
-  if ($("#boardingDogForm")?.elements.id.value === latest.id || sourceRecordIds.includes($("#boardingDogForm")?.elements.id.value)) {
+  if (boardingDogFormRecordId() === latest.id || sourceRecordIds.includes(boardingDogFormRecordId())) {
     renderBoardingStays(latest);
     renderBoardingCustomerUpdates(latest);
     renderBoardingHistory(latest);
@@ -4425,7 +4425,7 @@ async function saveBoardingStayFromForm(formEl) {
       .join(" | ") || "Adjustments removed";
     await addAuditLog("Updated stay billing adjustments", "boardingDog", record, \`Stay ID: \${requestCode} | \${details}\`);
   }
-  if ($("#boardingDogForm")?.elements.id.value === record.id) {
+  if (boardingDogFormRecordId() === record.id) {
     renderBoardingStays(record);
     renderBoardingHistory(record);
     renderBoardingOwnerAccountPanel(record);
@@ -5247,7 +5247,7 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   renderBoardingRequests();
   renderCustomerRequests();
   renderDashboard();
-  if ($("#boardingDogForm")?.elements.id.value === updated.id) {
+  if (boardingDogFormRecordId() === updated.id) {
     renderBoardingStays(updated);
     renderBoardingHistory(updated);
     renderBoardingKennelLocationControl(updated);
@@ -6643,6 +6643,20 @@ async function addBoardingCustomerUpdate() {
   return saveBoardingCustomerUpdateForStay(record, stay, { note, input });
 }
 
+function boardingDogFormRecordId(formEl = $("#boardingDogForm")) {
+  const fieldValue = String(formFieldByName(formEl, "id")?.value || "").trim();
+  return fieldValue || String(formEl?.dataset?.boardingDogRecordId || "").trim();
+}
+
+function setBoardingDogFormRecordId(formEl = $("#boardingDogForm"), recordId = "") {
+  if (!formEl) return "";
+  const normalizedId = String(recordId || "").trim();
+  const field = formFieldByName(formEl, "id");
+  if (field) field.value = normalizedId;
+  formEl.dataset.boardingDogRecordId = normalizedId;
+  return normalizedId;
+}
+
 function resetBoardingDogFormForRecord(record = {}) {
   const formEl = $("#boardingDogForm");
   formEl.reset();
@@ -6666,7 +6680,7 @@ function resetBoardingDogFormForRecord(record = {}) {
   if (formEl.elements.sex) formEl.elements.sex.value = sexFromCombinedDogSpayNeuterStatus(combinedStatus) || record.sex || "";
   if (formEl.elements.rabiesGoodThreeYears) formEl.elements.rabiesGoodThreeYears.checked = vaccineDurationIsThreeYears(record, "rabies");
   if (formEl.elements.dhppGoodThreeYears) formEl.elements.dhppGoodThreeYears.checked = vaccineDurationIsThreeYears(record, "dhpp");
-  formEl.elements.id.value = record.id || "";
+  setBoardingDogFormRecordId(formEl, record.id || "");
   if (formEl.elements.profilePhotoUrl && !record.id) formEl.elements.profilePhotoUrl.value = "";
   if ($("#boardingDogPhotoInput")) $("#boardingDogPhotoInput").value = "";
   if ($("#boardingDogVaccinationFiles")) $("#boardingDogVaccinationFiles").value = "";
@@ -6717,13 +6731,13 @@ function setBoardingFormLocked() {
     spayNeuterStatus: formEl.elements.spayNeuterStatus?.value || "",
   });
   $("#boardingDogSaveButton").hidden = false;
-  $("#deleteBoardingDogButton").hidden = !formEl.elements.id.value || currentRole() !== "admin";
+  $("#deleteBoardingDogButton").hidden = !boardingDogFormRecordId(formEl) || currentRole() !== "admin";
   formEl.classList.remove("is-readonly");
   renderBoardingOwnerAccountPanel(activeBoardingDog());
 }
 
 function activeBoardingDog(options = {}) {
-  const id = $("#boardingDogForm").elements.id.value;
+  const id = boardingDogFormRecordId();
   const raw = readRecords("boardingDog").find((record) => record.id === id && !record.removed);
   return options.raw ? raw : boardingDogRecordForDisplay(id) || raw;
 }
@@ -6975,7 +6989,7 @@ async function saveBoardingMedicalBehaviorNote(record = {}, reference = {}, data
     savedRecords.push(updated);
   }
   const refreshed = boardingDogRecordForDisplay(displayRecord.id) || savedRecords[0] || displayRecord;
-  if ($("#boardingDogForm")?.elements.id.value && (refreshed.id === $("#boardingDogForm").elements.id.value || sourceIds.includes($("#boardingDogForm").elements.id.value))) {
+  if (boardingDogFormRecordId() && (refreshed.id === boardingDogFormRecordId() || sourceIds.includes(boardingDogFormRecordId()))) {
     renderBoardingHistory(refreshed);
     renderBoardingStays(refreshed);
   }
@@ -7049,7 +7063,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   renderBoardingRequests();
   renderCustomerRequests();
   renderDashboard();
-  if ($("#boardingDogForm")?.elements.id.value === updated.id) {
+  if (boardingDogFormRecordId() === updated.id) {
     renderBoardingStays(updated);
     renderBoardingHistory(updated);
     renderBoardingKennelLocationControl(updated);
@@ -7298,7 +7312,7 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
   renderBoardingRequests();
   renderCustomerRequests();
   renderDashboard();
-  if ($("#boardingDogForm")?.elements.id.value === updated.id) {
+  if (boardingDogFormRecordId() === updated.id) {
     renderBoardingStays(updated);
     renderBoardingHistory(updated);
     renderBoardingKennelLocationControl(updated);
@@ -7440,7 +7454,7 @@ async function removeBoardingStayFromDog(dogId = "", stayId = "", reference = {}
     if (updated.id === displayRecord.id) updatedPrimary = updated;
   }
   const refreshed = boardingDogRecordForDisplay(displayRecord.id) || updatedPrimary;
-  if (refreshed && $("#boardingDogForm")?.elements.id.value === refreshed.id) {
+  if (refreshed && boardingDogFormRecordId() === refreshed.id) {
     renderBoardingStays(refreshed);
     renderBoardingHistory(refreshed);
     renderBoardingDogs();
