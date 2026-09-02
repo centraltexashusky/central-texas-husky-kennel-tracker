@@ -64,6 +64,7 @@ assert.match(boarding, /function setBoardingDogFormRecordId[\s\S]*formFieldByNam
 assert.match(boarding, /boardingDogEditorRecord = record\?\.id \? record : null/, "the on-demand roster keeps the opened dog record available to the profile editor");
 assert.match(boarding, /function activeBoardingDog[\s\S]*boardingDogEditorRecord[\s\S]*boardingDogRecordForDisplay\(id\) \|\| raw \|\| editorRecord/, "profile edits fall back to the opened on-demand record when the full roster is not resident");
 assert.match(shared, /setBoardingDogFormRecordId\(formEl, record\.id\);[\s\S]*boardingDogEditorRecord = record;/, "successful saves refresh the active on-demand profile record");
+assert.match(shared, /let payload = \{[\s\S]*\.\.\.formData,[\s\S]*id: dogId,[\s\S]*saveCanonicalCustomerDogForBoarding\(payload, existing\)/, "the resolved canonical boarding ID cannot be overwritten by the blank form ID");
 assert.doesNotMatch(boarding, /#boardingDogForm[^\n]*elements\.id\.value/, "boarding profile actions do not use the ambiguous form elements.id collection");
 assert.match(shared, /setBoardingDogFormRecordId\(formEl, record\.id\)/, "successful boarding saves retain the canonical record ID");
 assert.match(shared, /pricingEligibilityChanged[\s\S]*forceCurrentPricing: true[\s\S]*estimatedTotal: pricingSnapshot\.total/, "staff pricing eligibility changes reprice active stay totals");

@@ -15102,9 +15102,9 @@ function initEvents() {
       let payload = {
 	        ...existing,
 	        type: "boardingDog",
-	        id: dogId,
 	        submittedAt: existing.submittedAt || timestamp,
 	        ...formData,
+	        id: dogId,
 	        sex: derivedSex || formData.sex || existing.sex || "",
 	        spayNeuterStatus: combinedStatus || formData.spayNeuterStatus || existing.spayNeuterStatus || "",
 	        ownerEmail: normalizeEmail(formData.ownerEmail),
