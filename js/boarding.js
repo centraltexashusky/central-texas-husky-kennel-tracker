@@ -3225,6 +3225,72 @@ function boardingDogWithCustomerProfilePatch(record = {}, customerDog = {}) {
   };
 }
 
+function canonicalActiveBoardingDogForCustomerDog(customerDogId = "", records = readRecords("boardingDog")) {
+  const linkedId = String(customerDogId || "").trim();
+  if (!linkedId) return null;
+  return arrayValue(records)
+    .filter((record) => {
+      const removed = record?.removed === true || String(record?.removed || "").trim().toLowerCase() === "true";
+      return !removed && String(record?.linkedCustomerDogId || "").trim() === linkedId;
+    })
+    .sort((a, b) => boardingRecordSortTime(b) - boardingRecordSortTime(a))[0] || null;
+}
+
+function boardingDogWithCanonicalSaveIdentity(record = {}, canonicalRecord = {}, customerDogId = "") {
+  if (!canonicalRecord?.id) return record || {};
+  const linkedId = String(customerDogId || canonicalRecord.linkedCustomerDogId || record.linkedCustomerDogId || "").trim();
+  const sourceRecordIds = [...new Set([
+    ...arrayValue(canonicalRecord.sourceRecordIds),
+    ...arrayValue(record.sourceRecordIds),
+    canonicalRecord.id,
+    record.id,
+  ].filter(Boolean))];
+  const duplicateProfileIds = [...new Set([
+    ...arrayValue(canonicalRecord.duplicateProfileIds),
+    ...arrayValue(record.duplicateProfileIds),
+    record.id,
+  ].filter((id) => id && id !== canonicalRecord.id))];
+  return {
+    ...canonicalRecord,
+    ...record,
+    id: canonicalRecord.id,
+    type: "boardingDog",
+    submittedAt: canonicalRecord.submittedAt || record.submittedAt || "",
+    linkedCustomerDogId: linkedId,
+    sourceRecordIds,
+    duplicateProfileIds,
+  };
+}
+
+async function resolveCanonicalBoardingDogForSave(record = {}, customerDog = {}) {
+  const matchedCustomerDog = customerDog?.id ? customerDog : matchingCustomerDogForBoardingProfile(record) || {};
+  const linkedId = String(matchedCustomerDog.id || record.linkedCustomerDogId || "").trim();
+  if (!linkedId) return record || {};
+
+  const localCanonical = canonicalActiveBoardingDogForCustomerDog(linkedId);
+  if (localCanonical?.id) return boardingDogWithCanonicalSaveIdentity(record, localCanonical, linkedId);
+  if (localTestMode || !supabaseClient) return record || {};
+
+  const { data, error } = await cuddleStayRequest((db) => db
+    .from("kennel_records")
+    .select("id,payload,submitted_at,updated_at")
+    .eq("type", "boardingDog")
+    .eq("payload->>linkedCustomerDogId", linkedId)
+    .order("updated_at", { ascending: false })
+    .limit(5));
+  if (error) throw error;
+  const remoteCandidates = arrayValue(data).map((row) => ({
+    ...(row?.payload && typeof row.payload === "object" ? row.payload : {}),
+    id: row?.id || row?.payload?.id || "",
+    submittedAt: row?.payload?.submittedAt || row?.submitted_at || "",
+    updatedAt: row?.updated_at || row?.payload?.updatedAt || "",
+  }));
+  const remoteCanonical = canonicalActiveBoardingDogForCustomerDog(linkedId, remoteCandidates);
+  return remoteCanonical?.id
+    ? boardingDogWithCanonicalSaveIdentity(record, remoteCanonical, linkedId)
+    : record || {};
+}
+
 function reservationStatusFromLegacy(record = {}, stay = {}) {
   const status = stay.status || normalizeBoardingStatus(record);
   if (status === "Cancelled") return "cancelled";

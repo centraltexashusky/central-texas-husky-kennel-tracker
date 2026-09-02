@@ -15085,6 +15085,10 @@ function initEvents() {
       if (!existing.id) {
         existing = findMatchingBoardingDogProfile(formData) || {};
       }
+      existing = await resolveCanonicalBoardingDogForSave(
+        existing.id ? existing : { ...existing, ...formData },
+        matchingCustomerDogForBoardingProfile(existing.id ? existing : formData) || {},
+      );
       const isNewBoardingDog = !existing.id;
       const dogId = existing.id || formData.id || uid("boardingDog");
       const timestamp = new Date().toISOString();
@@ -15424,8 +15428,21 @@ function initEvents() {
       const isNewCustomerDog = !existing?.id;
       const hadCustomerDogsBeforeSave = customerDogsForCurrentUser().length > 0;
       const dogId = existing.id || data.id || uid("customerDog");
-      const sourceBoardingDogId = boardingDogIdFromCustomerDogValue(data.sourceBoardingDogId || existing.sourceBoardingDogId || "");
-      const linkedBoardingDogId = boardingDogIdFromCustomerDogValue(data.linkedBoardingDogId || existing.linkedBoardingDogId || sourceBoardingDogId);
+      let sourceBoardingDogId = boardingDogIdFromCustomerDogValue(data.sourceBoardingDogId || existing.sourceBoardingDogId || "");
+      let linkedBoardingDogId = boardingDogIdFromCustomerDogValue(data.linkedBoardingDogId || existing.linkedBoardingDogId || sourceBoardingDogId);
+      const loadedBoardingDog = readRecords("boardingDog").find((item) => (
+        !item.removed && [sourceBoardingDogId, linkedBoardingDogId].filter(Boolean).includes(item.id)
+      ));
+      const canonicalBoardingDog = (existing.id || sourceBoardingDogId || linkedBoardingDogId)
+        ? await resolveCanonicalBoardingDogForSave(
+          loadedBoardingDog || { linkedCustomerDogId: dogId },
+          { ...existing, ...data, id: dogId, type: "customerDog" },
+        )
+        : null;
+      if (canonicalBoardingDog?.id) {
+        sourceBoardingDogId = canonicalBoardingDog.id;
+        linkedBoardingDogId = canonicalBoardingDog.id;
+      }
       if (uploadStatus) uploadStatus.textContent = "Saving dog profile and uploading files...";
       setSubmitState($("#saveCustomerDogButton"), true, "Saving...");
       const photo = await durableDogPhoto("customer", existing, data, $("#customerDogPhotoInput"), dogId);
@@ -15454,7 +15471,9 @@ function initEvents() {
       await sendPayload(record);
       const boardingRecordId = boardingDogIdFromCustomerDogValue(record.sourceBoardingDogId || record.linkedBoardingDogId);
       if (boardingRecordId && (currentRole() === "admin" || customerDogVisibleToCustomer(record))) {
-        const boarding = readRecords("boardingDog").find((item) => item.id === boardingRecordId && !item.removed);
+        const boarding = canonicalBoardingDog?.id === boardingRecordId
+          ? canonicalBoardingDog
+          : readRecords("boardingDog").find((item) => item.id === boardingRecordId && !item.removed);
         if (boarding && (currentRole() === "admin" || boardingDogVisibleToCustomer(boarding))) {
           const linkedBoarding = upsertRecord("boardingDog", boardingDogWithCustomerProfilePatch(boarding, record));
           await sendPayload(linkedBoarding);

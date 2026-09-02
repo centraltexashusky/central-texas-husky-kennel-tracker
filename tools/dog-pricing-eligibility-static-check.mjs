@@ -54,7 +54,10 @@ const migration = fs.readFileSync("supabase/migrations/20260901154451_protect_cu
 assert.match(index, /data-roles="admin">Pricing eligibility[\s\S]*name="pricingScopeOverride"[\s\S]*Regular pricing for this dog/, "admin dog profiles expose a regular-pricing override");
 assert.match(shared, /canonicalDogProfileFields[\s\S]*"pricingScopeOverride"/, "the override is part of the canonical dog profile");
 assert.match(shared, /Changed dog pricing eligibility/, "staff eligibility changes are audited");
+assert.match(shared, /existing = await resolveCanonicalBoardingDogForSave\([\s\S]*saveCanonicalCustomerDogForBoarding\(payload, existing\)/, "boarding profile saves resolve the active linked row before syncing the customer profile");
+assert.match(shared, /const canonicalBoardingDog = [\s\S]*await resolveCanonicalBoardingDogForSave\([\s\S]*sourceBoardingDogId = canonicalBoardingDog\.id/, "customer dog saves repair stale boarding links before persisting the profile");
 assert.match(boarding, /function boardingRatePlanForRecord[\s\S]*boardingRatePlanForDog/, "staff pricing resolves the dog-level scope");
+assert.match(boarding, /function resolveCanonicalBoardingDogForSave[\s\S]*payload->>linkedCustomerDogId/, "profile saves perform a targeted canonical lookup when the linked row is not loaded");
 assert.match(boarding, /statusChipHtml\("Regular pricing", "pricing-scope-chip"\)/, "staff roster cards show the dog-level pricing designation");
 assert.match(boarding, /hasExplicitSharedCrateRequest[\s\S]*sharedCrateRequested: sharedCrateRequested && dogRatePlan\.isMemberPricing/, "recalculation clears stale shared-crate pricing from regular-priced dogs");
 assert.match(customer, /customerServiceVisibleForCurrentUser\(service, dog\)/, "services are filtered separately for each selected dog");
@@ -100,6 +103,61 @@ for (const name of ["dogPricingScopeOverride", "customerPricingScopeForDog", "do
   vm.runInContext(balancedFunctionSource(boarding, name), context);
 }
 
+const canonicalContext = {
+  arrayValue: (value) => Array.isArray(value) ? value : [],
+  readRecords: () => [],
+  boardingRecordSortTime: (record) => Date.parse(record.updatedAt || record.submittedAt || 0) || 0,
+  matchingCustomerDogForBoardingProfile: () => null,
+  localTestMode: false,
+  supabaseClient: {},
+};
+vm.createContext(canonicalContext);
+for (const name of ["canonicalActiveBoardingDogForCustomerDog", "boardingDogWithCanonicalSaveIdentity"]) {
+  vm.runInContext(balancedFunctionSource(boarding, name), canonicalContext);
+}
+const staleProfile = {
+  id: "boardingDog-stale",
+  linkedCustomerDogId: "",
+  sourceRecordIds: ["boardingDog-stale", "boardingDog-canonical"],
+  stays: [{ id: "stay-new" }],
+  pricingScopeOverride: "non-member",
+};
+const canonicalProfile = {
+  id: "boardingDog-canonical",
+  linkedCustomerDogId: "customerDog-coco",
+  submittedAt: "2026-06-17T01:33:20.779Z",
+  updatedAt: "2026-08-31T15:55:14.934Z",
+  stays: [{ id: "stay-old" }],
+};
+assert.equal(
+  canonicalContext.canonicalActiveBoardingDogForCustomerDog("customerDog-coco", [staleProfile, canonicalProfile])?.id,
+  "boardingDog-canonical",
+  "the unique linked boarding profile wins over a stale consolidated primary",
+);
+const canonicalSave = canonicalContext.boardingDogWithCanonicalSaveIdentity(staleProfile, canonicalProfile, "customerDog-coco");
+assert.equal(canonicalSave.id, "boardingDog-canonical");
+assert.equal(canonicalSave.linkedCustomerDogId, "customerDog-coco");
+assert.equal(canonicalSave.pricingScopeOverride, "non-member");
+assert.deepEqual(Array.from(canonicalSave.stays, (stay) => stay.id), ["stay-new"], "the edited merged stay payload is preserved");
+assert.ok(Array.from(canonicalSave.duplicateProfileIds).includes("boardingDog-stale"), "the stale primary remains recorded as profile history");
+
+const remoteFilters = [];
+const remoteChain = {
+  from(value) { remoteFilters.push(["from", value]); return this; },
+  select(value) { remoteFilters.push(["select", value]); return this; },
+  eq(field, value) { remoteFilters.push(["eq", field, value]); return this; },
+  order(field) { remoteFilters.push(["order", field]); return this; },
+  async limit(value) {
+    remoteFilters.push(["limit", value]);
+    return { data: [{ id: canonicalProfile.id, payload: canonicalProfile, updated_at: canonicalProfile.updatedAt }], error: null };
+  },
+};
+canonicalContext.cuddleStayRequest = async (request) => request(remoteChain);
+vm.runInContext("async " + balancedFunctionSource(boarding, "resolveCanonicalBoardingDogForSave"), canonicalContext);
+const remotelyResolvedSave = await canonicalContext.resolveCanonicalBoardingDogForSave(staleProfile, { id: "customerDog-coco" });
+assert.equal(remotelyResolvedSave.id, "boardingDog-canonical", "a save can recover the canonical identity when the row was not loaded");
+assert.ok(remoteFilters.some((entry) => entry[0] === "eq" && entry[1] === "payload->>linkedCustomerDogId" && entry[2] === "customerDog-coco"), "the fallback lookup is scoped to the linked customer dog");
+
 assert.equal(context.customerPricingScopeForDog({ id: "member-dog" }, context.currentUser), "member");
 assert.equal(context.customerPricingScopeForDog({ id: "regular-dog", pricingScopeOverride: "regular" }, context.currentUser), "non-member");
 const lines = context.boardingDogPricingLines([
@@ -124,5 +182,8 @@ assert.match(main, /shared\.js\?[^"\n]*dog-pricing-eligibility-v90/, "shared cac
 assert.match(main, /customer\.js\?[^"\n]*dog-pricing-eligibility-v90/, "customer cache key is current");
 assert.match(main, /boarding\.js\?[^"\n]*dog-pricing-eligibility-v90/, "boarding cache key is current");
 assert.match(index, /main\.js\?[^"\n]*dog-pricing-eligibility-v90/, "application entrypoint cache key is current");
+assert.match(main, /shared\.js\?[^"\n]*canonical-boarding-save-v94/, "the canonical save fix is cache-busted in shared code");
+assert.match(main, /boarding\.js\?[^"\n]*canonical-boarding-save-v94/, "the canonical save resolver is cache-busted");
+assert.match(index, /main\.js\?[^"\n]*canonical-boarding-save-v94/, "the canonical save fix is cache-busted at the entrypoint");
 
 console.log("Per-dog pricing eligibility checks passed.");
