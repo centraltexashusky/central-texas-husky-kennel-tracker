@@ -3912,7 +3912,9 @@ function stayRequestMatchesService(request = {}, service = {}, options = {}) {
 
 function boardingStayRequestServiceCatalog(record = {}, stay = {}) {
   const user = boardingPricingUserForRecord(record);
+  const pricingScope = customerPricingScopeForDog(record, user);
   return serviceCatalogForStayRequests({ user })
+    .filter((service) => serviceMatchesPricingScopeForResolution(service, pricingScope))
     .sort((a, b) => [
       a.category || "",
       serviceDependencyId(a) ? serviceDependencyId(a) : "",
