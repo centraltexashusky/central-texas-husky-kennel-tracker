@@ -815,32 +815,9 @@ function notificationVisibleToCurrentUser(notification = {}) {
   return currentRole() === "admin";
 }
 
-function notificationHasUnresolvedBoardingAction(notification = {}) {
-  const isBoardingRequestAlert = ["customerBoardingRequestCreated", "customerBoardingRequestUpdated"].includes(notification.eventName)
-    || Boolean(recoveredBoardingRequestNotification(notification));
-  if (!isBoardingRequestAlert) return false;
-  // Boarding is intentionally code-split from the authenticated shell. Until
-  // that module is ready, keep approval alerts conservatively unread instead
-  // of calling helpers that have not been installed yet.
-  if (!boardingNotificationHelpersAvailable()) return true;
-  const recovered = recoveredBoardingRequestNotification(notification);
-  const source = notificationSourceSnapshot(notification);
-  const sourceId = notification.sourceId || source.id || recovered?.record?.id || "";
-  const record = recovered?.record
-    || boardingDogRecordForDisplay(sourceId)
-    || readRecords("boardingDog").find((item) => item.id === sourceId && !item.removed)
-    || (source?.type === "boardingDog" && source.id ? source : null);
-  if (!record) return false;
-  const reference = boardingRequestNotificationReference(notification, recovered);
-  const group = boardingRequestAlertGroup(record, reference);
-  const entries = group?.entries || [boardingStayEntryForRecord(record, boardingStayByReference(record, reference) || boardingPrimaryStay(record) || {})];
-  return entries.some((entry) => entry?.status === "Pending");
-}
-
 function notificationIsRead(notification = {}) {
-  // Reading an approval alert does not resolve the work. Keep it in the action
-  // queue until every linked request has actually left Pending.
-  if (notificationHasUnresolvedBoardingAction(notification)) return false;
+  // Read receipts describe this reader's acknowledgement, not request approval.
+  // A pending/deleted source snapshot must never override a saved receipt.
   const key = currentUserNotificationKey();
   if (!key) return false;
   if ((notification.readBy || []).includes(key)) return true;
@@ -1993,9 +1970,24 @@ async function markNotificationRead(id = "") {
 }
 
 async function markAllNotificationsRead() {
+  const button = $("#markAllNotificationsReadButton");
+  if (button?.disabled) return;
   const visible = readRecords("notificationLog").filter((item) => !item.removed && notificationVisibleToCurrentUser(item) && !notificationIsRead(item));
-  await Promise.allSettled(visible.map((item) => saveNotificationReadReceipt(item.id)));
-  renderNotifications();
+  if (!visible.length) {
+    showToast("No unread alerts.");
+    return;
+  }
+  setSubmitState(button, true, "Marking read...");
+  try {
+    const results = await Promise.allSettled(visible.map((item) => saveNotificationReadReceipt(item.id)));
+    const failed = results.filter((result) => result.status === "rejected").length;
+    showToast(failed
+      ? String(failed) + " alert(s) could not be marked read. Please try again."
+      : "All alerts marked as read.");
+  } finally {
+    setSubmitState(button, false);
+    renderNotifications();
+  }
 }
 
 async function saveNotificationReadReceipt(id = "") {
@@ -2006,9 +1998,10 @@ async function saveNotificationReadReceipt(id = "") {
     const record = readRecords("notificationLog").find((item) => item.id === id);
     if (!record) return null;
     const readBy = [...new Set([...(record.readBy || []), key].filter(Boolean))];
-    const updated = upsertRecord("notificationLog", { ...record, readBy });
-    await sendPayload(updated);
-    return updated;
+    const updated = { ...record, readBy };
+    const result = await sendPayload(updated);
+    if (result?.skippedRemote) throw new Error("The alert read receipt could not be saved.");
+    return upsertRecord("notificationLog", updated);
   };
 
   if (localTestMode || !supabaseClient || !notificationReadSyncAvailable) return fallbackReadByUpdate();
@@ -2034,7 +2027,10 @@ async function saveNotificationReadReceipt(id = "") {
     throw error;
   }
 
-  mergeNotificationReadRows([data || row], { replaceLocal: false });
+  if (data?.notification_id !== id || data?.reader_key !== key) {
+    throw new Error("The alert read receipt could not be confirmed. Please try again.");
+  }
+  mergeNotificationReadRows([data], { replaceLocal: false });
   return readRecords("notificationLog").find((item) => item.id === id) || null;
 }
 
@@ -2292,8 +2288,8 @@ async function openNotification(id = "") {
   const notification = readRecords("notificationLog").find((item) => item.id === id);
   if (!notification) return;
   $("#notificationPanel").hidden = true;
-  // A read-receipt network failure must never block the review UI. Pending
-  // boarding actions remain visibly unresolved via notificationIsRead().
+  // A read-receipt network failure must never block the review UI. Reading an
+  // alert does not approve, decline, or otherwise modify its source request.
   markNotificationRead(id).catch((error) => console.warn("Alert read receipt could not be saved.", error));
   const sourceType = notification.sourceType;
   const sourceId = notification.sourceId;

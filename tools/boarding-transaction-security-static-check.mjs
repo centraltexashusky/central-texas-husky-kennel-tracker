@@ -33,7 +33,7 @@ requireMatch(boarding, /function requireBoardingApprovalPreflight/, "Approval an
 requireMatch(shared, /requiredVaccines\.every\(\(vaccine\) => currentRecordVaccines\.has\(vaccine\)\)/, "Vaccines OK must require every configured core vaccine, not any one current record.");
 if (/keys\.push\(\\`name:/.test(boarding)) throw new Error("Owner name alone must never group boarding requests.");
 
-requireMatch(notifications, /notificationHasUnresolvedBoardingAction/, "Pending boarding actions must remain visible independently of read receipts.");
+requireMatch(notifications, /function notificationIsRead[\s\S]*readRecords\("notificationRead"\)/, "Alert read status must honor saved per-reader receipts independently of approval.");
 requireMatch(notifications, /Delivery needs attention:/, "Alert cards must expose delivery failures.");
 requireMatch(notifications, /ensurePendingBoardingRequestRecoveryAlerts/, "Pending requests missing their original alert must generate a recovery alert.");
 requireMatch(shared, /PARTIAL_BATCH_SAVE/, "Partial batch persistence must throw a typed error.");
