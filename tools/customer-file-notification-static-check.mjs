@@ -45,6 +45,9 @@ if (!openNotification.includes("await openOperationalNotificationRecord(sourceTy
 if (!main.includes('notifications.js?v=20260723-customer-file-view-v2') || !main.includes("maintenance-alert-detail-active-request-lock-v36")) failures.push("The notification module is not cache-busted.");
 if (!index.includes('js/main.js?v=20260723-customer-file-view-v2') || !index.includes("maintenance-alert-detail-active-request-lock-v36")) failures.push("The application entrypoint is not cache-busted.");
 if (!main.includes("durable-customer-file-alert-v106") || !index.includes("durable-customer-file-alert-v106")) failures.push("The durable customer file alert path is not cache-busted.");
+if (!shared.includes('types: ["notificationLog", "notificationPreference"]')
+  || !shared.includes('summary.textContent = "Loading alerts..."')) failures.push("The global alert panel does not fetch its lightweight records on demand.");
+if (!main.includes("alert-panel-on-demand-v108") || !index.includes("alert-panel-on-demand-v108")) failures.push("The on-demand global alert panel is not cache-busted.");
 
 if (failures.length) {
   failures.forEach((failure) => console.error(`FAIL: ${failure}`));

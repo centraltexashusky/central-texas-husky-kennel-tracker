@@ -14290,9 +14290,29 @@ function initEvents() {
 	  });
 	  $("#openTimeOffRequestButton")?.addEventListener("click", () => openTimeOffRequestPopup());
 	  $("#openHolidayButton")?.addEventListener("click", () => openHolidayPopup());
-	  $("#notificationBellButton")?.addEventListener("click", () => {
+	  $("#notificationBellButton")?.addEventListener("click", async () => {
 	    const panel = $("#notificationPanel");
-	    panel.hidden = !panel.hidden;
+	    const opening = panel.hidden;
+	    panel.hidden = !opening;
+	    renderNotifications();
+	    if (!opening || localTestMode || !supabaseClient) return;
+	    const summary = $("#notificationPanelSummary");
+	    if (summary) summary.textContent = "Loading alerts...";
+	    try {
+	      // Alerts stay out of heavy page-load plans. Fetch their two small
+	      // record types only when a staff member opens the global panel.
+	      if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
+	      await loadRemoteRecords({
+	        types: ["notificationLog", "notificationPreference"],
+	        pageId: activePageId(),
+	        fullRefresh: true,
+	        showLoader: false,
+	        quiet: true,
+	      });
+	    } catch (error) {
+	      console.warn("Alerts could not be refreshed on demand.", error);
+	      showToast("Alerts could not refresh. Try again.");
+	    }
 	    renderNotifications();
 	  });
 	  $("#markAllNotificationsReadButton")?.addEventListener("click", markAllNotificationsRead);
