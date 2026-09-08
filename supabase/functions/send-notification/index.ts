@@ -1556,6 +1556,32 @@ function notificationFallbackFields(eventName: string, sourceRecord: Record<stri
       readBy: [],
     };
   }
+  if (eventName === "customerDogFileUploaded") {
+    return {
+      id: notificationId,
+      type: "notificationLog",
+      eventName,
+      sourceType: "customerDog",
+      sourceId,
+      sourceSnapshot: sourceRecord,
+      title: `Customer file uploaded: ${dogName || "Customer dog"}`,
+      message: `${ownerName} uploaded a file${dogName ? ` for ${dogName}` : ""}.`,
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceRoles: ["admin"],
+      alertCategory: "Customer",
+      alertReason: "Customer file uploaded",
+      dogName,
+      ownerName,
+      actionLabel: "View File",
+      actionTarget: {
+        eventName,
+        sourceType: "customerDog",
+        sourceId,
+      },
+      readBy: [],
+    };
+  }
   if (["timeOffRequested", "timeOffRevised", "timeOffCancelled"].includes(eventName)) {
     const staffName = String(sourceRecord.staffName || sourceRecord.staffEmail || "Staff");
     const dates = `${sourceRecord.startDate || ""}${sourceRecord.endDate && sourceRecord.endDate !== sourceRecord.startDate ? ` to ${sourceRecord.endDate}` : ""}`;

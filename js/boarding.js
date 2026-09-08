@@ -2748,16 +2748,19 @@ function boardingRecordHasActionableStay(record = {}, date = new Date()) {
   return stays.some((stay) => boardingStayIsCurrentOrUpcoming(record, stay, date));
 }
 
+function boardingRecordHasOperationalStay(record = {}, date = new Date()) {
+  return ["Checked In", "In Kennel", "Ready For Pickup"]
+    .some((status) => boardingRecordHasCurrentOrUpcomingStatus(record, status, date));
+}
+
 function boardingDogMatchesRosterFilter(record = {}, filter = boardingDogRosterFilter) {
-  const status = boardingDisplayStatus(record);
-  const hasActiveStay = isCurrentlyBoarding(record);
-  const hasStays = Boolean((record.stays || []).length);
   if (filter === "All Boarding Dogs") return true;
-  if (filter === "Pending" || filter === "Pending Approval") return boardingRecordHasCurrentOrUpcomingStatus(record, "Pending") && !hasActiveStay;
-  if (filter === "Approved") return boardingRecordHasCurrentOrUpcomingStatus(record, "Approved") && !hasActiveStay;
-  if (filter === "In Kennel") return status === "In Kennel" && (hasActiveStay || !hasStays);
-  if (filter === "Ready For Pickup") return status === "Ready For Pickup" && (hasActiveStay || !hasStays);
-  return hasActiveStay || (!hasStays && ["Checked In", "In Kennel", "Ready For Pickup"].includes(status));
+  const hasOperationalStay = boardingRecordHasOperationalStay(record);
+  if (filter === "Pending" || filter === "Pending Approval") return boardingRecordHasCurrentOrUpcomingStatus(record, "Pending") && !hasOperationalStay;
+  if (filter === "Approved") return boardingRecordHasCurrentOrUpcomingStatus(record, "Approved") && !hasOperationalStay;
+  if (filter === "In Kennel") return boardingRecordHasCurrentOrUpcomingStatus(record, "In Kennel");
+  if (filter === "Ready For Pickup") return boardingRecordHasCurrentOrUpcomingStatus(record, "Ready For Pickup");
+  return hasOperationalStay;
 }
 
 function boardingRosterCountMapFromRecords(records = []) {

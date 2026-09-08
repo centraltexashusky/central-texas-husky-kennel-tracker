@@ -77,6 +77,42 @@ if ((onDemandBoardingMigration.match(/security invoker/g) || []).length < 2) fai
 if (!onDemandBoardingMigration.includes("p_offset integer default 0")) failures.push("Filtered boarding roster RPC cannot page through large rosters.");
 if ((onDemandBoardingMigration.match(/pending_customer_request/g) || []).length < 4) failures.push("Fresh installs exclude customer-submitted stays from Pending Approval.");
 if ((pendingRequestFilterMigration.match(/pending_customer_request/g) || []).length < 4) failures.push("Production migration does not include customer-submitted stays in Pending Approval.");
+if (!main.includes("ready-pickup-until-checkout-v107") || !index.includes("ready-pickup-until-checkout-v107")) failures.push("The explicit Ready for Pickup lifecycle fix is not cache-busted.");
+
+const rosterFunctions = [
+  "boardingStayPickupHasPassed",
+  "boardingStayIsCurrentOrUpcoming",
+  "boardingRecordHasCurrentOrUpcomingStatus",
+  "boardingRecordHasOperationalStay",
+  "boardingDogMatchesRosterFilter",
+].map((name) => boarding.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}`))?.[0] || "").join("\n");
+if (!rosterFunctions.includes("function boardingRecordHasOperationalStay")) {
+  failures.push("Operational boarding status matching could not be extracted.");
+} else {
+  const matchesRoster = Function(
+    "boardingStayDisplayStatus",
+    "normalizeBoardingStatus",
+    "arrayValue",
+    "boardingDogRosterFilter",
+    `${rosterFunctions}\nreturn boardingDogMatchesRosterFilter;`,
+  )(
+    (_record, stay) => stay.status,
+    (record) => record.boardingStatus || record.status || "",
+    (value) => Array.isArray(value) ? value : [],
+    "Active dogs",
+  );
+  const overdueReady = {
+    boardingStatus: "Ready For Pickup",
+    stays: [{ id: "stay-ready", status: "Ready For Pickup", pickupTime: "2026-09-08T10:00:00-05:00" }],
+  };
+  const checkedOut = {
+    boardingStatus: "Checked Out",
+    stays: [{ id: "stay-out", status: "Checked Out", pickupTime: "2026-09-08T10:00:00-05:00" }],
+  };
+  if (!matchesRoster(overdueReady, "Ready For Pickup")) failures.push("A ready dog disappears after its scheduled pickup time.");
+  if (!matchesRoster(overdueReady, "Active dogs")) failures.push("An overdue ready dog disappears from Active dogs before checkout.");
+  if (matchesRoster(checkedOut, "Ready For Pickup") || matchesRoster(checkedOut, "Active dogs")) failures.push("Checked-out dogs remain in operational roster counts.");
+}
 
 const countdownMatch = boarding.match(/function boardingServiceCountdownLabel\(dueInfo = null\) \{[\s\S]*?\n\}/);
 if (!countdownMatch) {

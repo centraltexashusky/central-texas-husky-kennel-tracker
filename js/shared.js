@@ -11990,10 +11990,25 @@ function renderAllRecords(options = {}) {
 async function notifyIfNeeded(record = {}, eventName = "") {
   const config = notificationEventConfig(eventName, record);
   if (!config) return null;
-  const notification = createNotificationRecord(record, eventName, config);
+  let notification = createNotificationRecord(record, eventName, config);
   renderNotifications();
   if (!supabaseClient || localTestMode) {
     return notification;
+  }
+  if (eventName === "customerDogFileUploaded" && record.id && arrayValue(record.notificationFileItems).length) {
+    try {
+      const { data, error } = await cuddleStayRequest((db) => db.rpc("queue_customer_dog_file_notification", {
+        p_record_id: record.id,
+        p_notification_id: notification.id,
+        p_file_items: record.notificationFileItems,
+      }));
+      if (error) throw error;
+      if (data && typeof data === "object") notification = upsertRecord("notificationLog", data);
+    } catch (error) {
+      // The Edge Function still has a service-role persistence fallback. Keep
+      // delivery moving while retaining a useful diagnostic for staff.
+      console.warn("Customer file alert could not be queued before delivery.", error);
+    }
   }
   // Customer-triggered alerts are usually addressed to staff. Those records do
   // not pass the customer's notificationLog RLS check, and the edge function
@@ -15494,16 +15509,6 @@ function initEvents() {
       };
       const record = upsertRecord("customerDog", payload);
       await sendPayload(record);
-      const boardingRecordId = boardingDogIdFromCustomerDogValue(record.sourceBoardingDogId || record.linkedBoardingDogId);
-      if (boardingRecordId && (currentRole() === "admin" || customerDogVisibleToCustomer(record))) {
-        const boarding = canonicalBoardingDog?.id === boardingRecordId
-          ? canonicalBoardingDog
-          : readRecords("boardingDog").find((item) => item.id === boardingRecordId && !item.removed);
-        if (boarding && (currentRole() === "admin" || boardingDogVisibleToCustomer(boarding))) {
-          const linkedBoarding = upsertRecord("boardingDog", boardingDogWithCustomerProfilePatch(boarding, record));
-          await sendPayload(linkedBoarding);
-        }
-      }
       if (vaccinationUploads.length
         || (photo.profilePhotoUrl && photo.profilePhotoUrl !== (existing.profilePhotoUrl || ""))
         || (photo.profilePhotoPath && photo.profilePhotoPath !== (existing.profilePhotoPath || ""))) {
@@ -15519,7 +15524,20 @@ function initEvents() {
             }]
             : []),
         ];
+        // Alert staff immediately after the durable customer record is saved.
+        // Optional linked-profile synchronization must not be able to suppress
+        // the upload alert or its email if that later synchronization fails.
         await notifyIfNeeded({ ...record, notificationFileItems }, "customerDogFileUploaded");
+      }
+      const boardingRecordId = boardingDogIdFromCustomerDogValue(record.sourceBoardingDogId || record.linkedBoardingDogId);
+      if (boardingRecordId && (currentRole() === "admin" || customerDogVisibleToCustomer(record))) {
+        const boarding = canonicalBoardingDog?.id === boardingRecordId
+          ? canonicalBoardingDog
+          : readRecords("boardingDog").find((item) => item.id === boardingRecordId && !item.removed);
+        if (boarding && (currentRole() === "admin" || boardingDogVisibleToCustomer(boarding))) {
+          const linkedBoarding = upsertRecord("boardingDog", boardingDogWithCustomerProfilePatch(boarding, record));
+          await sendPayload(linkedBoarding);
+        }
       }
       await ensureCustomerAccessProfile({
         email: record.customerEmail || record.ownerEmail,
