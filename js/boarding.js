@@ -7527,7 +7527,7 @@ async function deleteBoardingDogById(id = "") {
     await sendPayload(removed);
   }
   await addAuditLog("Deleted boarding dog", "boardingDog", removed, \`\${removed.dogName || "Dog"} | owner: \${removed.ownerEmail || removed.customerEmail || "none"} | recover before \${removed.softDeleteExpiresOn}\`);
-  $("#boardingDogDetail").hidden = true;
+  closeBoardingDogModal({ skipHistory: true });
   renderBoardingDogs();
   renderBoardingRequests();
   renderCustomerDogs();

@@ -59,11 +59,16 @@ if (!boarding.includes("clearPopupFeedback(boardingDogDetail)")) {
 }
 const requestCardSource = boarding.match(/function boardingRequestCardHtml[\s\S]*?\n\}/)?.[0] || "";
 const openBoardingDogSource = boarding.match(/function openBoardingDog\(record = \{\}\)[\s\S]*?\n\}/)?.[0] || "";
+const deleteBoardingDogSource = boarding.match(/async function deleteBoardingDogById[\s\S]*?\n\}/)?.[0] || "";
 if (!requestCardSource.includes('data-action="change-boarding"')) {
   failures.push("Staff can no longer open the request editor for an active stay.");
 }
 if (!openBoardingDogSource.includes("setBoardingFormLocked(false)")) {
   failures.push("Staff boarding profiles are unexpectedly locked during an active stay.");
+}
+if (!deleteBoardingDogSource.includes("closeBoardingDogModal({ skipHistory: true })")
+  || deleteBoardingDogSource.includes('$("#boardingDogDetail").hidden = true')) {
+  failures.push("Deleting a boarding dog can leave the mobile modal backdrop active over the roster.");
 }
 
 const sendPayloadSource = shared.match(/async function sendPayload\([\s\S]*?\n\}/)?.[0] || "";
@@ -191,6 +196,9 @@ if (!main.includes("approval-persistence-identity-v61") || !index.includes("appr
 }
 if (!main.includes("maintenance-alert-detail-active-request-lock-v36") || !index.includes("maintenance-alert-detail-active-request-lock-v36")) {
   failures.push("The maintenance alert and active-stay request lock fix is not cache-busted.");
+}
+if (!main.includes("delete-modal-cleanup-v109") || !index.includes("delete-modal-cleanup-v109")) {
+  failures.push("The boarding-dog delete modal cleanup is not cache-busted.");
 }
 
 if (failures.length) {
