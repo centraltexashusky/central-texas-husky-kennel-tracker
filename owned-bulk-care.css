@@ -1,0 +1,27 @@
+.owned-heartworm-form { --hw-border: #d9e4ed; --hw-muted: #526b82; color: #12314e; }
+.owned-heartworm-intro { margin-top: 0; line-height: 1.5; }
+.owned-heartworm-fields { display: grid; grid-template-columns: minmax(160px,1fr) 2fr; gap: 16px; }
+.owned-heartworm-form label { font-size: 14px; }
+.owned-heartworm-form input:not([type="checkbox"]) { width: 100%; min-width: 0; min-height: 46px; border-radius: 7px; font-size: 16px; }
+.owned-heartworm-selection { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 16px 0; }
+.owned-heartworm-selection > div { display: flex; gap: 8px; }
+.owned-heartworm-form button { border-radius: 7px; min-height: 42px; box-shadow: none; }
+.owned-heartworm-list { max-height: 340px; overflow-y: auto; margin-top: 12px; border: 1px solid var(--hw-border); border-radius: 9px; }
+.owned-heartworm-form .owned-heartworm-row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; margin: 0; border-bottom: 1px solid var(--hw-border); cursor: pointer; }
+.owned-heartworm-row:last-child { border-bottom: 0; }
+.owned-heartworm-row input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 20px; accent-color: #0869aa; }
+.owned-heartworm-row strong, .owned-heartworm-row small { display: block; }
+.owned-heartworm-row small { margin-top: 4px; color: var(--hw-muted); font-weight: 400; }
+.owned-heartworm-result { margin-left: auto; max-width: 40%; font-size: 12px; }
+.owned-heartworm-footer { display: flex; gap: 10px; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid var(--hw-border); }
+.owned-heartworm-form [hidden] { display: none !important; }
+#ownedHeartwormStatus { font-weight: 600; line-height: 1.5; }
+:root[data-theme="dark"] .owned-heartworm-form { --hw-border: #395264; --hw-muted: #b2c5d4; color: #e4eff7; }
+@media (max-width: 600px) {
+  .owned-heartworm-fields { grid-template-columns: minmax(0,1fr); }
+  .owned-heartworm-selection { align-items: stretch; flex-direction: column; }
+  .owned-heartworm-selection button { flex: 1; }
+  .owned-heartworm-footer button { width: 100%; }
+  .owned-heartworm-form .owned-heartworm-row { padding: 12px; gap: 9px; }
+  .owned-heartworm-list { max-height: 280px; }
+}
