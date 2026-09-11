@@ -19136,6 +19136,8 @@ function initEvents() {
     const formEl = event.currentTarget;
     if (!validateForm(formEl)) return;
     const uploadStatus = $("#customerUploadStatus");
+    let savedDog = null;
+    let savedVaccinationCount = 0;
     try {
       const data = formPayload(formEl);
       const existing = data.id ? readRecords("customerDog").find((record) => record.id === data.id) || {} : {};
@@ -19167,10 +19169,13 @@ function initEvents() {
       };
       const record = upsertRecord("customerDog", payload);
       await sendPayload(record);
+      savedDog = record;
+      savedVaccinationCount = vaccinationUploads.length;
       const boardingRecordId = boardingDogIdFromCustomerDogValue(record.sourceBoardingDogId || record.linkedBoardingDogId);
-      if (boardingRecordId && (currentRole() === "admin" || customerDogVisibleToCustomer(record))) {
+      // Customer uploads belong to the customer profile, not staff-managed stays.
+      if (boardingRecordId && currentRole() === "admin") {
         const boarding = readRecords("boardingDog").find((item) => item.id === boardingRecordId && !item.removed);
-        if (boarding && (currentRole() === "admin" || boardingDogVisibleToCustomer(boarding))) {
+        if (boarding) {
           const linkedBoarding = upsertRecord("boardingDog", boardingDogWithCustomerProfilePatch(boarding, record));
           await sendPayload(linkedBoarding);
         }
@@ -19187,7 +19192,7 @@ function initEvents() {
       closeCustomerDogModal();
       renderCustomerDogs();
       renderCustomerFiles();
-      renderBoardingDogs();
+      if (currentRole() === "admin" && typeof renderBoardingDogs === "function") renderBoardingDogs();
       const uploadText = vaccinationUploads.length ? `${vaccinationUploads.length} vaccination file(s) uploaded.` : "No new vaccination files uploaded.";
       if (uploadStatus) uploadStatus.textContent = uploadText;
       const message = photo.photoError
@@ -19195,6 +19200,13 @@ function initEvents() {
         : `<p>${escapeHtml(record.dogName || "Dog")} has been saved to your list.</p><p>${escapeHtml(uploadText)}</p>`;
       showDetailDialog(existing?.id ? "Dog Updated" : "Dog Saved", message);
     } catch (error) {
+      if (savedDog) {
+        resetCustomerDogForm();
+        closeCustomerDogModal();
+        if (uploadStatus) uploadStatus.textContent = "Dog profile saved. A follow-up could not finish.";
+        showDetailDialog("Dog Saved — Follow-up Needed", `<p>${escapeHtml(savedDog.dogName || "Dog")} was saved.${savedVaccinationCount ? ` ${savedVaccinationCount} vaccination file(s) uploaded.` : ""} Please do not upload the same files again.</p><p>A follow-up update could not finish. Please contact staff if you need help.</p><p>${escapeHtml(error.message)}</p>`);
+        return;
+      }
       if (uploadStatus) uploadStatus.textContent = "The dog profile or files could not be saved.";
       showDetailDialog("Dog Not Saved", `<p>The dog record could not be saved: ${escapeHtml(error.message)}</p>`);
     } finally {
