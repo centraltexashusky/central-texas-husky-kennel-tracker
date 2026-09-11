@@ -130,8 +130,8 @@ const checks = [
   },
   {
     path: "js/daily.js",
-    mustInclude: "query ? matches(record, query) : ownedDogMatchesCareFilter(record)",
-    message: "Our Dogs search must search all dogs when a query is entered.",
+    mustInclude: "ownedDogMatchesCareFilter(record) && (!query || matches(record, query))",
+    message: "Our Dogs search must retain the selected care filter.",
   },
   {
     path: "js/daily.js",

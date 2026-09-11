@@ -619,6 +619,7 @@ var tableColumns = {
     { key: "rabiesDate", label: "Rabies", value: (record) => record.rabiesDate || "" },
     { key: "lastBath", label: "Last Bath", value: (record) => record.lastBath || "" },
     { key: "nextBath", label: "Next Bath", value: (record) => record.nextBath || "" },
+    { key: "nextCare", label: "Next Care", value: (record) => ownedWorkspaceNextCare(record) },
     { key: "foodAmount", label: "Food", value: (record) => record.foodAmount || "" },
   ],
   boardingDog: [
@@ -4532,7 +4533,9 @@ function careLogAdminAlertRecord(log = {}, dailyRecord = {}) {
 async function saveStructuredCareLog(log) {
   const date = log.date || todayDate();
   const structuredCareLogs = [log, ...structuredCareLogsForDate(date)];
-  return saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
+  const result = await saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
+  if (typeof refreshOwnedWorkspace === "function") refreshOwnedWorkspace();
+  return result;
 }
 
 async function completeDailyTaskRemote(completion = {}) {
@@ -14471,9 +14474,9 @@ function initEvents() {
     if (!dog) return;
     if (!window.confirm(\`Remove \${dog.callName || dog.showName || "this dog"} from Our Dogs?\`)) return;
     const updated = await markRecordRemoved("ownedDog", dog.id);
-    closeOwnedDogModal();
+    closeOwnedDogModal({ skipHistory: true });
     renderOwnedDogs();
-    renderBoardingDogs();
+    if (activePageId() === "boardingDogsPage") renderBoardingDogs();
     showDetailDialog("Dog Removed", \`<p>\${escapeHtml(updated?.callName || updated?.showName || "Dog")} has been removed from the active dog list.</p>\`);
   });
   $("#editOwnedDogButton").addEventListener("click", () => {
@@ -14538,7 +14541,7 @@ function initEvents() {
     const row = event.target.closest("tr[data-id]");
     if (!row) return;
     const record = readRecords("ownedDog").find((dog) => dog.id === row.dataset.id);
-    if (record) openOwnedDogOverviewPopup(record);
+    if (record) openOwnedWorkspace(record);
   });
   $("#ownedDogMobileCards")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]");
@@ -14635,8 +14638,9 @@ function initEvents() {
       renderOwnedActivity(record);
       renderOwnedDogFiles(record);
       renderOwnedDogs();
-      renderBoardingDogs();
-      renderDashboard();
+      if (activePageId() === "boardingDogsPage") renderBoardingDogs();
+      if (activePageId() === "dashboardPage") renderDashboard();
+      if (typeof refreshOwnedWorkspace === "function") refreshOwnedWorkspace();
       selectedDogPhotos.owned = null;
       syncOwnedDogTabAvailability(record);
       setOwnedFormLocked(false);

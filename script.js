@@ -345,6 +345,7 @@ const tableColumns = {
     { key: "rabiesDate", label: "Rabies", value: (record) => record.rabiesDate || "" },
     { key: "lastBath", label: "Last Bath", value: (record) => record.lastBath || "" },
     { key: "nextBath", label: "Next Bath", value: (record) => record.nextBath || "" },
+    { key: "nextCare", label: "Next Care", value: (record) => ownedWorkspaceNextCare(record) },
     { key: "foodAmount", label: "Food", value: (record) => record.foodAmount || "" },
   ],
   boardingDog: [
@@ -1256,7 +1257,10 @@ function readTableConfig() {
     const currentKeys = columns.map((column) => column.key);
     const savedKeys = (saved[type] || []).filter((key) => currentKeys.includes(key));
     const newKeys = currentKeys.filter((key) => !savedKeys.includes(key));
-    withDefaults[type] = saved[type] ? [...savedKeys, ...newKeys] : currentKeys;
+    // Resident roster defaults are compact. Keep explicitly saved column selections.
+    withDefaults[type] = type === "ownedDog"
+      ? (saved[type] ? savedKeys : ["callName", "careStatus", "specialCare", "nextCare", "foodAmount"])
+      : (saved[type] ? [...savedKeys, ...newKeys] : currentKeys);
   });
   return withDefaults;
 }
@@ -18486,8 +18490,9 @@ function initEvents() {
       renderOwnedActivity(record);
       renderOwnedDogFiles(record);
       renderOwnedDogs();
-      renderBoardingDogs();
-      renderDashboard();
+      if (activePageId() === "boardingDogsPage") renderBoardingDogs();
+      if (activePageId() === "dashboardPage") renderDashboard();
+      if (typeof refreshOwnedWorkspace === "function") refreshOwnedWorkspace();
       selectedDogPhotos.owned = null;
       syncOwnedDogTabAvailability(record);
       setOwnedFormLocked(false);

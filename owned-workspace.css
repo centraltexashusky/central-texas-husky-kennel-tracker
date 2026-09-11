@@ -1,0 +1,130 @@
+/* Scoped resident-dog workspace; boarding and global navigation stay unchanged. */
+#ourDogsPage, #ownedDogDetail.owned-workspace {
+  --owned-ink: #12314e; --owned-muted: #526b82; --owned-blue: #0869aa;
+  --owned-border: #dae4ed; --owned-paper: #fff; --owned-soft: #f5f8fb;
+  color: var(--owned-ink);
+}
+#ourDogsPage [hidden], #ownedDogDetail.owned-workspace [hidden] { display: none !important; }
+#ourDogsPage > .form-section, #ownedDogDetail.owned-workspace .dog-profile-editor, #ownedDogDetail.owned-workspace .owned-profile-section { background: var(--owned-paper) !important; border-radius: 0 !important; box-shadow: none !important; }
+#ourDogsPage > .form-section { animation: none !important; filter: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs { background: var(--owned-soft) !important; border: 0 !important; border-right: 1px solid var(--owned-border) !important; border-radius: 0 !important; box-shadow: none !important; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs button { background: transparent !important; margin: 0; transform: none; white-space: normal; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs button { box-shadow: none !important; background-image: none !important; }
+#ownedDogDetail.owned-workspace .dog-profile-editor { flex-direction: row !important; justify-content: flex-start !important; text-align: left; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs button svg { flex: 0 0 21px; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs button.is-active { background: #e4f1fb !important; }
+#ownedDogDetail.owned-workspace .dog-photo-picker { width: 64px !important; height: 64px !important; flex: 0 0 64px; padding: 0; }
+#ownedDogDetail.owned-workspace:not([hidden]) { background: var(--owned-paper) !important; box-shadow: 0 0 0 9999px rgba(4,15,26,.58), 0 16px 50px #0003 !important; }
+#ourDogsPage > .form-section { padding: 24px; border: 1px solid var(--owned-border); box-shadow: none; border-radius: 10px; background: var(--owned-paper); }
+#ourDogsPage > .form-section > .section-heading { margin-bottom: 16px; }
+#ourDogsPage > .form-section > .section-heading > span { display: none; }
+#ourDogsPage h2 { font-size: 28px; letter-spacing: -.6px; color: var(--owned-ink); }
+#ourDogsPage .section-heading p { color: var(--owned-muted); font-size: 15px; }
+#ourDogsPage button, #ownedDogDetail.owned-workspace button, .owned-care-picker button { border-radius: 7px; box-shadow: none; font-size: 14px; min-height: 40px; background-image: none; }
+#ourDogsPage button:not(.secondary-button):not(.icon-button):not(.owned-care-info-button), #ownedDogDetail.owned-workspace button:not(.secondary-button):not(.dog-photo-picker) { background-color: var(--owned-blue); color: #fff; }
+#ourDogsPage .table-toolbar { justify-content: flex-end; margin: -66px 0 28px; }
+#ownedDogCareFilters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 16px; border: 0; border-bottom: 1px solid var(--owned-border); border-radius: 0; box-shadow: none; background: transparent; }
+#ownedDogCareFilters [data-filter] { padding: 9px 12px; background: var(--owned-paper); color: var(--owned-muted); border: 1px solid var(--owned-border); display: inline-flex; align-items: center; gap: 8px; }
+#ownedDogCareFilters [data-filter].is-active { color: var(--owned-blue); background: #eaf4fc; border-color: #8cb9d9; }
+.owned-filter-count { border-radius: 4px; background: #edf1f4; color: #425b71; padding: 1px 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+#ownedDogCareFilters [data-filter]:nth-child(-n+4) { font-weight: 700; }
+.owned-filter-break { flex-basis: 100%; height: 0; }
+.owned-roster-tools { display: flex; align-items: center; gap: 12px; margin: 18px 0; }
+#ourDogsPage #ownedDogSearch { flex: 1; min-width: 0; width: auto; margin: 0; border: 1px solid var(--owned-border); box-shadow: none; font-size: 14px; border-radius: 6px; }
+#ownedColumnsButton { flex: none; }
+#ourDogsPage .table-wrap { padding: 0; border: 0; border-radius: 0; box-shadow: none; background: var(--owned-paper); }
+#ownedDogTable { min-width: 830px; width: 100%; font-size: 14px; }
+#ownedDogTable th { background: var(--owned-soft); color: var(--owned-muted); font-size: 11px; letter-spacing: .6px; padding: 13px 12px; }
+#ownedDogTable td { padding: 17px 12px; vertical-align: middle; border-bottom: 1px solid var(--owned-border); box-shadow: none; border-left: 0; max-width: 260px; }
+#ownedDogTable tr { background: var(--owned-paper); }
+#ownedDogTable tr:hover { background: var(--owned-soft); }
+#ownedDogTable .table-actions { flex-wrap: nowrap; gap: 6px; }
+#ownedDogTable .table-actions button { padding: 8px 10px; white-space: nowrap; }
+#ownedDogTable .chip-row, #ownedDogMobileCards .chip-row { gap: 5px; margin: 0; }
+#ownedDogTable .status-chip, #ownedDogMobileCards .status-chip { font-size: 11px; border-radius: 4px; padding: 3px 6px; }
+.owned-roster-identity { display: flex; align-items: center; gap: 12px; min-width: 160px; }
+.owned-roster-identity strong { color: var(--owned-ink); display: block; font-size: 15px; }
+.owned-roster-identity small { display: block; color: var(--owned-muted); font-size: 12px; margin-top: 4px; }
+.owned-roster-photo { width: 52px; height: 52px; flex: 0 0 52px; background: #e8eff5; border-radius: 8px; display: grid; place-items: center; overflow: hidden; color: #34556f; font-weight: 700; }
+.owned-roster-photo img { width: 100%; height: 100%; object-fit: cover; }
+.owned-modern-card { border: 1px solid var(--owned-border); border-radius: 8px; padding: 16px; background: var(--owned-paper); display: grid; gap: 14px; }
+.owned-card-facts { margin: 0; display: grid; gap: 12px; }
+.owned-card-facts div { display: grid; grid-template-columns: 75px 1fr; gap: 8px; }
+.owned-card-facts dt { color: var(--owned-muted); font-size: 12px; }
+.owned-card-facts dd { margin: 0; font-size: 14px; }
+.owned-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.owned-care-warning { color: #704d0b; background: #fff6df; border-left: 3px solid #e4ad38; padding: 12px 14px; border-radius: 4px; white-space: pre-wrap; }
+#ownedDogDetail.owned-workspace:not([hidden]) { display: grid; grid-template-columns: 205px minmax(0,1fr); grid-template-rows: auto minmax(0,1fr) auto; width: min(1140px,calc(100vw - 40px)); height: min(860px,calc(100dvh - 40px)); max-height: calc(100dvh - 40px); padding: 0; overflow: hidden; border: 1px solid var(--owned-border); background: var(--owned-paper); }
+#ownedDogDetail.owned-workspace > .section-heading { position: absolute; right: 20px; top: 22px; margin: 0; z-index: 2; }
+#ownedDogDetail.owned-workspace > .section-heading > span, #ownedDogDetail.owned-workspace > .section-heading > div { display: none; }
+#ownedDogDetail.owned-workspace #ourDogForm { display: contents; }
+#ownedDogDetail.owned-workspace .dog-profile-editor { grid-column: 1 / -1; grid-row: 1; padding: 22px 114px 22px 24px; display: flex; gap: 16px; align-items: center; margin: 0; background: var(--owned-paper); border: 0; border-bottom: 1px solid var(--owned-border); border-radius: 0; box-shadow: none; }
+#ownedDogDetail.owned-workspace .dog-photo-picker { width: 64px; height: 64px; min-width: 64px; border-radius: 8px; }
+#ownedDogDetail.owned-workspace #ownedDogPhotoName { font-size: 24px; color: var(--owned-ink); }
+#ownedDogDetail.owned-workspace .dog-profile-editor p { font-size: 12px; margin: 5px 0 0; color: var(--owned-muted); }
+#ownedDogDetail.owned-workspace .dog-profile-editor p:not(#ownedWorkspaceMeta) { display: none; }
+.owned-workspace-actions { display: flex; gap: 8px; margin-left: auto; }
+#ownedDogDetail.owned-workspace[data-mode="edit"] [data-owned-workspace-action="edit"] { display: none; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs { grid-column: 1; grid-row: 2 / 4; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; margin: 0; background: var(--owned-soft); border: 0; border-right: 1px solid var(--owned-border); border-radius: 0; box-shadow: none; overflow-y: auto; align-items: stretch; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs button { display: flex; align-items: center; gap: 11px; text-align: left; padding: 12px 10px; border: 0; background: transparent; color: var(--owned-ink); font-weight: 500; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs button.is-active { color: var(--owned-blue); background: #e4f1fb; box-shadow: inset 3px 0 var(--owned-blue); font-weight: 700; }
+#ownedDogDetail.owned-workspace #ownedDogProfileTabs button:disabled { opacity: .45; }
+.owned-nav-group { font-size: 10px; font-weight: 700; color: var(--owned-muted); letter-spacing: 1px; padding: 18px 10px 6px; }
+#ownedDogDetail.owned-workspace .owned-profile-section, #ownedWorkspaceReadPanel { grid-column: 2; grid-row: 2; padding: 26px; overflow-y: auto; overscroll-behavior: contain; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; background: var(--owned-paper); }
+#ownedDogDetail.owned-workspace h2 { font-size: 27px; letter-spacing: -.6px; color: var(--owned-ink); margin: 0 0 8px; }
+#ownedDogDetail.owned-workspace h3 { font-size: 17px; color: var(--owned-ink); margin: 22px 0 12px; }
+#ownedDogDetail.owned-workspace .compact-heading > span { display: none; }
+#ownedDogDetail.owned-workspace .section-heading p, .owned-read-heading p { color: var(--owned-muted); font-size: 14px; margin: 0 0 20px; }
+#ownedDogDetail.owned-workspace .field-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; }
+#ownedDogDetail.owned-workspace label { font-size: 13px; color: var(--owned-muted); }
+#ownedDogDetail.owned-workspace input, #ownedDogDetail.owned-workspace select, #ownedDogDetail.owned-workspace textarea { font-size: 14px; border: 1px solid var(--owned-border); border-radius: 6px; box-shadow: none; background: var(--owned-paper); color: var(--owned-ink); padding: 10px 12px; }
+#ownedDogDetail.owned-workspace .owned-dog-submit-row { grid-column: 2; grid-row: 3; margin: 0; padding: 14px 26px; border-top: 1px solid var(--owned-border); background: var(--owned-paper); gap: 10px; }
+.owned-workspace-facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px 28px; margin: 24px 0; }
+.owned-workspace-facts dt { font-size: 12px; color: var(--owned-muted); margin-bottom: 6px; }
+.owned-workspace-facts dd { margin: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.owned-inline-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+#ownedDogDetail.owned-workspace .record-card { padding: 16px 0; background: transparent; border: 0; border-bottom: 1px solid var(--owned-border); border-radius: 0; box-shadow: none; }
+#ownedDogDetail.owned-workspace .record-card p, #ownedDogDetail.owned-workspace .record-card span { font-size: 13px; color: var(--owned-muted); }
+#ownedWorkspaceReadPanel details { border-block: 1px solid var(--owned-border); padding: 16px 0; }
+#ownedWorkspaceReadPanel summary { cursor: pointer; font-weight: 600; }
+.owned-care-picker { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; margin-top: 20px; }
+#ourDogsPage button:focus-visible, #ownedDogDetail.owned-workspace button:focus-visible { outline: 2px solid var(--owned-blue); outline-offset: 3px; }
+@media(min-width:761px) {
+  body #ourDogsPage .table-wrap { display: block !important; }
+  body #ourDogsPage #ownedDogMobileCards { display: none; }
+  body #ourDogsPage #ownedDogColumnManager:not([hidden]) { display: block !important; }
+}
+@media(max-width:760px) {
+  #ourDogsPage > .form-section { padding: 16px; }
+  #ourDogsPage .table-toolbar { margin: 0 0 20px; justify-content: stretch; }
+  #ourDogsPage .table-toolbar button { width: 100%; }
+  #ourDogsPage #ownedDogCareFilters { display: flex; flex-direction: row; gap: 6px; }
+  #ownedDogCareFilters [data-filter] { width: auto; font-size: 12px; padding: 8px; }
+  #ownedDogCareFilters .special-care-filter-group { width: auto; }
+  #ownedColumnsButton { display: none; }
+  body #ourDogsPage .table-wrap { display: none !important; }
+  body #ourDogsPage #ownedDogMobileCards { display: grid; gap: 12px; }
+  body #ownedDogDetail.owned-workspace:not([hidden]) { width: calc(100vw - 12px); height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto minmax(0,1fr) auto; inset: 6px !important; transform: none !important; border-radius: 10px; }
+  #ownedDogDetail.owned-workspace > .section-heading { right: 12px; top: 14px; }
+  #ownedDogDetail.owned-workspace .dog-profile-editor { padding: 14px; flex-wrap: wrap; gap: 10px; }
+  #ownedDogDetail.owned-workspace .dog-photo-picker { width: 48px !important; height: 48px !important; min-width: 48px; flex-basis: 48px; }
+  #ownedDogDetail.owned-workspace #ownedDogPhotoName { font-size: 20px; }
+  #ownedDogDetail.owned-workspace .dog-profile-editor > div:not(.owned-workspace-actions) { max-width: calc(100% - 143px); }
+  .owned-workspace-actions { width: 100%; margin: 4px 0 0; }
+  .owned-workspace-actions button { flex: 1; }
+  #ownedDogDetail.owned-workspace #ownedDogProfileTabs { grid-column: 1; grid-row: 2; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px; border-right: 0; border-bottom: 1px solid var(--owned-border); }
+  #ownedDogDetail.owned-workspace #ownedDogProfileTabs button { flex: none; white-space: nowrap; font-size: 13px; padding: 10px; }
+  #ownedDogDetail.owned-workspace .owned-nav-group { display: none; }
+  #ownedDogDetail.owned-workspace .owned-profile-section, #ownedWorkspaceReadPanel { grid-column: 1; grid-row: 3; padding: 18px; }
+  #ownedDogDetail.owned-workspace .owned-dog-submit-row { grid-column: 1; grid-row: 4; padding: 12px; }
+  #ownedDogDetail.owned-workspace .field-grid { grid-template-columns: 1fr; }
+  #ownedDogDetail.owned-workspace input, #ownedDogDetail.owned-workspace select, #ownedDogDetail.owned-workspace textarea { font-size: 16px; }
+  #ownedDogDetail.owned-workspace h2 { font-size: 23px; }
+  .owned-workspace-facts { gap: 18px 16px; }
+  .owned-care-picker { grid-template-columns: 1fr; }
+}
+:root[data-theme="dark"] #ourDogsPage, :root[data-theme="dark"] #ownedDogDetail.owned-workspace {
+  --owned-ink: #e4eef8; --owned-muted: #a7bdd0; --owned-paper: #132a3e; --owned-soft: #19344b; --owned-border: #365268; --owned-blue: #3286bb;
+}
+:root[data-theme="dark"] .owned-care-warning { background: #403820; color: #f5daa0; }
+:root[data-theme="dark"] #ownedDogCareFilters [data-filter].is-active, :root[data-theme="dark"] #ownedDogDetail.owned-workspace #ownedDogProfileTabs button.is-active { background: #234b68 !important; color: #c8e9ff; }

@@ -821,6 +821,7 @@ function ownedDogHasRosterAlert(record = {}, referenceDate = todayDate()) {
 }
 
 function ownedDogMobileCardHtml(record = {}) {
+  if (typeof ownedWorkspaceMobileCard === "function") return ownedWorkspaceMobileCard(normalizeOwnedDogCare(record));
   const dog = normalizeOwnedDogCare(record);
   const name = ownedDogDisplayName(dog) || "Dog";
   const photo = profilePhotoDirectSource(dog);
@@ -1000,12 +1001,17 @@ function renderOwnedDogs() {
   const addButton = $("#addOwnedDogButton");
   if (addButton) addButton.hidden = !isAdmin;
   const allDogs = readRecords("ownedDog").filter((record) => !record.removed);
-  const records = sortRecordsForTable("ownedDog", allDogs.filter((record) => query ? matches(record, query) : ownedDogMatchesCareFilter(record)));
+  const records = sortRecordsForTable("ownedDog", allDogs.filter((record) => ownedDogMatchesCareFilter(record) && (!query || matches(record, query))));
   const visibleRecords = records.slice(0, Math.max(OWNED_DOG_RENDER_PAGE_SIZE, ownedDogVisibleLimit));
   const columns = activeColumns("ownedDog");
   const isSpecialCareView = ownedDogCareFilter === "Special Care";
   $("#ownedDogTable")?.classList.toggle("is-special-care-table", isSpecialCareView);
-  $("#ownedDogColumnManager").hidden = isSpecialCareView;
+  if (isSpecialCareView) $("#ownedDogColumnManager").hidden = true;
+  $("#ownedColumnsButton")?.setAttribute("aria-expanded", String(!$("#ownedDogColumnManager").hidden));
+  const mobileRoster = matchMedia("(max-width: 760px)").matches;
+  $("#ownedDogTableHead").innerHTML = "";
+  $("#ownedDogTableBody").innerHTML = "";
+  $("#ownedDogMobileCards").innerHTML = "";
   const summary = {
     total: allDogs.length,
     exerciseDue: allDogs.filter((dog) => ownedDogExerciseDue(dog)).length,
@@ -1026,9 +1032,9 @@ function renderOwnedDogs() {
     $("#ownedDogSummary").hidden = true;
   }
   renderOwnedDogFilterCounts(summary);
-  if (isSpecialCareView) {
+  if (!mobileRoster && isSpecialCareView) {
     renderOwnedDogSpecialCareTable(visibleRecords);
-  } else {
+  } else if (!mobileRoster) {
     $("#ownedDogTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="ownedDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
     $("#ownedDogTableBody").innerHTML = visibleRecords.length
       ? visibleRecords
@@ -1040,17 +1046,16 @@ function renderOwnedDogs() {
               heat.inHeat ? "is-in-heat" : "",
             ].filter(Boolean).join(" ");
             return \`<tr data-id="\${record.id}" class="\${rowClass}">\${columns.map((column) => {
-              const cellValue = escapeHtml(column.value(record));
-              return \`<td>\${cellValue}\${column.key === "callName" ? ownedDogRosterAlertChipsHtml(record) : ""}</td>\`;
-            }).join("")}<td><div class="record-actions table-actions">\${dogTypeBadgeHtml("ownedDog")}<button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(record.id)}">View</button><button type="button" class="secondary-button" data-action="edit-owned" data-id="\${escapeHtml(record.id)}">Edit</button><button type="button" class="secondary-button" data-action="log-owned-care" data-id="\${escapeHtml(record.id)}">Log Care</button></div></td></tr>\`;
+              return \`<td>\${ownedWorkspaceCell(column, record)}</td>\`;
+            }).join("")}<td><div class="record-actions table-actions"><button type="button" class="secondary-button" data-action="view-owned" data-id="\${escapeHtml(record.id)}">View</button><button type="button" class="secondary-button" data-action="log-owned-care" data-id="\${escapeHtml(record.id)}">Log Care</button></div></td></tr>\`;
           })
           .join("")
       : \`<tr><td colspan="\${(columns.length || 1) + 1}">No matching dogs. Use Add New Dog.</td></tr>\`;
   }
-  renderOwnedDogMobileCards(visibleRecords);
+  if (mobileRoster) renderOwnedDogMobileCards(visibleRecords);
+  else hydrateProfilePhotoElements($("#ownedDogTableBody"));
   renderOwnedDogListStatus(records.length, visibleRecords.length);
   if (!isSpecialCareView) renderColumnManager("ownedDog", "#ownedDogColumnManager");
-  renderCareDogOptions();
 }
 
 function renderOwnedDogFilterCounts(summary = {}) {
@@ -1069,7 +1074,8 @@ function renderOwnedDogFilterCounts(summary = {}) {
     const base = button.dataset.baseLabel || button.dataset.filter || button.textContent.trim();
     button.dataset.baseLabel = base;
     const count = counts[base] || 0;
-    button.textContent = count > 0 ? \`\${base} (\${count})\` : base;
+    button.innerHTML = escapeHtml(base) + \`<span class="owned-filter-count">\${count}</span>\`;
+    button.setAttribute("aria-pressed", String(button.dataset.filter === ownedDogCareFilter));
   });
 }
 
@@ -1081,6 +1087,7 @@ function setOwnedDogActiveTab(tabName = "Overview") {
   sections.forEach((section) => {
     section.hidden = section.dataset.ownedProfileSection !== availableTab;
   });
+  if (typeof refreshOwnedWorkspace === "function") refreshOwnedWorkspace();
 }
 
 function syncOwnedDogTabAvailability(record = activeOwnedDog() || {}) {
@@ -1116,13 +1123,14 @@ function openOwnedDog(record = {}) {
   $("#ourDogForm").elements.id.value = record.id || "";
   setDogPhoto("owned", normalized);
   setOwnedCareEntryVisibility(Boolean(record.id));
-  renderOwnedActivity(normalized);
-  renderOwnedDogFiles(normalized);
+  $("#ownedActivityHistory").innerHTML = "";
+  $("#ownedDogFileList").innerHTML = "";
   updateOwnedDogConditionalFields();
   syncOwnedDogTabAvailability(normalized);
   setOwnedDogActiveTab("Overview");
   setOwnedFormLocked(false);
   $("#deleteOwnedDogButton").hidden = !record.id || currentRole() !== "admin";
+  setupOwnedWorkspace(normalized);
 }
 
 function setOwnedCareEntryVisibility(visible = false) {
@@ -1321,6 +1329,11 @@ function openOwnedDogOverviewPopup(record = {}) {
 function renderOwnedActivity(record = activeOwnedDog()) {
   const filter = $("#ownedActivityFilter")?.value || "All";
   const history = $("#ownedActivityHistory");
+  if (document.querySelector('[data-owned-profile-section="Timeline"]')?.hidden) return;
+  if (history && document.getElementById("ownedDogDetail")?.classList.contains("owned-workspace")) {
+    history.innerHTML = ownedWorkspaceTimeline(record || {}, filter);
+    return;
+  }
   if (history) history.innerHTML = ownedDogActivityEntriesHtml(record || {}, filter, { removable: true });
 }
 
@@ -1354,7 +1367,7 @@ function handleOwnedDogRosterAction(button) {
     return;
   }
   if (button.dataset.action === "view-owned") {
-    openOwnedDogOverviewPopup(record);
+    openOwnedWorkspace(record);
   }
   if (button.dataset.action === "edit-owned") {
     openOwnedDog(record);
@@ -1362,7 +1375,7 @@ function handleOwnedDogRosterAction(button) {
     $("#deleteOwnedDogButton").hidden = currentRole() !== "admin";
   }
   if (button.dataset.action === "log-owned-care") {
-    openOwnedDogTimeline(record.id);
+    openOwnedWorkspaceCare(record);
   }
 }
 

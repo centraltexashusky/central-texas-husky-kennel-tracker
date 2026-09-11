@@ -531,7 +531,10 @@ function readTableConfig() {
     const currentKeys = columns.map((column) => column.key);
     const savedKeys = (saved[type] || []).filter((key) => currentKeys.includes(key));
     const newKeys = currentKeys.filter((key) => !savedKeys.includes(key));
-    withDefaults[type] = saved[type] ? [...savedKeys, ...newKeys] : currentKeys;
+    // Resident roster defaults are compact. Keep explicitly saved column selections.
+    withDefaults[type] = type === "ownedDog"
+      ? (saved[type] ? savedKeys : ["callName", "careStatus", "specialCare", "nextCare", "foodAmount"])
+      : (saved[type] ? [...savedKeys, ...newKeys] : currentKeys);
   });
   return withDefaults;
 }
