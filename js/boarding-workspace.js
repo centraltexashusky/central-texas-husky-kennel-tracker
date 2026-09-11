@@ -129,12 +129,33 @@ function boardingWorkspaceStayHtml(record = {}, stay = {}) {
   return '<article class="record-card boarding-stay-card workspace-stay">' + progress + '<div class="workspace-stay-columns"><div class="workspace-stay-main"><div class="workspace-stay-title"><h3>' + escapeHtml(code) + '</h3>' + edit + '</div><div class="workspace-stay-facts">' + facts('calendar', 'Drop-off', formatDateTime(stay.dropoffTime)) + facts('pin', 'Location', location) + facts('calendar', 'Pickup', formatDateTime(stay.pickupTime)) + facts('history', 'Billable days', days ? String(days) + ' days' : 'See estimate') + '</div>' + (record.specialCare ? '<p class="workspace-warning"><strong>Special care:</strong> ' + escapeHtml(record.specialCare) + '</p>' : '') + '<div class="workspace-services-heading"><h3>Requested services</h3><button type="button" class="secondary-button" data-action="edit-stay"' + attrs + '>Add / edit services</button></div>' + (boardingStayServiceTaskListHtml(record, stay, { actions: true }) || '<p class="profile-empty-note">No additional services requested.</p>') + '<div class="workspace-care-grid"><section><h3>Belongings</h3><p>' + escapeHtml(boardingStayBelongings(stay) || 'None recorded') + '</p></section><section><h3>Food & care</h3><p>' + escapeHtml(boardingFoodInstructions(record) || 'No feeding instructions recorded') + '</p></section><section><h3>Stay notes</h3><p>' + escapeHtml([stay.stayNotes, stay.bathPlan].filter(Boolean).join(' · ') || 'No additional notes') + '</p></section></div>' + boardingCancellationAuditHtml(record, stay) + boardingCancellationReasonHtml(record, stay) + '</div><aside class="workspace-bill"><h3>Estimated bill</h3>' + boardingStayInvoiceSummaryHtml(record, stay) + '<button type="button" class="secondary-button workspace-price-edit" data-action="edit-stay"' + attrs + '>Review pricing & adjustments</button><p class="workspace-info">Pricing and adjustments apply to this dog’s stay.</p></aside></div><div class="workspace-stay-actions">' + transitions + boardingOwnerUpdateButtonHtml(record, stay) + boardingMedicalBehaviorButtonHtml(record, stay) + '<details class="workspace-more"><summary>More actions</summary><button type="button" class="secondary-button danger-button" data-action="remove-stay"' + attrs + '>Remove Stay</button></details></div></article>';
 }
 
+function boardingWorkspaceCheckoutInvoiceHtml(record = {}, options = {}) {
+  const stay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) || {} : activeBoardingStay(record) || currentOrNextStay(record) || {};
+  const attrs = ' data-id="' + escapeHtml(record.id || '') + '"' + (stay.id ? boardingStayDataAttrs(record, stay) : '');
+  const services = boardingStayServiceSummary(record, stay);
+  const paymentStatus = record.paymentStatus || 'Unpaid';
+  const invoiceSummary = (stay.id ? boardingStayInvoiceSummaryHtml(record, stay, { final: true }) : '') || '<div class="checkout-fallback-total"><span>Final total</span><strong>' + money(boardingInvoiceTotal(record, stay)) + '</strong></div>';
+  const fact = (label, value) => '<div><dt>' + label + '</dt><dd>' + escapeHtml(value || 'Not recorded') + '</dd></div>';
+  return `<section class="checkout-invoice">
+    <header class="checkout-invoice-identity"><div><h2>${escapeHtml(record.dogName || 'Boarding dog')}</h2><p>${escapeHtml(record.ownerName || 'No owner saved')} · ${phoneLinkHtml(record.ownerPhone)}</p></div><span class="checkout-payment-status">${escapeHtml(paymentStatus)}${record.paymentMethod ? ' · ' + escapeHtml(record.paymentMethod) : ''}</span></header>
+    <div class="checkout-invoice-columns"><div class="checkout-invoice-details">
+      <section class="checkout-invoice-section"><h3>Stay details</h3><div class="chip-row">${boardingStayRequestCodeChipHtml(record, stay)}${boardingStayStatusChipHtml(record, stay)}</div><dl class="checkout-stay-facts">${fact('Drop-off', stay.dropoffTime ? formatDateTime(stay.dropoffTime) : '')}${fact('Pickup', stay.pickupTime ? formatDateTime(stay.pickupTime) : '')}</dl></section>
+      <section class="checkout-invoice-section"><h3>Services</h3>${services.length ? '<ul class="checkout-service-list">' + services.map(name => '<li>' + escapeHtml(name) + '</li>').join('') + '</ul>' : '<p>No additional services requested.</p>'}</section>
+      ${boardingStayBelongingsHtml(stay, { showEmpty: true, label: 'Belongings to return at checkout', className: 'boarding-checkout-belongings-card' })}
+      <label class="checkout-note-label">Checkout note<textarea id="checkoutNote" rows="3" placeholder="Payment note, pickup person, invoice issue, or checkout detail"></textarea></label>
+    </div><aside class="checkout-invoice-bill"><h3>Invoice summary</h3>${invoiceSummary}<p>Review the charges and return belongings before completing checkout.</p></aside></div>
+    <footer class="checkout-invoice-actions"><button type="button" data-action="checkout-paid-method"${attrs}>Pay &amp; Check-out</button><button type="button" class="secondary-button" data-action="confirm-check-out"${attrs}>Check Out</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></footer>
+  </section>`;
+}
+
 function enhanceBoardingWorkspacePopup() {
   const dialog = document.getElementById('detailDialog');
   const body = document.getElementById('detailDialogBody');
   if (!dialog || !body) return;
   const isBoarding = Boolean(body.querySelector('#boardingStayPopupForm, #boardingCheckInForm, #boardingCheckInServiceForm, #boardingRequirementOverrideForm, #boardingDeclineRequestForm, #ownerUpdatePopupForm, #boardingMedicalBehaviorNoteForm, #pickupReadyNote, #checkoutNote, [data-action="undo-stay-service"], #kennelAssignmentForm, #paymentMethodForm'));
   dialog.classList.toggle('boarding-workspace-popup', isBoarding);
+  dialog.classList.toggle('boarding-invoice-popup', Boolean(body.querySelector('.checkout-invoice')));
+  dialog.classList.toggle('boarding-payment-popup', Boolean(body.querySelector('#paymentMethodForm')));
   const form = body.querySelector('#boardingStayPopupForm');
   if (!form || form.dataset.workspaceEnhanced) return;
   form.dataset.workspaceEnhanced = 'true';

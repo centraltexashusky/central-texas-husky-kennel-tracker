@@ -44,6 +44,17 @@ for (const path of ['js/boarding.js', 'script.js']) {
   assert.equal(result.pricingSnapshot.calculatedAt,'saved');
   assert.equal(result.invoiceAdjustments.length,2);
   assert.equal(oldStay.pricingSnapshot.total,340,'Do not mutate inputs');
+  context.boardingLifecycleStatuses.push('Checked Out');
+  savedRecord.checkoutNote = 'Owner collected leash';
+  savedRecord.paymentStatus = 'Paid';
+  savedRecord.paymentMethod = 'Zelle';
+  savedRecord.paidAt = '2026-09-11T12:00:00Z';
+  savedRecord.paidBy = 'QA staff';
+  persisted.length = 0;
+  await context.syncDuplicateBoardingStayStatusRecords({...oldRecord,sourceRecordIds:['old','new']},savedRecord,oldStay,'Checked Out');
+  for (const key of ['checkoutNote','paymentStatus','paymentMethod','paidAt','paidBy']) {
+    assert.equal(persisted[0][key],savedRecord[key],'Checkout metadata must survive duplicate synchronization');
+  }
 }
 const boarding=source('js/boarding.js');
 const workspace=source('js/boarding-workspace.js');
@@ -59,4 +70,12 @@ assert(css.includes('max-width:760px'));
 assert(css.includes('grid-template-columns:minmax(0,1fr) 285px'));
 assert(index.includes('js/boarding-workspace.js?v=boarding-workspace-v112'));
 assert(source('js/main.js').includes('boarding-workspace-v112'));
+for (const file of ['js/shared.js','script.js']) {
+  const text = source(file);
+  assert(fn(text,'paymentMethodHtml').includes('Pay &amp; Check-out'));
+  assert(fn(text,'paymentMethodHtml').includes('name="checkoutNote"'));
+}
+assert(workspace.includes('boardingStayInvoiceSummaryHtml(record, stay, { final: true })'));
+assert(workspace.includes('boarding-checkout-belongings-card'));
+assert(css.includes('.checkout-invoice-columns'));
 console.log('Boarding workspace checks passed: linked-editor refresh, duplicate check-in pricing, nine accessible tabs and mobile layout.');

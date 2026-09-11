@@ -8586,6 +8586,7 @@ function boardingInvoiceTotal(record = {}, stayOverride = null) {
 }
 
 function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
+  if (typeof boardingWorkspaceCheckoutInvoiceHtml === "function") return boardingWorkspaceCheckoutInvoiceHtml(record, options);
   const stay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) || {} : activeBoardingStay(record) || currentOrNextStay(record) || {};
   const services = boardingStayServiceSummary(record, stay);
   const total = boardingInvoiceTotal(record, stay);
@@ -8611,8 +8612,10 @@ function openCheckoutInvoicePopup(record = {}, options = {}) {
 
 function paymentMethodHtml(record = {}, options = {}) {
   return `<form id="paymentMethodForm" class="tracker-form" data-id="${escapeHtml(record.id || "")}" data-stay-id="${escapeHtml(options.stayId || "")}" data-request-code="${escapeHtml(options.requestCode || "")}">
+    <input type="hidden" name="checkoutNote" value="${escapeHtml(options.checkoutNote || '')}">
     <label>Payment method<select name="paymentMethod" required><option value="">Select method</option><option>Cash</option><option>Venmo</option><option>PayPal</option><option>Zelle</option><option>Credit Card</option></select></label>
-    <div class="button-row"><button type="submit">Paid</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+    <p class="payment-checkout-explanation">Confirm payment has been received. This records the payment method and checks the dog out.</p>
+    <div class="button-row"><button type="submit">Pay &amp; Check-out</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
   </form>`;
 }
 
@@ -10032,6 +10035,11 @@ async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updat
     });
     if (!synced) continue;
     // Copy the authoritative revision instead of repricing a stale duplicate.
+    if (nextStatus === "Checked Out") {
+      for (const field of ["checkoutNote", "paymentStatus", "paymentMethod", "paidAt", "paidBy"]) {
+        if (Object.prototype.hasOwnProperty.call(updatedRecord, field)) synced[field] = updatedRecord[field];
+      }
+    }
     if (savedStay) synced.stays = (synced.stays || []).map((stay) => boardingStayMatchesIdentity(stay, targetStay)
       ? { ...stay, ...savedStay, id: stay.id, sourceStayIds: [...new Set([...boardingStaySourceIds(stay), ...boardingStaySourceIds(savedStay)])] }
       : stay);
@@ -17360,6 +17368,7 @@ function initEvents() {
       transitionOptions.early = boardingTransitionIsEarly(record, "Checked Out", transitionOptions);
       const paid = upsertRecord("boardingDog", {
         ...record,
+        checkoutNote: paymentMethodForm.elements.checkoutNote.value.trim() || record.checkoutNote || "",
         paymentStatus: "Paid",
         paymentMethod: paymentMethodForm.elements.paymentMethod.value,
         paidAt: new Date().toISOString(),
@@ -17694,7 +17703,7 @@ function initEvents() {
     }
     if (action.dataset.action === "checkout-paid-method") {
       const record = boardingDogRecordForDisplay(action.dataset.id);
-      if (record) openPaymentMethodPopup(record, boardingStayReferenceFromAction(action));
+      if (record) openPaymentMethodPopup(record, { ...boardingStayReferenceFromAction(action), checkoutNote: $("#checkoutNote")?.value.trim() || "" });
       return;
     }
     if (action.dataset.action === "confirm-check-out") {

@@ -175,3 +175,51 @@ body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
   .workspace-care-grid { grid-template-columns:minmax(0,1fr); }
   .workspace-services-heading { align-items:flex-start; flex-direction:column; }
 }
+
+/* Checkout uses the same restrained invoice layout as the boarding workspace. */
+#detailDialog.boarding-invoice-popup { --invoice-ink:#12314e; --invoice-muted:#58708a; --invoice-line:#dce5ed; --invoice-soft:#f4f8fb; }
+:root body:not(.is-login-view) #detailDialog.boarding-invoice-popup { max-height:calc(100dvh - 32px) !important; }
+#detailDialog.boarding-invoice-popup .checkout-invoice-actions { position:sticky; bottom:-24px; background:var(--invoice-surface,#fff); margin-bottom:-24px; padding-bottom:18px; z-index:1; }
+#detailDialog .checkout-invoice { display:block; color:var(--invoice-ink); }
+#detailDialog .checkout-invoice-identity { display:flex; justify-content:space-between; align-items:center; gap:16px; padding-bottom:22px; border-bottom:1px solid var(--invoice-line); }
+#detailDialog .checkout-invoice h2 { margin:0 0 6px; font-size:26px; line-height:1.2; }
+#detailDialog .checkout-invoice h3 { margin:0 0 14px; font-size:16px; line-height:1.4; }
+#detailDialog .checkout-invoice p { margin:0; color:var(--invoice-muted); line-height:1.6; }
+#detailDialog .checkout-payment-status { padding:7px 12px; border:1px solid var(--invoice-line); border-radius:6px; font-size:13px; font-weight:700; white-space:normal; }
+#detailDialog .checkout-invoice-columns { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,0.9fr); gap:30px; padding:24px 0; }
+#detailDialog .checkout-invoice-details { display:grid; gap:22px; min-width:0; }
+#detailDialog .checkout-stay-facts { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin:18px 0 0; }
+#detailDialog .checkout-stay-facts dt { font-size:12px; color:var(--invoice-muted); margin-bottom:6px; }
+#detailDialog .checkout-stay-facts dd { margin:0; font-size:14px; font-weight:600; line-height:1.5; }
+#detailDialog .checkout-service-list { margin:0; padding-left:18px; line-height:1.8; font-size:14px; }
+#detailDialog .checkout-invoice .boarding-checkout-belongings-card { margin:0; padding:14px 16px; box-shadow:none !important; border-radius:6px; border:1px solid #ebc27a !important; background:#fffaef !important; }
+#detailDialog .checkout-invoice .boarding-checkout-belongings-card strong { color:#785015; font-size:14px; }
+#detailDialog .checkout-note-label { display:grid; gap:8px; }
+#detailDialog .checkout-invoice-bill { align-self:start; min-width:0; padding:22px; background:var(--invoice-soft) !important; border:1px solid var(--invoice-line); border-radius:8px; }
+#detailDialog .checkout-invoice-bill .stay-invoice-summary { padding:0; margin:0; border:0 !important; background:transparent !important; box-shadow:none !important; }
+#detailDialog .checkout-invoice-bill .estimate-line { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; padding:12px 0; border-bottom:1px solid var(--invoice-line); font-size:14px; line-height:1.5; }
+#detailDialog .checkout-invoice-bill .estimate-line > :last-child { text-align:right; font-variant-numeric:tabular-nums; }
+#detailDialog .checkout-invoice-bill .estimate-total { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:12px; border:0 !important; border-top:2px solid var(--invoice-line) !important; border-radius:0; padding:20px 0 8px; margin-top:8px; background:transparent !important; box-shadow:none !important; }
+#detailDialog .checkout-invoice-bill .estimate-total > span { color:var(--invoice-ink); font-size:30px; font-weight:800; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+#detailDialog .checkout-invoice-bill > p { font-size:12px; margin-top:16px; }
+#detailDialog .checkout-fallback-total { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:12px; }
+#detailDialog .checkout-fallback-total strong { font-size:30px; }
+#detailDialog .checkout-invoice-actions { display:flex; flex-wrap:wrap; gap:10px; padding-top:18px; border-top:1px solid var(--invoice-line); }
+#detailDialog .checkout-invoice-actions > :first-child, #detailDialog #paymentMethodForm button[type="submit"] { background:#0b5b9b !important; color:white !important; border-color:#0b5b9b !important; }
+:root body:not(.is-login-view) #detailDialog.boarding-payment-popup { width:min(540px,calc(100vw - 32px)) !important; }
+#paymentMethodForm .payment-checkout-explanation { font-size:14px; line-height:1.6; color:#58708a; margin:0; }
+#paymentMethodForm .button-row { margin-top:4px; }
+:root[data-theme="dark"] #detailDialog.boarding-invoice-popup { --invoice-ink:#edf5ff; --invoice-muted:#b2c4d8; --invoice-line:#355066; --invoice-soft:#142c40; --invoice-surface:#102335; }
+@media(max-width:700px) {
+  #detailDialog.boarding-invoice-popup .checkout-invoice-actions { bottom:-16px; margin-bottom:-16px; }
+  #detailDialog .checkout-invoice-columns { grid-template-columns:minmax(0,1fr); gap:22px; }
+  #detailDialog .checkout-invoice-identity { align-items:flex-start; }
+  #detailDialog .checkout-invoice h2 { font-size:23px; }
+  #detailDialog .checkout-invoice-bill { padding:18px; grid-row:1; }
+  #detailDialog .checkout-invoice-actions > :first-child { flex-basis:100%; }
+  #detailDialog .checkout-invoice-actions > .secondary-button { flex:1; }
+}
+@media(max-width:420px) {
+  #detailDialog .checkout-stay-facts { grid-template-columns:1fr; gap:12px; }
+  #detailDialog .checkout-invoice-bill .estimate-line { grid-template-columns:minmax(0,1fr); gap:4px; }
+}

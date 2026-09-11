@@ -3736,6 +3736,7 @@ function boardingInvoiceTotal(record = {}, stayOverride = null) {
 }
 
 function boardingCheckoutInvoiceHtml(record = {}, options = {}) {
+  if (typeof boardingWorkspaceCheckoutInvoiceHtml === "function") return boardingWorkspaceCheckoutInvoiceHtml(record, options);
   const stay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) || {} : activeBoardingStay(record) || currentOrNextStay(record) || {};
   const services = boardingStayServiceSummary(record, stay);
   const total = boardingInvoiceTotal(record, stay);
@@ -5214,6 +5215,11 @@ async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updat
     });
     if (!synced) continue;
     // Status synchronization must not reprice an older duplicate as a new revision.
+    if (nextStatus === "Checked Out") {
+      for (const field of ["checkoutNote", "paymentStatus", "paymentMethod", "paidAt", "paidBy"]) {
+        if (Object.prototype.hasOwnProperty.call(updatedRecord, field)) synced[field] = updatedRecord[field];
+      }
+    }
     // Keep the authoritative saved schedule, services, adjustments and invoice.
     if (savedStay) synced.stays = (synced.stays || []).map((stay) => boardingStayMatchesIdentity(stay, targetStay)
       ? { ...stay, ...savedStay, id: stay.id, sourceStayIds: [...new Set([...boardingStaySourceIds(stay), ...boardingStaySourceIds(savedStay)])] }
