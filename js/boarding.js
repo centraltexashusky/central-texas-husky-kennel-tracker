@@ -4396,6 +4396,7 @@ async function saveBoardingStayFromForm(formEl) {
     status: shouldAutoApproveStay ? "Approved" : existingStay?.status || "Approved",
     dropoffTime: payload.dropoffTime,
     pickupTime: payload.pickupTime,
+    scheduledPickupTime: payload.pickupTime,
     stayType: draftStay.stayType,
     billingDays: pricingSnapshot.billingDays,
     requests: selectedRequests,
@@ -4611,6 +4612,9 @@ function boardingStaySemanticMergeKey(record = {}, stay = {}) {
 }
 
 function boardingStayMergeKeyForRecord(record = {}, stay = {}) {
+  // A schedule edit is a revision of the same request, not a separate stay.
+  const requestCode = boardingStayExplicitRequestCode(stay);
+  if (requestCode) return "code:" + requestCode;
   return boardingStaySemanticMergeKey(record, stay) || boardingStayMergeKey(stay);
 }
 

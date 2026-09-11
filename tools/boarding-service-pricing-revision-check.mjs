@@ -63,7 +63,9 @@ for (const [label, source] of [["modules", shared + boarding + settings], ["lega
     boardingStayRequestUnitPrice: (request) => Number(request.unitPrice || 0),
     boardingServiceTaskSources: (_record, stay) => stay.requests || [],
     boardingStayServiceTasks: (_record, stay) => stay.serviceTasks || [],
-    boardingStayMergeKeyForRecord: (_record, stay) => `${stay.dropoffTime}|${stay.pickupTime}`,
+    boardingStayExplicitRequestCode: stay => String(stay.requestCode || stay.requestId || stay.reservationId || "").trim(),
+    boardingStaySemanticMergeKey: (_record, stay) => `${stay.dropoffTime}|${stay.pickupTime}`,
+    boardingStayMergeKey: stay => stay.id,
     boardingStayMergeTime: (_record, stay) => Date.parse(stay.updatedAt),
     boardingStatusPriority: () => 0,
     boardingStayDisplayStatus: (_record, stay) => stay.status,
@@ -72,7 +74,7 @@ for (const [label, source] of [["modules", shared + boarding + settings], ["lega
     itemSortTime: (item) => Date.parse(item.updatedAt || 0) || 0,
   };
   vm.createContext(context);
-  for (const name of ["mergeBoardingStayRequestList", "boardingStayPricingItemForMerge",
+  for (const name of ["boardingStayMergeKeyForRecord", "mergeBoardingStayRequestList", "boardingStayPricingItemForMerge",
     "boardingStayRequestsForMergedItems", "mergeBoardingStayServiceTasksForRequests", "mergeBoardingStays"]) {
     vm.runInContext(functionSource(source, name, name === "boardingStayPricingItemForMerge"), context);
   }
@@ -125,5 +127,25 @@ for (const [label, source] of [["modules", shared + boarding + settings], ["lega
   delete oldAmendment.stays[0].pricingSnapshot.calculatedAt;
   assert.equal(merge(oldRecord, oldAmendment).pricingSnapshot.total, 195, "Undated legacy snapshots retain existing precedence");
   assert.equal(merge(staff).pricingSnapshot.total, 315, "Single records must remain unchanged");
+
+  // Coco regression: an older duplicate receives a later lifecycle update after
+  // staff revised the pickup time and regular rate. Dates and bill must stay together.
+  const revised = revision("revised", "2026-09-10T14:00:00Z", "2026-09-10T14:00:00Z", [], 0);
+  revised.stays[0].pickupTime = "2026-09-10T16:00";
+  revised.stays[0].scheduledPickupTime = "2026-09-10T16:00";
+  revised.stays[0].pricingSnapshot = { ...revised.stays[0].pricingSnapshot, total: 520, currentDogRate: 65, currentDogRole: "non-member" };
+  const stale = structuredClone(original);
+  stale.stays[0].updatedAt = "2026-09-10T14:01:00Z";
+  stale.stays[0].status = "Ready For Pickup";
+  stale.stays[0].pickupTime = "2026-09-10T10:30";
+  for (const records of [[revised, stale], [stale, revised]]) {
+    const stays = context.mergeBoardingStays(records, records[0]);
+    assert.equal(stays.length, 1, `${label}: changing dates must not split a request into two stays`);
+    assert.equal(stays[0].pickupTime, "2026-09-10T16:00", `${label}: an old status sync must not restore the old pickup time`);
+    assert.equal(stays[0].scheduledPickupTime, "2026-09-10T16:00");
+    assert.equal(stays[0].estimatedTotal, 520);
+    assert.equal(stays[0].pricingSnapshot.currentDogRole, "non-member");
+    assert.equal(stays[0].status, "Ready For Pickup", "Preserve the latest operational status independently");
+  }
 }
 console.log("Boarding service pricing revision checks passed (modules and legacy).");

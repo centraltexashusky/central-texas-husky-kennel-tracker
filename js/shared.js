@@ -9124,7 +9124,8 @@ function mergeBoardingStays(records = [], primary = {}) {
     if (pricingItem) {
       // Keep requests, invoice lines, adjustments, and totals from one saved revision.
       // Do not reprice against today's catalog or use status timestamps for pricing.
-      for (const field of ["pricingSnapshot", "billingDays", "groupTotal", "requestGroupTotal",
+      for (const field of ["dropoffTime", "pickupTime", "scheduledDropoffTime", "scheduledPickupTime",
+        "pricingSnapshot", "billingDays", "groupTotal", "requestGroupTotal",
         "invoiceAdjustments", "invoiceEvents", "stayProgram", "stayProgramId", "stayProgramName", "stayProgramRate"]) {
         if (Object.prototype.hasOwnProperty.call(pricingItem.stay, field)) merged[field] = pricingItem.stay[field];
       }

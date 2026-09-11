@@ -9282,6 +9282,7 @@ async function saveBoardingStayFromForm(formEl) {
     status: shouldAutoApproveStay ? "Approved" : existingStay?.status || "Approved",
     dropoffTime: payload.dropoffTime,
     pickupTime: payload.pickupTime,
+    scheduledPickupTime: payload.pickupTime,
     stayType: draftStay.stayType,
     billingDays: pricingSnapshot.billingDays,
     requests: selectedRequests,
@@ -9654,6 +9655,9 @@ function boardingStaySemanticMergeKey(record = {}, stay = {}) {
 }
 
 function boardingStayMergeKeyForRecord(record = {}, stay = {}) {
+  // A schedule edit is a revision of the same request, not a separate stay.
+  const requestCode = String(stay.requestCode || stay.requestId || stay.reservationId || "").trim();
+  if (requestCode) return "code:" + requestCode;
   return boardingStaySemanticMergeKey(record, stay) || boardingStayMergeKey(stay);
 }
 
@@ -9817,7 +9821,8 @@ function mergeBoardingStays(records = [], primary = {}) {
     if (pricingItem) {
       // Keep requests, invoice lines, adjustments, and totals from one saved revision.
       // Do not reprice against today's catalog or use status timestamps for pricing.
-      for (const field of ["pricingSnapshot", "billingDays", "groupTotal", "requestGroupTotal",
+      for (const field of ["dropoffTime", "pickupTime", "scheduledDropoffTime", "scheduledPickupTime",
+        "pricingSnapshot", "billingDays", "groupTotal", "requestGroupTotal",
         "invoiceAdjustments", "invoiceEvents", "stayProgram", "stayProgramId", "stayProgramName", "stayProgramRate"]) {
         if (Object.prototype.hasOwnProperty.call(pricingItem.stay, field)) merged[field] = pricingItem.stay[field];
       }
