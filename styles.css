@@ -22653,6 +22653,7 @@ button.dog-show-planner-score:focus-visible {
 #boardingDogRosterTabs { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto; gap: 4px; padding: 0; border: 0; border-bottom: 1px solid var(--roster-line); border-radius: 0; box-shadow: none; }
 #boardingDogRosterTabs button { flex: 0 0 auto !important; width: auto !important; min-height: 44px; padding: 9px 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 5px 5px 0 0; background: transparent; box-shadow: none; font-size: 13px; }
 #boardingDogRosterTabs button.is-active { background: #edf6ff; color: #075c99; border-bottom-color: #147bc0; }
+#boardingDogRosterTabs button.is-active > span { background: #d6eaff; color: #075c99; }
 #boardingViewToggle { margin: 14px 0; }
 #boardingViewToggle button { min-height: 40px; border-radius: 5px; font-size: 13px; }
 @media (min-width: 761px) and (max-width: 1250px) {
