@@ -356,6 +356,7 @@ function renderDailyTaskTabs(config = readTaskConfig()) {
 
 function adminTaskTabDragEnabled() {
   return currentRole() === "admin"
+    && document.getElementById("dailyPage")?.dataset.taskManaging === "true"
     && window.matchMedia("(min-width: 900px)").matches;
 }
 
@@ -424,6 +425,7 @@ function dailyTaskDraftInputKey(input) {
 }
 
 function renderDailyTaskLists(selected = {}) {
+  if (typeof setupDailyWorkspace === "function") setupDailyWorkspace();
   const draftState = captureDailyTaskDraftState();
   const config = readTaskConfig();
   const completionIndex = dailyTaskCompletionIndex(currentDailyDate());
@@ -438,7 +440,7 @@ function renderDailyTaskLists(selected = {}) {
   Object.entries(staticLists).forEach(([listId, shift]) => {
     const list = $(\`#\${listId}\`);
     if (!list) return;
-    list.innerHTML = (config[shift] || []).map((task) => taskLabel(task, shift, completionIndex)).join("");
+    list.innerHTML = "";
     bindTaskListInteractions(list);
   });
   parkTaskFilterToggle();
@@ -450,9 +452,11 @@ function renderDailyTaskLists(selected = {}) {
   $("#weeklyTaskAdminControls").hidden = !canManageTasks;
   $("#tuesdayTaskAdminControls").hidden = !canManageTasks;
   $("#monthlyTaskAdminControls").hidden = !canManageTasks;
-  renderCareDogOptions();
   pendingStructuredCareLogs = structuredCareLogsForDate(currentDailyDate());
-  renderStructuredCareLogs();
+  if (document.getElementById("dailyPage")?.dataset.workspaceView === "care") {
+    renderCareDogOptions();
+    renderStructuredCareLogs();
+  }
   setDailyTaskTab(dailyTaskTab);
   restoreDailyTaskDraftState(draftState);
   updateCompletionCount(completionIndex);
@@ -472,6 +476,15 @@ function setDailyTaskTab(tab = "morning") {
     panel.hidden = panel.dataset.taskPanel !== dailyTaskTab;
   });
   syncTaskFilterTogglePlacement();
+  const config = readTaskConfig();
+  const completionIndex = dailyTaskCompletionIndex(currentDailyDate());
+  panels.forEach(panel => {
+    const list = panel.querySelector(".checklist");
+    if (!list) return;
+    list.innerHTML = panel.hidden ? "" : (config[dailyTaskTab] || []).map(task => taskLabel(task, dailyTaskTab, completionIndex)).join("");
+    bindTaskListInteractions(list);
+  });
+  if (typeof refreshDailyWorkspace === "function") refreshDailyWorkspace(config, completionIndex);
 }
 
 function taskTabFormHtml() {
@@ -693,7 +706,7 @@ async function syncOwnedDogCareFromDailyReport(record) {
     }
   }
   if (dogUpdates.size) {
-    renderOwnedDogs();
+    if (activePageId() === "ourDogsPage") renderOwnedDogs();
     renderCareDogOptions();
     const activeId = $("#ourDogForm")?.elements.id.value || "";
     const activeUpdate = activeId ? dogUpdates.get(activeId) : null;

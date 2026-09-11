@@ -19,6 +19,7 @@
     </script>
     <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-optional-acknowledgements-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v3-compiled-finance-reports-v4-dog-attributable-costs-v5-customer-finance-reports-upcoming-status-ux-v6-dog-profile-registration-akc-breeds-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-timesheet-payroll-review-v26-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-notification-health-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-customer-vaccine-self-service-v41-customer-vaccine-card-layout-v42-boarding-progressive-load-v54-profile-history-v57-styles-pdf-media-preview-v60-financial-transaction-columns-v61-financial-summary-containment-v66-persisted-financial-ledger-v68-scalable-rosters-v70-boarding-history-retention-v85-schedule-publish-status-v93-sidebar-outline-icons-v104-boarding-modern-roster-v110-stay-save-revision-v111-boarding-workspace-v112-checkout-v113" />
     <link rel="stylesheet" href="boarding-workspace.css?v=boarding-workspace-v112a-checkout-v113-lifecycle-v114" />
+    <link rel="stylesheet" href="daily-workspace.css?v=daily-workspace-v115" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -670,6 +671,12 @@
       </section>
 
       <section class="page-view" id="dailyPage">
+      <header class="daily-workspace-header"><div><h2>Daily Tasks</h2><p>Complete shift work and record dog care.</p></div><time id="dailyWorkspaceDate"></time></header>
+      <div class="daily-workspace-nav" role="tablist" aria-label="Daily workspace">
+        <button type="button" id="dailyViewTasks" data-daily-view="tasks" role="tab" aria-selected="true" aria-controls="dailyQueuePanel">Tasks</button>
+        <button type="button" id="dailyViewCare" data-daily-view="care" role="tab" aria-selected="false" aria-controls="structuredCareSection" tabindex="-1">Dog Care</button>
+        <button type="button" id="dailyViewActivity" data-daily-view="activity" role="tab" aria-selected="false" aria-controls="dailyActivityPanel" tabindex="-1">Activity</button>
+      </div>
       <form id="kennelForm" class="tracker-form">
         <input type="hidden" name="id" id="dailyTaskId" />
         <input type="hidden" name="date" id="dailyTaskDate" />
@@ -687,12 +694,12 @@
           <option>Saturday</option>
         </select>
 
-        <section class="form-section structured-care-panel structured-care-section" id="structuredCareSection" aria-labelledby="structuredCareHeading">
+        <section class="form-section structured-care-panel structured-care-section" id="structuredCareSection" aria-labelledby="dailyViewCare" role="tabpanel" data-daily-workspace-panel="care" hidden>
           <div class="section-heading">
             <span>C</span>
             <div>
-              <h2 id="structuredCareHeading">Structured Our Dog Care Log</h2>
-              <p>Log exercise, training, baths, heat notes, and care notes to the selected Our Dog profile.</p>
+              <h2 id="structuredCareHeading">Dog Care</h2>
+              <p>Log care for Our Dogs.</p>
             </div>
           </div>
 
@@ -722,6 +729,7 @@
           </div>
         </section>
 
+        <section id="dailyQueuePanel" role="tabpanel" aria-labelledby="dailyViewTasks" data-daily-workspace-panel="tasks">
         <div class="daily-task-tabs" id="dailyTaskTabs" role="tablist" aria-label="Daily task sections">
           <button type="button" class="is-active" data-task-tab="morning" role="tab" aria-selected="true">Morning</button>
           <button type="button" data-task-tab="pm" role="tab" aria-selected="false">Evening</button>
@@ -731,7 +739,12 @@
           <button type="button" class="secondary-button task-add-tab-button" data-action="add-task-tab" hidden>Add Tab</button>
         </div>
         <div class="task-progress-banner" id="dailyTaskProgress" aria-live="polite">0 completed | tasks loading</div>
-        <label class="toggle-row task-filter-toggle" id="dailyTaskFilterToggleRow"><input type="checkbox" id="showRemainingTasksOnly" checked /> Remaining tasks only</label>
+        <progress id="dailyTaskMeter" value="0" max="1" aria-label="Task completion"></progress>
+        <div class="daily-queue-toolbar" id="dailyQueueToolbar">
+          <input type="search" id="dailyTaskSearch" placeholder="Find a task in this group" aria-label="Find a task in this group" />
+          <label class="toggle-row task-filter-toggle" id="dailyTaskFilterToggleRow"><input type="checkbox" id="showRemainingTasksOnly" checked /> Remaining tasks only</label>
+          <button type="button" id="dailyManageTasks" class="secondary-button" aria-pressed="false" hidden>Manage tasks</button>
+        </div>
 
         <section class="form-section collapsible-section" data-task-panel="morning" data-collapsible-section>
           <div class="section-heading">
@@ -834,9 +847,11 @@
           </div>
         </section>
         <div id="customTaskPanels"></div>
+        <p class="daily-queue-footnote">Tasks save when marked Done.</p>
+        </section>
       </form>
 
-      <section class="recent-submissions">
+      <section class="recent-submissions" id="dailyActivityPanel" role="tabpanel" aria-labelledby="dailyViewActivity" data-daily-workspace-panel="activity" hidden>
         <div class="section-heading">
           <span>R</span>
           <div>
@@ -1950,7 +1965,8 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-optional-acknowledgements-customer-agreement-records-dual-email-show-wide-expense-split-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v6-compiled-finance-reports-v7-dog-attributable-costs-v8-customer-finance-reports-upcoming-status-ux-v9-dog-profile-registration-akc-breeds-net-dog-credits-v10-collapsible-ledgers-dog-reports-v11-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-customer-request-history-detach-v23-boarding-request-notification-rls-v25-timesheet-payroll-review-v28-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-boarding-detached-profile-v34-customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36d-dog-show-lifecycle-owner-update-photo-invoice-v39-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-daily-care-log-staff-date-v44-boarding-request-alert-reliability-v26-boarding-family-alert-approval-v27-boarding-group-status-v28-boarding-transition-revision-v29-transaction-security-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-boarding-stay-revision-v37-boarding-checkin-preflight-v38-boarding-requirement-override-v39-boarding-override-confirmation-v40-customer-vaccine-self-service-v41-vaccination-document-approval-v43-cuddle-schema-isolated-v45-boarding-alert-recovery-v46-user-removal-v47-dashboard-daily-completion-v48-atomic-owner-update-v49-notification-delivery-retry-v51-shared-kennels-v52-customer-canonical-profile-fallback-v42-staff-new-boarding-default-v53-boarding-progressive-load-v54-request-history-lazy-v55-profile-lookup-cache-v56-profile-history-v57-calendar-pricing-consistency-v58-profile-request-isolation-v59-pdf-media-preview-v60-approval-persistence-identity-v61-service-pricing-revision-v62-removed-user-payroll-rate-v63-staff-schedule-sunday-grid-v64-financial-category-description-columns-v65-financial-loading-progress-v67-persisted-financial-ledger-v69-scalable-page-loading-v83-boarding-roster-counts-v89-dog-pricing-eligibility-v90-time-off-self-service-v91-time-off-upsert-fix-v92-schedule-publish-status-v93-canonical-boarding-save-v94-canonical-linked-fallback-v95-staff-pricing-canonical-v97-boarding-form-id-v98-on-demand-editor-v99-canonical-payload-id-v100-staff-service-scope-v101-full-catalog-v102-canonical-provenance-v103-notification-read-receipts-v105-durable-customer-file-alert-v106-ready-pickup-until-checkout-v107-alert-panel-on-demand-v108-boarding-modern-roster-v110-stay-save-revision-v111-delete-modal-cleanup-v109-boarding-modern-roster-v110-stay-save-revision-v111-boarding-workspace-v112-checkout-v113"></script>
+    <script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-optional-acknowledgements-customer-agreement-records-dual-email-show-wide-expense-split-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v6-compiled-finance-reports-v7-dog-attributable-costs-v8-customer-finance-reports-upcoming-status-ux-v9-dog-profile-registration-akc-breeds-net-dog-credits-v10-collapsible-ledgers-dog-reports-v11-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-customer-request-history-detach-v23-boarding-request-notification-rls-v25-timesheet-payroll-review-v28-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-boarding-detached-profile-v34-customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36d-dog-show-lifecycle-owner-update-photo-invoice-v39-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-daily-care-log-staff-date-v44-boarding-request-alert-reliability-v26-boarding-family-alert-approval-v27-boarding-group-status-v28-boarding-transition-revision-v29-transaction-security-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-boarding-stay-revision-v37-boarding-checkin-preflight-v38-boarding-requirement-override-v39-boarding-override-confirmation-v40-customer-vaccine-self-service-v41-vaccination-document-approval-v43-cuddle-schema-isolated-v45-boarding-alert-recovery-v46-user-removal-v47-dashboard-daily-completion-v48-atomic-owner-update-v49-notification-delivery-retry-v51-shared-kennels-v52-customer-canonical-profile-fallback-v42-staff-new-boarding-default-v53-boarding-progressive-load-v54-request-history-lazy-v55-profile-lookup-cache-v56-profile-history-v57-calendar-pricing-consistency-v58-profile-request-isolation-v59-pdf-media-preview-v60-approval-persistence-identity-v61-service-pricing-revision-v62-removed-user-payroll-rate-v63-staff-schedule-sunday-grid-v64-financial-category-description-columns-v65-financial-loading-progress-v67-persisted-financial-ledger-v69-scalable-page-loading-v83-boarding-roster-counts-v89-dog-pricing-eligibility-v90-time-off-self-service-v91-time-off-upsert-fix-v92-schedule-publish-status-v93-canonical-boarding-save-v94-canonical-linked-fallback-v95-staff-pricing-canonical-v97-boarding-form-id-v98-on-demand-editor-v99-canonical-payload-id-v100-staff-service-scope-v101-full-catalog-v102-canonical-provenance-v103-notification-read-receipts-v105-durable-customer-file-alert-v106-ready-pickup-until-checkout-v107-alert-panel-on-demand-v108-boarding-modern-roster-v110-stay-save-revision-v111-delete-modal-cleanup-v109-boarding-modern-roster-v110-stay-save-revision-v111-boarding-workspace-v112-checkout-v113-daily-workspace-v115"></script>
     <script src="js/boarding-workspace.js?v=boarding-workspace-v112-checkout-v113" defer></script>
+    <script src="js/daily-workspace.js?v=daily-workspace-v115" defer></script>
 </body>
 </html>

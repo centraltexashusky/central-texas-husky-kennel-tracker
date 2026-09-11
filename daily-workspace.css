@@ -1,0 +1,84 @@
+/* Daily work queue: scoped so boarding, scheduler, and other forms stay unchanged. */
+body:has(#dailyPage.is-active) .page-header h1 { font-size: 28px; line-height: 1.2; }
+body:has(#dailyPage.is-active) .page-header .eyebrow { display: none; }
+body:has(#dailyPage.is-active) #globalSearchPanel { padding: 12px; }
+body:has(#dailyPage.is-active) #globalSearchPanel:has(#globalQuickSearch:placeholder-shown) #globalSearchResults { display: none; }
+#dailyPage { --daily-ink: #12314e; --daily-accent: #0b5b9b; --daily-line: #d8e3ed; --daily-surface: #fff; --daily-muted: #536a82; --daily-soft: #f3f7fa; background: var(--daily-surface); padding: 24px; border: 1px solid var(--daily-line); border-radius: 12px; color: var(--daily-ink); }
+:root[data-theme="dark"] #dailyPage { --daily-ink: #e7f0f9; --daily-accent: #69b8f5; --daily-line: #3b5268; --daily-surface: #142638; --daily-muted: #b2c6da; --daily-soft: #20384d; }
+#dailyPage [hidden] { display: none !important; }
+#dailyPage .daily-workspace-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; margin-bottom: 20px; }
+#dailyPage .daily-workspace-header h2 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; color: var(--daily-ink); }
+#dailyPage .daily-workspace-header p, #dailyWorkspaceDate { margin: 0; font-size: 14px; color: var(--daily-muted); }
+#dailyWorkspaceDate { white-space: nowrap; padding-top: 5px; }
+#dailyPage .daily-workspace-nav { display: flex; gap: 20px; border-bottom: 1px solid var(--daily-line); margin-bottom: 20px; }
+#dailyPage .daily-workspace-nav button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; box-shadow: none; padding: 12px 18px; background: transparent; color: var(--daily-muted); font-size: 15px; }
+#dailyPage .daily-workspace-nav button[aria-selected="true"] { color: var(--daily-accent); border-bottom-color: var(--daily-accent); }
+#dailyPage #kennelForm { gap: 0; }
+#dailyPage #kennelForm, #dailyPage #dailyQueuePanel, #dailyPage #customTaskPanels, #dailyPage [data-task-panel] { min-width: 0; max-width: 100%; }
+#dailyPage #dailyTaskTabs { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; margin: 0 0 16px; padding: 2px 0 8px; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+#dailyPage #dailyTaskTabs button { flex: 0 0 auto; width: auto; min-height: 42px; padding: 9px 14px; border-radius: 6px; border: 1px solid var(--daily-line); background: var(--daily-surface); color: var(--daily-ink); box-shadow: none; font-size: 14px; display: inline-flex; gap: 8px; align-items: center; }
+#dailyPage #dailyTaskTabs button.is-active { background: var(--daily-soft); border-color: var(--daily-accent); color: var(--daily-accent); }
+#dailyPage .daily-group-count { padding: 1px 6px; min-width: 20px; border-radius: 20px; background: var(--daily-soft); font-size: 12px; text-align: center; }
+#dailyPage #dailyTaskProgress { margin: 0 0 6px; padding: 0; background: none; border: 0; font-size: 14px; color: var(--daily-ink); box-shadow: none; }
+#dailyTaskMeter { appearance: none; display: block; width: 100%; height: 8px; margin: 0 0 18px; border: 0; border-radius: 8px; overflow: hidden; background: var(--daily-soft); }
+#dailyTaskMeter::-webkit-progress-bar { background: var(--daily-soft); }
+#dailyTaskMeter::-webkit-progress-value { background: var(--daily-accent); border-radius: 8px; }
+#dailyTaskMeter::-moz-progress-bar { background: var(--daily-accent); }
+#dailyPage .daily-queue-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 22px; }
+#dailyPage #dailyTaskSearch { flex: 1 1 260px; width: auto; min-width: 0; height: 44px; border-radius: 6px; font-size: 14px; }
+#dailyPage #dailyTaskFilterToggleRow { margin: 0; padding: 0; border: 0; background: transparent; font-size: 14px; white-space: nowrap; }
+#dailyPage #dailyTaskFilterToggleRow input { width: 18px; height: 18px; }
+#dailyPage button { font-size: 14px; min-height: 42px; }
+#dailyPage button:focus-visible, #dailyPage input:focus-visible { outline: 3px solid var(--daily-accent); outline-offset: 3px; }
+#dailyPage .secondary-button { background: var(--daily-surface); color: var(--daily-ink); border: 1px solid var(--daily-line); box-shadow: none; border-radius: 6px; }
+#dailyPage [data-task-panel], #dailyPage #structuredCareSection, #dailyPage .recent-submissions { padding: 0; margin: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+#dailyPage [data-task-panel] .section-heading { margin-bottom: 0; border-bottom: 1px solid var(--daily-line); padding-bottom: 12px; }
+#dailyPage .section-heading h2 { color: var(--daily-ink); font-size: 20px; }
+#dailyPage [data-task-panel] .section-heading > span, #dailyPage [data-task-panel] .section-heading p, #dailyPage [data-task-panel] .section-toggle-button, #dailyPage #structuredCareSection .section-heading > span, #dailyPage .recent-submissions .section-heading > span { display: none; }
+#dailyPage [data-task-panel] .section-body { display: block !important; padding: 0; }
+#dailyPage .checklist { display: grid; grid-template-columns: 1fr; gap: 0; margin: 0; }
+#dailyPage .checklist .task-item { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px 16px; padding: 14px 2px; min-height: 70px; border: 0; border-bottom: 1px solid var(--daily-line); border-radius: 0; box-shadow: none; background: var(--daily-surface); color: var(--daily-ink); }
+#dailyPage .checklist .task-text { color: var(--daily-ink); font-size: 16px; line-height: 1.5; overflow-wrap: anywhere; }
+#dailyPage .checklist .task-done-button { grid-column: 2; grid-row: 1; width: auto; min-width: 74px; padding: 9px 16px; border: 0; border-radius: 6px; background: #0b5b9b; color: #fff; box-shadow: none; }
+#dailyPage .checklist .task-done-button:disabled { opacity: .65; }
+#dailyPage .task-completed-meta { grid-column: 1; grid-row: 2; color: var(--daily-muted); font-size: 13px; }
+#dailyPage .task-admin-tools { grid-column: 1 / -1; justify-content: flex-end; }
+#dailyPage:not([data-task-managing="true"]) :is(.task-admin-tools,.admin-task-controls,.task-tab-delete-row,.task-add-tab-button) { display: none !important; }
+#dailyPage .admin-task-controls { margin-top: 16px; }
+#dailyPage .daily-task-empty { padding: 28px 12px; background: var(--daily-soft); color: var(--daily-muted); display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: center; }
+#dailyPage .daily-queue-footnote { font-size: 13px; color: var(--daily-muted); margin: 12px 0 0; }
+#dailyPage .field-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+#dailyPage #structuredCareSection .section-heading { margin-bottom: 20px; }
+#dailyPage :is(input,select,textarea) { border-radius: 6px; }
+#dailyPage :is(#addCareQuickLog, #dailyStaffNoteForm button[type="submit"]) { background: #0b5b9b; color: white; border-radius: 6px; box-shadow: none; }
+#dailyPage .recent-submissions .section-heading { margin-bottom: 18px; }
+#dailyPage .record-card { box-shadow: none; border-radius: 8px; }
+/* Override the legacy themed card and admin force-display rules only here. */
+body #dailyPage:not([data-task-managing="true"]) .admin-task-controls { display: none !important; }
+body #dailyPage [data-task-panel], body #dailyPage #structuredCareSection, body #dailyPage .recent-submissions { background: transparent !important; border: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+:root[data-theme] #dailyPage .checklist .task-item { background: var(--daily-surface); box-shadow: none; color: var(--daily-ink); }
+:root[data-theme] #dailyPage .checklist .task-item .task-text { color: var(--daily-ink); font-weight: 500; }
+:root[data-theme] #dailyPage .checklist .task-item.is-complete { background: var(--daily-soft); box-shadow: none; }
+body #dailyPage #dailyTaskFilterToggleRow { box-shadow: none !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; }
+#dailyPage #dailyTaskSearch { order: 0; }
+#dailyPage #dailyTaskFilterToggleRow { order: 1; }
+#dailyPage #dailyManageTasks { order: 2; }
+@media(max-width:760px) {
+  body:has(#dailyPage.is-active) .page-header .user-card { display: flex; flex-direction: row; flex-wrap: wrap; gap: 8px; padding: 12px; }
+  body:has(#dailyPage.is-active) .page-header .user-card > div { flex: 1 0 100%; }
+  body:has(#dailyPage.is-active) .page-header .user-card button { width: auto !important; min-height: 34px; font-size: 12px; padding: 6px 12px; }
+  #dailyPage { padding: 18px 14px; }
+  #dailyPage .daily-workspace-header { gap: 10px; flex-wrap: wrap; }
+  #dailyPage .daily-workspace-header h2 { font-size: 24px; }
+  #dailyPage .daily-workspace-nav { gap: 0; }
+  #dailyPage .daily-workspace-header { margin-bottom: 10px; }
+  #dailyPage .daily-workspace-nav { margin-bottom: 12px; }
+  #dailyPage #dailyTaskTabs { margin-bottom: 10px; }
+  #dailyPage .daily-workspace-nav button { flex: 1; padding-inline: 8px; }
+  #dailyPage .daily-queue-toolbar { gap: 14px 10px; }
+  #dailyPage #dailyTaskSearch { flex-basis: 100%; width: 100%; }
+  #dailyPage #dailyManageTasks { width: auto; margin-left: auto; }
+  #dailyPage .field-grid { grid-template-columns: 1fr; }
+  #dailyPage .checklist .task-item { gap: 8px 12px; }
+  #dailyPage .checklist .task-text { font-size: 15px; }
+}

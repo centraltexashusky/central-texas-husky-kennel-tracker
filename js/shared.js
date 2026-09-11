@@ -4093,6 +4093,10 @@ function updateConditionalSections() {
 }
 
 function updateCompletionCount(completionIndex = null) {
+  if (typeof refreshDailyWorkspace === "function" && typeof taskTabMeta === "function") {
+    refreshDailyWorkspace(readTaskConfig(), dailyTaskCompletionIndex(currentDailyDate()));
+    return;
+  }
   const date = currentDailyDate();
   const resolvedCompletionIndex = completionIndex
     || (typeof dailyTaskCompletionIndex === "function" ? dailyTaskCompletionIndex(date) : new Map());
@@ -4135,6 +4139,8 @@ function ensureTaskFilterToggleRow() {
 
 function parkTaskFilterToggle() {
   const row = ensureTaskFilterToggleRow();
+  const toolbar = document.getElementById("dailyQueueToolbar");
+  if (toolbar) { toolbar.appendChild(row); return row; }
   const progress = $("#dailyTaskProgress");
   if (row && progress && row.parentElement !== progress.parentElement) progress.insertAdjacentElement("afterend", row);
   return row;
@@ -4143,6 +4149,8 @@ function parkTaskFilterToggle() {
 function syncTaskFilterTogglePlacement() {
   const row = ensureTaskFilterToggleRow();
   if (!row) return;
+  const toolbar = document.getElementById("dailyQueueToolbar");
+  if (toolbar) { if (row.parentElement !== toolbar) toolbar.appendChild(row); row.hidden = false; return; }
   const panel = $$("[data-task-panel]").find((item) => item.dataset.taskPanel === dailyTaskTab);
   const headingBody = panel?.querySelector(".section-heading > div");
   if (headingBody && row.parentElement !== headingBody) headingBody.appendChild(row);
@@ -4321,7 +4329,7 @@ async function saveDailyWorkPayload(payload) {
   await syncOwnedDogCareFromDailyReport(record);
   renderDailyTaskLists(record);
   renderDemoSubmissions();
-  renderDashboard();
+  if (activePageId() === "dashboardPage") renderDashboard();
   return record;
 }
 
@@ -4612,7 +4620,7 @@ async function completeDailyTask(button) {
       showToast(taskText + " marked done.");
     }
     renderDailyTaskLists();
-    renderDashboard();
+    if (activePageId() === "dashboardPage") renderDashboard();
   } catch (error) {
     console.warn("Daily task completion failed.", error);
     showToast("Task could not be completed: " + error.message);
@@ -4789,7 +4797,7 @@ function restoreDailyTaskDraftState(state = {}) {
 function renderCustomTaskPanels(config = readTaskConfig(), completionIndex = null) {
   const container = $("#customTaskPanels");
   if (!container) return;
-  container.innerHTML = (config._tabs || []).map((tab) => customTaskPanelHtml(tab, config[tab.id] || [], completionIndex)).join("");
+  container.innerHTML = (config._tabs || []).map((tab) => customTaskPanelHtml(tab, [], completionIndex)).join("");
   container.querySelectorAll("[data-custom-task-list]").forEach(bindTaskListInteractions);
 }
 
@@ -7689,6 +7697,7 @@ function groupedRecentStaffNotes(notes = []) {
 
 
 function renderDemoSubmissions() {
+  if (document.getElementById("dailyActivityPanel")?.hidden) return;
   const dailyRecords = readRecords("dailyTask");
   const calendarNotes = readRecords("calendarNote").filter((note) => !note.removed);
   const saved = [
