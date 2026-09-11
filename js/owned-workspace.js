@@ -19,7 +19,9 @@ function ownedWorkspaceIcon(name) {
 function ownedWorkspacePhoto(dog) {
   const name = ownedDogDisplayName(dog) || 'Dog';
   const src = profilePhotoDirectSource(dog);
-  return `<span class="owned-roster-photo"${profilePhotoAccessAttrs(dog, 'ownedDog')}><img${src ? ` src="${escapeHtml(src)}"` : ' hidden'} alt="" loading="lazy" /><span data-profile-photo-initials${src ? ' hidden' : ''}>${escapeHtml(avatarText(name))}</span></span>`;
+  // The existing photo hydrator defers off-screen work. Native lazy loading on a
+  // hidden image can deadlock its load event and prevent the hydrator revealing it.
+  return `<span class="owned-roster-photo"${profilePhotoAccessAttrs(dog, 'ownedDog')}><img${src ? ` src="${escapeHtml(src)}"` : ' hidden'} alt="" /><span data-profile-photo-initials${src ? ' hidden' : ''}>${escapeHtml(avatarText(name))}</span></span>`;
 }
 
 function ownedWorkspaceNextCare(dog) {

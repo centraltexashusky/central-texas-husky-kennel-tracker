@@ -37,6 +37,7 @@ Intentional differences: existing global navigation/account header remain unchan
 - Existing-file fixture: rename, filtered history/removal, and data retention after reload passed.
 - Dark selected-tab colors checked in rendered browser: background `rgb(35,75,104)`, text `rgb(200,233,255)`.
 - No uncaught browser errors in completed runs. All local fixture storage cleared after tests.
+- Live authenticated read check: all 19 existing dogs rendered and the read-first profile opened. Native image lazy loading conflicted with the existing protected-photo hydrator; removed that duplicate lazy-loading mechanism while retaining the hydrator's visibility-based scheduling.
 
 The full roster/profile browser check is retained in `tools/owned-workspace-browser-check.mjs`. Run against a local server with Playwright available, optionally setting `PLAYWRIGHT_MODULE` to its module path. The check refuses non-local URLs and blocks Supabase requests.
 

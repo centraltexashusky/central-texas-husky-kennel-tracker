@@ -16,6 +16,7 @@ assert(!html.includes('<script>'));assert(html.includes('&lt;script&gt;'));
 assert(!html.includes('<img onerror='));
 assert.equal((html.match(/<button /g)||[]).length,2);
 assert(html.includes('1 cup'));assert(html.includes('2026-10-01'));
+assert(!context.ownedWorkspacePhoto(dog).includes('loading="lazy"'), 'Hidden private thumbnails must be revealed by the existing photo hydrator');
 for(const tab of ['Overview','Exercise','Training','Baths','Heat Cycle','Medical / Care Notes']) assert(context.ownedWorkspaceReadHtml(dog,tab).includes(tab.replaceAll('&','&amp;')));
 const timeline=context.ownedWorkspaceTimeline({logs:Array.from({length:500},(_,i)=>({id:i,type:'Treadmill',group:'Exercise'}))},'All');
 assert.equal((timeline.match(/<article>/g)||[]).length,30);
@@ -28,6 +29,6 @@ assert(workspace.includes("['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home
 assert(settings.includes('saved[type] ? savedKeys : ["callName", "careStatus", "specialCare", "nextCare", "foodAmount"]'));
 assert(shared.includes('if (record) openOwnedWorkspace(record)'));
 assert(index.includes('owned-workspace.css?v=owned-workspace-v117'));
-assert(index.includes('js/owned-workspace.js?v=owned-workspace-v117'));
+assert(index.includes('js/owned-workspace.js?v=owned-workspace-v117-photo'));
 assert(css.includes('inset: 6px !important; transform: none !important;'));
 console.log('Our Dogs workspace checks passed: escaped compact cards, 8-tab navigation, 30-entry history, current-record editing, single responsive roster, saved columns, filtered search and unchanged persistence.');
