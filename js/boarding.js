@@ -4344,6 +4344,8 @@ async function saveBoardingStayFromForm(formEl) {
     ...(existingStay || {}),
     dropoffTime: payload.dropoffTime,
     pickupTime: payload.pickupTime,
+    scheduledDropoffTime: payload.dropoffTime,
+    scheduledPickupTime: payload.pickupTime,
     stayType,
     requests: selectedRequests,
     invoiceAdjustments,
@@ -4398,6 +4400,7 @@ async function saveBoardingStayFromForm(formEl) {
     pickupTime: payload.pickupTime,
     scheduledPickupTime: payload.pickupTime,
     stayType: draftStay.stayType,
+    scheduledDropoffTime: payload.dropoffTime,
     billingDays: pricingSnapshot.billingDays,
     requests: selectedRequests,
     stayNotes: payload.stayNotes,
@@ -4474,7 +4477,7 @@ async function saveBoardingStayFromForm(formEl) {
       .join(" | ") || "Adjustments removed";
     await addAuditLog("Updated stay billing adjustments", "boardingDog", record, \`Stay ID: \${requestCode} | \${details}\`);
   }
-  if (boardingDogFormRecordId() === record.id) {
+  if (boardingEditorShowsRecord(record)) {
     renderBoardingStays(record);
     renderBoardingHistory(record);
     renderBoardingOwnerAccountPanel(record);
@@ -5199,6 +5202,7 @@ async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updat
     ...(targetStay.sourceRecordIds || []),
   ].filter(Boolean))];
   const syncedRecords = [];
+  const savedStay = boardingStayByReference(updatedRecord, targetStay);
   const sourceRecords = readRecords("boardingDog").filter((record) => sourceIds.includes(record.id) && !record.removed && record.id !== updatedRecord.id);
   for (const sourceRecord of sourceRecords) {
     const sourceStay = (sourceRecord.stays || []).find((stay) => boardingStayMatchesIdentity(stay, targetStay));
@@ -5209,6 +5213,11 @@ async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updat
       forceStatusSync: true,
     });
     if (!synced) continue;
+    // Status synchronization must not reprice an older duplicate as a new revision.
+    // Keep the authoritative saved schedule, services, adjustments and invoice.
+    if (savedStay) synced.stays = (synced.stays || []).map((stay) => boardingStayMatchesIdentity(stay, targetStay)
+      ? { ...stay, ...savedStay, id: stay.id, sourceStayIds: [...new Set([...boardingStaySourceIds(stay), ...boardingStaySourceIds(savedStay)])] }
+      : stay);
     syncedRecords.push(boardingDogForPersistence(synced));
   }
   if (syncedRecords.length) await sendPayloadBatch(syncedRecords);
@@ -5295,7 +5304,7 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
   renderBoardingRequests();
   renderCustomerRequests();
   renderDashboard();
-  if (boardingDogFormRecordId() === updated.id) {
+  if (boardingEditorShowsRecord(updated)) {
     renderBoardingStays(updated);
     renderBoardingHistory(updated);
     renderBoardingKennelLocationControl(updated);
@@ -6131,6 +6140,7 @@ function setBoardingDogActiveTab(tabName = "Dog Info") {
     section.hidden = !isActive;
   });
   scheduleBoardingProfileTabRender(availableTab, activeBoardingDog() || {});
+  if (typeof syncBoardingWorkspaceTab === "function") syncBoardingWorkspaceTab(availableTab);
 }
 
 function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
@@ -6756,7 +6766,8 @@ function openBoardingDog(record = {}) {
   $$('input[name="boardingFlags"]').forEach((input) => {
     input.checked = (record.flags || []).includes(input.value);
   });
-  setBoardingDogActiveTab("Dog Info");
+  if (typeof setupBoardingWorkspace === "function") setupBoardingWorkspace(record);
+  setBoardingDogActiveTab(record.id ? "Boarding & Request" : "Dog Info");
   setBoardingFormLocked(false);
 }
 
@@ -6793,6 +6804,15 @@ function activeBoardingDog(options = {}) {
     ? boardingDogEditorRecord
     : null;
   return options.raw ? raw || editorRecord : boardingDogRecordForDisplay(id) || raw || editorRecord;
+}
+
+function boardingEditorShowsRecord(record = {}) {
+  const editingId = boardingDogFormRecordId();
+  if (!editingId || !record.id) return false;
+  return editingId === record.id
+    || arrayValue(record.sourceRecordIds).includes(editingId)
+    || Boolean(boardingDogRecordForDisplay(editingId)?.id
+      && boardingDogRecordForDisplay(editingId).id === boardingDogRecordForDisplay(record.id)?.id);
 }
 
 function renderBoardingKennelLocationControl(record = activeBoardingDog()) {
@@ -6850,6 +6870,7 @@ async function updateBoardingKennelLocation(locationId = "") {
 }
 
 function boardingStayCardHtml(displayRecord = {}, stay = {}) {
+  if (typeof boardingWorkspaceStayHtml === "function") return boardingWorkspaceStayHtml(displayRecord, stay);
   const requestCode = boardingStayRequestCode(displayRecord, stay);
   const ownerUpdateButton = boardingOwnerUpdateButtonHtml(displayRecord, stay);
   const serviceOnly = isServiceRequestStay(displayRecord, stay);
@@ -6911,6 +6932,7 @@ async function renderPastBoardingStays(record = activeBoardingDog()) {
 }
 
 function renderBoardingStays(record = activeBoardingDog()) {
+  if (typeof setupBoardingWorkspace === "function" && !$("#boardingDogDetail")?.hidden) setupBoardingWorkspace(record || {});
   if (!boardingProfileTabIsActive("Boarding & Request")) return;
   const displayRecord = boardingDogWithStayStatus(record || {});
   const stays = dedupeBoardingStaysForDisplay(displayRecord, displayRecord?.stays || []);
@@ -7042,6 +7064,7 @@ async function saveBoardingMedicalBehaviorNote(record = {}, reference = {}, data
     savedRecords.push(updated);
   }
   const refreshed = boardingDogRecordForDisplay(displayRecord.id) || savedRecords[0] || displayRecord;
+  if (typeof renderBoardingWorkspaceCareLog === "function") renderBoardingWorkspaceCareLog(refreshed);
   if (boardingDogFormRecordId() && (refreshed.id === boardingDogFormRecordId() || sourceIds.includes(boardingDogFormRecordId()))) {
     renderBoardingHistory(refreshed);
     renderBoardingStays(refreshed);
@@ -7116,7 +7139,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
   renderBoardingRequests();
   renderCustomerRequests();
   renderDashboard();
-  if (boardingDogFormRecordId() === updated.id) {
+  if (boardingEditorShowsRecord(updated)) {
     renderBoardingStays(updated);
     renderBoardingHistory(updated);
     renderBoardingKennelLocationControl(updated);
@@ -7365,7 +7388,7 @@ async function approveBoardingStay(record = {}, stayId = "", reference = {}) {
   renderBoardingRequests();
   renderCustomerRequests();
   renderDashboard();
-  if (boardingDogFormRecordId() === updated.id) {
+  if (boardingEditorShowsRecord(updated)) {
     renderBoardingStays(updated);
     renderBoardingHistory(updated);
     renderBoardingKennelLocationControl(updated);
@@ -7507,7 +7530,7 @@ async function removeBoardingStayFromDog(dogId = "", stayId = "", reference = {}
     if (updated.id === displayRecord.id) updatedPrimary = updated;
   }
   const refreshed = boardingDogRecordForDisplay(displayRecord.id) || updatedPrimary;
-  if (refreshed && boardingDogFormRecordId() === refreshed.id) {
+  if (refreshed && boardingEditorShowsRecord(refreshed)) {
     renderBoardingStays(refreshed);
     renderBoardingHistory(refreshed);
     renderBoardingDogs();

@@ -9268,6 +9268,8 @@ async function saveBoardingStayFromForm(formEl) {
     ...(existingStay || {}),
     dropoffTime: payload.dropoffTime,
     pickupTime: payload.pickupTime,
+    scheduledDropoffTime: payload.dropoffTime,
+    scheduledPickupTime: payload.pickupTime,
     stayType: existingStay?.stayType || "Boarding",
     requests: selectedRequests,
     invoiceAdjustments,
@@ -9284,6 +9286,7 @@ async function saveBoardingStayFromForm(formEl) {
     pickupTime: payload.pickupTime,
     scheduledPickupTime: payload.pickupTime,
     stayType: draftStay.stayType,
+    scheduledDropoffTime: payload.dropoffTime,
     billingDays: pricingSnapshot.billingDays,
     requests: selectedRequests,
     stayNotes: payload.stayNotes,
@@ -10017,6 +10020,7 @@ async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updat
     ...(targetStay.sourceRecordIds || []),
   ].filter(Boolean))];
   const syncedRecords = [];
+  const savedStay = boardingStayByReference(updatedRecord, targetStay);
   const sourceRecords = readRecords("boardingDog").filter((record) => sourceIds.includes(record.id) && !record.removed && record.id !== updatedRecord.id);
   for (const sourceRecord of sourceRecords) {
     const sourceStay = (sourceRecord.stays || []).find((stay) => boardingStayMatchesIdentity(stay, targetStay));
@@ -10027,6 +10031,10 @@ async function syncDuplicateBoardingStayStatusRecords(originalRecord = {}, updat
       forceStatusSync: true,
     });
     if (!synced) continue;
+    // Copy the authoritative revision instead of repricing a stale duplicate.
+    if (savedStay) synced.stays = (synced.stays || []).map((stay) => boardingStayMatchesIdentity(stay, targetStay)
+      ? { ...stay, ...savedStay, id: stay.id, sourceStayIds: [...new Set([...boardingStaySourceIds(stay), ...boardingStaySourceIds(savedStay)])] }
+      : stay);
     const stored = upsertRecord("boardingDog", synced);
     await sendPayload(stored);
     syncedRecords.push(stored);
@@ -10619,6 +10627,7 @@ function setBoardingDogActiveTab(tabName = "Dog Info") {
     }
     section.hidden = !isActive;
   });
+  if (typeof syncBoardingWorkspaceTab === "function") syncBoardingWorkspaceTab(availableTab);
 }
 
 function renderBoardingVaccinationFiles(record = activeBoardingDog() || {}) {
@@ -11079,7 +11088,8 @@ function openBoardingDog(record = {}) {
   renderBoardingStays(record);
   renderBoardingHistory(record);
   setBoardingFormLocked(false);
-  setBoardingDogActiveTab("Dog Info");
+  if (typeof setupBoardingWorkspace === "function") setupBoardingWorkspace(record);
+  setBoardingDogActiveTab(record.id ? "Boarding & Request" : "Dog Info");
 }
 
 function closeBoardingDogModal() {
@@ -11550,6 +11560,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
   const stays = displayRecord?.stays || [];
   $("#boardingStayHistory").innerHTML = stays.length
     ? stays.map((stay) => {
+      if (typeof boardingWorkspaceStayHtml === "function") return boardingWorkspaceStayHtml(displayRecord, stay);
       const requestCode = boardingStayRequestCode(displayRecord, stay);
       const ownerUpdateButton = ownerUpdateStayIsAvailable(displayRecord, stay)
         ? `<button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="${escapeHtml(displayRecord.id)}" data-id="${escapeHtml(stay.id)}" data-request-code="${escapeHtml(requestCode)}">Update Owner</button>`

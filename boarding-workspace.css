@@ -1,0 +1,177 @@
+/* Approved navy workspace: compact identity, grouped rail, open white content. */
+body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
+  --workspace-border:#dce5ed; --workspace-ink:#102d4d; --workspace-muted:#536d87; --workspace-surface:#fff; --workspace-soft:#f6f9fb;
+  display:grid; grid-template-columns:226px minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto;
+  width:min(1420px,calc(100vw - 40px)); height:min(940px,calc(100dvh - 40px)); max-height:calc(100dvh - 40px);
+  padding:0; overflow:hidden; background:var(--workspace-surface); border:1px solid var(--workspace-border); border-radius:12px; color:var(--workspace-ink);
+}
+#boardingDogDetail.boarding-workspace #boardingDogForm { display:contents; }
+#boardingDogDetail.boarding-workspace > .operational-alert-help { display:none; }
+#boardingDogDetail.boarding-workspace > .section-heading { position:absolute; right:18px; top:20px; margin:0; z-index:2; }
+#boardingDogDetail.boarding-workspace > .section-heading > :not(button) { display:none; }
+#boardingDogDetail.boarding-workspace .boarding-profile-editor { grid-row:1; grid-column:1/-1; display:flex; align-items:center; gap:18px; padding:20px 115px 20px 24px; margin:0; border:0; border-bottom:1px solid var(--workspace-border); border-radius:0; box-shadow:none; background:var(--workspace-surface); min-width:0; }
+#boardingDogDetail.boarding-workspace .boarding-profile-editor > div { min-width:0; }
+#boardingDogDetail.boarding-workspace #boardingDogPhotoPicker { flex:0 0 72px; width:72px; height:78px; border-radius:7px; padding:0; }
+#boardingDogDetail.boarding-workspace #boardingDogPhotoName { display:block; font-size:27px; line-height:1.2; color:var(--workspace-ink); }
+#boardingDogDetail.boarding-workspace #boardingDogHeaderOwner { margin:8px 0 0; font-size:14px; }
+#boardingDogDetail.boarding-workspace .boarding-profile-editor > div > p:nth-of-type(2) { display:none; }
+#boardingWorkspaceHeaderSummary { margin-left:20px; padding-left:24px; border-left:1px solid var(--workspace-border); }
+#boardingWorkspaceHeaderSummary p { font-size:14px; margin:8px 0 3px; }
+#boardingWorkspaceHeaderSummary small { font-size:12px; color:var(--workspace-muted); }
+#boardingDogDetail.boarding-workspace #boardingDogProfileTabs { grid-row:2/4; grid-column:1; display:flex; flex-direction:column; align-items:stretch; overflow-y:auto; gap:4px; padding:16px 10px; margin:0; border:0; border-right:1px solid var(--workspace-border); border-radius:0; box-shadow:none; background:var(--workspace-soft); }
+.workspace-nav-group { margin:16px 12px 7px; text-transform:uppercase; color:var(--workspace-muted); font-size:11px; font-weight:700; letter-spacing:.045em; }
+#boardingDogDetail.boarding-workspace #boardingDogProfileTabs button { display:flex; align-items:center; justify-content:flex-start; gap:12px; flex:none; width:100%; min-height:45px; padding:11px 12px; font-size:14px; font-weight:500; line-height:1.35; text-align:left; color:var(--workspace-ink); background:transparent; border:0; border-radius:5px; box-shadow:none; }
+#boardingDogDetail.boarding-workspace #boardingDogProfileTabs button.is-active { color:#0768aa; background:#e5f3fd; font-weight:700; box-shadow:inset 3px 0 #1479b8; }
+.boarding-workspace-icon { flex:0 0 22px; }
+#boardingDogDetail.boarding-workspace .boarding-profile-section:not([hidden]) { grid-column:2; grid-row:2; overflow:auto; overscroll-behavior:contain; margin:0; padding:24px; background:var(--workspace-surface); border:0; border-radius:0; box-shadow:none; min-width:0; }
+#boardingDogDetail.boarding-workspace h2 { margin:0 0 8px; font-size:27px; line-height:1.2; color:var(--workspace-ink); }
+#boardingDogDetail.boarding-workspace h3 { font-size:17px; margin:0 0 12px; line-height:1.35; color:var(--workspace-ink); }
+.workspace-intro { margin:0 0 24px; color:var(--workspace-muted); font-size:14px; }
+#boardingDogDetail.boarding-workspace .section-heading > span { display:none; }
+#boardingDogDetail.boarding-workspace .section-heading { margin-bottom:16px; }
+#boardingDogDetail.boarding-workspace .section-heading p { font-size:14px; }
+#boardingDogDetail.boarding-workspace .field-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+#boardingDogDetail.boarding-workspace label { font-size:13px; letter-spacing:0; text-transform:none; font-weight:600; }
+#boardingDogDetail.boarding-workspace :is(input,select,textarea) { font-size:14px; min-height:42px; padding:10px 12px; border-radius:6px; }
+#boardingDogDetail.boarding-workspace :is(input[type="checkbox"],input[type="radio"]) { min-height:0; }
+#boardingDogDetail.boarding-workspace label small { font-size:12px; font-weight:400; }
+#boardingDogDetail.boarding-workspace .boarding-profile-section > label { display:grid; gap:7px; margin:20px 0; }
+#boardingDogDetail.boarding-workspace :is(button,.past-boarding-stays summary) { min-height:40px; border-radius:6px; font-size:13px; line-height:1.3; box-shadow:none; }
+#boardingDogDetail.boarding-workspace button:not(.secondary-button):not(.dog-photo-picker) { background:#126eaa; color:white; }
+#boardingDogDetail.boarding-workspace .boarding-workspace-footer:not([hidden]) { grid-column:2; grid-row:3; display:flex; align-items:center; gap:10px; margin:0; padding:14px 24px; border-top:1px solid var(--workspace-border); background:var(--workspace-surface); }
+#boardingWorkspaceSaveHint { margin-right:auto; font-size:12px; color:var(--workspace-muted); }
+#boardingDogDetail.boarding-workspace #boardingSchedulePanel > .button-row { justify-content:flex-end; margin:-56px 0 20px; }
+#boardingDogDetail.boarding-workspace #boardingSchedulePanel > .section-heading { padding-right:180px; }
+#boardingDogDetail.boarding-workspace #boardingStayHistory { display:grid; gap:18px; }
+#boardingDogDetail.boarding-workspace #boardingStayHistory > .workspace-stay { display:block; padding:0; border:0; box-shadow:none; background:var(--workspace-surface); }
+.workspace-lifecycle { display:flex; list-style:none; padding:0; margin:16px 0 28px; }
+.workspace-lifecycle li { flex:1; text-align:center; position:relative; font-size:11px; color:var(--workspace-muted); }
+.workspace-lifecycle li::before { content:''; height:2px; background:#cdd8e1; position:absolute; left:-50%; right:50%; top:11px; }
+.workspace-lifecycle li:first-child::before { display:none; }
+.workspace-lifecycle li > span { position:relative; display:flex; justify-content:center; align-items:center; width:24px; height:24px; margin:0 auto 8px; border-radius:50%; background:#c3cfd9; border:2px solid white; color:white; font-weight:700; }
+.workspace-lifecycle .is-complete > span,.workspace-lifecycle .is-complete::before { background:#0b987b; }
+.workspace-lifecycle .is-current { color:#10669e; font-weight:700; }
+.workspace-lifecycle .is-current > span { background:#126eaa; }
+.workspace-stay-columns { display:grid; grid-template-columns:minmax(0,1fr) 285px; gap:20px; align-items:stretch; }
+.workspace-stay-main,.workspace-bill { min-width:0; border:1px solid var(--workspace-border); border-radius:6px; padding:18px; }
+.workspace-stay-title,.workspace-services-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.workspace-stay-title h3,.workspace-services-heading h3 { margin:0 !important; overflow-wrap:anywhere; }
+.workspace-stay-facts { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:18px 0; border-top:1px solid var(--workspace-border); }
+.workspace-stay-fact { display:flex; gap:12px; font-size:13px; align-items:center; }
+.workspace-stay-fact span { display:block; color:var(--workspace-muted); margin-bottom:4px; }
+.workspace-stay-fact strong { display:block; font-size:14px; font-weight:500; }
+.workspace-info,.workspace-warning { padding:14px; border:1px solid #d4e9f8; border-radius:5px; background:#eaf5fe; font-size:13px; }
+.workspace-warning { background:#fff7e1; border-color:#ffe1a3; color:#835400; }
+.workspace-services-heading { margin-top:16px; }
+#boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-task-list > strong { display:none; }
+#boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-task-card { padding:0; border:0; border-radius:0; box-shadow:none; background:transparent; }
+#boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-task-card > div:first-child { display:none; }
+#boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-unit-row { border:0; border-bottom:1px solid var(--workspace-border); border-radius:0; background:transparent; padding:12px 0; }
+#boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-unit-row strong { font-size:13px; }
+#boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-unit-row span { font-size:12px; }
+.workspace-care-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:22px; }
+.workspace-care-grid section { padding:12px; border:1px solid var(--workspace-border); border-radius:5px; }
+.workspace-care-grid p { font-size:13px; margin:0; overflow-wrap:anywhere; white-space:pre-line; }
+.workspace-care-grid h3 { font-size:14px !important; margin:0 0 6px !important; }
+#boardingDogDetail.boarding-workspace .workspace-bill .stay-invoice-summary { background:transparent; box-shadow:none; border:0; border-radius:0; padding:0; }
+#boardingDogDetail.boarding-workspace .workspace-bill .estimate-line { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:14px 0; font-size:13px; border-top:1px solid var(--workspace-border); }
+.workspace-bill .estimate-line span:last-child { text-align:right; flex:0 0 45%; }
+#boardingDogDetail.boarding-workspace .workspace-bill .estimate-total { padding:20px 0; margin:8px 0; box-shadow:none; background:transparent; border:0; border-top:1px solid var(--workspace-border); border-radius:0; }
+.workspace-price-edit { margin-top:16px; }
+.workspace-stay-actions { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:16px 0; }
+.workspace-stay-actions .lifecycle-actions { margin:0; }
+#boardingDogDetail.boarding-workspace button[data-primary-transition] { background:#126eaa !important; color:#fff !important; border-color:#126eaa !important; }
+.workspace-more { margin-left:auto; position:relative; font-size:13px; }
+.workspace-more summary { padding:12px; cursor:pointer; }
+.workspace-more[open] button { position:absolute; right:0; bottom:44px; white-space:nowrap; background:white; }
+.workspace-table-scroll { overflow-x:auto; }
+.workspace-log-table { width:100%; font-size:13px; border-collapse:collapse; }
+.workspace-log-table th,.workspace-log-table td { padding:14px; text-align:left; border-bottom:1px solid #dce5ed; }
+.workspace-log-table th { background:#f3f7fa; }
+#detailDialog.boarding-workspace-popup { width:min(1080px,calc(100vw - 40px)); padding:0; border-radius:10px; }
+#detailDialog.boarding-workspace-popup .dialog-heading { padding:20px 24px; border-bottom:1px solid #dce5ed; }
+#detailDialog.boarding-workspace-popup .dialog-header { padding:20px 24px; border-bottom:1px solid #dce5ed; margin:0; }
+#detailDialog.boarding-workspace-popup .detail-dialog-body { padding:24px; }
+#detailDialog.boarding-workspace-popup :is(button,input,select,textarea) { border-radius:6px; font-size:14px; }
+#detailDialog.boarding-workspace-popup button { min-height:42px; box-shadow:none; }
+#detailDialog.boarding-workspace-popup label { letter-spacing:0; text-transform:none; font-size:13px; }
+#boardingStayPopupForm[data-workspace-enhanced] { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:24px; }
+.workspace-edit-fields { min-width:0; display:grid; gap:18px; }
+.workspace-edit-bill { border-left:1px solid #dce5ed; padding-left:20px; min-width:0; }
+.workspace-edit-bill .field-grid { grid-template-columns:1fr; }
+.workspace-edit-bill .billing-adjustment-section { padding:0; box-shadow:none; border:0; }
+.workspace-edit-bill .estimate-line { font-size:13px; }
+#detailDialog.boarding-workspace-popup .field-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+#detailDialog.boarding-workspace-popup .workspace-edit-bill .field-grid { grid-template-columns:minmax(0,1fr); }
+#detailDialog.boarding-workspace-popup :is(label,input,select,textarea) { min-width:0; max-width:100%; box-sizing:border-box; }
+:root[data-theme="dark"] body:not(.is-login-view) #boardingDogDetail.boarding-workspace { --workspace-surface:#142c40; --workspace-soft:#102335; --workspace-ink:#edf5ff; --workspace-muted:#b2c4d8; --workspace-border:#355066; }
+:root[data-theme="dark"] .boarding-workspace .workspace-info { background:#193c55; color:#edf5ff; }
+@media(max-width:1100px) {
+  .workspace-stay-columns { grid-template-columns:minmax(0,1fr); }
+  #boardingDogDetail.boarding-workspace .workspace-bill .estimate-line { padding:9px 0; }
+  #boardingDogDetail.boarding-workspace .workspace-bill .estimate-total { padding:12px 0; }
+  #boardingWorkspaceHeaderSummary { margin-left:0; padding-left:14px; }
+}
+@media(max-width:760px) {
+  body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) { width:100vw; height:100dvh; max-height:100dvh; border-radius:0; grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto minmax(0,1fr) auto; }
+  #boardingDogDetail.boarding-workspace .boarding-profile-editor { gap:12px; padding:16px 70px 14px 16px; flex-direction:row; flex-wrap:wrap; }
+  #boardingDogDetail.boarding-workspace #boardingDogPhotoPicker { width:56px; height:60px; flex-basis:56px; }
+  #boardingDogDetail.boarding-workspace #boardingDogPhotoName { font-size:22px; }
+  #boardingDogDetail.boarding-workspace #boardingDogHeaderOwner { font-size:12px; margin-top:4px; }
+  #boardingWorkspaceHeaderSummary { flex-basis:100%; border:0; padding:0; }
+  #boardingWorkspaceHeaderSummary p { font-size:12px; }
+  #boardingWorkspaceHeaderSummary small { display:none; }
+  #boardingDogDetail.boarding-workspace > .section-heading { top:16px; right:10px; }
+  #boardingDogDetail.boarding-workspace #closeBoardingDogDialogButton { padding:8px 10px; min-width:0; }
+  #boardingDogDetail.boarding-workspace #boardingDogProfileTabs { grid-row:2; grid-column:1; flex-direction:row; flex-wrap:nowrap; gap:4px; overflow-x:auto; overflow-y:hidden; border-right:0; border-bottom:1px solid var(--workspace-border); padding:6px 10px; }
+  #boardingDogDetail.boarding-workspace #boardingDogProfileTabs button { width:auto; white-space:nowrap; font-size:13px; gap:7px; }
+  #boardingDogDetail.boarding-workspace #boardingDogProfileTabs button.is-active { box-shadow:inset 0 -3px #1479b8; }
+  .workspace-nav-group { display:none; }
+  #boardingDogDetail.boarding-workspace .boarding-profile-section:not([hidden]) { grid-row:3; grid-column:1; padding:18px 14px; }
+  #boardingDogDetail.boarding-workspace .boarding-workspace-footer:not([hidden]) { grid-row:4; grid-column:1; padding:10px 14px; }
+  #boardingWorkspaceSaveHint { display:none; }
+  #boardingDogDetail.boarding-workspace h2 { font-size:22px; }
+  #boardingDogDetail.boarding-workspace #boardingSchedulePanel > .button-row { margin:0 0 14px; justify-content:flex-start; }
+  #boardingDogDetail.boarding-workspace #boardingSchedulePanel > .section-heading { padding-right:0; }
+  .workspace-stay-main,.workspace-bill { padding:14px; }
+  .workspace-lifecycle li { font-size:9px; }
+  .workspace-stay-facts { gap:16px 12px; }
+  .workspace-stay-fact { gap:7px; }
+  .workspace-stay-fact strong { font-size:12px; }
+  .workspace-stay-fact svg { width:18px; flex-basis:18px; }
+  .workspace-stay-actions > button,.workspace-stay-actions .lifecycle-actions { flex:1 1 45%; }
+  .workspace-stay-actions .lifecycle-actions button { width:100%; }
+  .workspace-more { margin-left:0; }
+  #boardingStayPopupForm[data-workspace-enhanced] { grid-template-columns:1fr; }
+  .workspace-edit-bill { border-left:0; border-top:1px solid #dce5ed; padding:20px 0 0; }
+  #detailDialog.boarding-workspace-popup { width:calc(100vw - 16px); max-height:calc(100dvh - 16px); }
+  #detailDialog.boarding-workspace-popup .detail-dialog-body { padding:16px; }
+}
+/* The original theme uses !important on every card; constrain overrides to this workspace. */
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace :is(.boarding-profile-editor,.boarding-profile-section,.workspace-stay,.stay-invoice-summary,.estimate-total,.boarding-service-task-card) {
+  background:var(--workspace-surface) !important; border:0 !important; border-radius:0 !important; box-shadow:none !important;
+}
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace #boardingSchedulePanel #boardingStayHistory > .workspace-stay { background:var(--workspace-surface) !important; border:0 !important; box-shadow:none !important; }
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace .boarding-profile-editor { border-bottom:1px solid var(--workspace-border) !important; }
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace #boardingDogProfileTabs { background:var(--workspace-soft) !important; border:0 !important; border-right:1px solid var(--workspace-border) !important; border-radius:0 !important; box-shadow:none !important; }
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace #boardingDogProfileTabs button:not(.is-active) { background:transparent !important; color:var(--workspace-ink) !important; }
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace #boardingDogProfileTabs button.is-active { background:#e5f3fd !important; color:#0768aa !important; }
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace .workspace-bill .estimate-total { border-top:1px solid var(--workspace-border) !important; }
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace .boarding-profile-section:not([hidden]) { display:block !important; }
+:root body:not(.is-login-view) #detailDialog.boarding-workspace-popup { width:min(1080px,calc(100vw - 40px)) !important; max-width:calc(100vw - 40px) !important; padding:0 !important; }
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace #boardingSchedulePanel > .section-heading { margin:0 0 16px !important; }
+:root body:not(.is-login-view) #boardingDogDetail.boarding-workspace #boardingSchedulePanel > .button-row { margin:-56px 0 24px !important; }
+@media(max-width:980px) and (min-width:761px) {
+  body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) { inset:20px; transform:none; }
+}
+@media(max-width:760px) {
+  body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) { inset:0; transform:none; margin:0; }
+  :root body:not(.is-login-view) #boardingDogDetail.boarding-workspace #boardingSchedulePanel > .button-row { margin:0 0 14px !important; }
+  :root body:not(.is-login-view) #detailDialog.boarding-workspace-popup { width:calc(100vw - 16px) !important; max-width:calc(100vw - 16px) !important; }
+  #detailDialog.boarding-workspace-popup .field-grid { grid-template-columns:minmax(0,1fr); }
+}
+@media(max-width:420px) {
+  #boardingDogDetail.boarding-workspace .field-grid { grid-template-columns:minmax(0,1fr); }
+  .workspace-care-grid { grid-template-columns:minmax(0,1fr); }
+  .workspace-services-heading { align-items:flex-start; flex-direction:column; }
+}
