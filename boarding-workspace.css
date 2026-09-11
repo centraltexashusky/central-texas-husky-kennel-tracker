@@ -65,7 +65,7 @@ body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
 .workspace-services-heading { margin-top:16px; }
 #boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-task-list > strong { display:none; }
 #boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-task-card { padding:0; border:0; border-radius:0; box-shadow:none; background:transparent; }
-#boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-task-card > div:first-child { display:none; }
+#boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-task-card > div:first-child > :is(strong,span) { display:none; }
 #boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-unit-row { border:0; border-bottom:1px solid var(--workspace-border); border-radius:0; background:transparent; padding:12px 0; }
 #boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-unit-row strong { font-size:13px; }
 #boardingDogDetail.boarding-workspace .workspace-stay .boarding-service-unit-row span { font-size:12px; }
