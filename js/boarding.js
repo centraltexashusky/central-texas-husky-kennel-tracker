@@ -3852,21 +3852,58 @@ function boardingDogThumbnailHtml(record = {}, options = {}) {
 
 function boardingQuickCardHtml(record = {}) {
   const stay = boardingPrimaryStay(record) || {};
+  const tasks = boardingStayServiceTasks(record, stay);
+  const serviceAttrs = ' data-id="' + escapeHtml(record.id || "") + '"' + boardingStayDataAttrs(record, stay);
+  const services = tasks.slice(0, 3).map((task) => '<li><span aria-hidden="true" class="boarding-service-dot' + (task.status === "completed" ? ' is-complete' : '') + '">' + (task.status === "completed" ? '✓' : '○') + '</span><span>' + escapeHtml(boardingServiceTaskDisplayName(task)) + (Number(task.quantity) > 1 ? ' ×' + escapeHtml(task.quantity) : '') + '<span class="sr-only"> — ' + (task.status === "completed" ? 'Completed' : 'Pending') + '</span></span></li>').join("");
   return \`
-    <article class="record-card mobile-roster-card boarding-mobile-roster-card">
-      <div class="mobile-roster-card-main boarding-mobile-card-main">
+    <article class="record-card mobile-roster-card boarding-mobile-roster-card boarding-roster-card" aria-label="\${escapeHtml(record.dogName || 'Boarding dog')}">
+      <div class="boarding-roster-sections">
+       <div class="boarding-roster-identity">
         \${boardingDogMobilePhotoHtml(record)}
-        <div class="boarding-mobile-card-content">
-          <div class="boarding-card-title-row"><strong>\${escapeHtml(record.dogName || "Boarding dog")}</strong>\${dogUsesRegularPricingOverride(record) ? statusChipHtml("Regular pricing", "pricing-scope-chip") : ""}\${vaccinationStatusBadgeHtml(record)}</div>
-          <div class="chip-row boarding-mobile-status-row">\${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : ""}\${boardingRecordStatusButtonHtml(record)}</div>
-          \${boardingQuickFactsHtml(record, stay)}
-          \${boardingMobileScheduleFlagsHtml(record, stay)}
-          <p class="boarding-mobile-owner-line">\${escapeHtml(record.ownerName || "No owner saved")}\${record.ownerPhone ? \` | \${phoneLinkHtml(record.ownerPhone)}\` : ""}</p>
+        <div>
+          <h3>\${escapeHtml(record.dogName || "Boarding dog")}</h3>
+          \${boardingRecordStatusButtonHtml(record)}
+          <p class="boarding-roster-owner">\${escapeHtml(record.ownerName || "No owner saved")}</p>
+          \${record.ownerPhone ? phoneLinkHtml(record.ownerPhone) : ""}
+          <div class="boarding-roster-badges">\${vaccinationStatusBadgeHtml(record)}\${dogUsesRegularPricingOverride(record) ? statusChipHtml("Regular pricing", "pricing-scope-chip") : ""}</div>
         </div>
+       </div>
+       <section class="boarding-roster-stay" aria-label="Stay and location">
+        <span class="boarding-roster-label">Stay & location</span>
+        \${stay.id ? boardingStayRequestCodeChipHtml(record, stay) : '<p>No stay scheduled</p>'}
+        \${boardingMobileScheduleFlagsHtml(record, stay)}
+        \${boardingQuickLengthFact(record, stay)}
+        \${boardingKennelLocationLabel(record, stay) ? '<p class="boarding-roster-location">⌖ ' + escapeHtml(boardingKennelLocationLabel(record, stay)) + '</p>' : ''}
+       </section>
+       <section class="boarding-roster-services" aria-label="Services requested">
+        <span class="boarding-roster-label">Services requested</span>
+        \${services ? '<button type="button" class="boarding-roster-service-list" data-action="open-boarding-services"' + serviceAttrs + ' aria-label="View requested services for ' + escapeHtml(record.dogName || 'dog') + '"><ul>' + services + '</ul>' + (tasks.length > 3 ? '<span class="boarding-roster-more">+' + (tasks.length - 3) + ' more services</span>' : '') + '</button>' : '<p class="boarding-roster-muted">No services requested</p>'}
+        \${boardingQuickServiceFact(record, stay)}
+       </section>
+       <section class="boarding-roster-care" aria-label="Care and belongings">
+        <span class="boarding-roster-label">Care & belongings</span>
+        \${boardingQuickSpecialCareFact(record, stay)}
+        \${boardingQuickBelongingsFact(record, stay)}
+       </section>
       </div>
-      \${boardingQuickActionButtons(record)}
+      \${boardingRosterActionButtons(record)}
       <span class="inline-save-status" data-inline-status-message="\${escapeHtml(record.id || "")}" aria-live="polite"></span>
     </article>\`;
+}
+
+function boardingRosterActionButtons(record = {}) {
+  const icons = {
+    'data-next-status': '<path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/>',
+    'open-owner-update': '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/>',
+    'open-boarding-medical': '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v4H9zM9 12h6M9 16h6"/>',
+    'change-boarding': '<circle cx="12" cy="12" r="9"/><path d="M7 12h1M11.5 12h1M16 12h1"/>',
+  };
+  return boardingQuickActionButtons(record).split('</button>').map((part) => {
+    const key = Object.keys(icons).find((candidate) => part.includes(candidate));
+    if (!key) return part;
+    const start = part.lastIndexOf('>') + 1;
+    return part.slice(0, start) + '<svg class="boarding-roster-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + icons[key] + '</svg><span>' + part.slice(start).replace('Log Medical/Behavior', 'Log Care') + '</span>';
+  }).join('</button>');
 }
 
 function serviceForStayRequestOption(option = {}, options = {}) {
@@ -4861,12 +4898,11 @@ function boardingStayEntrySortTime(entry = {}) {
 
 function handleBoardingViewToggle(view = "board") {
   boardingViewMode = ["calendar", "list"].includes(view) ? view : "board";
-  const mobileList = boardingRosterUsesMobileCards();
   $$("#boardingViewToggle [data-view]").forEach((button) => button.classList.toggle("is-active", button.dataset.view === boardingViewMode));
   $("#boardingQueueGroups")?.classList.toggle("is-hidden", boardingViewMode !== "board");
   $("#boardingCalendarView")?.classList.toggle("is-hidden", boardingViewMode !== "calendar");
-  $("#boardingDogsPage .table-settings-shell")?.classList.toggle("is-hidden", boardingViewMode !== "list" || mobileList);
-  $("#boardingDogQuickCards")?.classList.toggle("is-hidden", boardingViewMode !== "list" || !mobileList);
+  $("#boardingDogsPage .table-settings-shell")?.classList.add("is-hidden");
+  $("#boardingDogQuickCards")?.classList.toggle("is-hidden", boardingViewMode !== "list");
 }
 
 function boardingSkeletonCardsHtml(count = 3) {
@@ -4933,8 +4969,9 @@ function boardingTableRowHtml(record = {}, columns = []) {
 function renderBoardingListInBatches(records = [], columns = [], options = {}) {
   const tableBody = $("#boardingDogTableBody");
   const quickCardsContainer = $("#boardingDogQuickCards");
-  const renderMobileCards = boardingRosterUsesMobileCards();
-  const renderDesktopRows = !renderMobileCards;
+  // One responsive card tree avoids building hidden desktop/mobile duplicates.
+  const renderMobileCards = true;
+  const renderDesktopRows = false;
   const sequence = beginBoardingRosterRender(records.length, "Preparing boarding dog list");
   if (tableBody) tableBody.innerHTML = "";
   if (quickCardsContainer) quickCardsContainer.innerHTML = "";
@@ -5103,17 +5140,13 @@ function renderBoardingDogs() {
 
     if (activeView === "list") {
       const columns = activeColumns("boardingDog");
-      if (tableHead) tableHead.innerHTML = boardingRosterUsesMobileCards() ? "" : \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="boardingDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
+      if (tableHead) tableHead.innerHTML = "";
       renderBoardingListInBatches(visibleRecords, columns, {
         emptyTableText: hasSearchQuery ? "No boarding dog records match this search." : \`No \${escapeHtml(boardingRosterFilterLabel(boardingDogRosterFilter)).toLowerCase()} match this search.\`,
       });
-      if (boardingRosterUsesMobileCards()) {
-        if (columnManager) {
-          columnManager.innerHTML = "";
-          columnManager.hidden = true;
-        }
-      } else {
-        renderColumnManager("boardingDog", "#boardingDogColumnManager");
+      if (columnManager) {
+        columnManager.innerHTML = "";
+        columnManager.hidden = true;
       }
     } else {
       if (tableHead) tableHead.innerHTML = "";

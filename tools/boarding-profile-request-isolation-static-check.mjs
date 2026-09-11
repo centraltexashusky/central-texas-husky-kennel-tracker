@@ -31,7 +31,7 @@ if ((boarding.match(/window\.requestAnimationFrame\(\(\) => \{/g) || []).length 
 if (!boarding.includes("section.dataset.profileRenderState = \"deferred\"")) failures.push("Deferred profile tabs do not expose their loading state.");
 if (!boarding.includes('if (!boardingProfileTabIsActive("Boarding History")) return;')) failures.push("Boarding history can still render while its tab is hidden.");
 if (!boarding.includes('if (!boardingProfileTabIsActive("Boarding & Request")) return;')) failures.push("Stay history can still render while its tab is hidden.");
-if (!boarding.includes("const renderMobileCards = boardingRosterUsesMobileCards();")) failures.push("List view does not isolate mobile cards from desktop rows.");
+if (!boarding.includes("const renderMobileCards = true;") || !boarding.includes("const renderDesktopRows = false;")) failures.push("List view must render a single responsive card tree.");
 if (!boarding.includes("tableBody && renderDesktopRows") || !boarding.includes("quickCardsContainer && renderMobileCards")) failures.push("List batches still build both responsive DOM trees.");
 if (index.includes('id="boardingRequestsSection"') || index.includes("Review Boarding Requests")) failures.push("The redundant Boarding Requests panel is still rendered.");
 if (!shared.includes('$("#boardingRequestRecords")?.addEventListener')) failures.push("Removed request-panel controls can still crash event initialization.");

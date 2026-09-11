@@ -274,7 +274,7 @@ var servicePricingFilter = "all";
 var kennelBuildingTab = "Shed";
 var boardingDogRosterFilter = "Active dogs";
 var boardingDogPriorityFilter = "";
-var boardingViewMode = "board";
+var boardingViewMode = "list";
 var showRemainingTasksOnly = true;
 var selectedDogPhotos = { owned: null, boarding: null, customer: null };
 var ownedDogCareFilter = "All";
@@ -16195,7 +16195,7 @@ function switchPage(pageId, options = {}) {
   $$(".page-view").forEach((page) => page.classList.toggle("is-active", page.id === pageId));
   if (pageId === "boardingDogsPage") {
     if (previousPageId !== pageId) resetBoardingRosterDemandState();
-    boardingViewMode = window.innerWidth >= 768 ? "list" : "board";
+    boardingViewMode = "list";
     handleBoardingViewToggle(boardingViewMode);
   }
   syncMobileNavigationActive(pageId);

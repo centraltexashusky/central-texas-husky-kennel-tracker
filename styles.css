@@ -22603,3 +22603,80 @@ button.dog-show-planner-score:focus-visible {
     background: #ffffff !important;
   }
 }
+
+/* Modern boarding roster: one bounded card tree for desktop and mobile. */
+#boardingDogsPage { --roster-blue: #235f88; --roster-line: #dce5ec; --roster-muted: #526783; }
+#boardingDogQuickCards:not(.is-hidden) { display: grid !important; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+#boardingDogsPage .boarding-roster-card { min-width: 0; padding: 18px; border: 1px solid var(--roster-line); border-radius: 12px; box-shadow: 0 3px 12px #17324d08; background: var(--card-bg, #fff); }
+#boardingDogsPage .boarding-roster-sections { display: grid; grid-template-columns: 1.25fr 1.2fr 1fr .95fr; gap: 18px; align-items: start; }
+#boardingDogsPage .boarding-roster-sections > * { min-width: 0; margin: 0; padding: 0; border: 0; box-shadow: none; background: transparent; }
+#boardingDogsPage .boarding-roster-sections > section { border-left: 1px solid var(--roster-line); padding-left: 18px; }
+#boardingDogsPage .boarding-roster-identity { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 12px; }
+#boardingDogsPage .boarding-roster-card .mobile-dog-photo-button { width: 70px; height: 86px; min-width: 0; border-radius: 8px; border-width: 1px; box-shadow: none; margin: 0; }
+#boardingDogsPage .boarding-roster-card h3 { font-size: 18px; line-height: 1.25; margin: 0 0 6px; overflow-wrap: anywhere; }
+#boardingDogsPage .boarding-roster-card p { font-size: 13px; line-height: 1.45; margin: 7px 0; }
+#boardingDogsPage .boarding-roster-card a { font-size: 13px; overflow-wrap: anywhere; }
+#boardingDogsPage .boarding-roster-owner, #boardingDogsPage .boarding-roster-muted { color: var(--roster-muted); }
+#boardingDogsPage .boarding-roster-badges { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+#boardingDogsPage .boarding-roster-card .status-chip { font-size: 11px; padding: 3px 7px; white-space: normal; text-align: left; }
+#boardingDogsPage .boarding-roster-label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--roster-muted); margin-bottom: 10px; }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-schedule-flags { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+#boardingDogsPage .boarding-roster-card .boarding-queue-flag { display: flex; flex-direction: column; align-items: flex-start; border: 0; background: transparent; padding: 0; border-radius: 0; font-size: 12px; white-space: normal; }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact { display: block; width: 100%; min-width: 0; min-height: 0; border: 0; border-radius: 6px; padding: 7px 0; margin: 0; box-shadow: none; background: transparent; text-align: left; }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact > span:first-child { font-size: 10px; color: var(--roster-muted); }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact strong { display: block; font-size: 13px; font-weight: 500; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact > * { margin: 0; }
+#boardingDogsPage .boarding-roster-stay .boarding-mobile-fact > span:first-child,
+#boardingDogsPage .boarding-roster-services .boarding-mobile-fact > span:first-child { display: none; }
+#boardingDogsPage .boarding-roster-care .boarding-mobile-fact:not(.is-attention) { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 7px 0; }
+#boardingDogsPage .boarding-roster-card > .inline-save-status:empty { display: none; }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact-progress { display: block; margin-top: 5px; height: 5px; background: #e9eef3; }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact-progress i { background: var(--roster-blue); }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact.is-attention { padding: 9px; background: #fff4d9; color: #855300; }
+#boardingDogsPage .boarding-roster-service-list { display: block; width: 100%; padding: 0; min-height: 0; border: 0; border-radius: 4px; background: transparent; box-shadow: none; text-align: left; color: inherit; }
+#boardingDogsPage .boarding-roster-service-list ul { display: grid; gap: 9px; list-style: none; padding: 0; margin: 0; }
+#boardingDogsPage .boarding-roster-service-list li { display: flex; gap: 7px; font-size: 13px; line-height: 1.4; }
+#boardingDogsPage .boarding-roster-service-list { font-weight: 400; }
+#boardingDogsPage .boarding-roster-service-list .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#boardingDogsPage .boarding-roster-action-icon { width: 18px; height: 18px; flex-shrink: 0; }
+#boardingDogsPage .boarding-roster-card .boarding-action-grid button { display: flex; justify-content: center; align-items: center; gap: 8px; }
+#boardingDogsPage .boarding-roster-card .boarding-action-grid button > span { color: inherit; font-size: inherit; }
+#boardingDogsPage .boarding-service-dot { flex: 0 0 16px; color: var(--roster-muted); }
+#boardingDogsPage .boarding-service-dot.is-complete { color: #078153; font-weight: 800; }
+#boardingDogsPage .boarding-roster-more { display: block; margin-top: 8px; font-size: 12px; color: var(--roster-blue); }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact.is-good { color: #078153; }
+#boardingDogsPage .boarding-roster-card .boarding-mobile-fact-flag { float: right; font-size: 10px; }
+#boardingDogsPage .boarding-roster-card .boarding-action-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; border-top: 1px solid var(--roster-line); padding-top: 12px; margin-top: 14px; }
+#boardingDogsPage .boarding-roster-card .boarding-action-grid button { min-width: 0; min-height: 42px; padding: 8px; font-size: 12px; border-radius: 6px; box-shadow: none; }
+#boardingDogsPage .boarding-roster-card .boarding-action-grid button[data-next-status]:not(.danger-button) { background: var(--roster-blue); border-color: var(--roster-blue); color: white; }
+#boardingDogsPage .boarding-roster-card button:focus-visible { outline: 3px solid #3799db; outline-offset: 3px; }
+#boardingDogRosterTabs { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto; gap: 4px; padding: 0; border: 0; border-bottom: 1px solid var(--roster-line); border-radius: 0; box-shadow: none; }
+#boardingDogRosterTabs button { flex: 0 0 auto !important; width: auto !important; min-height: 44px; padding: 9px 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 5px 5px 0 0; background: transparent; box-shadow: none; font-size: 13px; }
+#boardingDogRosterTabs button.is-active { background: #edf6ff; color: #075c99; border-bottom-color: #147bc0; }
+#boardingViewToggle { margin: 14px 0; }
+#boardingViewToggle button { min-height: 40px; border-radius: 5px; font-size: 13px; }
+@media (min-width: 761px) and (max-width: 1250px) {
+  #boardingDogsPage .boarding-roster-sections { grid-template-columns: 1fr 1fr; gap: 16px 22px; }
+  #boardingDogsPage .boarding-roster-sections > section:nth-child(3) { border-left: 0; padding-left: 0; }
+}
+@media (max-width: 760px) {
+  #boardingDogsPage .boarding-roster-card { padding: 14px; }
+  #boardingDogsPage .boarding-roster-sections { display: flex; flex-direction: column; gap: 14px; }
+  #boardingDogsPage .boarding-roster-sections > * { width: 100%; }
+  #boardingDogsPage .boarding-roster-sections > section { border-left: 0; padding-left: 0; }
+  #boardingDogsPage .boarding-roster-identity { grid-template-columns: 82px minmax(0, 1fr); }
+  #boardingDogsPage .boarding-roster-card .mobile-dog-photo-button { width: 82px; height: 100px; }
+  #boardingDogsPage .boarding-roster-stay { border-top: 1px solid var(--roster-line); padding-top: 12px; }
+  #boardingDogsPage .boarding-roster-card .boarding-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #boardingDogsPage .boarding-roster-card .boarding-action-grid button[data-next-status]:first-child { grid-column: 1 / -1; }
+  #boardingDogsPage .boarding-roster-card .boarding-action-grid button { min-height: 44px; font-size: 12px; }
+  #boardingDogsPage .boarding-roster-card .boarding-mobile-schedule-flags { grid-template-columns: 1fr 1fr; }
+  #boardingDogsPage .boarding-roster-service-list li { font-size: 14px; }
+  #boardingDogsPage .boarding-roster-stay > .boarding-roster-label,
+  #boardingDogsPage .boarding-roster-care > .boarding-roster-label { display: none; }
+  #boardingDogsPage .boarding-roster-card { gap: 0; }
+  #boardingDogsPage .boarding-roster-services .boarding-mobile-fact { padding: 3px 0; }
+}
+:root[data-theme="dark"] #boardingDogsPage { --roster-line: #395065; --roster-muted: #b4c5d5; }
+:root[data-theme="dark"] #boardingDogsPage .boarding-roster-card { background: #152b3c; }
+:root[data-theme="dark"] #boardingDogRosterTabs button.is-active { background: #244b68; color: #edf6ff; }
