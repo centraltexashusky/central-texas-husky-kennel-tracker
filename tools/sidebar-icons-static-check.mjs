@@ -19,8 +19,7 @@ const expectedLabels = [
   "Task Scheduling",
   "Our Dogs",
   "Boarding Dogs",
-  "Request",
-  "Maintenance",
+  "Requests &amp; Maintenance",
   "Financials",
   "Settings",
   "Setup",
@@ -43,4 +42,4 @@ for (const [, attrs, content] of buttons) {
 assert.match(css, /\.sidebar-nav-icon\s*\{[^}]*flex: 0 0 22px;[^}]*fill: none;[^}]*stroke: currentColor;[^}]*pointer-events: none;/, "Icons have fixed dimensions and inherit theme/selection colors");
 assert.match(css, /\.sub-nav-button \.sidebar-nav-icon\s*\{[^}]*width: 18px;[^}]*height: 18px;/, "Submenu icons use a consistent smaller size");
 assert.match(html, /styles\.css\?v=[^"]*sidebar-outline-icons-v104/, "Stylesheet cache key includes sidebar icon release");
-console.log("Sidebar icons static check passed (23 destinations, labels/access preserved, inline SVG only).");
+console.log("Sidebar icons static check passed (22 destinations, combined requests/maintenance, access preserved, inline SVG only).");

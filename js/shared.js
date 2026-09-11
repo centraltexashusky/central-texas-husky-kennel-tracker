@@ -382,8 +382,7 @@ var mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 var mobileMoreMenuItems = [
   { pageId: "timesheetPage", label: "Timesheet", roles: ["helper", "staff", "admin"] },
   { pageId: "taskSchedulerPage", label: "Task Scheduling", roles: ["helper", "staff", "admin"] },
-  { pageId: "maintenancePage", label: "Maintenance", roles: ["helper", "staff", "admin"] },
-  { pageId: "requestsPage", label: "Requests", roles: ["helper", "staff", "admin"] },
+  { pageId: "requestsPage", label: "Requests & Maintenance", roles: ["helper", "staff", "admin"] },
   { pageId: "financialsPage", label: "Financials", roles: ["admin"] },
   { pageId: "settingsSetupPage", label: "Setup", roles: ["admin"] },
   { pageId: "settingsUsersPage", label: "Users", roles: ["admin"] },
@@ -1765,7 +1764,7 @@ function remoteRecordLoadPlanForPage(pageId = "") {
     },
     ourDogsPage: { critical: ["ownedDog"], deferred: ["careLog", "customerDog", "boardingDog"] },
     boardingDogsPage: { critical: [], deferred: [] },
-    requestsPage: { critical: ["request"], deferred: [] },
+    requestsPage: { critical: ["request", "maintenance"], deferred: [] },
     maintenancePage: { critical: ["maintenance"], deferred: [] },
     timesheetPage: {
       critical: ["timesheet", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "settingsUser"],
@@ -3803,6 +3802,7 @@ function staffIdentity() {
 }
 
 function normalizePageId(pageId = "") {
+  if (pageId === "maintenancePage") return "requestsPage";
   return pageId === "settingsPage" ? "settingsUsersPage" : pageId;
 }
 
@@ -5267,7 +5267,7 @@ function renderAfterRealtimeTypes(types = []) {
     renderBoardingDogs();
     renderBoardingRequests();
   }
-  if (activePage === "requestsPage" && requestChanged) renderRequests();
+  if (activePage === "requestsPage" && (requestChanged || maintenanceChanged)) renderRequests();
   if (activePage === "maintenancePage" && maintenanceChanged) renderMaintenance();
   if (activePage === "timesheetPage" && timesheetChanged) {
     renderTimesheet();
@@ -10003,6 +10003,7 @@ function bathPlanForStay(stay) {
 }
 
 function renderRequests() {
+  if (typeof renderOperationsWorkspace === "function") return renderOperationsWorkspace();
   const showCompleted = $("#showCompletedRequests")?.checked;
   const isAdmin = currentRole() === "admin";
   const records = readRecords("request").filter((record) => !record.removed).filter((record) => showCompleted || !record.completed);
@@ -10017,6 +10018,7 @@ function renderRequests() {
 }
 
 function renderMaintenance() {
+  if (typeof renderOperationsWorkspace === "function") return renderOperationsWorkspace();
   const showCompleted = $("#showCompletedMaintenance")?.checked;
   const isAdmin = currentRole() === "admin";
   const records = readRecords("maintenance").filter((record) => !record.removed).filter((record) => showCompleted || !record.completed);
@@ -15307,6 +15309,7 @@ function initEvents() {
   $("#requestForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
+    if (typeof submitOperationsForm === "function") return submitOperationsForm(formEl, "request");
     if (!validateForm(formEl)) return;
     try {
       const mediaItems = await uploadMediaFiles($("#requestMedia"), "requests", {
@@ -15330,6 +15333,7 @@ function initEvents() {
   $("#maintenanceForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
+    if (typeof submitOperationsForm === "function") return submitOperationsForm(formEl, "maintenance");
     if (!validateForm(formEl)) return;
     try {
       const mediaItems = await uploadMediaFiles($("#maintenanceMedia"), "maintenance", {
