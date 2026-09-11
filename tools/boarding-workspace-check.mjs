@@ -78,4 +78,5 @@ for (const file of ['js/shared.js','script.js']) {
 assert(workspace.includes('boardingStayInvoiceSummaryHtml(record, stay, { final: true })'));
 assert(workspace.includes('boarding-checkout-belongings-card'));
 assert(css.includes('.checkout-invoice-columns'));
+assert(css.includes('left:calc(-50% + 14px); right:calc(50% + 14px)'), 'Lifecycle connectors must stop outside the 24px circles');
 console.log('Boarding workspace checks passed: linked-editor refresh, duplicate check-in pricing, nine accessible tabs and mobile layout.');

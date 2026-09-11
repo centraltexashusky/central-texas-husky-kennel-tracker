@@ -46,7 +46,7 @@ body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
 #boardingDogDetail.boarding-workspace #boardingStayHistory > .workspace-stay { display:block; padding:0; border:0; box-shadow:none; background:var(--workspace-surface); }
 .workspace-lifecycle { display:flex; list-style:none; padding:0; margin:16px 0 28px; }
 .workspace-lifecycle li { flex:1; text-align:center; position:relative; font-size:11px; color:var(--workspace-muted); }
-.workspace-lifecycle li::before { content:''; height:2px; background:#cdd8e1; position:absolute; left:-50%; right:50%; top:11px; }
+.workspace-lifecycle li::before { content:''; height:2px; background:#cdd8e1; position:absolute; left:calc(-50% + 14px); right:calc(50% + 14px); top:11px; }
 .workspace-lifecycle li:first-child::before { display:none; }
 .workspace-lifecycle li > span { position:relative; display:flex; justify-content:center; align-items:center; width:24px; height:24px; margin:0 auto 8px; border-radius:50%; background:#c3cfd9; border:2px solid white; color:white; font-weight:700; }
 .workspace-lifecycle .is-complete > span,.workspace-lifecycle .is-complete::before { background:#0b987b; }
