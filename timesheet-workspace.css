@@ -83,9 +83,10 @@
 #timesheetPage .timesheet-mobile-agenda { display:none; }
 #timesheetPage #timesheetSchedulePanel .section-heading { flex-wrap:wrap; }
 #timesheetPage #timesheetSchedulePanel .timesheet-publication #staffSchedulePublishStatus { flex:1; }
-#timesheetPage #timesheetSchedulePanel .timesheet-publication .staff-schedule-publish-status-copy { display:grid; width:auto; height:auto; min-width:0; border:0; border-radius:0; background:none; box-shadow:none; padding:0; }
+#timesheetPage #timesheetSchedulePanel .timesheet-publication .staff-schedule-publish-status-copy { display:grid; flex:1 1 0; width:auto; height:auto; min-width:0; border:0; border-radius:0; background:none; box-shadow:none; padding:0; }
 #timesheetPage #timesheetSchedulePanel .timesheet-publication .staff-schedule-publish-status-dot { width:8px; height:8px; min-width:8px; flex:none; border:0; padding:0; }
 #timesheetPage #timesheetSchedulePanel .timesheet-publication :is(strong,small) { width:auto; max-width:none; overflow:visible; white-space:normal; }
+#timesheetPage #staffSchedulePublishStatusMeta { overflow-wrap:anywhere; }
 #timesheetPage .service-warning-text { color:#a03c16; }
 :root[data-theme="dark"] #timesheetPage .service-warning-text { color:#ffc08e; }
 #timesheetPage #timesheetSchedulePanel :is(.task-scheduler-heading h2,.task-scheduler-panel-header h3,.staff-schedule-legend h3,.staff-schedule-legend-item,.summary-card strong,#staffScheduleRangeLabel) { color:var(--tw-ink); }
