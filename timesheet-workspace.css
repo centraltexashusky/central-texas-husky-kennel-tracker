@@ -1,0 +1,185 @@
+/* Approved Timesheet treatment. Dashboard rules below are paint-only. */
+#timesheetPage, #dashboardPage, body:has(#timesheetPage.is-active) #detailDialog {
+  --tw-surface: #fff; --tw-soft: #f5f8fb; --tw-ink: #12314e;
+  --tw-muted: #526b82; --tw-line: #dae4ed; --tw-blue: #0869aa; --tw-tint: #e8f3fc;
+  color: var(--tw-ink);
+}
+:root[data-theme="dark"] :is(#timesheetPage, #dashboardPage),
+:root[data-theme="dark"] body:has(#timesheetPage.is-active) #detailDialog {
+  --tw-surface: #14283a; --tw-soft: #102131; --tw-ink: #e5eff8;
+  --tw-muted: #b0c4d5; --tw-line: #365066; --tw-blue: #2383c5; --tw-tint: #193e5c;
+}
+#timesheetPage { gap: 16px; }
+#timesheetPage > .recent-submissions { gap:12px; }
+#timesheetPage #timesheetClockPanel > .section-heading { margin-bottom:4px; }
+#timesheetPage #timesheetClockPanel .filter-summary { margin:0; font-weight:400; font-size:12px; }
+#timesheetPage #timesheetClockPanel .timesheet-personal-clock { margin-bottom:12px; }
+#timesheetPage #timesheetTabs { border-radius:0!important; box-shadow:none!important; border-top:0!important; border-left:0!important; border-right:0!important; }
+#timesheetPage #timesheetTabs { flex-direction:row!important; }
+#timesheetPage #timesheetTabs button { width:auto!important; }
+#timesheetPage .summary-grid .summary-card { border-radius:0!important; border-top:0!important; border-bottom:0!important; border-left:0!important; box-shadow:none!important; }
+#timesheetPage .table-wrap, #timesheetPage .helper-total-item { box-shadow:none!important; }
+#timesheetPage #timesheetSchedulePanel .staff-schedule-toolbar { justify-content:flex-start; margin-bottom:0; }
+#timesheetPage #timesheetSchedulePanel #openScheduleShiftButton,
+#timesheetPage #timesheetSchedulePanel #publishScheduleButton,
+#timesheetPage #timesheetSchedulePanel .segmented-control button.is-active { background:var(--tw-blue)!important; color:#fff!important; }
+#timesheetPage > .form-section, #timesheetPage > .recent-submissions {
+  background: var(--tw-surface)!important; border: 1px solid var(--tw-line); border-radius: 8px;
+  box-shadow: none!important; padding: 24px; min-width: 0; animation:none; backdrop-filter:none;
+}
+#timesheetPage .section-heading { margin-bottom: 20px; }
+#timesheetPage h2 { color: var(--tw-ink); font-size: 24px; letter-spacing: -.6px; }
+#timesheetPage > .form-section h2 { font-size: 32px; }
+#timesheetPage :is(p,small,.filter-summary) { color: var(--tw-muted); }
+#timesheetPage .section-heading > span { border: 0; background: var(--tw-tint); color: var(--tw-blue); border-radius: 8px; }
+#timesheetPage :is(button,input,select,textarea), body:has(#timesheetPage.is-active) #detailDialog :is(button,input,select,textarea) {
+  border-radius: 6px!important; box-shadow: none!important; font-size: 14px; min-height: 40px;
+}
+#timesheetPage button, body:has(#timesheetPage.is-active) #detailDialog button { background: var(--tw-blue); color: #fff; border: 1px solid transparent; padding: 9px 15px; }
+#timesheetPage button.secondary-button, body:has(#timesheetPage.is-active) #detailDialog button.secondary-button { background: var(--tw-surface)!important; color: var(--tw-ink)!important; border-color: var(--tw-line); }
+#timesheetPage :is(input,select,textarea), body:has(#timesheetPage.is-active) #detailDialog :is(input,select,textarea) { background: var(--tw-surface)!important; color: var(--tw-ink)!important; border-color: var(--tw-line); }
+#timesheetPage :is(label,.field-label-text,.field-label-text span) { font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--tw-muted); }
+#timesheetPage button:focus-visible, #timesheetPage summary:focus-visible { outline: 2px solid var(--tw-blue); outline-offset: 3px; }
+#timesheetPage [hidden] { display: none!important; }
+#timesheetPage #timesheetTabs { display:flex!important; flex-wrap:nowrap; gap:16px; overflow-x:auto; border:0; border-bottom:1px solid var(--tw-line); border-radius:0; box-shadow:none; background:transparent!important; padding:0; margin:0; }
+#timesheetPage #timesheetTabs button { display:flex; align-items:center; gap:7px; flex:0 0 auto; background:transparent!important; color:var(--tw-muted)!important; border:0; border-bottom:3px solid transparent; border-radius:0!important; padding:13px 8px; }
+#timesheetPage #timesheetTabs button.is-active { color:var(--tw-blue)!important; border-bottom-color:var(--tw-blue); }
+#timesheetPage .timesheet-personal-clock { display:flex; align-items:center; gap:22px; padding:22px; border:1px solid var(--tw-line); border-radius:8px; margin-bottom:28px; background:var(--tw-soft); }
+#timesheetPage .timesheet-personal-clock > svg { width:56px; height:56px; flex:none; color:var(--tw-muted); }
+#timesheetPage .timesheet-personal-clock h3 { margin:0 0 6px; font-size:18px; }
+#timesheetPage #clockInDisplay { display:block; font-size:16px; font-weight:500; color:var(--tw-muted); }
+#timesheetPage #timesheetElapsed { display:block; font-size:22px; font-variant-numeric:tabular-nums; color:var(--tw-ink); margin-top:4px; }
+#timesheetPage .timesheet-clock-action { margin-left:auto; display:grid; gap:8px; text-align:center; }
+#timesheetPage .timesheet-clock-action small { font-size:11px; }
+#timesheetPage #clockInButton { min-width:210px; }
+#timesheetPage .is-clocked-in > svg { color:#09976e; }
+#timesheetPage .timesheet-date-filter { display:flex; flex-wrap:wrap; align-items:end; gap:10px; padding:0; background:none; border:0; box-shadow:none; }
+#timesheetPage .timesheet-date-filter label { flex:0 1 175px; }
+#timesheetPage .export-actions { display:flex; gap:8px; margin:14px 0; }
+#timesheetPage #timesheetAdminActions { margin:0 0 0 auto; }
+#timesheetPage :is(.timesheet-metrics,.summary-grid) { display:grid; grid-template-columns:repeat(auto-fit,minmax(115px,1fr)); gap:0; margin:16px 0; padding:14px 0; border:1px solid var(--tw-line); border-radius:8px; background:var(--tw-soft)!important; }
+#timesheetPage :is(.timesheet-metrics > div,.summary-card) { padding:0 16px; border:0; border-right:1px solid var(--tw-line); border-radius:0; background:transparent!important; box-shadow:none!important; min-width:0; }
+#timesheetPage :is(.timesheet-metrics > div,.summary-card):last-child { border-right:0; }
+#timesheetPage :is(.timesheet-metrics span,.summary-card > span) { display:block; color:var(--tw-muted); font-size:12px; font-weight:500; letter-spacing:0; text-transform:none; }
+#timesheetPage :is(.timesheet-metrics strong,.summary-card strong) { display:block; color:var(--tw-ink); font-size:23px; font-variant-numeric:tabular-nums; margin-top:4px; }
+#timesheetPage .summary-card p { font-size:11px; margin:5px 0 0; }
+#timesheetPage .table-wrap { border:1px solid var(--tw-line); border-radius:7px; box-shadow:none; background:var(--tw-surface); padding:0; overflow:auto; }
+#timesheetPage .data-table { font-size:14px; min-width:680px; }
+#timesheetPage .data-table :is(th,td) { padding:12px 14px; border:0; border-bottom:1px solid var(--tw-line); background:var(--tw-surface)!important; color:var(--tw-ink); vertical-align:middle; }
+#timesheetPage .data-table th { background:var(--tw-soft)!important; color:var(--tw-muted); font-size:12px; text-transform:none; letter-spacing:0; white-space:nowrap; }
+#timesheetPage .data-table td span { display:block; color:var(--tw-muted); font-size:12px; }
+#timesheetPage #timesheetRows td:nth-child(5) { font-variant-numeric:tabular-nums; text-align:right; font-weight:700; }
+#timesheetPage .timesheet-entry-open td:nth-child(4) { color:var(--tw-blue); font-weight:600; }
+#timesheetPage .helper-total-item { box-shadow:none; background:var(--tw-soft); border-color:var(--tw-line); border-radius:6px; }
+#timesheetPage #timesheetSchedulePanel .staff-schedule-toolbar { display:flex!important; flex-wrap:wrap; gap:8px; padding:0 0 14px; background:transparent; border:0; box-shadow:none; }
+#timesheetPage #staffScheduleRangeLabel { font-size:15px; padding:0 8px; }
+#timesheetPage .segmented-control { box-shadow:none; background:var(--tw-soft); border-color:var(--tw-line); border-radius:6px; }
+#timesheetPage .segmented-control button { background:transparent; color:var(--tw-muted); }
+#timesheetPage .segmented-control button.is-active { background:var(--tw-blue); color:#fff; }
+#timesheetPage #staffSchedulePublishStatus { box-shadow:none; border-radius:6px; min-width:0; flex:1 1 270px; }
+#timesheetPage #staffSchedulePublishStatusLabel { text-transform:uppercase; font-size:12px; }
+#timesheetPage #staffSchedulePublishStatusMeta { font-size:11px; }
+#timesheetPage .timesheet-publication { display:flex; align-items:center; gap:8px; margin-left:auto; flex:0 1 460px; }
+#timesheetPage .timesheet-mobile-agenda { display:none; }
+#timesheetPage #timesheetSchedulePanel .section-heading { flex-wrap:wrap; }
+#timesheetPage #timesheetSchedulePanel .timesheet-publication #staffSchedulePublishStatus { flex:1; }
+#timesheetPage #timesheetSchedulePanel .timesheet-publication .staff-schedule-publish-status-copy { display:grid; width:auto; height:auto; min-width:0; border:0; border-radius:0; background:none; box-shadow:none; padding:0; }
+#timesheetPage #timesheetSchedulePanel .timesheet-publication .staff-schedule-publish-status-dot { width:8px; height:8px; min-width:8px; flex:none; border:0; padding:0; }
+#timesheetPage #timesheetSchedulePanel .timesheet-publication :is(strong,small) { width:auto; max-width:none; overflow:visible; white-space:normal; }
+#timesheetPage .service-warning-text { color:#a03c16; }
+:root[data-theme="dark"] #timesheetPage .service-warning-text { color:#ffc08e; }
+#timesheetPage #timesheetSchedulePanel :is(.task-scheduler-heading h2,.task-scheduler-panel-header h3,.staff-schedule-legend h3,.staff-schedule-legend-item,.summary-card strong,#staffScheduleRangeLabel) { color:var(--tw-ink); }
+#timesheetPage #staffScheduleLayout { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; }
+#timesheetPage #staffScheduleLayout.has-panel-open { grid-template-columns:minmax(0,1fr) 290px; }
+#timesheetPage .staff-schedule-sidebar { display:flex!important; flex-wrap:wrap; align-items:center; gap:12px; grid-column:1/-1; padding:0; border:0; background:transparent; box-shadow:none; overflow:visible; }
+#timesheetPage #scheduleSummaryGrid { flex:1; margin:0; min-width:340px; padding:10px 0; }
+#timesheetPage #scheduleSummaryGrid .summary-card:first-child { display:none; }
+#timesheetPage #scheduleSummaryGrid strong { font-size:18px; }
+#timesheetPage #scheduleSummaryGrid p { display:none; }
+#timesheetPage .timesheet-calendar-picker { position:relative; color:var(--tw-muted); font-size:13px; }
+#timesheetPage .timesheet-calendar-picker summary { cursor:pointer; padding:12px; border:1px solid var(--tw-line); border-radius:6px; }
+#timesheetPage #staffScheduleMiniCalendar { position:absolute; width:270px; top:48px; left:0; background:var(--tw-surface); border:1px solid var(--tw-line); border-radius:8px; z-index:20; box-shadow:0 10px 30px #10213126; }
+#timesheetPage #staffScheduleLegend { display:flex; flex-wrap:wrap; gap:8px; width:100%; padding:0; background:none; border:0; }
+#timesheetPage #scheduleWeekGrid, #timesheetPage #staffScheduleDetailPanel { border-radius:7px; box-shadow:none; background:var(--tw-surface); border-color:var(--tw-line); }
+#timesheetPage .staff-schedule-card { border-radius:6px; box-shadow:none; }
+#timesheetPage #timesheetSchedulePanel .staff-schedule-card.is-positioned { align-items:start; align-content:start; padding:12px 9px; }
+#timesheetPage #timesheetSchedulePanel .staff-schedule-card-copy { align-self:start; }
+#timesheetPage #timesheetSchedulePanel .staff-schedule-card-copy :is(strong,span) { white-space:normal; }
+#timesheetPage .timesheet-status-filters { display:flex; flex-wrap:wrap; gap:0; margin:18px 0; border-bottom:1px solid var(--tw-line); }
+#timesheetPage .timesheet-status-filters button { background:transparent; color:var(--tw-muted); border-radius:0!important; border-bottom:3px solid transparent; }
+#timesheetPage .timesheet-status-filters button[aria-pressed="true"] { background:var(--tw-tint); color:var(--tw-blue); border-bottom-color:var(--tw-blue); }
+#timesheetPage :is(#timeOffRequestList,#holidayList,#scheduleReviewIssues) { display:grid; grid-template-columns:1fr; gap:0; }
+#timesheetPage :is(#timeOffRequestList,#holidayList,#scheduleReviewIssues) > .record-card { display:grid; grid-template-columns:minmax(160px,1fr) minmax(150px,1fr) auto; gap:6px 20px; align-items:center; padding:18px 14px; border:0; border-bottom:1px solid var(--tw-line); border-radius:0; background:var(--tw-surface)!important; box-shadow:none!important; }
+#timesheetPage :is(#timeOffRequestList,#holidayList,#scheduleReviewIssues) > .record-card p { margin:0; font-size:13px; grid-column:1/3; }
+#timesheetPage :is(#timeOffRequestList,#holidayList) .record-actions { grid-column:3; grid-row:1/5; margin:0; }
+#timesheetPage :is(#timeOffRequestList,#holidayList) .record-card > span { font-size:13px; color:var(--tw-muted); }
+#timesheetPage .schedule-review-payroll { background:var(--tw-soft); border:1px solid var(--tw-line); border-radius:8px; box-shadow:none; }
+body:has(#timesheetPage.is-active) #detailDialog { background:var(--tw-surface)!important; border:1px solid var(--tw-line); border-radius:10px; max-width:760px; }
+body:has(#timesheetPage.is-active) #detailDialog { animation:none!important; backdrop-filter:none!important; filter:none!important; }
+body:has(#timesheetPage.is-active) #detailDialog :is(.dialog-header,.detail-dialog-body,.tracker-form,.record-card) { color:var(--tw-ink); background:var(--tw-surface)!important; box-shadow:none; border-color:var(--tw-line); }
+body:has(#timesheetPage.is-active) #detailDialog :is(h2,h3,label) { color:var(--tw-ink); }
+body:has(#timesheetPage.is-active) #detailDialog .field-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+body:has(#timesheetPage.is-active) #detailDialog .service-warning-text { background:var(--tw-tint); color:var(--tw-ink); padding:12px; border-radius:6px; }
+/* Dashboard: no order, grid, sizing, spacing, visibility or loading changes. */
+#dashboardPage :is(.form-section,.recent-submissions,.record-card,.calendar-card,.dashboard-action-group,.reminder-card) { background:var(--tw-surface)!important; border-color:var(--tw-line)!important; box-shadow:none!important; border-radius:8px; color:var(--tw-ink); }
+#dashboardPage :is(h2,h3,strong) { color:var(--tw-ink); }
+#dashboardPage :is(p,small) { color:var(--tw-muted); }
+#dashboardPage .section-heading > span { background:var(--tw-tint); color:var(--tw-blue); border-color:var(--tw-line); }
+#dashboardPage button { background:var(--tw-blue); color:white; box-shadow:none!important; border-radius:6px; }
+#dashboardPage :is(.secondary-button,.calendar-day) { background:var(--tw-surface)!important; color:var(--tw-ink)!important; border-color:var(--tw-line)!important; }
+#dashboardPage .calendar-day.is-selected { background:var(--tw-tint)!important; border-color:var(--tw-blue)!important; }
+#dashboardPage .calendar-day.is-today { border-color:#e5a52f!important; }
+#dashboardPage :is(input,textarea) { background:var(--tw-surface); color:var(--tw-ink); border-color:var(--tw-line); box-shadow:none; border-radius:6px; }
+#dashboardPage #calendarNoteForm { background:var(--tw-soft); border-color:var(--tw-line); box-shadow:none; }
+#dashboardPage :is(.task-calendar,.dashboard-action-panel,.reminder-panel) { background:var(--tw-surface)!important; color:var(--tw-ink); border-color:var(--tw-line)!important; box-shadow:none!important; }
+:root[data-theme="dark"] #timesheetPage #timesheetSchedulePanel :is(.staff-schedule-time-grid,.task-scheduler-time-cell,.task-scheduler-day-header,.task-scheduler-time-label,.task-scheduler-month-day,.task-scheduler-detail-card,.task-scheduler-detail-row) { background:var(--tw-surface); color:var(--tw-ink); border-color:var(--tw-line); }
+:root[data-theme="dark"] #timesheetPage #timesheetSchedulePanel :is(.task-scheduler-detail-hero h4,.task-scheduler-detail-row strong,.task-scheduler-detail-row p,.task-scheduler-day-header strong) { color:var(--tw-ink); }
+@media(max-width:760px) {
+  #timesheetPage > :is(.form-section,.recent-submissions) { padding:16px; }
+  #timesheetPage #timesheetTabs { gap:10px; }
+  #timesheetPage #timesheetTabs button { font-size:13px; }
+  #timesheetPage #timesheetTabs svg { display:none; }
+  #timesheetPage .timesheet-personal-clock { flex-wrap:wrap; gap:14px; padding:18px; }
+  #timesheetPage .timesheet-clock-action { width:100%; margin:0; }
+  #timesheetPage .timesheet-date-filter { display:grid; grid-template-columns:1fr 1fr; }
+  #timesheetPage .timesheet-date-filter label { min-width:0; }
+  #timesheetPage .export-actions { flex-wrap:wrap; }
+  #timesheetPage #timesheetAdminActions { margin:0; }
+  #timesheetPage :is(.timesheet-metrics,.summary-grid) { grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px 0; }
+  #timesheetPage .timesheet-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  #timesheetPage .timesheet-metrics > div { padding:0 9px; }
+  #timesheetPage .timesheet-metrics strong { font-size:21px; }
+  #timesheetPage #timesheetClockPanel .table-wrap { display:block!important; border:0; }
+  #timesheetPage #timesheetClockPanel .data-table { display:block; min-width:0; width:100%; }
+  #timesheetPage #timesheetClockPanel thead { position:absolute; clip-path:inset(50%); width:1px; height:1px; overflow:hidden; }
+  #timesheetPage #timesheetRows { display:block; }
+  #timesheetPage #timesheetRows tr { display:grid; grid-template-columns:1fr 1fr; border:1px solid var(--tw-line); border-radius:8px; margin:0 0 12px; padding:10px; }
+  #timesheetPage #timesheetRows td { display:block; border:0; padding:6px; font-size:13px; overflow-wrap:anywhere; }
+  #timesheetPage #timesheetRows td::before { content:attr(data-label); display:block; font-size:11px; color:var(--tw-muted); margin-bottom:3px; font-weight:400; }
+  #timesheetPage #timesheetRows td:nth-child(5) { text-align:left; }
+  #timesheetPage #timesheetRows td:last-child { grid-column:1/-1; }
+  #timesheetPage #timesheetRows td:last-child::before { display:none; }
+  #timesheetPage #timesheetRows td:last-child button { width:100%; }
+  #timesheetPage #staffScheduleLayout.has-panel-open { grid-template-columns:minmax(0,1fr); }
+  #timesheetPage #staffScheduleDetailPanel { position:static; width:auto; max-height:none; }
+  #timesheetPage #scheduleSummaryGrid { min-width:0; flex-basis:100%; }
+  #timesheetPage #staffScheduleRangeLabel { font-size:13px; padding:0; }
+  #timesheetPage .timesheet-publication { margin:0; flex-basis:100%; flex-wrap:wrap; }
+  #timesheetPage #timesheetSchedulePanel .timesheet-publication #staffSchedulePublishStatus { flex-basis:100%; }
+  #timesheetPage #timesheetSchedulePanel .timesheet-publication #publishScheduleButton { width:100%; }
+  #timesheetPage #scheduleWeekGrid[data-agenda="true"] > :not(.timesheet-mobile-agenda) { display:none!important; }
+  #timesheetPage .timesheet-mobile-agenda { display:grid; gap:16px; }
+  #timesheetPage .timesheet-mobile-agenda section { border-bottom:1px solid var(--tw-line); padding-bottom:12px; }
+  #timesheetPage .timesheet-mobile-agenda h3 { font-size:14px; margin:0 0 10px; color:var(--tw-ink); }
+  #timesheetPage .timesheet-mobile-agenda p { font-size:13px; margin:8px 0; }
+  #timesheetPage .timesheet-mobile-agenda button { display:flex; align-items:center; gap:12px; width:100%; text-align:left; margin:6px 0; }
+  #timesheetPage .timesheet-mobile-agenda button > span:first-of-type { flex:1; }
+  #timesheetPage .timesheet-mobile-agenda :is(strong,small) { display:block; }
+  #timesheetPage .timesheet-mobile-agenda small { font-size:12px; font-weight:400; margin-top:4px; }
+  #timesheetPage #timesheetClockPanel[data-own-entries="true"] #timesheetRows td:nth-child(2) { display:none; }
+  #timesheetPage #timesheetRows td:empty { display:none; }
+  #timesheetPage #timesheetRows td:first-child { font-weight:700; }
+  #timesheetPage :is(#timeOffRequestList,#holidayList,#scheduleReviewIssues) > .record-card { grid-template-columns:1fr; padding:18px 0; }
+  #timesheetPage :is(#timeOffRequestList,#holidayList,#scheduleReviewIssues) > .record-card > * { grid-column:1; grid-row:auto; }
+  body:has(#timesheetPage.is-active) #detailDialog .field-grid { grid-template-columns:1fr; }
+}

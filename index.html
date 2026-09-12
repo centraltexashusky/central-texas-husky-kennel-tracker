@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="boarding-workspace.css?v=boarding-workspace-v112a-checkout-v113-lifecycle-v114" />
     <link rel="stylesheet" href="daily-workspace.css?v=daily-workspace-v115" />
     <link rel="stylesheet" href="owned-workspace.css?v=owned-workspace-v117" />
+    <link rel="stylesheet" href="timesheet-workspace.css?v=timesheet-workspace-v120" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -944,19 +945,10 @@
             <span>T</span>
             <div>
               <h2>Timesheet</h2>
-              <p>Clock in/out and review weekly hours by staff member. Desktop/admin can add corrections when needed.</p>
+              <p>Time, schedules, and staff availability.</p>
             </div>
           </div>
 
-          <div class="timesheet-grid">
-            <div class="time-card">
-              <span>Timesheet Clock</span>
-              <strong id="clockInDisplay">Not clocked in</strong>
-              <button type="button" id="clockInButton">Clock In</button>
-            </div>
-          </div>
-
-          <div class="button-row mobile-admin-only" id="timesheetAdminActions"><button type="button" class="secondary-button" id="openTimesheetEditButton">Edit Timesheet</button></div>
           <div class="profile-tabs timesheet-tabs" id="timesheetTabs" role="tablist" aria-label="Timesheet sections">
             <button type="button" class="secondary-button is-active" data-timesheet-tab="clock" role="tab" aria-selected="true">Clock</button>
             <button type="button" class="secondary-button" data-timesheet-tab="schedule" role="tab" aria-selected="false">Schedule</button>
@@ -968,18 +960,26 @@
         </section>
 
         <section class="recent-submissions timesheet-tab-panel" id="timesheetClockPanel" data-timesheet-panel="clock">
+          <div class="timesheet-personal-clock">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 4"/></svg>
+            <div><h3>Your clock</h3><strong id="clockInDisplay">Not clocked in</strong><span id="timesheetElapsed"></span></div>
+            <div class="timesheet-clock-action"><button type="button" id="clockInButton">Clock In</button><small>Clock actions apply to your own account.</small></div>
+          </div>
           <div class="section-heading"><span>W</span><div><h2 id="timesheetTableTitle">Current Week</h2><p id="timesheetTableHelp">Clock in and clock out records for this week.</p></div></div>
           <div class="timesheet-date-filter" aria-label="Timesheet date range filter">
             <label>From date<input type="date" id="timesheetStartDate" /></label>
             <label>To date<input type="date" id="timesheetEndDate" /></label>
             <button type="button" class="secondary-button" id="applyTimesheetDateFilterButton">Apply Date Filter</button>
             <button type="button" class="secondary-button" id="resetTimesheetDateFilterButton">This Week</button>
+            <label id="timesheetStaffFilterLabel" hidden>Staff<select id="timesheetStaffFilter"><option value="">All staff</option></select></label>
           </div>
           <p class="filter-summary" id="timesheetRangeSummary"></p>
           <div class="button-row export-actions">
             <button type="button" class="secondary-button" id="exportTimesheetButton">Export Timesheet</button>
             <button type="button" class="secondary-button" id="viewTimesheetButton">View Timesheet</button>
+            <div class="button-row mobile-admin-only" id="timesheetAdminActions"><button type="button" class="secondary-button" id="openTimesheetEditButton">Edit Timesheet</button></div>
           </div>
+          <div id="timesheetVisibleSummary" class="timesheet-metrics" aria-live="polite"></div>
           <div class="table-wrap">
             <table class="data-table">
               <thead><tr><th>Date</th><th>Staff</th><th>Clock In</th><th>Clock Out</th><th>Hours</th><th>Note</th><th>Edit</th></tr></thead>
@@ -1022,7 +1022,7 @@
           </div>
           <div class="task-scheduler-layout staff-schedule-layout" id="staffScheduleLayout">
             <aside class="task-scheduler-sidebar staff-schedule-sidebar">
-              <div class="task-scheduler-mini-calendar staff-schedule-mini-calendar" id="staffScheduleMiniCalendar"></div>
+              <details class="timesheet-calendar-picker"><summary>Jump to date</summary><div class="task-scheduler-mini-calendar staff-schedule-mini-calendar" id="staffScheduleMiniCalendar"></div></details>
               <div class="summary-grid staff-schedule-summary-grid" id="scheduleSummaryGrid"></div>
               <div class="task-scheduler-legend staff-schedule-legend" id="staffScheduleLegend"></div>
             </aside>
@@ -1038,6 +1038,7 @@
           <div class="button-row timesheet-toolbar">
             <button type="button" id="openTimeOffRequestButton">Request Time Off</button>
           </div>
+          <div id="timeOffStatusFilters" class="timesheet-status-filters" role="group" aria-label="Filter time off requests"><button type="button" data-time-off-filter="All" aria-pressed="true">All</button><button type="button" data-time-off-filter="Pending" aria-pressed="false">Pending</button><button type="button" data-time-off-filter="Approved" aria-pressed="false">Approved</button><button type="button" data-time-off-filter="History" aria-pressed="false">History</button></div>
           <div class="record-grid compact-record-grid" id="timeOffRequestList"></div>
         </section>
         <section class="recent-submissions timesheet-tab-panel" id="timesheetHolidayPanel" data-timesheet-panel="holidays" hidden>
@@ -1975,12 +1976,13 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-<script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-optional-acknowledgements-customer-agreement-records-dual-email-show-wide-expense-split-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v6-compiled-finance-reports-v7-dog-attributable-costs-v8-customer-finance-reports-upcoming-status-ux-v9-dog-profile-registration-akc-breeds-net-dog-credits-v10-collapsible-ledgers-dog-reports-v11-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-customer-request-history-detach-v23-boarding-request-notification-rls-v25-timesheet-payroll-review-v28-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-boarding-detached-profile-v34-customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36d-dog-show-lifecycle-owner-update-photo-invoice-v39-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-daily-care-log-staff-date-v44-boarding-request-alert-reliability-v26-boarding-family-alert-approval-v27-boarding-group-status-v28-boarding-transition-revision-v29-transaction-security-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-boarding-stay-revision-v37-boarding-checkin-preflight-v38-boarding-requirement-override-v39-boarding-override-confirmation-v40-customer-vaccine-self-service-v41-vaccination-document-approval-v43-cuddle-schema-isolated-v45-boarding-alert-recovery-v46-user-removal-v47-dashboard-daily-completion-v48-atomic-owner-update-v49-notification-delivery-retry-v51-shared-kennels-v52-customer-canonical-profile-fallback-v42-staff-new-boarding-default-v53-boarding-progressive-load-v54-request-history-lazy-v55-profile-lookup-cache-v56-profile-history-v57-calendar-pricing-consistency-v58-profile-request-isolation-v59-pdf-media-preview-v60-approval-persistence-identity-v61-service-pricing-revision-v62-removed-user-payroll-rate-v63-staff-schedule-sunday-grid-v64-financial-category-description-columns-v65-financial-loading-progress-v67-persisted-financial-ledger-v69-scalable-page-loading-v83-boarding-roster-counts-v89-dog-pricing-eligibility-v90-time-off-self-service-v91-time-off-upsert-fix-v92-schedule-publish-status-v93-canonical-boarding-save-v94-canonical-linked-fallback-v95-staff-pricing-canonical-v97-boarding-form-id-v98-on-demand-editor-v99-canonical-payload-id-v100-staff-service-scope-v101-full-catalog-v102-canonical-provenance-v103-notification-read-receipts-v105-durable-customer-file-alert-v106-ready-pickup-until-checkout-v107-alert-panel-on-demand-v108-boarding-modern-roster-v110-stay-save-revision-v111-delete-modal-cleanup-v109-boarding-modern-roster-v110-stay-save-revision-v111-boarding-workspace-v112-checkout-v113-daily-workspace-v115-customer-upload-save-v116-owned-workspace-v117-operations-v119"></script>
+<script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-optional-acknowledgements-customer-agreement-records-dual-email-show-wide-expense-split-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v6-compiled-finance-reports-v7-dog-attributable-costs-v8-customer-finance-reports-upcoming-status-ux-v9-dog-profile-registration-akc-breeds-net-dog-credits-v10-collapsible-ledgers-dog-reports-v11-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-customer-request-history-detach-v23-boarding-request-notification-rls-v25-timesheet-payroll-review-v28-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-boarding-detached-profile-v34-customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36d-dog-show-lifecycle-owner-update-photo-invoice-v39-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-daily-care-log-staff-date-v44-boarding-request-alert-reliability-v26-boarding-family-alert-approval-v27-boarding-group-status-v28-boarding-transition-revision-v29-transaction-security-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-boarding-stay-revision-v37-boarding-checkin-preflight-v38-boarding-requirement-override-v39-boarding-override-confirmation-v40-customer-vaccine-self-service-v41-vaccination-document-approval-v43-cuddle-schema-isolated-v45-boarding-alert-recovery-v46-user-removal-v47-dashboard-daily-completion-v48-atomic-owner-update-v49-notification-delivery-retry-v51-shared-kennels-v52-customer-canonical-profile-fallback-v42-staff-new-boarding-default-v53-boarding-progressive-load-v54-request-history-lazy-v55-profile-lookup-cache-v56-profile-history-v57-calendar-pricing-consistency-v58-profile-request-isolation-v59-pdf-media-preview-v60-approval-persistence-identity-v61-service-pricing-revision-v62-removed-user-payroll-rate-v63-staff-schedule-sunday-grid-v64-financial-category-description-columns-v65-financial-loading-progress-v67-persisted-financial-ledger-v69-scalable-page-loading-v83-boarding-roster-counts-v89-dog-pricing-eligibility-v90-time-off-self-service-v91-time-off-upsert-fix-v92-schedule-publish-status-v93-canonical-boarding-save-v94-canonical-linked-fallback-v95-staff-pricing-canonical-v97-boarding-form-id-v98-on-demand-editor-v99-canonical-payload-id-v100-staff-service-scope-v101-full-catalog-v102-canonical-provenance-v103-notification-read-receipts-v105-durable-customer-file-alert-v106-ready-pickup-until-checkout-v107-alert-panel-on-demand-v108-boarding-modern-roster-v110-stay-save-revision-v111-delete-modal-cleanup-v109-boarding-modern-roster-v110-stay-save-revision-v111-boarding-workspace-v112-checkout-v113-daily-workspace-v115-customer-upload-save-v116-owned-workspace-v117-operations-v119-timesheet-workspace-v120"></script>
     <script src="js/boarding-workspace.js?v=boarding-workspace-v112-checkout-v113" defer></script>
     <script src="js/daily-workspace.js?v=daily-workspace-v115" defer></script>
     <script src="js/owned-workspace.js?v=owned-workspace-v117-photo" defer></script>
     <script src="js/owned-bulk-care.js?v=heartworm-v118" defer></script>
     <script src="js/operations-workspace.js?v=operations-v119" defer></script>
+    <script src="js/timesheet-workspace.js?v=timesheet-workspace-v120" defer></script>
     <link rel="stylesheet" href="operations-workspace.css?v=operations-v119" />
     <link rel="stylesheet" href="owned-bulk-care.css?v=heartworm-v118" />
 </body>

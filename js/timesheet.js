@@ -143,6 +143,7 @@ function timesheetRecordsForRange(range = timesheetActiveRange()) {
   return readRecords("timesheet")
     .filter((record) => !record.removed && (isAdmin || timesheetBelongsToCurrentUser(record)))
     .filter((record) => timesheetRecordInDateRange(record, range.start, range.end))
+    .filter((record) => !isAdmin || typeof timesheetStaffFilterValue === "undefined" || !timesheetStaffFilterValue || (record.helperEmail || record.helperName || "").toLowerCase() === timesheetStaffFilterValue)
     .sort((a, b) => timesheetRecordTime(b) - timesheetRecordTime(a));
 }
 
@@ -270,7 +271,7 @@ function syncTimesheetRangeUi(range = timesheetActiveRange()) {
   const summary = $("#timesheetRangeSummary");
   const payrollSummary = $("#payrollRangeSummary");
   const label = timesheetRangeLabel(range);
-  if (title) title.textContent = range.isFiltered ? "Selected Date Range" : "Current Week";
+  if (title) title.textContent = "Time entries";
   if (help) help.textContent = range.isFiltered ? "Clock in and clock out records for the selected date range." : "Clock in and clock out records for this week.";
   if (summary) summary.textContent = label ? \`Showing timesheet records for \${label}.\` : "";
   if (payrollSummary) payrollSummary.textContent = label ? \`Showing payroll estimates for \${label}.\` : "";
@@ -291,6 +292,7 @@ function renderTimesheet() {
   const thisYearStart = new Date(now.getFullYear(), 0, 1);
   const currentWeekRecords = records.filter((record) => inRange(record, thisWeekStart, nextWeekStart));
   const activeRange = timesheetActiveRange();
+  if (typeof prepareTimesheetWorkspace === "function") prepareTimesheetWorkspace(records);
   const visibleRecords = timesheetRecordsForRange(activeRange);
   syncTimesheetRangeUi(activeRange);
 
@@ -320,11 +322,12 @@ function renderTimesheet() {
 	    : "";
 	  if ($("#timesheetAdminActions")) $("#timesheetAdminActions").hidden = !isAdmin;
 	  renderTimesheetTabs();
-	  renderScheduleTab();
-	  renderTimeOffTab();
-	  renderHolidayTab();
-	  renderScheduleReviewTab();
-	  renderPayrollTab();
+	  if (timesheetTab === "schedule") renderScheduleTab();
+	  if (timesheetTab === "timeOff") renderTimeOffTab();
+	  if (timesheetTab === "holidays") renderHolidayTab();
+	  if (timesheetTab === "review" || !isAdmin) renderScheduleReviewTab();
+	  if (timesheetTab === "payroll" || !isAdmin) renderPayrollTab();
+    if (typeof finishTimesheetWorkspace === "function") finishTimesheetWorkspace(visibleRecords);
 	}
 
 async function saveTimeEntry(payload, options = {}) {
@@ -1150,6 +1153,7 @@ function staffScheduleMonthHtml() {
 function renderStaffScheduleMiniCalendar() {
   const el = $("#staffScheduleMiniCalendar");
   if (!el) return;
+  if (el.closest?.("details") && !el.closest("details").open) return;
   const anchor = dateOnly(scheduleWeekDate) || todayDate();
   const dates = staffScheduleMonthDates(anchor);
   el.innerHTML = '<div class="task-scheduler-mini-header"><button type="button" class="secondary-button" data-action="staff-schedule-mini-prev" aria-label="Previous month">‹</button><strong>' + escapeHtml(new Date(anchor + "T12:00:00").toLocaleDateString("en-US", { month: "long", year: "numeric" })) + '</strong><button type="button" class="secondary-button" data-action="staff-schedule-mini-next" aria-label="Next month">›</button></div>' +
@@ -1505,12 +1509,13 @@ function renderScheduleTab() {
     if (el) el.hidden = !isAdmin;
   });
   ensureStaffSchedulePlannerBindings();
+  if (typeof renderTimesheetMobileAgenda === "function") renderTimesheetMobileAgenda(shifts, dates);
 }
 
 function renderTimeOffTab() {
   const list = $("#timeOffRequestList");
   if (!list) return;
-  const records = timeOffRequests().sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
+  const records = timeOffRequests().filter((record) => typeof timesheetTimeOffFilter === "undefined" || timesheetTimeOffFilter === "All" || (timesheetTimeOffFilter === "History" ? !["Pending", "Approved"].includes(record.status || "Pending") : (record.status || "Pending") === timesheetTimeOffFilter)).sort((a, b) => new Date(b.updatedAt || b.submittedAt || 0) - new Date(a.updatedAt || a.submittedAt || 0));
   const isAdmin = currentRole() === "admin";
   list.innerHTML = records.length
     ? records.map((record) => {
