@@ -18,6 +18,8 @@ const pageModuleLoaders = {
 };
 
 const pageModuleDependencies = {
+  // Shared startup initializes task configuration even on a direct public login URL.
+  loginPage: ["daily"],
   dashboardPage: ["daily", "boarding"],
   dailyPage: ["daily"],
   taskSchedulerPage: ["taskScheduler"],
