@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {reminderMessage} from '../supabase/functions/stay-reminders/message.ts';
+const base={dogName:'Milo <test>',requestCode:'BR-QA',eventAt:'2026-10-13T14:00:00Z'};
+const arrival=reminderMessage({...base,kind:'arrival',paid:false});
+assert(arrival.text.includes('9:00 AM CDT'));
+assert(!arrival.text.includes('outstanding balance'));
+assert(arrival.html.includes('Milo &lt;test&gt;'));
+const unpaid=reminderMessage({...base,kind:'pickup',paid:false});
+assert(unpaid.text.includes('arrange payment'));
+assert(unpaid.text.includes('Contact the kennel for the final amount'));
+assert(!reminderMessage({...base,kind:'pickup',paid:true}).text.includes('arrange payment'));
+assert(unpaid.html.includes('#customerRequestsPage'));
+const sql=fs.readFileSync('supabase/migrations/20260913150749_customer_stay_reminders.sql','utf8');
+for(const feature of ['enable row level security','security invoker','for update skip locked','on conflict(id) do nothing',"interval '24 hours'",'vault.decrypted_secrets',"interval '6 hours'","'cancelled'"])assert(sql.includes(feature),feature);
+const worker=fs.readFileSync('supabase/functions/stay-reminders/index.ts','utf8');
+for(const feature of ['x-reminder-token','SHA-256','Idempotency-Key','stay_reminder_candidates','provider_id','emailConfigured'])assert(worker.includes(feature),feature);
+console.log('Stay reminder message/security checks passed: timezone, escaping, paid/unpaid, provider idempotency and retry safeguards.');

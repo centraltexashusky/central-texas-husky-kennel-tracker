@@ -22,6 +22,7 @@
     <link rel="stylesheet" href="daily-workspace.css?v=daily-workspace-v115" />
     <link rel="stylesheet" href="owned-workspace.css?v=owned-workspace-v117" />
     <link rel="stylesheet" href="timesheet-workspace.css?v=timesheet-workspace-v120a" />
+    <link rel="stylesheet" href="customer-workspace.css?v=customer-workspace-v121" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -194,7 +195,7 @@
 
       <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobile kennel sections">
         <button class="mobile-bottom-nav-button" type="button" data-page="customerPage" data-roles="customer" aria-label="My Dog">
-          <img class="mobile-bottom-nav-icon mobile-bottom-nav-image my-dog-menu-logo" src="assets/icons/arkinlight-husky-logo-transparent.png?v=20260530-my-dog-logo-crop" alt="" aria-hidden="true" />
+          <svg class="mobile-bottom-nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><ellipse cx="5" cy="9" rx="2" ry="2.6"/><ellipse cx="10" cy="5" rx="2" ry="2.6"/><ellipse cx="16" cy="5" rx="2" ry="2.6"/><ellipse cx="20" cy="10" rx="2" ry="2.6"/><path d="M7 15c2-5 8-5 10 0 5 5-1 8-4 5-3 3-9 0-6-5Z"/></svg>
           <span class="mobile-bottom-nav-label">My Dogs</span>
         </button>
         <button class="mobile-bottom-nav-button" type="button" data-page="customerRequestsPage" data-roles="customer" aria-label="My Requests">
@@ -286,10 +287,14 @@
       <section class="page-view is-active" id="loginPage">
         <section class="login-auth-section">
           <div class="login-panel" id="loginPanel">
+            <div class="customer-login-hero">
+              <img src="assets/customer-welcome.jpg" alt="A happy husky beside a lake" width="1024" height="1536" />
+              <div><strong>Snuggle Stay</strong><p>Central Texas Husky</p><h2>A familiar place.<br />A happy stay.</h2></div>
+            </div>
             <div class="login-copy">
               <span class="login-brand">Central Texas Husky</span>
               <h2>Welcome back</h2>
-              <p>Sign in to your Snuggle Stay account.</p>
+              <p>Your dogs, stays and updates in one place.</p>
               <strong id="loginStatus" class="login-status-line">Not logged in</strong>
               <p id="loginHelp" class="login-help-line">Use your email and password, Google, or Facebook.</p>
             </div>
@@ -365,10 +370,12 @@
 
       <section class="page-view" id="customerPage">
         <section class="form-section">
-          <div class="section-heading"><span>C</span><div><h2>My Dogs</h2><p>Keep your dog profiles and care details current.</p></div></div>
+          <div class="section-heading"><span>C</span><div><h2 id="customerWelcomeTitle">My Dogs</h2><p>Everything for your dogs, in one place.</p></div></div>
           <div class="customer-progress-panel" id="customerOnboardingProgress"></div>
-          <div class="table-toolbar"><button type="button" id="openCustomerDogModalButton">Add Your Dog</button></div>
+          <div class="table-toolbar"><button type="button" data-customer-workspace="book">Book a stay</button><button type="button" class="secondary-button" id="openCustomerDogModalButton">Add Your Dog</button></div>
+          <div id="customerAttentionList" class="customer-attention-list"></div>
           <div class="customer-dog-list" id="customerDogList"></div>
+          <section id="customerRecentUpdate" class="customer-recent-update" hidden></section>
           <div id="customerDogFormHome">
           <form id="customerDogForm" class="tracker-form detail-panel customer-dog-modal" hidden>
             <input type="hidden" name="id" id="customerDogId" />
@@ -611,7 +618,8 @@
 
       <section class="page-view" id="customerUpdatesPage">
         <section class="form-section">
-          <div class="section-heading"><span>U</span><div><h2>Updates</h2><p>Boarding and dog show updates sent by the kennel for your dog.</p></div></div>
+          <div class="section-heading"><span>U</span><div><h2>Updates from their stay</h2><p>Photos and notes from the kennel.</p></div></div>
+          <label class="customer-filter-label">Dog<select id="customerUpdatesDogFilter"><option value="">All dogs</option></select></label>
           <div class="record-grid compact-record-grid" id="customerUpdatesList"></div>
         </section>
       </section>
@@ -619,7 +627,9 @@
       <section class="page-view" id="customerFilesPage">
         <section class="form-section">
           <div class="section-heading"><span>R</span><div><h2>My Records</h2><p>Review signed agreements and files saved to your dog profiles.</p></div></div>
-          <section class="customer-records-section" aria-labelledby="customerAgreementRecordsHeading">
+          <div class="customer-record-controls"><label>Dog<select id="customerRecordsDogFilter"><option value="">All dogs</option></select></label><button type="button" class="secondary-button" data-customer-workspace="upload">Upload vaccination record</button></div>
+          <div class="portal-record-tabs" role="tablist" aria-label="Record type"><button type="button" role="tab" aria-selected="true" aria-controls="customerDogFilesSection" id="customerFilesTab" data-customer-record-tab="files">Files & vaccinations</button><button type="button" role="tab" aria-selected="false" aria-controls="customerAgreementRecordsSection" id="customerAgreementsTab" data-customer-record-tab="agreements" tabindex="-1">Agreements</button></div>
+          <section id="customerAgreementRecordsSection" class="customer-records-section" role="tabpanel" aria-labelledby="customerAgreementsTab" hidden>
             <div class="customer-records-section-heading">
               <div>
                 <h3 id="customerAgreementRecordsHeading">Signed Contracts &amp; Agreements</h3>
@@ -628,7 +638,7 @@
             </div>
             <div class="record-grid compact-record-grid" id="customerAgreementRecordsList"></div>
           </section>
-          <section class="customer-records-section" aria-labelledby="customerDogFilesHeading">
+          <section id="customerDogFilesSection" class="customer-records-section" role="tabpanel" aria-labelledby="customerFilesTab">
             <div class="customer-records-section-heading">
               <div>
                 <h3 id="customerDogFilesHeading">Dog Profile Files</h3>
@@ -1976,7 +1986,7 @@
       </div>
     </dialog>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.108.0/dist/umd/supabase.min.js"></script>
-<script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-optional-acknowledgements-customer-agreement-records-dual-email-show-wide-expense-split-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v6-compiled-finance-reports-v7-dog-attributable-costs-v8-customer-finance-reports-upcoming-status-ux-v9-dog-profile-registration-akc-breeds-net-dog-credits-v10-collapsible-ledgers-dog-reports-v11-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-customer-request-history-detach-v23-boarding-request-notification-rls-v25-timesheet-payroll-review-v28-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-boarding-detached-profile-v34-customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36d-dog-show-lifecycle-owner-update-photo-invoice-v39-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-daily-care-log-staff-date-v44-boarding-request-alert-reliability-v26-boarding-family-alert-approval-v27-boarding-group-status-v28-boarding-transition-revision-v29-transaction-security-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-boarding-stay-revision-v37-boarding-checkin-preflight-v38-boarding-requirement-override-v39-boarding-override-confirmation-v40-customer-vaccine-self-service-v41-vaccination-document-approval-v43-cuddle-schema-isolated-v45-boarding-alert-recovery-v46-user-removal-v47-dashboard-daily-completion-v48-atomic-owner-update-v49-notification-delivery-retry-v51-shared-kennels-v52-customer-canonical-profile-fallback-v42-staff-new-boarding-default-v53-boarding-progressive-load-v54-request-history-lazy-v55-profile-lookup-cache-v56-profile-history-v57-calendar-pricing-consistency-v58-profile-request-isolation-v59-pdf-media-preview-v60-approval-persistence-identity-v61-service-pricing-revision-v62-removed-user-payroll-rate-v63-staff-schedule-sunday-grid-v64-financial-category-description-columns-v65-financial-loading-progress-v67-persisted-financial-ledger-v69-scalable-page-loading-v83-boarding-roster-counts-v89-dog-pricing-eligibility-v90-time-off-self-service-v91-time-off-upsert-fix-v92-schedule-publish-status-v93-canonical-boarding-save-v94-canonical-linked-fallback-v95-staff-pricing-canonical-v97-boarding-form-id-v98-on-demand-editor-v99-canonical-payload-id-v100-staff-service-scope-v101-full-catalog-v102-canonical-provenance-v103-notification-read-receipts-v105-durable-customer-file-alert-v106-ready-pickup-until-checkout-v107-alert-panel-on-demand-v108-boarding-modern-roster-v110-stay-save-revision-v111-delete-modal-cleanup-v109-boarding-modern-roster-v110-stay-save-revision-v111-boarding-workspace-v112-checkout-v113-daily-workspace-v115-customer-upload-save-v116-owned-workspace-v117-operations-v119-timesheet-workspace-v120"></script>
+<script type="module" src="js/main.js?v=20260723-customer-file-view-v2-dashboard-simplify-operational-flow-dashboard-vaccine-queues-board-queue-cleanup-dog-show-timeline-task-edit-modal-dashboard-timeline-restore-daily-report-groups-compact-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-year-range-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-negative-ready-buffer-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-guarded-inline-status-service-price-clarity-finance-category-sync-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-closing-superintendent-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-akc-multisource-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-signed-agreement-profile-email-legacy-agreement-profile-resolution-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-service-completion-undo-optional-acknowledgements-customer-agreement-records-dual-email-show-wide-expense-split-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v6-compiled-finance-reports-v7-dog-attributable-costs-v8-customer-finance-reports-upcoming-status-ux-v9-dog-profile-registration-akc-breeds-net-dog-credits-v10-collapsible-ledgers-dog-reports-v11-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-customer-request-history-detach-v23-boarding-request-notification-rls-v25-timesheet-payroll-review-v28-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-boarding-detached-profile-v34-customer-request-amendment-v35-maintenance-alert-detail-active-request-lock-v36d-dog-show-lifecycle-owner-update-photo-invoice-v39-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-daily-care-log-staff-date-v44-boarding-request-alert-reliability-v26-boarding-family-alert-approval-v27-boarding-group-status-v28-boarding-transition-revision-v29-transaction-security-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-boarding-stay-revision-v37-boarding-checkin-preflight-v38-boarding-requirement-override-v39-boarding-override-confirmation-v40-customer-vaccine-self-service-v41-vaccination-document-approval-v43-cuddle-schema-isolated-v45-boarding-alert-recovery-v46-user-removal-v47-dashboard-daily-completion-v48-atomic-owner-update-v49-notification-delivery-retry-v51-shared-kennels-v52-customer-canonical-profile-fallback-v42-staff-new-boarding-default-v53-boarding-progressive-load-v54-request-history-lazy-v55-profile-lookup-cache-v56-profile-history-v57-calendar-pricing-consistency-v58-profile-request-isolation-v59-pdf-media-preview-v60-approval-persistence-identity-v61-service-pricing-revision-v62-removed-user-payroll-rate-v63-staff-schedule-sunday-grid-v64-financial-category-description-columns-v65-financial-loading-progress-v67-persisted-financial-ledger-v69-scalable-page-loading-v83-boarding-roster-counts-v89-dog-pricing-eligibility-v90-time-off-self-service-v91-time-off-upsert-fix-v92-schedule-publish-status-v93-canonical-boarding-save-v94-canonical-linked-fallback-v95-staff-pricing-canonical-v97-boarding-form-id-v98-on-demand-editor-v99-canonical-payload-id-v100-staff-service-scope-v101-full-catalog-v102-canonical-provenance-v103-notification-read-receipts-v105-durable-customer-file-alert-v106-ready-pickup-until-checkout-v107-alert-panel-on-demand-v108-boarding-modern-roster-v110-stay-save-revision-v111-delete-modal-cleanup-v109-boarding-modern-roster-v110-stay-save-revision-v111-boarding-workspace-v112-checkout-v113-daily-workspace-v115-customer-upload-save-v116-owned-workspace-v117-operations-v119-timesheet-workspace-v120-customer-workspace-v121"></script>
     <script src="js/boarding-workspace.js?v=boarding-workspace-v112-checkout-v113" defer></script>
     <script src="js/daily-workspace.js?v=daily-workspace-v115" defer></script>
     <script src="js/owned-workspace.js?v=owned-workspace-v117-photo" defer></script>

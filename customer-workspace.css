@@ -1,0 +1,162 @@
+/* Approved customer portal: navy ink, blue actions, flat white surfaces. Staff layouts are untouched. */
+:root{--portal-ink:#12314e;--portal-muted:#526b82;--portal-blue:#0869aa;--portal-border:#dae4ed;--portal-surface:#fff;--portal-soft:#f5f8fb}
+:root[data-theme="dark"]{--portal-ink:#e8f2ff;--portal-muted:#b1c3d8;--portal-blue:#237fc1;--portal-border:#345069;--portal-surface:#142b40;--portal-soft:#102235}
+body.role-customer .app-layout{display:block}
+body.role-customer #sidebar{display:none}
+body.role-customer .app-shell{width:100%;max-width:1400px;margin:0 auto;padding:0 36px 90px}
+body.role-customer .page-header{display:flex;align-items:center;gap:24px;padding:22px 0;margin:0 0 34px;border-bottom:1px solid var(--portal-border)}
+body.role-customer .page-header h1{font-size:24px;line-height:1.1;margin:0;color:var(--portal-ink)}
+body.role-customer .page-header .eyebrow{font-size:11px;margin:0 0 5px;color:var(--portal-muted);letter-spacing:.04em}
+body.role-customer .page-header .user-card{margin-left:auto;padding:0;background:transparent!important;box-shadow:none!important;border:0!important;gap:10px;min-width:0}
+body.role-customer #headerUserName{max-width:160px;font-size:13px}
+body.role-customer #modeLabel,body.role-customer #clearLocalCacheButton{display:none}
+#customerPortalNav{display:none}
+body.role-customer #customerPortalNav{display:flex;align-items:center;gap:8px;flex:1;justify-content:center}
+body.role-customer .portal-nav-button{display:flex;align-items:center;gap:9px;white-space:nowrap;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent!important;color:var(--portal-ink);box-shadow:none!important;padding:18px 10px;font-size:14px;font-weight:500}
+body.role-customer .portal-nav-button.is-active{color:var(--portal-blue);border-bottom-color:var(--portal-blue)}
+body.role-customer .portal-nav-button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.6}
+body.role-customer .form-section{background:var(--portal-surface)!important;border:0!important;box-shadow:none!important;border-radius:0;padding:0;margin:0 0 32px}
+html body.role-customer :is(#customerPage,#customerRequestsPage,#customerUpdatesPage,#customerFilesPage)>.form-section{background:var(--portal-surface)!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0;min-height:0;animation:none;backdrop-filter:none}
+html body.role-customer{background:var(--portal-surface)}
+html body.role-customer #customerDogList>.portal-dog-card{background:var(--portal-surface)!important;box-shadow:none!important}
+body.role-customer .section-heading>span{display:none}
+body.role-customer .section-heading h2{font-size:30px;color:var(--portal-ink);letter-spacing:-.025em;line-height:1.2}
+body.role-customer .section-heading p{color:var(--portal-muted);font-size:16px}
+body.role-customer :is(button,input,select,textarea){font-family:inherit;font-size:14px;border-radius:6px}
+body.role-customer button{min-height:42px;padding:10px 16px;box-shadow:none!important}
+body.role-customer button:not(.secondary-button):not(.portal-nav-button):not(.mobile-bottom-nav-button):not(.info-tooltip-button):not(.customer-update-media-button){background:var(--portal-blue);color:white}
+body.role-customer .secondary-button{background:var(--portal-surface);color:var(--portal-ink);border:1px solid var(--portal-border)}
+body.role-customer :is(input,select,textarea){background:var(--portal-surface);color:var(--portal-ink);border:1px solid var(--portal-border);min-height:44px;box-shadow:none}
+body.role-customer :is(input[type="checkbox"],input[type="radio"]){min-height:18px;width:18px;height:18px;accent-color:var(--portal-blue)}
+body.role-customer :is(button,input,select,textarea):focus-visible{outline:3px solid #62abe4;outline-offset:3px}
+body.role-customer :is(.record-card,.customer-service-group,.customer-dog-item,.customer-form-step,.customer-vaccine-card,.estimate-box,.customer-update-group,.signed-agreement-card){background:var(--portal-surface)!important;border:1px solid var(--portal-border)!important;box-shadow:none!important;border-radius:8px}
+body.role-customer .table-toolbar{justify-content:flex-start;gap:12px;margin:20px 0}
+body.role-customer #customerDogList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+body.role-customer .portal-dog-card{display:grid;grid-template-columns:145px minmax(0,1fr);gap:20px;padding:20px;border:1px solid var(--portal-border)!important;background:var(--portal-surface)!important;border-radius:8px;box-shadow:none!important;color:var(--portal-ink)}
+body.role-customer .portal-dog-photo .customer-dog-photo{width:145px;height:220px;max-width:100%;border-radius:7px;object-fit:cover;border:0}
+body.role-customer .portal-dog-photo .customer-dog-photo-initials{display:grid;place-items:center;background:var(--portal-soft);color:var(--portal-muted);font-size:30px}
+body.role-customer .portal-dog-card h3{font-size:25px;margin:0 0 12px;letter-spacing:-.02em}
+body.role-customer .chip-row{gap:6px;flex-wrap:wrap}
+body.role-customer .status-chip{font-size:11px;padding:5px 8px;min-height:0;border-radius:5px;line-height:1.4}
+body.role-customer .portal-dog-breed{font-size:12px;color:var(--portal-muted);margin:12px 0}
+.portal-stay-facts{display:grid;gap:12px;margin:12px 0 0;font-size:13px}
+.portal-stay-facts>div{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px}
+.portal-stay-facts dt{display:flex;gap:5px;align-items:center;color:var(--portal-muted)}
+.portal-stay-facts dt svg{height:17px;width:17px;flex-shrink:0}
+.portal-stay-facts dd{margin:0;overflow-wrap:anywhere}
+body.role-customer .customer-dashboard-actions{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0}
+.portal-empty-stay{color:var(--portal-muted);line-height:1.7}
+.customer-attention-list{display:grid;gap:10px;margin:18px 0}
+body.role-customer .portal-notice{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff7e6;color:#795219;border:1px solid #f2d396;padding:14px 16px;border-radius:6px;font-size:14px}
+.customer-recent-update{margin:32px 0}
+.customer-recent-update>div{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:20px;border:1px solid var(--portal-border);border-radius:8px}
+body.role-customer .customer-record-controls{display:flex;align-items:end;gap:16px;margin:22px 0}
+.customer-record-controls label,.customer-filter-label{max-width:280px;display:grid;gap:8px}
+body.role-customer .portal-file-received{display:block;font-size:12px;font-weight:600;color:#087454;margin-bottom:8px}
+body.role-customer #customerRequestList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+body.role-customer #customerRequestList>article{padding:24px;cursor:pointer;line-height:1.6;overflow-wrap:anywhere}
+.portal-request-pricing{font-size:12px;color:var(--portal-blue);margin-bottom:8px}
+body.role-customer #customerUpdatesList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin-top:24px}
+body.role-customer .customer-update-group{padding:20px;min-width:0}
+body.role-customer .customer-update-card{display:flex;flex-direction:column;padding:0;border:0!important;margin-top:20px}
+body.role-customer .customer-update-media-grid{order:-1;display:grid;grid-template-columns:1fr;margin-bottom:16px}
+body.role-customer .customer-update-media-button{width:100%;max-width:100%;padding:0;color:var(--portal-ink);border:0;background:var(--portal-soft)}
+body.role-customer .customer-update-media-button img{width:100%;height:250px;object-fit:cover;border-radius:6px}
+body.role-customer .customer-update-media-button span{display:block;padding:10px}
+body.role-customer .customer-flow-stepper{background:none;box-shadow:none;border:0;gap:6px}
+body.role-customer .customer-flow-step{border-radius:0;background:none;box-shadow:none;min-width:0}
+body.role-customer .customer-dog-modal:not([hidden]),body.role-customer .customer-request-modal:not([hidden]){background:var(--portal-surface)!important;border:1px solid var(--portal-border)!important;border-radius:10px!important;box-shadow:none!important;padding:26px!important;max-width:1050px}
+body.role-customer :is(.detail-dialog,.booking-confirm-dialog){background:var(--portal-surface)!important;border:1px solid var(--portal-border)!important;border-radius:10px!important;color:var(--portal-ink);max-height:90dvh}
+body.role-customer .detail-dialog-body{background:var(--portal-surface);padding:24px}
+body.role-customer .customer-dog-service-menu{border:1px solid var(--portal-border);border-radius:6px;background:var(--portal-surface);margin:12px 0}
+body.role-customer .customer-wizard-actions{position:sticky;bottom:0;background:var(--portal-surface);padding:16px 0 0;border-top:1px solid var(--portal-border);z-index:2;display:flex;flex-wrap:wrap;gap:10px}
+body.role-customer .portal-dog-estimate{border-bottom:1px solid var(--portal-border);padding:8px 0 18px;margin-bottom:12px}
+.portal-dog-estimate h4 small{font-weight:400;font-size:12px;margin-left:8px;color:var(--portal-muted)}
+body.role-customer .estimate-total{background:var(--portal-soft)!important;border:0!important;border-radius:6px;box-shadow:none!important}
+body.role-customer .estimate-total span{color:var(--portal-ink);font-size:26px}
+body.role-customer .estimate-line{gap:24px;font-size:14px}
+body.role-customer .estimate-line>:last-child{white-space:nowrap}
+body.role-customer .customer-sticky-book-now{display:none!important}
+body.is-login-view{background:var(--portal-soft)}
+body.is-login-view .app-shell{padding:32px 20px;max-width:1160px}
+body.is-login-view .login-auth-section{max-width:1100px;margin:24px auto}
+body.is-login-view #loginPanel{display:grid!important;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;padding:0!important;gap:0!important;background:var(--portal-surface)!important;border:1px solid var(--portal-border);border-radius:10px;overflow:hidden;box-shadow:0 8px 32px #12314e09}
+body.is-login-view #loginPanel[hidden]{display:none!important}
+.customer-login-hero{position:relative;grid-row:1/3;min-height:690px}
+.customer-login-hero>img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.customer-login-hero>div{position:relative;padding:36px;color:#fff;text-shadow:0 1px 6px #12314e55}
+.customer-login-hero strong{font-size:32px}
+.customer-login-hero p{color:#fff!important;margin-top:8px}
+.customer-login-hero h2{font-size:38px;color:#fff!important;margin-top:40px}
+body.is-login-view #loginPanel .login-copy{padding:64px 46px 20px}
+body.is-login-view #loginPanel .login-copy h2{font-size:34px;color:var(--portal-ink);margin-bottom:12px}
+body.is-login-view #loginPanel .login-copy p{color:var(--portal-muted);font-size:16px}
+body.is-login-view #loginPanel .login-actions{padding:0 46px 56px;display:flex;flex-direction:column;gap:18px}
+body.is-login-view #loginPanel :is(.login-brand,#loginStatus,#loginHelp){display:none}
+body.is-login-view .role-note{display:none}
+body.is-login-view #loginPanel :is(input,button){border-radius:6px;box-shadow:none;min-height:44px;font-size:14px}
+body.is-login-view #loginPanel .auth-submit-button{background:var(--portal-blue);color:white}
+body.is-login-view #loginPanel .signup-prompt{font-size:14px;text-align:center}
+body.is-login-view #loginPanel #showCustomerSignupButton{min-height:0}
+@media(max-width:1150px){body.role-customer .page-header{flex-wrap:wrap;gap:16px}body.role-customer #customerPortalNav{order:3;flex-basis:100%;justify-content:flex-start}body.role-customer .portal-dog-card{grid-template-columns:90px minmax(0,1fr);gap:14px}body.role-customer .portal-dog-photo .customer-dog-photo{width:90px;height:125px}.portal-stay-facts>div{grid-template-columns:70px minmax(0,1fr)}}
+@media(max-width:700px){
+ body.role-customer .app-shell{padding:0 16px 100px}body.role-customer .page-header{margin-bottom:26px;padding:18px 0}body.role-customer .page-header h1{font-size:22px}body.role-customer #headerUserName{max-width:100px;font-size:11px}body.role-customer #customerPortalNav{display:none}body.role-customer .page-header .user-card{gap:6px;flex-wrap:wrap;max-width:200px}body.role-customer .page-header .user-card button{font-size:11px;padding:7px;min-height:36px}
+ body.role-customer :is(#customerDogList,#customerRequestList,#customerUpdatesList){grid-template-columns:1fr}body.role-customer .section-heading h2{font-size:26px}body.role-customer .section-heading p{font-size:14px}body.role-customer .portal-dog-card{padding:16px;grid-template-columns:74px minmax(0,1fr)}body.role-customer .portal-dog-photo .customer-dog-photo{width:74px;height:90px}.portal-stay-facts{font-size:12px;gap:8px}.portal-stay-facts>div{grid-template-columns:65px minmax(0,1fr)}body.role-customer .portal-dog-card h3{font-size:22px}.portal-dog-breed{display:none}body.role-customer .customer-dashboard-actions{gap:10px}body.role-customer .customer-dashboard-actions button{font-size:13px;padding:9px}
+ body.role-customer .portal-notice{flex-wrap:wrap;font-size:13px;padding:12px}body.role-customer .customer-record-controls{flex-wrap:wrap}body.role-customer .customer-record-controls label{flex:1;min-width:160px}body.role-customer .mobile-bottom-nav{border-radius:0!important;bottom:0!important;left:0!important;right:0!important;width:100%!important;background:var(--portal-surface)!important;border-top:1px solid var(--portal-border)!important;box-shadow:none!important;padding:6px 8px max(6px,env(safe-area-inset-bottom))!important}body.role-customer .mobile-bottom-nav-button{color:var(--portal-muted)!important;border-radius:5px!important;font-size:11px!important;padding:6px!important;box-shadow:none!important}body.role-customer .mobile-bottom-nav-button.is-active{background:#e8f3fc!important;color:#0869aa!important;border-color:transparent!important}body.role-customer :is(.field-grid,.customer-vaccine-cards){grid-template-columns:1fr!important}body.role-customer .customer-dog-modal:not([hidden]),body.role-customer .customer-request-modal:not([hidden]){padding:18px!important;max-width:100%}.customer-recent-update>div{flex-wrap:wrap}
+ body.is-login-view .app-shell{padding:0 12px}body.is-login-view .login-auth-section{margin:16px auto}body.is-login-view #loginPanel{grid-template-columns:1fr;grid-template-rows:auto auto auto}.customer-login-hero{grid-row:auto;min-height:185px;height:185px}.customer-login-hero>img{object-position:50% 52%}.customer-login-hero>div{padding:22px}.customer-login-hero strong{font-size:24px}.customer-login-hero h2{display:none}body.is-login-view #loginPanel .login-copy{padding:26px 22px 18px}body.is-login-view #loginPanel .login-copy h2{font-size:28px}body.is-login-view #loginPanel .login-actions{padding:0 22px 26px}
+}
+@media(prefers-reduced-motion:reduce){body.role-customer *{scroll-behavior:auto!important;transition:none!important}}
+/* Override the earlier customer dashboard's ID-specific glass treatment. */
+:root[data-theme] body.role-customer:not(.is-login-view) #customerPage>.form-section:has(#customerDogList){background:var(--portal-surface)!important;border:0!important;border-radius:0!important;box-shadow:none!important}
+:root[data-theme] body.role-customer:not(.is-login-view){background:var(--portal-surface)!important}
+:root[data-theme] body.role-customer::before{display:none!important}
+:root[data-theme] body.role-customer .app-layout{background:var(--portal-surface)!important}
+:root[data-theme] body.is-login-view #loginPage .login-auth-section{width:100%;max-width:1100px}
+:root[data-theme] body.is-login-view #loginPage #loginPanel{width:100%;max-width:1100px;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+:root[data-theme] body.is-login-view #loginPage #loginPanel .login-actions{min-width:0}
+:root[data-theme] body.role-customer #customerBookingForm{background:var(--portal-surface)!important;box-shadow:none!important}
+:root[data-theme] body.role-customer #customerEstimate{background:var(--portal-surface)!important;box-shadow:none!important}
+:root[data-theme] body.role-customer #customerEstimate .estimate-heading strong{color:var(--portal-ink);font-size:20px}
+:root[data-theme] body.role-customer #customerEstimate .estimate-heading span{color:var(--portal-muted);font-size:12px}
+:root[data-theme] body.role-customer #customerEstimate h4{color:var(--portal-ink);text-transform:none;font-size:17px}
+:root[data-theme] body.role-customer #customerEstimate .estimate-total{background:var(--portal-soft)!important;box-shadow:none!important}
+:root[data-theme] body.role-customer .customer-flow-stepper{background:none;border:0;padding:0}
+:root[data-theme] body.role-customer .customer-flow-step-list span{background:none;border:0;color:var(--portal-muted);border-radius:0;font-weight:500}
+:root[data-theme] body.role-customer .customer-flow-step-list span.is-active{color:var(--portal-blue);font-weight:700}
+:root[data-theme] body.role-customer .customer-flow-step-list i{background:#e0eaf2;color:var(--portal-muted)}
+:root[data-theme] body.role-customer .customer-flow-step-list :is(.is-complete,.is-active) i{background:var(--portal-blue);color:#fff}
+body.role-customer #customerBookingForm [data-customer-booking-step="review"]:not([hidden]){display:grid;grid-template-columns:minmax(0,1.3fr) minmax(300px,1fr);gap:20px;align-items:start}
+body.role-customer #customerEstimate{margin:0;padding:20px}
+body.role-customer #customerAgreementPanel{grid-column:1/-1;background:var(--portal-surface);border:1px solid var(--portal-border);border-radius:8px;padding:20px}
+body.role-customer .portal-review-overview{border:1px solid var(--portal-border);border-radius:8px;padding:20px}
+.portal-review-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 18px}
+.portal-record-tabs{display:flex;gap:20px;border-bottom:1px solid var(--portal-border);margin:20px 0}
+:root[data-theme] body.role-customer .portal-record-tabs button{background:none!important;color:var(--portal-muted)!important;border:0;border-bottom:2px solid transparent;border-radius:0}
+:root[data-theme] body.role-customer .portal-record-tabs button[aria-selected="true"]{color:var(--portal-blue)!important;border-bottom-color:var(--portal-blue)}
+.portal-review-heading h3{font-size:18px;margin:0;color:var(--portal-ink)}
+.portal-review-dates{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:0 0 26px;padding-bottom:24px;border-bottom:1px solid var(--portal-border)}
+.portal-review-dates dt{color:var(--portal-muted);font-size:12px;margin-bottom:8px}
+.portal-review-dates dd{margin:0;font-size:14px}
+.portal-review-dog{padding:16px 0;border-top:1px solid var(--portal-border)}
+.portal-review-dog strong{font-size:17px}.portal-review-dog small{display:inline-block;margin-left:10px;color:var(--portal-muted)}
+.portal-review-dog p{font-size:14px;margin-bottom:0}
+.portal-change-summary{padding-top:16px;border-top:1px solid var(--portal-border);font-size:13px}.portal-change-summary li{margin:8px 0}
+body.role-customer .estimate-heading{margin-bottom:20px;display:grid;gap:6px}.portal-dog-estimate h4{margin:12px 0}
+body.role-customer .customer-agreement-document{background:var(--portal-soft);border:1px solid var(--portal-border);border-radius:6px}
+body.role-customer .customer-agreement-document summary{padding:14px}
+body.role-customer #customerSignatureBlock{background:var(--portal-surface);box-shadow:none}
+@media(max-width:700px){body.role-customer #customerBookingForm [data-customer-booking-step="review"]:not([hidden]){grid-template-columns:minmax(0,1fr)}.portal-review-heading{flex-wrap:wrap}.portal-review-dates{grid-template-columns:1fr}body.role-customer #customerAgreementPanel{padding:14px}}
+@media(max-width:700px){
+ :root[data-theme] body.is-login-view #loginPage #loginPanel{grid-template-columns:minmax(0,1fr)}
+ :root[data-theme] body.role-customer .page-header{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;text-align:left}
+ :root[data-theme] body.role-customer .page-header>div:first-child{width:auto;min-width:0;margin:0;text-align:left}
+ :root[data-theme] body.role-customer .page-header .user-card{width:auto;max-width:none;display:flex;flex-direction:row;align-items:center;margin:0;justify-content:end}
+ :root[data-theme] body.role-customer .page-header .user-card>div{display:none}
+ :root[data-theme] body.role-customer .page-header h1{font-size:20px}
+ :root[data-theme] body.role-customer .page-header .eyebrow{font-size:9px}
+ :root[data-theme] body.role-customer #mobileBottomNav{background:var(--portal-surface)!important;border:1px solid var(--portal-border)!important;box-shadow:none!important}
+ :root[data-theme] body.role-customer #mobileBottomNav .mobile-bottom-nav-button{color:var(--portal-muted)!important}
+ :root[data-theme] body.role-customer #mobileBottomNav .mobile-bottom-nav-button.is-active{color:var(--portal-blue)!important}
+ :root[data-theme] body.role-customer #mobileBottomNav :is(.mobile-bottom-nav-icon,.mobile-bottom-nav-label){color:inherit!important}
+ body.role-customer .table-toolbar{display:flex;flex-direction:row}body.role-customer .table-toolbar button{flex:1}
+}

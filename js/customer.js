@@ -1494,12 +1494,13 @@ function renderCustomerUpdates() {
       ? stayScheduleRangeLabel(update.dog || {}, update.stay || {})
       : "Current stay");
     const key = \`\${update.dog?.dogName || update.dogName || "Dog"}|\${stayText}|\${requestCode || update.stayId || update.stay?.id || ""}\`;
-    groups[key] = groups[key] || { dogName: update.dog?.dogName || update.dogName || "Dog", stayText, requestCode, updates: [] };
+    const profile = update.dog ? customerDogsForCurrentUser().find((dog) => dog.id === update.dog.id || boardingRecordMatchesCustomerDog(update.dog, dog)) : null;
+    groups[key] = groups[key] || { dogName: update.dog?.dogName || update.dogName || "Dog", customerDogId: profile?.id || "", stayText, requestCode, updates: [] };
     groups[key].updates.push(update);
     return groups;
   }, {});
   list.innerHTML = Object.values(grouped)
-    .map((group) => \`<section class="customer-update-group">
+    .map((group) => \`<section class="customer-update-group" data-customer-dog-id="\${escapeHtml(group.customerDogId)}">
       <h3>\${escapeHtml(group.dogName)}</h3>
       <p>\${group.requestCode ? \`Stay ID: \${escapeHtml(group.requestCode)} | \` : ""}\${escapeHtml(group.stayText)}</p>
       \${group.updates.map((update) => {
@@ -3489,3 +3490,4 @@ async function submitPendingCustomerBooking() {
 //# sourceURL=snuggle-stay/customer.js
 `;
 (0, eval)(__snuggleStayModuleSource);
+await import("./customer-workspace.js?v=customer-workspace-v121");
