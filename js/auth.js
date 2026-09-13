@@ -234,8 +234,10 @@ async function restoreSupabaseSession() {
 
 function setHelper(user, options = {}) {
   if (typeof clearRemoteWriteIdentityCache === "function") clearRemoteWriteIdentityCache();
+  const previousReadScope = syncMetaScopeKey();
   const key = accountSessionKey(user);
   currentUser = { ...user, key, role: user.role || "helper" };
+  if (previousReadScope !== syncMetaScopeKey()) resetRemoteReadStateForAccountChange();
   localTestMode = currentUser.authProvider === "local-test" || String(currentUser.key || "").startsWith("local-test-");
   if (localTestMode) supabaseClient = null;
   else if (typeof prepareProductionMemoryRecordCache === "function") prepareProductionMemoryRecordCache();

@@ -2488,6 +2488,23 @@ function prepareProductionMemoryRecordCache() {
   });
 }
 
+function resetRemoteReadStateForAccountChange() {
+  // In-memory collections may have been replaced by a scoped roster load.
+  // Never let a previous customer's freshness/signature suppress a new read.
+  lastRemoteRecordsSignature = null;
+  lastRemoteRecordsSignatureByRequest.clear();
+  remoteTypesFullyLoadedInMemory.clear();
+  activePageRemoteLoadFinishedAtByKey.clear();
+  activePageRemoteLoadLastKey = "";
+  activePageRemoteLoadLastAt = 0;
+  boardingDogFullHistoryLoaded = false;
+  deferredPageRemoteLoadRequestId += 1;
+  if (activePageRemoteLoadTimer) window.clearTimeout(activePageRemoteLoadTimer);
+  if (deferredPageRemoteLoadTimer) window.clearTimeout(deferredPageRemoteLoadTimer);
+  activePageRemoteLoadTimer = null;
+  deferredPageRemoteLoadTimer = null;
+}
+
 async function clearLocalAppCache() {
   const pageId = activePageId();
   setAppPageLoading(pageId, true, "Clearing local cache");
@@ -5771,6 +5788,8 @@ async function loadBoardingDogRosterRecords(filter = boardingDogRosterFilter, op
   renderBoardingDogs();
 }
 
+var remoteLoadReadScope = "";
+
 async function loadRemoteRecords(options = {}) {
   const mark = efficiencyPerfStart("loadRemoteRecords");
   if (localTestMode || !supabaseClient) {
@@ -5789,7 +5808,13 @@ async function loadRemoteRecords(options = {}) {
   const showPageLoader = options.showLoader !== false && options.render !== false;
   const quietLoad = options.quiet === true || options.silent === true;
   const deltaLoad = options.fullRefresh !== true && options.delta !== false;
+  const readScope = syncMetaScopeKey();
   if (remoteLoadPromise) {
+    if (remoteLoadReadScope !== readScope) {
+      await remoteLoadPromise.catch(() => {});
+      if (readScope !== syncMetaScopeKey()) return;
+      return loadRemoteRecords(options);
+    }
     const missingTypes = requestedRemoteTypes.filter((type) => !remoteLoadActiveTypes.has(type));
     if (missingTypes.length) {
       queueRemoteRecordLoad(missingTypes, options);
@@ -5802,6 +5827,7 @@ async function loadRemoteRecords(options = {}) {
   }
 
   remoteLoadActiveTypes = new Set(requestedRemoteTypes);
+  remoteLoadReadScope = readScope;
   remoteLoadInProgress = true;
   remoteLoadStartedAt = Date.now();
   const loadRequestId = ++remoteLoadRequestSequence;
@@ -5829,6 +5855,7 @@ async function loadRemoteRecords(options = {}) {
         boardingRosterOffset: Number(options.boardingRosterOffset || 0),
         scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
       }), REMOTE_LOAD_STALE_MS, "Remote record load");
+      if (readScope !== syncMetaScopeKey()) return;
       if (showPageActivityProgress) setPageActivityProgress(loadingPageId, 52, pageActivityProgressLabel(loadingPageId, "preparing"));
       const failedRemoteTypes = new Set(lastRemoteRecordFetchFailedTypes || []);
       const loadedRemoteTypes = requestedRemoteTypes.filter((type) => !failedRemoteTypes.has(type));
@@ -5863,6 +5890,7 @@ async function loadRemoteRecords(options = {}) {
         });
       }
 
+      if (readScope !== syncMetaScopeKey()) return;
       const requestKey = remoteLoadRequestKey(requestedRemoteTypes);
       const failedSignature = failedRemoteTypes.size ? "||failed:" + [...failedRemoteTypes].sort().join(",") : "";
       const nextTaskCompletionSignature = remoteTaskCompletionSignature(taskCompletionRows);
@@ -16046,7 +16074,7 @@ function initEvents() {
 }
 
 function pageRemoteLoadCacheKey(pageId = activePageId(), types = []) {
-  return \`\${pageRemoteScopeKey(pageId)}||\${remoteLoadRequestKey(types)}\`;
+  return \`\${syncMetaScopeKey()}||\${pageRemoteScopeKey(pageId)}||\${remoteLoadRequestKey(types)}\`;
 }
 
 function pageRemoteLoadIsFresh(pageId = activePageId(), types = []) {
@@ -16060,6 +16088,7 @@ function markPageRemoteLoadFinished(pageId = activePageId(), types = []) {
 }
 
 function scheduleDeferredPageRemoteLoad(pageId = activePageId(), types = []) {
+  const readScope = syncMetaScopeKey();
   const deferredTypes = uniqueRemoteRecordTypes(types);
   deferredPageRemoteLoadRequestId += 1;
   const requestId = deferredPageRemoteLoadRequestId;
@@ -16067,7 +16096,7 @@ function scheduleDeferredPageRemoteLoad(pageId = activePageId(), types = []) {
   deferredPageRemoteLoadTimer = null;
   if (!deferredTypes.length || pageRemoteLoadIsFresh(pageId, deferredTypes)) return;
   const run = () => {
-    if (requestId !== deferredPageRemoteLoadRequestId || activePageId() !== normalizePageId(pageId)) return;
+    if (readScope !== syncMetaScopeKey() || requestId !== deferredPageRemoteLoadRequestId || activePageId() !== normalizePageId(pageId)) return;
     loadRemoteRecords({
       types: deferredTypes,
       render: true,
@@ -16075,7 +16104,7 @@ function scheduleDeferredPageRemoteLoad(pageId = activePageId(), types = []) {
       showLoader: false,
       quiet: true,
       silent: true,
-    }).then(() => markPageRemoteLoadFinished(pageId, deferredTypes)).catch((error) => {
+    }).then(() => { if (readScope === syncMetaScopeKey()) markPageRemoteLoadFinished(pageId, deferredTypes); }).catch((error) => {
       console.warn(\`Deferred page sync failed for \${pageId}.\`, error);
     });
   };
@@ -16089,6 +16118,7 @@ function scheduleDeferredPageRemoteLoad(pageId = activePageId(), types = []) {
 function scheduleActivePageRemoteLoad(pageId = activePageId()) {
   if (!helperIsLoggedIn() || pageId === "loginPage" || localTestMode || !supabaseClient) return;
   const plan = remoteRecordLoadPlanForPage(pageId);
+  const readScope = syncMetaScopeKey();
   const criticalTypes = plan.critical;
   const requestKey = pageRemoteLoadCacheKey(pageId, criticalTypes);
   const now = Date.now();
@@ -16105,6 +16135,7 @@ function scheduleActivePageRemoteLoad(pageId = activePageId()) {
   // ready state; secondary history and relationship data arrive while idle.
   activePageRemoteLoadTimer = window.setTimeout(() => {
     activePageRemoteLoadTimer = null;
+    if (readScope !== syncMetaScopeKey()) return;
     const loadingFinancialLedger = normalizePageId(pageId) === "financialsPage";
     const loadingBoardingCounts = normalizePageId(pageId) === "boardingDogsPage";
     if (loadingFinancialLedger && typeof loadPersistedFinancialLedger === "function") {
@@ -16118,9 +16149,10 @@ function scheduleActivePageRemoteLoad(pageId = activePageId()) {
         console.warn("Boarding roster totals could not load.", error);
       })])
       : criticalLoad;
-    load.then(() => markPageRemoteLoadFinished(pageId, criticalTypes)).catch((error) => {
+    load.then(() => { if (readScope === syncMetaScopeKey()) markPageRemoteLoadFinished(pageId, criticalTypes); }).catch((error) => {
       console.warn(\`Active page sync failed for \${pageId}.\`, error);
     }).finally(() => {
+      if (readScope !== syncMetaScopeKey()) return;
       scheduleDeferredPageRemoteLoad(pageId, plan.deferred);
       scheduleNotificationBackgroundLoad(pageId);
     });

@@ -43,3 +43,42 @@ assert.equal(tableCalls,1);assert.equal(full[0].payload.stays[0].pricingSnapshot
 assert.equal(s.boardingDogFullHistoryLoaded,true);
 assert.match(fn(shared,'fetchRemoteRecordRows'),/boardingFullHistory: options.boardingFullHistory === true/,'Full-history option reaches the actual fetcher');
 console.log('Customer request history and full financial-source loading checks passed.');
+
+// Regression: Gill -> admin -> Larisa -> admin -> Gill in the same tab.
+// An active-only staff roster may replace the full customer collection between
+// views, so even unchanged server rows must be read/merged again for each user.
+const auth=decode('js/auth.js');
+const a={Map,Set,currentUser:{key:'admin',role:'admin'},currentRole:()=>a.currentUser?.role,
+  syncMetaScopeKey:()=>a.currentUser?.key+':'+a.currentUser?.role,
+  accountSessionKey:u=>u.key,localTestMode:true,supabaseClient:null,
+  window:{clearTimeout(){}},lastRemoteRecordsSignature:'old',
+  lastRemoteRecordsSignatureByRequest:new Map([['boardingDog','same-server-rows']]),
+  remoteTypesFullyLoadedInMemory:new Set(['boardingDog']),activePageRemoteLoadFinishedAtByKey:new Map(),
+  activePageRemoteLoadLastKey:'old',activePageRemoteLoadLastAt:1,boardingDogFullHistoryLoaded:true,
+  deferredPageRemoteLoadRequestId:0,activePageRemoteLoadTimer:1,deferredPageRemoteLoadTimer:2,
+  pageRemoteScopeKey:x=>x,remoteLoadRequestKey:x=>x.join('|'),
+  prepareProductionMemoryRecordCache(){},setDefaultDateAndDay(){},safeLocalStorageSetItem(){},
+  stateKeys:{session:'session'},helperName:{},helperEmail:{},helperKey:{},loginStatus:{},loginHelp:{},
+  updateHeaderUser(){},applyCurrentUserThemePreference(){},roleLabel:x=>x,updateNavigationAccess(){},
+  $:()=>({}),startAutoSync(){}};
+vm.createContext(a);
+for(const name of ['resetRemoteReadStateForAccountChange','pageRemoteLoadCacheKey'])vm.runInContext(fn(shared,name),a);
+vm.runInContext(fn(auth,'setHelper'),a);
+const keys=[];
+for(const [key,role] of [['gill','customer'],['admin','admin'],['larisa','customer'],['admin','admin'],['gill','customer']]){
+  a.lastRemoteRecordsSignatureByRequest.set('boardingDog','unchanged');
+  a.remoteTypesFullyLoadedInMemory.add('boardingDog');
+  a.activePageRemoteLoadFinishedAtByKey.set('customerRequestsPage',Date.now());
+  a.setHelper({key,role,authProvider:'supabase'},{render:false,switchAfterLogin:false});
+  assert.equal(a.lastRemoteRecordsSignatureByRequest.size,0);
+  assert.equal(a.remoteTypesFullyLoadedInMemory.size,0);
+  assert.equal(a.activePageRemoteLoadFinishedAtByKey.size,0);
+  keys.push(a.pageRemoteLoadCacheKey('customerRequestsPage',['boardingDog']));
+}
+assert.notEqual(keys[0],keys[2],'Freshness is scoped to the customer identity');
+a.lastRemoteRecordsSignatureByRequest.set('boardingDog','same-user');
+a.setHelper({...a.currentUser},{render:false,switchAfterLogin:false});
+assert.equal(a.lastRemoteRecordsSignatureByRequest.size,1,'Routine auth refresh does not reset the same user');
+assert.match(fn(shared,'loadRemoteRecords'),/remoteLoadReadScope !== readScope[\s\S]*await remoteLoadPromise/);
+assert.match(fn(shared,'loadRemoteRecords'),/if \(readScope !== syncMetaScopeKey\(\)\) return;/);
+console.log('Account-switch history freshness and stale-response guard checks passed.');
