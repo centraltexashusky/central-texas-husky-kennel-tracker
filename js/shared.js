@@ -5408,7 +5408,7 @@ async function fetchRemoteRecordRowsForType(type, options = {}) {
       lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "scoped-full");
       return rows;
     }
-    if (type === "boardingDog") {
+    if (type === "boardingDog" && options.boardingFullHistory !== true) {
       const { data, error } = await cuddleStayRequest((db) => db.rpc("kennel_boarding_roster_records", {
         p_since_updated_at: sinceUpdatedAt || null,
       }));
@@ -5508,6 +5508,7 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
         lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "full");
         return await withTimeout(fetchRemoteRecordRowsForType(type, {
           sinceUpdatedAt,
+          boardingFullHistory: options.boardingFullHistory === true,
           scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
           dailyTaskWindow: type === "dailyTask"
             ? (options.pageId === "dashboardPage" && dashboardTimelineRequestedDate

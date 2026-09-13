@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+const decode = path => vm.runInNewContext(fs.readFileSync(path,'utf8').match(/const __snuggleStayModuleSource = (`[\s\S]*`);\n\(0, eval\)/)[1]);
+const customer=decode('js/customer.js'), shared=decode('js/shared.js');
+const fn=(source,name)=>source.match(new RegExp(`(?:async )?function ${name}\\([\\s\\S]*?\\n\\}`))[0];
+const past={id:'past',status:'Checked Out',dropoffTime:'2026-07-01T09:00',pickupTime:'2026-07-03T16:00',requests:[{serviceName:'Bath'}],pricingSnapshot:{total:235}};
+const record={id:'dog',customerRequest:true,ownerEmail:'owner@example.invalid',updatedAt:'1',stays:[],_remotePastBoardingDeferred:true,_remotePastBoardingCount:1};
+let records=[record], calls=0, fail=false;
+const c={Map,Promise,console:{warn(){}},currentUser:{email:record.ownerEmail},currentRole:()=> 'customer',normalizeEmail:x=>(x||'').toLowerCase(),arrayValue:x=>Array.isArray(x)?x:[],boardingDeferredSectionCacheKey:r=>r.id+'|'+r.updatedAt,boardingDogVisibleToCustomer:r=>r.ownerEmail===c.currentUser.email,readRecords:()=>records,consolidatedBoardingDogRecords:r=>r,dedupeBoardingStaysForDisplay:(_r,s)=>[...new Map(s.map(x=>[x.id,x])).values()],boardingStayEntries:rs=>rs.flatMap(r=>(r.stays.length?r.stays:[{}]).map(stay=>({record:r,stay,status:stay.status}))),uniqueBoardingStayEntries:x=>x,boardingStayEntrySortTime:()=>0,boardingPastStayCache:new Map(),activePageId:()=> 'customerPage',renderCustomerRequests:()=>{},loadBoardingPastStayData:async()=>{calls++;if(fail)throw Error('offline');return [past];}};
+vm.createContext(c);
+vm.runInContext('var customerRequestHistoryLoads = new Map();',c);
+for(const name of ['customerRequestHistoryKey','customerRequestHistoryState','customerRequestHistoryNeeded','customerRequestBaseRecords','customerRequestRecordWithHistory','loadCustomerRequestHistory','customerRequestEntries'])vm.runInContext(fn(customer,name),c);
+assert.equal(c.customerRequestEntries().length,0,'Unloaded historical data must not generate a fake empty completed stay');
+const before=JSON.stringify(records);
+await Promise.all([c.loadCustomerRequestHistory(record),c.loadCustomerRequestHistory(record)]);
+assert.equal(calls,1,'Concurrent renders share one request');
+assert.equal(c.customerRequestEntries()[0].stay.pricingSnapshot.total,235);
+assert.equal(c.customerRequestEntries()[0].stay.requests[0].serviceName,'Bath');
+assert.equal(c.customerRequestEntries('Approved').length,0);
+assert.equal(JSON.stringify(records),before,'History does not mutate editable records or financial sources');
+records=[{...record,stays:[{id:'active',status:'Approved'}]}];
+assert.equal(c.customerRequestEntries().length,2,'Active and historical stays are both retained');
+c.currentUser.email='different@example.invalid';
+assert.equal(c.customerRequestEntries().length,0,'Switching customers cannot expose a cached other-family stay');
+await c.loadCustomerRequestHistory(record);assert.equal(calls,1);
+c.currentUser.email=record.ownerEmail;records=[{...record,updatedAt:'2'}];fail=true;
+await c.loadCustomerRequestHistory(records[0]);
+assert.equal(c.customerRequestHistoryState(records[0]).status,'error');
+await c.loadCustomerRequestHistory(records[0]);assert.equal(calls,2,'Failure does not cause a render retry loop');
+fail=false;await c.loadCustomerRequestHistory(records[0],true);
+assert.equal(c.customerRequestEntries().length,1,'Explicit retry restores history');
+
+// The financial rebuild explicitly asks for full history, never a roster
+// projection; ordinary page reads must remain compact and lazy.
+let rpcCalls=0,tableCalls=0;
+const s={normalizeIsoTimestamp:x=>x,efficiencyPerfStart:()=>({}),efficiencyPerfEnd:()=>{},lastRemoteRecordFetchModesByType:new Map(),boardingDogFullHistoryLoaded:false,boardingDogRemoteTotalCount:0};
+s.cuddleStayRequest=async action=>action({rpc:async()=>{rpcCalls++;return {data:[{id:'dog',payload:{stays:[]},total_count:1}]};},from:()=>{tableCalls++;const q={select:()=>q,eq:()=>q,gte:()=>q,order:()=>q,range:async()=>({data:[{id:'dog',payload:{stays:[past]}}]})};return q;}});
+vm.createContext(s);vm.runInContext(fn(shared,'fetchRemoteRecordRowsForType'),s);
+await s.fetchRemoteRecordRowsForType('boardingDog');assert.equal(rpcCalls,1);assert.equal(tableCalls,0);
+const full=await s.fetchRemoteRecordRowsForType('boardingDog',{boardingFullHistory:true});
+assert.equal(tableCalls,1);assert.equal(full[0].payload.stays[0].pricingSnapshot.total,235);
+assert.equal(s.boardingDogFullHistoryLoaded,true);
+assert.match(fn(shared,'fetchRemoteRecordRows'),/boardingFullHistory: options.boardingFullHistory === true/,'Full-history option reaches the actual fetcher');
+console.log('Customer request history and full financial-source loading checks passed.');

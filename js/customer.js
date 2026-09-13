@@ -1158,9 +1158,19 @@ function customerBoardingDogDetailHtml(record = {}, stayId = "") {
       ["Feeding instructions", "foodInstructions"],
       ["Care notes", "specialCare"],
     ])}
-    \${boardingStayDetailCardHtml(displayRecord, stay, { customer: true })}
+    \${inactiveBoardingStayStatus(stay) ? customerHistoricalStayDetailHtml(displayRecord, stay) : boardingStayDetailCardHtml(displayRecord, stay, { customer: true })}
     \${customerUploadSectionHtml(displayRecord)}
   \`;
+}
+
+function customerHistoricalStayDetailHtml(record = {}, stay = {}) {
+  const log = boardingHistoricalServiceLog(stay);
+  return '<article class="record-card compact-record-card"><strong>' + escapeHtml(stayScheduleRangeLabel(record, stay)) + '</strong><p>'
+    + escapeHtml(boardingStayServicesText(stay, { customerFacing: true })) + '</p>'
+    + boardingStayInvoiceSummaryHtml(record, stay, { final: stay.status === "Checked Out" })
+    + (log.length ? '<h3>Completed service log</h3>' + log.map((entry) => '<p>' + escapeHtml(entry.label || "Service") + ' · '
+      + escapeHtml(formatDateTime(entry.completedAt) || "Completion time not recorded") + (entry.completedBy ? ' · ' + escapeHtml(entry.completedBy) : '') + '</p>').join('') : '')
+    + boardingCancellationAuditHtml(record, stay, { customer: true }) + boardingCancellationReasonHtml(record, stay, { customer: true }) + '</article>';
 }
 
 function customerDogHasBoardingLink(dog = {}, boardingId = "") {
@@ -1204,8 +1214,19 @@ function openCustomerDogEditorForRequest(requestId = "") {
   openCustomerDog(formDog);
 }
 
-function openCustomerRequestDetail(record = {}, stayId = "") {
+async function openCustomerRequestDetail(record = {}, stayId = "") {
   if (!record?.id) return;
+  if (currentRole() !== "admin" && !boardingDogVisibleToCustomer(record)) return;
+  const readerEmail = normalizeEmail(currentUser?.email);
+  if (customerRequestHistoryNeeded(record)) {
+    await loadCustomerRequestHistory(record);
+    if (readerEmail !== normalizeEmail(currentUser?.email)) return;
+    if (customerRequestHistoryState(record)?.status === "error") {
+      showDetailDialog("Stay history unavailable", "<p>The saved history could not load. Please retry from My Requests. No records have been changed.</p>");
+      return;
+    }
+  }
+  record = customerRequestRecordWithHistory(record);
   const displayRecord = boardingDogWithStayStatus(record);
   const stay = boardingStayByReference(displayRecord, stayId) || boardingPrimaryStay(displayRecord) || displayRecord.stays?.[0] || {};
   const canShowStaffDogAction = currentRole() === "admin" && !isImpersonating() && activePageId() !== "customerRequestsPage";
@@ -2480,10 +2501,66 @@ async function submitCustomerCancellationReason(formEl) {
   return updated;
 }
 
+// Keep historical read models separate from editable dog records. The roster
+// deliberately omits these stays; absence from that projection is not deletion.
+var customerRequestHistoryLoads = new Map();
+
+function customerRequestHistoryKey(record = {}) {
+  return normalizeEmail(currentUser?.email) + "|" + boardingDeferredSectionCacheKey(record, "customer-history");
+}
+
+function customerRequestHistoryState(record = {}) {
+  return customerRequestHistoryLoads.get(customerRequestHistoryKey(record));
+}
+
+function customerRequestHistoryNeeded(record = {}) {
+  return record._remotePastBoardingDeferred === true && Number(record._remotePastBoardingCount || 0) > 0;
+}
+
+function customerRequestBaseRecords() {
+  return consolidatedBoardingDogRecords(readRecords("boardingDog")
+    .filter((record) => !record.removed && (record.customerRequest || (record.stays || []).length || customerRequestHistoryNeeded(record)))
+    .filter((record) => currentRole() === "admin" || boardingDogVisibleToCustomer(record)));
+}
+
+function customerRequestRecordWithHistory(record = {}) {
+  const state = customerRequestHistoryState(record);
+  if (state?.status !== "loaded") return record;
+  return { ...record, stays: dedupeBoardingStaysForDisplay(record, [...arrayValue(record.stays), ...state.stays]) };
+}
+
+function loadCustomerRequestHistory(record = {}, retry = false) {
+  if (!customerRequestHistoryNeeded(record)) return Promise.resolve();
+  if (currentRole() !== "admin" && !boardingDogVisibleToCustomer(record)) return Promise.resolve();
+  const key = customerRequestHistoryKey(record);
+  const existing = customerRequestHistoryLoads.get(key);
+  if (existing && !(retry && existing.status === "error")) return existing.promise;
+  const state = { status: "loading", stays: [], promise: null };
+  customerRequestHistoryLoads.set(key, state);
+  state.promise = Promise.resolve().then(() => loadBoardingPastStayData(record)).then((stays) => {
+    // An empty response is not a successful history load when the roster says
+    // history exists (for example a permissions or stale-session mismatch).
+    if (!stays.length) throw new Error("Saved stay history was not returned.");
+    state.stays = stays;
+    state.status = "loaded";
+  }).catch((error) => {
+    state.status = "error";
+    boardingPastStayCache.delete(boardingDeferredSectionCacheKey(record, "past-stays"));
+    console.warn("Customer stay history could not load.", error);
+  }).finally(() => {
+    if (activePageId() === "customerRequestsPage") renderCustomerRequests();
+  });
+  return state.promise;
+}
+
 function renderCustomerRequests() {
   const list = $("#customerRequestList");
   if (!list) return;
   renderCustomerProgress();
+  const historyRecords = customerRequestBaseRecords().filter(customerRequestHistoryNeeded);
+  if (activePageId() === "customerRequestsPage") historyRecords.forEach((record) => loadCustomerRequestHistory(record));
+  const historyLoading = historyRecords.some((record) => !customerRequestHistoryState(record) || customerRequestHistoryState(record).status === "loading");
+  const historyFailed = historyRecords.some((record) => customerRequestHistoryState(record)?.status === "error");
   const statusFilter = $("#customerRequestStatusFilter")?.value || "All";
   const entries = customerRequestEntries(statusFilter);
   list.innerHTML = entries.length
@@ -2508,7 +2585,15 @@ function renderCustomerRequests() {
           return \`<article class="record-card clickable-card \${statusClassForRequest(status)} \${statusClassForBoardingStatus(status)}" data-action="view-customer-request" data-id="\${escapeHtml(record.id)}"\${stayAttr}><strong>\${escapeHtml(record.dogName || "Dog")}</strong><div class="chip-row">\${stay.id ? customerStayIdChipHtml(record, stay) : ""}\${customerRequestStayStatusChipHtml(record, stay)}</div><span>\${escapeHtml(stayScheduleRangeLabel(record, stay))}</span><p>\${escapeHtml(services)}</p>\${estimate}\${cancellationAudit}\${reasonHtml}\${declineHtml}\${actions}</article>\`;
         })
         .join("")
-    : \`<p>No \${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>\`;
+    : historyLoading || historyFailed ? "" : \`<p>No \${statusFilter === "All" ? "" : statusFilter.toLowerCase() + " "}boarding requests submitted yet.</p>\`;
+  if (historyLoading) list.insertAdjacentHTML("beforeend", '<p role="status">Loading saved stay history…</p>');
+  if (historyFailed) {
+    list.insertAdjacentHTML("beforeend", '<div role="status"><p>Some saved stay history could not load. Your records have not been deleted.</p><button type="button" class="secondary-button" data-retry-customer-history>Retry history</button></div>');
+    list.querySelector("[data-retry-customer-history]").onclick = () => {
+      historyRecords.forEach((record) => loadCustomerRequestHistory(record, true));
+      renderCustomerRequests();
+    };
+  }
 }
 
 function customerCanEditStayRequestStatus(status = "") {
@@ -2516,9 +2601,9 @@ function customerCanEditStayRequestStatus(status = "") {
 }
 
 function customerRequestEntries(statusFilter = "All") {
-  const records = consolidatedBoardingDogRecords(readRecords("boardingDog")
-    .filter((record) => !record.removed && (record.customerRequest || (record.stays || []).length))
-    .filter((record) => currentRole() === "admin" || boardingDogVisibleToCustomer(record)));
+  const records = customerRequestBaseRecords().map(customerRequestRecordWithHistory)
+    // Never synthesize a blank completed request from a deferred roster row.
+    .filter((record) => !customerRequestHistoryNeeded(record) || arrayValue(record.stays).length > 0);
   return uniqueBoardingStayEntries(boardingStayEntries(records))
     .filter(({ status }) => statusFilter === "All" || status === statusFilter)
     .sort((a, b) => boardingStayEntrySortTime(b) - boardingStayEntrySortTime(a));
