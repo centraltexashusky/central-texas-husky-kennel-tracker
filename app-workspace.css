@@ -100,6 +100,11 @@
 :root[data-theme="light"] .notification-item { border-radius:7px!important; }
 :root[data-theme="light"] .notification-item:not(.is-read) { border-left:3px solid #1685c6!important; }
 :root[data-theme="light"] #settingsAlertPreferenceList .record-card { background:#f5f8fb!important; }
+:root[data-theme="light"] .detail-dialog .alert-checkbox-grid { align-items:start; }
+:root[data-theme="light"] .detail-dialog .alert-checkbox-group { align-content:start; gap:0; background:#fff!important; border:1px solid var(--line)!important; border-radius:8px!important; box-shadow:none!important; padding:12px; }
+:root[data-theme="light"] .detail-dialog .alert-checkbox-group h3 { font-size:13px; color:var(--muted); margin:0 0 8px; }
+:root[data-theme="light"] .detail-dialog .alert-checkbox-group label { min-height:44px; background:transparent!important; border:0!important; border-bottom:1px solid var(--line)!important; border-radius:0!important; box-shadow:none!important; padding:10px 0; font-size:13px; line-height:1.45; }
+:root[data-theme="light"] .detail-dialog .alert-checkbox-group label:last-child { border-bottom:0!important; }
 /* Login is already a modern two-column form; align recovery/signup and accents. */
 :root[data-theme="light"] #loginPage :is(.login-panel,.signup-panel) { background:#fff!important; border:1px solid var(--line)!important; border-radius:12px!important; box-shadow:none!important; }
 :root[data-theme="light"] #loginPage :is(input,.auth-provider-button) { border-color:var(--line)!important; border-radius:7px!important; }
