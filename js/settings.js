@@ -2816,6 +2816,7 @@ function renderOperationHoursSettings() {
   }
   const overrideList = $("#operationOverrideList");
   if (overrideList) overrideList.innerHTML = operationOverrideSummaryHtml();
+  if (typeof adminHoursPolish === "function") adminHoursPolish(hours);
 }
 
 async function saveOperationHoursSettings() {
@@ -2946,7 +2947,8 @@ async function saveOperationDateOverrideFromForm(formEl) {
   });
   await sendPayload(record);
   await addAuditLog("Updated operation date override", "operationDateOverride", record, \`\${operationDateLabel(date)} | \${isOpen ? \`\${displayTime(openTime)} - \${displayTime(closeTime)}\` : "Closed"}\`);
-  renderOperationHoursSettings();
+  if (typeof adminRenderOperationCalendar === "function") adminRenderOperationCalendar();
+  else renderOperationHoursSettings();
   if (typeof renderCustomerBookingAvailabilityMessages === "function") renderCustomerBookingAvailabilityMessages();
   return record;
 }
@@ -2957,7 +2959,8 @@ async function clearOperationDateOverride(id = "") {
   const updated = upsertRecord("operationDateOverride", { ...record, removed: true, removedAt: new Date().toISOString() });
   await sendPayload(updated);
   await addAuditLog("Cleared operation date override", "operationDateOverride", updated, operationDateLabel(updated.date));
-  renderOperationHoursSettings();
+  if (typeof adminRenderOperationCalendar === "function") adminRenderOperationCalendar();
+  else renderOperationHoursSettings();
   if (typeof renderCustomerBookingAvailabilityMessages === "function") renderCustomerBookingAvailabilityMessages();
   return updated;
 }

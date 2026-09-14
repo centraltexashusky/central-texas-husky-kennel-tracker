@@ -12,7 +12,7 @@ try {
  await close();
  const monday=page.locator('[data-weekday="monday"]');
  await monday.locator('[data-operation-open-time]').fill('08:30');
- await monday.locator('[data-copy-weekday]').click();
+ await page.locator('#copyHoursToWeekdays').click();
  assert.equal(await page.locator('[data-weekday="friday"] [data-operation-open-time]').inputValue(),'08:30');
  assert.equal(await page.locator('[data-weekday="saturday"] [data-operation-open-time]').inputValue(),'09:00');
  await page.locator('[data-hours-tab="calendar"]').click();

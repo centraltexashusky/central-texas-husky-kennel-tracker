@@ -20,6 +20,40 @@ function adminRenderOperationCalendar() {
   list.replaceChildren(...draft);
 }
 
+function adminHoursPolish(hours) {
+  const icon = path => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">' + path + '</svg>';
+  const overrides = readRecords('operationDateOverride').filter(r => !r.removed);
+  const metrics = [
+    ['Open days', hours.filter(r => operationBoolean(r.isOpen, true)).length, 'weekly customer request days', '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4m8-4v4M4 10h16m-12 4h2m4 0h2m-8 3h2"/>'],
+    ['Weekly windows', hours.filter(r => operationBoolean(r.isOpen, true)).reduce((n,r) => n + operationTimeWindows(r).length, 0), 'drop-off and pickup windows', '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>'],
+    ['Calendar overrides', overrides.length, 'custom hours and closed dates', '<path d="M7 3h7l4 4v14H7zM14 3v5h4M10 12h5m-5 4h5"/>']
+  ];
+  document.querySelector('#operationHoursSummary').innerHTML = metrics.map(([label,value,note,path]) => '<div class="hours-metric">' + icon(path) + '<div><span>' + label + '</span><strong>' + value + '</strong><small>' + note + '</small></div></div>').join('');
+  document.querySelectorAll('#operationHoursList [data-weekday]').forEach(card => {
+    const name = card.querySelector('.operation-day-header > strong');
+    const day = name.textContent;
+    name.innerHTML = '<span class="hours-day-full">' + escapeHtml(day) + '</span><span class="hours-day-short" aria-hidden="true">' + escapeHtml(day.slice(0,3)) + '</span>';
+    card.querySelector('[data-operation-open]').setAttribute('aria-label', day + ' open');
+    card.querySelector('[data-copy-weekday]').hidden = true;
+    const add = card.querySelector('[data-action="add-operation-window"]');
+    add.innerHTML = '<span class="hours-add-label">Add window</span><span class="hours-add-icon" aria-hidden="true">+</span>';
+    add.setAttribute('aria-label', 'Add window for ' + day);
+  });
+  document.querySelectorAll('#operationOverrideCalendar [data-date]').forEach(button => {
+    const info = operationWindowForDate(button.dataset.date);
+    button.classList.toggle('is-today', button.dataset.date === todayDate());
+    button.setAttribute('aria-label', operationDateLabel(button.dataset.date) + ': ' + (info.isOpen ? operationTimeWindowsText(operationTimeWindows(info)) : 'Closed') + (info.override?.customerMessage ? '. ' + info.override.customerMessage : ''));
+    button.title = button.getAttribute('aria-label');
+  });
+  document.querySelector('#hoursOverridesHeading').textContent = 'Overrides for ' + monthLabel(operationCalendarMonth);
+  document.querySelector('.hours-overrides-heading [data-action]').dataset.date = todayDate().slice(0,7) === operationCalendarMonth ? todayDate() : operationCalendarMonth + '-01';
+  const visible = overrides.filter(r => String(r.date).slice(0,7) === operationCalendarMonth).sort((a,b) => String(a.date).localeCompare(String(b.date)));
+  document.querySelector('#operationOverrideList').innerHTML = visible.map(r => {
+    const open = operationBoolean(r.isOpen,true);
+    return '<article class="hours-override ' + (open ? '' : 'is-closed') + '"><span class="hours-override-dot" aria-hidden="true"></span><div><strong>' + escapeHtml(operationDateLabel(r.date)) + '</strong><small>' + escapeHtml(r.customerMessage || (open ? 'Custom hours' : 'Closed to customer requests')) + '</small><span>' + (open ? escapeHtml(operationTimeWindowsText(operationTimeWindows(r))) : 'Closed') + '</span></div><button type="button" class="secondary-button" data-action="open-operation-date-override" data-date="' + escapeHtml(r.date) + '" aria-label="Edit override for ' + escapeHtml(r.date) + '">Edit</button></article>';
+  }).join('') || '<p class="hours-empty">No overrides this month.<br>Weekly hours apply to these dates.</p>';
+}
+
 function adminFinancialExportRows(entries) {
   const safe = value => /^[\s]*[=+@-]/.test(String(value || '')) ? "'" + value : value;
   return entries.map(e => ({ Date: e.date, Type: e.entryType, Area: safe(e.businessArea), Category: safe(e.category), Description: safe(e.description), Customer: safe(e.counterparty), Reference: safe(e.reference), Amount: Number(e.amount || 0) }));
@@ -48,14 +82,18 @@ document.addEventListener('change', event => {
   if (event.target.id === 'serviceCategoryFilter') renderServices();
 });
 document.addEventListener('click', event => {
+  const addOverride = event.target.closest('.hours-overrides-heading [data-action="open-operation-date-override"]');
+  if (addOverride) openOperationDateOverridePopup(addOverride.dataset.date);
   const tab = event.target.closest('[data-hours-tab]');
   if (tab) {
     document.querySelectorAll('[data-hours-tab]').forEach(b => { b.setAttribute('aria-selected', String(b === tab)); b.classList.toggle('is-active', b === tab); });
-    document.querySelectorAll('[data-hours-panel]').forEach(panel => { panel.hidden = panel.dataset.hoursPanel !== tab.dataset.hoursTab; });
+    document.querySelectorAll('[data-hours-panel]').forEach(panel => {
+      if (panel.dataset.hoursPanel === tab.dataset.hoursTab) panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    });
   }
-  const copy = event.target.closest('[data-copy-weekday]');
+  const copy = event.target.closest('[data-copy-weekday], #copyHoursToWeekdays');
   if (copy) {
-    const source = copy.closest('[data-weekday]');
+    const source = copy.closest('[data-weekday]') || document.querySelector('#operationHoursList [data-weekday="monday"]');
     const targets = [...document.querySelectorAll('#operationHoursList [data-weekday]')].filter(card => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(card.dataset.weekday));
     targets.forEach(card => {
       if (card === source) return;
