@@ -1,0 +1,74 @@
+/* Scoped administrative workspaces; no booking or ledger behavior changes. */
+#settingsHoursPage, #servicesPage, #financialsPage { --admin-ink: #12304b; --admin-border: #d6e2ec; }
+:is(#settingsHoursPage, #servicesPage, #financialsPage) > :is(.recent-submissions,.form-section) { border: 1px solid var(--admin-border); border-radius: 12px; box-shadow: none; }
+:is(#settingsHoursPage, #servicesPage, #financialsPage) > :is(.recent-submissions,.form-section) { animation: none; backdrop-filter: none; -webkit-backdrop-filter: none; filter: none; }
+#servicesPage .section-heading #addServiceButton { margin-left: auto; flex-shrink: 0; }
+#servicesPage #servicePricingTabs { border: 0; border-bottom: 1px solid #d6e2ec; box-shadow: none; border-radius: 0; background: transparent; padding: 0; gap: 18px; }
+#servicesPage #servicePricingTabs button { background: transparent; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: #526b83; padding: 12px 4px; }
+#servicesPage #servicePricingTabs button.is-active { color: #0968a8; border-bottom-color: #0968a8; }
+:is(#settingsHoursPage, #servicesPage, #financialsPage) h2 { color: var(--admin-ink); font-size: 28px; letter-spacing: -.7px; }
+:is(#settingsHoursPage, #servicesPage, #financialsPage) .section-heading > span { display: none; }
+:is(#settingsHoursPage, #servicesPage, #financialsPage) button, #serviceEditorPanel button { border-radius: 7px; box-shadow: none; }
+:is(#settingsHoursPage, #servicesPage, #financialsPage) input, :is(#settingsHoursPage, #servicesPage, #financialsPage) select { border-radius: 7px; }
+.admin-tabs { display: flex; gap: 20px; border-bottom: 1px solid #d6e2ec; margin: 22px 0; }
+.admin-tabs button { color: #4c6782; background: transparent; border: 0; border-bottom: 3px solid transparent; border-radius: 0 !important; padding: 12px 4px; }
+.admin-tabs button.is-active { color: #0968a8; border-bottom-color: #0968a8; }
+.admin-policy { padding: 14px 18px; border: 1px solid #bcd9ec; border-radius: 8px; background: #edf7ff; color: #234762; margin: 16px 0; }
+#operationHoursList { display: grid; gap: 0; }
+#operationHoursList .operation-day-card { display: grid; grid-template-columns: 175px minmax(240px,1fr) auto; align-items: start; gap: 14px; padding: 18px 0; border: 0; border-bottom: 1px solid #d6e2ec; border-radius: 0; box-shadow: none; background: transparent; }
+#operationHoursList .operation-day-header { align-items: flex-start; flex-direction: column; gap: 10px; }
+#operationHoursList .operation-day-card > p { display: none; }
+#operationHoursList .operation-window-add-row { margin: 0; display: grid; gap: 6px; }
+#operationHoursList .operation-time-window-row { margin: 0 0 8px; }
+#operationHoursList input[type="time"] { border: 1px solid #cbdbe7; padding: 10px; min-height: 44px; width: 100%; background: #fff; color: #12304b; }
+#settingsHoursPage .settings-alert-actions { position: sticky; bottom: 12px; padding: 14px; border: 1px solid #d6e2ec; border-radius: 8px; background: #fff; z-index: 1; }
+#servicesPage .table-toolbar { display: flex; gap: 12px; }
+#servicesPage #serviceSearch { flex: 1; min-width: 160px; }
+#servicesPage #serviceCategoryFilter { flex: 0 1 240px; width: 240px; }
+#servicesPage .data-table { min-width: 690px; }
+#servicesPage .data-table td { vertical-align: top; padding: 18px 14px; }
+#servicesPage .data-table small { display: block; margin-top: 5px; color: #526b83; }
+#servicesPage .data-table th { background: #f3f7fa; color: #526b83; }
+.admin-chip { display: inline-block; border-radius: 5px; padding: 4px 8px; color: #315878; background: #eaf2f8; font-size: 12px; font-weight: 700; }
+.admin-chip.is-good { background: #e4f5ec; color: #167250; }
+.catalog-details { margin-top: 8px; font-size: 13px; max-width: 300px; }
+.catalog-details summary { color: #0968a8; cursor: pointer; }
+#serviceEditorPanel { border-radius: 12px; }
+#financialsPage .financial-view-tabs { background: transparent; box-shadow: none; border: 0; border-bottom: 1px solid #d6e2ec; border-radius: 0; justify-content: start; }
+#financialsPage .financial-view-tabs button { background: transparent; color: #526b83; border: 0; border-bottom: 3px solid transparent; border-radius: 0; box-shadow: none; }
+#financialsPage .financial-view-tabs button.is-active { color: #0968a8; border-bottom-color: #0968a8; }
+.financial-quick-ranges { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 12px; }
+.financial-quick-ranges #financialExportButton { margin-left: auto; }
+#financialsPage #financialCards { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+#financialCards .financial-summary-card { border-radius: 9px; box-shadow: none; padding: 18px; border-color: #d6e2ec; }
+#financialCards .financial-summary-card:nth-child(-n+3) { border-top: 3px solid #0968a8; background: #f3f9fd; }
+#financialCards .financial-summary-card:nth-child(2) { border-top-color: #c67945; }
+#financialCards .financial-summary-card:nth-child(3) { border-top-color: #188766; }
+#financialCards .financial-summary-card > strong { font-size: clamp(22px,2.5vw,32px); color: #12304b; }
+.financial-card-link { padding: 6px 0; margin-top: 8px; color: #0968a8; border: 0; background: transparent; font-size: 13px; text-align: left; }
+#financialsPage #financialCards .financial-summary-card:nth-child(-n+3) { border-top: 3px solid #0968a8; background: #f3f9fd; }
+#financialsPage #financialCards .financial-summary-card:nth-child(2) { border-top-color: #c67945; }
+#financialsPage #financialCards .financial-summary-card:nth-child(3) { border-top-color: #188766; }
+#financialsPage #financialCards .financial-card-link { background: transparent; border: 0; color: #0968a8; padding: 6px 0; min-height: 32px; box-shadow: none; }
+#financialsPage .financial-ledger-status:empty { display: none; }
+.financial-methodology { margin: 12px 0; color: #526b83; font-size: 13px; }
+.financial-methodology > summary { cursor: pointer; padding: 8px 0; }
+@media(max-width: 900px) { #operationHoursList .operation-day-card { grid-template-columns: 140px minmax(0,1fr); } #operationHoursList .operation-window-add-row { grid-column: 2; display: flex; flex-wrap: wrap; } }
+@media(max-width: 600px) { #operationHoursList .operation-day-card { grid-template-columns: 1fr; } #operationHoursList .operation-day-header { flex-direction: row; justify-content: space-between; } #operationHoursList .operation-window-add-row { grid-column: 1; } #servicesPage .table-toolbar { flex-direction: column; } #financialsPage #financialCards { grid-template-columns: 1fr; } #settingsHoursPage .settings-alert-actions { bottom: 96px; } .financial-quick-ranges #financialExportButton { margin-left: 0; } }
+:root[data-theme="dark"] :is(#settingsHoursPage,#servicesPage,#financialsPage) { --admin-ink: #e5eff9; --admin-border: #35516c; }
+:root[data-theme="dark"] :is(.admin-policy,#settingsHoursPage .settings-alert-actions,#financialCards .financial-summary-card:nth-child(-n+3)) { background: #172f45; color: #e5eff9; }
+:root[data-theme="dark"] #financialCards .financial-summary-card > strong { color: #e5eff9; }
+@media(max-width:600px) { #servicesPage #serviceCategoryFilter { width: 100%; flex-basis: auto; } }
+@media(max-width:600px) {
+  #operationHoursList .operation-time-window-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #operationHoursList [data-operation-window-label], #operationHoursList .operation-window-primary-label { display: none; }
+  #servicesPage .service-table-wrap { border: 0; box-shadow: none; overflow: visible; }
+  #servicesPage .data-table { min-width: 0; display: block; }
+  #servicesPage .data-table thead { display: none; }
+  #servicesPage .data-table tbody { display: grid; gap: 12px; }
+  #servicesPage .data-table tr { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #d6e2ec; border-radius: 9px; padding: 14px; gap: 12px; }
+  #servicesPage .data-table td { display: block; padding: 0; border: 0; }
+  #servicesPage .data-table td:first-child, #servicesPage .data-table td:last-child { grid-column: 1/-1; }
+  #servicesPage .data-table td:nth-child(4)::before { content: 'Price'; display: block; color: #526b83; font-size: 12px; margin-bottom: 4px; }
+  #servicesPage .data-table td:last-child button { width: 100%; }
+}

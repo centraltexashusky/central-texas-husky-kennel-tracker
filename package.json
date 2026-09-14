@@ -1,6 +1,7 @@
 {
   "type": "module",
   "scripts": {
+    "test:admin-workspace-browser": "node tools/admin-workspace-browser-check.mjs",
     "test:task-cycles": "node tools/task-cycles-check.mjs",
     "test:task-cycles-browser": "node tools/task-cycles-browser-check.mjs",
     "test:stay-reminders": "node tools/stay-reminders-check.mjs",

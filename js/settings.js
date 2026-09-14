@@ -943,7 +943,7 @@ function servicePricingScopeLabel(service = {}) {
 function serviceMatchesCustomerPricingScope(service = {}, user = currentUser) {
   const scope = servicePricingScope(service);
   if (scope === "all") return true;
-  return isMemberUser(user) ? scope === "member" : scope === "non-member";
+  return scope === "non-member";
 }
 
 function serviceBoardingRateType(service = {}) {
@@ -2204,6 +2204,8 @@ async function deleteFinancialTransaction(entry = {}) {
 }
 
 function renderFinancials() {
+  window.adminFinancialLedger = [];
+  if ($("#financialExportButton")) $("#financialExportButton").disabled = true;
   const cardsEl = $("#financialCards");
   if (!cardsEl) return;
   const chartEl = $("#financialIncomeChart");
@@ -2278,6 +2280,7 @@ function renderFinancials() {
   if (breakdownEl) breakdownEl.innerHTML = financialBreakdownHtml(buckets);
   renderFinancialTransactions(ledger, range);
   renderFinancialLineItems(entries, range);
+  if (typeof adminFinancialReady === "function") adminFinancialReady(ledger);
 }
 
 function renderCfoNotes() {}
@@ -2304,7 +2307,7 @@ function settingsUserPayRateText(user = {}) {
 function defaultSettingsUserForActiveTab() {
   if (settingsUserTab === "admin") return { role: "admin" };
   if (settingsUserTab === "staff") return { role: "helper" };
-  if (settingsUserTab === "member") return { role: "customer", isMember: true };
+  if (settingsUserTab === "member") return { role: "customer", isMember: false };
   return { role: "customer" };
 }
 
@@ -2785,6 +2788,7 @@ function renderOperationHoursSettings() {
         \${windows.map((window, index) => operationTimeWindowRowHtml(window, index, open)).join("")}
       </div>
       <div class="operation-window-add-row">
+        <button type="button" class="secondary-button" data-copy-weekday>Copy to weekdays</button>
         <button type="button" class="secondary-button" data-action="add-operation-window" data-operation-window-control \${open ? "" : "disabled"}>+ Add Open/Close Time</button>
       </div>
       <p>\${open ? \`Customers can request drop-off and pick-up during \${escapeHtml(operationTimeWindowsText(windows))}.\` : "Customers cannot request drop-off or pick-up on this weekday."}</p>
@@ -2858,7 +2862,7 @@ async function saveOperationHoursSettings() {
   for (const record of records) await sendPayload(upsertRecord("operationHours", record));
   await addAuditLog("Updated operation hours", "operationHours", { id: "weekly-operation-hours" }, "Weekly customer request hours updated.");
   renderOperationHoursSettings();
-  renderCustomerBookingAvailabilityMessages();
+  if (typeof renderCustomerBookingAvailabilityMessages === "function") renderCustomerBookingAvailabilityMessages();
   showToast("Hours of operation saved.");
   return records;
 }
@@ -2943,7 +2947,7 @@ async function saveOperationDateOverrideFromForm(formEl) {
   await sendPayload(record);
   await addAuditLog("Updated operation date override", "operationDateOverride", record, \`\${operationDateLabel(date)} | \${isOpen ? \`\${displayTime(openTime)} - \${displayTime(closeTime)}\` : "Closed"}\`);
   renderOperationHoursSettings();
-  renderCustomerBookingAvailabilityMessages();
+  if (typeof renderCustomerBookingAvailabilityMessages === "function") renderCustomerBookingAvailabilityMessages();
   return record;
 }
 
@@ -2954,7 +2958,7 @@ async function clearOperationDateOverride(id = "") {
   await sendPayload(updated);
   await addAuditLog("Cleared operation date override", "operationDateOverride", updated, operationDateLabel(updated.date));
   renderOperationHoursSettings();
-  renderCustomerBookingAvailabilityMessages();
+  if (typeof renderCustomerBookingAvailabilityMessages === "function") renderCustomerBookingAvailabilityMessages();
   return updated;
 }
 
@@ -3107,7 +3111,7 @@ function settingsUserPopupHtml(user = {}) {
         <label>Role<select name="role" required><option value="customer" \${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" \${user.role === "helper" || user.role === "staff" ? "selected" : ""}>Staff</option><option value="admin" \${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
         <label class="settings-user-pay-field" \${showPayrollFields ? "" : "hidden"}>Hourly pay rate<input type="number" name="hourlyRate" min="0" step="0.01" value="\${escapeHtml(staffHourlyRate(user) || "")}" placeholder="Example: 18.50" \${showPayrollFields ? "" : "disabled"} /><small>Used for staff/admin payroll estimates.</small></label>
       </div>
-      <label class="inline-check"><input type="checkbox" name="isMember" \${userMemberFlag(user) ? "checked" : ""} /> Member customer pricing</label>
+      <p class="admin-policy">Customer accounts use regular pricing. Assign member pricing to an individual dog under Boarding Dogs → Dog Info.</p><input type="hidden" name="isMember" value="false" />
       <div class="admin-password-panel">
         <h3>Password Management</h3>
         <p>Set a temporary Supabase password or send a reset email for this user.</p>
@@ -3317,6 +3321,7 @@ function renderServices() {
   const allRecords = sortRecordsForTable("service", readRecords("service").filter((record) => !record.removed && matches(record, query)));
   const records = allRecords.filter((record) => serviceMatchesPricingFilter(record));
   renderServicePricingTabs(allRecords);
+  if (typeof adminServiceCatalog === "function") return adminServiceCatalog(records, allRecords);
   $("#serviceTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="service">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
   $("#serviceTableBody").innerHTML = records.length
     ? records

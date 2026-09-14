@@ -1131,17 +1131,15 @@ function selectableOvernightBoardingPricingServices() {
 }
 
 function customerPricingScopeForUser(user = currentUser) {
-  return isMemberUser(user) ? "member" : "non-member";
+  return "non-member";
 }
 
 function dogPricingScopeOverride(dog = {}) {
-  return normalizedPricingScope(dog.pricingScopeOverride || dog.customerPricingScopeOverride || "") === "non-member"
-    ? "non-member"
-    : "";
+  return normalizedPricingScope(dog.pricingScopeOverride || dog.customerPricingScopeOverride || "") === "member" ? "member" : "non-member";
 }
 
 function customerPricingScopeForDog(dog = {}, user = currentUser) {
-  return dogPricingScopeOverride(dog) || customerPricingScopeForUser(user);
+  return dogPricingScopeOverride(dog);
 }
 
 function dogUsesRegularPricingOverride(dog = {}) {
@@ -1563,17 +1561,14 @@ function boardingLineDisplayLabel(line = {}) {
 }
 
 function boardingDogPricingLines(dogs = [], options = {}) {
-  const householdRatePlan = options.ratePlan || boardingRatePlanForCustomer(options.user || currentUser);
   const stayProgram = options.stayProgram || null;
   const days = Number(options.days || 0);
   const isServiceRequest = Boolean(options.isServiceRequest);
-  const sharedCrateRequested = Boolean(options.sharedCrateRequested && householdRatePlan.isMemberPricing && !stayProgram);
+  const sharedCrateRequested = Boolean(options.sharedCrateRequested && !stayProgram);
   const programRate = Number(stayProgram?.rate ?? stayProgram?.basePrice ?? 0);
   let memberDogIndex = 0;
   return uniqueCustomerBookingDogs(dogs).map((dog, index) => {
-    const ratePlan = dogUsesRegularPricingOverride(dog)
-      ? boardingRatePlanForDog(dog, options.user || boardingPricingUserForRecord(dog) || currentUser)
-      : householdRatePlan;
+    const ratePlan = boardingRatePlanForDog(dog, options.user || boardingPricingUserForRecord(dog) || currentUser);
     const eligibleMemberIndex = ratePlan.isMemberPricing ? memberDogIndex++ : -1;
     const pairIndex = eligibleMemberIndex >= 0 ? Math.floor(eligibleMemberIndex / ratePlan.maxDogsPerCrate) : index;
     const position = eligibleMemberIndex >= 0 ? eligibleMemberIndex % ratePlan.maxDogsPerCrate : 0;
@@ -5527,8 +5522,8 @@ function boardingFamilyPricingSnapshots(entries = []) {
   const days = isServiceRequest ? 0 : boardingDays(boardingBillableDropoffTime(firstStay), firstStay.pickupTime);
   const hadMemberSnapshot = activeEntries.some((entry) => entry.stay?.pricingSnapshot?.isMemberPricing);
   const explicitSharedCrate = activeEntries.some((entry) => entry.stay?.pricingSnapshot?.sharedCrateRequested);
-  const sharedCrateRequested = Boolean(ratePlan.isMemberPricing && !stayProgram && memberEntryCount > 1 && (explicitSharedCrate || !hadMemberSnapshot));
-  const useSavedMemberRoles = Boolean(ratePlan.isMemberPricing && activeEntries.some((entry) => entry.stay?.pricingSnapshot?.isMemberPricing && ["primary", "shared-crate-additional"].includes(entry.stay?.pricingSnapshot?.currentDogRole)));
+  const sharedCrateRequested = Boolean(!stayProgram && memberEntryCount > 1 && (explicitSharedCrate || !hadMemberSnapshot));
+  const useSavedMemberRoles = Boolean(activeEntries.some((entry) => entry.stay?.pricingSnapshot?.isMemberPricing && ["primary", "shared-crate-additional"].includes(entry.stay?.pricingSnapshot?.currentDogRole)));
   const lines = useSavedMemberRoles
     ? activeEntries.map((entry) => {
       const record = entry.record || {};

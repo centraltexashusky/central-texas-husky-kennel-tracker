@@ -2727,7 +2727,7 @@ function renderCustomerStayProgramOptions() {
   const existing = selectedCustomerStayProgramId();
   const selectedId = existing && programs.some((program) => program.id === existing) ? existing : "standard";
   const pricingScopes = new Set(dogs.map((dog) => customerPricingScopeForDog(dog, currentUser)));
-  const ratePlan = dogs.length === 1 ? boardingRatePlanForDog(dogs[0], currentUser) : boardingRatePlanForCustomer(currentUser);
+  const ratePlan = dogs.length ? boardingRatePlanForDog(dogs[0], currentUser) : boardingRatePlanForCustomer(currentUser);
   const standardRate = ratePlan.primaryRateConfig || {};
   const standardService = standardRate.ok ? standardRate.service : null;
   const standardLabel = standardService?.serviceName || "Standard Overnight Boarding";
@@ -2833,7 +2833,7 @@ function renderCustomerCrateShareOptions() {
   const stayProgram = selectedCustomerStayProgram();
   const ratePlan = boardingRatePlanForCustomer();
   const memberDogs = dogs.filter((dog) => customerPricingScopeForDog(dog, currentUser) === "member");
-  const show = isBoardingRequest && !stayProgram && ratePlan.isMemberPricing && memberDogs.length > 1;
+  const show = isBoardingRequest && !stayProgram && memberDogs.length > 1;
   step.hidden = !show;
   if (!show) {
     container.innerHTML = "";
@@ -3575,4 +3575,4 @@ async function submitPendingCustomerBooking() {
 //# sourceURL=snuggle-stay/customer.js
 `;
 (0, eval)(__snuggleStayModuleSource);
-await import("./customer-workspace.js?v=customer-workspace-v121");
+await import("./customer-workspace.js?v=customer-workspace-v121-dog-pricing-v126");

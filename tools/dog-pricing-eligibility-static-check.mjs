@@ -88,7 +88,7 @@ const context = {
   },
   customerPricingScopeForUser: () => "member",
   boardingRatePlanForCustomer: () => context.memberPlan,
-  boardingRatePlanForDog: () => context.regularPlan,
+  boardingRatePlanForDog: dog => dog.pricingScopeOverride === 'member' ? context.memberPlan : context.regularPlan,
   boardingPricingUserForRecord: () => context.currentUser,
   uniqueCustomerBookingDogs: (dogs) => dogs,
   boardingPricingDogKey: (dog) => dog.id,
@@ -174,12 +174,13 @@ const remotelyResolvedSave = await canonicalContext.resolveCanonicalBoardingDogF
 assert.equal(remotelyResolvedSave.id, "boardingDog-canonical", "a save can recover the canonical identity when the row was not loaded");
 assert.ok(remoteFilters.some((entry) => entry[0] === "eq" && entry[1] === "payload->>linkedCustomerDogId" && entry[2] === "customerDog-coco"), "the fallback lookup is scoped to the linked customer dog");
 
-assert.equal(context.customerPricingScopeForDog({ id: "member-dog" }, context.currentUser), "member");
+assert.equal(context.customerPricingScopeForDog({ id: "member-dog", pricingScopeOverride: "member" }, context.currentUser), "member");
+assert.equal(context.customerPricingScopeForDog({ id: "new-dog" }, context.currentUser), "non-member", "new dogs never inherit account membership");
 assert.equal(context.customerPricingScopeForDog({ id: "regular-dog", pricingScopeOverride: "regular" }, context.currentUser), "non-member");
 const lines = context.boardingDogPricingLines([
-  { id: "member-a", dogName: "Member A" },
+  { id: "member-a", dogName: "Member A", pricingScopeOverride: "member" },
   { id: "regular", dogName: "Regular", pricingScopeOverride: "non-member" },
-  { id: "member-b", dogName: "Member B" },
+  { id: "member-b", dogName: "Member B", pricingScopeOverride: "member" },
 ], { ratePlan: context.memberPlan, user: context.currentUser, days: 2, sharedCrateRequested: true });
 assert.deepEqual(Array.from(lines, (line) => line.role), ["primary", "non-member", "shared-crate-additional"]);
 assert.deepEqual(Array.from(lines, (line) => line.total), [90, 120, 50]);

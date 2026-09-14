@@ -8258,6 +8258,7 @@ function canonicalDogPayloadFromLegacy(dogId = "", sources = {}) {
     id: dogId,
     submittedAt: earliestTimestamp(allSources),
     dogName: customerDog.dogName || boardingDog.dogName || "Dog",
+    pricingScopeOverride: normalizedPricingScope((customerDog.id ? customerDog : boardingDog).pricingScopeOverride) === "member" ? "member" : "non-member",
     ownerUserId: ownerAccount.id || "",
     ownerEmail,
     ownerName: customerDog.ownerName || boardingDog.ownerName || ownerAccount.name || "",
@@ -16086,13 +16087,13 @@ function initEvents() {
     const current = new Date(\`\${operationCalendarMonth}-01T12:00:00\`);
     current.setMonth(current.getMonth() - 1);
     operationCalendarMonth = localDateKey(current).slice(0, 7);
-    renderOperationHoursSettings();
+    typeof adminRenderOperationCalendar === "function" ? adminRenderOperationCalendar() : renderOperationHoursSettings();
   });
   $("#nextOperationMonthButton")?.addEventListener("click", () => {
     const current = new Date(\`\${operationCalendarMonth}-01T12:00:00\`);
     current.setMonth(current.getMonth() + 1);
     operationCalendarMonth = localDateKey(current).slice(0, 7);
-    renderOperationHoursSettings();
+    typeof adminRenderOperationCalendar === "function" ? adminRenderOperationCalendar() : renderOperationHoursSettings();
   });
   $("#operationOverrideCalendar")?.addEventListener("click", (event) => {
     const button = event.target.closest('[data-action="open-operation-date-override"]');

@@ -1,7 +1,7 @@
 /* Customer presentation layer. All writes, permissions, prices and agreements use the existing workflows. */
 const el = id => document.getElementById(id);
 const html = value => escapeHtml(String(value ?? ''));
-const pricing = dog => dogUsesRegularPricingOverride(dog) || !isMemberUser() ? 'Regular pricing' : 'Member pricing';
+const pricing = dog => customerPricingScopeForDog(dog) === 'member' ? 'Member pricing' : 'Regular pricing';
 const icon = kind => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${kind === 'file' ? '<path d="M5 3h10l4 4v14H5zM14 3v5h5M8 12h8m-8 4h5"/>' : '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v5m10-5v5M3 11h18"/>'}</svg>`;
 function customerVisibleStay(dog) {
   const entries = customerRequestEntries().filter(e => boardingRecordMatchesCustomerDog(e.record || e, dog));
