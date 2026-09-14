@@ -64,12 +64,13 @@ function cssEscapeValue(value = "") {
 var CUDDLE_STAY_THEME_KEY = "cuddleStayTheme";
 
 function normalizeCuddleStayTheme(value) {
-  return value === "dark" ? "dark" : "light";
+  // A single light workspace is now the product default, including legacy profiles.
+  return "light";
 }
 
 function optionalCuddleStayTheme(value) {
   const normalized = String(value || "").trim().toLowerCase();
-  return normalized === "dark" || normalized === "light" ? normalized : "";
+  return normalized === "dark" || normalized === "light" ? "light" : "";
 }
 
 function rememberCuddleStayTheme(theme) {
@@ -142,27 +143,8 @@ function applyCurrentUserThemePreference() {
 }
 
 function saveCurrentUserThemePreference(theme, options = {}) {
-  if (!currentUser?.email || currentUser.authProvider === "admin-impersonation") return null;
-  const normalizedTheme = normalizeCuddleStayTheme(theme);
-  const existing = savedUserFor(currentUser) || {};
-  const preferences = { ...(existing.preferences || currentUser.preferences || {}), theme: normalizedTheme };
-  const uiPreferences = { ...(existing.uiPreferences || currentUser.uiPreferences || {}), theme: normalizedTheme };
-  const record = upsertRecord("settingsUser", {
-    ...profileRecordForUser(currentUser),
-    ...existing,
-    themePreference: normalizedTheme,
-    preferences,
-    uiPreferences,
-    removed: false,
-  });
-  currentUser.themePreference = normalizedTheme;
-  currentUser.preferences = preferences;
-  currentUser.uiPreferences = uiPreferences;
-  safeLocalStorageSetItem(stateKeys.session, JSON.stringify(currentUser), { quiet: true });
-  sendPayload(record, { quiet: options.quiet === true }).catch((error) => {
-    console.warn("Could not save theme preference to user profile.", error);
-  });
-  return record;
+  // Retained for older callers. Appearance must not trigger a profile write.
+  return null;
 }
 
 function saveCuddleStayTheme(theme) {
@@ -3990,14 +3972,7 @@ function mobileMoreHasContent() {
 }
 
 function renderMobileThemeMenu() {
-  const theme = activeCuddleStayTheme();
-  return '<section class="mobile-more-theme" aria-label="Theme">' +
-    '<span class="mobile-more-theme-label">Theme</span>' +
-    '<div class="mobile-more-theme-toggle" role="group" aria-label="Theme">' +
-    '<button type="button" class="mobile-more-theme-option ' + (theme === "light" ? "is-active" : "") + '" data-theme-option="light" aria-pressed="' + String(theme === "light") + '">Light Mode</button>' +
-    '<button type="button" class="mobile-more-theme-option ' + (theme === "dark" ? "is-active" : "") + '" data-theme-option="dark" aria-pressed="' + String(theme === "dark") + '">Dark Mode</button>' +
-    '</div>' +
-    '</section>';
+  return "";
 }
 
 function renderMobileMoreMenu() {
