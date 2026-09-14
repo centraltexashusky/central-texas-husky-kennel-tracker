@@ -1808,7 +1808,7 @@ function financialChartPolyline(points = "", className = "") {
 
 function financialIncomeChartSvg(buckets = []) {
   if (!buckets.length) return '<div class="financial-empty-state">No financial activity found for this date range.</div>';
-  const width = 820;
+  const width = Math.max(820, $("#financialIncomeChart")?.clientWidth || 820);
   const height = 300;
   const left = 64;
   const right = 24;
@@ -1896,7 +1896,7 @@ function financialSyncViewState() {
     button.setAttribute("aria-selected", active ? "true" : "false");
   });
   $$("[data-financial-panel]").forEach((panel) => {
-    const active = panel.dataset.financialPanel === mode;
+    const active = panel.dataset.financialPanel === mode || (mode === "overview" && panel.dataset.financialPanel === "transactions");
     panel.hidden = !active;
     panel.classList.toggle("is-active", active);
   });
@@ -3362,6 +3362,7 @@ function openService(record = {}) {
   $("#serviceEditorTitle").textContent = formRecord.id ? "Edit Service" : "Add Service";
   $("#serviceSaveButton").textContent = formRecord.id ? "Update Service" : "Add Service";
   $("#removeServiceButton").hidden = !formRecord.id;
+  if (typeof adminServiceEditor === "function") adminServiceEditor();
 }
 
 function closeServiceModal(options = {}) {

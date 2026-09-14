@@ -1,16 +1,47 @@
 /* Presentation and shortcuts only. Existing save paths and ledger math remain authoritative. */
 function adminServiceCatalog(records, allRecords) {
+  document.querySelectorAll('#servicePricingTabs [data-service-pricing-filter]').forEach(button => {
+    const text = [...button.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+    const labels = {all:'All prices ', member:'Member pricing ', regular:'Regular pricing '};
+    if (text && labels[button.dataset.servicePricingFilter]) text.textContent = labels[button.dataset.servicePricingFilter];
+  });
   const select = document.querySelector('#serviceCategoryFilter');
   const category = select.value;
   const categories = [...new Set(readRecords('service').filter(r => !r.removed).map(r => r.category).filter(Boolean))].sort();
   select.innerHTML = '<option value="">All categories</option>' + categories.map(c => `<option ${c === category ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
   const visible = records.filter(r => !category || r.category === category);
   document.querySelector('#serviceCatalogCount').textContent = `${visible.length} services shown · ${allRecords.length} matching search`;
-  document.querySelector('#serviceTableHead').innerHTML = '<tr><th data-sort-column="serviceName" data-table="service">Service</th><th data-sort-column="category" data-table="service">Category</th><th>Eligibility</th><th data-sort-column="basePrice" data-table="service">Price</th><th>Availability</th><th>Actions</th></tr>';
+  document.querySelector('#serviceTableHead').innerHTML = '<tr><th data-sort-column="serviceName" data-table="service">Service</th><th data-sort-column="category" data-table="service">Category</th><th>Pricing</th><th data-sort-column="basePrice" data-table="service">Price / unit</th><th>Availability</th><th>Actions</th></tr>';
   document.querySelector('#serviceTableBody').innerHTML = visible.map(r => {
     const flags = normalizedServiceFlags(r.flags || []);
-    return `<tr><td><strong>${escapeHtml(r.serviceName || 'Service')}</strong><details class="catalog-details"><summary>Service details</summary><p>${escapeHtml(r.description || r.notes || 'No additional notes.')}</p><p>Deposit: ${money(r.depositAmount || 0)} · Tax: ${escapeHtml(String(r.taxRate || 0))}%</p>${serviceChipsHtml(r)}</details></td><td>${escapeHtml(r.category || 'Other')}</td><td><span class="admin-chip">${escapeHtml(servicePricingScopeLabel(r))}</span></td><td><strong>${money(r.basePrice)}</strong><small>${escapeHtml(r.unit || '')}</small></td><td><span class="admin-chip ${flags.includes('Active') ? 'is-good' : ''}">${flags.includes('Active') ? 'Active' : 'Inactive'}</span>${flags.includes('Admin only') ? '<small>Staff only</small>' : ''}</td><td><button type="button" class="secondary-button" data-action="edit-service" data-id="${escapeHtml(r.id)}">Edit</button></td></tr>`;
+    return `<tr><td><strong>${escapeHtml(r.serviceName || 'Service')}</strong><details class="catalog-details"><summary>Service details</summary><p>${escapeHtml(r.description || r.notes || 'No additional notes.')}</p><p>Deposit: ${money(r.depositAmount || 0)} · Tax: ${escapeHtml(String(r.taxRate || 0))}%</p>${serviceChipsHtml(r)}</details></td><td>${escapeHtml(r.category || 'Other')}</td><td><span class="admin-chip">${escapeHtml(({member: "Member", "non-member": "Regular", all: "All dogs"}[servicePricingScope(r)] || servicePricingScopeLabel(r)))}</span></td><td><strong>${money(r.basePrice)}</strong><small>${escapeHtml(r.unit || '')}</small></td><td><span class="admin-chip ${flags.includes('Active') ? 'is-good' : ''}">${flags.includes('Active') ? 'Active' : 'Inactive'}</span>${flags.includes('Admin only') ? '<small>Staff only</small>' : ''}</td><td><button type="button" class="secondary-button" data-action="edit-service" data-id="${escapeHtml(r.id)}">Edit</button></td></tr>`;
   }).join('') || '<tr><td colspan="6">No services match these filters.</td></tr>';
+}
+
+// Move the original controls, preserving their values, validation and save handlers.
+function adminServiceEditor() {
+  const form = document.querySelector('#serviceForm');
+  let details = form.querySelector('.service-advanced');
+  if (!details) {
+    details = document.createElement('details');
+    details.className = 'service-advanced';
+    details.innerHTML = '<summary>Additional details<small>Deposit, tax, dependencies, descriptions and notes</small></summary><div class="field-grid"></div><div class="checklist compact"></div>';
+    const primary = form.querySelector('.field-grid');
+    const flags = form.querySelector('.checklist');
+    form.insertBefore(details, form.querySelector('.button-row'));
+    [...primary.children].forEach(label => {
+      const name = label.querySelector('[name]')?.name;
+      if (!['serviceName','category','basePrice','unit','pricingScope'].includes(name)) details.querySelector('.field-grid').append(label);
+    });
+    [...flags.children].forEach(label => {
+      if (!['Active','Member Pricing'].includes(label.querySelector('input')?.value)) details.querySelector('.checklist').append(label);
+    });
+    ['itemDescription','pricingNotes'].forEach(name => details.append(form.querySelector(`[name="${name}"]`).closest('label')));
+    form.addEventListener('invalid', event => {
+      if (details.contains(event.target)) details.open = true;
+    }, true);
+  }
+  details.open = false;
 }
 
 function adminRenderOperationCalendar() {
@@ -60,11 +91,30 @@ function adminFinancialExportRows(entries) {
 }
 
 function adminFinancialReady(ledger) {
+  const page = document.querySelector('#financialsPage');
+  if (!page.dataset.compactLayout) {
+    page.dataset.compactLayout = 'true';
+    const toolbar = page.querySelector('.financial-toolbar');
+    const ranges = page.querySelector('.financial-quick-ranges');
+    toolbar.prepend(ranges);
+    toolbar.append(page.querySelector('#financialPeriodControl'));
+    page.querySelector('.financial-line-items-header').append(page.querySelector('#financialExportButton'));
+    const chart = page.querySelector('.financial-chart-panel');
+    const info = document.createElement('div'); info.className = 'financial-chart-info';
+    info.append(page.querySelector('#financialLedgerStatus'), page.querySelector('.financial-methodology'));
+    chart.prepend(info);
+    const breakdown = document.createElement('details'); breakdown.className = 'financial-breakdown-details';
+    breakdown.innerHTML = '<summary>Period breakdown</summary>';
+    page.querySelector('#financialBreakdown').before(breakdown);
+    breakdown.append(page.querySelector('#financialBreakdown'));
+  }
   window.adminFinancialLedger = ledger;
   const exportButton = document.querySelector('#financialExportButton');
   if (exportButton) exportButton.disabled = false;
   const filters = [ ['income', 'all'], ['expense', 'all'], ['all', 'all'], ['income', 'Boarding'], ['income', 'Services'], ['expense', 'Payroll'], ['all', 'Dog Shows'] ];
   document.querySelectorAll('#financialCards > article').forEach((card, index) => {
+    card.title = card.querySelector('p')?.textContent || '';
+    card.setAttribute('aria-label', card.textContent.trim());
     if (!filters[index]) return;
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'financial-card-link'; button.textContent = 'View transactions →';

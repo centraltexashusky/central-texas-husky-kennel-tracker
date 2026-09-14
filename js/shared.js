@@ -15502,8 +15502,9 @@ function initEvents() {
     await sendPayload(record);
     await addAuditLog(existing?.id ? "Updated service" : "Created service", "service", record, \`\${record.category || "Service"} \${money(record.basePrice)}\`);
     renderServices();
-    renderDashboard();
-    renderFinancials();
+    // Hidden pages refresh when opened, after their lazy dependencies are loaded.
+    if (activePageId() === "dashboardPage") renderDashboard();
+    if (activePageId() === "financialsPage") renderFinancials();
     closeServiceModal();
     showToast("Service pricing saved.");
   });

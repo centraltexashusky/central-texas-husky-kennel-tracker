@@ -35,6 +35,7 @@ try {
   ]);renderServices();
  });
  assert.equal(await page.locator('#serviceTableBody tr').count(),4);
+ assert(!await page.locator('#serviceEditorPanel').isVisible(),'Closed editor must not appear above the catalog');
  await page.locator('#serviceCategoryFilter').selectOption('Grooming');
  assert.equal(await page.locator('#serviceTableBody tr').count(),1);
  await page.locator('#serviceSearch').fill('not a match');
@@ -43,6 +44,7 @@ try {
  await page.locator('#serviceCategoryFilter').selectOption('');
  await page.locator('#servicesPage').screenshot({path:'/tmp/admin-services-desktop.png'});
  await page.locator('[data-action="edit-service"][data-id="qa-bath"]').click();
+ assert.equal(await page.locator('#serviceForm .service-advanced').getAttribute('open'),null,'Advanced fields start collapsed');
  await page.locator('#serviceForm [name="basePrice"]').fill('80');
  await page.locator('#serviceSaveButton').click();
  await page.waitForFunction(()=>readRecords('service').find(r=>r.id==='qa-bath').basePrice==80);
@@ -55,6 +57,7 @@ try {
  });
  await page.locator('[data-financial-range="month"]').click();
  assert.equal(await page.locator('#financialCards article').count(),9);
+ assert(await page.locator('[data-financial-panel="transactions"]').isVisible(),'Overview includes the transaction list');
  await page.waitForTimeout(3200);
  await page.locator('#financialsPage').screenshot({path:'/tmp/admin-financials-desktop.png'});
  await page.locator('#financialCards article').first().getByRole('button').click();
