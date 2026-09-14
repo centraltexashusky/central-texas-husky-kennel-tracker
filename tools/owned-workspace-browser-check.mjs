@@ -126,15 +126,15 @@ await page.locator('#ownedDogTableBody [data-action="view-owned"][data-id="qa-bl
 await page.locator('[data-owned-workspace-action="edit"]').click();
 assert(!await page.locator('#deleteOwnedDogButton').isVisible());
 await page.locator('#closeOwnedDogDialogButton').click();await page.waitForTimeout(200);
-await page.evaluate(()=>{currentUser.role='admin';const base=readRecords('ownedDog')[0];writeRecords('ownedDog',Array.from({length:500},(_,i)=>({...base,id:'qa-scale-'+i,callName:'QA Dog '+String(i).padStart(3,'0'),removed:false})));ownedDogVisibleLimit=50;renderOwnedDogs();});
-assert.equal(await page.locator('#ownedDogTableBody tr[data-id]').count(),50);
+await page.evaluate(()=>{currentUser.role='admin';const base=readRecords('ownedDog')[0];writeRecords('ownedDog',Array.from({length:500},(_,i)=>({...base,id:'qa-scale-'+i,callName:'QA Dog '+String(i).padStart(3,'0'),removed:false})));ownedDogVisibleLimit=5;renderOwnedDogs();});
+assert.equal(await page.locator('#ownedDogTableBody tr[data-id]').count(),5);
 assert((await page.locator('#ownedDogListStatus').innerText()).includes('500'));
 await page.locator('#ownedDogListStatus button').click();
-assert.equal(await page.locator('#ownedDogTableBody tr[data-id]').count(),100);
+assert.equal(await page.locator('#ownedDogTableBody tr[data-id]').count(),10);
 await page.setViewportSize({width:390,height:844});
 await page.locator('#ownedDogMobileCards .owned-modern-card').first().waitFor();
 assert.equal(await page.locator('#ownedDogTableBody tr').count(),0);
-assert.equal(await page.locator('#ownedDogMobileCards .owned-modern-card').count(),100);
+assert.equal(await page.locator('#ownedDogMobileCards .owned-modern-card').count(),10);
 await page.evaluate(()=>document.documentElement.dataset.theme='dark');
 await page.locator('#ownedDogMobileCards [data-action="view-owned"]').first().click();
 await page.screenshot({path:'/tmp/owned-profile-dark.png'});
@@ -142,5 +142,5 @@ await page.locator('[data-owned-profile-tab="Overview"]').focus();
 await page.keyboard.press('ArrowRight');
 assert.equal(await page.locator('[data-owned-profile-tab="Exercise"]').getAttribute('aria-selected'),'true');
 assert.deepEqual(errors,[]);
-console.log('PASS roster, filters, columns, 8 profile tabs, drafts, save, all 7 care types, mobile, close/reopen, female-only heat, add/delete, staff restrictions, keyboard navigation, 500 dogs bounded to 50/100 visible.');
+console.log('PASS roster, filters, columns, 8 profile tabs, drafts, save, all 7 care types, mobile, close/reopen, female-only heat, add/delete, staff restrictions, keyboard navigation, 500 dogs bounded to 5/10 visible.');
 }catch(e){await page.screenshot({path:'/tmp/owned-qa-error.png'});console.error(e);console.log((await page.locator('body').innerText()).slice(-8500));process.exitCode=1;}finally{await page.evaluate(()=>localStorage.clear());await browser.close();}

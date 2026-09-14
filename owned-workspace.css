@@ -1,4 +1,23 @@
 /* Scoped resident-dog workspace; boarding and global navigation stay unchanged. */
+#ownedCareViewIntro { color: var(--owned-muted); font-size: 14px; line-height: 1.6; margin: 12px 0 18px; }
+#ourDogsPage .owned-focus-table { table-layout: fixed; width: 100%; min-width: 0; }
+#ourDogsPage .owned-focus-table th:first-child { width: 23%; }
+#ourDogsPage .owned-focus-table th:last-child { width: 130px; }
+#ourDogsPage .owned-focus-table td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
+#ourDogsPage .owned-focus-table .table-actions { flex-direction: column; align-items: stretch; min-width: 0; }
+.owned-focus-facts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px 20px; margin: 12px 0; }
+.owned-focus-facts div { min-width: 0; }
+.owned-focus-facts dt { font-size: 12px; font-weight: 600; color: var(--owned-muted); margin-bottom: 4px; }
+.owned-focus-facts dd { font-size: 14px; margin: 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.owned-vaccine-review { display: grid; gap: 10px; }
+.owned-vaccine-item { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding-bottom: 10px; border-bottom: 1px solid var(--owned-border); }
+.owned-vaccine-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.owned-vaccine-item small { flex-basis: 100%; font-size: 12px; color: var(--owned-muted); }
+.owned-focus-status { display: inline-block; width: fit-content; border-radius: 5px; padding: 3px 7px; font-size: 12px; font-weight: 600; }
+.owned-focus-status.is-attention { background: #fff0ed; color: #a02c18; }
+.owned-focus-status.is-soon { background: #fff3d6; color: #785000; }
+.owned-focus-status.is-current { background: #e6f5ee; color: #176244; }
+@media(max-width:760px) { .owned-focus-facts { grid-template-columns: 1fr; } }
 #ourDogsPage, #ownedDogDetail.owned-workspace {
   --owned-ink: #12314e; --owned-muted: #526b82; --owned-blue: #0869aa;
   --owned-border: #dae4ed; --owned-paper: #fff; --owned-soft: #f5f8fb;

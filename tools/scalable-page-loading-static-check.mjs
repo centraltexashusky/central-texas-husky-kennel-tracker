@@ -51,8 +51,8 @@ requireText(migration, "'details'", "Completion snapshot does not limit details 
 const dailyPageSize = Number(daily.match(/OWNED_DOG_RENDER_PAGE_SIZE = (\d+)/)?.[1] || 0);
 const boardingPageSize = Number(boarding.match(/BOARDING_ROSTER_RENDER_PAGE_SIZE = (\d+)/)?.[1] || 0);
 const fixtureDogs = Array.from({ length: 500 }, (_, index) => ({ id: "dog-" + (index + 1) }));
-if (dailyPageSize !== 50 || fixtureDogs.slice(0, dailyPageSize).length !== 50) {
-  failures.push("Our Dogs first paint is not capped at 50 rows for a 500-dog fixture.");
+if (dailyPageSize !== 5 || fixtureDogs.slice(0, dailyPageSize).length !== 5) {
+  failures.push("Our Dogs first paint is not capped at 5 rows for a 500-dog fixture.");
 }
 if (boardingPageSize !== 60 || fixtureDogs.slice(0, boardingPageSize).length !== 60) {
   failures.push("Boarding first paint is not capped at 60 rows for a 500-dog fixture.");
@@ -65,4 +65,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log("Scalable page loading checks passed (500-dog fixture: 50 Our Dogs + 60 Boarding rows on first paint).");
+console.log("Scalable page loading checks passed (500-dog fixture: 5 Our Dogs + 60 Boarding rows on first paint).");

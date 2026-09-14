@@ -6,7 +6,7 @@ const __snuggleStayModuleSource = `function careDueFromDate(lastDate, intervalDa
   return days === null ? false : days >= intervalDays;
 }
 
-var OWNED_DOG_RENDER_PAGE_SIZE = 50;
+var OWNED_DOG_RENDER_PAGE_SIZE = 5;
 var ownedDogVisibleLimit = OWNED_DOG_RENDER_PAGE_SIZE;
 
 function ownedDogExerciseDue(record, date = todayDate()) {
@@ -991,7 +991,7 @@ function renderOwnedDogListStatus(total = 0, shown = 0) {
   }
   const label = "Showing " + shown + " of " + total + " matching dogs.";
   status.innerHTML = shown < total
-    ? '<span>' + escapeHtml(label) + '</span><button type="button" class="secondary-button" data-action="load-more-owned-dogs">Load 50 more</button>'
+    ? '<span>' + escapeHtml(label) + '</span><button type="button" class="secondary-button" data-action="load-more-owned-dogs">Show 5 more</button>'
     : '<span>' + escapeHtml(label) + '</span>';
 }
 
@@ -1003,7 +1003,7 @@ function renderOwnedDogs() {
   const allDogs = readRecords("ownedDog").filter((record) => !record.removed);
   const records = sortRecordsForTable("ownedDog", allDogs.filter((record) => ownedDogMatchesCareFilter(record) && (!query || matches(record, query))));
   const visibleRecords = records.slice(0, Math.max(OWNED_DOG_RENDER_PAGE_SIZE, ownedDogVisibleLimit));
-  const columns = activeColumns("ownedDog");
+  const columns = ownedWorkspaceColumns(activeColumns("ownedDog"));
   const isSpecialCareView = ownedDogCareFilter === "Special Care";
   $("#ownedDogTable")?.classList.toggle("is-special-care-table", isSpecialCareView);
   if (isSpecialCareView) $("#ownedDogColumnManager").hidden = true;
@@ -1032,10 +1032,11 @@ function renderOwnedDogs() {
     $("#ownedDogSummary").hidden = true;
   }
   renderOwnedDogFilterCounts(summary);
+  renderOwnedWorkspaceCareIntro();
   if (!mobileRoster && isSpecialCareView) {
     renderOwnedDogSpecialCareTable(visibleRecords);
   } else if (!mobileRoster) {
-    $("#ownedDogTableHead").innerHTML = \`<tr>\${columns.map((column) => \`<th data-sort-column="\${column.key}" data-table="ownedDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
+    $("#ownedDogTableHead").innerHTML = \`<tr>\${columns.map((column) => column.key === "careFocus" || columns.some((item) => item.key === "careFocus") ? \`<th>\${escapeHtml(column.label)}</th>\` : \`<th data-sort-column="\${column.key}" data-table="ownedDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;
     $("#ownedDogTableBody").innerHTML = visibleRecords.length
       ? visibleRecords
           .map((record) => {
@@ -1067,7 +1068,7 @@ function renderOwnedDogFilterCounts(summary = {}) {
     Females: summary.females || 0,
     Males: summary.males || 0,
     Vaccine: summary.vaccineReview || 0,
-    "Heat Watch": (summary.femalesInHeat || 0) + (summary.heatExpectedSoon || 0),
+    "Heat Watch": readRecords("ownedDog").filter((dog) => !dog.removed && ownedDogMatchesCareFilter(dog, "Heat Watch")).length,
     "Special Care": summary.specialCare || 0,
   };
   $$("#ownedDogCareFilters [data-filter]").forEach((button) => {
