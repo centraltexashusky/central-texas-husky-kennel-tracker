@@ -26,6 +26,8 @@ let html=c.ownedWorkspaceCareFocus(dog);
 for(const text of ['Rabies','Overdue by 13 days','DHPP','Due in 17 days','Bordetella','Administration date missing','Last given:'])assert(html.includes(text),text);
 assert(c.ownedWorkspaceCareFocus({...dog,nextDhppDate:''}).includes('Renewal date needs review'));
 assert(c.ownedWorkspaceCareFocus({...dog,nextDhppDate:'2027-01-01'}).includes('Current'));
+assert(c.ownedWorkspaceCareFocus({...dog,dhppDate:'2026-11-27',nextDhppDate:'2027-11-27'}).includes('Given date is in the future'));
+assert(c.ownedWorkspaceCareFocus({...dog,dhppDate:'2026-08-01',nextDhppDate:'2026-07-01'}).includes('Renewal is before given date'));
 c.ownedDogCareFilter='Heat Watch';html=c.ownedWorkspaceCareFocus(dog);
 assert(html.includes('4 days since start (day 5)'));assert(html.includes('Recorded as in heat'));assert(!html.includes('<script>'));
 assert(c.ownedWorkspaceCareFocus({sex:'Female'}).includes('Start date needed'));

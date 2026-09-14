@@ -83,6 +83,9 @@ function ownedDogVaccineReviewItems(record = {}, referenceDate = todayDate()) {
     if (!loggedDate) {
       return { field: loggedConfig.field, label: \`No \${loggedConfig.label} Logged\`, className: "is-red-warning" };
     }
+    if (loggedDate > referenceDate || (dueDate && dueDate < loggedDate)) {
+      return { field: loggedConfig.field, label: \`\${loggedConfig.label} dates need review\`, className: "is-red-warning" };
+    }
     if (!dueDate) {
       return { field: dueConfig.field, label: \`\${loggedConfig.label} renewal date missing\`, className: "is-red-warning" };
     }

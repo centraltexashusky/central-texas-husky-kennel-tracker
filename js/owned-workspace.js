@@ -52,9 +52,11 @@ function ownedWorkspaceCareFocus(record) {
       const last = dateOnly(dog[config.field]);
       const due = dateOnly(dog[ownedHealthDueConfig[index].field]);
       const days = due ? daysBetweenDates(today,due) : null;
-      const missing = !last || !due || days === null;
+      const invalidOrder = last && due && due < last;
+      const futureGiven = last && last > today;
+      const missing = !last || !due || days === null || invalidOrder || futureGiven;
       const tone = missing || days < 0 ? 'attention' : days <= 30 ? 'soon' : 'current';
-      const status = !last ? 'Administration date missing' : !due || days === null ? 'Renewal date needs review' : days < 0 ? `Overdue by ${-days} days` : days === 0 ? 'Due today' : days <= 30 ? `Due in ${days} days` : 'Current';
+      const status = !last ? 'Administration date missing' : futureGiven ? 'Given date is in the future — review' : invalidOrder ? 'Renewal is before given date — review' : !due || days === null ? 'Renewal date needs review' : days < 0 ? `Overdue by ${-days} days` : days === 0 ? 'Due today' : days <= 30 ? `Due in ${days} days` : 'Current';
       return `<section class="owned-vaccine-item"><strong>${escapeHtml(config.label)}</strong><span class="owned-focus-status is-${tone}">${escapeHtml(status)}</span><small>Last given: ${escapeHtml(last || 'Not recorded')} · Next due: ${escapeHtml(due || 'Not recorded')}</small></section>`;
     }).join('') + '</div>';
   }
