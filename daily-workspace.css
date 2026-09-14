@@ -1,4 +1,8 @@
 /* Daily work queue: scoped so boarding, scheduler, and other forms stay unchanged. */
+.daily-cycle-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:12px 0; }
+.daily-cycle-toolbar p { flex:1 1 270px; margin:0; color:var(--muted-text, #496581); font-size:13px; }
+.daily-cycle-toolbar button { flex:0 0 auto; }
+@media (max-width:600px) { .daily-cycle-toolbar p { flex-basis:100%; } .daily-cycle-toolbar button { flex:1; } }
 body:has(#dailyPage.is-active) .page-header h1 { font-size: 28px; line-height: 1.2; }
 body:has(#dailyPage.is-active) .page-header .eyebrow { display: none; }
 body:has(#dailyPage.is-active) #globalSearchPanel { padding: 12px; }

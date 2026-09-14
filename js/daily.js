@@ -174,7 +174,7 @@ function taskTabMeta(config = readTaskConfig()) {
   const tabMap = new Map(tabs.map((tab) => [tab.id, tab]));
   const ordered = normalizeTaskTabOrder(config._tabOrder, tabs).map((tabId) => tabMap.get(tabId)).filter(Boolean);
   const orderedIds = new Set(ordered.map((tab) => tab.id));
-  return [...ordered, ...tabs.filter((tab) => !orderedIds.has(tab.id))];
+  return [...ordered, ...tabs.filter((tab) => !orderedIds.has(tab.id))].map((tab) => ({ ...tab, label: config._tabSettings?.[tab.id]?.label || tab.label, description: config._tabSettings?.[tab.id]?.description ?? tab.description }));
 }
 
 function taskTabLabel(shift = "") {
@@ -203,7 +203,7 @@ function dailyTaskRecordForDate(date = currentDailyDate()) {
 function dailyTaskCompletionIndex(date = currentDailyDate()) {
   const index = new Map();
   const config = readTaskConfig();
-  completedTasksForDate(date).forEach((completion) => {
+  (typeof taskCycleCompletions === "function" ? taskCycleCompletions(date, config) : completedTasksForDate(date)).forEach((completion) => {
     if (completion.taskId) index.set(taskKey(completion.shift, completion.taskId), completion);
     const matchingTask = (config[completion.shift] || []).find((task) => task.text === completion.taskText);
     if (matchingTask) index.set(taskKey(completion.shift, matchingTask.id), completion);
@@ -885,7 +885,7 @@ function renderOwnedDogMobileCards(records = []) {
     const priority = (dog) => Number(ownedDogExerciseDue(dog)) + Number(ownedDogTrainingDue(dog)) + Number(ownedDogBathDue(dog)) + Number(ownedDogHeatStatus(dog).expectedSoon || ownedDogHeatStatus(dog).inHeat || ownedDogHeatStatus(dog).overdue);
     return priority(b) - priority(a) || ownedDogDisplayName(a).localeCompare(ownedDogDisplayName(b));
   });
-  if (ownedDogCareFilter === "Special Care") {
+  if (ownedDogCareFilter === "Special Care" && typeof ownedWorkspaceCareFocus !== "function") {
     container.innerHTML = mobileRecords.length
       ? mobileRecords.map(ownedDogSpecialCareMobileCardHtml).join("")
       : \`<article class="record-card mobile-roster-card"><strong>No matching Special Care dogs</strong><p>Try a shorter search or another care filter.</p></article>\`;
@@ -1008,7 +1008,7 @@ function renderOwnedDogs() {
   const visibleRecords = records.slice(0, Math.max(OWNED_DOG_RENDER_PAGE_SIZE, ownedDogVisibleLimit));
   const columns = ownedWorkspaceColumns(activeColumns("ownedDog"));
   const isSpecialCareView = ownedDogCareFilter === "Special Care";
-  $("#ownedDogTable")?.classList.toggle("is-special-care-table", isSpecialCareView);
+  $("#ownedDogTable")?.classList.toggle("is-special-care-table", isSpecialCareView && typeof ownedWorkspaceCareFocus !== "function");
   if (isSpecialCareView) $("#ownedDogColumnManager").hidden = true;
   $("#ownedColumnsButton")?.setAttribute("aria-expanded", String(!$("#ownedDogColumnManager").hidden));
   const mobileRoster = matchMedia("(max-width: 760px)").matches;
@@ -1036,7 +1036,7 @@ function renderOwnedDogs() {
   }
   renderOwnedDogFilterCounts(summary);
   renderOwnedWorkspaceCareIntro();
-  if (!mobileRoster && isSpecialCareView) {
+  if (!mobileRoster && isSpecialCareView && typeof ownedWorkspaceCareFocus !== "function") {
     renderOwnedDogSpecialCareTable(visibleRecords);
   } else if (!mobileRoster) {
     $("#ownedDogTableHead").innerHTML = \`<tr>\${columns.map((column) => column.key === "careFocus" || columns.some((item) => item.key === "careFocus") ? \`<th>\${escapeHtml(column.label)}</th>\` : \`<th data-sort-column="\${column.key}" data-table="ownedDog" data-column="\${column.key}" draggable="true" title="Drag to reorder. Double-click to sort.">\${escapeHtml(column.label)}</th>\`).join("")}<th>Actions</th></tr>\`;

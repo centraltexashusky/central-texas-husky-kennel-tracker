@@ -33,7 +33,7 @@ function ownedWorkspaceCareFilter() {
 }
 
 function ownedWorkspaceColumns(general) {
-  const titles = {Vaccine:'Vaccination review', 'Heat Watch':'Heat watch', 'Training Due':'Training plan & recent session', 'Exercise Due':'Exercise plan & recent activity'};
+  const titles = {Vaccine:'Vaccination review', 'Heat Watch':'Heat watch', 'Training Due':'Training plan & recent session', 'Exercise Due':'Exercise plan & recent activity', 'Bath Due':'Bath routine & last bath', 'Special Care':'Current special care'};
   const title = titles[ownedWorkspaceCareFilter()];
   return title ? [{key:'callName',label:'Dog'}, {key:'careFocus',label:title}] : general;
 }
@@ -44,9 +44,26 @@ function ownedWorkspaceCareFacts(items) {
 
 function ownedWorkspaceCareFocus(record) {
   const filter = ownedWorkspaceCareFilter();
-  if (!['Vaccine','Heat Watch','Training Due','Exercise Due'].includes(filter)) return '';
+  if (!['Vaccine','Heat Watch','Training Due','Exercise Due','Bath Due','Special Care'].includes(filter)) return '';
   const dog = normalizeOwnedDogCare(record);
   const today = todayDate();
+  if (filter === 'Special Care') {
+    const logs = ownedDogActivityLogs(dog).filter(log => log.group === 'Medical/Care' && dateOnly(log.date || log.loggedAt) <= today).slice(0,2);
+    return `<p class="owned-care-warning">${escapeHtml(ownedDogCareAlertNotes(dog) || 'No specific care instructions saved — review this profile.')}</p>` + ownedWorkspaceCareFacts([
+      ['Care status',dog.careStatus || 'Special care instructions on file'],
+      ...logs.map((log,index) => [index ? 'Previous care note' : 'Latest care note',[log.date || dateOnly(log.loggedAt),log.note || 'No note recorded',log.completedBy].filter(Boolean).join(' · ')])
+    ]) + (logs.length ? '' : '<p>No medical / behavior notes recorded.</p>');
+  }
+  if (filter === 'Bath Due') {
+    const log = ownedDogActivityLogs(dog).find(log => log.group === 'Bath' && dateOnly(log.date || log.loggedAt) <= today);
+    const days = dog.nextBath ? daysBetweenDates(today,dog.nextBath) : null;
+    return ownedWorkspaceCareFacts([
+      ['Next bath',dog.nextBath ? `${dog.nextBath}${days < 0 ? ` · ${-days} days overdue` : days === 0 ? ' · Due today' : ''}` : 'Date needs review'],
+      ['Last bath',dog.lastBath],['Bath routine',dog.bathRoutine],['Products / shampoo',dog.bathProducts],
+      ['Frequency',dog.bathIntervalDays > 0 ? `Every ${dog.bathIntervalDays} days` : 'No recurring reminder'],
+      ['Latest bath note',log ? [log.date || dateOnly(log.loggedAt),log.note || 'No note recorded',log.completedBy].filter(Boolean).join(' · ') : 'No bath log recorded']
+    ]);
+  }
   if (filter === 'Vaccine') {
     return '<div class="owned-vaccine-review">' + ownedLoggedVaccinationConfig.map((config,index) => {
       const last = dateOnly(dog[config.field]);
@@ -93,7 +110,9 @@ function renderOwnedWorkspaceCareIntro() {
     Vaccine:'Review missing dates, overdue vaccines, and vaccines due within 30 days. Dates come from saved records; confirm the schedule with your veterinarian.',
     'Heat Watch':'Recorded heat status, days since start, and estimated upcoming cycles. Estimates are not confirmation; missing dates are included for review.',
     'Training Due':'Use the saved routine, goals, and last completed session to plan the next training session.',
-    'Exercise Due':'Review the saved exercise routine, current instructions, and most recent completed activity.'
+    'Exercise Due':'Review the saved exercise routine, current instructions, and most recent completed activity.',
+    'Bath Due':'Bath dates, saved routine and products, and the latest bath note. Open View for the full bath history.',
+    'Special Care':'Current care instructions and the two most recent medical / behavior notes. Routine exercise, training, and bath logs stay in the dog profile.'
   }[filter];
   let panel = document.getElementById('ownedCareViewIntro');
   if (!panel) {
@@ -101,7 +120,7 @@ function renderOwnedWorkspaceCareIntro() {
     document.getElementById('ownedDogCareFilters').after(panel);
   }
   panel.textContent = text || ''; panel.hidden = !text;
-  const focused = ['Vaccine','Heat Watch','Training Due','Exercise Due'].includes(filter);
+  const focused = ['Vaccine','Heat Watch','Training Due','Exercise Due','Bath Due','Special Care'].includes(filter);
   document.getElementById('ownedDogTable')?.classList.toggle('owned-focus-table',focused);
   const columns = document.getElementById('ownedColumnsButton');
   if (columns) columns.hidden = focused;
@@ -121,7 +140,7 @@ function ownedWorkspaceMobileCard(dog) {
   return `<article class="owned-modern-card" data-id="${escapeHtml(dog.id)}">
     <div class="owned-roster-identity">${ownedWorkspacePhoto(dog)}<div><strong>${escapeHtml(ownedDogDisplayName(dog))}</strong><small>${escapeHtml(dog.sex || '')}</small></div></div>
     ${focus || ownedDogCareTagsHtml(dog)}
-    ${ownedDogCareAlertNotes(dog) ? `<p class="owned-care-warning">${escapeHtml(ownedDogCareAlertNotes(dog))}</p>` : ''}
+    ${ownedWorkspaceCareFilter() !== 'Special Care' && ownedDogCareAlertNotes(dog) ? `<p class="owned-care-warning">${escapeHtml(ownedDogCareAlertNotes(dog))}</p>` : ''}
     ${focus ? '' : `<dl class="owned-card-facts"><div><dt>Next care</dt><dd>${escapeHtml(ownedWorkspaceNextCare(dog))}</dd></div><div><dt>Food</dt><dd>${escapeHtml(dog.foodAmount || 'Not specified')}</dd></div></dl>`}
     <div class="owned-card-actions"><button type="button" class="secondary-button" data-action="view-owned" data-id="${escapeHtml(dog.id)}">View</button><button type="button" data-action="log-owned-care" data-id="${escapeHtml(dog.id)}">Log Care</button></div>
   </article>`;
@@ -189,7 +208,7 @@ function setupOwnedWorkspace(record) {
   refreshOwnedWorkspace();
 }
 
-function openOwnedWorkspace(record, tab = ({'Exercise Due':'Exercise','Training Due':'Training','Heat Watch':'Heat Cycle'}[ownedWorkspaceCareFilter()] || 'Overview')) {
+function openOwnedWorkspace(record, tab = ({'Exercise Due':'Exercise','Training Due':'Training','Heat Watch':'Heat Cycle','Bath Due':'Baths','Special Care':'Medical / Care Notes'}[ownedWorkspaceCareFilter()] || 'Overview')) {
   openOwnedDog(record);
   ownedWorkspaceMode = 'view';
   setOwnedDogActiveTab(tab);

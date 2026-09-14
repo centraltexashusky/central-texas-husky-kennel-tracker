@@ -1557,6 +1557,7 @@ function normalizeTaskConfig(saved = null) {
   const availableTabs = [...defaultTaskTabMeta.filter((tab) => !removedTabs.includes(tab.id)), ...customTabs];
   const config = {
     _tabs: customTabs,
+    _tabSettings: saved?._tabSettings && typeof saved._tabSettings === "object" ? saved._tabSettings : {},
     _removedTabs: removedTabs,
     _tabOrder: normalizeTaskTabOrder(saved?._tabOrder, availableTabs),
     morning: normalizeTaskList(saved?.morning, hasGroup("morning") ? [] : defaultTaskList("morning", defaultDailyTasks.morning)),
@@ -4609,6 +4610,16 @@ async function completeDailyTask(button) {
   const shift = button.dataset.shift || "morning";
   const taskText = button.dataset.taskText || "";
   const taskId = button.dataset.id || taskTemplateId(shift, taskText, 0);
+  if (button.dataset.cycleChecking === "true") return;
+  button.dataset.cycleChecking = "true";
+  try {
+    if (!await ensureTaskCycleReady(shift, date)) return;
+  } catch (error) {
+    showToast("Could not verify this task's reset cycle. Please retry: " + error.message);
+    return;
+  } finally {
+    delete button.dataset.cycleChecking;
+  }
   const completionIndex = dailyTaskCompletionIndex(date);
   if (completionIndex.has(taskKey(shift, taskId))) {
     const completed = completionIndex.get(taskKey(shift, taskId));
@@ -4830,33 +4841,50 @@ function renderCustomTaskPanels(config = readTaskConfig(), completionIndex = nul
 // Extracted to js/daily.js: taskTabFormHtml
 
 
-function openTaskTabPopup() {
-  showDetailDialog("Add Task Tab", taskTabFormHtml());
+function openTaskTabPopup(tabId = "") {
+  if (currentRole() !== "admin") return;
+  const tab = taskTabMeta().find((item) => item.id === tabId) || {};
+  showDetailDialog(tabId ? "Task tab settings" : "Add Task Tab", taskCycleSettingsForm(tab));
 }
 
 async function saveTaskTabFromForm(formEl) {
+  if (currentRole() !== "admin") return null;
   if (!validateForm(formEl)) return null;
   const payload = formPayload(formEl);
   const label = payload.label.trim();
   const description = (payload.description || "").trim();
   const config = readTaskConfig();
-  const removedDefault = defaultTaskTabMeta.find((tab) => tab.label.toLowerCase() === label.toLowerCase() && (config._removedTabs || []).includes(tab.id));
-  if (removedDefault) {
-    config._removedTabs = (config._removedTabs || []).filter((tabId) => tabId !== removedDefault.id);
-    if (!config[removedDefault.id]) config[removedDefault.id] = [];
-    await persistTaskConfig(config);
-    dailyTaskTab = removedDefault.id;
-    renderDailyTaskLists();
-    return removedDefault;
-  }
-  if (taskTabMeta(config).some((tab) => tab.label.toLowerCase() === label.toLowerCase())) {
+  const previousConfig = JSON.parse(JSON.stringify(config));
+  const editingId = formEl.dataset.tabId || "";
+  const existing = taskTabMeta(config).find((tab) => tab.id === editingId);
+  if (editingId && !existing) throw new Error("This tab no longer exists. Reopen the task list.");
+  const frequency = payload.frequency || "daily";
+  const days = Number(payload.days || 1);
+  const start = payload.start || currentDailyDate();
+  if (!label || !["daily", "weekly", "monthly", "days"].includes(frequency) || !Number.isInteger(days) || days < 1 || days > 365 || !isTaskCycleDate(start)) throw new Error("Enter a valid name, start date, and reset interval (1–365 days).");
+  if (taskTabMeta(config).some((tab) => tab.id !== editingId && tab.label.toLowerCase() === label.toLowerCase())) {
     showToast("A task tab with that name already exists.");
     return null;
   }
-  const tab = { id: normalizeTaskTabId(label), label, description, system: false };
-  config._tabs.push(tab);
-  config[tab.id] = [];
-  await persistTaskConfig(config);
+  const removedDefault = defaultTaskTabMeta.find((tab) => tab.label.toLowerCase() === label.toLowerCase() && (config._removedTabs || []).includes(tab.id));
+  let tab = existing || removedDefault;
+  if (!existing && removedDefault) {
+    config._removedTabs = (config._removedTabs || []).filter((tabId) => tabId !== removedDefault.id);
+    if (!config[removedDefault.id]) config[removedDefault.id] = [];
+  }
+  if (!tab) {
+    tab = { id: normalizeTaskTabId(label), label, description, system: false };
+    config._tabs.push(tab);
+    config[tab.id] = [];
+  }
+  config._tabSettings[tab.id] = { label, description, cycle: { frequency, days, start } };
+  config._tabs = config._tabs.map((item) => item.id === tab.id ? { ...item, label, description } : item);
+  try {
+    await persistTaskConfig(config);
+  } catch (error) {
+    writeTaskConfig(previousConfig, { syncRemote: false });
+    throw error;
+  }
   dailyTaskTab = tab.id;
   renderDailyTaskLists();
   return tab;
@@ -5556,7 +5584,7 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
   }
 }
 
-async function fetchRemoteDailyTaskCompletionRows(pageId = activePageId()) {
+async function fetchRemoteDailyTaskCompletionRows(pageId = activePageId(), config = readTaskConfig()) {
   const windowBounds = pageId === "dashboardPage" && dashboardTimelineRequestedDate
     ? { start: dashboardTimelineRequestedDate, end: dashboardTimelineRequestedDate, detailDate: dashboardTimelineRequestedDate }
     : dailyTaskWorkspaceWindow(pageId);
@@ -5570,7 +5598,9 @@ async function fetchRemoteDailyTaskCompletionRows(pageId = activePageId()) {
   dailyTaskCompletionCountByDate = new Map(
     Object.entries(snapshot.counts || {}).map(([date, count]) => [dateOnly(date), Number(count || 0)]),
   );
-  return arrayValue(snapshot.details);
+  const cycleRows = typeof fetchTaskCycleCompletionRows === "function"
+    ? await cuddleStayRequest((db) => fetchTaskCycleCompletionRows(db, config, windowBounds.detailDate)) : [];
+  return [...new Map([...arrayValue(snapshot.details), ...cycleRows].map((row) => [row.id, row])).values()];
 }
 
 function remoteTaskCompletionSignature(rows = []) {
@@ -5871,7 +5901,8 @@ async function loadRemoteRecords(options = {}) {
       let taskCompletionRowsLoaded = false;
       if (dailyTaskCompletionSyncAvailable && requestedRemoteTypes.includes("dailyTask") && !failedRemoteTypes.has("dailyTask")) {
         try {
-          taskCompletionRows = await withTimeout(fetchRemoteDailyTaskCompletionRows(loadingPageId), 6000, "Daily task completion load");
+          taskCompletionRows = await withTimeout(fetchRemoteDailyTaskCompletionRows(loadingPageId, taskTemplateRecordFromRows(data || [])?.config || readTaskConfig()), 10000, "Daily task completion load");
+          if (readScope !== syncMetaScopeKey()) return;
           taskCompletionRowsLoaded = true;
           mergeDailyTaskCompletionRecords(taskCompletionRows, { replaceLocal: true });
         } catch (completionError) {
@@ -13151,7 +13182,7 @@ function initEvents() {
       const tab = await saveTaskTabFromForm(taskTabForm);
       if (tab) {
         $("#detailDialog").close();
-        showToast("Task tab added.");
+        showToast("Task tab saved.");
       }
       return;
     }

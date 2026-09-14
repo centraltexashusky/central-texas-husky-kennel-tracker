@@ -40,6 +40,13 @@ for(const text of ['Recall','Stay focused','Recall improving','Short sessions'])
 assert(c.ownedWorkspaceCareFocus({}).includes('No completed session recorded'));
 assert.equal(c.ownedWorkspaceColumns([])[1].key,'careFocus');
 c.ownedDogCareFilter='All';assert.equal(c.ownedWorkspaceCareFocus(dog),'');
+c.ownedDogActivityLogs=()=>[{group:'Exercise',date:'2026-09-14',note:'Unrelated treadmill'},...['14','13','12'].map(day=>({group:'Medical/Care',date:'2026-09-'+day,note:'Medical note '+day})),{group:'Bath',date:'2026-09-11',note:'Gentle wash'}];
+c.ownedDogCareAlertNotes=d=>d.medicalCareNotes;
+c.ownedDogCareFilter='Special Care';html=c.ownedWorkspaceCareFocus({...dog,medicalCareNotes:'Check skin daily'});
+assert(html.includes('Check skin daily'));assert(html.includes('Medical note 14'));assert(!html.includes('Medical note 12'));assert(!html.includes('Unrelated treadmill'));assert(!html.includes('Gentle wash'));
+c.ownedDogCareFilter='Bath Due';html=c.ownedWorkspaceCareFocus({...dog,lastBath:'2026-08-01',nextBath:'2026-09-01',bathRoutine:'Brush after washing',bathProducts:'Gentle shampoo',bathIntervalDays:30});
+for(const text of ['Brush after washing','Gentle shampoo','Gentle wash','2026-09-01'])assert(html.includes(text),text);
+assert(!html.includes('Medical note'));assert(!html.includes('Unrelated treadmill'));
 assert.equal(JSON.stringify(dog),before,'Care views never mutate saved profiles/history');
 assert(daily.includes('OWNED_DOG_RENDER_PAGE_SIZE = 5'));
 assert(daily.includes('Show 5 more'));

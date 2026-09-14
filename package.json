@@ -1,6 +1,8 @@
 {
   "type": "module",
   "scripts": {
+    "test:task-cycles": "node tools/task-cycles-check.mjs",
+    "test:task-cycles-browser": "node tools/task-cycles-browser-check.mjs",
     "test:stay-reminders": "node tools/stay-reminders-check.mjs",
     "test:timesheet-workspace": "node tools/timesheet-workspace-check.mjs",
     "test:timesheet-browser": "node tools/timesheet-workspace-browser-check.mjs",

@@ -8,6 +8,8 @@ function setupDailyWorkspace() {
   page.addEventListener('click', event => {
     const view = event.target.closest('[data-daily-view]');
     if (view) setDailyWorkspaceView(view.dataset.dailyView);
+    if (event.target.closest('#dailyAddTab')) openTaskTabPopup();
+    if (event.target.closest('#dailyTabSettings')) openTaskTabPopup(dailyTaskTab);
     if (event.target.closest('#dailyManageTasks')) {
       if (currentRole() !== 'admin') return;
       page.dataset.taskManaging = page.dataset.taskManaging === 'true' ? 'false' : 'true';
@@ -82,10 +84,17 @@ function refreshDailyWorkspace(config, completionIndex) {
   document.getElementById('dailyWorkspaceDate').textContent = dailyCareLogDateLabel(currentDailyDate());
   const manage = document.getElementById('dailyManageTasks');
   manage.hidden = currentRole() !== 'admin';
+  document.getElementById('dailyAddTab').hidden = currentRole() !== 'admin';
+  document.getElementById('dailyTabSettings').hidden = currentRole() !== 'admin' || !selected;
+  const cycle = taskCycleWindow(dailyTaskTab, currentDailyDate(), config);
+  document.getElementById('dailyCycleSummary').textContent = cycle.active ? `${cycle.label} · Next reset ${cycle.next} · Completion history kept` : `First cycle starts ${cycle.start}`;
   manage.setAttribute('aria-pressed', page.dataset.taskManaging);
   manage.textContent = page.dataset.taskManaging === 'true' ? 'Finish managing' : 'Manage tasks';
   const panel = [...page.querySelectorAll('[data-task-panel]')].find(item => item.dataset.taskPanel === dailyTaskTab);
   if (panel) {
+    const heading = panel.querySelector('.section-heading h2');
+    if (heading && selected) heading.textContent = `${selected.label} Tasks`;
+    if (!cycle.active) panel.querySelectorAll('.task-done-button').forEach(button => { button.disabled = true; });
     let empty = panel.querySelector('.daily-task-empty');
     if (!empty) {
       empty = document.createElement('div'); empty.className = 'daily-task-empty'; empty.setAttribute('role', 'status');
