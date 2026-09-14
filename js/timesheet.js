@@ -1610,7 +1610,7 @@ function renderPayrollTab() {
 
   rows.innerHTML = payroll.staff.length
     ? payroll.staff.map((item) => \`<tr\${item.missingRate ? ' class="payroll-rate-missing"' : ""}>
-        <td><strong>\${escapeHtml(item.staffName || "Staff")}</strong>\${item.staffEmail ? \`<span>\${escapeHtml(item.staffEmail)}</span>\` : ""}</td>
+        <td><button type="button" class="payroll-staff-link" data-payroll-staff="\${escapeHtml(normalizeEmail(item.staffEmail) || normalizeHelperName(item.staffName))}" aria-haspopup="dialog" aria-label="View logged hours for \${escapeHtml(item.staffName || "Staff")}"><strong>\${escapeHtml(item.staffName || "Staff")}</strong>\${item.staffEmail ? \`<span>\${escapeHtml(item.staffEmail)}</span>\` : ""}</button></td>
         <td>\${escapeHtml(item.hours.toFixed(2))}</td>
         <td>\${item.missingRate ? '<strong class="service-warning-text">Rate not set</strong>' : escapeHtml(staffHourlyRateText({ hourlyRate: item.rate }))}</td>
         <td><strong>\${item.missingRate ? "—" : escapeHtml(payrollMoney(item.total || 0))}</strong></td>

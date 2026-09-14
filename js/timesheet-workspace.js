@@ -2,6 +2,41 @@
 var timesheetStaffFilterValue = '';
 var timesheetTimeOffFilter = 'All';
 
+// Payroll drill-down uses exactly the same entries and rounding as the summary.
+function openPayrollStaffHours(staffKey) {
+  if (currentRole() !== 'admin') return;
+  const range = timesheetActiveRange();
+  const payroll = staffPayrollSummaryForRange(range, {includeAll:true});
+  const keyFor = item => normalizeEmail(item.staffEmail) || normalizeHelperName(item.staffName) || item.id;
+  const staff = payroll.staff.find(item => keyFor(item) === staffKey);
+  if (!staff) { showToast('No completed clock records for this employee in the selected period.'); return; }
+  const entries = payroll.entries.filter(item => keyFor(item) === staffKey);
+  const originals = new Map(readRecords('timesheet').filter(r => !r.removed).map(r => [r.id,r]));
+  const rows = entries.map(entry => {
+    const record = originals.get(entry.id) || {};
+    return `<tr><td data-label="Date">${escapeHtml(timesheetDateLabel(entry.date))}</td><td data-label="Clock in">${escapeHtml(formatDateTime(record.clockInTime))}</td><td data-label="Clock out">${escapeHtml(formatDateTime(record.clockOutTime))}</td><td data-label="Hours"><strong>${entry.hours.toFixed(2)}</strong></td><td data-label="Note">${escapeHtml(record.note || '—')}</td></tr>`;
+  }).join('');
+  showDetailDialog(`${staff.staffName || 'Staff'} · Logged hours`, `<section class="payroll-hours-detail">
+    <p class="payroll-hours-range">${escapeHtml(timesheetRangeLabel(range))}</p>
+    ${staff.staffEmail ? `<p class="payroll-hours-email">${escapeHtml(staff.staffEmail)}</p>` : ''}
+    <div class="payroll-hours-summary"><div><span>Completed hours</span><strong>${staff.hours.toFixed(2)}</strong></div><div><span>Clock records</span><strong>${entries.length}</strong></div><div><span>Hourly rate</span><strong>${staff.missingRate ? 'Not set' : escapeHtml(staffHourlyRateText({hourlyRate:staff.rate}))}</strong></div><div><span>Estimated gross pay</span><strong>${staff.missingRate ? '—' : payrollMoney(staff.total)}</strong></div></div>
+    <div class="table-wrap"><table class="data-table payroll-hours-table"><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th>Hours</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="payroll-hours-note">Completed clock records only; open and removed entries are excluded. Hours use the saved records, with the same rounding as Payroll Review. Gross pay is before taxes and deductions.</p>
+  </section>`);
+}
+
+document.addEventListener('click', event => {
+  if (event.target.closest('#lastWeekPayrollDateFilterButton')) {
+    if (currentRole() !== 'admin') return;
+    const currentWeek = timesheetDefaultRange();
+    timesheetFilterStart = addDays(currentWeek.start,-7);
+    timesheetFilterEnd = addDays(currentWeek.start,-1);
+    renderTimesheet();
+  }
+  const staff = event.target.closest('#payrollRows [data-payroll-staff]');
+  if (staff) openPayrollStaffHours(staff.dataset.payrollStaff);
+});
+
 function timesheetOutlineIcon(kind) {
   const paths = {
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/>',
