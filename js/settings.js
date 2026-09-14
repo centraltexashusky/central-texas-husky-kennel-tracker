@@ -1823,7 +1823,11 @@ function financialIncomeChartSvg(buckets = []) {
     : left + ((width - left - right) * index / Math.max(1, buckets.length - 1));
   const yFor = (value) => top + (height - top - bottom) * (1 - ((Number(value || 0) - minValue) / span));
   const pointsFor = (field) => buckets.map((bucket, index) => xFor(index).toFixed(1) + "," + yFor(bucket[field]).toFixed(1)).join(" ");
-  const tickValues = minValue < 0 ? [minValue, 0, maxValue] : [0, maxValue / 2, maxValue];
+  // Small losses beside a large income peak must not overlap the zero label.
+  const zeroLabelFits = Math.abs(yFor(minValue) - yFor(0)) >= 20;
+  const tickValues = minValue < 0
+    ? (zeroLabelFits ? [minValue, 0, maxValue] : [minValue, maxValue / 2, maxValue])
+    : [0, maxValue / 2, maxValue];
   const tickLines = tickValues.map((value) => {
     const y = yFor(value).toFixed(1);
     return '<g><line class="chart-grid-line" x1="' + left + '" y1="' + y + '" x2="' + (width - right) + '" y2="' + y + '" /><text class="chart-axis-label" x="' + (left - 12) + '" y="' + (Number(y) + 4) + '" text-anchor="end">' + escapeHtml(financialCompactMoney(value)) + '</text></g>';
