@@ -890,7 +890,7 @@ function serviceCatalogForStayRequests(options = {}) {
     .filter((service) => !service.removed && serviceHasFlag(service, "Active"))
     .filter((service) => includeAdminOnly || !serviceHasFlag(service, "Admin only"))
     .filter((service) => service.category !== "Boarding" || serviceDependencyId(service))
-    .filter((service) => !user || serviceMatchesCustomerPricingScope(service, user));
+    .filter((service) => options.pricingScope ? serviceMatchesPricingScopeForResolution(service, options.pricingScope) : !user || serviceMatchesCustomerPricingScope(service, user));
 }
 
 function normalizedServiceLookupText(value = "") {
@@ -1304,7 +1304,7 @@ function financialSingleEntryTotals(entry = {}) {
   const lineServiceTotal = financialLineItemSum(snapshot, (line) => line.type === "service");
   const serviceSource = snapshot.serviceSubtotal !== undefined
     ? snapshot.serviceSubtotal
-    : (lineServiceTotal > 0 ? lineServiceTotal : boardingStayRequestTotal(stay.requests || [], { user: boardingPricingUserForRecord(record), preferCatalogPricing: true }));
+    : (lineServiceTotal > 0 ? lineServiceTotal : boardingStayRequestTotal(stay.requests || [], { user: boardingPricingUserForRecord(record), pricingScope: snapshot.customerPricingScope || snapshot.pricingScope || customerPricingScopeForDog(record), preferCatalogPricing: true }));
   const services = Number(serviceSource || 0) || 0;
   const lineBoardingTotal = financialLineItemSum(snapshot, (line) => ["boarding", "boarding-program"].includes(line.type));
   const boardingSource = snapshot.boardingSubtotal !== undefined

@@ -66,6 +66,13 @@ try {
  assert.equal(await page.evaluate(()=>customerPricingScopeForDog({}, {isMember:true})),'non-member');
  const serviceOnly=await page.evaluate(()=>boardingDogPricingLines([{id:'a',pricingScopeOverride:'member'},{id:'b'}],{days:2,isServiceRequest:true}));
  assert(serviceOnly.every(p=>p.total===0));
+ const legacyTotals=await page.evaluate(()=>{
+   writeRecords('service',[...readRecords('service'),{id:'qa-legacy-member-bath',type:'service',serviceName:'Legacy member bath',category:'Grooming',basePrice:40,pricingScope:'member',flags:['Active','Member Pricing']}]);
+   return financialSingleEntryTotals({record:{pricingScopeOverride:'member'},stay:{id:'legacy',requests:['Legacy member bath'],pricingSnapshot:{total:225}}});
+ });
+ assert.equal(legacyTotals.total,225);
+ assert.equal(legacyTotals.services,40,'Legacy member service remains service income after account becomes regular');
+ assert.equal(legacyTotals.boarding,185);
  const escaped=await page.evaluate(()=>adminFinancialExportRows([{description:'=HYPERLINK("bad")',amount:10}])[0].Description);
  assert(escaped.startsWith("'="));
  await page.setViewportSize({width:390,height:844});

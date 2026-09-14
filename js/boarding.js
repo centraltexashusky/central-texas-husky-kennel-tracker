@@ -1607,6 +1607,7 @@ function boardingPricingSnapshotForStay(record = {}, stay = {}, options = {}) {
   const customerPricingScope = ratePlan.customerPricingScope || customerPricingScopeForUser(pricingUser);
   const servicePricingOptions = {
     user: pricingUser,
+    pricingScope: customerPricingScope,
     preferCatalogPricing: Boolean(options.preferCatalogPricing || options.forceCurrentPricing || boardingStayCanUseCurrentPricing(record, stay)),
   };
   const stayType = options.stayType || stay.stayType || record.stayType || "Boarding";
@@ -5552,6 +5553,7 @@ function boardingFamilyPricingSnapshots(entries = []) {
   const groupBoardingSubtotal = lines.reduce((total, line) => total + Number(line.total || 0), 0);
   const groupServiceSubtotal = activeEntries.reduce((total, entry) => total + boardingStayRequestTotal(entry.stay?.requests || [], {
     user: boardingPricingUserForRecord(entry.record || {}),
+    pricingScope: customerPricingScopeForDog(entry.record || {}),
     preferCatalogPricing: true,
   }), 0);
   const groupTotal = groupBoardingSubtotal + groupServiceSubtotal;
