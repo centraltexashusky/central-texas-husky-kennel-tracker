@@ -25,6 +25,7 @@ body:has(:is(#servicesPage,#financialsPage).is-active) .page-header .eyebrow { d
 #servicePricingTabs .tab-count { background:transparent !important; }
 #servicesPage #servicePricingTabs button { border:0 !important; border-bottom:3px solid transparent !important; background:transparent !important; box-shadow:none !important; }
 #servicesPage #servicePricingTabs button.is-active { border-bottom-color:var(--af-blue) !important; }
+#servicesPage #servicePricingTabs { flex-direction:row !important; }
 #financialsPage #financialViewTabs { max-width:none !important; }
 #servicesPage .table-toolbar { display:flex !important; gap:12px !important; margin:0 0 16px !important; padding:0 !important; }
 #servicesPage #serviceSearch { max-width:400px; }
