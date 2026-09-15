@@ -5,7 +5,7 @@
 .emergency-heading p { margin:0; color:#516986; }
 .emergency-danger { background:#fff1f0; color:#9c2424; border:1px solid #edb4af; border-radius:8px; padding:14px 16px; margin:22px 0; font-weight:700; }
 .emergency-danger a { color:inherit; text-decoration:underline; }
-:root[data-theme="light"] .emergency-shortcut { width:auto; margin:0; color:#9c2424!important; border-color:#edb4af!important; background:#fff1f0!important; }
+:root[data-theme="light"] .emergency-shortcut { width:auto; margin:0; justify-content:center; text-align:center; color:#9c2424!important; border-color:#edb4af!important; background:#fff1f0!important; }
 .emergency-contacts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-bottom:22px; }
 .emergency-contacts article { border:1px solid var(--em-line); padding:18px; border-radius:8px; min-width:0; }
 .emergency-contacts h3 { font-size:16px; margin:0 0 12px; }
