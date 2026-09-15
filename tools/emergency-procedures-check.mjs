@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=name=>readFileSync(new URL(`../${name}`,import.meta.url),'utf8');
+const js=read('js/emergency.js'), shared=read('js/shared.js'), page=read('index.html');
+assert.equal((js.match(/\{id:'(?:injury|fire|tornado|power|evacuation|missing|poison|heat)'/g)||[]).length,8);
+assert.match(page,/data-page="emergencyPage" data-roles="helper,staff,admin"/);
+assert.match(shared,/emergencyPage: \{ critical: \["emergencyPlan"\], deferred: \[\] \}/);
+assert.match(js,/currentRole\(\)!=='admin'/);
+assert.match(js,/await loadSharedPlan\(\)/);
+assert.match(js,/latest.updatedAt/);
+assert(js.indexOf('await sendPayload(record')<js.indexOf("upsertRecord('emergencyPlan',record)"));
+assert.match(js,/Your edits are still here/);
+assert.match(js,/afterprint/);
+assert.match(js,/html\(p\[k\]\)/);
+assert.doesNotMatch(js+page,/18213|Anicio Gallo|Inside the main house/,'Private facility details must not be published in static assets');
+assert.match(read('emergency-workspace.css'),/@media print/);
+console.log('PASS emergency routes, role gates, eight guides, shared-save protection, escaped content, private-data separation, print support.');

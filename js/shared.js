@@ -362,6 +362,7 @@ var defaultTaskTabMeta = [
 var mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
 var mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 var mobileMoreMenuItems = [
+  { pageId: "emergencyPage", label: "Emergency Procedures", roles: ["helper", "staff", "admin"] },
   { pageId: "timesheetPage", label: "Timesheet", roles: ["helper", "staff", "admin"] },
   { pageId: "taskSchedulerPage", label: "Task Scheduling", roles: ["helper", "staff", "admin"] },
   { pageId: "requestsPage", label: "Requests & Maintenance", roles: ["helper", "staff", "admin"] },
@@ -537,6 +538,7 @@ var stateKeys = {
   boardingAgreement: "cth-boardingAgreement-records",
   settingsUser: "cth-settingsUser-records",
   appConfig: "cth-appConfig-records",
+  emergencyPlan: "cth-emergencyPlan-records",
   cfoNote: "cth-cfoNote-records",
   calendarNote: "cth-calendarNote-records",
   kennelLocation: "cth-kennelLocation-records",
@@ -1712,6 +1714,7 @@ async function ensureCuddleStayCustomerMembership() {
 
 function recordTypes() {
   return [
+    "emergencyPlan",
     "ownedDog", "boardingDog", "request", "maintenance", "timesheet", "service", "dailyTask", "careLog", "scheduledCareTask", "showEvent", "showEntry", "showDayTask", "showCareLog", "showResult", "showInvoice", "financialTransaction", "customerDog",
     "dog", "userDogAccess", "boardingReservation", "reservationService", "dogVaccination", "dogInternalNote", "dogActivityLog", "reservationCustomerUpdate", "dogClaimRequest", "legacyDogLink", "boardingAgreement",
     "settingsUser", "cfoNote", "calendarNote", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride", "auditLog", "staffSchedule", "timeOffRequest", "kennelHoliday", "scheduleTemplate", "schedulePublish", "notificationLog", "notificationPreference",
@@ -1729,6 +1732,7 @@ function remoteRecordTypesForCurrentApp() {
 
 function remoteRecordLoadPlanForPage(pageId = "") {
   const plans = {
+    emergencyPage: { critical: ["emergencyPlan"], deferred: [] },
     dashboardPage: {
       critical: ["boardingDog", "ownedDog", "request", "maintenance", TASK_TEMPLATE_RECORD_TYPE],
       deferred: ["careLog", "calendarNote", "notificationLog", "notificationPreference"],
@@ -1867,6 +1871,7 @@ var REMOTE_CUSTOMER_WRITE_RECORD_TYPES = new Set([
 ]);
 
 var REMOTE_ADMIN_CONFIG_RECORD_TYPES = new Set([
+  "emergencyPlan",
   "service",
   "cfoNote",
   "kennelLocation",
@@ -5269,6 +5274,7 @@ function renderAfterRealtimeTypes(types = []) {
   if (!typeSet.size) return;
   const activePage = activePageId();
   const hasAny = (items) => items.some((type) => typeSet.has(type));
+  if (activePage === "emergencyPage" && typeSet.has("emergencyPlan")) window.renderEmergencyProcedures?.();
 
   const boardingChanged = hasAny(["boardingDog", "customerDog", "service", "kennelLocation", "kennelBuilding", "operationHours", "operationDateOverride"]);
   const dailyChanged = hasAny(["dailyTask", "dailyTaskCompletion", "careLog"]);
@@ -11924,6 +11930,7 @@ function scheduleRender(options = {}) {
 function renderActivePageRecords(pageId = activePageId()) {
   const mark = efficiencyPerfStart(\`renderActivePageRecords:\${pageId}\`);
   const renderers = {
+    emergencyPage: () => window.renderEmergencyProcedures?.(),
     dashboardPage: () => renderDashboard(),
     dailyPage: () => renderDailyTaskLists(),
     taskSchedulerPage: () => renderTaskScheduler(),

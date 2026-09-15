@@ -1,6 +1,9 @@
 // === MODULE: SEARCH ===
 const __snuggleStayModuleSource = `function globalSearchEntries() {
   const entries = [];
+  if (pageAllowed("emergencyPage")) {
+    entries.push({ label: "Emergency Procedures", detail: "Emergency help: injured dog, veterinarian, fire, tornado, power outage, generator, evacuation, missing dog, poisoning, heat distress", type: "emergencyGuide", id: "", pageId: "emergencyPage" });
+  }
   readRecords("ownedDog").filter((record) => !record.removed).forEach((record) => {
     const detail = [ownedDogCareSummary(record), record.ownerName, record.ownerEmail, (record.ownerPhone || "").replace(/\\D/g, "")].filter(Boolean).join(" | ");
     entries.push({ label: ownedDogDisplayName(record), detail, type: "ownedDog", id: record.id, pageId: "ourDogsPage" });
