@@ -4045,6 +4045,7 @@ function updateMobileNavigationAccess() {
 }
 
 function updateNavigationAccess() {
+  if (!pageAllowed("emergencyPage")) window.renderEmergencyProcedures?.();
   $$(".nav-button").forEach((button) => {
     const isLogin = button.dataset.page === "loginPage";
     const locked = !pageAllowed(button.dataset.page);

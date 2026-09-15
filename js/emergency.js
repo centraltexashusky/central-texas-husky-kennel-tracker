@@ -13,7 +13,7 @@ const guides = [
     ['Call a veterinarian now', 'Call the primary vet during business hours or the emergency hospital after hours. Describe the symptoms and follow their directions. Trouble breathing, collapse, severe bleeding or seizures need urgent veterinary attention.'],
     ['Keep yourself safe and limit handling', 'An injured dog may bite. Keep the area quiet and avoid unnecessary movement. Do not give medication or attempt treatment beyond your training without veterinary direction.'],
     ['Prepare safe transport and notify the manager', 'Call ahead, use safe restraint, and bring the dog’s identification and relevant medical information. Coordinate owner notification without delaying urgent care. Record what happened and the care provided.'],
-  ], fields:['manager','transport','keys'], refs:['vet']},
+  ], fields:['supplies','manager','transport','keys'], refs:['vet']},
   {id:'fire', title:'Fire or smoke', keywords:'smoke burning gas alarm evacuation exit flames', steps:[
     ['Get people out and call 911 from safety', 'Raise the alarm and leave by a safe exit. Do not delay evacuation to retrieve belongings or use this app.'],
     ['Never re-enter a dangerous building', 'Do not return for dogs, keys or equipment. Tell firefighters where any people or animals remain. Move dogs only when it can be done without entering danger or delaying your escape.'],
@@ -74,12 +74,23 @@ const canRead = () => helperIsLoggedIn() && ['helper','staff','admin'].includes(
 function plan() { return readRecords('emergencyPlan').find(r=>r.id===PLAN_ID && !r.removed) || {}; }
 function vets(p) { return vetDefaults.map((v,i)=>({...v,...p.vets?.[i]})); }
 function referenceLinks(keys) { return keys.map(k=>`<a href="${references[k][1]}" target="_blank" rel="noopener noreferrer">${references[k][0]}</a>`).join(' · '); }
+function phoneLinks(value) {
+  return html(value).replace(/(?:\+?1[ .-])?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}\b/g,number=>`<a href="tel:${number.replace(/[^+\d]/g,'')}">${number}</a>`);
+}
+function staffContactsHtml(p) {
+  const contacts=String(p.manager || '').split(/\n\s*\n/).filter(s=>s.trim());
+  return `<h3>Owner &amp; backup contacts</h3><p class="emergency-muted">Use the roles and backup conditions below. For fire or immediate danger to people, call 911 first.</p><div class="emergency-staff-grid">${contacts.length ? contacts.map(contact=>{
+    const number=contact.match(/(?:\+?1[ .-])?\(?\d{3}\)?[ .-]\d{3}[ .-]\d{4}\b/)?.[0];
+    const heading=contact.split(/Phone:| — /)[0].replace(/\.\s*$/,'').trim();
+    return `<article><h4>${html(heading)}</h4><p>${phoneLinks(contact)}</p>${number ? `<a class="secondary-button emergency-call" href="tel:${number.replace(/[^+\d]/g,'')}" aria-label="Call ${html(heading)}">Call contact</a>` : '<p class="emergency-missing">No complete phone number recorded</p>'}</article>`;
+  }).join('') : '<p class="emergency-missing">Facility contacts have not been loaded or configured. Use the listed veterinary contacts for urgent animal care.</p>'}</div>`;
+}
 function fieldList(p, keys) {
-  return `<dl class="emergency-facts">${keys.map(k=>`<div><dt>${html(fields.find(f=>f[0]===k)?.[1] || k)}</dt><dd>${p[k] ? html(p[k]).replace(/\n/g,'<br>') : '<span class="emergency-missing">Needs setup — contact the manager</span>'}</dd></div>`).join('')}</dl>`;
+  return `<dl class="emergency-facts">${keys.map(k=>`<div><dt>${html(fields.find(f=>f[0]===k)?.[1] || k)}</dt><dd>${p[k] ? phoneLinks(p[k]).replace(/\n/g,'<br>') : '<span class="emergency-missing">Needs setup — contact the manager</span>'}</dd></div>`).join('')}</dl>`;
 }
 function guideHtml(g,p) {
   return `<h3>${html(g.title)}</h3><ol class="emergency-steps">${g.steps.map(([title,text])=>`<li><strong>${html(title)}</strong><p>${html(text)}</p></li>`).join('')}</ol>
-    <h4>Facility instructions</h4>${fieldList(p,g.fields)}${p.notes?.[g.id] ? `<h4>Additional approved instructions</h4><p class="emergency-note">${html(p.notes[g.id])}</p>` : ''}
+    ${p.notes?.[g.id] ? `<section class="emergency-local-instructions"><h4>Your facility procedure</h4><p class="emergency-note">${phoneLinks(p.notes[g.id])}</p><p class="emergency-muted">Facility notes are not a substitute for veterinary or equipment-specific professional instructions.</p></section>` : ''}<h4>Contacts, equipment &amp; locations</h4>${fieldList(p,g.fields)}
     <p class="emergency-muted">General guidance checked September 15, 2026. ${referenceLinks(g.refs)}</p>`;
 }
 function contactHtml(p) {
@@ -101,12 +112,15 @@ function renderGuides() {
 function renderFacility() {
   const p=plan();
   const missing=fields.filter(([k])=>!String(p[k] || '').trim());
-  el('emergencyFacility').innerHTML=`<div class="emergency-review"><strong>${missing.length ? `Facility plan needs setup: ${missing.length} items` : 'Facility details saved'}</strong><p>${p.reviewedAt ? `Last facility review: ${html(p.reviewedAt)}${p.reviewedBy ? ` · ${html(p.reviewedBy)}` : ''}` : 'Not yet reviewed with staff. Complete the missing instructions and practice the plan.'}</p>${missing.length ? `<p>${missing.map(f=>html(f[1])).join(' · ')}</p>` : ''}</div><details><summary>Facility resources and readiness</summary>${fieldList(p,fields.map(f=>f[0]))}</details>`;
+  el('emergencyFacility').innerHTML=`<div class="emergency-review"><h3>${p.id ? (missing.length ? `Setup checklist: ${missing.length} blank items` : 'Facility details entered') : 'Facility details not loaded or configured'}</h3><p>${p.reviewedAt ? `Last facility review: ${html(p.reviewedAt)}${p.reviewedBy ? ` · ${html(p.reviewedBy)}` : ''}` : 'Not yet reviewed with staff. Complete the missing instructions and practice the plan.'}</p><p>Entered details may still contain items needing confirmation. Saving does not mark this plan professionally reviewed.</p>${missing.length ? `<ul class="emergency-setup-list">${missing.map(([key,label])=>`<li>${currentRole()==='admin' ? `<button type="button" class="secondary-button" data-emergency-setup="${key}">Add ${html(label)}</button>` : html(label)}</li>`).join('')}</ul>` : ''}</div><details id="emergencyResources"><summary>Equipment, locations &amp; facility resources</summary>${fieldList(p,fields.map(f=>f[0]))}</details>`;
 }
 window.renderEmergencyProcedures = function() {
-  if (!canRead()) { el('emergencyContacts').innerHTML=''; el('emergencyFacility').innerHTML=''; el('emergencyGuideDetail').innerHTML=''; el('emergencyGuideList').innerHTML=''; return; }
+  if (!canRead()) { ['emergencyContacts','emergencyStaffContacts','emergencyFacility','emergencyGuideDetail','emergencyGuideList','emergencyPlanStatus','emergencyPrintContent'].forEach(id=>{el(id).innerHTML='';}); el('emergencyEdit').hidden=true; const form=el('emergencyPlanForm'); if(form){form.remove();el('closeDetailDialog').click();} return; }
   el('emergencyEdit').hidden=currentRole()!=='admin';
   el('emergencyContacts').innerHTML=contactHtml(plan());
+  el('emergencyStaffContacts').innerHTML=staffContactsHtml(plan());
+  const saved=plan().updatedAt && new Date(plan().updatedAt);
+  el('emergencyPlanStatus').textContent=saved && !Number.isNaN(saved.getTime()) ? `Facility details saved ${saved.toLocaleString()}. Review the setup checklist for remaining items.` : 'Facility details are not loaded or configured yet. General emergency guides and vet contacts remain available.';
   renderGuides(); renderFacility();
 };
 async function loadSharedPlan() {
@@ -116,7 +130,7 @@ async function loadSharedPlan() {
   if (error) throw error;
   return data?.payload || {};
 }
-async function openEditor() {
+async function openEditor(focusField) {
   if (!canRead() || currentRole()!=='admin') return;
   const editButton=el('emergencyEdit');
   editButton.disabled=true;
@@ -129,6 +143,7 @@ async function openEditor() {
   showDetailDialog('Edit emergency facility plan', `<form id="emergencyPlanForm"><p>Shared with staff and admins only. Leave unknown details blank; do not guess locations or equipment instructions.</p><div class="emergency-editor-fields">${fields.map(fieldInput).join('')}</div><details><summary>Veterinary contacts</summary>${vets(p).map((v,i)=>`<fieldset><legend>${i ? 'After hours & weekends' : 'Primary vet'}</legend>${['name','phone','address','hours'].map(k=>`<label>${html(k)}<input name="vet${i}_${k}" value="${html(v[k])}" maxlength="400" required ${k==='phone' ? 'type="tel" pattern="[+0-9() .-]{7,30}"' : ''}></label>`).join('')}</fieldset>`).join('')}</details><details><summary>Additional instructions by emergency</summary>${guides.map(g=>`<label>${html(g.title)}<textarea name="notes_${g.id}" rows="3" maxlength="5000">${html(p.notes?.[g.id] || '')}</textarea></label>`).join('')}</details><label>Last reviewed with staff<input name="reviewedAt" type="date" value="${html(p.reviewedAt || '')}" max="${new Date().toLocaleDateString('en-CA')}"></label><label>Reviewed by<input name="reviewedBy" value="${html(p.reviewedBy || '')}" maxlength="200"></label><p id="emergencySaveStatus" role="status"></p><div class="button-row"><button type="submit">Save facility plan</button><button type="button" class="secondary-button" data-emergency-cancel>Cancel</button></div></form>`);
   // A remote refresh must not replace the administrator's in-progress form.
   const form=el('emergencyPlanForm');
+  if (typeof focusField==='string' && fields.some(([key])=>key===focusField)) form.elements.namedItem(focusField)?.focus();
   form.addEventListener('submit',async event=>{
     event.preventDefault();
     if (currentRole()!=='admin' || !canRead()) return;
@@ -158,6 +173,10 @@ async function openEditor() {
 el('emergencyEdit').addEventListener('click',openEditor);
 el('emergencySearch').addEventListener('input',event=>{query=event.target.value;renderGuides();});
 el('emergencyPage').addEventListener('click',event=>{
+  const jump=event.target.closest('[data-emergency-jump]');
+  if(jump) { const target=el(jump.dataset.emergencyJump); if(target) {if(target.tagName==='DETAILS')target.open=true; target.scrollIntoView({block:'start'}); if(target.matches('input,[tabindex]'))target.focus({preventScroll:true});} }
+  const setup=event.target.closest('[data-emergency-setup]');
+  if(setup) openEditor(setup.dataset.emergencySetup);
   const guide=event.target.closest('[data-emergency-guide]');
   if (guide) {selected=guide.dataset.emergencyGuide;renderGuides();el('emergencyGuideDetail').focus({preventScroll:true});if(innerWidth<760)el('emergencyGuideDetail').scrollIntoView({block:'start'});}
   if(event.target.closest('[data-emergency-clear]')) {query='';el('emergencySearch').value='';renderGuides();el('emergencySearch').focus();}

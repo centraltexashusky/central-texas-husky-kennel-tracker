@@ -17,6 +17,20 @@
 .emergency-workspace .button-row .primary-button { background:#096aaa; color:#fff; border:1px solid #096aaa; }
 .emergency-workspace .button-row .secondary-button { color:#173653; background:white; border:1px solid var(--em-line); }
 .emergency-muted { color:#516986; font-size:14px; line-height:1.55; }
+.emergency-jumps { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; }
+.emergency-jumps button { min-height:44px; }
+#emergencyContacts,#emergencyStaffContacts,#emergencyResources,#emergencySearch { scroll-margin-top:18px; }
+#emergencyStaffContacts { margin-bottom:24px; }
+.emergency-staff-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.emergency-staff-grid article { padding:16px; border:1px solid var(--em-line); border-radius:8px; min-width:0; }
+.emergency-staff-grid h4 { margin:0 0 8px; }
+.emergency-staff-grid p { margin:8px 0 14px; line-height:1.55; overflow-wrap:anywhere; }
+.emergency-call { display:inline-flex; align-items:center; min-height:44px; padding:10px 16px; border:1px solid var(--em-line); border-radius:8px; text-decoration:none; font-weight:700; }
+.emergency-workspace a[href^="tel:"] { white-space:nowrap; }
+.emergency-local-instructions { background:#f1f8fe; border-left:3px solid #096aaa; padding:16px; margin-bottom:20px; }
+.emergency-local-instructions h4 { margin-top:0; }
+.emergency-setup-list { list-style:none; padding:0; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.emergency-setup-list button { width:100%; text-align:left; min-height:44px; }
 .emergency-layout { display:grid; grid-template-columns:250px minmax(0,1fr); gap:18px; margin:12px 0 20px; align-items:start; }
 #emergencyGuideList { border:1px solid var(--em-line); border-radius:8px; overflow:hidden; }
 :root[data-theme="light"] #emergencyGuideList button { display:flex; justify-content:space-between; gap:8px; width:100%; min-height:56px; text-align:left; border:0!important; border-bottom:1px solid var(--em-line)!important; border-radius:0!important; box-shadow:none; background:#fff!important; color:#173653!important; padding:14px 16px; }
@@ -45,7 +59,7 @@
 @media(max-width:760px) {
  .emergency-workspace { padding:16px; }
  .emergency-heading h2 { font-size:25px; }
- .emergency-contacts,.emergency-layout,.emergency-editor-fields { grid-template-columns:1fr; }
+ .emergency-contacts,.emergency-layout,.emergency-editor-fields,.emergency-staff-grid,.emergency-setup-list { grid-template-columns:1fr; }
  #emergencyGuideList { display:grid; grid-template-columns:1fr 1fr; }
  #emergencyGuideDetail { padding:16px; }
  .emergency-contacts article { padding:16px; }
