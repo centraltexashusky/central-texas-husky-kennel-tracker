@@ -7581,6 +7581,12 @@ function validateForm(targetForm, extraChecks = []) {
     firstInvalid = firstInvalid || field;
   });
   if (firstInvalid) {
+    // Reveal the wizard panel before focusing an invalid field. Native form
+    // validation cannot focus required controls on a hidden earlier step.
+    if (targetForm.getAttribute("id") === "customerDogForm") {
+      const panel = firstInvalid.closest("[data-customer-dog-step]");
+      if (panel) setCustomerDogWizardStep(panel.dataset.customerDogStep);
+    }
     firstInvalid.focus({ preventScroll: true });
     firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
     showToast("Please fix the highlighted fields before saving.");
