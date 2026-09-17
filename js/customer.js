@@ -2631,7 +2631,20 @@ function customerServiceDisplayName(service = {}) {
   return service.serviceName || service.name || "Service";
 }
 
+function customerServiceIsSharedCrate(service = {}) {
+  return normalizedBoardingRateRole(service.boardingRateRole) === "shared-crate-additional"
+    || normalizedServiceLookupText(service.serviceName || service.name || "") === "shared crate";
+}
+
+function customerServiceAvailableForBooking(service = {}, dogs = selectedCustomerDogs()) {
+  return !customerServiceIsSharedCrate(service)
+    || (customerRequestMode() === "boarding" && uniqueCustomerBookingDogs(dogs).length > 1);
+}
+
 function customerServiceInfoText(service = {}) {
+  if (customerServiceIsSharedCrate(service)) {
+    return "Available when two or more dogs are included in the boarding request and two dogs can safely share a crate together. Shared-crate arrangements are subject to staff approval.";
+  }
   const itemDescription = String(service.itemDescription || "").trim();
   if (itemDescription) return itemDescription;
   if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION;
@@ -2765,6 +2778,7 @@ function customerDependencyIds(checkedIds = new Set(), dog = {}) {
 
 function customerServiceVisibleForCurrentUser(service = {}, dog = {}) {
   return !service.removed
+    && customerServiceAvailableForBooking(service)
     && serviceHasFlag(service, "Active")
     && !serviceHasFlag(service, "Admin only")
     && (service.category !== "Boarding" || serviceDependencyId(service))

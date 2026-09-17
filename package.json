@@ -1,6 +1,7 @@
 {
   "type": "module",
   "scripts": {
+    "test:customer-service-availability": "node tools/customer-service-availability-check.mjs",
     "test:customer-dog-validation": "node tools/customer-dog-validation-check.mjs",
     "test:admin-workspace-browser": "node tools/admin-workspace-browser-check.mjs",
     "test:task-cycles": "node tools/task-cycles-check.mjs",

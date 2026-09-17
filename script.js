@@ -14474,7 +14474,20 @@ function customerServiceDisplayName(service = {}) {
   return service.serviceName || service.name || "Service";
 }
 
+function customerServiceIsSharedCrate(service = {}) {
+  return normalizedBoardingRateRole(service.boardingRateRole) === "shared-crate-additional"
+    || normalizedServiceLookupText(service.serviceName || service.name || "") === "shared crate";
+}
+
+function customerServiceAvailableForBooking(service = {}, dogs = selectedCustomerDogs()) {
+  return !customerServiceIsSharedCrate(service)
+    || (customerRequestMode() === "boarding" && uniqueCustomerBookingDogs(dogs).length > 1);
+}
+
 function customerServiceInfoText(service = {}) {
+  if (customerServiceIsSharedCrate(service)) {
+    return "Available when two or more dogs are included in the boarding request and two dogs can safely share a crate together. Shared-crate arrangements are subject to staff approval.";
+  }
   const itemDescription = String(service.itemDescription || "").trim();
   if (itemDescription) return itemDescription;
   if (customerServiceIsPremiumStayUpgrade(service)) return CUSTOMER_PREMIUM_STAY_UPGRADE_DESCRIPTION;
@@ -14666,7 +14679,7 @@ function renderCustomerServiceOptions() {
   applyLegacyBoardingProgramMigration();
   const formEl = $("#customerBookingForm");
   const dogs = selectedCustomerDogs();
-  const services = readRecords("service").filter((service) => !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && serviceMatchesCustomerPricingScope(service, currentUser));
+  const services = readRecords("service").filter((service) => customerServiceAvailableForBooking(service, dogs) && !service.removed && serviceHasFlag(service, "Active") && !serviceHasFlag(service, "Admin only") && (service.category !== "Boarding" || serviceDependencyId(service)) && serviceMatchesCustomerPricingScope(service, currentUser));
   const visibleServices = services.filter((service) => !serviceDependencyId(service));
   const groupedVisibleServices = visibleServices.reduce((groups, service) => {
     const category = String(service.category || "Other Services").trim() || "Other Services";
@@ -15088,7 +15101,7 @@ function customerEstimateDetails() {
     return [...selectedServiceIds]
       .map((id) => {
         const service = serviceCatalog.find((item) => item.id === id);
-        if (!service) return null;
+        if (!service || !customerServiceAvailableForBooking(service, dogs)) return null;
         const quantity = Math.max(1, Number(formFieldByName(formEl, customerServiceQuantityFieldName(id, dog))?.value || 1));
         const unitPrice = Number(service.basePrice || 0);
         return {
