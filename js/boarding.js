@@ -3582,16 +3582,13 @@ function boardingQuickServiceFact(record = {}, stay = {}) {
       : dueInfo?.className === "is-service-due"
         ? "is-attention"
         : "is-progress";
-  const countdown = boardingServiceCountdownLabel(dueInfo);
   const openCount = stats.incompleteTasks.length;
   return boardingQuickFactHtml("Services", value, className, {
     action: "open-boarding-services",
     attrs: ' data-id="' + escapeHtml(record.id || "") + '"' + boardingStayDataAttrs(record, stay),
     title: openCount
-      ? (countdown ? countdown + ". " : "") + "View and complete " + openCount + " requested service" + (openCount === 1 ? "" : "s") + " for " + (record.dogName || "this dog") + "."
+      ? "View and complete " + openCount + " requested service" + (openCount === 1 ? "" : "s") + " for " + (record.dogName || "this dog") + "."
       : "All requested services are complete for " + (record.dogName || "this dog") + ".",
-    flag: countdown,
-    flagClass: dueInfo?.className || "is-service-pending",
   });
 }
 

@@ -21,7 +21,9 @@ if (!boarding.includes('function boardingServiceCountdownLabel')) failures.push(
 if (!boarding.includes('return "Due in " + hoursRemaining + "h";')) failures.push("Requested services do not keep pickup countdowns in hours.");
 if (!boarding.includes('if (hoursRemaining > 72) return "";')) failures.push("Future service countdowns are not hidden until the 72-hour action window.");
 if (boarding.includes('Math.ceil(hoursRemaining / 24) + "d"')) failures.push("Requested services still convert pickup countdowns to days.");
-if (!boarding.includes('flag: countdown')) failures.push("Requested services do not expose the countdown on the boarding card.");
+const serviceFact = boarding.slice(boarding.indexOf('function boardingQuickServiceFact'), boarding.indexOf('function boardingQuickOwnerUpdateFact'));
+if (serviceFact.includes('flag:') || serviceFact.includes('boardingServiceCountdownLabel')) failures.push("The boarding roster still shows a service countdown.");
+if (!serviceFact.includes('stats.completedTasks.length + "/" + stats.total + " done"')) failures.push("The boarding roster lost its service completion count.");
 if (!boarding.includes('boarding-service-popup-deadline')) failures.push("Requested services popup does not explain the service deadline.");
 if (!shared.includes('button.dataset.action === "open-boarding-special-care"')) failures.push("Boarding card clicks do not open the special-care popup.");
 if (!shared.includes('button.dataset.action === "open-boarding-services"')) failures.push("Boarding card clicks do not open the services popup.");
