@@ -3134,6 +3134,7 @@ function boardingDraftFromCustomerDog(dog = {}) {
   return {
     dogName: dog.dogName || "",
     breedDescription: dog.breedDescription || "",
+    ...dogShowRegistrationPatch(dog),
     akcRegistrationNumber: dog.akcRegistrationNumber || "",
     microchipNumber: dog.microchipNumber || "",
     sireName: dog.sireName || "",

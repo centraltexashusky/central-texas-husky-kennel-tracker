@@ -4310,6 +4310,16 @@ function dogShowEntryDialogViewState() {
   };
 }
 
+function dogShowRegistrationSummaryHtml(entry = {}) {
+  if (entry.dogType !== "boardingDog" || entry.attendanceRole !== "Showing") return "";
+  const dog = dogShowSourceDog(entry);
+  const linked = typeof linkedCustomerDogForBoarding === "function" ? linkedCustomerDogForBoarding(dog) || {} : {};
+  const fields = [["Registered name", "registeredName"], ["AKC registration #", "akcRegistrationNumber"], ["Sire’s registered name", "sireName"], ["Dam’s registered name", "damName"]];
+  const rows = fields.map(([label, key]) => [label, linked[key] ?? dog[key] ?? ""]);
+  const missing = rows.filter(([, value]) => !String(value).trim()).length;
+  return '<section class="dog-show-dialog-section"><h3>Show Registration</h3><p>' + (missing ? missing + ' registration details missing. Collect and verify before official entry.' : 'Registration details recorded — staff must verify before official entry.') + '</p><dl class="field-grid">' + rows.map(([label, value]) => '<div><dt>' + escapeHtml(label) + '</dt><dd>' + escapeHtml(value || 'Not provided') + '</dd></div>').join('') + '</dl><small>Edit these details in Boarding Dogs → Dog Info. This does not block ordinary boarding.</small></section>';
+}
+
 function openDogShowEntryForm(entry = {}, quickConfirmation = {}, viewState = {}) {
   const event = dogShowActiveEvent();
   const savedSchedules = dogShowRingSchedules(entry);
@@ -4327,6 +4337,7 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}, viewState = {}
   const confirmationLabel = quickConfirmation.label || confirmedLogType;
   const quickConfirmationText = confirmedLogType ? `${confirmationLabel} logged at ${dogShowFormatTime(quickConfirmation.loggedAt)} by ${quickConfirmation.helperName || currentUser?.name || "Staff"}.` : "";
   openDogShowDialog(dogShowEntryName(entry), `<div class="dog-show-detail-header">${dogShowPhotoHtml(entry, "dog-show-detail-photo")}<div><strong>${escapeHtml(dogShowNameWithBreed(entry))}</strong><span>${escapeHtml([entry.dogType === "boardingDog" ? "Boarding Dog" : "Our Dog", entry.attendanceRole, savedSchedules.length ? `${savedSchedules.length} ring appearance${savedSchedules.length === 1 ? "" : "s"}` : "Ring schedule needed"].filter(Boolean).join(" · "))}</span><small>Last attended: ${escapeHtml(dogShowLastLog(entry) ? dogShowFormatDateTime(dogShowLastLog(entry).loggedAt) : "No log")}</small></div></div>
+    ${dogShowRegistrationSummaryHtml(entry)}
     <section class="dog-show-dialog-section"><h3>Quick Log</h3><div class="dog-show-quick-grid">
       <button type="button" class="${confirmedLogType === "Potty" ? "is-logged" : ""}" data-action="open-show-potty" data-id="${escapeHtml(entry.id)}">Potty</button>
       <button type="button" class="${confirmedLogType === "Water" ? "is-logged" : ""}" data-action="quick-show-log" data-log-type="Water" data-id="${escapeHtml(entry.id)}">Water</button>
