@@ -200,7 +200,7 @@ let dogShowTaskFilter = "open";
 let dogShowSelectedTaskIds = new Set();
 let dogShowCalendarView = ["weekend", "day"].includes(localStorage.getItem(DOG_SHOW_CALENDAR_VIEW_KEY)) ? localStorage.getItem(DOG_SHOW_CALENDAR_VIEW_KEY) : "weekend";
 let dogShowCalendarDate = localStorage.getItem(DOG_SHOW_CALENDAR_DATE_KEY) || "";
-let dogShowMasterCalendarView = ["year", "month", "week", "day"].includes(localStorage.getItem(DOG_SHOW_MASTER_CALENDAR_VIEW_KEY)) ? localStorage.getItem(DOG_SHOW_MASTER_CALENDAR_VIEW_KEY) : "month";
+let dogShowMasterCalendarView = ["list", "year", "month", "week", "day"].includes(localStorage.getItem(DOG_SHOW_MASTER_CALENDAR_VIEW_KEY)) ? localStorage.getItem(DOG_SHOW_MASTER_CALENDAR_VIEW_KEY) : "month";
 let dogShowMasterCalendarDate = localStorage.getItem(DOG_SHOW_MASTER_CALENDAR_DATE_KEY) || todayDate();
 let dogShowCalendarDragTaskId = "";
 let dogShowBulkCarePending = false;
@@ -3476,7 +3476,7 @@ function dogShowMasterCalendarItemHtml(item = {}, compact = false) {
 function dogShowMasterCalendarRangeLabel() {
   const anchor = dogShowMasterDate();
   if (dogShowMasterCalendarView === "year") return String(anchor.getFullYear());
-  if (dogShowMasterCalendarView === "month") return anchor.toLocaleDateString([], { month: "long", year: "numeric" });
+  if (["list", "month"].includes(dogShowMasterCalendarView)) return anchor.toLocaleDateString([], { month: "long", year: "numeric" });
   if (dogShowMasterCalendarView === "day") return anchor.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const start = new Date(anchor);
   start.setDate(start.getDate() - start.getDay());
@@ -3547,16 +3547,94 @@ function dogShowMasterCalendarDayHtml(items = []) {
   return `<section class="dog-show-master-day-list"><header><span>${escapeHtml(dogShowMasterDate().toLocaleDateString([], { weekday: "long" }))}</span><strong>${escapeHtml(dogShowMasterDate().toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }))}</strong></header><div>${dayItems.length ? dayItems.map((item) => dogShowMasterCalendarItemHtml(item)).join("") : dogShowRenderEmpty("No shows on this date", "Use the arrows or calendar views to find another show date.")}</div></section>`;
 }
 
+const DOG_SHOW_REGISTRATION_STATUSES = ["Planned to go", "Not registered yet", "Registered"];
+
+function dogShowEntryRegistrationStatus(entry = {}) {
+  if (entry.registrationStatus === "") return "";
+  if (DOG_SHOW_REGISTRATION_STATUSES.includes(entry.registrationStatus)) return entry.registrationStatus;
+  // Confirmed was historically assigned automatically: it is not proof of entry.
+  return entry.status === "Entered" ? "Registered" : entry.status === "Considering" ? "Planned to go" : "";
+}
+
+function dogShowRegistrationOptions(entry = {}) {
+  const selected = dogShowEntryRegistrationStatus(entry);
+  return '<option value="">Not recorded</option>' + DOG_SHOW_REGISTRATION_STATUSES.map(status =>
+    `<option value="${escapeHtml(status)}"${status === selected ? " selected" : ""}>${escapeHtml(status)}</option>`
+  ).join("");
+}
+
+function dogShowEntryPlanningLocked(entry = {}, event = {}) {
+  return event.status === "Completed" || ["Completed", "Scratched", "Cancelled", "Canceled"].includes(entry.status);
+}
+
+function dogShowMasterCalendarListHtml(items = []) {
+  const anchor = dogShowMasterDate();
+  const from = dogShowDateKey(new Date(anchor.getFullYear(), anchor.getMonth(), 1, 12));
+  const to = dogShowDateKey(new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0, 12));
+  const events = dogShowEvents().filter(event => event.startDate <= to && (event.endDate || event.startDate) >= from)
+    .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)) || String(a.name).localeCompare(String(b.name)));
+  const cards = events.map(event => {
+    const entries = dogShowEntries(event);
+    const attending = entries.filter(entry => !["Scratched", "Cancelled", "Canceled"].includes(entry.status));
+    const showing = attending.filter(entry => entry.attendanceRole === "Showing").length;
+    const socializing = attending.length - showing;
+    return `<article class="dog-show-agenda-event" data-agenda-event="${escapeHtml(event.id)}">
+      <header><div><small>${escapeHtml(dogShowPlannerDateRange(event))}</small><h3>${escapeHtml(event.name || "Dog show")}</h3>
+      <p>${showing} Showing · ${socializing} Socializing · ${escapeHtml(dogShowMasterCalendarEventStatus(event))}</p></div>
+      <button type="button" class="secondary-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">Manage dogs</button></header>
+      <div class="dog-show-agenda-dogs">${entries.length ? entries.map(entry => {
+        const locked = dogShowEntryPlanningLocked(entry, event);
+        return `<div class="dog-show-agenda-dog">
+          <div><strong>${escapeHtml(dogShowEntryName(entry))}</strong><span class="status-chip">${entry.attendanceRole === "Showing" ? "Showing" : "Socializing"}</span>
+          <small>${escapeHtml(entry.status === "Scratched" ? "Withdrawn" : entry.status || "Planned")}</small></div>
+          <label>Registration<select data-show-entry-registration="${escapeHtml(entry.id)}" aria-label="Registration for ${escapeHtml(dogShowEntryName(entry))} at ${escapeHtml(event.name)} on ${escapeHtml(event.startDate)}"${locked ? " disabled" : ""}>${dogShowRegistrationOptions(entry)}</select></label>
+          <div class="dog-show-agenda-helper"><small>${entry.attendanceRole === "Showing" ? "Handler" : "Care helper"}</small><span>${escapeHtml(dogShowStaffLabel(entry.attendanceRole === "Showing" ? entry.handlerEmail : entry.helperEmail))}</span></div>
+          <button type="button" class="secondary-button" data-action="edit-agenda-dog" data-id="${escapeHtml(entry.id)}">${locked ? "View dog" : "Adjust dog"}</button>
+        </div>`;
+      }).join("") : '<p class="empty-state">No dogs assigned yet. Use Manage dogs to add Showing or Socializing dogs.</p>'}</div>
+    </article>`;
+  }).join("");
+  const potential = items.filter(item => item.kind === "potential" && item.startDate <= to && item.endDate >= from);
+  return `<div class="dog-show-agenda"><p class="dog-show-agenda-help">Registration is tracked per dog, per event. “Registered” is a staff record only—it does not submit an entry or make a payment. Socializing dogs do not require a competition entry.</p>
+    ${cards || dogShowRenderEmpty("No scheduled shows this month", "Use the month arrows or Find Shows to plan your next trip.")}
+    ${potential.length ? `<section><h3>Potential shows · no dogs assigned</h3>${potential.map(item => dogShowMasterCalendarItemHtml(item)).join("")}</section>` : ""}
+    <p role="status" id="dogShowAgendaFeedback"></p></div>`;
+}
+
+async function saveDogShowEntryRegistration(input) {
+  if (!["admin", "staff", "helper"].includes(currentRole())) return;
+  const entry = dogShowRecords("showEntry").find(item => item.id === input.dataset.showEntryRegistration);
+  const event = entry && dogShowEvents().find(item => item.id === entry.showEventId);
+  if (!entry || !event || dogShowEntryPlanningLocked(entry, event)) return;
+  const registrationStatus = input.value;
+  if (registrationStatus && !DOG_SHOW_REGISTRATION_STATUSES.includes(registrationStatus)) return;
+  input.disabled = true;
+  try {
+    await saveDogShowRecord("showEntry", { ...entry, registrationStatus });
+    const feedback = document.getElementById("dogShowAgendaFeedback");
+    if (feedback) feedback.textContent = `${dogShowEntryName(entry)}: ${registrationStatus || "registration cleared"} saved.`;
+    showToast("Show registration status saved.");
+  } catch (error) {
+    upsertRecord("showEntry", entry);
+    input.value = dogShowEntryRegistrationStatus(entry);
+    showToast("Registration could not be saved. Please try again.");
+  } finally {
+    input.disabled = false;
+  }
+}
+
 function dogShowMasterCalendarHtml() {
   const items = dogShowMasterCalendarItems();
-  const viewHtml = dogShowMasterCalendarView === "year"
+  const viewHtml = dogShowMasterCalendarView === "list"
+    ? dogShowMasterCalendarListHtml(items)
+    : dogShowMasterCalendarView === "year"
     ? dogShowMasterCalendarYearHtml(items)
     : dogShowMasterCalendarView === "month"
       ? dogShowMasterCalendarMonthHtml(items)
       : dogShowMasterCalendarView === "week"
         ? dogShowMasterCalendarWeekHtml(items)
         : dogShowMasterCalendarDayHtml(items);
-  return `<div class="dog-show-view dog-show-master-calendar-view"><section class="dog-show-planner-heading"><div><span>SHOW PLANNING</span><h3>Show Calendar</h3><p>Follow each show from research and planning through booked, active, and completed.</p></div><button type="button" data-action="open-show-planner">Find Shows</button></section><section class="dog-show-master-calendar"><header><div class="dog-show-master-calendar-view-toggle" role="group" aria-label="Show Calendar view">${["year", "month", "week", "day"].map((view) => `<button type="button" data-show-master-calendar-view="${view}" class="${dogShowMasterCalendarView === view ? "is-active" : ""}">${view[0].toUpperCase()}${view.slice(1)}</button>`).join("")}</div><div class="dog-show-master-calendar-navigation"><button type="button" class="secondary-button" data-show-calendar-offset="-1" aria-label="Previous ${escapeHtml(dogShowMasterCalendarView)}">‹</button><button type="button" class="secondary-button" data-show-calendar-today>Today</button><strong>${escapeHtml(dogShowMasterCalendarRangeLabel())}</strong><button type="button" class="secondary-button" data-show-calendar-offset="1" aria-label="Next ${escapeHtml(dogShowMasterCalendarView)}">›</button></div></header><div class="dog-show-master-calendar-legend" aria-label="Show statuses"><span class="is-potential">Potential</span><span class="is-going-to">Going To</span><span class="is-going">Going (Booked/Paid)</span><span class="is-active">Active</span><span class="is-completed">Completed</span></div><div class="dog-show-master-calendar-body">${viewHtml}</div></section></div>`;
+  return `<div class="dog-show-view dog-show-master-calendar-view"><section class="dog-show-planner-heading"><div><span>SHOW PLANNING</span><h3>Show Calendar</h3><p>Plan each show, review Showing and Socializing dogs, and track their registration.</p></div><button type="button" data-action="open-show-planner">Find Shows</button></section><section class="dog-show-master-calendar"><header><div class="dog-show-master-calendar-view-toggle" role="group" aria-label="Show Calendar view">${["list", "year", "month", "week", "day"].map((view) => `<button type="button" data-show-master-calendar-view="${view}" class="${dogShowMasterCalendarView === view ? "is-active" : ""}">${view[0].toUpperCase()}${view.slice(1)}</button>`).join("")}</div><div class="dog-show-master-calendar-navigation"><button type="button" class="secondary-button" data-show-calendar-offset="-1" aria-label="Previous ${escapeHtml(dogShowMasterCalendarView)}">‹</button><button type="button" class="secondary-button" data-show-calendar-today>Today</button><strong>${escapeHtml(dogShowMasterCalendarRangeLabel())}</strong><button type="button" class="secondary-button" data-show-calendar-offset="1" aria-label="Next ${escapeHtml(dogShowMasterCalendarView)}">›</button></div></header><div class="dog-show-master-calendar-legend" aria-label="Show statuses"><span class="is-potential">Potential</span><span class="is-going-to">Going To</span><span class="is-going">Going (Booked/Paid)</span><span class="is-active">Active</span><span class="is-completed">Completed</span></div><div class="dog-show-master-calendar-body">${viewHtml}</div></section></div>`;
 }
 
 function dogShowPlannerHtml() {
@@ -4351,6 +4429,7 @@ function openDogShowEntryForm(entry = {}, quickConfirmation = {}, viewState = {}
           <label>Attendance role<select name="attendanceRole"><option${entry.attendanceRole === "Showing" ? " selected" : ""}>Showing</option><option${entry.attendanceRole !== "Showing" ? " selected" : ""}>Socialization</option></select></label>
           <label>Handler<select name="handlerEmail">${dogShowStaffOptions(entry.handlerEmail || "")}</select></label>
           <label>Care helper<select name="helperEmail">${dogShowStaffOptions(entry.helperEmail || "")}</select></label>
+          <label>Show registration<select name="registrationStatus"${dogShowEntryPlanningLocked(entry, dogShowEvents().find(event => event.id === entry.showEventId)) ? " disabled" : ""}>${dogShowRegistrationOptions(entry)}</select><small>Tracks entry paperwork separately from attendance. Does not submit an official entry.</small></label>
           <label>Entry status<select name="status">${[{ value: "Considering", label: "Considering" }, { value: "Entered", label: "Entered" }, { value: "Confirmed", label: "Confirmed" }, { value: "Scratched", label: "Withdrawn" }, { value: "Completed", label: "Completed" }].map((status) => `<option value="${status.value}"${status.value === (entry.status || "Confirmed") ? " selected" : ""}>${status.label}</option>`).join("")}</select></label>
         </div></div></details>
       <details class="dog-show-collapsible-section dog-show-ring-schedules" data-show-ring-appearances${entry.attendanceRole === "Showing" ? "" : " hidden"}${viewState.ringSchedulesOpen === false ? "" : " open"}><summary><span><strong>Ring Appearances</strong><small data-ring-appearance-count>${ringSchedules.length} scheduled</small></span></summary><div class="dog-show-collapsible-content dog-show-ring-schedules-content"><div class="dog-show-ring-schedules-toolbar"><p>Add a separate assignment for each show day, ring, or class.</p></div><div id="dogShowRingScheduleRows">${ringSchedules.map(dogShowRingScheduleRowHtml).join("")}</div><div class="dog-show-ring-schedules-footer"><button type="button" class="secondary-button" data-action="add-ring-schedule">Add Ring Appearance</button></div></div></details>
@@ -5475,6 +5554,10 @@ function setupDogShowEventListeners() {
   });
 
   page.addEventListener("change", async (event) => {
+    if (event.target.matches("[data-show-entry-registration]")) {
+      await saveDogShowEntryRegistration(event.target);
+      return;
+    }
     if (event.target.matches("[data-show-table-select-all]")) {
       page.querySelectorAll("[data-show-table-select]").forEach((input) => {
         input.checked = event.target.checked;
@@ -5577,7 +5660,7 @@ function setupDogShowEventListeners() {
       const anchor = dogShowMasterDate();
       const offset = Number(masterCalendarOffset.dataset.showCalendarOffset || 0);
       if (dogShowMasterCalendarView === "year") anchor.setFullYear(anchor.getFullYear() + offset);
-      else if (dogShowMasterCalendarView === "month") anchor.setMonth(anchor.getMonth() + offset);
+      else if (["list", "month"].includes(dogShowMasterCalendarView)) { anchor.setDate(1); anchor.setMonth(anchor.getMonth() + offset); }
       else anchor.setDate(anchor.getDate() + (dogShowMasterCalendarView === "week" ? 7 : 1) * offset);
       dogShowMasterCalendarDate = dogShowDateKey(anchor);
       localStorage.setItem(DOG_SHOW_MASTER_CALENDAR_DATE_KEY, dogShowMasterCalendarDate);
@@ -5630,6 +5713,15 @@ function setupDogShowEventListeners() {
     }
     const action = event.target.closest("[data-action]");
     if (!action) return;
+    if (action.dataset.action === "edit-agenda-dog") {
+      const selectedEntry = dogShowRecords("showEntry").find(item => item.id === action.dataset.id);
+      if (selectedEntry) {
+        localStorage.setItem(DOG_SHOW_EVENT_KEY, selectedEntry.showEventId);
+        renderDogShow();
+        openDogShowEntryForm(selectedEntry);
+      }
+      return;
+    }
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
     if (action.dataset.action === "open-finance-metric-info") {
       event.preventDefault();

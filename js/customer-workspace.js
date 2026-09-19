@@ -150,7 +150,12 @@ document.addEventListener('click',async event=>{
   const action=button.dataset.customerWorkspace;
   if(action==='book'){
     switchPage('customerRequestsPage');openCustomerBookingModal('boarding');
-    if(button.dataset.dogId){el('customerBookingDogList').querySelectorAll('input').forEach(input=>input.checked=input.value===button.dataset.dogId);renderCustomerServiceOptions();updateCustomerEstimate();}
+    if(button.dataset.dogId){
+      const list=el('customerBookingDogList');
+      list.querySelectorAll('input[name="customerDogSelect"]').forEach(input=>input.checked=input.value===button.dataset.dogId);
+      // Use the same pricing, crate and service refresh as a manual dog selection.
+      list.dispatchEvent(new Event('change',{bubbles:true}));
+    }
   }
   if(action==='stay'){
     const record=boardingDogRecordForDisplay(button.dataset.id);if(record&&boardingDogVisibleToCustomer(record))openCustomerRequestDetail(record,{stayId:button.dataset.stayId});

@@ -1306,6 +1306,7 @@ function customerDogFromBoardingDog(record = {}, email = currentUser?.email, opt
     sourceBoardingDogId: record.id,
     linkedBoardingDogId: record.id,
     dogName: record.dogName || linked.dogName || "Boarding dog",
+    pricingScopeOverride: normalizedPricingScope(linked.pricingScopeOverride || linked.customerPricingScopeOverride || record.pricingScopeOverride || record.customerPricingScopeOverride) === "member" ? "member" : "non-member",
     breedDescription: record.breedDescription || linked.breedDescription || "",
     ...dogShowRegistrationPatch(record, linked),
     akcRegistrationNumber: record.akcRegistrationNumber || linked.akcRegistrationNumber || "",
@@ -2732,7 +2733,8 @@ function renderCustomerStayProgramOptions() {
   const show = customerRequestMode() === "boarding";
   const dogs = selectedCustomerDogs();
   const programs = show ? customerStayProgramServices(currentUser, dogs) : [];
-  step.hidden = !show || !programs.length;
+  // Standard boarding is still available when mixed dog pricing has no common premium program.
+  step.hidden = !show || !dogs.length;
   if (step.hidden) {
     container.innerHTML = "";
     updateCustomerBookingOptionsEmptyState();
@@ -3592,4 +3594,4 @@ async function submitPendingCustomerBooking() {
 //# sourceURL=snuggle-stay/customer.js
 `;
 (0, eval)(__snuggleStayModuleSource);
-await import("./customer-workspace.js?v=customer-workspace-v121-dog-pricing-v126");
+await import("./customer-workspace.js?v=customer-workspace-v121-dog-pricing-v138");

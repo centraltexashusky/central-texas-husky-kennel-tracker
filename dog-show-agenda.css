@@ -1,0 +1,22 @@
+.dog-show-agenda { display: grid; gap: 18px; }
+.dog-show-agenda-help { color: #486581; font-size: .88rem; line-height: 1.5; margin: 0; }
+.dog-show-agenda-event { border: 1px solid #d4e2ef; border-radius: 12px; overflow: hidden; background: #fff; }
+.dog-show-agenda-event > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px; background: #f2f7fc; }
+.dog-show-agenda-event h3 { margin: 4px 0; color: #123451; }
+.dog-show-agenda-event p { margin: 6px 0 0; }
+.dog-show-agenda-event small { color: #486581; }
+.dog-show-agenda-dog { display: grid; grid-template-columns: minmax(150px, 1.2fr) minmax(180px, 1fr) minmax(130px, 1fr) auto; align-items: center; gap: 16px; padding: 16px 18px; border-top: 1px solid #e1eaf2; }
+.dog-show-agenda-dog > div:first-child { display: grid; justify-items: start; gap: 5px; }
+.dog-show-agenda-dog label { display: grid; gap: 5px; margin: 0; font-size: .8rem; }
+.dog-show-agenda-dog select { width: 100%; min-height: 44px; }
+.dog-show-agenda-helper { display: grid; gap: 5px; overflow-wrap: anywhere; }
+.dog-show-agenda-dogs > .empty-state { padding: 18px; }
+@media (max-width: 1100px) {
+  .dog-show-agenda-dog { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  .dog-show-agenda-event > header { align-items: start; flex-direction: column; }
+  .dog-show-agenda-dog { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .dog-show-agenda-dog > button { width: 100%; }
+  .dog-show-master-calendar-view-toggle { flex-wrap: wrap; }
+}
