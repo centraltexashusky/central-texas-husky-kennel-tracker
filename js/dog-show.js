@@ -4399,7 +4399,7 @@ function dogShowRegistrationSummaryHtml(entry = {}) {
 }
 
 function openDogShowEntryForm(entry = {}, quickConfirmation = {}, viewState = {}) {
-  const event = dogShowActiveEvent();
+  const event = dogShowEvents().find(item => item.id === entry.showEventId) || dogShowActiveEvent();
   const savedSchedules = dogShowRingSchedules(entry);
   const ringSchedules = savedSchedules.length ? savedSchedules : [{ id: uid("showRing"), ringDate: event?.startDate || todayDate(), prepMinutes: Number(entry.prepMinutes ?? 45), readyBufferMinutes: Number(entry.readyBufferMinutes ?? 15) }];
   const logs = dogShowLogs(event)

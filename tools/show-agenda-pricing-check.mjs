@@ -21,6 +21,7 @@ fail=true;input.value='Planned to go';await context.saveDogShowEntryRegistration
 fail=false;role='customer';const before=saves;await context.saveDogShowEntryRegistration(input);assert.equal(saves,before,'Customer cannot change staff show registration');
 role='admin';records[0].status='Completed';await context.saveDogShowEntryRegistration(input);assert.equal(saves,before,'Completed entries are not changed by list');
 assert.match(show,/"list", "year", "month", "week", "day"/);
+assert.match(fn(show,'openDogShowEntryForm'),/dogShowEvents\(\)\.find\(item => item.id === entry.showEventId\)/,'Editor uses the clicked event, including history, not the active weekend');
 assert.match(fn(show,'dogShowMasterCalendarListHtml'),/dogShowEntries\(event\)/,'List includes all attendance roles for each exact event');
 const c={currentUser:{},explicitLinkedCustomerDogForBoarding:()=>({}),linkedCustomerDogForBoarding:()=>({}),normalizeEmail:v=>v||'',boardingDogProfilePhotoRecord:()=>({}),normalizedPricingScope:v=>v||'',dogShowRegistrationPatch:()=>({}),vaccineDurationIsThreeYears:()=>false,profilePhotoDirectSource:()=>'',profilePhotoStoragePath:()=>''};
 vm.createContext(c);vm.runInContext(fn(customer,'customerDogFromBoardingDog'),c);
