@@ -247,13 +247,16 @@ function dogShowEvents() {
 }
 
 function dogShowOperationalEvents() {
-  return dogShowEvents().filter((event) => dogShowPlannerLifecycleStatus(event) !== "Completed");
+  // Only an explicit completion closes the show workspace; dates alone do not.
+  return dogShowEvents().filter((event) => event.status !== "Completed");
 }
 
 function dogShowActiveEvent() {
+  // Past shows remain selectable for post-show results and billing.
   const events = dogShowOperationalEvents();
   const savedId = localStorage.getItem(DOG_SHOW_EVENT_KEY) || "";
-  const selected = events.find((event) => event.id === savedId) || events[0] || null;
+  const mostRecent = [...events].sort((a, b) => String(b.endDate || b.startDate || "").localeCompare(String(a.endDate || a.startDate || "")))[0];
+  const selected = events.find((event) => event.id === savedId) || events.find((event) => (event.endDate || event.startDate || "") >= todayDate()) || mostRecent || null;
   if (selected && selected.id !== savedId) localStorage.setItem(DOG_SHOW_EVENT_KEY, selected.id);
   if (!selected && savedId) localStorage.removeItem(DOG_SHOW_EVENT_KEY);
   return selected;
@@ -680,19 +683,25 @@ function dogShowEventWeekendGroups(events = dogShowEvents()) {
 }
 
 function dogShowEventOptions(active = dogShowActiveEvent()) {
-  const groups = dogShowEventWeekendGroups(dogShowOperationalEvents());
-  if (!groups.length) return `<option value="">No active shows</option>`;
+  const isPastGroup = (group) => group.events.every((event) => dogShowPlannerLifecycleStatus(event) === "Completed");
+  const groups = dogShowEventWeekendGroups(dogShowOperationalEvents()).sort((a, b) => {
+    const pastDiff = Number(isPastGroup(a)) - Number(isPastGroup(b));
+    return pastDiff || (isPastGroup(a) ? String(b.endDate).localeCompare(String(a.endDate)) : String(a.startDate).localeCompare(String(b.startDate)));
+  });
+  if (!groups.length) return `<option value="">No open shows</option>`;
   return groups.map((group) => {
+    const historyLabel = isPastGroup(group) ? "Past show — open · " : "";
+    const year = String(group.startDate || "").slice(0, 4);
     if (group.events.length === 1) {
       const event = group.events[0];
       const weekend = `${dogShowFormatMonthDay(event.startDate)} - ${dogShowFormatMonthDay(event.endDate || event.startDate)}`;
-      return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${event.name || "Untitled Show"} · ${weekend} · ${dogShowEventStatus(event.status)}`)}</option>`;
+      return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${historyLabel}${event.name || "Untitled Show"} · ${weekend}, ${year} · ${dogShowEventStatus(event.status)}`)}</option>`;
     }
-    const label = `${group.title} · ${dogShowFormatMonthDay(group.startDate)} - ${dogShowFormatMonthDay(group.endDate)} · ${group.events.length} events`;
+    const label = `${historyLabel}${group.title} · ${dogShowFormatMonthDay(group.startDate)} - ${dogShowFormatMonthDay(group.endDate)}, ${year} · ${group.events.length} events`;
     const options = group.events.map((event) => {
       const day = dogShowFormatMonthDay(event.startDate);
       const weekend = `${dogShowFormatMonthDay(group.startDate)} - ${dogShowFormatMonthDay(group.endDate)}`;
-      return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${group.title} · ${weekend} · ${day} · ${dogShowEventStatus(event.status)}`)}</option>`;
+      return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${historyLabel}${group.title} · ${weekend}, ${year} · ${day} · ${dogShowEventStatus(event.status)}`)}</option>`;
     }).join("");
     return `<optgroup label="${escapeHtml(label)}">${options}</optgroup>`;
   }).join("");
