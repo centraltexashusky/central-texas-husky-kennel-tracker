@@ -20,7 +20,7 @@ window.customerDogSummaryCardHtml = function(dog) {
     <div class="portal-dog-info"><h3>${html(dog.dogName || 'Your dog')}</h3><div class="chip-row">${statusChipHtml(pricing(dog),'pricing-scope-chip')}${statusChipHtml(vaccine.label,`vaccination-status-chip ${vaccine.className}`)}</div>
     <p class="portal-dog-breed">${html(dog.breedDescription || dog.breed || 'Dog profile')}</p>
     ${entry ? `<dl class="portal-stay-facts"><div><dt>${icon('calendar')}${['Pending','Approved'].includes(status)?'Upcoming stay':'Current stay'}</dt><dd>${statusChipHtml(status,`boarding-status-chip ${statusClassForBoardingStatus(status)}`)}</dd></div><div><dt>Drop-off</dt><dd>${html(formatDateTime(stay.dropoffTime || stay.requestedDropoffTime))}</dd></div><div><dt>Pickup</dt><dd>${html(formatDateTime(stay.pickupTime || stay.requestedPickupTime))}</dd></div><div><dt>Services</dt><dd>${html(boardingStayServicesText(stay,{customerFacing:true}))}</dd></div></dl>` : '<p class="portal-empty-stay">No upcoming stay. Ready to plan their next visit?</p>'}</div>
-    <div class="customer-dashboard-actions">${entry ? `<button type="button" data-customer-workspace="stay" data-id="${html(record.id)}" data-stay-id="${html(stay.id)}">View stay</button>` : `<button type="button" data-customer-workspace="book" data-dog-id="${html(dog.id)}">Book a stay</button>`}<button type="button" class="secondary-button" data-action="edit-customer-dog-inline" data-id="${html(dog.id)}" data-boarding-id="${html(dog.sourceBoardingDogId || dog.linkedBoardingDogId || '')}">Edit profile</button></div>
+    <div class="customer-dashboard-actions">${dog.showRegistrationEnabled === 'Yes' ? `<button type="button" class="secondary-button" data-customer-show-schedule data-dog-id="${html(dog.id)}">Show schedule</button>` : ''}${entry ? `<button type="button" data-customer-workspace="stay" data-id="${html(record.id)}" data-stay-id="${html(stay.id)}">View stay</button>` : `<button type="button" data-customer-workspace="book" data-dog-id="${html(dog.id)}">Book a stay</button>`}<button type="button" class="secondary-button" data-action="edit-customer-dog-inline" data-id="${html(dog.id)}" data-boarding-id="${html(dog.sourceBoardingDogId || dog.linkedBoardingDogId || '')}">Edit profile</button></div>
   </article>`;
 };
 function prepareShell() {
@@ -45,7 +45,7 @@ function fillDogFilter(id) {
 }
 const originalDogs=window.renderCustomerDogs;
 window.renderCustomerDogs=function(...args){
-  originalDogs(...args);prepareShell();
+  originalDogs(...args);prepareShell();window.syncCustomerShowAccess?.();
   if(currentRole()!=='customer')return;
   const dogs=customerDogsForCurrentUser();
   el('customerWelcomeTitle').textContent=`Hi ${(currentUser.name || '').split(' ')[0] || 'there'}, welcome back.`;
@@ -57,7 +57,7 @@ window.renderCustomerDogs=function(...args){
 };
 for(const name of ['renderCustomerRequests','renderCustomerUpdates','renderCustomerFiles']) {
   const original=window[name];
-  window[name]=function(...args){original(...args);prepareShell();
+  window[name]=function(...args){original(...args);prepareShell();window.syncCustomerShowAccess?.();
     if(currentRole()!=='customer')return;
     if(name==='renderCustomerRequests') {
       el('customerRequestList').querySelectorAll('article[data-id]').forEach(card=>{
@@ -170,4 +170,4 @@ document.addEventListener('click',async event=>{
 });
 prepareShell();
 const originalSwitchPage=window.switchPage;
-window.switchPage=function(...args){const result=originalSwitchPage(...args);prepareShell();return result;};
+window.switchPage=function(...args){const result=originalSwitchPage(...args);prepareShell();window.syncCustomerShowAccess?.();return result;};

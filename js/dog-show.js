@@ -4037,6 +4037,7 @@ function scheduleDogShowPlannerLazyLoad() {
 function renderDogShow() {
   const content = document.getElementById("dogShowContent");
   if (!content) return;
+  void window.renderCustomerShowRequestQueue?.();
   dogShowPlannerLazyObserver?.disconnect();
   dogShowPlannerLazyObserver = null;
   dogShowPlannerLazyCleanup?.();

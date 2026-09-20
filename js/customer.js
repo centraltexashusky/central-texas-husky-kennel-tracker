@@ -3594,4 +3594,5 @@ async function submitPendingCustomerBooking() {
 //# sourceURL=snuggle-stay/customer.js
 `;
 (0, eval)(__snuggleStayModuleSource);
-await import("./customer-workspace.js?v=customer-workspace-v121-dog-pricing-v138");
+await import("./customer-shows.js?v=customer-shows-v139");
+await import("./customer-workspace.js?v=customer-workspace-v139");
