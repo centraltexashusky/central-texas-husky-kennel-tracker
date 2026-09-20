@@ -6,6 +6,7 @@ const dogKey = dog => dog?.sourceCustomerDogId || dog?.linkedCustomerDogId || do
 const sessionKey = () => `${currentRole()}:${currentUser?.email || ''}`;
 let sequence = 0;
 let selectedDogId = '';
+let displayIdentity = '';
 let schedule = { shows: [], requests: [] };
 let queue = [];
 let queueLoading = false;
@@ -78,6 +79,7 @@ async function loadSchedule() {
 
 window.openCustomerShowSchedule = function(id='') {
   const dogs=eligibleDogs();if(!dogs.length)return;
+  displayIdentity=sessionKey();
   selectedDogId=dogKey(dogs.find(d=>d.id===id||dogKey(d)===id)||dogs[0]);
   const element=dialog();if(!element.open)element.showModal();
   void loadSchedule();
@@ -91,7 +93,10 @@ window.syncCustomerShowAccess = function() {
     const button=document.createElement('button');button.type='button';button.className='portal-nav-button';
     button.textContent='Show schedule';button.dataset.customerShowSchedule='';button.hidden=!dogs.length;nav.append(button);
   }
-  if(!dogs.length){document.getElementById('customerShowDialog')?.close();schedule={shows:[],requests:[]};}
+  if(!dogs.length||displayIdentity!==sessionKey()||!dogs.some(d=>dogKey(d)===selectedDogId)){
+    document.getElementById('customerShowDialog')?.close();schedule={shows:[],requests:[]};
+    const body=document.getElementById('customerShowBody');if(body)body.textContent='';
+  }
 };
 
 window.renderCustomerShowRequestQueue = async function() {

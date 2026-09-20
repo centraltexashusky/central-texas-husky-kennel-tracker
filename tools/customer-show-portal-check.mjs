@@ -16,6 +16,7 @@ const projection=sql.slice(sql.indexOf("if p_action='schedule'"),sql.indexOf("if
 assert(!projection.includes("'notes'"));assert(!projection.includes("'expenses'"));assert(!projection.includes('to_jsonb(s)'));
 assert.match(ui,/d.showRegistrationEnabled === 'Yes'/);
 assert.match(ui,/identity!==sessionKey\(\)/);
+assert.match(ui,/displayIdentity!==sessionKey\(\)/);
 assert.match(ui,/p_expected_updated_at:req.updatedAt/);
 assert.match(ui,/show.canRequest\?/);
 assert.match(ui,/A request or attendance approval is not an official show entry/);
