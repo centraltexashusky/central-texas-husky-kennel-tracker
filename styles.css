@@ -261,6 +261,20 @@ iframe {
   color: #B9C8D6;
 }
 
+.sidebar-brand-meta {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+#appReleaseVersion {
+  color: #DCE8F3;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .side-nav {
   display: grid;
   gap: 8px;

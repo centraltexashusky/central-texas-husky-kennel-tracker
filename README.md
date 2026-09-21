@@ -91,6 +91,8 @@ Use `docs/production-hardening-runbook.md` for the SQL apply order, Edge Functio
 Important deployment note:
 Whenever `index.html`, `styles.css`, or `script.js` changes, upload the updated files to GitHub or your Wix-hosted version.
 
+Before each release, run `node tools/stamp-release-version.mjs` and include the updated `index.html` in the release commit. The sidebar displays the release timestamp as `vYYYY.MM.DD.HH` in `America/Chicago` time; it stays fixed until the next release. Push verified repairs to the production `main` branch and confirm GitHub Pages finishes publishing so they can be tested immediately.
+
 OAuth route note:
 The static route `oauth/consent/index.html` exists so GitHub Pages can serve:
 
