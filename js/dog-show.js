@@ -4524,6 +4524,46 @@ function dogShowPointStateOptions(selected = "") {
   return `<option value="">Choose location</option>${supportedStates.map(([value, label]) => `<option value="${value}"${value === selected ? " selected" : ""}>${label}</option>`).join("")}`;
 }
 
+function dogShowResultSelectOptions(options, selected = "", placeholder = "None") {
+  // Keep historical free-text results selectable without changing their saved value.
+  const choices = [["", placeholder], ...options];
+  if (selected && !choices.some(([value]) => value === selected)) choices.push([selected, `${selected} (saved)`]);
+  return choices.map(([value, label]) => `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(label)}</option>`).join("");
+}
+
+function dogShowResultPlacementOptions(schedule = {}, selected = "") {
+  const entered = String(schedule.classEntered || "").trim();
+  const className = /^(BOB|BOV|BOB\/BOV|Best of Breed|Best of Variety)$/i.test(entered) ? "" : entered;
+  const options = ["1st", "2nd", "3rd", "4th"].map((place) => {
+    const value = className ? `${place} ${className}` : place;
+    return [value, className ? value : `${place} in class`];
+  });
+  options.push(["No placement", "No placement"]);
+  return dogShowResultSelectOptions(options, selected, "No class placement recorded");
+}
+
+function dogShowResultBreedAwardOptions(selected = "") {
+  const options = [
+    ["BOB", "BOB — Best of Breed"], ["BOV", "BOV — Best of Variety"],
+    ["BOS", "BOS — Best of Opposite Sex"], ["BOW", "BOW — Best of Winners"],
+    ["WD", "WD — Winners Dog"], ["WB", "WB — Winners Bitch"],
+    ["RWD", "RWD — Reserve Winners Dog"], ["RWB", "RWB — Reserve Winners Bitch"],
+    ["SD", "SD — Select Dog"], ["SB", "SB — Select Bitch"],
+    ["AOM", "AOM — Award of Merit"], ["BOBOH", "BOBOH — Best of Breed Owner-Handled"],
+  ];
+  // Preserve the comma-separated format consumed by the point estimator and reports.
+  for (const winner of ["WD", "WB"]) {
+    for (const awards of ["BOW", "BOS", "BOB", "BOV", "BOW, BOS", "BOW, BOB", "BOW, BOV"]) {
+      const value = `${winner}, ${awards}`;
+      options.push([value, value]);
+    }
+  }
+  for (const awards of ["BOW, BOS", "BOW, BOB", "BOW, BOV", "BOB, BOBOH", "BOV, BOBOH", "BOS, BOBOH", "SD, BOBOH", "SB, BOBOH"]) {
+    options.push([awards, awards]);
+  }
+  return dogShowResultSelectOptions(options, selected, "No breed award recorded");
+}
+
 function dogShowManualGroupPoints(result = {}) {
   if (result.groupPointsEarned === "" || result.groupPointsEarned == null) return null;
   const value = Number(result.groupPointsEarned);
@@ -4597,8 +4637,8 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
     <fieldset class="dog-show-result-tier dog-show-result-tier-breed">
       <legend>Breed / Variety (BOB/BOV)</legend>
       <div class="field-grid">
-        <label>Placement<input name="placement" value="${escapeHtml(result.placement || "")}" placeholder="1st Open Bitch"/></label>
-        <label>BOB/BOV &amp; breed awards<input name="awards" value="${escapeHtml(result.awards || "")}" placeholder="WD, BOW, BOB or BOV"/></label>
+        <label>Placement<select name="placement">${dogShowResultPlacementOptions(schedule || {}, result.placement || "")}</select></label>
+        <label>BOB/BOV &amp; breed awards<select name="awards">${dogShowResultBreedAwardOptions(result.awards || "")}</select></label>
         <label>Championship points used<input type="number" name="pointsEarned" min="0" max="5" step="1" value="${displayedPoints}"/></label>
         <label>Point schedule state<select name="pointScheduleState">${dogShowPointStateOptions(eventState)}</select></label>
       </div>

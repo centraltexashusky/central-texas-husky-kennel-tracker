@@ -14350,6 +14350,36 @@ body:has(#timesheetSchedulePanel:not([hidden])) .app-shell {
   border-left: 4px solid var(--gold);
 }
 
+#dogShowDialog .dog-show-result-appearance-list > button {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+#dogShowDialog .dog-show-result-appearance-list > button:hover,
+#dogShowDialog .dog-show-result-appearance-list > button:focus-visible {
+  background: var(--glass-fill-hover);
+  border-color: var(--blue);
+}
+
+#dogShowDialog .dog-show-result-appearance-list :is(strong, span, small) {
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+:root[data-theme="dark"] #dogShowDialog .dog-show-result-appearance-list > button {
+  background: #12263D;
+  color: #F7FBFF;
+  border-color: #6489A8;
+}
+
+:root[data-theme="dark"] #dogShowDialog .dog-show-result-appearance-list > button:hover,
+:root[data-theme="dark"] #dogShowDialog .dog-show-result-appearance-list > button:focus-visible {
+  background: #1A3552;
+}
+
 .dog-show-prep-preview,
 .dog-show-form-note {
   background: var(--tint-blue);
