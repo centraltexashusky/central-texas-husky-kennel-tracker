@@ -4765,14 +4765,14 @@ function openDogShowResultForm(entry, ringScheduleId = "") {
         <section class="dog-show-result-award-card">
           <h3>OH Group</h3>
           <div class="field-grid">
-            <label>OH Group win / award<input name="ohGroupAward" value="${escapeHtml(result.ohGroupAward || "")}" placeholder="OH Group 1, 2, 3 or 4"/></label>
+            <label>OH Group win / award<select name="ohGroupAward">${dogShowResultSelectOptions([1, 2, 3, 4].map((place) => [`OH Group ${place}`, `OH Group ${place}`]), result.ohGroupAward || "", "No OH Group award")}</select></label>
             <label>OH Group judge<input name="ohGroupJudge" value="${escapeHtml(result.ohGroupJudge || "")}" placeholder="Judge name"/></label>
           </div>
         </section>
         <section class="dog-show-result-award-card">
           <h3>OH Best in Show</h3>
           <div class="field-grid">
-            <label>OH BIS award<input name="ohBisAward" value="${escapeHtml(result.ohBisAward || "")}" placeholder="OH BIS or OH RBIS"/></label>
+            <label>OH BIS award<select name="ohBisAward">${dogShowResultSelectOptions([["OH BIS", "OH BIS — Best in Show"], ["OH RBIS", "OH RBIS — Reserve Best in Show"]], result.ohBisAward || "", "No OH BIS award")}</select></label>
             <label>OH BIS judge<input name="ohBisJudge" value="${escapeHtml(result.ohBisJudge || "")}" placeholder="Judge name"/></label>
           </div>
         </section>
