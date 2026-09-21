@@ -13357,7 +13357,6 @@ function initEvents() {
           id: payload.manualTimeId,
           helperName: payload.manualHelper || helperName.value || "Unknown staff",
           helperEmail: payload.manualHelperEmail || existing?.helperEmail || helperEmail.value || currentUser?.email || "",
-          date: payload.manualDate,
           clockInTime: payload.manualClockIn,
           clockOutTime: payload.manualClockOut,
           note: payload.manualNote,

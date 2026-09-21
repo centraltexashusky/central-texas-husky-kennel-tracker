@@ -41,3 +41,29 @@ assert(!/\b(display|order|grid-template|width|height|padding|margin)\s*:/.test(d
 const adapter=read('js/timesheet-workspace.js');
 assert(!/\b(sendPayload|saveAndNotify|upsertRecord|writeRecords)\s*\(/.test(adapter),'Presentation adapter cannot write operational records.');
 console.log('Timesheet workspace checks passed: selected-tab rendering, staff-filter privacy, lazy date picker, responsive visibility, unchanged Dashboard layout and presentation-only adapter.');
+
+// Creation time is automatic; work dates follow clock-in without a second date field.
+assert(!source.includes('name="manualDate"'));
+assert(!read('js/shared.js').includes('payload.manualDate'));
+vm.runInContext(`
+role='admin';
+var savedTimeEntries=[];
+readRecords=()=>savedTimeEntries;
+uid=()=> 'manual-time-test';
+localDateTimeToIso=value=>value ? new Date(value).toISOString() : '';
+localDateFromStoredDateTime=value=>value.slice(0,10);
+localDateFromDateTimeInput=value=>value.slice(0,10);
+hoursBetween=(a,b)=>b ? (new Date(b)-new Date(a))/3600000 : 0;
+sendPayload=async()=>{};
+upsertRecord=(_type,record)=>{savedTimeEntries=[record]};
+renderTimesheet=()=>{};
+showToast=()=>{};
+`,context);
+const creationStart=Date.now();
+const created=await vm.runInContext(`saveTimeEntry({helperName:'QA',helperEmail:'qa@example.invalid',clockInTime:'2026-08-01T09:00:00Z',clockOutTime:'2026-08-01T13:00:00Z'})`,context);
+assert(Date.parse(created.submittedAt)>=creationStart && Date.parse(created.submittedAt)<=Date.now(),'Creation timestamp must be captured at save, not backdated to the shift.');
+assert.equal(created.date,'2026-08-01');assert.equal(created.hours,4);
+const edited=await vm.runInContext(`saveTimeEntry({id:'manual-time-test',helperName:'QA',helperEmail:'qa@example.invalid',clockInTime:'2026-08-02T09:00:00Z',clockOutTime:'2026-08-02T14:00:00Z'})`,context);
+assert.equal(edited.submittedAt,created.submittedAt,'Editing a shift must retain its original creation timestamp.');
+assert.equal(edited.date,'2026-08-02');assert.equal(edited.hours,5);
+console.log('Automatic timesheet creation timestamp, edit preservation, and clock-derived work date checks passed.');

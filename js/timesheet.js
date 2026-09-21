@@ -438,7 +438,6 @@ function timesheetEditFormHtml(record = {}) {
     <div class="field-grid">
       <label>Staff name<select name="manualStaffKey" id="timesheetStaffSelect" \${isAdmin ? "" : "disabled"} required>\${staffOptions || \`<option value="\${escapeHtml(helperValue)}" data-name="\${escapeHtml(helperValue)}" data-email="\${escapeHtml(helperEmailValue)}">\${escapeHtml(helperValue || "Current staff")}</option>\`}</select><small>\${isAdmin ? "Select from saved Staff/Admin users." : "Staff is set from your login."}</small></label>
       <label>Staff email<input type="email" name="manualHelperEmailDisplay" value="\${escapeHtml(helperEmailValue)}" readonly /></label>
-      <label>Entry date<input type="date" name="manualDate" value="\${escapeHtml(localDateFromStoredDateTime(record.clockInTime) || record.date || todayDate())}" required /></label>
       <label>Clock in<input type="datetime-local" name="manualClockIn" value="\${escapeHtml(clockInValue)}" required /></label>
       <label>Clock out <small>Optional. Leave blank if this staff member is still on shift.</small><input type="datetime-local" name="manualClockOut" value="\${escapeHtml(clockOutValue)}" /></label>
     </div>
