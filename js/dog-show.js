@@ -1511,7 +1511,7 @@ function dogShowCalendarHtml(event) {
       const prep = dogShowPrepTimes(entry, schedule);
       const calendarTitle = dogShowCalendarRingTitle(entry, schedule);
       if (!prep.start) {
-        allDayByDate.get(key).push({ kind: "unscheduled", title: calendarTitle, meta: `${dogShowEntryName(entry)} · ${schedule.classEntered || "Class not listed"} · Ring time needed`, action: "open-show-dog", id: entry.id });
+        allDayByDate.get(key).push({ kind: "unscheduled", title: dogShowEntryName(entry), meta: `${schedule.classEntered || "Class not listed"} · ${schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring not assigned"} · Ring time needed`, action: "open-show-dog", id: entry.id, entry });
         return;
       }
       if (dogShowPrepTaskFor(entry, schedule, event)) return;

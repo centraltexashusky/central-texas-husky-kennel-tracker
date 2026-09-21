@@ -17,6 +17,10 @@ assert(!html.includes('Social dog')&&!html.includes('data-id="a-task"')&&html.in
 ctx.dogShowTaskAssignee='a@example.invalid';assert(ctx.dogShowTaskMatchesFilter(tasks[0]));assert(!ctx.dogShowTaskMatchesFilter(tasks[1]));
 ctx.dogShowTaskAssignee='';ctx.dogShowTaskFilter='completed';assert(!ctx.dogShowTaskMatchesFilter(tasks[0]));assert(ctx.dogShowTaskMatchesFilter(tasks[1]));
 ctx.dogShowTaskFilter='mine';assert(ctx.dogShowTaskMatchesFilter(tasks[0]));assert(!ctx.dogShowTaskMatchesFilter(tasks[1]));
+// Dogs without assigned ring times must keep their identity and photo in the agenda.
+ctx.dogShowScheduleStaff='';entries.push({id:'unscheduled',dogName:'Awaiting ring',attendanceRole:'Showing'});
+Object.assign(ctx,{dogShowRingSchedules:()=>[{id:'ring',ringDate:'2026-09-21'}],dogShowPrepTimes:()=>({}),dogShowCalendarRingTitle:()=> 'Ring --',dogShowPhotoHtml:e=>`<img alt="${e.dogName}">`});
+html=ctx.dogShowCalendarHtml(show);assert(html.includes('<img alt="Awaiting ring">')&&html.includes('<strong>Awaiting ring</strong>'),'Unscheduled dogs retain photo identity');
 // The selected-day calendar must not leak other dates' scheduled or potential shows.
 Object.assign(ctx,{dogShowMasterDate:()=>days[1],dogShowEvents:()=>[{id:'today',name:'Today event',...show},{id:'later',name:'Later event',startDate:'2026-09-25',endDate:'2026-09-26'}],dogShowEntries:()=>[],dogShowPlannerDateRange:e=>e.startDate,dogShowMasterCalendarEventStatus:()=> 'Active',dogShowMasterCalendarItemHtml:i=>i.title});
 vm.runInContext(source.match(/function dogShowMasterCalendarListHtml\([\s\S]*?\n\}/)[0],ctx);
