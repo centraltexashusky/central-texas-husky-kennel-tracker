@@ -194,6 +194,11 @@ function dogShowFinanceCategoryOptions(entryType = "expense", selectedCategory =
 let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
   ? localStorage.getItem(DOG_SHOW_VIEW_KEY)
   : "home";
+let dogShowOverviewDay = "";
+let dogShowUpcomingQuery = "";
+let dogShowUpcomingFilter = "all";
+let dogShowUpcomingPage = 1;
+const dogShowShellSlots = new Map();
 let dogShowDogFilter = "all";
 let dogShowDogQuery = "";
 let dogShowTaskFilter = "open";
@@ -1285,74 +1290,116 @@ function dogShowRenderEmpty(title, copy, action = "new-show-event", label = "Cre
   return `<section class="dog-show-empty"><span>S</span><h3>${escapeHtml(title)}</h3><p>${escapeHtml(copy)}</p><button type="button" data-action="${escapeHtml(action)}">${escapeHtml(label)}</button></section>`;
 }
 
+function dogShowOverviewEvents() {
+  const today = todayDate();
+  return dogShowOperationalEvents().sort((a, b) => {
+    const aPast = (a.endDate || a.startDate || "") < today;
+    const bPast = (b.endDate || b.startDate || "") < today;
+    return Number(aPast) - Number(bPast) || String(a.startDate || "").localeCompare(String(b.startDate || "")) || String(a.name || "").localeCompare(String(b.name || ""));
+  });
+}
+
+function dogShowOverviewStatus(event = {}) {
+  const value = dogShowEventStatus(event.status);
+  return { value, label: ({ "Going To": "Planning", Going: "Booked", Active: "Active", Completed: "Completed" })[value], key: value.toLowerCase().replace(/\s+/g, "-") };
+}
+
+function dogShowOverviewDeadline(event = {}) {
+  if (!event.entryClosingDate) return { text: "Not listed", days: null };
+  const days = Math.round((Date.parse(event.entryClosingDate) - Date.parse(todayDate())) / 86400000);
+  const date = dogShowFormatMonthDay(event.entryClosingDate);
+  return { text: days < 0 ? "Closed" : `${date}${days === 0 ? " · Today" : days <= 14 ? ` · ${days} days` : ""}`, days };
+}
+
+function dogShowOverviewAppearances(event = {}, entries = dogShowEntries(event)) {
+  const results = dogShowResults(event);
+  return entries.filter((entry) => entry.attendanceRole === "Showing").flatMap((entry) =>
+    dogShowRingSchedules(entry).map((schedule) => ({ entry, schedule, time: dogShowRingDateTime(entry, schedule), result: dogShowResultForSchedule(entry, schedule, event, results.filter((result) => result.showEntryId === entry.id)) }))
+  ).sort((a, b) => (a.time?.getTime() || Infinity) - (b.time?.getTime() || Infinity) || dogShowEntryName(a.entry).localeCompare(dogShowEntryName(b.entry)));
+}
+
+function dogShowOverviewMissingResults(event = {}, entries = dogShowEntries(event), now = new Date()) {
+  return dogShowOverviewAppearances(event, entries).filter(({ schedule, time, result }) => !result && ((time && time <= now) || (!schedule.ringTime && schedule.ringDate && schedule.ringDate < todayDate())));
+}
+
+function dogShowOverviewResultPicker() {
+  const event = dogShowActiveEvent();
+  const appearances = dogShowOverviewAppearances(event);
+  openDogShowDialog("Record result", appearances.length ? `<div class="dog-show-summary-list dog-show-result-appearance-list">${appearances.map(({ entry, schedule, result }) => `<button type="button" data-action="open-show-result" data-id="${escapeHtml(entry.id)}" data-ring-schedule-id="${escapeHtml(schedule.id)}"><strong>${escapeHtml(dogShowEntryName(entry))}</strong><span>${escapeHtml(dogShowRingAppearanceTitle(schedule))} · ${escapeHtml(dogShowRingAppearanceMeta(schedule))}</span><small>${result ? "View or edit result" : "No result logged"}</small></button>`).join("")}</div>` : `<p>No ring appearances yet. Add a showing dog and its ring appearance before recording a result.</p><button type="button" class="secondary-button" data-action="close-show-dialog">Close</button>`);
+}
+
 function dogShowUpcomingTableHtml(activeEvent = dogShowActiveEvent()) {
-  const events = dogShowEvents()
-    .filter((event) => dogShowPlannerLifecycleStatus(event) !== "Completed")
-    .sort((left, right) => String(left.startDate || "").localeCompare(String(right.startDate || "")) || String(left.name || "").localeCompare(String(right.name || "")));
-  if (!events.length) return "";
-  const rows = events.map((event) => {
+  const all = dogShowOverviewEvents();
+  const query = dogShowUpcomingQuery.trim().toLowerCase();
+  const matches = all.filter((event) => (dogShowUpcomingFilter === "all" || dogShowOverviewStatus(event).value === dogShowUpcomingFilter) && (!query || [event.name, event.club, event.cityState, event.venue, event.venueAddress].join(" ").toLowerCase().includes(query)));
+  const pageSize = 5;
+  const pages = Math.max(1, Math.ceil(matches.length / pageSize));
+  dogShowUpcomingPage = Math.min(Math.max(1, dogShowUpcomingPage), pages);
+  const start = (dogShowUpcomingPage - 1) * pageSize;
+  const visible = matches.slice(start, start + pageSize);
+  const rows = visible.map((event) => {
     const entries = dogShowEntries(event);
-    const dogNames = entries.map(dogShowEntryName);
-    const helpers = (Array.isArray(event.helperEmails) ? event.helperEmails : []).map(dogShowStaffLabel);
-    const location = event.venueAddress || event.cityState || event.venue || "Location pending";
-    const lifecycleStatus = dogShowPlannerLifecycleStatus(event);
-    const statusClass = `is-status-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}`;
-    const closingNeedsAttention = lifecycleStatus === "Going To";
-    return `<tr class="${event.id === activeEvent?.id ? "is-current " : ""}${statusClass}" data-show-table-row="${escapeHtml(event.id)}">
+    const helpers = new Set([...(event.helperEmails || []), ...entries.flatMap((entry) => [entry.handlerEmail, entry.helperEmail])].filter(Boolean).map(normalizeEmail));
+    const status = dogShowOverviewStatus(event);
+    const deadline = dogShowOverviewDeadline(event);
+    const past = (event.endDate || event.startDate || "") < todayDate();
+    return `<tr class="${event.id === activeEvent?.id ? "is-current" : ""}" data-show-table-row="${escapeHtml(event.id)}">
       <td class="dog-show-upcoming-select-cell"><input type="checkbox" data-show-table-select="${escapeHtml(event.id)}" aria-label="Select ${escapeHtml(event.name || "show")}"/></td>
-      <td data-label="Show"><strong>${escapeHtml(event.name || event.club || "Dog Show")}</strong><small>${escapeHtml(location)}</small></td>
-      <td data-label="Dates"><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong>${event.entryClosingDate ? `<small class="dog-show-upcoming-closing${closingNeedsAttention ? " is-attention" : ""}">Closes ${escapeHtml(dogShowFormatDate(event.entryClosingDate))}</small>` : ""}</td>
-      <td data-label="Status"><select class="dog-show-upcoming-status ${statusClass}" data-show-quick-status="${escapeHtml(event.id)}" aria-label="Status for ${escapeHtml(event.name || "show")}">${dogShowEventStatusOptions(event.status)}</select></td>
-      <td data-label="Dogs"><strong>${entries.length}</strong><small title="${escapeHtml(dogNames.join(", "))}">${escapeHtml(dogNames.length ? dogNames.join(", ") : "No dogs assigned")}</small></td>
-      <td data-label="Helpers"><strong>${helpers.length}</strong><small title="${escapeHtml(helpers.join(", "))}">${escapeHtml(helpers.length ? helpers.join(", ") : "No helpers assigned")}</small></td>
-      <td data-label="Actions"><div class="dog-show-upcoming-actions"><button type="button" class="secondary-button" data-action="open-show-table-event" data-event-id="${escapeHtml(event.id)}">Open</button><button type="button" class="secondary-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">Dogs & Helpers</button><button type="button" class="secondary-button" data-action="edit-show-table-event" data-event-id="${escapeHtml(event.id)}">Setup</button></div></td>
+      <td data-label="Show"><button type="button" class="show-text-button show-event-name" data-action="open-show-table-event" data-event-id="${escapeHtml(event.id)}">${escapeHtml(event.club || event.name || "Dog Show")}</button><small>${escapeHtml(event.cityState || event.venue || event.venueAddress || "Location pending")}${past ? " · Past show — open" : ""}</small></td>
+      <td data-label="Dates">${escapeHtml(dogShowPlannerDateRange(event))}</td>
+      <td data-label="Entry deadline"><span class="show-deadline${deadline.days !== null && deadline.days >= 0 && deadline.days <= 14 ? " is-soon" : ""}" title="${escapeHtml(event.entryClosingDate || "Closing date not listed")}">${escapeHtml(deadline.text)}</span></td>
+      <td data-label="Status"><details class="show-status-menu"><summary class="show-status-pill is-${status.key}">${escapeHtml(status.label)}<span aria-hidden="true">⌄</span></summary><div><label>Status<select data-show-quick-status="${escapeHtml(event.id)}" aria-label="Status for ${escapeHtml(event.name || "show")}">${dogShowEventStatusOptions(event.status)}</select></label><button type="button" class="show-text-button" data-action="edit-show-table-event" data-event-id="${escapeHtml(event.id)}">Show setup</button></div></details></td>
+      <td data-label="Team"><button type="button" class="show-text-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">${entries.length ? `${entries.length} dogs · ${helpers.size} helper${helpers.size === 1 ? "" : "s"}` : "Assign dogs"}</button></td>
+      <td data-label="Open"><button type="button" class="show-row-open" data-action="open-show-table-event" data-event-id="${escapeHtml(event.id)}" aria-label="Open ${escapeHtml(event.name || "show")}">→</button></td>
     </tr>`;
   }).join("");
-  return `<section class="dog-show-upcoming-shows">
-    <header><div><span>SHOW MANAGEMENT</span><h3>Upcoming & Current Shows</h3><p>Update registration status, dogs, and helpers without opening each show.</p></div><strong>${events.length} show${events.length === 1 ? "" : "s"}</strong></header>
-    <div class="dog-show-upcoming-bulk">
-      <label class="inline-check"><input type="checkbox" data-show-table-select-all/><span>Select all</span></label>
-      <label class="dog-show-upcoming-bulk-status">Set selected shows to<select data-show-table-bulk-status>${dogShowEventStatusOptions("Going")}</select></label>
-      <button type="button" data-action="apply-show-table-status">Apply Status</button>
-    </div>
-    <div class="dog-show-upcoming-table-wrap"><table class="dog-show-upcoming-table">
-      <thead><tr><th scope="col"><span class="visually-hidden">Select</span></th><th scope="col">Show</th><th scope="col">Dates</th><th scope="col">Status</th><th scope="col">Dogs</th><th scope="col">Helpers</th><th scope="col">Quick actions</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div>
+  return `<section class="dog-show-upcoming-shows show-overview-card">
+    <header><div class="show-card-title"><h3>Upcoming shows</h3><span>${all.length} show${all.length === 1 ? "" : "s"}</span></div><label class="show-table-search"><span class="sr-only">Find a show</span><input type="search" id="dogShowUpcomingSearch" placeholder="Find a show" value="${escapeHtml(dogShowUpcomingQuery)}"/></label></header>
+    <div class="show-upcoming-filters" role="group" aria-label="Filter upcoming shows">${[["all", "All"], ["Going To", "Planning"], ["Going", "Booked"], ["Active", "Active"]].map(([value, label]) => `<button type="button" data-show-upcoming-filter="${value}" aria-pressed="${dogShowUpcomingFilter === value}" class="${dogShowUpcomingFilter === value ? "is-active" : ""}">${label}<span>${value === "all" ? all.length : all.filter((event) => dogShowOverviewStatus(event).value === value).length}</span></button>`).join("")}</div>
+    <div class="dog-show-upcoming-bulk" hidden><strong data-show-selection-count></strong><label class="dog-show-upcoming-bulk-status">Set selected shows to<select data-show-table-bulk-status>${dogShowEventStatusOptions("Going")}</select></label><button type="button" data-action="apply-show-table-status">Apply Status</button></div>
+    <div class="dog-show-upcoming-table-wrap"><table class="dog-show-upcoming-table"><thead><tr><th scope="col"><input type="checkbox" data-show-table-select-all aria-label="Select shows on this page"${visible.length ? "" : " disabled"}/></th><th scope="col">Show / location</th><th scope="col">Dates</th><th scope="col">Entry deadline</th><th scope="col">Status</th><th scope="col">Team</th><th scope="col"><span class="sr-only">Open show</span></th></tr></thead><tbody>${rows || `<tr><td colspan="7"><div class="show-table-empty">${all.length ? "No shows match these filters." : "No open shows. Create a show to get started."}</div></td></tr>`}</tbody></table></div>
+    <footer class="show-table-footer"><span>${matches.length ? `Showing ${start + 1}–${start + visible.length} of ${matches.length} shows` : "0 shows"}</span><nav aria-label="Upcoming show pages"><button type="button" data-show-upcoming-page="${dogShowUpcomingPage - 1}" aria-label="Previous shows"${dogShowUpcomingPage === 1 ? " disabled" : ""}>‹</button><span>Page ${dogShowUpcomingPage} of ${pages}</span><button type="button" data-show-upcoming-page="${dogShowUpcomingPage + 1}" aria-label="Next shows"${dogShowUpcomingPage === pages ? " disabled" : ""}>›</button></nav></footer>
   </section>`;
 }
 
 function dogShowHomeHtml(event) {
   const entries = dogShowEntries(event);
-  const tasks = dogShowTasks(event);
-  const resultProgress = dogShowResultProgress(event, entries);
-  const conflicts = dogShowConflictEntryIds(entries);
-  const needCare = entries.filter((entry) => dogShowAttentionState(entry) !== "current");
-  const openTasks = tasks.filter((task) => task.status !== "Completed");
-  const showing = entries.filter((entry) => entry.attendanceRole === "Showing");
-  const nextRing = showing.flatMap((entry) => dogShowRingSchedules(entry).map((schedule) => ({ entry, schedule, time: dogShowRingDateTime(entry, schedule) }))).filter((item) => item.time && item.time >= new Date()).sort((a, b) => a.time - b.time)[0];
-  const nextActions = [...entries].sort((a, b) => {
-    const careDiff = ["missing", "stale", "current"].indexOf(dogShowAttentionState(a)) - ["missing", "stale", "current"].indexOf(dogShowAttentionState(b));
-    const aStart = dogShowRingSchedules(a).map((schedule) => dogShowPrepTimes(a, schedule).start?.getTime() || Infinity).sort((left, right) => left - right)[0] || Infinity;
-    const bStart = dogShowRingSchedules(b).map((schedule) => dogShowPrepTimes(b, schedule).start?.getTime() || Infinity).sort((left, right) => left - right)[0] || Infinity;
-    return careDiff || aStart - bStart;
-  }).slice(0, 10);
-  const assignedEntries = entries.filter((entry) => entry.handlerEmail || entry.helperEmail);
-  const assignmentText = entries.length ? `${assignedEntries.length} of ${entries.length} dogs assigned to a handler or care helper` : "No dogs added to this show yet";
-  const staySummary = [event.stayType, event.stayName, event.stayAddress].filter(Boolean).join(" · ");
+  const days = dogShowShowDays(event).map(dogShowDateKey);
+  if (!days.includes(dogShowOverviewDay)) dogShowOverviewDay = days.includes(todayDate()) ? todayDate() : days[0];
+  const appearances = dogShowOverviewAppearances(event, entries).filter(({ schedule }) => schedule.ringDate === dogShowOverviewDay);
+  const missingResults = dogShowOverviewMissingResults(event, entries);
+  const deadlines = dogShowOverviewEvents().filter((show) => { const {days} = dogShowOverviewDeadline(show); return dogShowEventStatus(show.status) === "Going To" && days !== null && days >= 0 && days <= 14; });
+  const helpers = new Set([...(event.helperEmails || []), ...entries.flatMap((entry) => [entry.handlerEmail, entry.helperEmail])].filter(Boolean).map(normalizeEmail));
+  const care = entries.filter((entry) => dogShowAttentionState(entry) !== "current").length;
+  const tasks = dogShowTasks(event).filter((task) => task.status !== "Completed").length;
+  const conflicts = dogShowConflictEntryIds(entries).size;
+  const selectedDate = new Date(`${dogShowOverviewDay}T12:00:00`);
   return `<div class="dog-show-view dog-show-home-view">
-    ${dogShowUpcomingTableHtml(event)}
-    <section class="dog-show-event-summary"><div><span>Dog Shows</span><h3>${escapeHtml(event.name || "Show Weekend")}</h3><p>${escapeHtml([dogShowFormatDate(event.startDate), event.venue, event.venueAddress || event.cityState].filter(Boolean).join(" · "))}</p>${staySummary ? `<small>Stay: ${escapeHtml(staySummary)}</small>` : ""}</div><button type="button" class="secondary-button" data-action="edit-show-event">Show Setup</button></section>
-    <section class="dog-show-stat-grid">
-      <article><span>Need care</span><strong>${needCare.length}</strong><small>stale or no log</small></article>
-      <article><span>Next ring</span><strong>${nextRing ? dogShowFormatTime(nextRing.time) : "--"}</strong><small>${nextRing ? dogShowEntryName(nextRing.entry) : "No upcoming ring"}</small></article>
-      <article><span>Open tasks</span><strong>${openTasks.length}</strong><small>${conflicts.size ? `${conflicts.size} schedule conflicts` : "team workload"}</small></article>
-      <article><span>Results</span><strong>${resultProgress.logged}/${resultProgress.total}</strong><small>ring appearances logged</small></article>
-    </section>
-    <section class="dog-show-section-band"><div><h3>Next Actions</h3><p>Care status first, then preparation time.</p></div><button type="button" class="secondary-button" data-dog-show-view="dogs">All Dogs</button></section>
-    <div class="dog-show-roster-list">${nextActions.length ? nextActions.map((entry) => dogShowEntryRowHtml(entry, { conflict: conflicts.has(entry.id) })).join("") : dogShowRenderEmpty("No dogs added", "Add Our Dogs or Boarding Dogs to this show weekend.", "add-show-dogs", "Add Dogs")}</div>
-    <section class="dog-show-coverage"><div><h3>Dog Assignments</h3><p>${escapeHtml(assignmentText)}</p></div><div class="dog-show-progress" role="progressbar" aria-label="Dogs assigned" aria-valuemin="0" aria-valuemax="${Math.max(1, entries.length)}" aria-valuenow="${assignedEntries.length}"><span style="width:${Math.min(100, entries.length ? (assignedEntries.length / entries.length) * 100 : 0)}%"></span></div></section>
+    <div class="show-overview-top">
+      <section class="show-overview-card show-today"><header><div><h3>${dogShowOverviewDay === todayDate() ? "Today at the show" : "At the show"}</h3><p>${escapeHtml(selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }))}</p></div><button type="button" class="show-text-button" data-dog-show-view="schedule">View work schedule <span aria-hidden="true">→</span></button></header>
+      <div class="show-day-tabs" role="group" aria-label="Show day">${days.map((day) => `<button type="button" data-show-overview-day="${day}" aria-pressed="${day === dogShowOverviewDay}">${escapeHtml(new Date(`${day}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", day: "numeric" }))}</button>`).join("")}</div>
+      <div class="show-ring-list">${appearances.length ? appearances.map(({ entry, schedule, time, result }) => `<div class="show-ring-row"><time>${schedule.ringTime && time ? escapeHtml(dogShowFormatTime(time)) : "Time TBD"}</time>${dogShowPhotoHtml(entry, "show-overview-avatar")}<div class="show-ring-dog"><button type="button" class="show-text-button" data-action="open-show-dog" data-id="${escapeHtml(entry.id)}">${escapeHtml(dogShowEntryName(entry))}</button><small>${escapeHtml([schedule.classEntered || "Class not set", schedule.judge].filter(Boolean).join(" · "))}</small></div><span class="show-ring-pill">${escapeHtml(schedule.ringNumber ? `Ring ${schedule.ringNumber}` : "Ring TBD")}</span><button type="button" class="show-text-button show-ring-result" data-action="overview-result" data-id="${escapeHtml(entry.id)}" data-ring-schedule-id="${escapeHtml(schedule.id)}">${result ? "View result" : "Add result"} <span aria-hidden="true">→</span></button></div>`).join("") : `<div class="show-schedule-empty"><strong>No ring appearances for this day</strong><p>${entries.length ? "Manage the team to add ring details. Socializing dogs are listed on the Dogs tab." : "Add dogs to start organizing this show."}</p><button type="button" class="secondary-button" data-action="${entries.length ? "manage-show-table-team" : "add-show-dogs"}" data-event-id="${escapeHtml(event.id)}">${entries.length ? "Manage team" : "Add dogs"}</button></div>`}</div>
+      <footer class="show-team-footer"><div class="show-team-summary"><div class="show-avatar-stack">${entries.slice(0, 4).map((entry) => dogShowPhotoHtml(entry, "show-overview-avatar")).join("")}</div><span>${entries.length} dogs · ${helpers.size} helper${helpers.size === 1 ? "" : "s"}</span></div><button type="button" class="show-text-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">Manage team →</button></footer></section>
+      <section class="show-overview-card show-attention"><h3>Needs attention</h3><div class="show-attention-list">
+        <button type="button" data-action="overview-results" class="show-attention-item"><span class="show-attention-dot ${missingResults.length ? "is-amber" : "is-muted"}" aria-hidden="true"></span><span><strong>${missingResults.length ? `${missingResults.length} result${missingResults.length === 1 ? "" : "s"} to record` : "Results up to date"}</strong><small>${missingResults.length ? "Past ring times without a logged result" : "No past ring appearances awaiting results"}</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" data-action="overview-deadlines" class="show-attention-item"><span class="show-attention-dot is-blue" aria-hidden="true"></span><span><strong>${deadlines.length ? `${deadlines.length} upcoming entry deadline${deadlines.length === 1 ? "" : "s"}` : "No upcoming entry deadlines"}</strong><small>${deadlines.length ? "Planned shows closing within 14 days" : "For planned shows with a known closing date"}</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" data-action="overview-requests" class="show-attention-item"><span class="show-attention-dot is-muted" aria-hidden="true"></span><span><strong>Customer show requests</strong><small>Review requests and attendance</small></span><span aria-hidden="true">›</span></button>
+      </div><div class="show-care-summary"><button type="button" class="show-text-button" data-action="overview-needs-care">${care} dogs need care</button><button type="button" class="show-text-button" data-dog-show-view="tasks">${tasks} open tasks</button>${conflicts ? `<button type="button" class="show-text-button" data-dog-show-view="schedule">${conflicts} schedule conflicts</button>` : ""}</div>
+      <div class="show-quick-actions"><h4>Quick actions</h4><div><button type="button" class="secondary-button" data-dog-show-view="dogs">Log care</button><button type="button" class="secondary-button" data-action="overview-results">Record result</button><button type="button" class="secondary-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">Team</button></div></div></section>
+    </div>${dogShowUpcomingTableHtml(event)}
   </div>`;
+}
+
+function updateDogShowTableSelection() {
+  const page = document.getElementById("dogShowPage");
+  const inputs = [...page.querySelectorAll("[data-show-table-select]")];
+  const count = inputs.filter((input) => input.checked).length;
+  const bulk = page.querySelector(".dog-show-upcoming-bulk");
+  if (bulk) bulk.hidden = !count;
+  const label = page.querySelector("[data-show-selection-count]");
+  if (label) label.textContent = `${count} selected`;
+  const all = page.querySelector("[data-show-table-select-all]");
+  if (all) { all.checked = !!count && count === inputs.length; all.indeterminate = count > 0 && count < inputs.length; }
 }
 
 function dogShowDogsHtml(event) {
@@ -1373,21 +1420,22 @@ function dogShowDogsHtml(event) {
   const needCount = all.filter((entry) => dogShowAttentionState(entry) !== "current").length;
   const mineCount = all.filter((entry) => [entry.handlerEmail, entry.helperEmail].map(normalizeEmail).includes(normalizeEmail(currentUser?.email))).length;
   return `<div class="dog-show-view dog-show-dogs-view">
-    <section class="dog-show-list-toolbar"><div><h3>Dogs At Show</h3><p>${all.length} dogs · last-attended time visible on every row</p></div><button type="button" data-action="add-show-dogs">Add Dogs</button></section>
+    <section class="show-roster-controls"><div class="dog-show-list-toolbar"><div><h3>Dogs at show</h3><p>${all.length} dogs · ${all.filter((entry) => entry.attendanceRole === "Showing").length} showing · ${all.filter((entry) => entry.attendanceRole !== "Showing").length} socializing</p></div><button type="button" data-action="add-show-dogs">+ Add dogs</button></div><div class="show-roster-toolbar">
     <label class="dog-show-search"><span class="visually-hidden">Search show dogs</span><input type="search" id="dogShowDogSearch" value="${escapeHtml(dogShowDogQuery)}" placeholder="Search dog, helper, class, or ring" /></label>
     <div class="dog-show-filter-row" role="group" aria-label="Dog roster filters">
       <button type="button" data-dog-filter="all" class="${dogShowDogFilter === "all" ? "is-active" : ""}">All ${all.length}</button>
-      <button type="button" data-dog-filter="need" class="${dogShowDogFilter === "need" ? "is-active" : ""}">Need ${needCount}</button>
+      <button type="button" data-dog-filter="need" class="${dogShowDogFilter === "need" ? "is-active" : ""}">Needs care ${needCount}</button>
       <button type="button" data-dog-filter="mine" class="${dogShowDogFilter === "mine" ? "is-active" : ""}">Mine ${mineCount}</button>
       <button type="button" data-dog-filter="showing" class="${dogShowDogFilter === "showing" ? "is-active" : ""}">Showing ${all.filter((entry) => entry.attendanceRole === "Showing").length}</button>
       <button type="button" data-dog-filter="social" class="${dogShowDogFilter === "social" ? "is-active" : ""}">Social ${all.filter((entry) => entry.attendanceRole !== "Showing").length}</button>
     </div>
-    <div class="dog-show-count-strip"><strong>${entries.length} shown</strong><span>${needCount ? `${needCount} need attention` : "All dogs current"}</span></div>
-    ${all.length ? `<div class="dog-show-bulk-care" role="group" aria-label="Log care for all show dogs">
+    </div>
+    ${all.length ? `<div class="dog-show-bulk-care" role="group" aria-label="Log care for all show dogs"><span class="show-team-care-label">Team care</span>
       <button type="button" class="is-potty" data-action="open-bulk-show-potty"><strong>Potty All Dogs</strong><small>Choose outcome for ${all.length}</small></button>
       <button type="button" class="is-water" data-action="bulk-show-log" data-log-type="Water"><strong>Water All Dogs</strong><small>Log now for ${all.length}</small></button>
       <button type="button" class="is-food" data-action="bulk-show-log" data-log-type="Feeding"><strong>Feed All Dogs</strong><small>Log now for ${all.length}</small></button>
     </div>` : ""}
+    </section><p class="show-roster-count">${entries.length} of ${all.length} dogs shown · ${needCount ? `${needCount} need attention` : "All dogs current"}</p>
     <div class="dog-show-roster-list">${entries.length ? entries.map((entry) => dogShowEntryRowHtml(entry, { conflict: conflicts.has(entry.id), quickActions: true })).join("") : dogShowRenderEmpty("No matching dogs", "Change the filter or add dogs to this show.", "add-show-dogs", "Add Dogs")}</div>
   </div>`;
 }
@@ -4054,6 +4102,9 @@ function renderDogShow() {
   const event = dogShowActiveEvent();
   const select = document.getElementById("dogShowEventSelect");
   if (select) select.innerHTML = dogShowEventOptions(event);
+  const context = document.getElementById("dogShowWeekendContext");
+  if (context) context.innerHTML = event ? `<span>${escapeHtml(dogShowPlannerDateRange(event))}</span><span class="show-status-pill is-${dogShowOverviewStatus(event).key}">${escapeHtml(dogShowOverviewStatus(event).label)}</span><button type="button" class="show-text-button" data-action="edit-show-event">Show setup</button>` : "";
+  document.getElementById("dogShowPage")?.setAttribute("data-show-view", dogShowView);
   document.querySelectorAll("[data-dog-show-view]").forEach((button) => {
     const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calendar", "calculator", "expenses"].includes(dogShowView);
     const active = mobileMoreActive || button.dataset.dogShowView === dogShowView;
@@ -4096,6 +4147,23 @@ function setDogShowView(view = "home") {
 function syncDogShowShell(pageId = typeof activePageId === "function" ? activePageId() : "") {
   const active = pageId === "dogShowPage";
   document.body.classList.toggle("is-dog-show-mode", active);
+  // Move existing controls with their listeners intact; restore them on every exit.
+  for (const [selector, target] of [["#globalSearchPanel", "dogShowSearchSlot"], [".page-header .user-card", "dogShowAccountSlot"]]) {
+    if (active && !dogShowShellSlots.has(target)) {
+      const element = document.querySelector(selector);
+      const slot = document.getElementById(target);
+      if (element && slot) {
+        const marker = document.createComment(`Dog show restore ${target}`);
+        element.before(marker);
+        dogShowShellSlots.set(target, { element, marker });
+        slot.append(element);
+      }
+    } else if (!active && dogShowShellSlots.has(target)) {
+      const { element, marker } = dogShowShellSlots.get(target);
+      marker.replaceWith(element);
+      dogShowShellSlots.delete(target);
+    }
+  }
   const nav = document.getElementById("dogShowMobileNav");
   if (nav) nav.hidden = !active || !helperIsLoggedIn();
   if (!active) {
@@ -5525,6 +5593,15 @@ function setupDogShowEventListeners() {
   document.getElementById("dogShowDialogCloseButton")?.addEventListener("click", () => dialog?.close());
 
   page.addEventListener("input", (event) => {
+    if (event.target.id === "dogShowUpcomingSearch") {
+      dogShowUpcomingQuery = event.target.value || "";
+      dogShowUpcomingPage = 1;
+      const section = page.querySelector(".dog-show-upcoming-shows");
+      if (section) section.outerHTML = dogShowUpcomingTableHtml();
+      const input = document.getElementById("dogShowUpcomingSearch");
+      input?.focus();
+      return;
+    }
     if (event.target.matches("[data-progress-filter]")) {
       const filterKind = event.target.dataset.progressFilter || "";
       const query = dogShowSearchKey(event.target.value || "");
@@ -5612,6 +5689,11 @@ function setupDogShowEventListeners() {
       page.querySelectorAll("[data-show-table-select]").forEach((input) => {
         input.checked = event.target.checked;
       });
+      updateDogShowTableSelection();
+      return;
+    }
+    if (event.target.matches("[data-show-table-select]")) {
+      updateDogShowTableSelection();
       return;
     }
     if (event.target.matches("[data-show-quick-status]")) {
@@ -5662,6 +5744,17 @@ function setupDogShowEventListeners() {
   });
 
   page.addEventListener("click", async (event) => {
+    const overviewDay = event.target.closest("[data-show-overview-day]");
+    if (overviewDay) { dogShowOverviewDay = overviewDay.dataset.showOverviewDay; renderDogShow(); return; }
+    const upcomingFilter = event.target.closest("[data-show-upcoming-filter]");
+    const upcomingPage = event.target.closest("[data-show-upcoming-page]");
+    if (upcomingFilter || upcomingPage) {
+      if (upcomingFilter) { dogShowUpcomingFilter = upcomingFilter.dataset.showUpcomingFilter; dogShowUpcomingPage = 1; }
+      else dogShowUpcomingPage = Number(upcomingPage.dataset.showUpcomingPage);
+      const section = page.querySelector(".dog-show-upcoming-shows");
+      if (section) section.outerHTML = dogShowUpcomingTableHtml();
+      return;
+    }
     const progressTab = event.target.closest("[data-progress-tab]");
     if (progressTab) {
       dogShowProgressTab = progressTab.dataset.progressTab;
@@ -5773,6 +5866,23 @@ function setupDogShowEventListeners() {
       return;
     }
     const entry = action.dataset.id ? dogShowEntries().find((item) => item.id === action.dataset.id) : null;
+    if (action.dataset.action === "overview-result" && entry) { openDogShowResultForm(entry, action.dataset.ringScheduleId); return; }
+    if (action.dataset.action === "overview-results") { dogShowOverviewResultPicker(); return; }
+    if (action.dataset.action === "overview-needs-care") { dogShowDogFilter = "need"; setDogShowView("dogs"); return; }
+    if (action.dataset.action === "overview-requests") {
+      const requests = document.getElementById("customerShowRequestQueue");
+      const details = requests?.querySelector("details");
+      if (details) details.open = true;
+      requests?.scrollIntoView({ block: "center", behavior: "smooth" });
+      requests?.querySelector("summary,button")?.focus();
+      return;
+    }
+    if (action.dataset.action === "overview-deadlines") {
+      dogShowUpcomingFilter = "Going To"; dogShowUpcomingQuery = ""; dogShowUpcomingPage = 1;
+      renderDogShow();
+      page.querySelector(".dog-show-upcoming-shows")?.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
     if (action.dataset.action === "open-finance-metric-info") {
       event.preventDefault();
       event.stopPropagation();

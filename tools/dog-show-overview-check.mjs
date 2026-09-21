@@ -1,0 +1,17 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const source=fs.readFileSync('js/dog-show.js','utf8');
+const entries=[{id:'girl',attendanceRole:'Showing',dogName:'Girl',ringSchedules:[{id:'past',ringDate:'2026-09-19',ringTime:'09:00'},{id:'future',ringDate:'2026-09-21',ringTime:'09:00'}]},{id:'boy',attendanceRole:'Socializing',ringSchedules:[{id:'social',ringDate:'2026-09-19',ringTime:'09:00'}]}];
+let results=[];
+const ctx={todayDate:()=> '2026-09-20',dogShowFormatMonthDay:x=>x.slice(5),dogShowEntries:()=>entries,dogShowResults:()=>results,dogShowRingSchedules:e=>e.ringSchedules,dogShowEntryName:e=>e.dogName,dogShowRingDateTime:(_,s)=>s.ringTime?new Date(s.ringDate+'T'+s.ringTime+':00Z'):null,dogShowResultForSchedule:(e,s,ev,rs)=>rs.find(r=>r.ringScheduleId===s.id)||null};
+vm.createContext(ctx);
+for(const name of ['dogShowOverviewDeadline','dogShowOverviewAppearances','dogShowOverviewMissingResults'])vm.runInContext(source.match(new RegExp('function '+name+'\\([\\s\\S]*?\\n\\}'))[0],ctx);
+assert.equal(ctx.dogShowOverviewAppearances({}).length,2,'Socializing dogs do not generate show results');
+assert.equal(ctx.dogShowOverviewMissingResults({},entries,new Date('2026-09-20T12:00:00Z')).length,1,'Future appearances are not overdue');
+results=[{showEntryId:'girl',ringScheduleId:'past'}];
+assert.equal(ctx.dogShowOverviewMissingResults({},entries,new Date('2026-09-20T12:00:00Z')).length,0,'A logged appearance clears only its matching result');
+assert.equal(ctx.dogShowOverviewDeadline({}).days,null,'Unknown deadlines remain unknown');
+assert.equal(ctx.dogShowOverviewDeadline({entryClosingDate:'2026-09-30'}).days,10);
+assert.equal(ctx.dogShowOverviewDeadline({entryClosingDate:'2026-09-19'}).text,'Closed');
+console.log('Overview checks passed: per-appearance results, socializing exclusion, future-time handling and real deadline dates.');

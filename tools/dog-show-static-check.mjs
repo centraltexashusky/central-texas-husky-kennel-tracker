@@ -4,8 +4,8 @@ const read = (path) => fs.readFileSync(path, "utf8");
 
 const required = [
   ["index.html", 'data-page="dogShowPage"', "Missing Dog Shows top-level navigation."],
-  ["index.html", '<button type="button" data-dog-show-view="calendar">Calendar</button>', "Desktop Dog Show navigation does not expose Calendar directly."],
-  ["index.html", '<button type="button" data-dog-show-view="calculator">Calculator</button>', "Desktop Dog Show navigation does not expose Calculator directly."],
+  ["index.html", '<button type="button" data-dog-show-view="calendar">Show Calendar</button>', "Desktop Dog Show navigation does not expose Calendar directly."],
+  ["index.html", '<button type="button" data-dog-show-view="calculator">Point Calculator</button>', "Desktop Dog Show navigation does not expose Calculator directly."],
   ["index.html", '<button type="button" data-dog-show-view="expenses">Finances</button>', "Desktop Dog Show navigation does not expose Finances directly."],
   ["index.html", '<button type="button" data-dog-show-view="progress">Progress</button>', "Desktop Dog Show navigation does not expose Show Progress directly."],
   ["index.html", 'id="dogShowPage"', "Missing isolated Dog Show page."],
@@ -268,7 +268,7 @@ const required = [
   ["supabase/functions/show-calendar-scrape/index.ts", "closingDate", "The AKC importer does not capture the published entry closing date."],
   ["supabase/functions/show-calendar-scrape/index.ts", "premiumUrl", "The calendar scraper does not capture the premium list link."],
   ["supabase/functions/show-calendar-scrape/index.ts", "judgingProgramUrl", "The calendar scraper does not capture the judging program link."],
-  ["index.html", "<h2>Dog Show Dashboard</h2>", "The Dog Show workspace heading is missing."],
+  ["index.html", "<h2>Dog Shows</h2>", "The Dog Show workspace heading is missing."],
   ["styles.css", ".dog-show-planner-decision", "Show Planner decision details are not styled."],
   ["styles.css", ".dog-show-planner-flags", "Show Planner event-format flags are not styled."],
   ["styles.css", ".dog-show-planner-card", "Show Planner results are not styled."],
@@ -422,7 +422,7 @@ const required = [
   ["styles.css", "overflow-wrap: anywhere;", "Dog roster details do not wrap complete information."],
   ["js/dog-show.js", "dog-show-quick-confirmation", "Quick dog care logging does not provide an in-dialog confirmation."],
   ["js/dog-show.js", "dog-show-collapsible-section", "Dog assignment and ring appearance controls are not collapsible."],
-  ["js/dog-show.js", "Dog Assignments", "The ambiguous Team Coverage summary is still present."],
+  ["js/dog-show.js", "Manage team", "The overview is missing access to dog assignments."],
   ["js/dog-show.js", "customerVisible", "Owner-visible notes/results are not separated."],
   ["js/dog-show.js", '"Add to Customer Updates and email owner immediately"', "New owner-linked dog show results do not default to Customer Updates plus immediate email delivery."],
   ["js/dog-show.js", 'notifyIfNeeded(result, "dogShowResultPublished")', "Owner-visible dog show results do not trigger an immediate notification."],

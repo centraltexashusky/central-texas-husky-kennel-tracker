@@ -1,0 +1,287 @@
+/* Dog Show workspace: shared shell and operational screens. */
+.dog-show-utility-bar { display:none; }
+:root[data-theme] body.is-dog-show-mode { --show-ink:#12314e; --show-muted:#526b82; --show-line:#d6e2ec; --show-surface:#fff; --show-soft:#f5f8fb; --show-blue:#0869aa; }
+:root[data-theme] body.is-dog-show-mode .app-shell { max-width:none; width:100%; padding:0 28px 40px; box-sizing:border-box; }
+:root[data-theme] body.is-dog-show-mode .page-header { display:none; }
+:root[data-theme] body.is-dog-show-mode .dog-show-utility-bar { display:grid; grid-template-columns:minmax(140px,1fr) minmax(210px,350px) auto; align-items:center; gap:20px; min-height:66px; border-bottom:1px solid var(--show-line); margin-bottom:24px; }
+.dog-show-breadcrumb { font-size:14px; color:var(--show-muted); white-space:nowrap; }
+.dog-show-breadcrumb span { margin:0 12px; color:#8195a7; }
+.dog-show-breadcrumb strong { color:var(--show-ink); font-weight:600; }
+#dogShowSearchSlot { min-width:0; position:relative; }
+:root[data-theme] body.is-dog-show-mode #globalSearchPanel { display:block; padding:0; border:0; margin:0; background:transparent!important; box-shadow:none!important; }
+#dogShowSearchSlot label { font-size:0; margin:0; }
+#dogShowSearchSlot input { font-size:14px; min-height:38px; height:38px; width:100%; margin:0; }
+#dogShowSearchSlot #globalSearchResults:not(:has(button)) { display:none; }
+#dogShowSearchSlot #globalSearchResults:has(button) { position:absolute; top:44px; right:0; width:min(540px,80vw); max-height:60vh; overflow:auto; background:var(--show-surface); border:1px solid var(--show-line); border-radius:10px; padding:10px; z-index:50; box-shadow:0 10px 28px #12314e20; }
+.dog-show-account-menu { position:relative; font-size:13px; }
+.dog-show-account-menu > summary { cursor:pointer; color:var(--show-ink); border:1px solid var(--show-line); padding:10px 12px; border-radius:8px; white-space:nowrap; }
+#dogShowAccountSlot { position:absolute; top:calc(100% + 8px); right:0; z-index:60; width:280px; background:var(--show-surface); border:1px solid var(--show-line); border-radius:10px; padding:12px; box-shadow:0 12px 30px #12314e20; }
+#dogShowAccountSlot .user-card { display:flex; flex-wrap:wrap; justify-content:flex-start; padding:0; border:0!important; box-shadow:none!important; }
+#dogShowAccountSlot .user-card > div { width:100%; }
+:root[data-theme] body.is-dog-show-mode #sidebar .nav-button { background:transparent!important; border:0!important; padding:12px 14px; }
+:root[data-theme] body.is-dog-show-mode #sidebar .nav-button.is-active { background:#235b83!important; color:#fff!important; box-shadow:none!important; }
+:root[data-theme] body.is-dog-show-mode #sidebar .sidebar-brand { padding-bottom:24px; }
+:root[data-theme] body.is-dog-show-mode #sidebar .nav-button:hover { background:#1e4464!important; }
+:root[data-theme] #dogShowPage .dog-show-workspace { border:0!important; background:transparent!important; box-shadow:none!important; border-radius:0; padding:0!important; gap:18px; }
+:root[data-theme] #dogShowPage .dog-show-workspace-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0; }
+:root[data-theme] #dogShowPage .dog-show-heading { display:block; }
+:root[data-theme] #dogShowPage .dog-show-heading h2 { font-size:30px; line-height:1.2; letter-spacing:-.7px; margin:0 0 6px; color:var(--show-ink); }
+:root[data-theme] #dogShowPage .dog-show-heading p { margin:0; color:var(--show-muted); font-size:15px; }
+.dog-show-header-actions { display:flex; gap:10px; flex-shrink:0; }
+:root[data-theme] #dogShowPage .dog-show-header-actions button { min-height:42px; font-size:14px; padding:10px 16px; }
+:root[data-theme] #dogShowPage #dogShowDesktopNav { display:flex; gap:22px; overflow-x:auto; flex-wrap:nowrap; border:0; border-bottom:1px solid var(--show-line); padding:0; background:transparent; border-radius:0; min-width:0; scrollbar-width:thin; }
+:root[data-theme] #dogShowPage #dogShowDesktopNav > button { flex:0 0 auto; white-space:nowrap; min-height:48px; font-size:14px; padding:12px 1px; font-weight:500; }
+:root[data-theme] #dogShowPage #dogShowDesktopNav > button.is-active { font-weight:700; }
+:root[data-theme] #dogShowPage .dog-show-event-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px 18px; padding:13px 16px; border:1px solid var(--show-line); background:var(--show-surface); border-radius:9px; min-width:0; }
+:root[data-theme] #dogShowPage .dog-show-event-toolbar label { display:flex; align-items:center; gap:16px; margin:0; flex:1 1 400px; min-width:0; }
+:root[data-theme] #dogShowPage .dog-show-event-toolbar label > span { font-size:11px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; white-space:nowrap; }
+:root[data-theme] #dogShowPage #dogShowEventSelect { width:100%; flex:1; min-width:0; min-height:36px; font-size:13px; font-weight:600; background:var(--show-surface); padding:6px 28px 6px 10px; }
+#dogShowWeekendContext { display:flex; gap:14px; align-items:center; font-size:12px; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .customer-show-review { border:0; border-radius:0; padding:0; margin:0; background:transparent; }
+:root[data-theme] #dogShowPage .customer-show-review > details > summary { font-size:13px; color:var(--show-muted); padding:0 2px; min-height:22px; }
+:root[data-theme] #dogShowPage .customer-show-review > details[open] { background:var(--show-surface); padding:16px; border:1px solid var(--show-line); border-radius:10px; }
+:root[data-theme] #dogShowPage .dog-show-home-view { gap:20px; }
+.show-overview-top { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(280px,1fr); gap:20px; align-items:stretch; }
+:root[data-theme] #dogShowPage .show-overview-card { background:var(--show-surface)!important; border:1px solid var(--show-line)!important; border-radius:10px!important; box-shadow:none!important; padding:18px; min-width:0; }
+:root[data-theme] #dogShowPage .show-overview-card h3 { font-size:21px; line-height:1.3; margin:0; letter-spacing:-.3px; color:var(--show-ink); }
+:root[data-theme] #dogShowPage .show-overview-card h4 { font-size:15px; margin:0 0 12px; }
+:root[data-theme] #dogShowPage .show-overview-card > header { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 16px; }
+:root[data-theme] #dogShowPage .show-overview-card header p { font-size:14px; color:var(--show-muted); margin:4px 0 0; }
+:root[data-theme] #dogShowPage .show-text-button { border:0; background:transparent!important; box-shadow:none!important; padding:0; min-height:32px; color:var(--show-blue)!important; font-size:13px; font-weight:500; text-align:left; }
+:root[data-theme] #dogShowPage .show-text-button:hover { text-decoration:underline; }
+.show-day-tabs { display:flex; overflow-x:auto; border:1px solid var(--show-line); background:var(--show-soft); border-radius:7px; margin-bottom:6px; }
+:root[data-theme] #dogShowPage .show-day-tabs button { flex:1 0 75px; border:0; border-right:1px solid var(--show-line); border-radius:0; background:transparent; color:var(--show-ink); font-size:13px; min-height:35px; padding:6px; }
+:root[data-theme] #dogShowPage .show-day-tabs button:last-child { border:0; }
+:root[data-theme] #dogShowPage .show-day-tabs button[aria-pressed=true] { background:var(--show-blue); color:white; }
+.show-ring-list { max-height:325px; overflow:auto; }
+.show-ring-row { display:grid; grid-template-columns:72px 40px minmax(0,1fr) auto auto; align-items:center; gap:10px; border-bottom:1px solid var(--show-line); min-height:74px; }
+.show-ring-row > time { font-size:13px; font-weight:600; }
+.show-ring-dog { display:grid; min-width:0; gap:1px; }
+:root[data-theme] #dogShowPage .show-ring-dog > button { color:var(--show-ink)!important; font-weight:700; font-size:14px; min-height:24px; }
+.show-ring-dog small { color:var(--show-muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.show-overview-avatar { width:40px; height:40px; border-radius:50%; overflow:hidden; background:#e8f3fc; color:#315f85; display:grid; place-items:center; box-sizing:border-box; flex-shrink:0; font-size:12px; font-weight:700; }
+.show-overview-avatar img { width:100%; height:100%; object-fit:cover; }
+.show-ring-pill { background:#e8f3fc; border-radius:14px; padding:4px 8px; color:#0869aa; font-size:11px; white-space:nowrap; }
+:root[data-theme] #dogShowPage .show-ring-result { font-size:12px; white-space:nowrap; }
+.show-team-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; padding-top:15px; }
+.show-team-summary { display:flex; align-items:center; gap:12px; font-size:12px; color:var(--show-muted); }
+.show-avatar-stack { display:flex; padding-left:6px; }
+.show-avatar-stack .show-overview-avatar { width:28px; height:28px; margin-left:-6px; font-size:9px; }
+.show-schedule-empty { padding:24px 8px; font-size:14px; text-align:center; }
+.show-schedule-empty p { font-size:13px; color:var(--show-muted); }
+.show-attention { display:flex; flex-direction:column; }
+.show-attention-list { display:grid; gap:2px; margin:12px 0 4px; }
+:root[data-theme] #dogShowPage .show-attention-item { background:transparent; border:0; box-shadow:none; display:grid; grid-template-columns:12px minmax(0,1fr) auto; gap:12px; align-items:center; color:var(--show-ink); padding:9px 0; text-align:left; border-radius:0; }
+.show-attention-item > span:nth-child(2) { display:grid; gap:3px; }
+.show-attention-item strong { font-size:13px; font-weight:700; }
+.show-attention-item small { font-size:11px; color:var(--show-muted); line-height:1.4; }
+.show-attention-dot { width:10px; height:10px; border-radius:50%; background:#8195a7; }
+.show-attention-dot.is-amber { background:#dfab3d; }
+.show-attention-dot.is-blue { background:#1685c6; }
+.show-care-summary { display:flex; flex-wrap:wrap; gap:2px 14px; margin-bottom:12px; }
+:root[data-theme] #dogShowPage .show-care-summary button { font-size:11px; min-height:25px; }
+.show-quick-actions { border-top:1px solid var(--show-line); padding-top:16px; margin-top:auto; }
+.show-quick-actions > div { display:flex; gap:8px; }
+:root[data-theme] #dogShowPage .show-quick-actions button { padding:8px 10px; min-height:37px; font-size:12px; flex:1; white-space:nowrap; }
+:root[data-theme] #dogShowPage .show-card-title { display:flex; align-items:baseline; gap:12px; }
+:root[data-theme] #dogShowPage .show-card-title > span { color:var(--show-muted); font-size:12px; font-weight:400; letter-spacing:0; }
+.show-table-search { margin:0; }
+:root[data-theme] #dogShowPage .show-table-search input { width:230px; min-height:37px; font-size:13px; }
+.show-upcoming-filters { display:flex; gap:18px; border-bottom:1px solid var(--show-line); margin-bottom:0; overflow:auto; }
+:root[data-theme] #dogShowPage .show-upcoming-filters button { border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:var(--show-muted); padding:8px 0; font-size:13px; font-weight:500; white-space:nowrap; }
+:root[data-theme] #dogShowPage .show-upcoming-filters button.is-active { border-color:var(--show-blue); color:var(--show-blue); }
+.show-upcoming-filters button span { border-radius:10px; background:#edf3f9; padding:1px 6px; margin-left:5px; font-size:11px; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table-wrap { overflow:visible; border:0; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table { min-width:0; width:100%; table-layout:fixed; border-collapse:collapse; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table th { text-align:left; font-size:10px; letter-spacing:.3px; padding:12px 8px; color:var(--show-muted); background:var(--show-soft); }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table th:nth-child(1) { width:22px; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table th:nth-child(2) { width:26%; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table th:nth-child(3) { width:14%; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table th:nth-child(4) { width:17%; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table th:nth-child(5) { width:12%; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table th:nth-child(6) { width:17%; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table th:last-child { width:26px; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table td { padding:11px 8px; font-size:12px; border:0; border-bottom:1px solid var(--show-line); background:transparent!important; overflow-wrap:anywhere; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table td > small { white-space:normal; font-size:11px; color:var(--show-muted); margin-top:2px; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table .show-event-name { color:var(--show-ink)!important; font-weight:700; font-size:13px; line-height:1.4; min-height:0; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-table input[type=checkbox] { width:15px; height:15px; min-height:0; margin:0; }
+.show-deadline { font-size:11px; }
+.show-deadline.is-soon { background:#fff3db; color:#875800; padding:4px 7px; border-radius:5px; display:inline-block; }
+.show-status-menu { position:relative; }
+.show-status-pill { display:inline-flex; align-items:center; gap:7px; border-radius:16px; padding:5px 9px; font-size:11px; white-space:nowrap; background:#e8f3fc; color:#0869aa; line-height:1.3; }
+.show-status-pill::before { content:""; width:6px; height:6px; background:currentColor; border-radius:50%; }
+.show-status-pill.is-active { color:#137954; background:#e4f4ec; }
+.show-status-pill.is-going-to { color:#885900; background:#fff3db; }
+.show-status-menu summary { list-style:none; cursor:pointer; }
+.show-status-menu summary::-webkit-details-marker { display:none; }
+.show-status-menu > div { position:absolute; top:calc(100% + 5px); right:0; background:var(--show-surface); border:1px solid var(--show-line); padding:12px; width:230px; z-index:12; border-radius:8px; box-shadow:0 8px 24px #12314e20; }
+.show-status-menu label { display:grid; font-size:12px; gap:5px; }
+:root[data-theme] #dogShowPage .show-status-menu select { width:100%; font-size:12px; min-height:38px; }
+:root[data-theme] #dogShowPage .show-row-open { background:transparent; border:0; color:var(--show-blue); min-width:28px; min-height:34px; padding:4px; box-shadow:none; }
+.show-table-empty { padding:22px; text-align:center; color:var(--show-muted); }
+.show-table-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px; font-size:11px; color:var(--show-muted); }
+.show-table-footer nav { display:flex; align-items:center; gap:10px; }
+:root[data-theme] #dogShowPage .show-table-footer button { border:1px solid var(--show-line); background:var(--show-surface); color:var(--show-ink); width:28px; min-height:28px; padding:2px; border-radius:5px; }
+:root[data-theme] #dogShowPage .show-table-footer button:disabled { opacity:.4; cursor:default; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-bulk { background:#edf5fb; border:0; margin:10px 0; padding:10px; display:flex; gap:16px; align-items:center; border-radius:8px; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-bulk[hidden] { display:none; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-bulk > strong { white-space:nowrap; font-size:12px; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-bulk label { flex:1; }
+/* Roster: the same quick-care actions in a compact, readable row. */
+:root[data-theme] #dogShowPage .dog-show-dogs-view { gap:12px; }
+:root[data-theme] #dogShowPage .dog-show-dogs-view > .dog-show-section-band { margin:0; padding:0; }
+:root[data-theme] #dogShowPage .dog-show-dogs-view .dog-show-section-band h3 { font-size:22px; margin:0 0 5px; }
+:root[data-theme] #dogShowPage .dog-show-dogs-view .dog-show-section-band p { font-size:13px; }
+.show-roster-controls { background:var(--show-surface); border:1px solid var(--show-line); border-radius:10px; padding:18px; display:grid; gap:14px; }
+.show-roster-toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.show-roster-toolbar .dog-show-search { flex:1 1 260px; margin:0; }
+:root[data-theme] #dogShowPage .show-roster-toolbar input { min-height:40px; font-size:13px; }
+:root[data-theme] #dogShowPage .dog-show-filter-row { gap:0; margin:0; padding:0; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage .dog-show-filter-row button { border:0; border-bottom:2px solid transparent; background:transparent!important; color:var(--show-muted)!important; border-radius:0!important; padding:10px; font-size:12px; min-height:38px; }
+:root[data-theme] #dogShowPage .dog-show-filter-row button.is-active { color:var(--show-blue)!important; background:#e8f3fc!important; border-color:var(--show-blue); }
+:root[data-theme] #dogShowPage .dog-show-bulk-care { display:flex; gap:10px; padding:0; margin:0; background:transparent; border:0; }
+.show-team-care-label { font-size:13px; align-self:center; white-space:nowrap; margin-right:8px; }
+:root[data-theme] #dogShowPage .dog-show-bulk-care button { flex:1; display:flex; justify-content:center; gap:8px; align-items:center; background:var(--show-surface); border:1px solid #a6c5df; color:var(--show-blue); border-radius:7px; padding:8px; min-height:40px; }
+:root[data-theme] #dogShowPage .dog-show-bulk-care strong { font-size:13px; }
+:root[data-theme] #dogShowPage .dog-show-bulk-care small { font-size:11px; font-weight:400; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .dog-show-roster-list { gap:10px; }
+:root[data-theme] #dogShowPage .dog-show-dog-row { position:relative; padding:0 14px 0 88px; border:1px solid var(--show-line); border-left:3px solid #dba845; border-radius:9px; background:var(--show-surface); box-shadow:none; gap:0; }
+:root[data-theme] #dogShowPage .dog-show-dog-row.is-current { border-left-color:#4b9e7b; }
+:root[data-theme] #dogShowPage .dog-show-dog-primary { display:flex; align-items:center; gap:14px; width:100%; background:transparent; border:0; box-shadow:none; padding:12px 0 9px; text-align:left; color:var(--show-ink); min-height:54px; }
+:root[data-theme] #dogShowPage .dog-show-dog-primary > .dog-show-dog-photo { position:absolute; left:12px; top:20px; width:62px; height:62px; border-radius:50%; }
+:root[data-theme] #dogShowPage .dog-show-dog-copy { display:flex; align-items:center; gap:14px; flex:1; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage .dog-show-dog-copy strong { font-size:16px; }
+:root[data-theme] #dogShowPage .dog-show-dog-meta { gap:10px; }
+:root[data-theme] #dogShowPage .dog-show-dog-meta small { font-size:12px; }
+:root[data-theme] #dogShowPage .dog-show-ring-flag { border:0; border-radius:7px; background:#e8f3fc; color:#0869aa; font-size:11px; padding:5px 8px; }
+:root[data-theme] #dogShowPage .dog-show-dog-status { display:flex; align-items:center; gap:10px; }
+:root[data-theme] #dogShowPage .dog-show-time-chip { background:transparent; border:0; color:var(--show-ink); font-size:12px; font-weight:600; padding:0; white-space:nowrap; }
+:root[data-theme] #dogShowPage .dog-show-time-chip::before { content:"Last attended "; font-weight:400; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .dog-show-role-chip { font-size:10px; background:var(--show-soft); border:0; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .dog-show-dog-primary::after { content:"›"; font-size:23px; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-top:1px solid var(--show-line); gap:0; padding:7px 0 10px; }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions > button { border:0; border-right:1px solid var(--show-line); border-radius:0; background:transparent; color:var(--show-ink); box-shadow:none; text-align:left; justify-items:start; padding:2px 12px; min-height:42px; }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions > button:first-child { padding-left:0; }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions > button:last-child { border-right:0; }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions strong { font-size:12px; font-weight:600; }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions :is(small,.dog-show-activity-time,.dog-show-potty-time) { font-size:10px; color:var(--show-muted); font-weight:400; line-height:1.5; }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions button:hover { background:var(--show-soft); }
+:root[data-theme] #dogShowPage .care-priority-food [data-care-action=food], :root[data-theme] #dogShowPage .care-priority-potty [data-care-action=potty], :root[data-theme] #dogShowPage .care-priority-water [data-care-action=water] { background:#fffbf2; color:#805600; }
+:root[data-theme] #dogShowPage .show-roster-count { font-size:12px; color:var(--show-muted); margin:0; }
+/* Preserve the existing pink/female and blue/male thumbnail borders. */
+:root[data-theme] #dogShowPage .dog-photo-sex-female { border:3px solid #E58AAA!important; }
+:root[data-theme] #dogShowPage .dog-photo-sex-male { border:3px solid #5B9BD5!important; }
+@media (max-width:1200px) {
+  :root[data-theme] body.is-dog-show-mode .app-shell { padding-left:20px; padding-right:20px; }
+  #dogShowWeekendContext > span:first-child { display:none; }
+  .show-overview-top { grid-template-columns:minmax(0,1.45fr) minmax(255px,1fr); gap:14px; }
+  .show-ring-row { grid-template-columns:65px 34px minmax(0,1fr) auto; gap:8px; }
+  .show-ring-row .show-overview-avatar { width:34px; height:34px; }
+  .show-ring-result { grid-column:3 / 5; justify-self:end; margin-top:-12px; }
+  :root[data-theme] #dogShowPage .show-overview-card { padding:15px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-copy { gap:5px 12px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-meta small { font-size:11px; }
+  :root[data-theme] #dogShowPage .dog-show-bulk-care small { display:none; }
+}
+@media (max-width:980px) {
+  :root[data-theme] body.is-dog-show-mode .app-shell { padding:18px 18px 110px!important; }
+  :root[data-theme] body.is-dog-show-mode .dog-show-utility-bar { grid-template-columns:1fr auto; min-height:48px; margin:0 0 18px; padding-bottom:12px; }
+  .dog-show-breadcrumb { display:none; }
+  :root[data-theme] body.is-dog-show-mode #dogShowSearchSlot #globalSearchPanel { display:block; }
+  :root[data-theme] #dogShowPage .dog-show-heading h2 { font-size:26px; }
+  :root[data-theme] #dogShowPage #dogShowDesktopNav { display:flex; gap:20px; }
+  :root[data-theme] #dogShowPage .dog-show-event-toolbar { padding:10px 12px; }
+  .show-overview-top { grid-template-columns:minmax(0,1.5fr) minmax(245px,1fr); }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table { display:table; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table thead { display:table-header-group; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table tbody { display:table-row-group; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table tr { display:table-row; border:0; padding:0; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table td { display:table-cell; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table td::before { display:none; }
+}
+@media (max-width:700px) {
+  :root[data-theme] body.is-dog-show-mode .app-shell { padding:14px 12px 105px!important; }
+  :root[data-theme] #dogShowPage .dog-show-workspace { gap:14px; }
+  :root[data-theme] #dogShowPage .dog-show-workspace-header { align-items:start; }
+  :root[data-theme] #dogShowPage .dog-show-heading h2 { font-size:25px; }
+  :root[data-theme] #dogShowPage .dog-show-heading p { font-size:12px; max-width:220px; }
+  :root[data-theme] #dogShowPage .dog-show-header-actions > button:first-child { display:none; }
+  :root[data-theme] #dogShowPage .dog-show-header-actions > button { min-height:38px; font-size:12px; padding:8px 12px; }
+  :root[data-theme] #dogShowPage .dog-show-event-toolbar { gap:7px; }
+  :root[data-theme] #dogShowPage .dog-show-event-toolbar label { flex-basis:100%; display:grid; gap:5px; }
+  #dogShowWeekendContext { width:100%; justify-content:space-between; }
+  #dogShowWeekendContext > span:first-child { display:inline; font-size:11px; }
+  .show-overview-top { grid-template-columns:minmax(0,1fr); }
+  :root[data-theme] #dogShowPage .show-overview-card h3 { font-size:19px; }
+  .show-ring-row { grid-template-columns:65px 34px minmax(0,1fr) auto; }
+  .show-ring-list { max-height:none; }
+  .show-team-summary { font-size:11px; gap:8px; }
+  :root[data-theme] #dogShowPage .show-overview-card > header { flex-wrap:wrap; gap:10px; }
+  .show-table-search, :root[data-theme] #dogShowPage .show-table-search input { width:100%; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table thead { display:none; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table, :root[data-theme] #dogShowPage .dog-show-upcoming-table tbody { display:block; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table tr { display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:2px 8px; padding:12px 0; border-bottom:1px solid var(--show-line); position:relative; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table td { display:block; padding:3px 0; border:0; grid-column:2; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table td:first-child { grid-column:1; grid-row:1; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table td:nth-child(2) { grid-column:2; grid-row:1; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table td:nth-child(5) { grid-column:3; grid-row:1; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table td:last-child { grid-column:3; grid-row:2 / 5; align-self:end; justify-self:end; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-table td:nth-child(4)::before { content:"Entry deadline: "; display:inline; color:var(--show-muted); font-size:11px; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-bulk { flex-wrap:wrap; gap:8px; }
+  :root[data-theme] #dogShowPage .dog-show-upcoming-bulk label { flex-basis:100%; }
+  :root[data-theme] #dogShowPage .dog-show-dog-row { padding:0 10px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-primary { padding:12px 0; gap:10px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-primary > .dog-show-dog-photo { position:static; width:46px; height:46px; flex:0 0 46px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-copy { display:grid; gap:4px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-copy strong { font-size:15px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-status { display:grid; gap:3px; justify-items:end; }
+  :root[data-theme] #dogShowPage .dog-show-time-chip { font-size:10px; }
+  :root[data-theme] #dogShowPage .dog-show-time-chip::before { content:"Last attended"; display:block; font-size:9px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-meta small { font-size:10px; }
+  :root[data-theme] #dogShowPage .dog-show-card-quick-actions { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 0; padding:10px 0; }
+  :root[data-theme] #dogShowPage .dog-show-card-quick-actions > button { min-height:48px; padding:5px 10px; }
+  :root[data-theme] #dogShowPage .dog-show-card-quick-actions > button:nth-child(odd) { padding-left:0; }
+  :root[data-theme] #dogShowPage .dog-show-card-quick-actions > button:nth-child(even) { border-right:0; }
+  .show-roster-controls { padding:13px; }
+  .show-roster-toolbar { gap:8px; }
+  :root[data-theme] #dogShowPage .dog-show-filter-row { width:100%; justify-content:space-between; }
+  :root[data-theme] #dogShowPage .dog-show-filter-row button { font-size:11px; padding:8px 6px; }
+  :root[data-theme] #dogShowPage .dog-show-bulk-care { flex-wrap:wrap; gap:7px; }
+  .show-team-care-label { width:100%; }
+  :root[data-theme] #dogShowPage .dog-show-bulk-care strong { font-size:11px; }
+  .show-table-footer { flex-wrap:wrap; }
+}
+:root[data-theme=dark] body.is-dog-show-mode { --show-ink:#edf5ff; --show-muted:#b5c8d9; --show-line:#35516b; --show-surface:#12263d; --show-soft:#1a3552; --show-blue:#89c9f5; }
+:root[data-theme=dark] #dogShowPage :is(.show-overview-card,.dog-show-dog-row) { color:var(--show-ink); }
+
+:root[data-theme] #dogShowPage .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+:root[data-theme] #dogShowSearchSlot .field-label { display:none; }
+:root[data-theme] #dogShowPage .dog-show-upcoming-shows { display:block; }
+:root[data-theme] #dogShowPage .show-roster-controls .dog-show-list-toolbar { margin:0; padding:0; }
+:root[data-theme] #dogShowPage .show-roster-controls h3 { margin:0 0 4px; font-size:22px; }
+:root[data-theme] #dogShowPage .show-roster-controls p { margin:0; font-size:13px; color:var(--show-muted); }
+:root[data-theme] #dogShowSearchSlot label > span { display:none; }
+:root[data-theme] #dogShowPage .dog-show-dog-primary { position:static; }
+:root[data-theme] #dogShowPage .dog-show-dog-row { border-left-color:#dba845!important; }
+:root[data-theme] #dogShowPage .dog-show-dog-row.is-current { border-left-color:#4b9e7b!important; }
+:root[data-theme] #dogShowPage .dog-show-time-chip::before { margin-right:4px; }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions strong { font-size:13px; }
+:root[data-theme] #dogShowPage .dog-show-card-quick-actions :is(small,.dog-show-activity-time,.dog-show-potty-time) { font-size:11px; }
+:root[data-theme] #dogShowSearchSlot label { font-size:0!important; gap:0; }
+:root[data-theme] #dogShowSearchSlot input { font-size:14px!important; }
+:root[data-theme] #dogShowPage .dog-show-dog-primary { backdrop-filter:none!important; -webkit-backdrop-filter:none!important; }
+@media (min-width:701px) {
+  :root[data-theme] #dogShowPage .dog-show-potty-times { display:flex; flex-wrap:wrap; gap:5px; }
+  :root[data-theme] #dogShowPage .dog-show-dog-primary { min-height:50px; padding-top:10px; padding-bottom:8px; }
+}
+@media (max-width:980px) {
+  :root[data-theme] body.is-dog-show-mode #dogShowSearchSlot #globalSearchPanel:not([hidden]) { display:block!important; }
+  :root[data-theme] #dogShowPage .dog-show-workspace-header { flex-direction:row; }
+}
+@media (max-width:700px) {
+  :root[data-theme] body.is-dog-show-mode .dog-show-utility-bar { gap:8px; }
+  #dogShowSearchSlot input { padding-left:9px; font-size:12px!important; }
+  .dog-show-account-menu > summary { font-size:11px; padding:10px 8px; }
+}
+:root[data-theme=dark] #dogShowPage .dog-show-upcoming-bulk { background:var(--show-soft); }
+:root[data-theme=dark] #dogShowPage :is(.care-priority-food [data-care-action=food],.care-priority-potty [data-care-action=potty],.care-priority-water [data-care-action=water]) { background:#382e1d; color:#f2cd7d; }
