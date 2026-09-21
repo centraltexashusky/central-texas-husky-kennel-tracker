@@ -1,0 +1,324 @@
+/* Dog Shows: the approved planning, finance, progress and operations surfaces.
+   Reuse the shell tokens and native controls; keep photos and records real. */
+:root[data-theme] #dogShowPage .dog-show-view { min-width:0; }
+:root[data-theme] #dogShowPage .dog-show-view :is(h3,h4,p) { overflow-wrap:anywhere; }
+:root[data-theme] #dogShowPage .dog-show-view h3 { color:var(--show-ink); font-size:21px; letter-spacing:-.35px; line-height:1.3; }
+:root[data-theme] #dogShowPage .dog-show-view :is(input,select,textarea) { font:inherit; font-size:14px; color:var(--show-ink); background:var(--show-surface); border:1px solid var(--show-line); border-radius:7px; min-height:44px; min-width:0; max-width:100%; padding:10px 12px; }
+:root[data-theme] #dogShowPage .dog-show-view input[type=checkbox] { width:19px; height:19px; min-height:19px; padding:0; accent-color:var(--show-blue); }
+:root[data-theme] #dogShowPage .dog-show-view button { font-size:13px; line-height:1.35; }
+:root[data-theme] #dogShowPage .dog-show-view :is(button,a.secondary-button):focus-visible, :root[data-theme] #dogShowDialog :focus-visible { outline:3px solid #e0a03f; outline-offset:3px; }
+:root[data-theme] #dogShowPage[data-show-view=planner] .dog-show-event-toolbar,
+:root[data-theme] #dogShowPage[data-show-view=calendar] .dog-show-event-toolbar,
+:root[data-theme] #dogShowPage[data-show-view=calculator] .dog-show-event-toolbar,
+:root[data-theme] #dogShowPage[data-show-view=progress] .dog-show-event-toolbar,
+:root[data-theme] #dogShowPage:not([data-show-view=home]):not([data-show-view=dogs]) .customer-show-review { display:none; }
+:root[data-theme] #dogShowPage:not([data-show-view=home]):not([data-show-view=dogs]) .dog-show-heading p { display:none; }
+:root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-list-toolbar) { background:transparent; border:0; padding:0; margin:0 0 16px; box-shadow:none; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+:root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading) > div > span:first-child { display:none; }
+:root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-list-toolbar) h3 { font-size:25px; margin:0 0 5px; }
+:root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-list-toolbar) p { margin:0; font-size:13px; color:var(--show-muted); }
+:root[data-theme] #dogShowPage :is(.show-segmented,.dog-show-progress-nav,.dog-show-finance-mode-tabs,.dog-show-finance-scope-tabs,.dog-show-finance-period-tabs,.dog-show-calendar-view-toggle,.dog-show-master-calendar-view-toggle,.show-operations-tabs) { display:flex; gap:4px; background:var(--show-soft); border:1px solid var(--show-line); padding:4px; border-radius:8px; width:fit-content; max-width:100%; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage :is(.show-segmented,.dog-show-progress-nav,.dog-show-finance-mode-tabs,.dog-show-finance-scope-tabs,.dog-show-finance-period-tabs,.dog-show-calendar-view-toggle,.dog-show-master-calendar-view-toggle,.show-operations-tabs) > button { background:transparent; border:0; border-radius:6px; box-shadow:none; color:var(--show-muted); padding:10px 14px; min-height:40px; font-size:13px; }
+:root[data-theme] #dogShowPage :is(.show-segmented,.dog-show-progress-nav,.dog-show-finance-mode-tabs,.dog-show-finance-scope-tabs,.dog-show-finance-period-tabs,.dog-show-calendar-view-toggle,.dog-show-master-calendar-view-toggle,.show-operations-tabs) > button:is(.is-active,[aria-pressed=true]) { background:var(--show-blue); color:white; }
+:root[data-theme] #dogShowPage :is(.dog-show-panel,.dog-show-calendar-panel,.dog-show-progress-section,.dog-show-progress-dog-hero,.dog-show-progress-breakdown,.dog-show-judge-hero,.dog-show-planner-card,.dog-show-plan-board,.dog-show-calculator-form,.dog-show-calculator-results,.show-transaction-ledger,.dog-show-expense-split,.show-finance-dog-breakdown,.dog-show-finance-report,.dog-show-invoice-center) { border:1px solid var(--show-line); border-radius:10px; background:var(--show-surface); padding:20px; box-shadow:none; min-width:0; }
+:root[data-theme] #dogShowPage [hidden] { display:none!important; }
+/* Work Schedule: actionable agenda and a desktop time grid with a prep rail. */
+.show-schedule-filter { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.show-schedule-filter label,.show-task-assignee { display:flex; align-items:center; gap:12px; color:var(--show-muted); font-size:13px; }
+.show-schedule-filter select,.show-task-assignee select { min-width:180px!important; }
+.show-schedule-layout { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(270px,1fr); gap:20px; align-items:start; }
+:root[data-theme] #dogShowPage .dog-show-calendar-toolbar { display:grid; gap:14px; padding:0 0 16px; }
+:root[data-theme] #dogShowPage .dog-show-calendar-toolbar h3 { margin:0 0 4px; }
+:root[data-theme] #dogShowPage .dog-show-calendar-toolbar p { color:var(--show-muted); font-size:12px; margin:0; }
+:root[data-theme] #dogShowPage .dog-show-calendar-controls { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-start; align-items:center; }
+:root[data-theme] #dogShowPage .dog-show-calendar-controls > button { min-height:40px; }
+:root[data-theme] #dogShowPage .dog-show-calendar-range { font-size:12px; flex:1; }
+:root[data-theme] #dogShowPage .dog-show-calendar-board { max-height:600px; overflow:auto; border:1px solid var(--show-line); border-radius:8px; }
+:root[data-theme] #dogShowPage .dog-show-calendar-timeline { background:var(--show-surface); }
+:root[data-theme] #dogShowPage .dog-show-calendar-event { border-radius:6px; font-size:11px; box-shadow:none; }
+:root[data-theme] #dogShowPage .dog-show-calendar-event-copy small { font-size:10px; }
+:root[data-theme] #dogShowPage .show-prep-panel { min-width:0; background:var(--show-surface); border:1px solid var(--show-line); border-radius:10px; padding:18px; }
+:root[data-theme] #dogShowPage .show-prep-panel .dog-show-list-toolbar { margin-bottom:14px; }
+:root[data-theme] #dogShowPage .show-prep-panel h3 { font-size:20px; }
+:root[data-theme] #dogShowPage .show-prep-panel .dog-show-list-toolbar p { font-size:12px; }
+:root[data-theme] #dogShowPage .dog-show-schedule-day { border:0; background:transparent; padding:0; margin:0 0 16px; }
+:root[data-theme] #dogShowPage .dog-show-schedule-day-header { border:0; padding:9px 0; font-size:12px; }
+:root[data-theme] #dogShowPage .dog-show-schedule-row { display:grid; grid-template-columns:42px minmax(0,1fr); gap:10px; padding:12px; background:var(--show-soft); color:var(--show-ink); border:1px solid var(--show-line); border-radius:8px; text-align:left; box-shadow:none; }
+:root[data-theme] #dogShowPage .dog-show-schedule-row > .dog-show-schedule-photo { grid-column:1; grid-row:1 / 3; width:42px; height:42px; }
+:root[data-theme] #dogShowPage .dog-show-schedule-time { grid-column:2; grid-row:2; display:flex; gap:8px; align-items:center; font-size:12px; padding:0; }
+:root[data-theme] #dogShowPage .dog-show-schedule-main { grid-column:2; grid-row:1; min-width:0; }
+:root[data-theme] #dogShowPage .dog-show-schedule-main strong { font-size:14px; }
+:root[data-theme] #dogShowPage .dog-show-schedule-main small { font-size:11px; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .dog-show-time-line { font-size:12px; margin-top:6px; }
+:root[data-theme] #dogShowPage .dog-show-schedule-duration { display:none; }
+:root[data-theme] #dogShowPage .dog-show-schedule-row.has-conflict { border-left:3px solid #d99827; }
+:root[data-theme] #dogShowPage .dog-show-alert { margin:10px 0; padding:12px; border:1px solid #e7bf73; border-radius:7px; background:#fff7e6; color:#785216; font-size:12px; }
+.show-work-agenda { display:grid; gap:10px; }
+:root[data-theme] #dogShowPage .show-work-agenda-row { display:grid; grid-template-columns:44px minmax(0,1fr) 12px; gap:12px; align-items:center; text-align:left; padding:14px; background:var(--show-surface); border:1px solid var(--show-line); color:var(--show-ink); border-radius:9px; box-shadow:none; }
+.show-work-agenda-row > span:nth-child(2) { display:grid; gap:5px; }
+.show-work-agenda-row strong { font-size:15px; }.show-work-agenda-row small { font-weight:650; }.show-work-agenda-row span span { font-size:12px; color:var(--show-muted); }.show-work-agenda-row.is-completed { opacity:.65; }
+.show-agenda-task-icon { display:grid; place-items:center; width:42px; height:42px; background:var(--show-soft); border-radius:8px; }
+/* Tasks retain explicit completion and the editor, with clear state and ownership. */
+:root[data-theme] #dogShowPage .dog-show-tasks-view { display:grid; gap:14px; }
+:root[data-theme] #dogShowPage .dog-show-tasks-view .dog-show-list-toolbar { margin:0; }
+:root[data-theme] #dogShowPage .dog-show-task-batch { background:transparent; padding:0; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+:root[data-theme] #dogShowPage .dog-show-task-batch label { font-size:13px; display:flex; align-items:center; gap:8px; }
+:root[data-theme] #dogShowPage .dog-show-task-day { background:var(--show-surface); border:1px solid var(--show-line); border-radius:10px; overflow:hidden; }
+:root[data-theme] #dogShowPage .dog-show-task-day-toggle { background:var(--show-soft); color:var(--show-ink); padding:14px 18px; box-shadow:none; border:0; min-height:48px; }
+:root[data-theme] #dogShowPage .dog-show-task-row { display:grid; grid-template-columns:20px minmax(0,1fr) auto; gap:14px; align-items:center; padding:14px 18px; border:0; border-bottom:1px solid var(--show-line); border-radius:0; }
+:root[data-theme] #dogShowPage .dog-show-task-row > button[data-action=edit-show-task] { display:flex; align-items:center; gap:14px; text-align:left; background:transparent; color:var(--show-ink); border:0; padding:4px 0; box-shadow:none; }
+.show-task-photo { width:42px; height:42px; flex:0 0 42px; border-radius:9px; overflow:hidden; }.show-task-photo img { width:100%; height:100%; object-fit:cover; }
+.show-task-copy { display:grid; gap:4px; flex:1; min-width:0; }.show-task-copy strong{font-size:14px}.show-task-copy>span,.show-task-copy small{font-size:12px;color:var(--show-muted)}
+:root[data-theme] #dogShowPage .show-task-status { font-size:11px; background:#e6f2fc; color:#075d97; padding:5px 8px; border-radius:5px; white-space:nowrap; }
+:root[data-theme] #dogShowPage .show-task-status.is-overdue { background:#fff0d2; color:#825611; }
+/* Calendar month plus selected day's registration; other calendar modes remain available. */
+:root[data-theme] #dogShowPage .dog-show-master-calendar { padding:18px; background:var(--show-surface); border:1px solid var(--show-line); border-radius:10px; }
+:root[data-theme] #dogShowPage .dog-show-master-calendar > header { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:16px; }
+:root[data-theme] #dogShowPage .dog-show-master-calendar-navigation { display:flex; gap:9px; align-items:center; flex:1; justify-content:flex-end; }
+:root[data-theme] #dogShowPage .dog-show-master-calendar-navigation strong { font-size:14px; }
+.show-calendar-month-layout { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(280px,1fr); gap:18px; align-items:start; }
+:root[data-theme] #dogShowPage .dog-show-master-month-grid { min-width:0; }
+:root[data-theme] #dogShowPage .dog-show-master-month-day { min-height:100px; padding:5px; background:var(--show-surface); }
+:root[data-theme] #dogShowPage .dog-show-master-calendar-item.is-compact { font-size:10px; padding:6px 5px; min-width:0; overflow-wrap:anywhere; }
+.show-calendar-day-detail { min-width:0; }.show-calendar-day-detail>h3 { margin:0 0 12px!important; font-size:18px!important; }
+:root[data-theme] #dogShowPage .dog-show-agenda-event { border:1px solid var(--show-line); border-radius:9px; overflow:hidden; }
+:root[data-theme] #dogShowPage .dog-show-agenda-event>header { background:var(--show-soft); padding:15px; gap:10px; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage .dog-show-agenda-event>header h3 { font-size:17px; margin:5px 0; }
+:root[data-theme] #dogShowPage .dog-show-agenda-event>header p { font-size:12px; }
+.show-agenda-identity { display:flex; gap:10px; align-items:center; }.show-agenda-identity>div { display:grid; gap:4px; min-width:0; }
+:root[data-theme] #dogShowPage .dog-show-agenda-dog { padding:16px; gap:12px; }
+:root[data-theme] #dogShowPage .dog-show-agenda-help { font-size:12px; line-height:1.5; margin:0 0 14px; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .show-calendar-day-detail .dog-show-agenda-dog { grid-template-columns:minmax(0,1fr); }
+:root[data-theme] #dogShowPage .show-calendar-day-detail .dog-show-agenda-dog>button { justify-self:start; }
+:root[data-theme] #dogShowPage .show-social-note { font-size:12px; color:var(--show-muted); }
+/* Planner: compact criteria, lifecycle tabs, and progressive evidence disclosure. */
+:root[data-theme] #dogShowPage .dog-show-planner-view { gap:18px; }
+:root[data-theme] #dogShowPage .dog-show-planner-criteria { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:14px; background:var(--show-surface); padding:16px; border:1px solid var(--show-line); border-radius:9px; }
+:root[data-theme] #dogShowPage .dog-show-planner-criteria>div { background:transparent; padding:0; border:0; }
+:root[data-theme] #dogShowPage .dog-show-planner-criteria strong { font-size:13px; }.dog-show-planner-criteria span{font-size:11px}
+:root[data-theme] #dogShowPage .dog-show-plan-board>header { margin-bottom:12px; }.dog-show-plan-board>header span{display:none}
+:root[data-theme] #dogShowPage .dog-show-plan-stages { display:block; margin-top:14px; }
+:root[data-theme] #dogShowPage .dog-show-plan-stage { border:0; background:transparent; box-shadow:none; padding:0; }
+:root[data-theme] #dogShowPage .dog-show-plan-stage>div { padding:0; }
+:root[data-theme] #dogShowPage .dog-show-planner-list { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
+:root[data-theme] #dogShowPage .dog-show-planner-card { padding:0; border-left:1px solid var(--show-line); }
+:root[data-theme] #dogShowPage .dog-show-planner-card>summary { display:flex; align-items:center; justify-content:space-between; gap:18px; cursor:pointer; padding:18px; list-style:none; }
+.dog-show-planner-card>summary::-webkit-details-marker{display:none}
+:root[data-theme] #dogShowPage .dog-show-planner-card>summary h3 { font-size:17px; margin:3px 0; }
+:root[data-theme] #dogShowPage .dog-show-planner-card>summary p { color:var(--show-muted); font-size:12px; margin:5px 0; }
+:root[data-theme] #dogShowPage .dog-show-planner-card>summary::after { content:"⌄"; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .dog-show-planner-card[open]>summary { border-bottom:1px solid var(--show-line); }
+:root[data-theme] #dogShowPage .dog-show-planner-card>:not(summary) { margin:14px 18px; }
+:root[data-theme] #dogShowPage .dog-show-planner-panel { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+:root[data-theme] #dogShowPage .dog-show-planner-score { padding:8px 12px; min-width:85px; background:var(--show-soft); color:var(--show-blue); border:1px solid var(--show-line); box-shadow:none; }
+:root[data-theme] #dogShowPage .dog-show-planner-score strong { font-size:21px; }
+:root[data-theme] #dogShowPage .dog-show-planner-results>header h3 { margin:0 0 5px; }.dog-show-planner-results>header p{font-size:12px;color:var(--show-muted)}
+/* Calculator: retain every supported outcome; keep inputs beside the result. */
+:root[data-theme] #dogShowPage .dog-show-calculator-view { display:grid; grid-template-columns:minmax(300px,1fr) minmax(0,1fr); gap:20px; align-items:start; }
+:root[data-theme] #dogShowPage .dog-show-calculator-heading,:root[data-theme] #dogShowPage .dog-show-calculator-source { grid-column:1 / -1; }
+:root[data-theme] #dogShowPage .dog-show-calculator-form { display:grid; gap:20px; }
+:root[data-theme] #dogShowPage .dog-show-calculator-counts { border:1px solid var(--show-line); border-radius:8px; padding:16px; margin:0; }
+:root[data-theme] #dogShowPage .dog-show-calculator-counts p { font-size:12px; color:var(--show-muted); }
+:root[data-theme] #dogShowPage .dog-show-calculator-counts>div { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+:root[data-theme] #dogShowPage .dog-show-calculator-counts input { font-size:20px; font-weight:650; text-align:center; }
+:root[data-theme] #dogShowPage .dog-show-calculator-form>button { width:100%; min-height:44px; }
+:root[data-theme] #dogShowPage .dog-show-calculator-results>header { padding:0; margin-bottom:14px; border:0; }
+:root[data-theme] #dogShowPage .dog-show-calculator-results>header h3 { font-size:19px; }
+:root[data-theme] #dogShowPage .dog-show-calculator-results>header p { font-size:12px; }
+:root[data-theme] #dogShowPage .dog-show-calculator-outcomes { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; }
+:root[data-theme] #dogShowPage .dog-show-calculator-outcome-card { border:1px solid var(--show-line); border-left:3px solid var(--show-blue); border-radius:7px; padding:14px; background:var(--show-surface); }
+:root[data-theme] #dogShowPage .dog-show-calculator-outcome-card h4 { font-size:15px; }.dog-show-calculator-outcome-card p{font-size:12px}
+:root[data-theme] #dogShowPage .dog-show-calculator-outcome-card li { font-size:12px; gap:10px; padding:8px 0; }
+:root[data-theme] #dogShowPage .dog-show-calculator-schedule { padding:12px; margin-top:16px; background:var(--show-soft); border:1px solid var(--show-line); border-radius:7px; }
+.dog-show-calculator-schedule summary{font-size:13px;font-weight:650;cursor:pointer}.dog-show-calculator-thresholds{margin-top:14px}
+:root[data-theme] #dogShowPage :is(.dog-show-calculator-note,.dog-show-calculator-source) { font-size:12px; color:var(--show-muted); }
+/* Finance: stable scopes, readable ledger, shared-cost rail. */
+:root[data-theme] #dogShowPage .dog-show-expenses-heading { align-items:flex-start; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage .dog-show-finance-heading-actions { display:flex; gap:12px; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage :is(.dog-show-expense-stats,.dog-show-finance-report-stats,.dog-show-progress-summary) { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:0 0 18px; }
+:root[data-theme] #dogShowPage :is(.dog-show-expense-stats,.dog-show-finance-report-stats,.dog-show-progress-summary)>:is(article,div) { padding:18px; border:1px solid var(--show-line); border-radius:9px; background:var(--show-surface); box-shadow:none; color:var(--show-ink); }
+:root[data-theme] #dogShowPage :is(.dog-show-expense-stats,.dog-show-finance-report-stats,.dog-show-progress-summary) strong { font-size:27px; }.dog-show-expense-stats small{font-size:11px}
+.show-finance-layout { display:grid; grid-template-columns:minmax(0,1.9fr) minmax(260px,1fr); gap:18px; align-items:start; }.show-finance-sidebar{display:grid;gap:18px;min-width:0}
+.show-transaction-ledger>header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}.show-transaction-ledger h3{margin:0}
+:root[data-theme] #dogShowPage .show-transaction-ledger>header input{max-width:240px;font-size:12px}
+:root[data-theme] #dogShowPage .show-transaction-ledger .show-segmented{margin-bottom:18px}
+:root[data-theme] #dogShowPage .dog-show-expense-split { display:grid; grid-template-columns:1fr; gap:14px; }
+:root[data-theme] #dogShowPage .dog-show-expense-split-intro span { font-size:14px; color:var(--show-ink); letter-spacing:0; }.dog-show-expense-split-intro p{font-size:12px}
+:root[data-theme] #dogShowPage .dog-show-expense-split-metrics { display:grid; grid-template-columns:1fr; gap:8px; }
+:root[data-theme] #dogShowPage .dog-show-expense-split-metrics>div { display:flex; justify-content:space-between; padding:0; border:0; background:transparent; font-size:12px; }
+:root[data-theme] #dogShowPage #dogShowExpenseSplitForm { display:grid; gap:10px; }.dog-show-expense-split-result{padding:14px;border-radius:8px;background:var(--show-soft)}
+:root[data-theme] #dogShowPage .show-finance-dog-breakdown h3 { font-size:18px; margin:0 0 14px; }
+.show-finance-dog-identity{display:flex;gap:12px;align-items:center;margin:16px 0}.show-finance-dog-breakdown dl{display:grid;gap:12px;margin:0}.show-finance-dog-breakdown dl>div{display:flex;gap:12px;justify-content:space-between;font-size:12px}.show-finance-dog-breakdown dd{margin:0;font-weight:650}.show-finance-dog-breakdown p{font-size:12px;color:var(--show-muted);margin:16px 0 0}
+:root[data-theme] #dogShowPage .dog-show-expense-table-header { display:grid; grid-template-columns:80px 80px 95px minmax(0,1fr) 75px; padding:10px 28px 10px 0; gap:8px; background:var(--show-soft); font-size:10px; letter-spacing:0; }
+:root[data-theme] #dogShowPage .dog-show-expense-row { display:grid; grid-template-columns:minmax(0,1fr) 24px; gap:4px; border:0; border-bottom:1px solid var(--show-line); border-radius:0; background:transparent; padding:0; }
+:root[data-theme] #dogShowPage .dog-show-expense-edit-row { display:grid; grid-template-columns:80px 80px 95px minmax(0,1fr) 75px; gap:8px; min-width:0; text-align:left; border:0; box-shadow:none; border-radius:0; padding:14px 0; background:transparent; color:var(--show-ink); }
+:root[data-theme] #dogShowPage .dog-show-expense-cell { font-size:12px; overflow-wrap:anywhere; min-width:0; }.dog-show-finance-kind{font-size:10px!important}
+:root[data-theme] #dogShowPage .dog-show-expense-actions { display:flex; align-items:center; }
+:root[data-theme] #dogShowPage .dog-show-remove-expense { min-width:24px; width:24px; background:transparent; color:var(--show-muted); border:0; padding:0; }
+:root[data-theme] #dogShowPage .dog-show-finance-report-heading { display:grid; gap:18px; background:transparent; padding:0; margin:0 0 18px; border:0; }
+:root[data-theme] #dogShowPage .dog-show-finance-report-heading h3 { margin:0 0 5px; }.dog-show-finance-report-heading>div>span{display:none}.dog-show-finance-report-heading p{font-size:13px}
+:root[data-theme] #dogShowPage .dog-show-finance-report-controls { display:flex; gap:16px; justify-content:flex-start; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage .dog-show-finance-report :is(article,details) { border-color:var(--show-line); box-shadow:none; }
+:root[data-theme] #dogShowPage .dog-show-invoice-center { display:grid; gap:24px; }
+:root[data-theme] #dogShowPage #dogShowInvoiceCenterForm { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; }
+:root[data-theme] #dogShowPage #dogShowInvoiceCenterForm .dog-show-form-note { grid-column:1 / -1; }
+:root[data-theme] #dogShowPage #dogShowInvoiceCenterForm>.field-grid { grid-column:1; grid-row:2 / 4; grid-template-columns:1fr; }
+:root[data-theme] #dogShowPage #dogShowInvoiceCenterForm>.button-row { align-self:end; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage .dog-show-invoice-center-preview { display:grid; gap:20px; background:var(--show-soft); border:1px solid var(--show-line); border-radius:9px; padding:20px; min-height:160px; }
+:root[data-theme] #dogShowPage .dog-show-invoice-center-preview>strong { font-size:30px; }
+/* Progress: separate points and majors, focused detail, mobile selectors. */
+:root[data-theme] #dogShowPage .dog-show-progress-summary { grid-template-columns:repeat(4,minmax(0,1fr)); }
+:root[data-theme] #dogShowPage .dog-show-progress-section>header { margin-bottom:16px; padding:0; background:transparent; }
+:root[data-theme] #dogShowPage .dog-show-progress-section h3 { margin:0 0 5px; }
+:root[data-theme] #dogShowPage .dog-show-progress-dog-row { padding:16px 0; border:0; border-bottom:1px solid var(--show-line); background:transparent; box-shadow:none; border-radius:0; grid-template-columns:50px minmax(0,1fr) auto; gap:16px; color:var(--show-ink); }
+:root[data-theme] #dogShowPage .dog-show-progress-dog-copy>small { display:none; }
+.show-career-targets{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:12px 0;max-width:650px}.show-career-targets>div>span{display:flex;justify-content:space-between;gap:12px;font-size:11px;color:var(--show-muted)}.show-career-targets b{font-weight:650;color:var(--show-ink)}
+:root[data-theme] #dogShowPage .dog-show-title-progress { margin-top:6px; height:8px; background:var(--show-line); border-radius:8px; }.dog-show-title-progress span{background:#2082c2!important}.dog-show-title-progress.is-majors span{background:#2b9d6e!important}
+:root[data-theme] #dogShowPage .dog-show-progress-dogs-layout,:root[data-theme] #dogShowPage .dog-show-progress-judges-layout { display:grid; grid-template-columns:230px minmax(0,1fr); gap:18px; align-items:start; }
+:root[data-theme] #dogShowPage :is(.dog-show-progress-dog-selector,.dog-show-judge-selector) { border:1px solid var(--show-line); border-radius:9px; padding:12px; background:var(--show-surface); max-height:75vh; overflow:auto; }
+:root[data-theme] #dogShowPage :is(.dog-show-progress-dog-selector,.dog-show-judge-selector) button { background:transparent; color:var(--show-ink); border:0; border-bottom:1px solid var(--show-line); border-radius:6px; padding:12px 8px; box-shadow:none; }
+:root[data-theme] #dogShowPage :is(.dog-show-progress-dog-selector,.dog-show-judge-selector) button.is-active { background:#e6f2fc; color:#075d97; }
+:root[data-theme] #dogShowPage .dog-show-progress-dog-hero { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }.dog-show-progress-dog-hero>div{flex:1;min-width:190px}
+:root[data-theme] #dogShowPage .dog-show-progress-dog-hero h3 { font-size:23px; }.dog-show-progress-hero-photo{width:105px!important;height:105px!important;border-radius:9px!important}
+:root[data-theme] #dogShowPage .dog-show-progress-breakdown { gap:14px; padding:18px; background:var(--show-soft); }
+:root[data-theme] #dogShowPage .dog-show-progress-breakdown>div { border:0; background:transparent; padding:0 12px; }
+:root[data-theme] #dogShowPage .dog-show-progress-history-row { background:transparent; border:0; border-bottom:1px solid var(--show-line); color:var(--show-ink); border-radius:0; padding:16px 0; box-shadow:none; }
+:root[data-theme] #dogShowPage .dog-show-judge-notes { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+:root[data-theme] #dogShowPage .dog-show-judge-notes>div { background:transparent; border:0; padding:0; }.dog-show-judge-notes dt{font-size:12px}.dog-show-judge-notes dd{font-size:14px}
+.show-mobile-selector{display:none}
+/* More: packing beside helpers and results, without a wall of shortcut cards. */
+.show-operations-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start}.show-operations-packing{grid-row:1 / 3}.show-operations-team{grid-column:2}.show-operations-results{grid-column:2}
+:root[data-theme] #dogShowPage .show-operations-tabs{display:none}.show-operations-layout h3{font-size:20px!important;margin:0!important}.show-operations-layout progress{width:100%;height:7px;accent-color:var(--show-blue);margin:10px 0 15px}
+:root[data-theme] #dogShowPage .dog-show-packing-item { border:0; border-bottom:1px solid var(--show-line); border-radius:0; padding:12px 0; background:transparent; }.dog-show-packing-item label{font-size:14px!important}
+:root[data-theme] #dogShowPage .show-operations-result{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--show-line);background:transparent;box-shadow:none;color:var(--show-ink);padding:14px 0;border-radius:0}.show-operations-result>span:nth-child(2){display:grid;gap:4px;flex:1}.show-operations-result small{font-size:12px;color:var(--show-muted)}
+.show-helper-row{display:grid;gap:4px;padding:14px 0}.show-helper-row small{font-size:12px;color:var(--show-muted)}
+.show-operations-tools{padding:18px;border:1px solid var(--show-line);border-radius:10px;background:var(--show-surface)}.show-operations-tools summary{cursor:pointer;font-weight:700}.show-operations-tools>div{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.show-operations-tools button{flex:1;display:flex;gap:10px;justify-content:space-between;align-items:center;min-height:44px}
+/* Editors preserve form IDs and save handlers. Desktop drawer; phone full screen. */
+:root[data-theme] #dogShowDialog { color:var(--show-ink); background:var(--show-surface); border:1px solid var(--show-line); border-radius:12px; padding:0; width:min(850px,calc(100vw - 40px)); max-height:90dvh; }
+:root[data-theme] #dogShowDialog .dialog-header { position:sticky; top:0; z-index:3; background:var(--show-surface); padding:18px 22px; border-bottom:1px solid var(--show-line); }
+:root[data-theme] #dogShowDialog .detail-dialog-body { padding:22px; }
+:root[data-theme] #dogShowDialog :is(input,select,textarea){font:inherit;font-size:14px;color:var(--show-ink);background:var(--show-surface);border:1px solid var(--show-line);border-radius:7px;min-height:44px;padding:10px 12px;max-width:100%;min-width:0}
+:root[data-theme] #dogShowDialog input[type=checkbox]{width:19px;height:19px;min-height:19px;accent-color:var(--show-blue);padding:0}
+:root[data-theme] #dogShowDialog label{font-size:13px;gap:7px}.show-setup-section{border:1px solid var(--show-line);border-radius:8px;padding:0;overflow:hidden}.show-setup-section>summary{padding:14px 16px;background:var(--show-soft);font-weight:650;font-size:14px;cursor:pointer}.show-setup-section>.field-grid,.show-setup-section>.dog-show-check-grid{padding:16px}
+:root[data-theme] #dogShowDialog .show-editor-actions{position:sticky;bottom:-22px;background:var(--show-surface);margin:0 -22px -22px;padding:16px 22px;border-top:1px solid var(--show-line);justify-content:space-between;z-index:2}
+:root[data-theme] #dogShowDialog[data-editor=setup],:root[data-theme] #dogShowDialog[data-editor=task]{margin:0 0 0 auto;inset:0 0 0 auto;width:min(640px,90vw);height:100dvh;max-height:100dvh;border-radius:12px 0 0 12px}
+:root[data-theme] #dogShowDialog :is(.dog-photo-sex-female){border:3px solid #e58aaa!important}:root[data-theme] #dogShowDialog :is(.dog-photo-sex-male){border:3px solid #5b9bd5!important}
+@media(max-width:1250px){
+ .show-schedule-layout{grid-template-columns:minmax(0,1.4fr) minmax(250px,1fr);gap:14px}
+ .show-finance-layout{grid-template-columns:minmax(0,1fr)}.show-finance-sidebar{grid-template-columns:1fr 1fr}
+ .show-calendar-month-layout{grid-template-columns:minmax(0,1fr)}
+ :root[data-theme] #dogShowPage .show-calendar-day-detail .dog-show-agenda-dog{grid-template-columns:minmax(140px,1fr) minmax(150px,1fr) auto}
+ :root[data-theme] #dogShowPage .show-calendar-day-detail .dog-show-agenda-helper{display:none}
+ :root[data-theme] #dogShowPage .dog-show-calculator-selects{grid-template-columns:1fr}
+}
+@media(max-width:980px){
+ :root[data-theme] #dogShowPage .dog-show-progress-dogs-layout,:root[data-theme] #dogShowPage .dog-show-progress-judges-layout{grid-template-columns:190px minmax(0,1fr)}
+ :root[data-theme] #dogShowPage .dog-show-progress-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+ :root[data-theme] #dogShowPage .dog-show-planner-criteria{grid-template-columns:repeat(3,minmax(0,1fr))}
+ :root[data-theme] #dogShowPage .dog-show-view button{min-height:44px}
+}
+@media(max-width:700px){
+ :root[data-theme] #dogShowPage #dogShowDesktopNav{display:none}
+ :root[data-theme] #dogShowPage:not([data-show-view=home]):not([data-show-view=dogs]) .dog-show-workspace-header{display:none}
+ :root[data-theme] #dogShowPage .dog-show-event-toolbar{padding:10px 12px;margin:0}
+ :root[data-theme] #dogShowPage .dog-show-event-toolbar label>span,:root[data-theme] #dogShowPage #dogShowWeekendContext{display:none}
+ :root[data-theme] #dogShowPage .dog-show-view>section:first-child{margin-bottom:8px}
+ :root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-list-toolbar){gap:12px;flex-wrap:wrap;align-items:flex-start}
+ :root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-list-toolbar) h3{font-size:23px}
+ :root[data-theme] #dogShowPage .dog-show-view :is(input,select,textarea){font-size:16px}
+ :root[data-theme] #dogShowPage :is(.dog-show-panel,.dog-show-calendar-panel,.dog-show-progress-section,.dog-show-progress-dog-hero,.dog-show-progress-breakdown,.dog-show-judge-hero,.dog-show-plan-board,.dog-show-calculator-form,.dog-show-calculator-results,.show-transaction-ledger,.dog-show-expense-split,.show-finance-dog-breakdown,.dog-show-finance-report,.dog-show-invoice-center){padding:16px}
+ .show-schedule-layout,.show-finance-layout,.show-finance-sidebar,.show-operations-layout{grid-template-columns:minmax(0,1fr);gap:14px}
+ :root[data-theme] #dogShowPage .show-prep-panel{display:none}
+ .show-schedule-filter{justify-content:stretch}.show-schedule-filter label{width:100%}.show-schedule-filter select{flex:1}
+ :root[data-theme] #dogShowPage .dog-show-calendar-panel{padding:14px}
+ :root[data-theme] #dogShowPage .dog-show-calendar-controls{gap:8px}
+ :root[data-theme] #dogShowPage .dog-show-calendar-view-toggle{width:100%;justify-content:space-between}
+ :root[data-theme] #dogShowPage .dog-show-calendar-toolbar>div:first-child p{display:none}
+ :root[data-theme] #dogShowPage .dog-show-calendar-board{max-height:65vh}
+ :root[data-theme] #dogShowPage .show-work-agenda-row{grid-template-columns:40px minmax(0,1fr) 8px;padding:12px;gap:9px}
+ :root[data-theme] #dogShowPage .dog-show-task-row{grid-template-columns:20px minmax(0,1fr);gap:8px;padding:14px}
+ :root[data-theme] #dogShowPage .dog-show-task-row>button[data-action=edit-show-task]{flex-wrap:wrap;gap:9px}
+ .show-task-photo{width:36px;height:36px;flex-basis:36px}.show-task-status{margin-left:45px}.show-task-copy{min-width:150px}
+ :root[data-theme] #dogShowPage .dog-show-task-row>.dog-show-complete-button{grid-column:2;justify-self:end;min-width:110px}
+ :root[data-theme] #dogShowPage .dog-show-task-batch:has(button:not([hidden])){position:sticky;bottom:82px;z-index:3;background:var(--show-surface);border:1px solid var(--show-line);padding:12px;border-radius:9px;box-shadow:0 6px 20px #12314e15;order:10}
+ :root[data-theme] #dogShowPage .dog-show-master-calendar{padding:12px}
+ :root[data-theme] #dogShowPage .dog-show-master-calendar-view-toggle{width:100%;gap:0;flex-wrap:nowrap}
+ :root[data-theme] #dogShowPage .dog-show-master-calendar-view-toggle>button{padding:8px;flex:1;font-size:12px}
+ :root[data-theme] #dogShowPage .dog-show-master-calendar-navigation{justify-content:space-between;width:100%;gap:6px}
+ :root[data-theme] #dogShowPage .dog-show-master-calendar-navigation strong{font-size:13px}
+ :root[data-theme] #dogShowPage .dog-show-master-month-grid{min-width:0;gap:0}
+ :root[data-theme] #dogShowPage .dog-show-master-month-day{min-height:75px;padding:3px}
+ :root[data-theme] #dogShowPage .dog-show-master-month-day>div .dog-show-master-calendar-item{padding:3px;font-size:8px;line-height:1.25}
+ :root[data-theme] #dogShowPage .dog-show-master-month-day>header button{min-height:28px;font-size:12px;padding:3px}
+ :root[data-theme] #dogShowPage .dog-show-master-year-grid{grid-template-columns:1fr}
+ :root[data-theme] #dogShowPage .dog-show-master-week-grid{grid-template-columns:1fr}
+ :root[data-theme] #dogShowPage .dog-show-agenda-dog,:root[data-theme] #dogShowPage .show-calendar-day-detail .dog-show-agenda-dog{grid-template-columns:minmax(0,1fr);padding:14px}
+ :root[data-theme] #dogShowPage .show-calendar-day-detail .dog-show-agenda-helper{display:grid}
+ :root[data-theme] #dogShowPage .dog-show-planner-criteria{grid-template-columns:1fr 1fr;gap:12px;padding:14px}
+ :root[data-theme] #dogShowPage .dog-show-planner-panel{grid-template-columns:1fr}
+ :root[data-theme] #dogShowPage .dog-show-planner-card>summary{padding:14px;gap:10px}
+ :root[data-theme] #dogShowPage .dog-show-planner-card>summary h3{font-size:16px}
+ :root[data-theme] #dogShowPage .dog-show-planner-card-controls{display:grid;gap:12px}
+ :root[data-theme] #dogShowPage .dog-show-calculator-view{grid-template-columns:minmax(0,1fr);gap:14px}
+ :root[data-theme] #dogShowPage .dog-show-calculator-form label{font-size:13px}
+ :root[data-theme] #dogShowPage .dog-show-calculator-selects{grid-template-columns:1fr}
+ :root[data-theme] #dogShowPage :is(.dog-show-expense-stats,.dog-show-finance-report-stats){grid-template-columns:1fr;gap:8px}
+ :root[data-theme] #dogShowPage .dog-show-expense-stats>article{display:grid;grid-template-columns:1fr auto;gap:4px;padding:14px}
+ :root[data-theme] #dogShowPage .dog-show-expense-stats strong{font-size:22px;grid-column:2;grid-row:1 / 3}
+ :root[data-theme] #dogShowPage .dog-show-finance-mode-tabs{width:100%;flex-wrap:nowrap}
+ :root[data-theme] #dogShowPage .dog-show-finance-mode-tabs>button{flex:1;padding:9px;font-size:12px}
+ :root[data-theme] #dogShowPage .dog-show-expense-table-header{display:none}
+ :root[data-theme] #dogShowPage .dog-show-expense-edit-row{grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:14px 0}
+ :root[data-theme] #dogShowPage .dog-show-expense-cell::before{display:none}
+ :root[data-theme] #dogShowPage .dog-show-expense-cell.is-date{grid-column:1;font-size:11px;color:var(--show-muted)}
+ :root[data-theme] #dogShowPage .dog-show-expense-cell.is-description{grid-column:1;grid-row:2}
+ :root[data-theme] #dogShowPage .dog-show-expense-cell.is-category{grid-column:1;grid-row:3;font-size:11px;color:var(--show-muted)}
+ :root[data-theme] #dogShowPage .dog-show-expense-cell.is-kind{grid-column:2;grid-row:1}
+ :root[data-theme] #dogShowPage .dog-show-expense-cell.is-amount{grid-column:2;grid-row:2;font-size:14px}
+ :root[data-theme] #dogShowPage .dog-show-finance-report-controls{gap:10px}
+ :root[data-theme] #dogShowPage #dogShowInvoiceCenterForm{grid-template-columns:1fr}
+ :root[data-theme] #dogShowPage #dogShowInvoiceCenterForm>.field-grid{grid-column:auto;grid-row:auto}
+ :root[data-theme] #dogShowPage .dog-show-invoice-center-existing{min-width:0;overflow-x:auto}
+ :root[data-theme] #dogShowPage .dog-show-progress-dogs-layout,:root[data-theme] #dogShowPage .dog-show-progress-judges-layout{grid-template-columns:minmax(0,1fr)}
+ :root[data-theme] #dogShowPage .dog-show-progress-dog-selector,:root[data-theme] #dogShowPage .dog-show-judge-selector{display:none}
+ .show-mobile-selector{display:grid;gap:6px;font-size:13px;margin-bottom:14px}
+ :root[data-theme] #dogShowPage .dog-show-progress-dog-row{grid-template-columns:44px minmax(0,1fr);gap:12px}
+ :root[data-theme] #dogShowPage .dog-show-progress-total{display:none}
+ .show-career-targets{gap:12px}.show-career-targets>div>span{font-size:10px}
+ :root[data-theme] #dogShowPage .dog-show-progress-hero-photo{width:72px!important;height:72px!important}
+ :root[data-theme] #dogShowPage .dog-show-progress-dog-hero>div{min-width:150px}
+ :root[data-theme] #dogShowPage .dog-show-progress-dog-hero h3{font-size:19px}
+ :root[data-theme] #dogShowPage .dog-show-progress-history-row{grid-template-columns:minmax(0,1fr) auto;gap:8px}
+ :root[data-theme] #dogShowPage .dog-show-history-date{grid-column:1;grid-row:1;font-size:12px}
+ :root[data-theme] #dogShowPage .dog-show-progress-history-row>span:nth-child(2){grid-column:1;grid-row:2}
+ :root[data-theme] #dogShowPage .dog-show-history-points{grid-column:2;grid-row:1 / 3}
+ :root[data-theme] #dogShowPage .dog-show-judge-notes{grid-template-columns:1fr}
+ :root[data-theme] #dogShowPage .show-operations-tabs{display:flex;width:100%}
+ :root[data-theme] #dogShowPage .show-operations-tabs>button{flex:1}
+ .show-operations-packing,.show-operations-team,.show-operations-results{grid-column:auto;grid-row:auto}
+ [data-operations-tab=packing] :is(.show-operations-team,.show-operations-results),[data-operations-tab=team] :is(.show-operations-packing,.show-operations-results),[data-operations-tab=results] :is(.show-operations-packing,.show-operations-team){display:none!important}
+ .show-operations-tools>div{display:grid;gap:8px}.show-operations-result .show-task-status{margin:0}
+ :root[data-theme] #dogShowDialog,:root[data-theme] #dogShowDialog[data-editor=setup],:root[data-theme] #dogShowDialog[data-editor=task]{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;margin:0;border-radius:0;inset:0}
+ :root[data-theme] #dogShowDialog .detail-dialog-body{padding:16px 16px calc(24px + env(safe-area-inset-bottom))}
+ :root[data-theme] #dogShowDialog .dialog-header{padding:14px 16px}
+ :root[data-theme] #dogShowDialog .field-grid{grid-template-columns:1fr}
+ :root[data-theme] #dogShowDialog :is(input,select,textarea){font-size:16px}
+ :root[data-theme] #dogShowDialog .show-editor-actions{bottom:calc(-24px - env(safe-area-inset-bottom));margin:0 -16px calc(-24px - env(safe-area-inset-bottom));padding:14px 16px calc(14px + env(safe-area-inset-bottom))}
+}
+:root[data-theme=dark] #dogShowPage :is(.show-task-status,.dog-show-progress-dog-selector button.is-active,.dog-show-judge-selector button.is-active){background:#1f4667;color:#b6ddfa}
+:root[data-theme=dark] #dogShowPage :is(.show-task-status.is-overdue,.dog-show-alert){background:#3c301c;color:#f1cb7d}
+/* Supersede the earlier app-wide light-theme card overrides. */
+:root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-finance-report-heading) { border:0!important; background:transparent!important; border-radius:0!important; }
+:root[data-theme] #dogShowPage .dog-show-master-month-grid { grid-template-columns:repeat(7,minmax(0,1fr)); }
+:root[data-theme] #dogShowPage .dog-show-master-month-grid .weekday-full { display:none; }
+:root[data-theme] #dogShowPage .dog-show-master-month-grid .weekday-short { display:inline; }
+:root[data-theme] #dogShowPage .dog-show-judge-hero>div>span { color:var(--show-muted); }
+
+:root[data-theme] #dogShowPage .show-agenda-identity { display:flex; align-items:center; }
+.show-mobile-judge-tools { display:none; }
+@media(max-width:700px){
+ :root[data-theme] #dogShowPage .show-mobile-judge-tools { display:flex; justify-content:flex-end; margin:-4px 0 12px; }
+ :root[data-theme] #dogShowDialog .dialog-header { padding:14px 16px; }
+ :root[data-theme] #dogShowDialog .show-editor-actions { display:flex; gap:12px; padding:14px 16px; }
+ :root[data-theme] #dogShowDialog .show-editor-actions>button { flex:1; width:auto; }
+}
