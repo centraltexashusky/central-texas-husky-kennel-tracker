@@ -1532,6 +1532,8 @@ function financialOperationalLedgerEntries(boardingEntries = [], payrollEntries 
   })));
   const payroll = payrollEntries.map((entry) => ({
     key: "payroll:" + entry.id,
+    sourceType: "timesheet",
+    metadata: { payroll: { staffName: entry.staffName, staffEmail: entry.staffEmail, hours: entry.hours, rate: entry.rate } },
     date: entry.date,
     entryType: "expense",
     businessArea: "Payroll",
@@ -2054,9 +2056,46 @@ function financialTransactionSearchText(entry = {}) {
   return [entry.date, entry.entryType, entry.businessArea, entry.category, entry.description, entry.sourceLabel, entry.counterparty, entry.paymentMethod, entry.reference, entry.notes].join(" ").toLowerCase();
 }
 
+function financialDailyPayrollEntries(entries = []) {
+  const grouped = new Map();
+  const rows = [];
+  entries.forEach((entry) => {
+    const payroll = entry.metadata?.payroll;
+    const isTimesheet = entry.sourceType === "timesheet" || String(entry.key || "").startsWith("payroll:");
+    const identity = String(payroll?.staffEmail || payroll?.staffName || "").trim().toLowerCase();
+    if (!isTimesheet || entry.entryType !== "expense" || !identity || !entry.date) {
+      rows.push(entry);
+      return;
+    }
+    const key = JSON.stringify([entry.date, identity]);
+    let day = grouped.get(key);
+    if (!day) {
+      day = { ...entry, key: "payroll-day:" + key, sourceType: "payrollDaily", editable: false,
+        category: "Employee daily pay", payrollCount: 0, payrollHours: 0, payrollCents: 0,
+        payrollRates: new Set(), sourceKeys: [], staffName: payroll.staffName || payroll.staffEmail };
+      grouped.set(key, day);
+      rows.push(day);
+    }
+    day.payrollCount += 1;
+    day.payrollHours += Number(payroll.hours || 0);
+    // Add saved line amounts in cents; grouping must not recalculate anyone's pay.
+    day.payrollCents += Math.round(Number(entry.amount || 0) * 100);
+    day.payrollRates.add(Number(payroll.rate || 0));
+    day.sourceKeys.push(entry.key);
+  });
+  grouped.forEach((day) => {
+    const rate = day.payrollRates.size === 1 ? " at " + payrollMoney([...day.payrollRates][0]) + "/hr" : " across " + day.payrollRates.size + " hourly rates";
+    day.amount = day.payrollCents / 100;
+    day.description = day.staffName + " · " + day.payrollHours.toFixed(2) + " hours" + rate;
+    day.sourceLabel = day.payrollCount + " completed timesheet" + (day.payrollCount === 1 ? "" : "s");
+    delete day.payrollRates;
+  });
+  return rows;
+}
+
 function financialFilteredTransactions(entries = []) {
   const search = String(financialTransactionSearch || "").trim().toLowerCase();
-  return entries.filter((entry) => {
+  return financialDailyPayrollEntries(entries).filter((entry) => {
     if (search && !financialTransactionSearchText(entry).includes(search)) return false;
     if (financialTransactionTypeFilter !== "all" && entry.entryType !== financialTransactionTypeFilter) return false;
     if (financialTransactionAreaFilter !== "all" && entry.businessArea !== financialTransactionAreaFilter) return false;
@@ -2108,7 +2147,7 @@ function renderFinancialTransactions(entries = [], range = financialRangeValues(
   if ($("#financialTransactionsBody")) $("#financialTransactionsBody").innerHTML = visible.length ? visible.map(financialTransactionRowHtml).join("") : '<tr><td colspan="8"><div class="financial-empty-state">No transactions match the selected filters.</div></td></tr>';
   if ($("#financialTransactionMeta")) {
     const visibleLabel = filtered.length ? (pageStart + 1) + "-" + (pageStart + visible.length) : "0";
-    $("#financialTransactionMeta").textContent = "Showing " + visibleLabel + " of " + filtered.length + " matching transactions (" + entries.length + " total) | " + financialRangeLabel(range);
+    $("#financialTransactionMeta").textContent = "Showing " + visibleLabel + " of " + filtered.length + " matching rows (" + financialDailyPayrollEntries(entries).length + " total; payroll combined per employee per day) | " + financialRangeLabel(range);
   }
   if ($("#financialTransactionPageLabel")) $("#financialTransactionPageLabel").textContent = "Page " + financialTransactionPage + " of " + pageCount;
   if ($("#financialTransactionPrevButton")) $("#financialTransactionPrevButton").disabled = financialTransactionPage <= 1;

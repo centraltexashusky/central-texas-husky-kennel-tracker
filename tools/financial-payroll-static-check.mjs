@@ -97,3 +97,35 @@ assert.equal(removedUserPayroll.staff[0].total, 95.48, "Removed staff gross pay 
 assert.equal(removedUserPayroll.missingRateCount, 0, "A removed staff profile with a saved rate is not marked missing.");
 
 console.log("Financial payroll checks passed.");
+
+// Daily presentation groups saved payroll without changing source records or pay.
+const settingsRuntime = vm.runInNewContext(settings.match(/const __snuggleStayModuleSource = (`[\s\S]*`);\n\(0, eval\)/)[1]);
+const groupingContext = vm.createContext({ payrollMoney: value => '$' + Number(value).toFixed(2) });
+vm.runInContext(settingsRuntime.match(/function financialDailyPayrollEntries\([\s\S]*?\n\}/)[0], groupingContext);
+const payrollLine = (key, email, date, hours, rate, amount) => ({ key:'payroll:'+key, sourceType:'timesheet', entryType:'expense', businessArea:'Payroll', date, amount, metadata:{payroll:{staffName:'Shared name',staffEmail:email,hours,rate}}, editable:false });
+const payrollLines = [
+  payrollLine('a','a@example.invalid','2026-09-20',0.47,15,7.05),
+  payrollLine('b','A@EXAMPLE.INVALID','2026-09-20',4.65,15,69.75),
+  payrollLine('c','a@example.invalid','2026-09-20',0.58,15,8.70),
+  payrollLine('d','b@example.invalid','2026-09-20',8,10,80),
+  payrollLine('e','a@example.invalid','2026-09-19',1,15,15),
+  {key:'manual',sourceType:'financialTransaction',entryType:'expense',businessArea:'Payroll',date:'2026-09-20',amount:12,editable:true},
+];
+const beforeGrouping = JSON.stringify(payrollLines);
+const daily = groupingContext.financialDailyPayrollEntries(payrollLines);
+assert.equal(daily.length,4);
+assert.equal(daily[0].amount,85.50);
+assert.equal(daily[0].payrollHours.toFixed(2),'5.70');
+assert.equal(daily[0].sourceLabel,'3 completed timesheets');
+assert.equal(daily[1].amount,80,'Different employees with the same name stay separate.');
+assert.equal(daily[2].date,'2026-09-19','Different work dates stay separate.');
+assert.equal(daily[3],payrollLines[5],'Manual payroll transactions remain individually editable.');
+assert.equal(JSON.stringify(payrollLines),beforeGrouping,'Source timesheets are unchanged.');
+assert.equal(daily.reduce((sum,row)=>sum+Math.round(row.amount*100),0),payrollLines.reduce((sum,row)=>sum+Math.round(row.amount*100),0));
+assert.equal(JSON.stringify(groupingContext.financialDailyPayrollEntries(daily)),JSON.stringify(daily),'Already grouped rows are not grouped again.');
+const mixed = groupingContext.financialDailyPayrollEntries([payrollLine('f','a@example.invalid','2026-09-20',1,15,15),payrollLine('g','a@example.invalid','2026-09-20',2,16,32)]);
+assert.equal(mixed[0].amount,47);assert.match(mixed[0].description,/across 2 hourly rates/);
+const unidentified=payrollLine('unknown','','2026-09-20',1,15,15);unidentified.metadata={};
+assert.equal(groupingContext.financialDailyPayrollEntries([unidentified])[0],unidentified,'Missing identity must not merge unrelated entries.');
+assert.match(settingsRuntime,/return financialDailyPayrollEntries\(entries\)\.filter/,'Table and export filters share the same daily grouping.');
+console.log('Daily payroll grouping passed: identity, dates, cents, mixed rates, source preservation, and shared export filtering.');
