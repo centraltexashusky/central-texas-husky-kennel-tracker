@@ -1647,6 +1647,19 @@ function hydrateNotificationPayload(
   };
 }
 
+function dogShowInvoiceEmailItemLines(item: Record<string, unknown>) {
+  const hasBreakdown = ["directExpenses", "showWideShare", "incomeOffsets"].some(key => item[key] !== undefined);
+  return [
+    `${item.dogName || "Dog"} — ${item.showName || "Dog Show"}${item.showDate ? ` (${formatEmailDateOnlyText(item.showDate, "long")})` : ""}`,
+    ...(hasBreakdown ? [
+      `Direct expenses: ${formatEmailMoneyText(item.directExpenses ?? 0)}`,
+      `Shared expenses (this dog's share): ${formatEmailMoneyText(item.showWideShare ?? 0)}`,
+      `Rewards / credits deducted: ${formatEmailMoneyText(item.incomeOffsets ?? 0)}`,
+    ] : []),
+    `Amount for ${item.dogName || "this dog"}: ${formatEmailMoneyText(item.amount)}`,
+  ];
+}
+
 async function notificationContent(adminClient: ReturnType<typeof createClient>, eventName: string, record: Record<string, unknown>, notification: Record<string, unknown> = {}) {
   const stay = notificationTargetStay(record, notification, eventName);
   const audienceEmails = await notificationAudienceEmails(adminClient, eventName, record, notification);
@@ -2212,7 +2225,8 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       `Total due: ${formatEmailMoneyText(record.total)}`,
       "",
       "Invoice items:",
-      ...lineItems.map((item) => `${item.dogName || "Dog"} - ${item.showName || "Dog Show"}: ${formatEmailMoneyText(item.amount)}`),
+      ...lineItems.flatMap(dogShowInvoiceEmailItemLines),
+      "Each dog’s amount = direct expenses + shared expenses − rewards / credits. Shared expenses shown are only that dog’s allocated share.",
       record.memo ? `Note: ${record.memo}` : "",
       record.paymentInstructions ? `Payment: ${record.paymentInstructions}` : "",
       "",

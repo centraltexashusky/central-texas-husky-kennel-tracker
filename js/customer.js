@@ -3594,5 +3594,5 @@ async function submitPendingCustomerBooking() {
 //# sourceURL=snuggle-stay/customer.js
 `;
 (0, eval)(__snuggleStayModuleSource);
-await import("./customer-shows.js?v=customer-show-estimates-v152");
+await import("./customer-shows.js?v=customer-show-estimates-v152-show-lifecycle-v153");
 await import("./customer-workspace.js?v=customer-workspace-v139");
