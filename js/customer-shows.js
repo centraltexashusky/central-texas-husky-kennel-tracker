@@ -13,6 +13,23 @@ let queueLoading = false;
 const date = value => value ? new Date(`${String(value).slice(0,10)}T12:00:00`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'Date pending';
 const statusLabel = status => ({Pending:'Pending staff approval',Approved:'Attendance approved',Declined:'Unable to approve',Cancelled:'Request cancelled'}[status] || status);
 
+const estimateFields = [['handling','Handling'],['entryFee','Entry fees'],['sharedExpenses','Shared expenses (this dog’s share)'],['other','Other costs'],['credit','Credits / rewards']];
+const dollars = value => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value || 0));
+function estimateHtml(request, staff = false) {
+  const estimate=request.estimate;
+  if (!estimate) return request.status==='Approved' ? '<p>Next: staff will prepare an estimate for your review.</p>' : '';
+  return `<section class="customer-show-estimate"><h4>Show estimate · ${esc(estimate.status)}</h4><dl>${estimateFields.filter(([key])=>Number(estimate[key])).map(([key,label])=>`<div><dt>${esc(label)}</dt><dd>${key==='credit'?'−':''}${dollars(estimate[key])}</dd></div>`).join('')}<div class="estimate-total"><dt>Estimated total for this dog</dt><dd>${dollars(estimate.total)}</dd></div></dl>${estimate.note?`<p>${esc(estimate.note)}</p>`:''}<p>Final charges use actual expenses and earned rewards. Reviewing this estimate does not make a payment or submit an official entry.</p>${!staff&&estimate.status==='Awaiting response'?`<div class="button-row"><button type="button" data-show-estimate-answer="accept" data-request-id="${esc(request.id)}">Accept estimate</button><button type="button" class="secondary-button" data-show-estimate-answer="decline" data-request-id="${esc(request.id)}">Decline estimate</button></div>`:''}${estimate.status==='Accepted'?'<p><strong>Estimate accepted.</strong> Staff will coordinate registration and share show-day updates. See Updates for results and win photos.</p>':''}</section>`;
+}
+function estimateEditorHtml(request) {
+  if(request.status!=='Approved')return '';
+  return `${estimateHtml(request,true)}<details><summary>${request.estimate?'Revise estimate':'Prepare estimate'}</summary><form data-show-estimate-form="${esc(request.id)}"><p>Amounts below are for ${esc(request.dogName)} only. For two dogs, allocate the shared total between their estimates. Revising an estimate requires a new customer response.</p><div class="field-grid">${estimateFields.map(([key,label])=>`<label>${esc(label)}<input type="number" name="${key}" min="0" max="100000" step="0.01" value="${Number(request.estimate?.[key]||0)}" required></label>`).join('')}</div><label>Estimate notes / shared cost explanation<textarea name="note" maxlength="1000">${esc(request.estimate?.note||'')}</textarea></label><button type="submit">Save and email estimate</button><p role="status" data-estimate-feedback></p></form></details>`;
+}
+async function estimateAction(action,request,values={}) {
+  const {data,error}=await cuddleStayRequest(db=>db.rpc('customer_show_estimate',{p_action:action,p_request_id:request.id,p_expected_updated_at:request.updatedAt,...values}));
+  if(error)throw error;
+  return data;
+}
+
 async function portal(action, values = {}) {
   if (localTestMode) {
     // Isolated fixture mode only; never used by a signed-in production session.
@@ -56,12 +73,12 @@ function renderSchedule() {
       return `<article class="customer-show-card" data-show-search="${esc([show.name,show.location,date(show.startDate),date(show.endDate)].join(' ').toLowerCase())}">
       <header><div><h3>${esc(show.name || show.club || 'Dog show')}</h3><p>${esc(date(show.startDate))}${show.endDate&&show.endDate!==show.startDate?` – ${esc(date(show.endDate))}`:''}</p></div><span class="status-chip">${esc(show.status==='Going To'?'Planned attendance':show.status==='Active'?'Show underway':'Attendance confirmed')}</span></header>
       <p>${esc(show.location || 'Location to be confirmed')}</p>${show.entryClosingDate?`<p><strong>Entry deadline:</strong> ${esc(date(show.entryClosingDate))}</p>`:''}
-      ${r?`<p class="customer-show-request-status">${esc(statusLabel(r.status))}</p>${r.staffNote?`<p><strong>Staff response:</strong> ${esc(r.staffNote)}</p>`:''}${r.status==='Pending'?`<button type="button" class="secondary-button" data-show-cancel="${esc(r.id)}">Cancel request</button>`:''}`:
+      ${r?`${estimateHtml(r)}<p class="customer-show-request-status">${esc(statusLabel(r.status))}</p>${r.staffNote?`<p><strong>Staff response:</strong> ${esc(r.staffNote)}</p>`:''}${r.status==='Pending'?`<button type="button" class="secondary-button" data-show-cancel="${esc(r.id)}">Cancel request</button>`:''}`:
       show.canRequest?`<button type="button" data-show-request="${esc(show.id)}">Request ${esc(selected.dogName)} for this show</button>`:'<p>Entries have closed or the show has started. Contact staff about attendance.</p>'}
       </article>`;
     }).join(''):'<p>No upcoming shows are scheduled yet. Check back here or contact the kennel.</p>'}</div>
     <p id="customerShowNoMatches" hidden>No shows match your search.</p>
-    ${schedule.requests.length?`<details class="customer-show-history"><summary>My show requests (${schedule.requests.length})</summary>${schedule.requests.map(r=>`<div><strong>${esc(r.showName)} · ${esc(date(r.startDate))}</strong><p>${esc(statusLabel(r.status))} · Show: ${esc(r.eventStatus)}</p>${r.staffNote?`<p>${esc(r.staffNote)}</p>`:''}</div>`).join('')}</details>`:''}`;
+    ${schedule.requests.length?`<details class="customer-show-history"><summary>My show requests (${schedule.requests.length})</summary>${schedule.requests.map(r=>`<div><strong>${esc(r.showName)} · ${esc(date(r.startDate))}</strong><p>${esc(statusLabel(r.status))} · Show: ${esc(r.eventStatus)}</p>${r.staffNote?`<p>${esc(r.staffNote)}</p>`:''}${estimateHtml(r,true)}</div>`).join('')}</details>`:''}`;
 }
 
 async function loadSchedule() {
@@ -91,7 +108,7 @@ window.syncCustomerShowAccess = function() {
   const nav=document.getElementById('customerPortalNav');
   if(nav&&!nav.querySelector('[data-customer-show-schedule]')){
     const button=document.createElement('button');button.type='button';button.className='portal-nav-button';
-    button.textContent='Show schedule';button.dataset.customerShowSchedule='';button.hidden=!dogs.length;nav.append(button);
+    button.innerHTML='Show schedule';button.dataset.customerShowSchedule='';button.hidden=!dogs.length;nav.append(button);
   }
   if(!dogs.length||displayIdentity!==sessionKey()||!dogs.some(d=>dogKey(d)===selectedDogId)){
     document.getElementById('customerShowDialog')?.close();schedule={shows:[],requests:[]};
@@ -110,7 +127,7 @@ window.renderCustomerShowRequestQueue = async function() {
   try{
     const data=await portal('queue');if(identity!==sessionKey())return;
     queue=data;
-    panel.innerHTML=`<details ${queue.some(r=>r.status==='Pending')?'open':''}><summary>Customer show requests · ${queue.filter(r=>r.status==='Pending').length} pending</summary><p>Confirm availability, entry eligibility, boarding/transport arrangements, and fees before approval. Approval adds a planned roster entry; it does not register the dog with the show.</p><button type="button" class="secondary-button" data-show-queue-refresh>Refresh requests</button>${queue.length?queue.map(r=>`<article class="customer-show-card"><h3>${esc(r.dogName)} · ${esc(r.showName)}</h3><p>${esc(r.ownerName)} · ${esc(date(r.startDate))} · ${esc(r.eventStatus)}</p><p>${esc(statusLabel(r.status))}</p>${r.customerNote?`<p>Customer: ${esc(r.customerNote)}</p>`:''}${r.registrationMissing?`<p>${r.registrationMissing} registration details still need review.</p>`:''}${r.status==='Pending'?`<label>Response to customer (optional)<textarea maxlength="1000" data-show-response="${esc(r.id)}"></textarea></label><div class="button-row"><button type="button" data-show-review="approve" data-request-id="${esc(r.id)}">Approve attendance</button><button type="button" class="secondary-button" data-show-review="decline" data-request-id="${esc(r.id)}">Decline</button></div>`:`<p>${esc(r.staffNote)}</p>`}</article>`).join(''):'<p>No customer show requests yet.</p>'}</details>`;
+    panel.innerHTML=`<details ${queue.some(r=>r.status==='Pending')?'open':''}><summary>Customer show requests · ${queue.filter(r=>r.status==='Pending').length} pending</summary><p>Confirm availability, entry eligibility, boarding/transport arrangements, and fees before approval. Approval adds a planned roster entry; it does not register the dog with the show.</p><button type="button" class="secondary-button" data-show-queue-refresh>Refresh requests</button>${queue.length?queue.map(r=>`<article class="customer-show-card"><h3>${esc(r.dogName)} · ${esc(r.showName)}</h3><p>${esc(r.ownerName)} · ${esc(date(r.startDate))} · ${esc(r.eventStatus)}</p><p>${esc(statusLabel(r.status))}</p>${r.customerNote?`<p>Customer: ${esc(r.customerNote)}</p>`:''}${r.registrationMissing?`<p>${r.registrationMissing} registration details still need review.</p>`:''}${r.status==='Pending'?`<label>Response to customer (optional)<textarea maxlength="1000" data-show-response="${esc(r.id)}"></textarea></label><div class="button-row"><button type="button" data-show-review="approve" data-request-id="${esc(r.id)}">Approve attendance</button><button type="button" class="secondary-button" data-show-review="decline" data-request-id="${esc(r.id)}">Decline</button></div>`:`<p>${esc(r.staffNote)}</p>`}${estimateEditorHtml(r)}</article>`).join(''):'<p>No customer show requests yet.</p>'}</details>`;
   }catch(error){panel.innerHTML=`<p role="alert">Customer requests unavailable: ${esc(error.message || error)}</p><button type="button" data-show-queue-refresh>Retry</button>`;}
   finally{queueLoading=false;}
 };
@@ -130,6 +147,16 @@ document.addEventListener('click',async event=>{
   if(button.hasAttribute('data-customer-show-schedule')){openCustomerShowSchedule(button.dataset.dogId);return;}
   if(button.hasAttribute('data-show-portal-refresh')){void loadSchedule();return;}
   if(button.hasAttribute('data-show-queue-refresh')){void renderCustomerShowRequestQueue();return;}
+  if(button.dataset.showEstimateAnswer){
+    const req=schedule.shows.map(show=>show.request).find(r=>r?.id===button.dataset.requestId);if(!req)return;
+    const identity=sessionKey(),dogId=selectedDogId;
+    button.disabled=true;
+    try{
+      await estimateAction(button.dataset.showEstimateAnswer,req);
+      if(identity===sessionKey()&&dogId===selectedDogId)await loadSchedule();
+    }catch(error){document.getElementById('customerShowFeedback').textContent=`Could not save your response: ${error.message||error}`;button.disabled=false;}
+    return;
+  }
   if(button.dataset.showRequest){
     const show=schedule.shows.find(s=>s.id===button.dataset.showRequest);if(!show||!eligibleDogs().some(d=>dogKey(d)===selectedDogId))return;
     const identity=sessionKey(), dogId=selectedDogId;
@@ -161,4 +188,21 @@ document.addEventListener('click',async event=>{
       renderDogShow();showToast('Show attendance request updated.');
     }catch(error){showToast(`Could not update request: ${error.message || error}`);button.disabled=false;}
   }
+});
+
+document.addEventListener('submit',async event=>{
+ const form=event.target.closest('[data-show-estimate-form]');if(!form)return;
+ event.preventDefault();
+ const req=queue.find(r=>r.id===form.dataset.showEstimateForm);if(!req)return;
+ const button=form.querySelector('button[type="submit"]'),feedback=form.querySelector('[data-estimate-feedback]');
+ if(!form.reportValidity())return;
+ const data=new FormData(form),estimate={note:String(data.get('note')||'')};
+ estimateFields.forEach(([key])=>estimate[key]=Number(data.get(key)));
+ button.disabled=true;feedback.textContent='Saving estimate and sending email…';
+ try{
+  const source=await estimateAction('send',req,{p_estimate:estimate});
+  const notification=await notifyIfNeeded(source,'dogShowEstimateSent');
+  await renderCustomerShowRequestQueue();
+  showToast(notification?.deliveryStatus==='sent'?'Estimate saved and emailed. Waiting for the customer’s response.':'Estimate saved in the customer portal, but email was not delivered. Review Alerts before retrying.');
+ }catch(error){feedback.textContent=`Could not send estimate: ${error.message||error}`;button.disabled=false;}
 });

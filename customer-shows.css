@@ -1,3 +1,4 @@
+.customer-show-nav-icon { width:22px; height:28px; flex:0 0 22px; object-fit:contain; }
 .customer-show-dialog { width:min(850px,calc(100vw - 24px)); max-height:90dvh; padding:24px; border:1px solid #cbdce9; border-radius:18px; color:#123653; background:#f8fbff; }
 .customer-show-dialog::backdrop { background:#102e48aa; }
 .customer-show-dialog > header, .customer-show-card > header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
@@ -17,3 +18,14 @@
 .customer-show-review summary { font-weight:700; cursor:pointer; }
 .customer-show-card textarea { width:100%; min-height:64px; }
 @media(max-width:600px) { .customer-show-dialog { padding:16px; } .customer-show-dialog > header { top:-16px; } .customer-show-card { padding:14px; } .customer-show-card > header { flex-direction:column; gap:4px; } .customer-show-card button { width:100%; white-space:normal; } }
+
+.customer-show-estimate { padding:16px; margin:12px 0; background:var(--surface,#f4f8fb); border:1px solid #cbdbe6; border-radius:12px; }
+.customer-show-estimate h4 { margin:0 0 12px; }
+.customer-show-estimate dl { margin:0; }
+.customer-show-estimate dl>div { display:flex; justify-content:space-between; gap:16px; padding:6px 0; }
+.customer-show-estimate dd { margin:0; white-space:nowrap; font-weight:700; }
+.customer-show-estimate .estimate-total { border-top:1px solid #cbdbe6; margin-top:8px; padding-top:12px; font-weight:700; }
+[data-show-estimate-form] { display:grid; gap:12px; padding:16px 0; }
+[data-show-estimate-form] label { display:grid; gap:6px; }
+[data-show-estimate-form] input, [data-show-estimate-form] textarea { min-width:0; width:100%; }
+@media(max-width:600px) { [data-show-estimate-form] .field-grid { grid-template-columns:1fr; } .customer-show-estimate .button-row { display:grid; } }

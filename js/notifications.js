@@ -1524,6 +1524,13 @@ function notificationEventConfig(eventName = "", record = {}) {
       channels: ["email", "inApp"],
       audienceEmails: [record.ownerEmail, record.customerEmail, record.linkedOwnerEmail, record.secondaryOwnerEmail].filter(Boolean),
     },
+    dogShowEstimateSent: {
+      title: "Dog show estimate: " + (record.dogName || "Your dog"),
+      message: "Review the " + money(record.customerEstimate?.total || 0) + " estimate for " + (record.showName || "your show") + " in Show schedule.",
+      priority: "review",
+      channels: ["email", "inApp"],
+      audienceEmails: [record.ownerEmail, record.customerEmail].filter(Boolean),
+    },
     dogShowInvoiceSent: {
       title: \`Dog show invoice: \${record.invoiceNumber || record.dogNames?.join(", ") || "Customer"}\`,
       message: \`\${record.customerName || "Customer"} was invoiced $\${Number(record.total || 0).toFixed(2)} for \${record.periodLabel || "dog show services"}.\`,

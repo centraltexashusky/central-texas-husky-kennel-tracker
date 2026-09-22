@@ -65,6 +65,7 @@ begin
       'eventStatus',s.payload->>'status','status',r.status,'customerNote',r.customer_note,
       'staffNote',r.staff_note,'updatedAt',r.updated_at,'createdAt',r.created_at,
       'showEntryId',r.show_entry_id,
+      'estimate',(select e.payload->'customerEstimate' from cuddle_stay.kennel_records e where e.id=r.show_entry_id and e.organization_id=org),
       'registrationMissing', (select count(*) from unnest(array['registeredName','akcRegistrationNumber','sireName','damName']) k where coalesce(d.payload->>k,'')='')
     ) order by (r.status='Pending') desc,s.payload->>'startDate',r.created_at),'[]'::jsonb) into result
     from cuddle_stay_private.customer_show_requests r
@@ -99,7 +100,7 @@ begin
       'location',coalesce(nullif(s.payload->>'venueAddress',''),nullif(s.payload->>'cityState',''),s.payload->>'venue'),
       'status',s.payload->>'status','entryClosingDate',s.payload->>'entryClosingDate',
       'canRequest',s.payload->>'startDate'>=today and coalesce(nullif(s.payload->>'entryClosingDate',''),today)>=today,
-      'request',case when r.id is not null then jsonb_build_object('id',r.id,'status',r.status,'customerNote',r.customer_note,'staffNote',r.staff_note,'updatedAt',r.updated_at) else null end
+      'request',case when r.id is not null then jsonb_build_object('id',r.id,'status',r.status,'customerNote',r.customer_note,'staffNote',r.staff_note,'updatedAt',r.updated_at,'estimate',(select e.payload->'customerEstimate' from cuddle_stay.kennel_records e where e.id=r.show_entry_id and e.organization_id=org)) else null end
     ) order by s.payload->>'startDate',s.id),'[]'::jsonb)) into result
     from cuddle_stay.kennel_records s
     left join cuddle_stay_private.customer_show_requests r on r.organization_id=org and r.dog_id=dog.id and r.event_id=s.id
@@ -108,7 +109,8 @@ begin
     return result || jsonb_build_object('requests',coalesce((select jsonb_agg(jsonb_build_object(
       'id',r.id,'eventId',r.event_id,'showName',s.payload->>'name','startDate',s.payload->>'startDate',
       'eventStatus',case when coalesce(s.payload->>'removed','false')='true' then 'Removed' else s.payload->>'status' end,
-      'status',r.status,'staffNote',r.staff_note,'updatedAt',r.updated_at
+      'status',r.status,'staffNote',r.staff_note,'updatedAt',r.updated_at,
+      'estimate',(select e.payload->'customerEstimate' from cuddle_stay.kennel_records e where e.id=r.show_entry_id and e.organization_id=org)
     ) order by r.created_at desc) from cuddle_stay_private.customer_show_requests r
     join cuddle_stay.kennel_records s on s.id=r.event_id and s.organization_id=org
     where r.organization_id=org and r.dog_id=dog.id),'[]'::jsonb));

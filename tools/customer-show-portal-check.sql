@@ -72,4 +72,41 @@ begin
 end $$;
 reset role;
 select 'PASS: owner gating, show eligibility, sanitized schedule, deadline, idempotency, customer denial, cross-owner denial, stale review, atomic planned roster, cancellation and anonymous denial' result;
+-- Run inside the existing portal QA fixture transaction.
+set local role authenticated;
+do $$
+declare response jsonb; req uuid; stamp timestamptz; blocked boolean; source jsonb;
+begin
+ perform set_config('request.jwt.claims','{"sub":"a1390000-0000-4000-8000-000000000001","email":"show-qa@example.invalid","role":"authenticated"}',true);
+ response:=cuddle_stay.customer_show_portal('schedule','customerDog-show-qa139');
+ select (item->'request'->>'id')::uuid,(item->'request'->>'updatedAt')::timestamptz into req,stamp from jsonb_array_elements(response->'shows') item where item->>'id'='showEvent-qa139';
+ blocked:=false;
+ begin perform cuddle_stay.customer_show_estimate('send',req,stamp,'{"handling":100,"entryFee":35,"sharedExpenses":60,"other":5,"credit":10}'); exception when insufficient_privilege then blocked:=true; end;
+ assert blocked,'Customer could set own estimate';
+ perform set_config('request.jwt.claims','{"sub":"a1390000-0000-4000-8000-000000000003","email":"show-staff-qa@example.invalid","role":"authenticated"}',true);
+ source:=cuddle_stay.customer_show_estimate('send',req,stamp,'{"handling":100,"entryFee":35,"sharedExpenses":60,"other":5,"credit":10,"note":"Shared travel allocated to this dog."}');
+ assert source->'customerEstimate'->>'total'='190','Estimate sum incorrect';
+ assert source->>'ownerEmail'='show-qa@example.invalid','Estimate recipient missing';
+ perform set_config('request.jwt.claims','{"sub":"a1390000-0000-4000-8000-000000000002","email":"show-other-qa@example.invalid","role":"authenticated"}',true);
+ blocked:=false;
+ begin perform cuddle_stay.customer_show_estimate('accept',req,stamp); exception when insufficient_privilege then blocked:=true; end;
+ assert blocked,'Another customer could accept estimate';
+ perform set_config('request.jwt.claims','{"sub":"a1390000-0000-4000-8000-000000000001","email":"show-qa@example.invalid","role":"authenticated"}',true);
+ blocked:=false;
+ begin perform cuddle_stay.customer_show_estimate('accept',req,stamp); exception when raise_exception then blocked:=sqlerrm like 'This estimate changed%'; end;
+ assert blocked,'Stale estimate could be accepted';
+ response:=cuddle_stay.customer_show_portal('schedule','customerDog-show-qa139');
+ select (item->'request'->>'updatedAt')::timestamptz into stamp from jsonb_array_elements(response->'shows') item where item->>'id'='showEvent-qa139';
+ assert response::text like '%190%','Customer cannot see estimate';
+ response:=cuddle_stay.customer_show_estimate('accept',req,stamp);
+ assert response->>'status'='Accepted';
+ assert not(response ? 'ownerEmail'),'Customer response leaked roster data';
+ blocked:=false;
+ begin perform cuddle_stay.customer_show_estimate('accept',req,(response->>'updatedAt')::timestamptz); exception when raise_exception then blocked:=sqlerrm like 'This estimate has already%'; end;
+ assert blocked,'Estimate could be accepted twice';
+ assert not has_function_privilege('anon','cuddle_stay.customer_show_estimate(text,uuid,timestamptz,jsonb)','EXECUTE');
+end $$;
+reset role;
+select 'PASS: itemized estimate total, owner projection, staff-only price changes, other-owner denial, stale and duplicate response protection, customer acceptance, anonymous denial' result;
+
 rollback;

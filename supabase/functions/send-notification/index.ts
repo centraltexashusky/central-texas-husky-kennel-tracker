@@ -51,6 +51,7 @@ const ALLOWED_EVENT_NAMES = new Set([
   "customerStayUpdateSent",
   "dogShowResultPublished",
   "dogShowInvoiceSent",
+  "dogShowEstimateSent",
   "kennelRequestCreated",
   "maintenanceCreated",
   "scheduleChangedAfterPublish",
@@ -2175,6 +2176,25 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
       sms: false,
     };
   }
+  if (eventName === "dogShowEstimateSent") {
+    if (record.type !== "showEntry" || !record.customerEstimate) throw new Error("A saved show estimate is required.");
+    const estimate = record.customerEstimate as Record<string, unknown>;
+    const subject = `Dog show estimate: ${record.dogName || "Your dog"} — ${formatEmailMoneyText(estimate.total)}`;
+    const labels = [["handling","Handling"],["entryFee","Entry fees"],["sharedExpenses","Shared expenses (this dog's share)"],["other","Other costs"],["credit","Credits / rewards"]];
+    const body = [
+      `Hi ${record.ownerName || "there"},`,
+      `Attendance is approved for ${record.dogName || "your dog"} at ${record.showName || "the show"}. Please review the estimate before we proceed.`,
+      `Show date: ${formatEmailDateOnlyText(record.showStartDate, "long")}`,
+      ...labels.map(([key,label]) => `${label}: ${key==="credit"?"−":""}${formatEmailMoneyText(estimate[key])}`),
+      `Estimated total for this dog: ${formatEmailMoneyText(estimate.total)}`,
+      String(estimate.note || ""),
+      "Final charges use actual expenses and earned rewards. This estimate is not an invoice or official show entry.",
+      "Sign in, open Show schedule, select your dog, and accept or decline the estimate. If you have two dogs, review each dog's estimate separately.",
+      `Review estimate: ${appLink("#customerPage")}`,
+    ].filter(Boolean).join("\n\n");
+    const rendered = renderPremiumTextEmail({audience:"Customer",body,priority:"review",subject});
+    return {subject,body,html:rendered.html,priority:"review",template:rendered.template,to:customerEmailsForRecord(record),sms:false};
+  }
   if (eventName === "dogShowInvoiceSent") {
     const customerName = String(record.customerName || record.ownerName || "there").trim();
     const invoiceNumber = String(record.invoiceNumber || "Dog show invoice").trim();
@@ -2412,6 +2432,7 @@ Deno.serve(async (req) => {
     "customerStayUpdateSent",
     "dogShowResultPublished",
     "dogShowInvoiceSent",
+    "dogShowEstimateSent",
     "boardingCustomerRequestApproved",
     "boardingCustomerRequestDeclined",
     "boardingCustomerRequestCancelled",
