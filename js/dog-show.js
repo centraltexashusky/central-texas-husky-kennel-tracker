@@ -3660,7 +3660,7 @@ function dogShowMasterCalendarListHtml(items = [], selectedDate = "") {
     return `<article class="dog-show-agenda-event" data-agenda-event="${escapeHtml(event.id)}">
       <header><div><small>${escapeHtml(dogShowPlannerDateRange(event))}</small><h3>${escapeHtml(event.name || "Dog show")}</h3>
       <p>${showing} Showing · ${socializing} Socializing · ${escapeHtml(dogShowMasterCalendarEventStatus(event))}</p></div>
-      <button type="button" class="secondary-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">Manage dogs</button></header>
+      <div class="button-row show-calendar-event-actions"><button type="button" class="secondary-button" data-action="manage-show-table-team" data-event-id="${escapeHtml(event.id)}">Manage dogs</button><button type="button" class="secondary-button danger-button" data-action="remove-calendar-show" data-event-id="${escapeHtml(event.id)}" aria-label="Remove ${escapeHtml(event.name || "show")} on ${escapeHtml(event.startDate)}">Remove show</button></div></header>
       <div class="dog-show-agenda-dogs">${entries.length ? entries.map(entry => {
         const locked = dogShowEntryPlanningLocked(entry, event);
         return `<div class="dog-show-agenda-dog">
@@ -4050,7 +4050,14 @@ async function removeDogShowPlannedEvent(externalId = "") {
   const show = (plan.shows || []).find((item) => item.externalId === externalId);
   const event = show ? dogShowPlannerEventForShow(show) : null;
   if (!event) return showToast("The added show could not be found.");
-  if (!window.confirm(`Remove ${event.club || event.name || "this show"} from the show schedule? Its roster, tasks, and results will be hidden.`)) return;
+  return removeDogShowCalendarEvent(event.id);
+}
+
+async function removeDogShowCalendarEvent(eventId = "") {
+  if (!["admin", "staff", "helper"].includes(currentRole())) return;
+  const event = dogShowEvents().find((item) => item.id === eventId);
+  if (!event) return showToast("The show could not be found.");
+  if (!window.confirm(`Remove ${event.name || event.club || "this show"} (${dogShowPlannerDateRange(event)}) from the show schedule? Saved dog, care, result, and financial records will be retained. This does not cancel an official show registration.`)) return;
   await saveDogShowRecord("showEvent", {
     ...event,
     removed: true,
@@ -6004,6 +6011,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.action === "remove-potential-show") await removeDogShowPotentialShow(action.dataset.candidateId || "");
     if (action.dataset.action === "add-planned-show") openDogShowPlannedEvent(action.dataset.showId || "");
     if (action.dataset.action === "remove-planned-show") await removeDogShowPlannedEvent(action.dataset.showId || "");
+    if (action.dataset.action === "remove-calendar-show") await removeDogShowCalendarEvent(action.dataset.eventId || "");
     if (action.dataset.action === "open-planner-show-event") openDogShowPlannerEvent(action.dataset.eventId || "");
     if (action.dataset.action === "open-show-calendar-item") {
       if (action.dataset.kind === "potential") {

@@ -332,3 +332,9 @@
 :root[data-theme] #dogShowDialog .dog-show-judge-evidence-row :is(small,em) { color:var(--show-muted); }
 :root[data-theme] #dogShowDialog .dog-show-judge-evidence-points strong { color:#137348; }
 :root[data-theme="dark"] #dogShowDialog .dog-show-judge-evidence-points strong { color:#75dbab; }
+
+.show-calendar-event-actions { display:flex; flex-wrap:wrap; gap:8px; margin:0; }
+@media (max-width:700px) {
+ :root[data-theme] #dogShowPage .show-calendar-event-actions { width:100%; }
+ :root[data-theme] #dogShowPage .show-calendar-event-actions>button { flex:1; min-height:44px; }
+}

@@ -28,3 +28,16 @@ html=ctx.dogShowMasterCalendarListHtml([{kind:'potential',title:'Later potential
 assert(html.includes('Today event')&&!html.includes('Later event')&&!html.includes('Later potential'));
 html=ctx.dogShowMasterCalendarListHtml([],'2026-09-24');assert(html.includes('No scheduled shows on this date'));
 console.log('Modern Dog Shows checks passed: multi-day attendance, actionable agenda, staff/task filters, and selected-date isolation.');
+
+// Calendar removal targets the selected record, including duplicate imported shows.
+const scheduled=[{id:'duplicate-a',name:'Same club',startDate:'2026-10-16'},{id:'duplicate-b',name:'Same club',startDate:'2026-10-16'}];
+const writes=[];let confirmed=false;let cleared=false;
+Object.assign(ctx,{currentRole:()=> 'admin',currentUser:{name:'QA',email:'qa@example.invalid'},dogShowEvents:()=>scheduled,window:{confirm:()=>confirmed},showToast:()=>{},dogShowPlannerDateRange:event=>event.startDate,saveDogShowRecord:async(type,record)=>writes.push({type,record}),DOG_SHOW_EVENT_KEY:'active',localStorage:{getItem:()=> 'duplicate-a',removeItem:()=>{cleared=true}},renderDogShow:()=>{}});
+vm.runInContext(source.match(/async function removeDogShowCalendarEvent\([\s\S]*?\n\}/)[0],ctx);
+await ctx.removeDogShowCalendarEvent('duplicate-a');assert.equal(writes.length,0,'Cancel leaves the show untouched.');
+confirmed=true;await ctx.removeDogShowCalendarEvent('duplicate-a');
+assert.equal(writes.length,1);assert.equal(writes[0].type,'showEvent');assert.equal(writes[0].record.id,'duplicate-a');assert.equal(writes[0].record.removed,true);assert.equal(cleared,true);
+assert.equal(scheduled[1].removed,undefined,'Other copies of a show must remain scheduled.');
+assert(writes.every(write=>write.type==='showEvent'),'Removal must retain child care, result, and financial records.');
+ctx.currentRole=()=> 'customer';await ctx.removeDogShowCalendarEvent('duplicate-b');assert.equal(writes.length,1,'Customers cannot remove staff shows.');
+console.log('Calendar removal checks passed: exact event ID, cancellation, role gate, active selection, and retained history.');
