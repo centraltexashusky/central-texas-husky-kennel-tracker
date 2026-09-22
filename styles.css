@@ -22725,3 +22725,17 @@ button.dog-show-planner-score:focus-visible {
 :root[data-theme="dark"] #boardingDogsPage { --roster-line: #395065; --roster-muted: #b4c5d5; }
 :root[data-theme="dark"] #boardingDogsPage .boarding-roster-card { background: #152b3c; }
 :root[data-theme="dark"] #boardingDogRosterTabs button.is-active { background: #244b68; color: #edf6ff; }
+
+/* Financial chart details work with a pointer, touch, and keyboard focus. */
+.financial-income-chart .chart-hit-area { fill:transparent; pointer-events:all; }
+.financial-income-chart .chart-sample { cursor:crosshair; outline:none; }
+.financial-income-chart .chart-sample:is(:hover,:focus) .chart-hit-area { fill:rgba(27,124,232,.07); }
+.financial-income-chart .chart-sample:focus-visible .chart-hit-area { stroke:#1b7ce8; stroke-width:2; }
+.financial-income-chart .chart-point.is-expenses { stroke:#df414b; }
+.financial-income-chart .chart-point.is-net { stroke:#078353; }
+.financial-chart-tooltip { position:fixed; z-index:1000; pointer-events:none; width:260px; max-width:calc(100vw - 16px); box-sizing:border-box; padding:14px 16px; border:1px solid #c9d6e2; border-radius:10px; background:#fff; color:#12314e; box-shadow:0 8px 24px #12314e26; font-size:13px; line-height:1.5; }
+.financial-chart-tooltip[hidden] { display:none; }
+.financial-chart-tooltip>strong { display:block; margin-bottom:8px; }
+.financial-chart-tooltip>span { display:flex; justify-content:space-between; gap:16px; }
+.financial-chart-tooltip b { font-variant-numeric:tabular-nums; }
+:root[data-theme="dark"] .financial-chart-tooltip { background:#18334b; color:#fff; border-color:#597187; }

@@ -1806,6 +1806,61 @@ function financialChartPolyline(points = "", className = "") {
   return points ? '<polyline class="' + className + '" points="' + points + '" />' : "";
 }
 
+function financialChartPeriodLabel(bucket = {}) {
+  if (/^\\d{4}-\\d{2}-\\d{2}$/.test(bucket.key || "")) {
+    return financialRangeLabel({ start: bucket.key, end: addDays(bucket.key, 6) });
+  }
+  return bucket.label || bucket.key || "";
+}
+
+function bindFinancialChartTooltip(chartEl, buckets = []) {
+  chartEl.financialTooltipCleanup?.();
+  const tooltip = chartEl.querySelector(".financial-chart-tooltip");
+  if (!tooltip) return;
+  const hide = () => { tooltip.hidden = true; };
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('resize', hide);
+  chartEl.financialTooltipCleanup = () => {
+    window.removeEventListener('scroll', hide, true);
+    window.removeEventListener('resize', hide);
+  };
+  const show = (sample, pointer) => {
+    const bucket = buckets[Number(sample?.dataset.chartIndex)];
+    if (!bucket) return;
+    tooltip.innerHTML = '<strong>' + escapeHtml(financialChartPeriodLabel(bucket)) + '</strong>'
+      + ['income', 'expenses', 'net'].map((field) => '<span><span>' + field.charAt(0).toUpperCase() + field.slice(1) + '</span><b>' + escapeHtml(payrollMoney(bucket[field])) + '</b></span>').join('');
+    tooltip.hidden = false;
+    const point = sample.querySelector('.chart-point').getBoundingClientRect();
+    const box = tooltip.getBoundingClientRect();
+    const x = pointer?.clientX ?? point.x + point.width / 2;
+    const y = pointer?.clientY ?? point.y;
+    tooltip.style.left = Math.max(8, Math.min(window.innerWidth - box.width - 8, x - box.width / 2)) + 'px';
+    const above = y - box.height - 14;
+    tooltip.style.top = Math.max(8, Math.min(window.innerHeight - box.height - 8, above >= 8 ? above : y + 18)) + 'px';
+  };
+  chartEl.onpointermove = (event) => {
+    const sample = event.target.closest('.chart-sample');
+    if (sample) show(sample, event); else hide();
+  };
+  chartEl.onpointerleave = hide;
+  chartEl.querySelectorAll('.chart-sample').forEach((sample) => {
+    sample.addEventListener('focus', () => show(sample));
+    sample.addEventListener('blur', hide);
+  });
+  chartEl.onclick = (event) => show(event.target.closest('.chart-sample'));
+  chartEl.onscroll = hide;
+  chartEl.onkeydown = (event) => {
+    const sample = event.target.closest('.chart-sample');
+    if (!sample) return;
+    if (event.key === 'Escape') { hide(); event.preventDefault(); return; }
+    if (event.key === 'Enter' || event.key === ' ') { show(sample); event.preventDefault(); return; }
+    const samples = [...chartEl.querySelectorAll('.chart-sample')];
+    const index = samples.indexOf(sample);
+    const next = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: samples.length - 1 }[event.key];
+    if (next !== undefined) { event.preventDefault(); samples[Math.max(0, Math.min(samples.length - 1, next))]?.focus(); }
+  };
+}
+
 function financialIncomeChartSvg(buckets = []) {
   if (!buckets.length) return '<div class="financial-empty-state">No financial activity found for this date range.</div>';
   const width = Math.max(820, $("#financialIncomeChart")?.clientWidth || 820);
@@ -1838,10 +1893,18 @@ function financialIncomeChartSvg(buckets = []) {
     const x = xFor(index).toFixed(1);
     return '<text class="chart-axis-label" x="' + x + '" y="' + (height - 18) + '" text-anchor="middle">' + escapeHtml(bucket.label) + '</text>';
   }).join("");
-  const pointDots = buckets.length <= 20
-    ? buckets.map((bucket, index) => '<circle class="chart-point" cx="' + xFor(index).toFixed(1) + '" cy="' + yFor(bucket.income).toFixed(1) + '" r="4"><title>' + escapeHtml(bucket.label + " income: " + payrollMoney(bucket.income)) + '</title></circle>').join("")
-    : "";
-  return '<svg viewBox="0 0 ' + width + ' ' + height + '" aria-hidden="true" focusable="false">'
+  const step = (width - left - right) / Math.max(1, buckets.length - 1);
+  const pointDots = buckets.map((bucket, index) => {
+    const x = xFor(index);
+    const hitLeft = Math.max(left - 12, x - step / 2);
+    const hitRight = Math.min(width - right + 12, x + step / 2);
+    const label = financialChartPeriodLabel(bucket) + ": Income " + payrollMoney(bucket.income) + ", Expenses " + payrollMoney(bucket.expenses) + ", Net " + payrollMoney(bucket.net);
+    return '<g class="chart-sample" data-chart-index="' + index + '" tabindex="0" role="button" aria-label="' + escapeHtml(label) + '">'
+      + '<rect class="chart-hit-area" x="' + hitLeft.toFixed(1) + '" y="' + top + '" width="' + (hitRight - hitLeft).toFixed(1) + '" height="' + (height - top - bottom) + '" />'
+      + ["income", "expenses", "net"].map((field) => '<circle class="chart-point is-' + field + '" cx="' + x.toFixed(1) + '" cy="' + yFor(bucket[field]).toFixed(1) + '" r="4" />').join("")
+      + '</g>';
+  }).join("");
+  return '<svg viewBox="0 0 ' + width + ' ' + height + '" role="group" aria-label="Financial periods. Focus or tap a period for values; use arrow keys to move between periods.">'
     + tickLines
     + '<line class="chart-axis-line" x1="' + left + '" y1="' + yFor(0).toFixed(1) + '" x2="' + (width - right) + '" y2="' + yFor(0).toFixed(1) + '" />'
     + financialChartPolyline(pointsFor("expenses"), "chart-line is-expense")
@@ -1849,7 +1912,7 @@ function financialIncomeChartSvg(buckets = []) {
     + financialChartPolyline(pointsFor("income"), "chart-line is-income")
     + pointDots
     + xLabels
-    + '</svg>';
+    + '</svg><div class="financial-chart-tooltip" role="tooltip" hidden></div>';
 }
 
 function financialSummaryCardHtml(label = "", value = "", note = "") {
@@ -2279,6 +2342,7 @@ function renderFinancials() {
   if ($("#financialChartMeta")) $("#financialChartMeta").textContent = financialRangeLabel(range) + " | " + ledger.length + " unified transaction" + (ledger.length === 1 ? "" : "s");
   if (chartEl) {
     chartEl.innerHTML = financialIncomeChartSvg(buckets);
+    bindFinancialChartTooltip(chartEl, buckets);
     chartEl.setAttribute("aria-label", period + " income, expenses, and net from " + range.start + " to " + range.end);
   }
   if (breakdownEl) breakdownEl.innerHTML = financialBreakdownHtml(buckets);
