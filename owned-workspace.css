@@ -123,7 +123,8 @@
   #ownedColumnsButton { display: none; }
   body #ourDogsPage .table-wrap { display: none !important; }
   body #ourDogsPage #ownedDogMobileCards { display: grid; gap: 12px; }
-  body #ownedDogDetail.owned-workspace:not([hidden]) { width: calc(100vw - 12px); height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto minmax(0,1fr) auto; inset: 6px !important; transform: none !important; border-radius: 10px; }
+  /* One vertical scroll surface on phones: panels expand with their content. */
+  body #ownedDogDetail.owned-workspace:not([hidden]) { display: block; width: calc(100vw - 12px); height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; inset: 6px !important; transform: none !important; border-radius: 10px; }
   #ownedDogDetail.owned-workspace > .section-heading { right: 12px; top: 14px; }
   #ownedDogDetail.owned-workspace .dog-profile-editor { padding: 14px; flex-wrap: wrap; gap: 10px; }
   #ownedDogDetail.owned-workspace .dog-photo-picker { width: 48px !important; height: 48px !important; min-width: 48px; flex-basis: 48px; }
@@ -134,10 +135,11 @@
   #ownedDogDetail.owned-workspace #ownedDogProfileTabs { grid-column: 1; grid-row: 2; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px; border-right: 0; border-bottom: 1px solid var(--owned-border); }
   #ownedDogDetail.owned-workspace #ownedDogProfileTabs button { flex: none; white-space: nowrap; font-size: 13px; padding: 10px; }
   #ownedDogDetail.owned-workspace .owned-nav-group { display: none; }
-  #ownedDogDetail.owned-workspace .owned-profile-section, #ownedWorkspaceReadPanel { grid-column: 1; grid-row: 3; padding: 18px; }
-  #ownedDogDetail.owned-workspace .owned-dog-submit-row { grid-column: 1; grid-row: 4; padding: 12px; }
+  #ownedDogDetail.owned-workspace .owned-profile-section, #ownedWorkspaceReadPanel { padding: 18px; height: auto; max-height: none; overflow: visible; overscroll-behavior: auto; }
+  #ownedDogDetail.owned-workspace .owned-dog-submit-row { position: static; padding: 12px; }
   #ownedDogDetail.owned-workspace .field-grid { grid-template-columns: 1fr; }
   #ownedDogDetail.owned-workspace input, #ownedDogDetail.owned-workspace select, #ownedDogDetail.owned-workspace textarea { font-size: 16px; }
+  #ownedDogDetail.owned-workspace input[type="file"]:not(.visually-hidden-file) { width: 100%; min-width: 0; max-width: 100%; }
   #ownedDogDetail.owned-workspace h2 { font-size: 23px; }
   .owned-workspace-facts { gap: 18px 16px; }
   .owned-care-picker { grid-template-columns: 1fr; }

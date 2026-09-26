@@ -19,7 +19,7 @@
     <link rel="stylesheet" href="styles.css?v=20260723-profile-ux-fixes-v2-operational-flow-dashboard-vaccine-queues-dog-show-timeline-task-edit-modal-daily-report-groups-dog-show-result-tiers-progress-dog-show-regular-oh-awards-show-planner-judge-scores-decisions-breed-entry-points-official-point-schedule-manual-group-points-akc-all-breed-calculator-show-expenses-special-outcomes-v2-show-level-expenses-edit-optional-dog-income-rewards-grouped-ledgers-expense-split-planner-breed-potential-shows-event-flags-akc-judge-link-metadata-refresh-expense-info-planner-lifecycle-full-show-type-collapsed-stages-potential-toggle-show-calendar-desktop-direct-tools-complete-range-hover-calendar-hover-cleanup-weekend-groups-direct-judge-search-added-show-conflicts-profile-name-nationwide-format-filters-organization-setup-branding-workspace-agreement-template-config-repeatable-items-agreement-text-source-boarding-profile-optional-acknowledgements-show-status-lifecycle-upcoming-show-management-lifecycle-point-schedules-compact-v3-compiled-finance-reports-v4-dog-attributable-costs-v5-customer-finance-reports-upcoming-status-ux-v6-dog-profile-registration-akc-breeds-finance-table-split-flow-v12-progress-search-judge-rename-row-edit-v13-judge-note-actions-akc-search-v14-consistent-delete-v15-point-schedules-collapsed-v16-planner-akc-only-breed-schedule-pagination-v17-state-multiselect-breed-case-v18-planner-card-controls-lazy-v19-breed-code-inline-error-v20-completed-history-v21-completed-result-groups-v22-timesheet-payroll-review-v26-dog-show-closing-alerts-last-year-compact-v29-mobile-polish-finance-info-v30-akc-entry-details-v31-lifecycle-cleanup-v32-boarding-lifecycle-feedback-v33-dog-show-invoice-period-payment-v40-dog-show-invoice-load-v41-invoice-center-management-v42-danger-actions-v43-notification-health-v30-unified-financial-ledger-v31-boarding-stay-edit-feedback-v36-customer-vaccine-self-service-v41-customer-vaccine-card-layout-v42-boarding-progressive-load-v54-profile-history-v57-styles-pdf-media-preview-v60-financial-transaction-columns-v61-financial-summary-containment-v66-persisted-financial-ledger-v68-scalable-rosters-v70-boarding-history-retention-v85-schedule-publish-status-v93-sidebar-outline-icons-v104-boarding-modern-roster-v110-stay-save-revision-v111-boarding-workspace-v112-checkout-v113-show-result-dropdowns-v143-sidebar-release-v144-financial-chart-tooltip-v149b" />
     <link rel="stylesheet" href="boarding-workspace.css?v=boarding-workspace-v112a-checkout-v113-lifecycle-v114" />
     <link rel="stylesheet" href="daily-workspace.css?v=daily-workspace-v115-care-task-cycles-v125" />
-    <link rel="stylesheet" href="owned-workspace.css?v=owned-workspace-v117" />
+    <link rel="stylesheet" href="owned-workspace.css?v=owned-workspace-v117-mobile-scroll-v154" />
     <link rel="stylesheet" href="timesheet-workspace.css?v=payroll-drilldown-v129" />
     <link rel="stylesheet" href="customer-workspace.css?v=customer-workspace-v121" />
     <link rel="stylesheet" href="dog-show-agenda.css?v=show-agenda-v138" />
@@ -27,7 +27,7 @@
     <link rel="stylesheet" href="admin-workspace.css?v=admin-v128" />
     <link rel="stylesheet" href="admin-fidelity.css?v=admin-v128c" />
     <link rel="stylesheet" href="hours-workspace.css?v=hours-v127" />
-    <link rel="stylesheet" href="app-workspace.css?v=unified-light-v130a" />
+    <link rel="stylesheet" href="app-workspace.css?v=unified-light-v130a-header-version-v154" />
     <link rel="stylesheet" href="dog-show-workspace.css?v=show-overview-v145" />
     <link rel="stylesheet" href="dog-show-tools.css?v=show-tools-v147-calendar-remove-v151" />
     <link rel="stylesheet" href="emergency-workspace.css?v=emergency-procedures-v133" />
@@ -61,7 +61,7 @@
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-brand">
           <strong data-app-organization-name>Central Texas Husky</strong>
-          <span class="sidebar-brand-meta">Kennel Ops <time id="appReleaseVersion" datetime="2026-09-22T04:13:23.977Z" title="Release time in America/Chicago">v2026.09.21.23</time></span>
+          <span class="sidebar-brand-meta">Kennel Ops</span>
         </div>
         <nav class="side-nav" aria-label="Kennel tracker sections">
           <button class="nav-button is-active" type="button" data-page="loginPage" data-roles="public">
@@ -167,7 +167,10 @@
       <header class="page-header">
         <div>
           <p class="eyebrow" data-app-organization-name>Central Texas Husky</p>
-          <h1>Snuggle Stay</h1>
+          <div class="app-title-row">
+            <h1>Snuggle Stay</h1>
+            <time id="appReleaseVersion" datetime="2026-09-26T03:41:55.686Z" title="App version · Release time in America/Chicago">v2026.09.25.22</time>
+          </div>
         </div>
         <div class="status-card user-card" aria-live="polite">
           <div>

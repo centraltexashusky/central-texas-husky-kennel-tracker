@@ -11,7 +11,7 @@ const version = `v${parts.year}.${parts.month}.${parts.day}.${parts.hour}`;
 const file = new URL("../index.html", import.meta.url);
 const html = fs.readFileSync(file, "utf8");
 const marker = /<time id="appReleaseVersion"[^>]*>[^<]*<\/time>/g;
-if ([...html.matchAll(marker)].length !== 1) throw new Error("Expected one sidebar release version.");
+if ([...html.matchAll(marker)].length !== 1) throw new Error("Expected one app release version.");
 fs.writeFileSync(file, html.replace(marker,
-  `<time id="appReleaseVersion" datetime="${releasedAt.toISOString()}" title="Release time in America/Chicago">${version}</time>`));
-console.log(`Stamped sidebar release ${version} (America/Chicago).`);
+  `<time id="appReleaseVersion" datetime="${releasedAt.toISOString()}" title="App version · Release time in America/Chicago">${version}</time>`));
+console.log(`Stamped app release ${version} (America/Chicago).`);

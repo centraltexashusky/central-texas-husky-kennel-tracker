@@ -31,4 +31,8 @@ assert(shared.includes('if (record) openOwnedWorkspace(record)'));
 assert(index.includes('owned-workspace.css?v=owned-workspace-v117'));
 assert(index.includes('js/owned-workspace.js?v=owned-workspace-v117-photo'));
 assert(css.includes('inset: 6px !important; transform: none !important;'));
+assert(css.includes('overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain;'), 'Mobile dialog owns vertical scrolling');
+assert(css.includes('height: auto; max-height: none; overflow: visible; overscroll-behavior: auto;'), 'Mobile panels expand without nested scrolling');
+assert.equal((index.match(/id="appReleaseVersion"/g) || []).length, 1, 'One authoritative stamped version');
+assert.match(index, /class="app-title-row">\s*<h1>Snuggle Stay<\/h1>\s*<time id="appReleaseVersion"/, 'Version sits beside app title');
 console.log('Our Dogs workspace checks passed: escaped compact cards, 8-tab navigation, 30-entry history, current-record editing, single responsive roster, saved columns, filtered search and unchanged persistence.');

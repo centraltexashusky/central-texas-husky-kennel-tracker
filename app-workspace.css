@@ -25,6 +25,13 @@
 :root[data-theme="light"] .sidebar-brand { border-color:#34506a; }
 :root[data-theme="light"] .user-card { border:1px solid var(--line)!important; border-radius:10px!important; box-shadow:none!important; }
 :root[data-theme="light"] .page-header h1 { color:var(--ink); }
+.page-header .app-title-row { display:flex; align-items:baseline; gap:10px; }
+.page-header .app-title-row h1 { margin:0; }
+.page-header #appReleaseVersion { color:var(--muted); font-size:11px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+@media(max-width:760px) {
+  .page-header .app-title-row { gap:8px; }
+  .page-header .app-title-row h1 { font-size:clamp(1.6rem,7.3vw,2.5rem); white-space:nowrap; }
+}
 :root[data-theme="light"] #globalSearchPanel { background:#fff!important; border-color:var(--line)!important; border-radius:10px!important; box-shadow:none!important; }
 :root[data-theme="light"] .mobile-bottom-nav, :root[data-theme="light"] .dog-show-mobile-nav { background:#12314e!important; border:1px solid #284965!important; border-radius:16px!important; }
 :root[data-theme="light"] :is(.mobile-bottom-nav-button,.dog-show-mobile-nav button) { border-radius:9px!important; box-shadow:none!important; }
