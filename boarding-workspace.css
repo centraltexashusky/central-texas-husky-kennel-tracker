@@ -223,3 +223,13 @@ body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
   #detailDialog .checkout-stay-facts { grid-template-columns:1fr; gap:12px; }
   #detailDialog .checkout-invoice-bill .estimate-line { grid-template-columns:minmax(0,1fr); gap:4px; }
 }
+/* Receipt history and balances stay readable inside the narrow bill column. */
+.boarding-payments { margin:16px 0; padding:14px 0; border-top:1px solid #d7e2ec; }
+.boarding-payments h3 { margin:0 0 8px; }
+.boarding-payments .estimate-line, .boarding-payments .estimate-total { display:flex; justify-content:space-between; gap:12px; }
+.boarding-payments > button { width:100%; margin-top:12px; }
+.boarding-payments ul { padding-left:18px; overflow-wrap:anywhere; }
+.boarding-payments li { margin:10px 0; }
+#boardingPaymentForm { max-width:600px; margin:auto; }
+#boardingPaymentForm .boarding-payment-confirm { display:flex; align-items:center; gap:10px; }
+#boardingPaymentForm input[type="checkbox"] { width:20px; height:20px; flex:0 0 20px; margin:0; }

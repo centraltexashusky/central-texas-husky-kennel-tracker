@@ -8614,6 +8614,7 @@ function paymentMethodHtml(record = {}, options = {}) {
 }
 
 function openPaymentMethodPopup(record = {}, options = {}) {
+  if (typeof openBoardingPaymentPopup === "function") return openBoardingPaymentPopup(record, options);
   showDetailDialog("Payment Method", paymentMethodHtml(record, options));
 }
 
