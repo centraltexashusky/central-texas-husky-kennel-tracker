@@ -6169,7 +6169,16 @@ async function renderBoardingCustomerUpdates(record = activeBoardingDog() || {})
         return \`<article class="record-card compact-record-card customer-update-stay-card"><strong>\${escapeHtml(displayRecord.dogName || "Boarding dog")}</strong><div class="chip-row">\${customerStayIdChipHtml(displayRecord, stay)}\${boardingStayStatusChipHtml(displayRecord, stay)}</div><p>\${escapeHtml(stayScheduleRangeLabel(displayRecord, stay))}</p><div class="record-actions"><button type="button" class="secondary-button" data-action="open-owner-update-for-stay" data-dog-id="\${escapeHtml(displayRecord.id || "")}" data-id="\${escapeHtml(stay.id || "")}" data-request-code="\${escapeHtml(requestCode)}">Update Owner</button></div></article>\`;
       }).join("")}</section>\`
     : \`<article class="record-card compact-record-card"><strong>No in-care stay available.</strong><p>Owner updates can be sent after a stay is checked in, in kennel, or ready for pickup.</p></article>\`;
-  const updates = await loadBoardingCustomerUpdateData(displayRecord);
+  let updates;
+  try {
+    updates = await loadBoardingCustomerUpdateData(displayRecord);
+  } catch (error) {
+    if (boardingProfileTabIsActive("Customer Update") && activeBoardingDog()?.id === displayRecord.id) {
+      list.innerHTML = stayCards + '<p role="alert">Customer updates could not load. Reopen this tab to try again. Your saved updates have not been removed.</p>';
+    }
+    console.warn("Customer updates could not load.", error);
+    return;
+  }
   if (!boardingProfileTabIsActive("Customer Update") || activeBoardingDog()?.id !== displayRecord.id) return;
   const updateHistory = updates.length
     ? updates.map((update) => {
@@ -6938,6 +6947,11 @@ function renderBoardingStays(record = activeBoardingDog()) {
   const displayRecord = boardingDogWithStayStatus(record || {});
   const stays = dedupeBoardingStaysForDisplay(displayRecord, displayRecord?.stays || []);
   const activeStays = stays.filter((stay) => !inactiveBoardingStayStatus(stay));
+  activeStays.sort((a, b) => {
+    const inCare = (stay) => ["Checked In", "In Kennel", "Ready For Pickup"].includes(boardingStayDisplayStatus(displayRecord, stay));
+    return Number(inCare(b)) - Number(inCare(a)) ||
+      String(a.dropoffTime || "9999").localeCompare(String(b.dropoffTime || "9999")) || String(a.id || "").localeCompare(String(b.id || ""));
+  });
   const localPastStays = stays.filter((stay) => inactiveBoardingStayStatus(stay));
   const pastCount = Math.max(localPastStays.length, Number(displayRecord._remotePastBoardingCount || 0));
   const activeHtml = activeStays.length

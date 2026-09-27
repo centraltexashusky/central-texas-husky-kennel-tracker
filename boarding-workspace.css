@@ -1,4 +1,5 @@
 /* Approved navy workspace: compact identity, grouped rail, open white content. */
+.boarding-payments li > button { display:block; margin-top:8px; }
 body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
   --workspace-border:#dce5ed; --workspace-ink:#102d4d; --workspace-muted:#536d87; --workspace-surface:#fff; --workspace-soft:#f6f9fb;
   display:grid; grid-template-columns:226px minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto;

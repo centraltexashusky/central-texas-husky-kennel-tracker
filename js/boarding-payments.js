@@ -8,14 +8,17 @@ function boardingPaymentSummary(record = {}, stay = {}) {
   const code = boardingStayRequestCode(record, stay);
   const ids = new Set([stay.id, ...(stay.sourceStayIds || [])].filter(Boolean));
   const receipts = new Map();
+  const cancellations = new Map();
   [...boardingPaymentRecords(record), record].forEach(source => {
+    (source.boardingPaymentCancellations || []).forEach(item => cancellations.set(item.paymentId, item));
     (source.boardingPayments || []).forEach(payment => {
       if (payment.id && (ids.has(payment.stayId) || (code && payment.requestCode === code))) receipts.set(payment.id, payment);
     });
   });
-  const payments = [...receipts.values()].sort((a, b) => String(a.receivedDate).localeCompare(String(b.receivedDate)));
+  const payments = [...receipts.values()].map(p => ({ ...p, cancellation: cancellations.get(p.id) }))
+    .sort((a, b) => String(a.receivedDate).localeCompare(String(b.receivedDate)));
   const total = Math.round(Number(boardingStayInvoiceTotal(record, stay) || 0) * 100);
-  const paid = payments.reduce((sum, item) => sum + Math.round(Number(item.amount) * 100), 0);
+  const paid = payments.reduce((sum, item) => sum + (item.cancellation ? 0 : Math.round(Number(item.amount) * 100)), 0);
   // A legacy paid flag is only trustworthy for the checked-out stay, never a new stay.
   const legacyPaid = !payments.length && (stay.paymentStatus === 'Paid' ||
     (boardingStayDisplayStatus(record, stay) === 'Checked Out' && record.paymentStatus === 'Paid' &&
@@ -29,7 +32,12 @@ function boardingPaymentSummaryHtml(record, stay, options = {}) {
   const summary = boardingPaymentSummary(record, stay);
   const rows = summary.payments.map(p => '<li><strong>' + escapeHtml(money(p.amount)) + '</strong> · ' +
     escapeHtml(p.kind) + ' · ' + escapeHtml(p.receivedDate) + ' · ' + escapeHtml(p.method) +
-    '<br><small>' + escapeHtml([p.recordedBy, p.reference].filter(Boolean).join(' · ')) + '</small></li>').join('');
+    '<br><small>' + escapeHtml([p.recordedBy, p.reference].filter(Boolean).join(' · ')) + '</small>' +
+    (p.cancellation ? '<p><strong>Cancelled</strong> · ' + escapeHtml(p.cancellation.reason) + '<br><small>' +
+      escapeHtml([p.cancellation.cancelledBy, formatDateTime(p.cancellation.cancelledAt)].filter(Boolean).join(' · ')) + '</small></p>' :
+      currentRole() === 'admin' && !options.hideAction ? '<button type="button" class="danger-button" data-action="cancel-boarding-payment" data-dog-id="' +
+        escapeHtml(record.id) + '" data-stay-id="' + escapeHtml(stay.id) + '" data-request-code="' + escapeHtml(boardingStayRequestCode(record, stay)) +
+        '" data-payment-id="' + escapeHtml(p.id) + '">Cancel payment</button>' : '') + '</li>').join('');
   const available = currentRole() === 'admin' && !['Cancelled', 'Declined'].includes(boardingStayDisplayStatus(record, stay));
   return '<section class="boarding-payments" aria-label="Stay payments"><h3>Payments</h3><p><strong>' + escapeHtml(summary.status) +
     '</strong></p><div class="estimate-line"><span>Payments received</span><strong>' + (summary.legacyPaid ? 'Legacy paid record' : money(summary.paid)) +
@@ -114,6 +122,83 @@ async function saveBoardingPayment(form) {
   renderBoardingDogs();
   return refreshed;
 }
+
+function openBoardingPaymentCancellation(record, reference, paymentId) {
+  if (currentRole() !== 'admin') return showToast('Only an administrator can cancel payments.');
+  const stay = boardingStayByReference(record, reference);
+  const payment = stay && boardingPaymentSummary(record, stay).payments.find(p => p.id === paymentId && !p.cancellation);
+  if (!payment) return showToast('This payment is no longer available to cancel.');
+  showDetailDialog('Cancel recorded payment', '<form id="boardingPaymentCancellationForm" class="tracker-form" data-dog-id="' + escapeHtml(record.id) +
+    '" data-stay-id="' + escapeHtml(stay.id) + '" data-request-code="' + escapeHtml(boardingStayRequestCode(record, stay)) +
+    '" data-payment-id="' + escapeHtml(payment.id) + '" data-amount="' + payment.amount + '">' +
+    '<p><strong>' + escapeHtml(record.dogName) + '</strong> · ' + escapeHtml(boardingStayRequestCode(record, stay)) + '</p><p>' +
+    escapeHtml([money(payment.amount), payment.kind, payment.receivedDate, payment.method].join(' · ')) + '</p>' +
+    '<p>This removes the payment from the stay balance and keeps a cancellation in payment history. It does not refund or move money.</p>' +
+    '<label>Reason<input name="reason" maxlength="300" required></label>' +
+    '<label class="boarding-payment-confirm"><input type="checkbox" name="confirmed" required> I confirm this is the payment to cancel.</label>' +
+    '<div class="button-row"><button type="submit" class="danger-button">Confirm cancellation</button>' +
+    '<button type="button" class="secondary-button" data-action="close-dialog">Keep payment</button></div></form>');
+}
+
+async function cancelBoardingPayment(form) {
+  if (currentRole() !== 'admin') throw new Error('Only an administrator can cancel payments.');
+  const reason = form.elements.reason.value.trim();
+  if (!reason || reason.length > 300 || !form.elements.confirmed.checked) throw new Error('Enter a reason and confirm the payment to cancel.');
+  let record = boardingDogRecordForDisplay(form.dataset.dogId);
+  if (!record) throw new Error('This dog is no longer available.');
+  let sources = boardingPaymentRecords(record), rows = [];
+  if (!localTestMode) {
+    if (!supabaseClient) throw new Error('Connect to the server before cancelling a payment.');
+    const result = await cuddleStayRequest(db => db.from('kennel_records').select('id,payload,updated_at')
+      .eq('type', 'boardingDog').in('id', [...new Set([record.id, ...sources.map(s => s.id)])]));
+    if (result.error) throw result.error;
+    rows = result.data || [];
+    rows.forEach(row => upsertRecord('boardingDog', row.payload));
+    record = boardingDogRecordForDisplay(record.id);
+    sources = boardingPaymentRecords(record);
+  }
+  const stay = boardingStayByReference(record, { stayId: form.dataset.stayId, requestCode: form.dataset.requestCode });
+  const payment = stay && boardingPaymentSummary(record, stay).payments.find(p => p.id === form.dataset.paymentId);
+  if (!payment || payment.amount !== Number(form.dataset.amount)) throw new Error('The payment changed. Reopen payment history and try again.');
+  if (payment.cancellation) return record;
+  const owners = sources.filter(s => (s.boardingPayments || []).some(p => p.id === payment.id));
+  if (owners.length !== 1) throw new Error('The original receipt could not be uniquely identified. No payment was cancelled.');
+  const source = owners[0], timestamp = new Date().toISOString();
+  const cancellation = { paymentId: payment.id, reason, cancelledAt: timestamp, cancelledBy: currentUser?.name || currentUser?.email || 'Admin' };
+  const updated = { ...source, boardingPaymentCancellations: [...(source.boardingPaymentCancellations || []), cancellation], updatedAt: timestamp };
+  if (!localTestMode) {
+    const row = rows.find(r => r.id === source.id);
+    if (!row) throw new Error('Could not verify the current payment.');
+    const result = await cuddleStayRequest(db => db.from('kennel_records').update({ payload: updated, updated_at: timestamp })
+      .eq('id', source.id).eq('type', 'boardingDog').eq('updated_at', row.updated_at).select('payload').maybeSingle());
+    if (result.error) throw result.error;
+    if (!result.data?.payload?.boardingPaymentCancellations?.some(c => c.paymentId === payment.id)) throw new Error('The stay changed while saving. Refresh payment history before retrying.');
+    upsertRecord('boardingDog', result.data.payload);
+  } else upsertRecord('boardingDog', updated);
+  const refreshed = boardingDogRecordForDisplay(record.id);
+  renderBoardingStays(refreshed); renderBoardingDogs();
+  return refreshed;
+}
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-action="cancel-boarding-payment"]');
+  if (!button) return;
+  event.preventDefault();
+  const record = boardingDogRecordForDisplay(button.dataset.dogId);
+  if (record) openBoardingPaymentCancellation(record, boardingStayReferenceFromAction(button), button.dataset.paymentId);
+});
+document.addEventListener('submit', async event => {
+  const form = event.target.closest('#boardingPaymentCancellationForm');
+  if (!form) return;
+  event.preventDefault();
+  if (!form.reportValidity()) return;
+  await runPopupOperation(event.submitter, 'Cancelling payment...', async () => {
+    const record = await cancelBoardingPayment(form);
+    const stay = boardingStayByReference(record, { stayId: form.dataset.stayId, requestCode: form.dataset.requestCode });
+    showDetailDialog('Payment cancelled', '<p>The payment no longer counts toward this stay. The original receipt and cancellation remain in history. No money was refunded.</p>' + boardingPaymentSummaryHtml(record, stay));
+    return record;
+  }, 'Payment could not be cancelled');
+});
 
 document.addEventListener('change', event => {
   if (!event.target.matches('#boardingPaymentForm select[name="kind"]')) return;
