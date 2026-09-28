@@ -338,3 +338,17 @@
  :root[data-theme] #dogShowPage .show-calendar-event-actions { width:100%; }
  :root[data-theme] #dogShowPage .show-calendar-event-actions>button { flex:1; min-height:44px; }
 }
+
+/* Added shows retain their research and stand apart from unselected recommendations. */
+:root[data-theme] #dogShowPage :is(.dog-show-plan-event-card.is-added-show,.dog-show-planner-card.is-added-show) {
+  background:color-mix(in srgb, #a660cc 11%, var(--show-surface));
+  border-color:color-mix(in srgb, #a660cc 48%, var(--show-line));
+  border-left:4px solid #9655ba;
+}
+:root[data-theme] #dogShowPage .dog-show-entered-research { display:grid; gap:12px; min-width:0; }
+:root[data-theme] #dogShowPage .dog-show-entered-research .dog-show-planner-meta { display:flex; flex-wrap:wrap; gap:8px 14px; color:var(--show-muted); font-size:12px; }
+:root[data-theme] #dogShowPage .dog-show-entered-research .dog-show-planner-sources { border-top:1px solid var(--show-line); padding-top:12px; }
+:root[data-theme] #dogShowPage .dog-show-entered-research .dog-show-planner-sources>div { display:flex; flex-wrap:wrap; gap:6px; }
+@media(max-width:640px) {
+  :root[data-theme] #dogShowPage .dog-show-entered-research .dog-show-planner-panel { grid-template-columns:minmax(0,1fr); }
+}

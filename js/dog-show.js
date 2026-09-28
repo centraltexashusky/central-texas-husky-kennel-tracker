@@ -3347,22 +3347,72 @@ function dogShowPlannerCompletedResultsHtml(results = []) {
   }).join("")}</div>`;
 }
 
+// Retain published research independently of the current planner search.
+function dogShowPlannerResearchSnapshot(show = {}) {
+  const fields = ["externalId", "canonicalId", "eventNumber", "club", "startDate", "endDate", "cityState", "state", "breedName", "breedJudge", "groupJudge", "bisJudge", "groupName", "entryClosingDate", "superintendent", "akcSourceUrl", "sourceUrl", "superintendentUrl", "eventWebsiteUrl", "premiumUrl", "judgingProgramUrl", "showType", "nohs", "ownerHandled", "verifiedBy", "sources", "sourceIds"];
+  return Object.fromEntries(fields.filter((key) => show?.[key] !== undefined && show?.[key] !== null && show?.[key] !== "").map((key) => [key, show[key]]));
+}
+
+function dogShowPlannerEventResearch(event = {}, planner = dogShowPlannerRecord()) {
+  const notes = String(event.notes || "");
+  const noteValue = (pattern) => notes.match(pattern)?.[1]?.trim() || "";
+  const legacy = {
+    eventNumber: noteValue(/^AKC event number:\s*(.+)$/im),
+    breedJudge: noteValue(/^(?:Siberian Husky|Breed) judge:\s*(.+)$/im),
+    groupJudge: noteValue(/^(?:Working|Group) judge:\s*(.+)$/im),
+    bisJudge: noteValue(/^BIS judge:\s*(.+)$/im),
+    superintendentUrl: noteValue(/^Superintendent source:\s*(https?:\/\/\S+)$/im),
+  };
+  const candidate = dogShowPlannerCandidates().find((item) => dogShowPlannerEventForShow(item.show || {}, [event]));
+  const matched = (planner.shows || []).find((show) => dogShowPlannerEventForShow(show, [event]));
+  return {
+    ...dogShowPlannerResearchSnapshot(legacy),
+    ...dogShowPlannerResearchSnapshot(candidate?.show),
+    ...dogShowPlannerResearchSnapshot(event.plannerMetadata),
+    ...dogShowPlannerResearchSnapshot(matched),
+    ...dogShowPlannerResearchSnapshot(event),
+    id: event.id,
+    externalId: event.plannerExternalId || event.externalId || matched?.externalId || event.plannerMetadata?.externalId || candidate?.show?.externalId || "",
+  };
+}
+
+async function preserveDogShowPlannerResearch(planner = dogShowPlannerRecord()) {
+  // Save before replacing a search so already-added shows keep their sources.
+  for (const event of dogShowEvents()) {
+    if (!(planner.shows || []).some((show) => dogShowPlannerEventForShow(show, [event]))) continue;
+    const plannerMetadata = dogShowPlannerResearchSnapshot(dogShowPlannerEventResearch(event, planner));
+    if (JSON.stringify(plannerMetadata) === JSON.stringify(event.plannerMetadata || {})) continue;
+    await saveDogShowRecord("showEvent", { ...event, plannerMetadata });
+  }
+}
+
+function dogShowPlannerEventResearchHtml(event = {}, lifecycleStatus = "Going To", planner = dogShowPlannerRecord()) {
+  const show = dogShowPlannerEventResearch(event, planner);
+  return `<section class="dog-show-entered-research" aria-label="Show judges and reference information">
+    <div class="dog-show-planner-panel">${dogShowPlannerJudgeHtml("Breed", show.breedJudge || "", planner)}${dogShowPlannerJudgeHtml("Group", show.groupJudge || "", planner)}${dogShowPlannerJudgeHtml("BIS", show.bisJudge || "", planner)}</div>
+    ${dogShowPlannerPointScheduleHtml({ ...show, ...event }, lifecycleStatus, planner)}
+    <div class="dog-show-planner-meta">${show.eventNumber ? `<span>AKC #${escapeHtml(show.eventNumber)}</span>` : ""}${show.entryClosingDate ? `<span>Closes ${escapeHtml(dogShowFormatDate(show.entryClosingDate))}</span>` : ""}${show.superintendent ? `<span>${escapeHtml(show.superintendent)}</span>` : ""}${show.verifiedBy ? `<span>Verified by ${escapeHtml(show.verifiedBy)}</span>` : ""}</div>
+    ${dogShowPlannerSourceSectionHtml(show)}
+  </section>`;
+}
+
 function dogShowPlannerEventPlanHtml(event = {}, lifecycleStatus = "Going To", planner = dogShowPlannerRecord()) {
   const entries = dogShowEntries(event);
   const dogs = entries.map(dogShowEntryName).filter(Boolean);
   if (lifecycleStatus === "Completed") {
     const results = dogShowAppearanceResultsAll().filter((result) => result.showEventId === event.id);
-    return `<article class="dog-show-plan-event-card is-completed is-history-only">
+    return `<article class="dog-show-plan-event-card is-completed is-history-only is-added-show">
       <header><div><span>Completed</span><h4>${escapeHtml(event.name || event.club || "Dog Show")}</h4></div><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></header>
       <dl><div><dt>Dogs who went</dt><dd>${escapeHtml(dogs.join(", ") || "No dogs recorded")}</dd></div><div><dt>Show results</dt><dd>${results.length} result${results.length === 1 ? "" : "s"} recorded</dd></div></dl>
+      ${dogShowPlannerEventResearchHtml(event, lifecycleStatus, planner)}
       <section class="dog-show-plan-completed-results" aria-label="Show results"><header><h5>Results by dog</h5><span>Select a dog to view details</span></header>${dogShowPlannerCompletedResultsHtml(results)}</section>
     </article>`;
   }
-  return `<article class="dog-show-plan-event-card is-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}">
+  return `<article class="dog-show-plan-event-card is-added-show is-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}">
     <header><div><span>${escapeHtml(lifecycleStatus)}</span><h4>${escapeHtml(event.name || event.club || "Dog Show")}</h4><p>${escapeHtml(event.venueAddress || event.cityState || event.venue || "Location pending")}</p></div><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></header>
     ${dogShowPlannerEventFlagsHtml(event)}
     <dl><div><dt>Status</dt><dd>${escapeHtml(lifecycleStatus)}</dd></div><div><dt>Dogs</dt><dd>${escapeHtml(dogs.join(", ") || "No dogs added yet")}</dd></div></dl>
-    ${dogShowPlannerPointScheduleHtml(event, lifecycleStatus, planner)}
+    ${dogShowPlannerEventResearchHtml(event, lifecycleStatus, planner)}
     <footer><span>${entries.length} dog${entries.length === 1 ? "" : "s"} on roster</span><button type="button" data-action="open-planner-show-event" data-event-id="${escapeHtml(event.id || "")}">Open Show</button></footer>
   </article>`;
 }
@@ -3846,6 +3896,7 @@ async function refreshDogShowPlannerMetadata(plan = dogShowPlannerRecord()) {
     const matchedShowCount = plan.shows.filter(importedMatch).length;
     if (!matchedShowCount) throw new Error("No saved planner shows matched the refreshed calendar results.");
     const shows = plan.shows.map((show) => dogShowPlannerMergeMetadata(show, importedMatch(show) || {}));
+    await preserveDogShowPlannerResearch({ ...plan, shows });
     await saveDogShowRecord("showResult", {
       ...plan,
       shows,
@@ -3927,6 +3978,7 @@ async function saveDogShowPlanner(form) {
     setDogShowPlannerFormError(form, errorMessage || "No shows matched that date range, location, and show-format selection.");
     return;
   }
+  await preserveDogShowPlannerResearch();
   await saveDogShowRecord("showResult", {
     id: DOG_SHOW_PLANNER_RECORD_ID,
     recordKind: "showPlanner",
@@ -4032,6 +4084,7 @@ function openDogShowImportedEvent(show = {}, targets = [], options = {}) {
     nohs: Boolean(show.nohs || show.ownerHandled),
     plannerExternalId: show.canonicalId || show.externalId || "",
     plannerCandidateId: options.candidateId || "",
+    plannerMetadata: dogShowPlannerResearchSnapshot(show),
     breedName: show.breedName || selectedBreed,
     notes: `Imported from AKC Event Search.${show.eventNumber ? `\nAKC event number: ${show.eventNumber}` : ""}${breeds.length ? `\nBreeds researched: ${breeds.join(", ")}` : ""}${dogs.length ? `\nDogs considered: ${dogs.join(", ")}` : ""}${panelNotes.length ? `\n${panelNotes.join("\n")}` : show.breedJudge ? `\n${selectedBreed} judge: ${show.breedJudge}` : ""}${show.groupJudge && !panelNotes.length ? `\n${show.groupName || "Group"} judge: ${show.groupJudge}` : ""}${show.bisJudge ? `\nBIS judge: ${show.bisJudge}` : ""}${show.superintendentUrl ? `\nSuperintendent source: ${show.superintendentUrl}` : ""}`,
     status: "Going To",
@@ -4250,6 +4303,7 @@ function openDogShowEventForm(event = {}) {
     <input type="hidden" name="plannerExternalId" value="${escapeHtml(event.plannerExternalId || "")}"/>
     <input type="hidden" name="plannerCandidateId" value="${escapeHtml(event.plannerCandidateId || "")}"/>
     <input type="hidden" name="breedName" value="${escapeHtml(event.breedName || "")}"/>
+    <input type="hidden" name="plannerMetadata" value="${escapeHtml(JSON.stringify(dogShowPlannerResearchSnapshot(dogShowPlannerEventResearch(event))))}"/>
     <details class="show-setup-section" open><summary>Event</summary><div class="field-grid">
       <label class="dog-show-field-wide dog-show-status-field">Status<select name="status">${dogShowEventStatusOptions(event.status)}</select><small>Going To = planned; Going = booked/paid; Active = show underway.</small></label>
       <label>Show name<input name="name" value="${escapeHtml(event.name || "")}" required placeholder="Austin Kennel Club Weekend"/></label>
@@ -4997,6 +5051,9 @@ async function saveDogShowEvent(form) {
   const existing = form.dataset.id ? readRecords("showEvent").find((event) => event.id === form.dataset.id) || {} : {};
   const data = formPayload(form);
   data.status = dogShowEventStatus(data.status);
+  let submittedResearch = {};
+  try { submittedResearch = JSON.parse(data.plannerMetadata || "{}"); } catch { /* Older forms have no snapshot. */ }
+  data.plannerMetadata = dogShowPlannerResearchSnapshot({ ...dogShowPlannerEventResearch(existing), ...submittedResearch });
   const helperEmails = [...form.querySelectorAll('input[name="helperEmails"]:checked')].map((input) => input.value);
   const packingItems = Array.isArray(existing.packingItems) && existing.packingItems.length
     ? existing.packingItems
