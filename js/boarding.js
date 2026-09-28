@@ -6028,6 +6028,7 @@ async function loadBoardingCustomerUpdateData(record = {}) {
     if (error) throw error;
     updates = arrayValue(data?.updates);
   }
+  updates = updates.filter((update) => customerUpdateBelongsToCurrentStay(record, update));
   updates = [...new Map(updates.map((update, index) => [
     String(update.id || update.customerUpdateId || [update.createdAt || update.submittedAt || "", update.stayId || update.requestCode || "", index].join("|")),
     update,
@@ -6041,7 +6042,7 @@ function clearBoardingDeferredSectionCaches() {
   boardingCustomerUpdateCache.clear();
 }
 
-async function enforceBoardingCustomerUpdateRetention(recordOrIds = {}) {
+async function enforceBoardingCustomerUpdateRetention(recordOrIds = {}, expectedPlan = null) {
   if (!supabaseClient || localTestMode || !isStaffRole()) return { skipped: true };
   const recordIds = Array.isArray(recordOrIds)
     ? [...new Set(recordOrIds.map((id) => String(id || "").trim()).filter(Boolean))]
@@ -6053,6 +6054,9 @@ async function enforceBoardingCustomerUpdateRetention(recordOrIds = {}) {
     p_record_ids: recordIds,
   }));
   if (planError) throw planError;
+  if (expectedPlan && JSON.stringify(plan) !== JSON.stringify(expectedPlan)) {
+    throw new Error("The past-stay cleanup list changed. Reopen the cleanup preview before deleting anything.");
+  }
   const storagePaths = [...new Set(arrayValue(plan?.storagePaths).map((path) => String(path || "").trim()).filter(Boolean))];
   const unsafePath = storagePaths.find((path) => !path.startsWith("users/") || !path.includes("/boarding-customer-updates/"));
   if (unsafePath) throw new Error("Owner update cleanup stopped because an unexpected media path was returned.");
@@ -6067,6 +6071,40 @@ async function enforceBoardingCustomerUpdateRetention(recordOrIds = {}) {
   clearBoardingDeferredSectionCaches();
   return { ...(result || {}), removedMediaCount: storagePaths.length };
 }
+
+var boardingUpdateCleanupPreview = null;
+async function openBoardingUpdateCleanup(record) {
+  if (!isStaffRole() || !supabaseClient || localTestMode) return;
+  const recordIds = boardingDeferredSourceRecordIds(record);
+  const {data: plan, error} = await cuddleStayRequest((db) => db.rpc("kennel_boarding_customer_update_retention_plan", {p_record_ids: recordIds}));
+  if (error) throw error;
+  if (!Number(plan?.updateCount)) return showToast("No confirmed past-stay updates need cleanup.");
+  boardingUpdateCleanupPreview = { recordId: record.id, recordIds, plan };
+  showDetailDialog("Remove past-stay updates", '<p><strong>' + escapeHtml(record.dogName) + '</strong></p><p>Permanently remove ' +
+    Number(plan.updateCount) + ' past-stay updates and ' + Number(plan.mediaCount) + ' photo/video files? This cannot be undone.</p>' +
+    '<p>Current-stay updates, profile photos, and files still used elsewhere are kept. Updates without a confirmed past-stay match are not deleted.</p>' +
+    '<div class="button-row"><button type="button" class="danger-button" data-action="confirm-past-update-cleanup">Permanently remove past updates</button>' +
+    '<button type="button" class="secondary-button" data-action="close-dialog">Keep files</button></div>');
+}
+
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest('[data-action="preview-past-update-cleanup"], [data-action="confirm-past-update-cleanup"]');
+  if (!button) return;
+  event.preventDefault();
+  await runPopupOperation(button, "Checking updates...", async () => {
+    if (button.dataset.action === "preview-past-update-cleanup") {
+      return openBoardingUpdateCleanup(activeBoardingDog());
+    }
+    const preview = boardingUpdateCleanupPreview;
+    if (!preview) throw new Error("Reopen the cleanup preview first.");
+    const result = await enforceBoardingCustomerUpdateRetention(preview.recordIds, preview.plan);
+    boardingUpdateCleanupPreview = null;
+    if (activeBoardingDog()?.id === preview.recordId) await renderBoardingCustomerUpdates(activeBoardingDog());
+    showDetailDialog("Past updates removed", '<p>Removed ' + Number(result.removedUpdateCount || 0) + ' past-stay updates and ' +
+      Number(result.removedMediaCount || 0) + ' photo/video files. This deletion cannot be undone.</p><p>Current-stay updates were kept.</p>');
+    return result;
+  }, "Past updates could not be removed");
+});
 
 function resetBoardingProfileLazySections(record = {}) {
   boardingProfileTabRenderSequence += 1;
@@ -6186,8 +6224,9 @@ async function renderBoardingCustomerUpdates(record = activeBoardingDog() || {})
         const requestCode = update.requestCode || (stay.id ? boardingStayRequestCode(displayRecord, stay) : "");
         return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(formatDateTime(update.createdAt || update.submittedAt) || "Customer update")}</strong><span>\${escapeHtml([update.byName || update.by || "Staff update", requestCode ? \`Stay ID: \${requestCode}\` : ""].filter(Boolean).join(" | "))}</span><p>\${escapeHtml(update.note || "")}</p><div class="record-actions">\${customerUpdateMediaHtml(update)}</div></article>\`;
       }).join("")
-    : \`<article class="record-card compact-record-card"><strong>No customer updates sent yet.</strong><p>Updates sent from a stay will appear here and in the customer Updates menu.</p></article>\`;
-  list.innerHTML = \`\${stayCards}<section class="popup-record-section"><h3>Sent Updates</h3>\${updateHistory}</section>\`;
+    : \`<article class="record-card compact-record-card"><strong>No updates for the current stay.</strong><p>Only updates for a checked-in, in-kennel, or ready-for-pickup stay appear here.</p></article>\`;
+  list.innerHTML = \`\${stayCards}<section class="popup-record-section"><h3>Current-stay Updates</h3>\${updateHistory}</section>\` +
+    (isStaffRole() ? '<button type="button" class="secondary-button" data-action="preview-past-update-cleanup">Clean up past-stay photos</button>' : "");
 }
 
 function boardingAgreementTimestamp(record = {}) {

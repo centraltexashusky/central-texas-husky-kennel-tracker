@@ -1494,6 +1494,8 @@ function customerUpdatesForCurrentUser() {
       };
     });
   return [...boardingUpdates, ...customerDogUpdates, ...showUpdates]
+    .filter((update) => update.source === "showResult" || customerUpdateBelongsToCurrentStay(
+      update.source === "boardingDog" ? update.dog : boardingDogForCustomerDog(update.dog) || {}, update))
     .filter((update) => {
       const key = update.id || \`\${update.createdAt || ""}|\${update.note || ""}|\${update.stayId || ""}\`;
       if (updateKeys.has(key)) return false;

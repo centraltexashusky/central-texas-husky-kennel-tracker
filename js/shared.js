@@ -8744,6 +8744,15 @@ function customerUpdateForStay(record = {}, stay = {}) {
   }) || null;
 }
 
+function customerUpdateBelongsToCurrentStay(record = {}, update = {}) {
+  return ownerUpdateStaysForRecord(record).some((stay) => {
+    const code = boardingStayRequestCode(record, stay);
+    if (update.requestCode && code) return update.requestCode === code;
+    if (update.stayId) return [stay.id, ...arrayValue(stay.sourceStayIds)].includes(update.stayId);
+    return Boolean(stay.dropoffTime && stay.pickupTime && update.stayDropoffTime === stay.dropoffTime && update.stayPickupTime === stay.pickupTime);
+  });
+}
+
 
 function ownerUpdateReasonItems(record = {}, stay = {}) {
   const reasons = [];
