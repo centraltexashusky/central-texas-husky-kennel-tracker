@@ -341,8 +341,8 @@
 
 /* Added shows retain their research and stand apart from unselected recommendations. */
 :root[data-theme] #dogShowPage :is(.dog-show-plan-event-card.is-added-show,.dog-show-planner-card.is-added-show) {
-  background:color-mix(in srgb, #a660cc 11%, var(--show-surface));
-  border-color:color-mix(in srgb, #a660cc 48%, var(--show-line));
+  background:color-mix(in srgb, #a660cc 11%, var(--show-surface))!important;
+  border-color:color-mix(in srgb, #a660cc 48%, var(--show-line))!important;
   border-left:4px solid #9655ba;
 }
 :root[data-theme] #dogShowPage .dog-show-entered-research { display:grid; gap:12px; min-width:0; }
