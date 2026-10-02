@@ -694,6 +694,12 @@ function dogShowEventWeekendGroups(events = dogShowEvents()) {
   return groups;
 }
 
+function dogShowEventDayLabel(value = "") {
+  const date = value ? new Date(`${value}T12:00:00`) : null;
+  if (!date || Number.isNaN(date.getTime())) return "Date missing";
+  return `${date.toLocaleDateString("en-US", { weekday: "long" })}, ${dogShowFormatMonthDay(value)}`;
+}
+
 function dogShowEventOptions(active = dogShowActiveEvent()) {
   const isPastGroup = (group) => group.events.every((event) => dogShowPlannerLifecycleStatus(event) === "Completed");
   const groups = dogShowEventWeekendGroups(dogShowOperationalEvents()).sort((a, b) => {
@@ -707,11 +713,12 @@ function dogShowEventOptions(active = dogShowActiveEvent()) {
     if (group.events.length === 1) {
       const event = group.events[0];
       const weekend = `${dogShowFormatMonthDay(event.startDate)} - ${dogShowFormatMonthDay(event.endDate || event.startDate)}`;
-      return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${historyLabel}${event.name || "Untitled Show"} · ${weekend}, ${year} · ${dogShowEventStatus(event.status)}`)}</option>`;
+      const day = dogShowEventDayLabel(event.startDate) + (event.endDate && event.endDate !== event.startDate ? ` – ${dogShowEventDayLabel(event.endDate)}` : "");
+      return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${historyLabel}${event.name || "Untitled Show"} · ${weekend}, ${year} · ${day} · ${dogShowEventStatus(event.status)}`)}</option>`;
     }
     const label = `${historyLabel}${group.title} · ${dogShowFormatMonthDay(group.startDate)} - ${dogShowFormatMonthDay(group.endDate)}, ${year} · ${group.events.length} events`;
     const options = group.events.map((event) => {
-      const day = dogShowFormatMonthDay(event.startDate);
+      const day = dogShowEventDayLabel(event.startDate);
       const weekend = `${dogShowFormatMonthDay(group.startDate)} - ${dogShowFormatMonthDay(group.endDate)}`;
       return `<option value="${escapeHtml(event.id)}"${event.id === active?.id ? " selected" : ""}>${escapeHtml(`${historyLabel}${group.title} · ${weekend}, ${year} · ${day} · ${dogShowEventStatus(event.status)}`)}</option>`;
     }).join("");
