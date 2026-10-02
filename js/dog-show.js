@@ -782,7 +782,8 @@ function dogShowProgressRecords(kind = "") {
 }
 
 function dogShowPlannerRecord() {
-  return dogShowProgressRecords("showPlanner").sort((left, right) => new Date(right.updatedAt || right.submittedAt || 0) - new Date(left.updatedAt || left.submittedAt || 0))[0] || {};
+  const plan = dogShowProgressRecords("showPlanner").sort((left, right) => new Date(right.updatedAt || right.submittedAt || 0) - new Date(left.updatedAt || left.submittedAt || 0))[0] || {};
+  return { ...plan, dogKeys: [...new Set((plan.dogKeys || []).map(dogShowCanonicalDogKey))] };
 }
 
 function dogShowPlannerCalendarBreedName(value = "") {
@@ -872,7 +873,7 @@ function dogShowPlannerTargets(plan = dogShowPlannerRecord()) {
 
 function dogShowPlannerTargetKey(target = {}) {
   return target.targetType === "dog"
-    ? `dog:${target.dogKey || String(target.dogName || "").toLowerCase()}`
+    ? `dog:${dogShowCanonicalDogKey(target.dogKey) || String(target.dogName || "").toLowerCase()}`
     : `breed:${dogShowPlannerCalendarBreedName(target.breed).toLowerCase()}`;
 }
 
@@ -894,9 +895,32 @@ function dogShowAppearanceResultsAll() {
   return dogShowRecords("showResult").filter((record) => !record.recordKind || record.recordKind === "appearanceResult");
 }
 
+function dogShowCanonicalDogKey(key = "") {
+  if (!key.startsWith("boardingDog:")) return key;
+  const dogId = key.slice("boardingDog:".length);
+  if (!dogId) return key;
+  // Stays retain their own IDs. Only explicit profile links establish one dog;
+  // names (even a matching owner/name pair) are never identity evidence here.
+  const boarding = readRecords("boardingDog");
+  const visited = new Set();
+  const customerIds = new Set();
+  let sourceId = dogId;
+  while (sourceId && !visited.has(sourceId)) {
+    visited.add(sourceId);
+    const source = boarding.find((dog) => dog.id === sourceId);
+    if (!source) break;
+    [source.linkedCustomerDogId, source.sourceCustomerDogId].filter(Boolean).forEach((id) => customerIds.add(id));
+    sourceId = source.sourceBoardingDogId;
+  }
+  if (!customerIds.size) {
+    readRecords("customerDog").filter((dog) => visited.has(dog.sourceBoardingDogId)).forEach((dog) => customerIds.add(dog.id));
+  }
+  return customerIds.size === 1 ? `customerDog:${[...customerIds][0]}` : key;
+}
+
 function dogShowDogIdentity(record = {}) {
   const name = record.dogName || dogShowEntryName(record) || "Dog";
-  return `${record.dogType || "dog"}:${record.dogId || String(name).trim().toLowerCase()}`;
+  return dogShowCanonicalDogKey(`${record.dogType || "dog"}:${record.dogId || String(name).trim().toLowerCase()}`);
 }
 
 function dogShowProgressDogs() {
@@ -915,7 +939,7 @@ function dogShowProgressDogs() {
 }
 
 function dogShowCareerProfile(dogKey = "") {
-  return dogShowProgressRecords("careerProfile").find((profile) => profile.dogKey === dogKey || dogShowDogIdentity(profile) === dogKey) || {};
+  return dogShowProgressRecords("careerProfile").find((profile) => profile.dogKey === dogKey || dogShowDogIdentity(profile) === dogKey || dogShowCanonicalDogKey(profile.dogKey) === dogKey) || {};
 }
 
 function dogShowPointValue(result = {}) {
@@ -1148,7 +1172,7 @@ function submitDogShowAkcJudgeSearch(form) {
 
 function openDogShowJudgeEvidence(judgeName = "", kind = "entries", dogKeys = []) {
   const labels = { entries: "Entries Logged", placements: "Placements", points: "Points" };
-  const selectedDogs = new Set(Array.isArray(dogKeys) ? dogKeys : []);
+  const selectedDogs = new Set((Array.isArray(dogKeys) ? dogKeys : []).map(dogShowCanonicalDogKey));
   const results = dogShowJudgeEvidenceResults(judgeName, kind).filter((result) => !selectedDogs.size || selectedDogs.has(dogShowDogIdentity(result)));
   const events = new Map(dogShowEvents().map((event) => [event.id, event]));
   const entries = new Map(dogShowRecords("showEntry").map((entry) => [entry.id, entry]));
@@ -3015,7 +3039,7 @@ function dogShowPlannerDogs() {
 }
 
 function dogShowPlannerDogEvidence(judgeName = "", dogKeys = [], breedName = "") {
-  const selected = new Set(dogKeys);
+  const selected = new Set(dogKeys.map(dogShowCanonicalDogKey));
   const results = dogShowJudgeEvidenceResults(judgeName, "entries").filter((result) => {
     if (selected.size) return selected.has(dogShowDogIdentity(result));
     if (breedName) return dogShowPlannerBreedMatches(dogShowBreed(result), breedName);
