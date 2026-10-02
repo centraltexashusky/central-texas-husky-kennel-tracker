@@ -783,7 +783,7 @@ function dogShowProgressRecords(kind = "") {
 
 function dogShowPlannerRecord() {
   const plan = dogShowProgressRecords("showPlanner").sort((left, right) => new Date(right.updatedAt || right.submittedAt || 0) - new Date(left.updatedAt || left.submittedAt || 0))[0] || {};
-  return { ...plan, dogKeys: [...new Set((plan.dogKeys || []).map(dogShowCanonicalDogKey))] };
+  return { ...plan, dogKeys: [...new Set((Array.isArray(plan.dogKeys) ? plan.dogKeys : []).map(dogShowCanonicalDogKey))] };
 }
 
 function dogShowPlannerCalendarBreedName(value = "") {
@@ -896,6 +896,7 @@ function dogShowAppearanceResultsAll() {
 }
 
 function dogShowCanonicalDogKey(key = "") {
+  key = String(key || "");
   if (!key.startsWith("boardingDog:")) return key;
   const dogId = key.slice("boardingDog:".length);
   if (!dogId) return key;

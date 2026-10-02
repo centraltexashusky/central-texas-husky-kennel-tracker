@@ -36,6 +36,7 @@ assert.equal(ctx.dogShowPlannerTargetKey({targetType:'dog',dogKey:'boardingDog:s
 for (const id of ['conflict','cycle-a','missing']) assert.equal(ctx.dogShowCanonicalDogKey(`boardingDog:${id}`),`boardingDog:${id}`);
 assert.equal(ctx.dogShowDogIdentity({dogId:'owned',dogType:'ownedDog',dogName:'Mango'}),'ownedDog:owned');
 assert.equal(ctx.dogShowCanonicalDogKey('customerDog:customer-a'),'customerDog:customer-a');
+assert.equal(ctx.dogShowCanonicalDogKey(null),'');
 records.boardingDog[0].removed=true;
 assert.equal(ctx.dogShowCanonicalDogKey('boardingDog:stay-c'),'customerDog:customer-a','Retired source links still resolve history');
 records.customerDog.push({id:'reverse',sourceBoardingDogId:'missing'});
