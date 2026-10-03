@@ -285,3 +285,37 @@
 }
 :root[data-theme=dark] #dogShowPage .dog-show-upcoming-bulk { background:var(--show-soft); }
 :root[data-theme=dark] #dogShowPage :is(.care-priority-food [data-care-action=food],.care-priority-potty [data-care-action=potty],.care-priority-water [data-care-action=water]) { background:#382e1d; color:#f2cd7d; }
+
+/* Approved navigation: familiar tabs, explicit individual-show context. */
+:root[data-theme] #dogShowPage #dogShowDesktopNav { gap:16px; overflow:visible; flex-wrap:wrap; align-items:center; }
+.dog-show-nav-divider { height:18px; width:1px; background:var(--show-line); flex:0 0 1px; }
+.dog-show-tools-menu { position:relative; margin-left:auto; }
+:root[data-theme] #dogShowPage .dog-show-tools-menu summary { cursor:pointer; padding:14px 0; font-size:14px; font-weight:500; color:var(--show-muted); }
+.dog-show-tools-menu > div { position:absolute; right:0; top:100%; z-index:35; min-width:210px; display:grid; gap:4px; padding:9px; border:1px solid var(--show-line); border-radius:9px; background:var(--show-surface); box-shadow:0 12px 30px #12314e20; }
+:root[data-theme] #dogShowPage .dog-show-tools-menu button { text-align:left; background:transparent; border:0; color:var(--show-ink); box-shadow:none; min-height:42px; }
+.dog-show-selected-event { flex:1 1 480px; min-width:0; }
+:root[data-theme] #dogShowPage .dog-show-event-toolbar .dog-show-selected-event label { display:flex; }
+.dog-show-selected-group { margin:7px 0 0; display:flex; flex-wrap:wrap; gap:6px 14px; font-size:11px; color:var(--show-muted); }
+.dog-show-selected-group nav { display:flex; flex-wrap:wrap; gap:6px; }
+:root[data-theme] #dogShowPage .dog-show-selected-group button { min-height:30px; padding:5px 8px; font-size:11px; }
+:root[data-theme] #dogShowPage .dog-show-selected-group button[aria-current=date] { background:var(--show-soft); font-weight:700; color:var(--show-blue); }
+.dog-show-today { border-left:1px solid var(--show-line); padding-left:10px; }
+.dog-show-scope { color:var(--show-muted); font-size:11px; margin-top:-7px; }
+.dog-show-results-nav { display:flex; flex-wrap:wrap; gap:5px; padding:5px; background:var(--show-soft); border:1px solid var(--show-line); border-radius:8px; }
+:root[data-theme] #dogShowPage .dog-show-results-nav button { background:transparent; color:var(--show-muted); border:0; box-shadow:none; min-height:40px; font-size:12px; padding:9px 12px; }
+:root[data-theme] #dogShowPage .dog-show-results-nav button.is-active { background:var(--show-blue); color:white; }
+.dog-show-destination > .dog-show-panel { grid-column:auto; grid-row:auto; }
+#dogShowMoreMenu h3 { margin:10px 4px 3px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; }
+@media(max-width:980px) {
+ .dog-show-selected-event { flex-basis:100%; }
+ :root[data-theme] #dogShowPage .dog-show-event-toolbar .dog-show-selected-event label { display:grid; gap:6px; }
+ .dog-show-selected-group { gap:6px; }
+ #dogShowWeekendContext { flex-wrap:wrap; gap:8px; }
+ .dog-show-results-nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+ :root[data-theme] #dogShowPage .dog-show-results-nav button { white-space:normal; font-size:11px; }
+ #dogShowMoreMenu { max-height:calc(100dvh - 130px); overflow-y:auto; }
+}
+.dog-show-tools-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+:root[data-theme] #dogShowPage .dog-show-tools-grid > button { display:grid; gap:8px; text-align:left; justify-items:start; padding:20px; border:1px solid var(--show-line); border-radius:10px; background:var(--show-surface); color:var(--show-ink); box-shadow:none; }
+.dog-show-tools-grid span { font-size:12px; color:var(--show-muted); }
+@media(max-width:640px) { .dog-show-tools-grid { grid-template-columns:minmax(0,1fr); } }

@@ -191,7 +191,7 @@ function dogShowFinanceCategoryOptions(entryType = "expense", selectedCategory =
     .join("");
 }
 
-let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
+let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
   ? localStorage.getItem(DOG_SHOW_VIEW_KEY)
   : "home";
 let dogShowOverviewDay = "";
@@ -1768,6 +1768,55 @@ function dogShowMoreHtml(event) {
     </div>
     <details class="show-operations-tools" open><summary>More tools</summary><div>${[["open-show-planner", "Find shows"], ["open-show-calendar", "Show Calendar"], ["open-show-calculator", "Point Calculator"], ["open-show-expenses", "Finances"], ["open-show-progress", "Show Progress"]].map(([action, label]) => `<button type="button" class="secondary-button" data-action="${action}">${label}<span aria-hidden="true">›</span></button>`).join("")}</div></details>
   </div>`;
+}
+
+function dogShowResultsNavHtml() {
+  const views = [["results", "Selected-show results"], ["progress", "Progress overview"], ["progress", "Dog career", "dogs"], ["progress", "Judges", "judges"], ["calculator", "Point calculator"]];
+  return `<nav class="dog-show-results-nav segmented-control" aria-label="Results and progress">${views.map(([view, label, tab]) => {
+    const active = view === dogShowView && (view !== "progress" || dogShowProgressTab === (tab || "overview"));
+    return `<button type="button" data-results-view="${view}" data-results-tab="${tab || "overview"}" aria-current="${active ? "page" : "false"}" class="${active ? "is-active" : ""}">${label}</button>`;
+  }).join("")}</nav>`;
+}
+
+function dogShowOperationsDestinationHtml(event, section) {
+  const template = document.createElement("template");
+  template.innerHTML = dogShowMoreHtml(event);
+  const panel = template.content.querySelector(`.show-operations-${section}`);
+  if (panel?.querySelector("h3")) panel.querySelector("h3").textContent = section === "results" ? "Ring results" : section === "packing" ? "Weekend packing" : "Weekend helpers";
+  const label = section === "results" ? "Results" : section === "team" ? "Helpers & coverage" : "Packing list";
+  const nav = section === "results" ? dogShowResultsNavHtml() : `<nav class="dog-show-results-nav segmented-control" aria-label="Show tools"><button type="button" data-action="edit-show-event">Show setup</button><button type="button" data-dog-show-view="packing" class="${section === "packing" ? "is-active" : ""}">Packing</button><button type="button" data-dog-show-view="helpers" class="${section === "team" ? "is-active" : ""}">Helpers & coverage</button></nav>`;
+  return `<div class="dog-show-view dog-show-destination"><section class="dog-show-list-toolbar"><div><h3>${label}</h3><p>${section === "results" ? "Log and review each ring appearance for the selected show." : "Existing tools for your selected show."}</p></div></section>${nav}${panel?.outerHTML || ""}</div>`;
+}
+
+function dogShowToolsHtml() {
+  return `<div class="dog-show-view"><section class="dog-show-list-toolbar"><div><h3>Show tools</h3><p>Setup, packing, helper coverage, and point calculations.</p></div></section><div class="dog-show-tools-grid"><button type="button" class="secondary-button" data-action="edit-show-event"><strong>Show setup</strong><span>Event, venue, stay, links and helpers</span></button><button type="button" class="secondary-button" data-dog-show-view="packing"><strong>Packing</strong><span>Checklist and packed state</span></button><button type="button" class="secondary-button" data-dog-show-view="helpers"><strong>Helpers & coverage</strong><span>Assignments and open work by dog</span></button><button type="button" class="secondary-button" data-dog-show-view="calculator"><strong>Point Calculator</strong><span>Breed entries and estimated outcomes</span></button></div></div>`;
+}
+
+function dogShowSelectedGroupHtml(event) {
+  const group = dogShowEventWeekendGroups(dogShowOperationalEvents()).find(group => group.events.some(item => item.id === event.id));
+  if (!group) return "";
+  return `<div class="dog-show-selected-group"><span>Show group: ${escapeHtml(group.title)} · ${escapeHtml(dogShowPlannerDateRange(group))}</span>${group.events.length > 1 ? `<nav aria-label="Individual shows in this group">${group.events.map(item => `<button type="button" class="show-text-button" data-select-show="${escapeHtml(item.id)}" aria-current="${item.id === event.id ? "date" : "false"}">${escapeHtml(dogShowEventDayLabel(item.startDate))}</button>`).join("")}</nav>` : ""}</div>`;
+}
+
+function dogShowNavigationSnapshot() {
+  return { view: dogShowView, eventId: localStorage.getItem(DOG_SHOW_EVENT_KEY) || "", progressTab: dogShowProgressTab };
+}
+
+function recordDogShowNavigation(mode = "push") {
+  if (window.location.hash !== "#dogShowPage") return;
+  const navigation = dogShowNavigationSnapshot();
+  if (JSON.stringify(window.history.state?.dogShowNavigation) === JSON.stringify(navigation)) return;
+  window.history[mode === "push" ? "pushState" : "replaceState"]({ ...window.history.state, dogShowNavigation: navigation }, "", window.location.href);
+}
+
+function selectDogShowEvent(eventId) {
+  if (!dogShowOperationalEvents().some(event => event.id === eventId)) return;
+  recordDogShowNavigation("replace");
+  localStorage.setItem(DOG_SHOW_EVENT_KEY, eventId);
+  dogShowSelectedTaskIds.clear();
+  dogShowOverviewDay = "";
+  renderDogShow();
+  recordDogShowNavigation();
 }
 
 function dogShowCalculatorOptions(values = [], selected = "", labels = {}) {
@@ -4163,8 +4212,7 @@ function openDogShowPotentialEvent(candidateId = "") {
 function openDogShowPlannerEvent(eventId = "") {
   const event = dogShowEvents().find((candidate) => candidate.id === eventId);
   if (!event) return showToast("The selected show could not be found.");
-  localStorage.setItem(DOG_SHOW_EVENT_KEY, event.id);
-  setDogShowView("home");
+  setDogShowView("home", "", event.id);
 }
 
 function openDogShowCalendarEvent(eventIds = "", fallbackEventId = "") {
@@ -4216,11 +4264,16 @@ function renderDogShow() {
   const select = document.getElementById("dogShowEventSelect");
   if (select) select.innerHTML = dogShowEventOptions(event);
   const context = document.getElementById("dogShowWeekendContext");
-  if (context) context.innerHTML = event ? `<span>${escapeHtml(dogShowPlannerDateRange(event))}</span><span class="show-status-pill is-${dogShowOverviewStatus(event).key}">${escapeHtml(dogShowOverviewStatus(event).label)}</span><button type="button" class="show-text-button" data-action="edit-show-event">Show setup</button>` : "";
+  if (context) context.innerHTML = event ? `<span>${escapeHtml(dogShowPlannerDateRange(event))}</span><span class="show-status-pill is-${dogShowOverviewStatus(event).key}">${escapeHtml(dogShowOverviewStatus(event).label)}</span><span class="dog-show-today">Today · ${escapeHtml(dogShowEventDayLabel(todayDate()))}</span><button type="button" class="show-text-button" data-action="edit-show-event">Show setup</button>` : "";
+  const groupContext = document.getElementById("dogShowSelectedGroup");
+  if (groupContext) groupContext.innerHTML = event ? dogShowSelectedGroupHtml(event) : "";
+  const scope = document.getElementById("dogShowScope");
+  if (scope) scope.textContent = ["planner", "calendar"].includes(dogShowView) ? "Scope: All shows" : ["progress", "calculator"].includes(dogShowView) ? "Scope: Across shows" : dogShowView === "expenses" && dogShowFinanceMode !== "current" ? "Scope: Financial reports / invoices" : "Scope: Selected individual show";
   document.getElementById("dogShowPage")?.setAttribute("data-show-view", dogShowView);
   document.querySelectorAll("[data-dog-show-view]").forEach((button) => {
-    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calendar", "calculator", "expenses"].includes(dogShowView);
-    const active = mobileMoreActive || button.dataset.dogShowView === dogShowView;
+    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(dogShowView);
+    const resultsActive = button.closest("#dogShowDesktopNav") && button.dataset.dogShowView === "results" && ["results", "progress", "calculator"].includes(dogShowView);
+    const active = mobileMoreActive || resultsActive || button.dataset.dogShowView === dogShowView;
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
@@ -4230,11 +4283,14 @@ function renderDogShow() {
     return;
   }
   const renderers = {
+    results: event => dogShowOperationsDestinationHtml(event, "results"),
+    packing: event => dogShowOperationsDestinationHtml(event, "packing"),
+    helpers: event => dogShowOperationsDestinationHtml(event, "team"),
     home: dogShowHomeHtml,
     dogs: dogShowDogsHtml,
     schedule: dogShowScheduleHtml,
     tasks: dogShowTasksHtml,
-    more: dogShowMoreHtml,
+    more: dogShowToolsHtml,
     progress: dogShowProgressHtml,
     planner: dogShowPlannerHtml,
     calendar: dogShowMasterCalendarHtml,
@@ -4242,6 +4298,10 @@ function renderDogShow() {
     expenses: dogShowExpensesHtml,
   };
   content.innerHTML = renderers[dogShowView](event);
+  if (["progress", "calculator"].includes(dogShowView)) {
+    content.querySelector(".dog-show-progress-nav")?.remove();
+    content.querySelector(".dog-show-view")?.insertAdjacentHTML("afterbegin", dogShowResultsNavHtml());
+  }
   if (dogShowView === "planner") {
     scheduleDogShowPlannerLazyLoad();
     void refreshDogShowPlannerMetadata();
@@ -4249,12 +4309,23 @@ function renderDogShow() {
   if (typeof scheduleProfilePhotoHydrationSweep === "function") scheduleProfilePhotoHydrationSweep(40);
 }
 
-function setDogShowView(view = "home") {
-  if (!["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses"].includes(view)) return;
+function setDogShowView(view = "home", progressTab = "", eventId = "") {
+  if (!["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(view)) return;
+  recordDogShowNavigation("replace");
+  if (eventId) {
+    localStorage.setItem(DOG_SHOW_EVENT_KEY, eventId);
+    dogShowSelectedTaskIds.clear();
+    dogShowOverviewDay = "";
+  }
+  if (["overview", "dogs", "judges"].includes(progressTab)) {
+    dogShowProgressTab = progressTab;
+    localStorage.setItem(DOG_SHOW_PROGRESS_TAB_KEY, progressTab);
+  }
   dogShowView = view;
   localStorage.setItem(DOG_SHOW_VIEW_KEY, view);
   window.scrollTo({ top: 0, behavior: "smooth" });
   renderDogShow();
+  recordDogShowNavigation();
 }
 
 function syncDogShowShell(pageId = typeof activePageId === "function" ? activePageId() : "") {
@@ -5700,17 +5771,44 @@ function setupDogShowEventListeners() {
       return;
     }
     setDogShowMoreMenuOpen(false);
+    document.getElementById("dogShowToolsMenu")?.removeAttribute("open");
     setDogShowView(button.dataset.dogShowView);
   };
   page.addEventListener("click", handleViewClick);
   mobileNav?.addEventListener("click", handleViewClick);
   document.getElementById("dogShowNewEventButton")?.addEventListener("click", () => openDogShowEventForm());
   document.getElementById("dogShowEventSelect")?.addEventListener("change", (event) => {
-    if (event.target.value) localStorage.setItem(DOG_SHOW_EVENT_KEY, event.target.value);
-    dogShowSelectedTaskIds.clear();
-    renderDogShow();
+    selectDogShowEvent(event.target.value);
   });
   document.getElementById("dogShowDialogCloseButton")?.addEventListener("click", () => dialog?.close());
+
+  page.addEventListener("click", (event) => {
+    const selected = event.target.closest("[data-select-show]");
+    if (selected) selectDogShowEvent(selected.dataset.selectShow);
+    const resultView = event.target.closest("[data-results-view]");
+    if (resultView) {
+      setDogShowView(resultView.dataset.resultsView, resultView.dataset.resultsTab);
+    }
+    if (event.target.closest("#dogShowToolsMenu [data-action]")) document.getElementById("dogShowToolsMenu")?.removeAttribute("open");
+  });
+  document.addEventListener("click", event => {
+    if (!event.target.closest("#dogShowToolsMenu")) document.getElementById("dogShowToolsMenu")?.removeAttribute("open");
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") { document.getElementById("dogShowToolsMenu")?.removeAttribute("open"); setDogShowMoreMenuOpen(false); }
+  });
+  window.addEventListener("popstate", event => {
+    const navigation = event.state?.dogShowNavigation;
+    if (!navigation || window.location.hash !== "#dogShowPage") return;
+    if (dogShowOperationalEvents().some(show => show.id === navigation.eventId)) localStorage.setItem(DOG_SHOW_EVENT_KEY, navigation.eventId);
+    if (["overview", "dogs", "judges"].includes(navigation.progressTab)) dogShowProgressTab = navigation.progressTab;
+    if (["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(navigation.view)) dogShowView = navigation.view;
+    localStorage.setItem(DOG_SHOW_VIEW_KEY, dogShowView);
+    localStorage.setItem(DOG_SHOW_PROGRESS_TAB_KEY, dogShowProgressTab);
+    dogShowSelectedTaskIds.clear(); dogShowOverviewDay = "";
+    setDogShowMoreMenuOpen(false); document.getElementById("dogShowToolsMenu")?.removeAttribute("open");
+    renderDogShow();
+  });
 
   page.addEventListener("input", (event) => {
     if (event.target.matches("[data-show-transaction-search]")) {
@@ -6203,6 +6301,8 @@ function setupDogShowEventListeners() {
     const action = event.target.closest("[data-dog-show-more-action]");
     if (!action) return;
     setDogShowMoreMenuOpen(false);
+    if (["results", "packing", "helpers"].includes(action.dataset.dogShowMoreAction)) setDogShowView(action.dataset.dogShowMoreAction);
+    if (action.dataset.dogShowMoreAction === "setup") openDogShowEventForm(dogShowActiveEvent() || {});
     if (action.dataset.dogShowMoreAction === "operations") setDogShowView("more");
     if (action.dataset.dogShowMoreAction === "progress") setDogShowView("progress");
     if (action.dataset.dogShowMoreAction === "planner") setDogShowView("planner");

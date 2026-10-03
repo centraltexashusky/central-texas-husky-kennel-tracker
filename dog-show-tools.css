@@ -7,10 +7,6 @@
 :root[data-theme] #dogShowPage .dog-show-view input[type=checkbox] { width:19px; height:19px; min-height:19px; padding:0; accent-color:var(--show-blue); }
 :root[data-theme] #dogShowPage .dog-show-view button { font-size:13px; line-height:1.35; }
 :root[data-theme] #dogShowPage .dog-show-view :is(button,a.secondary-button):focus-visible, :root[data-theme] #dogShowDialog :focus-visible { outline:3px solid #e0a03f; outline-offset:3px; }
-:root[data-theme] #dogShowPage[data-show-view=planner] .dog-show-event-toolbar,
-:root[data-theme] #dogShowPage[data-show-view=calendar] .dog-show-event-toolbar,
-:root[data-theme] #dogShowPage[data-show-view=calculator] .dog-show-event-toolbar,
-:root[data-theme] #dogShowPage[data-show-view=progress] .dog-show-event-toolbar,
 :root[data-theme] #dogShowPage:not([data-show-view=home]):not([data-show-view=dogs]) .customer-show-review { display:none; }
 :root[data-theme] #dogShowPage:not([data-show-view=home]):not([data-show-view=dogs]) .dog-show-heading p { display:none; }
 :root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-list-toolbar) { background:transparent; border:0; padding:0; margin:0 0 16px; box-shadow:none; display:flex; align-items:center; justify-content:space-between; gap:16px; }
@@ -221,9 +217,7 @@
 }
 @media(max-width:700px){
  :root[data-theme] #dogShowPage #dogShowDesktopNav{display:none}
- :root[data-theme] #dogShowPage:not([data-show-view=home]):not([data-show-view=dogs]) .dog-show-workspace-header{display:none}
  :root[data-theme] #dogShowPage .dog-show-event-toolbar{padding:10px 12px;margin:0}
- :root[data-theme] #dogShowPage .dog-show-event-toolbar label>span,:root[data-theme] #dogShowPage #dogShowWeekendContext{display:none}
  :root[data-theme] #dogShowPage .dog-show-view>section:first-child{margin-bottom:8px}
  :root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-list-toolbar){gap:12px;flex-wrap:wrap;align-items:flex-start}
  :root[data-theme] #dogShowPage :is(.dog-show-planner-heading,.dog-show-calculator-heading,.dog-show-expenses-heading,.dog-show-progress-heading,.dog-show-list-toolbar) h3{font-size:23px}
