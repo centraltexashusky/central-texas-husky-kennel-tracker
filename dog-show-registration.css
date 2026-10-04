@@ -1,0 +1,65 @@
+/* Approved dog-first passport: one page scroll, including on phones. */
+:root[data-theme] #dogShowPage[data-show-view="registration"] .dog-show-event-toolbar { display:none; }
+.reg-workspace { color:#173651; min-width:0; }
+.reg-workspace h3 { margin:0; font-size:23px; }
+.reg-workspace h4 { margin:4px 0; font-size:18px; }
+.reg-workspace p { color:#526d85; margin:7px 0; line-height:1.5; }
+.reg-heading,.reg-passport>header,.reg-passport>footer,.reg-show-card>header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; }
+.reg-heading { margin:16px 0; }
+.reg-heading small,.reg-rail>small { font-size:11px; font-weight:700; letter-spacing:1px; }
+.reg-toggle { display:flex; gap:6px; }
+.reg-workspace button[aria-pressed="true"] { background:#e6f3ff!important; color:#096da8!important; border-color:#096da8!important; }
+.reg-layout { display:grid; grid-template-columns:190px minmax(0,1fr); border:1px solid #d5e2ec; border-radius:10px; background:#f4f8fb; }
+.reg-rail { background:white; border-right:1px solid #d5e2ec; padding:18px 12px; border-radius:10px 0 0 10px; min-width:0; }
+.reg-rail>label { margin:14px 0; display:grid; gap:5px; font-size:12px; }
+.reg-dog-list { display:grid; gap:8px; }
+.reg-dog-list button { display:block; width:100%; text-align:left; padding:12px 10px; white-space:normal; }
+.reg-dog-list strong,.reg-dog-list small { display:block; }
+.reg-dog-list small { margin-top:6px; font-size:12px; font-weight:400; }
+.reg-rail>p { border-top:1px solid #d5e2ec; margin-top:18px; padding-top:18px; font-size:12px; }
+.reg-main { padding:4px 20px 20px; min-width:0; }
+.reg-passport,.reg-show-card { padding:18px; background:white; border:1px solid #d5e2ec; border-radius:9px; }
+.reg-passport { margin-bottom:25px; }
+.reg-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 20px; margin:15px 0; }
+.reg-field { display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid #e2eaf1; padding:13px 0; min-width:0; }
+.reg-field small { display:block; color:#526d85; margin-bottom:5px; font-size:12px; }
+.reg-field strong { display:block; overflow-wrap:anywhere; font-size:14px; }
+.reg-field button { flex:none; min-width:36px; padding:5px 9px; }
+.reg-workspace details { border-top:1px solid #d5e2ec; padding-top:12px; margin:12px 0; }
+.reg-workspace summary { cursor:pointer; font-size:13px; font-weight:600; }
+.reg-passport>footer { border-top:1px solid #d5e2ec; padding-top:14px; margin-top:14px; }
+.reg-passport>footer small { color:#526d85; }
+.reg-pill { display:inline-block; background:#e7f5ec; color:#176044; padding:5px 8px; border-radius:5px; font-size:12px; font-weight:700; }
+.reg-pill.is-warning { background:#fff4d8; color:#80520b; }
+.reg-workspace .reg-warning { color:#80520b; }
+.reg-show-card { margin-bottom:12px; }
+.reg-card-actions { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px; margin:16px 0 0; }
+.reg-card-actions>div { display:grid; gap:6px; }
+.reg-primary-link { display:inline-flex; align-items:center; min-height:40px; padding:9px 12px; border-radius:6px; background:#096da8; color:white!important; font-weight:700; text-decoration:none; font-size:13px; }
+.reg-card-actions small { max-width:250px; }
+.reg-check { display:flex!important; align-items:center; gap:8px; font-size:13px; text-transform:none!important; letter-spacing:normal!important; }
+.reg-check input { width:auto; min-height:0; margin:0; }
+.reg-workspace .reg-notice:empty { display:none; }
+.reg-notice:not(:empty) { padding:12px; border:1px solid #b6d5e8; border-radius:6px; background:#e6f3ff; }
+.reg-show-select { display:grid; gap:7px; margin:16px 0; }
+.reg-footnote { font-size:12px; padding:12px 0; }
+.reg-empty { padding:24px; background:white; border:1px dashed #bdcdd9; border-radius:8px; }
+.reg-history { margin:12px 0; border-bottom:1px solid #d5e2ec; padding:12px 0; overflow-wrap:anywhere; }
+.reg-history dl { display:grid; grid-template-columns:1fr 2fr; gap:5px 10px; font-size:12px; }
+.reg-history dd { margin:0; }
+.reg-form [data-reg-error] { color:#aa2525; }
+.reg-form .field-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.reg-form label { min-width:0; }
+@media(max-width:700px) {
+  .reg-layout { display:block; }
+  .reg-rail { border-right:0; border-bottom:1px solid #d5e2ec; border-radius:10px 10px 0 0; }
+  .reg-dog-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .reg-main { padding:4px 12px 15px; }
+  .reg-fields,.reg-form .field-grid { grid-template-columns:1fr; }
+  .reg-passport,.reg-show-card { padding:14px; }
+  .reg-workspace h3 { font-size:21px; }
+  .reg-card-actions { display:grid; grid-template-columns:1fr; }
+  .reg-card-actions>button,.reg-primary-link { width:100%; justify-content:center; }
+  .reg-history dl { grid-template-columns:1fr; }
+  .reg-history dd { margin:0 0 8px; }
+}

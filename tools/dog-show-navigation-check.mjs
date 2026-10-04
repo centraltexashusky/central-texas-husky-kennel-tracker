@@ -50,7 +50,7 @@ assert.equal(historyEntries.length, count + 1, 'Other app pages receive no dog-s
 assert(historyEntries.every(entry => entry.state.snuggleStay && entry.state.pageId === 'dogShowPage'), 'App history identity remains intact');
 const nav = html.match(/id="dogShowDesktopNav"[\s\S]*?<\/nav>/)[0];
 const labels = [...nav.matchAll(/data-dog-show-view="([^"]+)"/g)].map(match => match[1]);
-assert.deepEqual(labels.slice(0, 8), ['home', 'planner', 'calendar', 'dogs', 'schedule', 'tasks', 'results', 'expenses']);
+assert.deepEqual(labels.slice(0, 9), ['home', 'planner', 'calendar', 'registration', 'dogs', 'schedule', 'tasks', 'results', 'expenses']);
 assert.match(html, /aria-label="Selected individual dog show"/);
 assert.match(html, /<h3>Plan shows<\/h3>[\s\S]*<h3>Results & billing<\/h3>[\s\S]*<h3>Show tools<\/h3>/);
 assert(renders > 0);

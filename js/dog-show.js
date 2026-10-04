@@ -4,6 +4,8 @@ import {
   akcPointCalculatorStates2026,
   calculateAkcBreedPointScenarios2026,
 } from "./dog-show-point-calculator.js?v=20260727-akc-all-breed-calculator-special-outcomes-v2-canonical-point-data-v30";
+import { createRegistrationWorkspace, registrationStatusForEntry } from "./dog-show-registration.js?v=20261003-registration-1";
+import { createRegistrationStore } from "./dog-show-registration-store.js?v=20261003-registration-1";
 
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
@@ -191,7 +193,7 @@ function dogShowFinanceCategoryOptions(entryType = "expense", selectedCategory =
     .join("");
 }
 
-let dogShowView = ["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
+let dogShowView = ["home", "dogs", "registration", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(localStorage.getItem(DOG_SHOW_VIEW_KEY))
   ? localStorage.getItem(DOG_SHOW_VIEW_KEY)
   : "home";
 let dogShowOverviewDay = "";
@@ -3756,7 +3758,7 @@ function dogShowMasterCalendarDayHtml(items = []) {
   return `<section class="dog-show-master-day-list"><header><span>${escapeHtml(dogShowMasterDate().toLocaleDateString([], { weekday: "long" }))}</span><strong>${escapeHtml(dogShowMasterDate().toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" }))}</strong></header><div>${dayItems.length ? dayItems.map((item) => dogShowMasterCalendarItemHtml(item)).join("") : dogShowRenderEmpty("No shows on this date", "Use the arrows or calendar views to find another show date.")}</div></section>`;
 }
 
-const DOG_SHOW_REGISTRATION_STATUSES = ["Planned to go", "Not registered yet", "Registered"];
+const DOG_SHOW_REGISTRATION_STATUSES = ["Planned to go", "Not registered yet", "Submitted — awaiting confirmation", "Registered"];
 
 function dogShowEntryRegistrationStatus(entry = {}) {
   if (entry.registrationStatus === "") return "";
@@ -3773,7 +3775,7 @@ function dogShowRegistrationOptions(entry = {}) {
 }
 
 function dogShowEntryPlanningLocked(entry = {}, event = {}) {
-  return event.status === "Completed" || ["Completed", "Scratched", "Cancelled", "Canceled"].includes(entry.status);
+  return Boolean(entry.entryRegistrations?.length) || event.status === "Completed" || ["Completed", "Scratched", "Cancelled", "Canceled"].includes(entry.status);
 }
 
 function dogShowMasterCalendarListHtml(items = [], selectedDate = "") {
@@ -4252,6 +4254,27 @@ function scheduleDogShowPlannerLazyLoad() {
   requestAnimationFrame(loadWhenNearViewport);
 }
 
+const dogShowRegistrationStore = createRegistrationStore({
+  read: type => readRecords(type),
+  local: () => localTestMode === true,
+  connected: () => Boolean(supabaseClient),
+  allowed: type => ["admin", "staff", "helper"].includes(currentRole()) && canWriteRemoteRecord({ type }),
+  request: callback => cuddleStayRequest(callback),
+  timeout: (promise, label) => withRemoteRequestTimeout(promise, label),
+  identity: payload => remoteWriteIdentity(payload),
+  cache: (type, payload) => upsertRecord(type, payload),
+});
+const dogShowRegistrationWorkspace = createRegistrationWorkspace({
+  read: type => readRecords(type), identity: entry => dogShowDogIdentity(entry),
+  name: entry => dogShowEntryName(entry), schedules: entry => dogShowRingSchedules(entry),
+  date: value => dogShowEventDayLabel(value), research: event => dogShowPlannerEventResearch(event),
+  today: () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()),
+  canEdit: () => ["admin", "staff", "helper"].includes(currentRole()), actor: () => currentUser?.email || currentUser?.name || "Staff",
+  dialog: (title, html) => openDogShowDialog(title, html), close: () => document.getElementById("dogShowDialog")?.close(),
+  assignment: entry => { localStorage.setItem(DOG_SHOW_EVENT_KEY, entry.showEventId); openDogShowEntryForm(entry); },
+  render: () => renderDogShow(), save: (...args) => dogShowRegistrationStore.save(...args), check: (...args) => dogShowRegistrationStore.check(...args),
+});
+
 function renderDogShow() {
   const content = document.getElementById("dogShowContent");
   if (!content) return;
@@ -4268,21 +4291,22 @@ function renderDogShow() {
   const groupContext = document.getElementById("dogShowSelectedGroup");
   if (groupContext) groupContext.innerHTML = event ? dogShowSelectedGroupHtml(event) : "";
   const scope = document.getElementById("dogShowScope");
-  if (scope) scope.textContent = ["planner", "calendar"].includes(dogShowView) ? "Scope: All shows" : ["progress", "calculator"].includes(dogShowView) ? "Scope: Across shows" : dogShowView === "expenses" && dogShowFinanceMode !== "current" ? "Scope: Financial reports / invoices" : "Scope: Selected individual show";
+  if (scope) scope.textContent = ["planner", "calendar"].includes(dogShowView) ? "Scope: All shows" : ["progress", "calculator", "registration"].includes(dogShowView) ? "Scope: Across shows" : dogShowView === "expenses" && dogShowFinanceMode !== "current" ? "Scope: Financial reports / invoices" : "Scope: Selected individual show";
   document.getElementById("dogShowPage")?.setAttribute("data-show-view", dogShowView);
   document.querySelectorAll("[data-dog-show-view]").forEach((button) => {
-    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(dogShowView);
+    const mobileMoreActive = button.closest("#dogShowMobileNav") && button.dataset.dogShowView === "more" && ["progress", "planner", "calendar", "registration", "calculator", "expenses", "results", "packing", "helpers"].includes(dogShowView);
     const resultsActive = button.closest("#dogShowDesktopNav") && button.dataset.dogShowView === "results" && ["results", "progress", "calculator"].includes(dogShowView);
     const active = mobileMoreActive || resultsActive || button.dataset.dogShowView === dogShowView;
     button.classList.toggle("is-active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
-  if (!event && !["progress", "planner", "calendar", "calculator", "expenses"].includes(dogShowView)) {
+  if (!event && !["progress", "planner", "calendar", "registration", "calculator", "expenses"].includes(dogShowView)) {
     content.innerHTML = dogShowRenderEmpty("Create the first show weekend", "Add the event once, then build the roster, prep schedule, helper tasks, and results.");
     return;
   }
   const renderers = {
+    registration: () => dogShowRegistrationWorkspace.render(),
     results: event => dogShowOperationsDestinationHtml(event, "results"),
     packing: event => dogShowOperationsDestinationHtml(event, "packing"),
     helpers: event => dogShowOperationsDestinationHtml(event, "team"),
@@ -4310,7 +4334,7 @@ function renderDogShow() {
 }
 
 function setDogShowView(view = "home", progressTab = "", eventId = "") {
-  if (!["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(view)) return;
+  if (!["home", "dogs", "registration", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(view)) return;
   recordDogShowNavigation("replace");
   if (eventId) {
     localStorage.setItem(DOG_SHOW_EVENT_KEY, eventId);
@@ -4573,6 +4597,7 @@ function dogShowRingScheduleRowHtml(schedule = {}, index = 0) {
       <label>Ring time<input type="time" name="ringTime" value="${escapeHtml(schedule.ringTime || "")}"/></label>
       <label>Ring number<input name="ringNumber" value="${escapeHtml(schedule.ringNumber || "")}" placeholder="14"/></label>
       <label>Class entered<input name="classEntered" value="${escapeHtml(schedule.classEntered || "")}" placeholder="Open Bitch"/></label>
+      <label>Competition<input name="competition" value="${escapeHtml(schedule.competition || schedule.competitionType || "")}" placeholder="Regular breed, 4–6 Month Beginner Puppy, Sweepstakes…"/><small>Keep separate competitions in separate appearances.</small></label>
       <fieldset class="dog-show-breed-entry-counts dog-show-field-wide">
         <legend>Breed entry counts</legend>
         <p>Dogs – Bitches – Dog specials – Bitch specials</p>
@@ -4602,6 +4627,7 @@ function dogShowRingScheduleFromRow(row) {
     ringTime: value("ringTime"),
     ringNumber: value("ringNumber"),
     classEntered: value("classEntered"),
+    competition: value("competition"),
     armbandNumber: value("armbandNumber"),
     judge: value("judge"),
     classDogCount: Math.max(0, Number(value("classDogCount") || 0)),
@@ -5326,6 +5352,7 @@ async function saveDogShowEntry(form) {
     ...entry,
     ...data,
     ringSchedules,
+    registrationStatus: entry.entryRegistrations?.length ? registrationStatusForEntry({ ...entry, ...data }, dogShowEvents().find(event => event.id === entry.showEventId) || {}, ringSchedules) : data.registrationStatus ?? entry.registrationStatus,
     ringDate: firstSchedule.ringDate || "",
     ringTime: firstSchedule.ringTime || "",
     ringNumber: firstSchedule.ringNumber || "",
@@ -5760,6 +5787,7 @@ function setupDogShowEventListeners() {
   const page = document.getElementById("dogShowPage");
   if (!page || page.dataset.dogShowBound === "true") return;
   page.dataset.dogShowBound = "true";
+  dogShowRegistrationWorkspace.bind();
   const mobileNav = document.getElementById("dogShowMobileNav");
   const dialog = document.getElementById("dogShowDialog");
 
@@ -5802,7 +5830,7 @@ function setupDogShowEventListeners() {
     if (!navigation || window.location.hash !== "#dogShowPage") return;
     if (dogShowOperationalEvents().some(show => show.id === navigation.eventId)) localStorage.setItem(DOG_SHOW_EVENT_KEY, navigation.eventId);
     if (["overview", "dogs", "judges"].includes(navigation.progressTab)) dogShowProgressTab = navigation.progressTab;
-    if (["home", "dogs", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(navigation.view)) dogShowView = navigation.view;
+    if (["home", "dogs", "registration", "schedule", "tasks", "more", "progress", "planner", "calendar", "calculator", "expenses", "results", "packing", "helpers"].includes(navigation.view)) dogShowView = navigation.view;
     localStorage.setItem(DOG_SHOW_VIEW_KEY, dogShowView);
     localStorage.setItem(DOG_SHOW_PROGRESS_TAB_KEY, dogShowProgressTab);
     dogShowSelectedTaskIds.clear(); dogShowOverviewDay = "";
@@ -6307,6 +6335,7 @@ function setupDogShowEventListeners() {
     if (action.dataset.dogShowMoreAction === "progress") setDogShowView("progress");
     if (action.dataset.dogShowMoreAction === "planner") setDogShowView("planner");
     if (action.dataset.dogShowMoreAction === "calendar") setDogShowView("calendar");
+    if (action.dataset.dogShowMoreAction === "registration") setDogShowView("registration");
     if (action.dataset.dogShowMoreAction === "calculator") setDogShowView("calculator");
     if (action.dataset.dogShowMoreAction === "expenses") setDogShowView("expenses");
     if (action.dataset.dogShowMoreAction === "boarding") switchPage("dashboardPage", { history: "push" });
