@@ -102,6 +102,7 @@ function syncBoardingWorkspaceTab(tabName) {
   const footer = modal.querySelector('.boarding-workspace-footer');
   footer.hidden = !editable;
   if (tabName === 'Medical/Behavior') renderBoardingWorkspaceCareLog(activeBoardingDog() || {});
+  if (tabName === 'Registration' && window.dogRegistrationProfileHtml) document.getElementById('boardingRegistrationProfile').innerHTML = window.dogRegistrationProfileHtml('boardingDog', activeBoardingDog());
 }
 
 function renderBoardingWorkspaceCareLog(record = {}) {

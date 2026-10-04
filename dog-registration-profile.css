@@ -1,0 +1,10 @@
+.dog-registration-profile header,.dog-registration-dialog header{display:flex;align-items:start;justify-content:space-between;gap:1rem}
+.dog-registration-profile{min-width:0}.dog-registration-profile p{line-height:1.5}.dog-registration-status{padding:.8rem;background:#e8f3fc;border-radius:8px}
+.dog-registration-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 1.5rem;margin:1rem 0}
+.dog-registration-facts>div{padding:1rem 0;border-bottom:1px solid #d3dfeb;min-width:0}.dog-registration-facts dt{font-size:.85rem;color:#496680;margin-bottom:.4rem}
+.dog-registration-facts dd{margin:0;display:flex;align-items:start;justify-content:space-between;gap:.6rem;white-space:pre-wrap;overflow-wrap:anywhere;font-weight:600}.dog-registration-facts button{flex-shrink:0;padding:.4rem .6rem}
+.dog-registration-profile details{margin:1rem 0}.dog-registration-profile summary{cursor:pointer;font-weight:600;padding:.6rem 0}
+.dog-registration-dialog{width:min(850px,94vw);max-height:90dvh;overflow:auto;border:1px solid #cad9e8;border-radius:14px;padding:1.5rem;color:#14324e;background:#fff}
+.dog-registration-dialog::backdrop{background:#102f4e88}.dog-registration-dialog form{display:grid;gap:1rem}.dog-registration-dialog h2{margin:0}
+.dog-registration-dialog label{display:grid;gap:.4rem}.dog-registration-dialog input{width:100%;min-width:0}.dog-registration-dialog [role=alert]{color:#aa2424}
+@media(max-width:760px){.dog-registration-facts{grid-template-columns:1fr}.dog-registration-profile header{display:block}.dog-registration-profile header button{margin:.5rem 0}.dog-registration-dialog{padding:1rem}.dog-registration-dialog .field-grid{grid-template-columns:1fr}}

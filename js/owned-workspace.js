@@ -11,6 +11,7 @@ function ownedWorkspaceIcon(name) {
     'Heat Cycle': '<path d="M20 7a9 9 0 1 0 1 9M20 2v5h-5M12 7v5l3 2"/>',
     'Medical / Care Notes': '<path d="M4 4h16v16H4zM12 8v8M8 12h8"/>',
     Files: '<path d="M5 3h9l5 5v13H5zM14 3v6h5M8 13h8M8 17h6"/>',
+    Registration: '<path d="M5 3h9l5 5v13H5zM14 3v6h5M8 13h8M8 17h6"/>',
     Timeline: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/>'
   };
   return '<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || paths.Overview) + '</svg>';
@@ -268,7 +269,7 @@ function refreshOwnedWorkspace() {
   const read = ownedWorkspaceMode === 'view';
   modal.dataset.mode = ownedWorkspaceMode;
   const panel = document.getElementById('ownedWorkspaceReadPanel');
-  const native = !read || ['Files','Timeline'].includes(tab);
+  const native = !read || ['Files','Timeline','Registration'].includes(tab);
   modal.querySelectorAll('.owned-profile-section').forEach(section => {
     section.hidden = !native || section.dataset.ownedProfileSection !== tab;
     section.setAttribute('role', 'tabpanel');
@@ -292,9 +293,10 @@ function refreshOwnedWorkspace() {
     hydrateProfilePhotoElements(panel);
   } else panel.innerHTML = '';
   const dog = activeOwnedDog();
+  if (tab === 'Registration' && window.dogRegistrationProfileHtml) document.getElementById('ownedRegistrationProfile').innerHTML = window.dogRegistrationProfileHtml('ownedDog', dog);
   if (dog && tab === 'Files') renderOwnedDogFiles(dog);
   if (dog && tab === 'Timeline') renderOwnedActivity(dog);
-  modal.querySelector('.owned-dog-submit-row').hidden = read;
+  modal.querySelector('.owned-dog-submit-row').hidden = read || tab === 'Registration';
 }
 
 function openOwnedWorkspaceCare(dog) {

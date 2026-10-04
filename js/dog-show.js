@@ -4,7 +4,7 @@ import {
   akcPointCalculatorStates2026,
   calculateAkcBreedPointScenarios2026,
 } from "./dog-show-point-calculator.js?v=20260727-akc-all-breed-calculator-special-outcomes-v2-canonical-point-data-v30";
-import { createRegistrationWorkspace, registrationStatusForEntry } from "./dog-show-registration.js?v=20261004-registration-2";
+import { createRegistrationWorkspace, registrationStatusForEntry } from "./dog-show-registration.js?v=20261004-profile-1";
 import { createRegistrationStore } from "./dog-show-registration-store.js?v=20261003-registration-1";
 
 // === MODULE: DOG SHOW ===
@@ -4274,6 +4274,7 @@ const dogShowRegistrationWorkspace = createRegistrationWorkspace({
   assignment: entry => { localStorage.setItem(DOG_SHOW_EVENT_KEY, entry.showEventId); openDogShowEntryForm(entry); },
   render: () => renderDogShow(), save: (...args) => dogShowRegistrationStore.save(...args), check: (...args) => dogShowRegistrationStore.check(...args),
 });
+document.addEventListener('dog-registration-saved', () => { if (activePageId() === 'dogShowPage') renderDogShow(); });
 
 function renderDogShow() {
   const content = document.getElementById("dogShowContent");

@@ -65,7 +65,8 @@ assert(fn(boarding,'saveBoardingStayFromForm').includes('boardingEditorShowsReco
 assert(workspace.includes('await handleBoardingTransition(dog, next, options)'));
 assert(workspace.includes('openBoardingMedicalBehaviorNotePopup(dog, reference)'));
 assert(workspace.includes("button.setAttribute('aria-selected', String(selected))"));
-assert.equal((index.match(/data-workspace-icon=/g)||[]).length,9);
+assert.equal((index.match(/data-workspace-icon=/g)||[]).length,10);
+assert(index.includes('id="boardingRegistrationProfile"'));
 assert(css.includes('max-width:760px'));
 assert(css.includes('grid-template-columns:minmax(0,1fr) 285px'));
 assert(index.includes('js/boarding-workspace.js?v=boarding-workspace-v112'));

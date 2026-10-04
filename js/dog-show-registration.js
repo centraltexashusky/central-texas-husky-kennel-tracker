@@ -19,7 +19,7 @@ export function safeRegistrationUrl(value) {
 }
 export function registrationPassport(profile = {}) {
   const saved = profile.showEntryPassport || {};
-  const defaults = { registeredName: profile.type === "ownedDog" ? profile.showName || profile.registeredName : profile.registeredName || profile.showName, akcRegistrationNumber: profile.akcRegistrationNumber,
+  const defaults = { registeredName: profile.registeredName || profile.showName, akcRegistrationNumber: profile.akcRegistrationNumber,
     sireName: profile.sireName, damName: profile.damName, dateOfBirth: profile.dateOfBirth,
     breed: profile.breedDescription || profile.breed, sex: profile.sex, ownerNames: profile.ownerNames || profile.ownerName,
     breederNames: profile.breederNames || profile.breederName, ownerAddress: profile.ownerAddress,
@@ -104,8 +104,8 @@ export function passportPatch(profile, values, actor, now) {
   const passport = Object.fromEntries(passportFields.map(([key]) => [key, String(values[key] || "").trim()]));
   if (passport.dateOfBirth && !validDate(passport.dateOfBirth)) throw new Error("Enter a valid birth date.");
   if (passport.certificateUrl && !safeRegistrationUrl(passport.certificateUrl)) throw new Error("Use an http or https certificate link.");
-  return { showEntryPassport: { ...passport, reviewedAt: now, reviewedBy: actor },
-    registeredName: passport.registeredName, ...(profile.type === "ownedDog" ? { showName: passport.registeredName } : {}),
+  return { showEntryPassport: { ...profile.showEntryPassport, ...passport, reviewedAt: now, reviewedBy: actor },
+    registeredName: passport.registeredName, ...(profile.type === "ownedDog" && !profile.showName ? { showName: passport.registeredName } : {}),
     akcRegistrationNumber: passport.akcRegistrationNumber, sireName: passport.sireName, damName: passport.damName,
     dateOfBirth: passport.dateOfBirth, breed: passport.breed, breedDescription: passport.breed, sex: passport.sex };
 }
