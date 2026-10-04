@@ -27,6 +27,7 @@ const dog=queue[0], appearance=dog.appearances[0];
 assert.equal(appearance.status,'Planned to go','Confirmed attendance never implies registration');
 assert.equal(registrationAppearances({...entry,registrationStatus:'',status:'Entered'},show,entry.ringSchedules)[0].status,'Planned to go','Explicit cleared status is not evidence');
 assert.equal(registrationAppearances({...entry,ringSchedules:[]},show,[])[0].date,'','Multiday show cannot guess the entry day');
+assert.equal(registrationAppearances({...entry,ringSchedules:[]},{...show,showType:'AB/JS'},[])[0].competition,'','Broad show category is not the dog’s selected competition');
 assert.equal(registrationEligibility({dateOfBirth:'2026-04-16'},appearance).blocked,true);
 assert.equal(registrationEligibility({dateOfBirth:'2026-04-15'},{...appearance,competition:'4–6 Month Beginner Puppy'}).blocked,true);
 assert.throws(()=>registrationPatch(dog,appearance,{status:'Registered'},'test','now'),/reference/);

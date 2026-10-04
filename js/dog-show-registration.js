@@ -56,7 +56,9 @@ export function registrationAppearances(entry, event, schedules = []) {
   return source.map((ring, index) => {
     const id = ring.id || `${entry.id}-ring-${index + 1}`;
     const date = ring.ringDate || (event.startDate === (event.endDate || event.startDate) ? event.startDate : "");
-    const competition = ring.competition || ring.competitionType || event.showType || "";
+    // An event category such as AB/JS describes the whole show, not which
+    // competition this dog is entered in (it may also offer beginner puppy).
+    const competition = ring.competition || ring.competitionType || entry.competition || "";
     const context = JSON.stringify([event.id, date, ring.classEntered || "", competition]);
     const records = Array.isArray(entry.entryRegistrations) ? entry.entryRegistrations : [];
     const record = [...records].reverse().find(item => item.appearanceId === id && item.context === context);
