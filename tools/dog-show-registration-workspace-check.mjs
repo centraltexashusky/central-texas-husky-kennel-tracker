@@ -9,7 +9,7 @@ const show = { id:'show-one', type:'showEvent', name:'Belton · Example KC', sta
 const entry = { id:'entry-one', type:'showEntry', dogType:'ownedDog', dogId:profile.id, dogName:'Blossom', showEventId:show.id, attendanceRole:'Showing', status:'Confirmed', ringSchedules:[{id:'thu',ringDate:'2026-10-15',classEntered:'Open Bitch',competition:'Regular breed'},{id:'fri',ringDate:'2026-10-16',classEntered:'Open Bitch',competition:'Regular breed'}], notes:'Keep this', prepMinutes:45 };
 const secondProfile = { id:'dog-two', type:'customerDog', dogName:'Mango', dateOfBirth:'' };
 const records = { ownedDog:[profile], customerDog:[secondProfile], boardingDog:[{id:'stay-one',linkedCustomerDogId:'dog-two'},{id:'stay-two',linkedCustomerDogId:'dog-two'}], showEvent:[show,{...show,id:'show-two',name:'Example KC · Saturday',startDate:'2026-10-17',endDate:'2026-10-17',entryUrl:'',superintendent:'Another provider'}], showEntry:[entry,{...entry,id:'entry-two',dogType:'boardingDog',dogId:'stay-one',dogName:'Mango',ringSchedules:[]},{...entry,id:'entry-three',showEventId:'show-two',dogType:'boardingDog',dogId:'stay-two',dogName:'Mango',ringSchedules:[]},{...entry,id:'social',dogId:'social-dog',attendanceRole:'Socialization'}] };
-const deps = { read:type=>records[type]||[], identity:entry=>entry.dogType==='boardingDog'?`customerDog:${records.boardingDog.find(dog=>dog.id===entry.dogId).linkedCustomerDogId}`:`${entry.dogType}:${entry.dogId}`, name:entry=>entry.dogName, schedules:entry=>entry.ringSchedules||[], research:()=>({}), date:v=>v, today:()=> '2026-10-04' };
+const deps = { read:type=>records[type]||[], identity:entry=>entry.dogType==='boardingDog'?`customerDog:${records.boardingDog.find(dog=>dog.id===entry.dogId).linkedCustomerDogId}`:`${entry.dogType}:${entry.dogId}`, name:entry=>entry.dogName, schedules:entry=>entry.ringSchedules||[], research:()=>({}), date:v=>v, today:()=> '2026-10-04', canEdit:()=>true };
 assert.equal(registrationAge('2026-04-15','2026-10-14'),5);
 assert.equal(registrationAge('2026-04-15','2026-10-15'),6);
 assert.equal(registrationAge('2026-06-15','2026-10-14'),3);
@@ -97,6 +97,41 @@ assert.match(html,/Entry link missing|Open Example superintendent/);
 assert.match(html,/Not registered only/);
 assert(!html.includes('social-dog'));
 assert.match(html,/target="_blank" rel="noopener noreferrer"/);
+assert.match(html,/data-reg-status=/);
+assert.match(html,/Saves automatically/);
+assert(!html.includes('Record registration'),'Quick status replaces the modal action');
+assert.match(html,/<summary>More options<\/summary>/,'Optional paperwork is tucked away');
+const handlers={}; let rendered='', savedStatus=null, checks=[], statusFail=false, releaseSave;
+const statusWorkspace=createRegistrationWorkspace({...deps,actor:()=> 'tester',check:async(type)=>checks.push(type),
+  save:async(type,base,patch)=>{if(statusFail)throw Error('Simulated save failure'); await new Promise(resolve=>releaseSave=resolve); savedStatus={type,base,patch};},
+  render:()=>{rendered=statusWorkspace.render();}});
+statusWorkspace.bind({addEventListener:(name,fn)=>handlers[name]=fn});
+rendered=statusWorkspace.render();
+const key=rendered.match(/data-reg-status="([^"]+)"/)[1];
+const change={target:{dataset:{regStatus:key},value:'Registered',matches:s=>s==='[data-reg-status]'}};
+handlers.change(change);
+assert.match(rendered,/Saving status/);
+assert.match(rendered,/data-reg-status="[^"]+"[^>]* disabled/,'Disable status controls while saving');
+await new Promise(resolve=>setImmediate(resolve));
+handlers.change(change);
+releaseSave(); await new Promise(resolve=>setImmediate(resolve));
+assert.equal(savedStatus.patch.entryRegistrations.at(-1).status,'Registered');
+assert.deepEqual(checks,['showEvent','ownedDog'],'Reject concurrent profile/event changes before saving');
+assert.equal(savedStatus.base.id,entry.id);
+assert.match(rendered,/Registered saved/);
+statusFail=true;savedStatus=null;change.target.value='Registered';handlers.change(change);await new Promise(resolve=>setImmediate(resolve));
+assert.equal(savedStatus,null);assert.match(rendered,/Simulated save failure/);
+assert.match(rendered,/<option selected>Planned to go/,'Failed save retains persisted status');
+const withPaperwork={...appearance,entry:savedEntry,record:{reference:'KEEP',receiptUrl:'https://example.com/receipt',notes:'Preserve notes'}};
+const statusOnly=registrationPatch(dog,withPaperwork,{...withPaperwork.record,status:'Submitted — awaiting confirmation'},'test','later');
+assert.equal(statusOnly.entryRegistrations.at(-1).reference,'KEEP');
+assert.equal(statusOnly.entryRegistrations.at(-1).notes,'Preserve notes');
+assert.equal(statusOnly.entryRegistrations.at(-1).receiptUrl,'https://example.com/receipt');
+assert.equal(statusOnly.entryRegistrations.length,2,'Quick changes append history');
+statusWorkspace.state.key='customerDog:dog-two';
+const mangoHtml=statusWorkspace.render();
+const mangoKeys=[...mangoHtml.matchAll(/data-reg-status="([^"]+)"/g)].map(match=>match[1]);
+assert.equal(new Set(mangoKeys).size,2,'Primary appearances on different shows must not share status keys');
 console.log('Registration workspace passed: canonical identity, date/age boundaries, exact appearances, profile snapshots, legacy status, URL safety, concurrent saves, permissions and cloud error handling.');
 
 // Explicit localhost-only harness: no production data, credentials or network writes.

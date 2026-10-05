@@ -141,6 +141,8 @@ export function registrationPatch(dog, appearance, values, actor, now) {
 export function createRegistrationWorkspace(deps) {
   const state = { mode: "dog", key: "", eventId: "", pending: true, search: "", notice: "" };
   let editContext = null, bound = false;
+  let statusSaving = false;
+  const statusContexts = new Map(), statusMessages = new Map();
   const button = (action, label, extra = "") => `<button type="button" class="secondary-button" data-reg-action="${action}" ${extra}>${label}</button>`;
   const pill = (text, warn = false) => `<span class="reg-pill${warn ? " is-warning" : ""}">${esc(text)}</span>`;
   const fieldHtml = (passport, fields) => fields.map(([key, label]) => `<div class="reg-field"><div><small>${esc(label)}</small><strong>${esc(passport[key] || "Not provided")}</strong></div>${passport[key] ? button("copy-field", "⧉", `data-field="${key}" aria-label="Copy ${esc(label)}"`) : ""}</div>`).join("");
@@ -152,6 +154,9 @@ export function createRegistrationWorkspace(deps) {
     return url ? `<a class="reg-primary-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open ${esc(event.superintendent || research.superintendent || "superintendent")} ↗</a>${direct ? "" : '<small>Provider website · select this exact event there.</small>'}` : '<small class="reg-warning">Entry link missing. Add the official superintendent link.</small>';
   }
   function appearanceHtml(dog, item, index) {
+    const statusKey = `${dog.key}:${item.entry.id}:${item.id}`;
+    statusContexts.set(statusKey, structuredClone({ dog, appearance: item }));
+    const statusMessage = statusMessages.get(statusKey);
     const research = deps.research(item.event), eligibility = registrationEligibility(dog.passport, item);
     const closing = item.event.entryClosingDate || research.entryClosingDate || "";
     const expired = closing && closing < deps.today();
@@ -162,11 +167,14 @@ export function createRegistrationWorkspace(deps) {
       ${item.legacy ? '<p class="reg-warning">Previously marked registered; no confirmation is saved here. Verify with the superintendent.</p>' : ""}
       ${item.record?.reference ? `<p>Reference: <strong>${esc(item.record.reference)}</strong></p>` : ""}
       ${safeRegistrationUrl(item.record?.receiptUrl) ? `<a href="${esc(safeRegistrationUrl(item.record.receiptUrl))}" target="_blank" rel="noopener noreferrer">View receipt / confirmation ↗</a>` : ""}
-      <div class="reg-card-actions"><div>${linkHtml(item.event)}</div>${button("confirmation", "Record registration", `data-appearance="${index}"`)}${button("assignment", "Review show assignment", `data-appearance="${index}"`)}${button("links", "Edit entry link", `data-appearance="${index}"`)}</div>
+      <div class="reg-card-actions"><div>${linkHtml(item.event)}</div><label class="reg-quick-status">Registration status<select data-reg-status="${esc(statusKey)}" aria-label="Registration status for ${esc(dog.name)} · ${esc(item.event.name)} · ${esc(item.date || "Date not set")}"${statusSaving || !deps.canEdit() ? " disabled" : ""}>${registrationStatuses.map(status => `<option${item.status === status ? " selected" : ""}>${esc(status)}</option>`).join("")}</select><small>Saves automatically</small></label></div>
+      <p class="reg-status-feedback${statusMessage?.error ? " is-error" : ""}" role="status">${esc(statusMessage?.text || "")}</p>
+      <details class="reg-more"><summary>More options</summary><div class="reg-card-actions">${button("confirmation", "Receipt & notes", `data-appearance="${index}"`)}${button("assignment", "Review show assignment", `data-appearance="${index}"`)}${button("links", "Edit entry link", `data-appearance="${index}"`)}</div></details>
       ${item.entry.entryRegistrations?.some(record => record.appearanceId === item.id) ? `<details><summary>Saved entry details & history</summary>${(item.entry.entryRegistrations || []).filter(record => record.appearanceId === item.id).slice().reverse().map(record => `<div class="reg-history"><strong>${esc(record.status)} · ${esc(record.showDate)}</strong><p>${esc(record.competition)} · ${esc(record.classEntered)} · ${esc(record.reference || "No reference")}</p><p>${esc(record.recordedAt)} · ${esc(record.recordedBy)}${record.notes ? ` · ${esc(record.notes)}` : ""}</p><dl>${passportFields.map(([key, label]) => `<dt>${esc(label)}</dt><dd>${esc(record.passportSnapshot?.[key] || "Not recorded")}</dd>`).join("")}</dl></div>`).join("")}</details>` : ""}
     </article>`;
   }
   function render() {
+    statusContexts.clear();
     const all = data();
     const events = [...new Map(all.flatMap(dog => dog.appearances.map(item => [item.event.id, item.event]))).values()].sort((a, b) => a.startDate.localeCompare(b.startDate));
     if (!events.some(event => event.id === state.eventId)) state.eventId = events[0]?.id || "";
@@ -226,9 +234,7 @@ export function createRegistrationWorkspace(deps) {
     }
     if (action === "confirmation") {
       const record = appearance.record || {};
-      const warnings = registrationWarnings(dog, appearance);
-      const advisory = warnings.length ? `<aside class="reg-advisory" aria-label="Registration reminders"><strong>You can save this status with incomplete details.</strong><ul>${warnings.map(message => `<li>${esc(message)}</li>`).join("")}</ul><p>These are reminders, not blockers. You may use information held elsewhere when registering with the superintendent.</p></aside>` : "";
-      form(`Registration · ${dog.name}`, "confirmation", `<p><strong>${esc(appearance.event.name)} · ${esc(appearance.date ? deps.date(appearance.date) : "Date not set")}</strong><br>${esc(appearance.competition || "Competition not set")} · ${esc(appearance.classEntered || "Class not set")}</p><p>Record only what the superintendent confirms. This does not submit an entry or take payment.</p>${advisory}<label>Status<select name="status">${registrationStatuses.map(status => `<option${appearance.status === status ? " selected" : ""}>${esc(status)}</option>`).join("")}</select></label><label>Confirmation / reference number (optional)<input name="reference" value="${esc(record.reference || "")}"/></label><label>Receipt / confirmation link (optional)<input type="url" name="receiptUrl" value="${esc(record.receiptUrl || "")}"/></label><p>A reference or receipt is optional. Add it later if it is stored elsewhere or not yet available.</p><label>Notes<textarea name="notes">${esc(record.notes || "")}</textarea></label><label class="reg-check"><input type="checkbox" name="verified" required/> I checked the dog and show, and this status matches my registration records.</label>`, { dog, appearance, base: structuredClone(appearance.entry), eventBase: structuredClone(appearance.event) });
+      form(`Receipt & notes · ${dog.name}`, "confirmation", `<p><strong>${esc(appearance.event.name)} · ${esc(appearance.date ? deps.date(appearance.date) : "Date not set")}</strong></p><label>Confirmation / reference number (optional)<input name="reference" value="${esc(record.reference || "")}"/></label><label>Receipt / confirmation link (optional)<input type="url" name="receiptUrl" value="${esc(record.receiptUrl || "")}"/></label><label>Notes (optional)<textarea name="notes">${esc(record.notes || "")}</textarea></label>`, { dog, appearance, base: structuredClone(appearance.entry), eventBase: structuredClone(appearance.event) });
     }
   }
   async function submit(event) {
@@ -252,7 +258,7 @@ export function createRegistrationWorkspace(deps) {
         if (!currentDog || JSON.stringify(currentDog.passport) !== JSON.stringify(context.dog.passport)) throw new Error("This profile changed. Close and review it again.");
         await deps.check("showEvent", context.eventBase);
         await deps.check(context.dog.type, context.dog.profile);
-        const patch = registrationPatch(context.dog, context.appearance, values, actor, now);
+        const patch = registrationPatch(context.dog, context.appearance, { ...values, status: context.appearance.status }, actor, now);
         await deps.save("showEntry", context.base, patch);
       }
       state.notice = `${kind === "profile" ? "Entry profile" : kind === "links" ? "Official entry link" : "Registration record"} saved.`;
@@ -261,11 +267,36 @@ export function createRegistrationWorkspace(deps) {
       form.querySelector("[data-reg-error]").textContent = error.message || "Save failed. Your changes have not been confirmed. Please retry.";
     } finally { delete form.dataset.saving; form.querySelector('[type="submit"]').disabled = false; }
   }
+  async function changeStatus(target) {
+    const key = target.dataset.regStatus, context = statusContexts.get(key);
+    if (!context) return;
+    const { dog, appearance } = context, status = target.value;
+    if (statusSaving || status === appearance.status) { target.value = appearance.status; return; }
+    statusSaving = true;
+    state.notice = "";
+    statusMessages.set(key, { text: "Saving status…" });
+    deps.render();
+    try {
+      if (!deps.canEdit()) throw new Error("Staff access is required.");
+      await deps.check("showEvent", appearance.event);
+      await deps.check(dog.type, dog.profile);
+      // Keep optional paperwork when changing only the status. Each change is
+      // appended to history and saved against the record displayed to the user.
+      const patch = registrationPatch(dog, appearance, { ...appearance.record, status }, deps.actor(), new Date().toISOString());
+      await deps.save("showEntry", appearance.entry, patch);
+      const text = `${dog.name} · ${appearance.date ? deps.date(appearance.date) : appearance.event.name}: ${status} saved.`;
+      statusMessages.set(key, { text });
+      state.notice = text;
+    } catch (error) {
+      statusMessages.set(key, { error: true, text: error.message || "Status could not be saved. Try again." });
+    } finally { statusSaving = false; deps.render(); }
+  }
   return { render, state, bind(root = document) {
     if (bound) return; bound = true;
     root.addEventListener("click", event => { void click(event); });
     root.addEventListener("submit", event => { void submit(event); });
     root.addEventListener("change", event => {
+      if (event.target.matches("[data-reg-status]")) { void changeStatus(event.target); return; }
       if (event.target.matches("[data-reg-event]")) { state.eventId = event.target.value; deps.render(); }
       if (event.target.matches("[data-reg-pending]")) { state.pending = event.target.checked; deps.render(); }
     });
