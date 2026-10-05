@@ -61,14 +61,15 @@
   .reg-show-card>header>div { width:100%; }
   .reg-show-body { grid-template-columns:1fr; gap:20px; }
   .reg-show-controls { padding:12px; }
-  .reg-show-controls .reg-quick-status select { font-size:13px; padding-left:8px; padding-right:20px; }
 }
 .reg-card-actions { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px; margin:16px 0 0; }
 .reg-card-actions>div { display:grid; gap:6px; }
 .reg-primary-link { display:inline-flex; align-items:center; min-height:40px; padding:9px 12px; border-radius:6px; background:#096da8; color:white!important; font-weight:700; text-decoration:none; font-size:13px; }
 .reg-card-actions small { max-width:250px; }
 .reg-quick-status { display:grid; gap:6px; flex:1 1 260px; min-width:0; max-width:100%; font-size:13px; font-weight:600; text-transform:none!important; letter-spacing:normal!important; }
-.reg-quick-status select { width:100%; min-width:0; min-height:44px; font-size:14px; }
+.reg-quick-status .reg-progress-button { width:100%; min-width:0; min-height:44px; white-space:normal; font-size:14px; margin-top:6px; }
+.reg-quick-status>strong { color:#526d85; font-size:13px; font-weight:400; }
+.reg-quick-status .reg-progress-button:disabled { cursor:default; }
 .reg-quick-status small { font-weight:400; color:#526d85; }
 .reg-status-feedback:empty { display:none; }
 .reg-workspace .reg-status-feedback.is-error { color:#aa2525; }

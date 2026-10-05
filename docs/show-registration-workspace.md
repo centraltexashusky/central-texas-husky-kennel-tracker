@@ -5,6 +5,13 @@ same canonical dogs and records. Only Showing entries in open, non-removed shows
 appear; socializing attendance is unchanged. Past shows stay until explicitly
 completed, matching the existing operational selection rule.
 
+Show cards offer one-click forward progression: Planned to go → Not registered
+yet → Submitted — awaiting confirmation → Registered. Registered is terminal;
+it never cycles backward. More options → Status, receipt & notes retains the
+full dropdown for reversals or direct changes. Every forward click saves only
+that appearance, preserves existing paperwork, and appends history. Incomplete
+profiles remain advisory; none of these controls submit an external entry.
+
 ## Data and boundaries
 
 - `showEntryPassport` lives on the explicitly linked customer/owned dog profile,
