@@ -33,6 +33,36 @@
 .reg-pill.is-warning { background:#fff4d8; color:#80520b; }
 .reg-workspace .reg-warning { color:#80520b; }
 .reg-show-card { margin-bottom:12px; }
+.reg-show-card { container:registration-card / inline-size; padding:22px; }
+.reg-show-card>header { align-items:flex-start; gap:16px; padding-bottom:20px; border-bottom:1px solid #e2eaf1; }
+.reg-show-card>header>div { flex:1; min-width:0; }
+.reg-show-card>header small { display:block; color:#526d85; margin-bottom:7px; }
+.reg-show-body { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,.9fr); gap:24px; padding:22px 0; }
+.reg-show-details { min-width:0; }
+.reg-show-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:22px 18px; margin:0; }
+.reg-show-facts dt,.reg-eligibility>span,.reg-provider>span { display:block; font-size:12px; font-weight:600; color:#526d85; margin-bottom:7px; }
+.reg-show-facts dd { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:0; font-size:14px; font-weight:600; overflow-wrap:anywhere; }
+.reg-show-facts .reg-deadline { grid-column:1/-1; }
+.reg-deadline small { display:block; color:#526d85; font-size:12px; line-height:1.5; margin-top:6px; }
+.reg-deadline-badge { background:#fff4d8; color:#80520b; font-size:11px; padding:3px 7px; border-radius:4px; }
+.reg-eligibility { margin-top:22px; padding-top:18px; border-top:1px solid #e2eaf1; }
+.reg-workspace .reg-eligibility p { font-size:13px; margin:0; }
+.reg-workspace .reg-eligibility.reg-warning p { color:#80520b; }
+.reg-show-controls { min-width:0; align-self:start; padding:18px; background:#f4f8fb; border:1px solid #e2eaf1; border-radius:8px; }
+.reg-provider { display:grid; gap:8px; margin-top:20px; padding-top:18px; border-top:1px solid #d5e2ec; }
+.reg-provider>span { margin:0; }
+.reg-provider small { font-size:12px; line-height:1.5; color:#526d85; }
+.reg-provider .reg-primary-link { justify-content:center; text-align:center; white-space:normal; overflow-wrap:anywhere; }
+.reg-workspace .reg-show-controls .reg-status-feedback { font-size:12px; color:#176044; margin:8px 0 0; overflow-wrap:anywhere; }
+.reg-workspace .reg-show-controls .reg-status-feedback.is-error { color:#aa2525; }
+.reg-show-card>.reg-more { margin-top:0; }
+@container registration-card (max-width:620px) {
+  .reg-show-card>header { flex-direction:column; align-items:flex-start; }
+  .reg-show-card>header>div { width:100%; }
+  .reg-show-body { grid-template-columns:1fr; gap:20px; }
+  .reg-show-controls { padding:12px; }
+  .reg-show-controls .reg-quick-status select { font-size:13px; padding-left:8px; padding-right:20px; }
+}
 .reg-card-actions { display:flex; align-items:flex-start; flex-wrap:wrap; gap:8px; margin:16px 0 0; }
 .reg-card-actions>div { display:grid; gap:6px; }
 .reg-primary-link { display:inline-flex; align-items:center; min-height:40px; padding:9px 12px; border-radius:6px; background:#096da8; color:white!important; font-weight:700; text-decoration:none; font-size:13px; }

@@ -101,6 +101,11 @@ assert.match(html,/data-reg-status=/);
 assert.match(html,/Saves automatically/);
 assert(!html.includes('Record registration'),'Quick status replaces the modal action');
 assert.match(html,/<summary>More options<\/summary>/,'Optional paperwork is tucked away');
+assert.match(html,/class="reg-show-facts"/,'Show facts are grouped separately from controls');
+assert.match(html,/<dt>Competition<\/dt>/);
+assert.match(html,/<dt>Class<\/dt>/);
+assert.match(html,/class="reg-show-controls"/);
+assert.match(html,/>Age & eligibility<\/span>/);
 const handlers={}; let rendered='', savedStatus=null, checks=[], statusFail=false, releaseSave;
 const statusWorkspace=createRegistrationWorkspace({...deps,actor:()=> 'tester',check:async(type)=>checks.push(type),
   save:async(type,base,patch)=>{if(statusFail)throw Error('Simulated save failure'); await new Promise(resolve=>releaseSave=resolve); savedStatus={type,base,patch};},

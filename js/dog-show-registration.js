@@ -151,7 +151,7 @@ export function createRegistrationWorkspace(deps) {
   function linkHtml(event) {
     const research = deps.research(event);
     const direct = safeRegistrationUrl(event.entryUrl), url = direct || safeRegistrationUrl(event.superintendentUrl || research.superintendentUrl);
-    return url ? `<a class="reg-primary-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open ${esc(event.superintendent || research.superintendent || "superintendent")} ↗</a>${direct ? "" : '<small>Provider website · select this exact event there.</small>'}` : '<small class="reg-warning">Entry link missing. Add the official superintendent link.</small>';
+    return url ? `<a class="reg-primary-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Open ${esc(event.superintendent || research.superintendent || "superintendent")} ↗</a><small>${direct ? "Opens this show's entry page." : "Choose this show on the provider’s website."}</small>` : '<small class="reg-warning">Entry link missing. Add the official superintendent link.</small>';
   }
   function appearanceHtml(dog, item, index) {
     const statusKey = `${dog.key}:${item.entry.id}:${item.id}`;
@@ -161,14 +161,17 @@ export function createRegistrationWorkspace(deps) {
     const closing = item.event.entryClosingDate || research.entryClosingDate || "";
     const expired = closing && closing < deps.today();
     return `<article class="reg-show-card"><header><div><small>${esc(item.date ? deps.date(item.date) : "Exact show date needed")}</small><h4>${esc(item.event.name || "Dog show")}</h4></div>${pill(item.status, item.status !== "Registered")}</header>
-      <p>${esc(item.competition || "Competition not set")} · ${esc(item.classEntered || "Class not set")}</p>
-      <p>Entry deadline: ${esc(closing ? deps.date(closing) : "Not recorded — check premium")}${item.event.entryClosingTime ? ` · ${esc(item.event.entryClosingTime)} ${esc(item.event.entryClosingTimezone || "(confirm time zone)")}` : ""}${expired ? " · CLOSED — verify with superintendent" : ""}</p>
-      <p class="${eligibility.blocked ? "reg-warning" : ""}">${esc(eligibility.text)}</p>
+      <div class="reg-show-body"><div class="reg-show-details"><dl class="reg-show-facts">
+        <div><dt>Competition</dt><dd>${esc(item.competition || "Not set")}</dd></div>
+        <div><dt>Class</dt><dd>${esc(item.classEntered || "Not set")}</dd></div>
+        <div class="reg-deadline"><dt>Entry deadline</dt><dd>${esc(closing ? deps.date(closing) : "Not recorded — check premium")}${expired ? '<span class="reg-deadline-badge">Closed</span>' : ""}</dd>${item.event.entryClosingTime ? `<small>${esc(item.event.entryClosingTime)} ${esc(item.event.entryClosingTimezone || "(confirm time zone)")}</small>` : ""}${expired ? '<small>Verify availability with the superintendent.</small>' : ""}</div>
+      </dl><div class="reg-eligibility${eligibility.blocked ? " reg-warning" : ""}"><span>Age & eligibility</span><p>${esc(eligibility.text)}</p></div>
       ${item.legacy ? '<p class="reg-warning">Previously marked registered; no confirmation is saved here. Verify with the superintendent.</p>' : ""}
       ${item.record?.reference ? `<p>Reference: <strong>${esc(item.record.reference)}</strong></p>` : ""}
       ${safeRegistrationUrl(item.record?.receiptUrl) ? `<a href="${esc(safeRegistrationUrl(item.record.receiptUrl))}" target="_blank" rel="noopener noreferrer">View receipt / confirmation ↗</a>` : ""}
-      <div class="reg-card-actions"><div>${linkHtml(item.event)}</div><label class="reg-quick-status">Registration status<select data-reg-status="${esc(statusKey)}" aria-label="Registration status for ${esc(dog.name)} · ${esc(item.event.name)} · ${esc(item.date || "Date not set")}"${statusSaving || !deps.canEdit() ? " disabled" : ""}>${registrationStatuses.map(status => `<option${item.status === status ? " selected" : ""}>${esc(status)}</option>`).join("")}</select><small>Saves automatically</small></label></div>
+      </div><div class="reg-show-controls"><label class="reg-quick-status">Registration status<select data-reg-status="${esc(statusKey)}" aria-label="Registration status for ${esc(dog.name)} · ${esc(item.event.name)} · ${esc(item.date || "Date not set")}"${statusSaving || !deps.canEdit() ? " disabled" : ""}>${registrationStatuses.map(status => `<option${item.status === status ? " selected" : ""}>${esc(status)}</option>`).join("")}</select><small>Saves automatically</small></label>
       <p class="reg-status-feedback${statusMessage?.error ? " is-error" : ""}" role="status">${esc(statusMessage?.text || "")}</p>
+      <div class="reg-provider"><span>Superintendent</span>${linkHtml(item.event)}</div></div></div>
       <details class="reg-more"><summary>More options</summary><div class="reg-card-actions">${button("confirmation", "Receipt & notes", `data-appearance="${index}"`)}${button("assignment", "Review show assignment", `data-appearance="${index}"`)}${button("links", "Edit entry link", `data-appearance="${index}"`)}</div></details>
       ${item.entry.entryRegistrations?.some(record => record.appearanceId === item.id) ? `<details><summary>Saved entry details & history</summary>${(item.entry.entryRegistrations || []).filter(record => record.appearanceId === item.id).slice().reverse().map(record => `<div class="reg-history"><strong>${esc(record.status)} · ${esc(record.showDate)}</strong><p>${esc(record.competition)} · ${esc(record.classEntered)} · ${esc(record.reference || "No reference")}</p><p>${esc(record.recordedAt)} · ${esc(record.recordedBy)}${record.notes ? ` · ${esc(record.notes)}` : ""}</p><dl>${passportFields.map(([key, label]) => `<dt>${esc(label)}</dt><dd>${esc(record.passportSnapshot?.[key] || "Not recorded")}</dd>`).join("")}</dl></div>`).join("")}</details>` : ""}
     </article>`;
@@ -285,7 +288,7 @@ export function createRegistrationWorkspace(deps) {
       const patch = registrationPatch(dog, appearance, { ...appearance.record, status }, deps.actor(), new Date().toISOString());
       await deps.save("showEntry", appearance.entry, patch);
       const text = `${dog.name} · ${appearance.date ? deps.date(appearance.date) : appearance.event.name}: ${status} saved.`;
-      statusMessages.set(key, { text });
+      statusMessages.set(key, { text: "Saved" });
       state.notice = text;
     } catch (error) {
       statusMessages.set(key, { error: true, text: error.message || "Status could not be saved. Try again." });
