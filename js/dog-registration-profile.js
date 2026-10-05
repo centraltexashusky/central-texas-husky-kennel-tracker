@@ -1,4 +1,4 @@
-import { passportFields, registrationPassport, passportMissing, passportPatch, safeRegistrationUrl } from './dog-show-registration.js?v=20261004-profile-1';
+import { passportFields, registrationPassport, passportMissing, passportPatch, safeRegistrationUrl } from './dog-show-registration.js?v=20261004-registration-advisory-1';
 import { createRegistrationStore } from './dog-show-registration-store.js?v=20261003-registration-1';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

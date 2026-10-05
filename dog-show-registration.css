@@ -50,6 +50,10 @@
 .reg-form [data-reg-error] { color:#aa2525; }
 .reg-form .field-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .reg-form label { min-width:0; }
+.reg-form .reg-advisory { padding:14px; border:1px solid #e6c573; border-radius:8px; background:#fff8e7; color:#634609; }
+.reg-form .reg-advisory ul { margin:8px 0; padding-left:22px; }
+.reg-form .reg-advisory li { margin:5px 0; overflow-wrap:anywhere; }
+.reg-form .reg-advisory p { margin:8px 0 0; color:inherit; }
 @media(max-width:700px) {
   .reg-layout { display:block; }
   .reg-rail { border-right:0; border-bottom:1px solid #d5e2ec; border-radius:10px 10px 0 0; }

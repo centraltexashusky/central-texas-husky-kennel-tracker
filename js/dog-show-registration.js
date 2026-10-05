@@ -109,21 +109,28 @@ export function passportPatch(profile, values, actor, now) {
     akcRegistrationNumber: passport.akcRegistrationNumber, sireName: passport.sireName, damName: passport.damName,
     dateOfBirth: passport.dateOfBirth, breed: passport.breed, breedDescription: passport.breed, sex: passport.sex };
 }
+export function registrationWarnings(dog, appearance) {
+  const warnings = [];
+  const missing = passportMissing(dog.passport);
+  if (missing.length) warnings.push(`Missing from this dog's profile: ${passportFields.filter(([key]) => missing.includes(key)).map(([, label]) => label).join(", ")}.`);
+  if (!passportReviewed(dog.profile)) warnings.push("The current entry profile has not been marked reviewed in Snuggle Stay.");
+  const assignment = [[appearance.date, "Exact show date"], [appearance.competition, "Competition"], [appearance.classEntered, "Class"]].filter(([value]) => !value).map(([, label]) => label);
+  if (assignment.length) warnings.push(`Missing from this show assignment: ${assignment.join(", ")}.`);
+  const eligibility = registrationEligibility(dog.passport, appearance);
+  if (eligibility.blocked) warnings.push(eligibility.text);
+  return warnings;
+}
 export function registrationPatch(dog, appearance, values, actor, now) {
   if (closed(appearance.event) || closed(appearance.entry)) throw new Error("This entry is closed.");
   if (!registrationStatuses.includes(values.status)) throw new Error("Choose a registration status.");
-  if (["Registered", "Submitted — awaiting confirmation"].includes(values.status)) {
-    if (!passportReviewed(dog.profile) || passportMissing(dog.passport).length) throw new Error("Review and complete the entry profile first.");
-    if (!appearance.date || !appearance.classEntered || !appearance.competition) throw new Error("Set the exact date, competition and class in the show assignment first.");
-    if (registrationEligibility(dog.passport, appearance).blocked) throw new Error("Resolve the age / competition warning before recording this entry.");
-    if (!String(values.reference || "").trim() && !String(values.receiptUrl || "").trim()) throw new Error("Add a confirmation/reference number or receipt link.");
-  }
+  // This records externally handled paperwork, not an application to enter a show.
+  // Incomplete local information is advisory and must not block a status update.
   if (values.receiptUrl && !safeRegistrationUrl(values.receiptUrl)) throw new Error("Use an http or https receipt link.");
   const record = { appearanceId: appearance.id, context: appearance.context, showDate: appearance.date,
     competition: appearance.competition, classEntered: appearance.classEntered, status: values.status,
     reference: String(values.reference || "").trim(), receiptUrl: String(values.receiptUrl || "").trim(),
     notes: String(values.notes || "").trim(), recordedAt: now, recordedBy: actor,
-    passportSnapshot: { ...dog.passport }, superintendent: appearance.event.superintendent || "", entryUrl: appearance.event.entryUrl || "" };
+    passportSnapshot: { ...dog.passport }, profileWarnings: registrationWarnings(dog, appearance), superintendent: appearance.event.superintendent || "", entryUrl: appearance.event.entryUrl || "" };
   // Append-only history preserves the data used for each submission, even after profile edits.
   const records = [...(appearance.entry.entryRegistrations || []), record];
   const statuses = dog.appearances.filter(item => item.entry.id === appearance.entry.id).map(item => item.id === appearance.id ? record.status : item.status);
@@ -219,7 +226,9 @@ export function createRegistrationWorkspace(deps) {
     }
     if (action === "confirmation") {
       const record = appearance.record || {};
-      form(`Registration · ${dog.name}`, "confirmation", `<p><strong>${esc(appearance.event.name)} · ${esc(appearance.date ? deps.date(appearance.date) : "Date not set")}</strong><br>${esc(appearance.competition || "Competition not set")} · ${esc(appearance.classEntered || "Class not set")}</p><p>Record only what the superintendent confirms. This does not submit an entry or take payment.</p><label>Status<select name="status">${registrationStatuses.map(status => `<option${appearance.status === status ? " selected" : ""}>${esc(status)}</option>`).join("")}</select></label><label>Confirmation / reference number<input name="reference" value="${esc(record.reference || "")}"/></label><label>Receipt / confirmation link<input type="url" name="receiptUrl" value="${esc(record.receiptUrl || "")}"/></label><label>Notes<textarea name="notes">${esc(record.notes || "")}</textarea></label><label class="reg-check"><input type="checkbox" name="verified" required/> I checked the exact dog, show date, competition and status.</label>`, { dog, appearance, base: structuredClone(appearance.entry), eventBase: structuredClone(appearance.event) });
+      const warnings = registrationWarnings(dog, appearance);
+      const advisory = warnings.length ? `<aside class="reg-advisory" aria-label="Registration reminders"><strong>You can save this status with incomplete details.</strong><ul>${warnings.map(message => `<li>${esc(message)}</li>`).join("")}</ul><p>These are reminders, not blockers. You may use information held elsewhere when registering with the superintendent.</p></aside>` : "";
+      form(`Registration · ${dog.name}`, "confirmation", `<p><strong>${esc(appearance.event.name)} · ${esc(appearance.date ? deps.date(appearance.date) : "Date not set")}</strong><br>${esc(appearance.competition || "Competition not set")} · ${esc(appearance.classEntered || "Class not set")}</p><p>Record only what the superintendent confirms. This does not submit an entry or take payment.</p>${advisory}<label>Status<select name="status">${registrationStatuses.map(status => `<option${appearance.status === status ? " selected" : ""}>${esc(status)}</option>`).join("")}</select></label><label>Confirmation / reference number (optional)<input name="reference" value="${esc(record.reference || "")}"/></label><label>Receipt / confirmation link (optional)<input type="url" name="receiptUrl" value="${esc(record.receiptUrl || "")}"/></label><p>A reference or receipt is optional. Add it later if it is stored elsewhere or not yet available.</p><label>Notes<textarea name="notes">${esc(record.notes || "")}</textarea></label><label class="reg-check"><input type="checkbox" name="verified" required/> I checked the dog and show, and this status matches my registration records.</label>`, { dog, appearance, base: structuredClone(appearance.entry), eventBase: structuredClone(appearance.event) });
     }
   }
   async function submit(event) {

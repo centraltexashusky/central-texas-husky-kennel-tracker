@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { passportFields, passportReviewed, registrationStatusForEntry, registrationAge, registrationAppearances, registrationPassport, registrationEligibility, registrationQueue, registrationPatch, passportPatch, safeRegistrationUrl, createRegistrationWorkspace } from '../js/dog-show-registration.js';
+import { passportFields, passportReviewed, registrationWarnings, registrationStatusForEntry, registrationAge, registrationAppearances, registrationPassport, registrationEligibility, registrationQueue, registrationPatch, passportPatch, safeRegistrationUrl, createRegistrationWorkspace } from '../js/dog-show-registration.js';
 import { assertRegistrationUnchanged, createRegistrationStore } from '../js/dog-show-registration-store.js';
 const profile = { id:'dog-one', type:'ownedDog', callName:'Blossom', dateOfBirth:'2025-04-15', sex:'Female', breed:'Siberian Husky' };
 const fields = Object.fromEntries(passportFields.map(([key]) => [key, 'Example']));
@@ -30,8 +30,25 @@ assert.equal(registrationAppearances({...entry,ringSchedules:[]},show,[])[0].dat
 assert.equal(registrationAppearances({...entry,ringSchedules:[]},{...show,showType:'AB/JS'},[])[0].competition,'','Broad show category is not the dog’s selected competition');
 assert.equal(registrationEligibility({dateOfBirth:'2026-04-16'},appearance).blocked,true);
 assert.equal(registrationEligibility({dateOfBirth:'2026-04-15'},{...appearance,competition:'4–6 Month Beginner Puppy'}).blocked,true);
-assert.throws(()=>registrationPatch(dog,appearance,{status:'Registered'},'test','now'),/reference/);
-assert.throws(()=>registrationPatch({...dog,passport:{...dog.passport,dateOfBirth:''}},appearance,{status:'Registered',reference:'one'},'test','now'),/complete/);
+assert.equal(registrationPatch(dog,appearance,{status:'Registered'},'test','now').entryRegistrations[0].status,'Registered','Receipt/reference is optional');
+const incompleteDog={...dog,profile:{...dog.profile,showEntryPassport:{}},passport:{...dog.passport,dateOfBirth:'',ownerAddress:''}};
+const incompleteAppearance={...appearance,date:'',competition:'',classEntered:''};
+const warnings=registrationWarnings(incompleteDog,incompleteAppearance);
+assert(warnings.some(text=>text.includes('Date of birth')&&text.includes('Owner mailing address')),'Missing fields are named');
+assert(warnings.some(text=>text.includes('not been marked reviewed')),'Review warning is explicit');
+assert(warnings.some(text=>text.includes('Exact show date, Competition, Class')),'Assignment omissions are named');
+for(const status of ['Planned to go','Not registered yet','Submitted — awaiting confirmation','Registered']) {
+  const result=registrationPatch(incompleteDog,incompleteAppearance,{status},'test','now');
+  assert.equal(result.entryRegistrations[0].status,status,'Incomplete local records do not block any status');
+  assert.deepEqual(result.entryRegistrations[0].profileWarnings,warnings,'Warnings captured in history');
+  assert.equal(result.entryRegistrations[0].passportSnapshot.ownerAddress,'','Missing data is not fabricated');
+}
+const ageConflictDog={...dog,passport:{...dog.passport,dateOfBirth:'2026-04-16'}};
+assert.equal(registrationPatch(ageConflictDog,appearance,{status:'Registered'},'test','now').entryRegistrations[0].status,'Registered','External registration may be recorded despite a local age/class warning');
+assert(registrationWarnings(ageConflictDog,appearance).some(text=>text.includes('conflicts')));
+assert.throws(()=>registrationPatch(dog,appearance,{status:'Registered',receiptUrl:'javascript:alert(1)'},'test','now'),/http or https/);
+assert.throws(()=>registrationPatch(dog,{...appearance,event:{...show,status:'Completed'}},{status:'Registered'},'test','now'),/closed/);
+assert.throws(()=>registrationPatch(dog,appearance,{status:'Invalid'},'test','now'),/Choose a registration status/);
 const patch=registrationPatch(dog,appearance,{status:'Registered',reference:'CONF-EXAMPLE'},'test','now');
 assert.equal(patch.registrationStatus,'Not registered yet','One day is not both days');
 assert.equal(patch.entryRegistrations.length,1);
