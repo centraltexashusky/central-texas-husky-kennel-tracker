@@ -17,6 +17,7 @@ create table if not exists public.app_settings (
   id text primary key default 'workspace',
   organization_name text not null default 'Central Texas Husky',
   agreement_config jsonb not null default '{}'::jsonb,
+  payment_methods jsonb not null default '{}'::jsonb check (jsonb_typeof(payment_methods) = 'object'),
   updated_at timestamptz not null default now(),
   updated_by text not null default '',
   constraint app_settings_singleton check (id = 'workspace'),
@@ -26,6 +27,10 @@ create table if not exists public.app_settings (
 
 alter table public.app_settings
   add column if not exists agreement_config jsonb not null default '{}'::jsonb;
+
+alter table public.app_settings
+  add column if not exists payment_methods jsonb not null default '{}'::jsonb
+  check (jsonb_typeof(payment_methods) = 'object');
 
 create index if not exists kennel_records_type_idx on public.kennel_records (type);
 create index if not exists kennel_records_updated_idx on public.kennel_records (updated_at desc);

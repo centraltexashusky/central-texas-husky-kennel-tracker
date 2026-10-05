@@ -1168,6 +1168,7 @@ function customerHistoricalStayDetailHtml(record = {}, stay = {}) {
   return '<article class="record-card compact-record-card"><strong>' + escapeHtml(stayScheduleRangeLabel(record, stay)) + '</strong><p>'
     + escapeHtml(boardingStayServicesText(stay, { customerFacing: true })) + '</p>'
     + boardingStayInvoiceSummaryHtml(record, stay, { final: stay.status === "Checked Out" })
+    + customerStayPaymentHtml(record, stay)
     + (log.length ? '<h3>Completed service log</h3>' + log.map((entry) => '<p>' + escapeHtml(entry.label || "Service") + ' · '
       + escapeHtml(formatDateTime(entry.completedAt) || "Completion time not recorded") + (entry.completedBy ? ' · ' + escapeHtml(entry.completedBy) : '') + '</p>').join('') : '')
     + boardingCancellationAuditHtml(record, stay, { customer: true }) + boardingCancellationReasonHtml(record, stay, { customer: true }) + '</article>';

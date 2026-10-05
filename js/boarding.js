@@ -2565,6 +2565,7 @@ function boardingStayDetailCardHtml(record = {}, stay = {}, options = {}) {
     \${boardingCancellationReasonHtml(record, stay, { customer: isCustomer })}
     \${boardingDeclineNoteHtml(record, stay)}
     \${invoiceSummary}
+    \${isCustomer && stay.id ? customerStayPaymentHtml(record, stay) : ""}
   </article>\`;
 }
 

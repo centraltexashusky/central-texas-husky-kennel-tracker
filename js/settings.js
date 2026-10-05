@@ -147,7 +147,7 @@ async function loadRemoteAppBranding() {
   try {
     const { data, error } = await cuddleStayRequest((db) => db
       .from("app_settings")
-      .select("id, organization_name, agreement_config, updated_at, updated_by")
+      .select("id, organization_name, agreement_config, payment_methods, updated_at, updated_by")
       .eq("id", "workspace")
       .maybeSingle());
     if (error) throw error;
@@ -157,6 +157,7 @@ async function loadRemoteAppBranding() {
         id: APP_BRANDING_CONFIG_ID,
         organizationName: data.organization_name,
         agreementConfig: sanitizeWorkspaceAgreementConfig(data.agreement_config || {}),
+        paymentMethods: sanitizeAcceptedPayments(data.payment_methods || {}),
         submittedAt: data.updated_at || new Date().toISOString(),
         updatedAt: data.updated_at || new Date().toISOString(),
         updatedBy: data.updated_by || "",
@@ -178,6 +179,7 @@ async function persistAppBrandingConfig(record = {}) {
       id: "workspace",
       organization_name: record.organizationName,
       agreement_config: sanitizeWorkspaceAgreementConfig(record.agreementConfig || {}),
+      payment_methods: sanitizeAcceptedPayments(record.paymentMethods || {}),
       updated_at: record.updatedAt || new Date().toISOString(),
       updated_by: currentUser?.email || "",
     }));
@@ -193,6 +195,7 @@ function renderSettingsSetup() {
   const preview = $("#settingsOrganizationNamePreview");
   if (preview) preview.textContent = config.organizationName;
   renderSettingsAgreement();
+  renderPaymentMethodSettings();
 }
 
 function updateSettingsSetupPreview() {
