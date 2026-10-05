@@ -9,18 +9,37 @@ function customerVisibleStay(dog) {
   return entries.filter(e => ['Pending','Approved','Checked In','In Kennel','Ready For Pickup'].includes(boardingStayDisplayStatus(e.record || e, e.stay || {})))
     .sort((a,b) => rank(boardingStayDisplayStatus(a.record,a.stay))-rank(boardingStayDisplayStatus(b.record,b.stay)) || new Date(a.stay.dropoffTime || a.stay.requestedDropoffTime)-new Date(b.stay.dropoffTime || b.stay.requestedDropoffTime))[0];
 }
+function customerStayServiceItemsHtml(stay = {}) {
+  const requests = arrayValue(stay.requests);
+  if (!requests.length) return '<span>No service requests</span>';
+  return `<ul class="portal-service-items" aria-label="Requested services">${requests.map(request => {
+    const item = request && typeof request === 'object' ? request : {};
+    const name = boardingServiceTaskDisplayName(typeof request === 'string' ? request : {...item, serviceName:item.serviceName || item.name || item.label});
+    const rawQuantity = boardingServiceTaskQuantity(request);
+    const quantity = Number.isFinite(rawQuantity) && rawQuantity > 0 ? rawQuantity : 1;
+    // Keep saved request rates, including free services; this view never reprices a stay.
+    const serviceId = item.serviceId || item.id;
+    const savedMatches = arrayValue(stay.pricingSnapshot?.selectedServicePrices).filter(line => serviceId ? line.serviceId === serviceId : line.serviceName === name);
+    const savedPrice = item.unitPrice ?? item.basePrice ?? (savedMatches.length === 1 ? savedMatches[0].unitPrice : undefined);
+    const unitPrice = savedPrice !== undefined && savedPrice !== null && String(savedPrice).trim() !== '' ? Number(savedPrice) : null;
+    const hasPrice = unitPrice !== null && Number.isFinite(unitPrice) && unitPrice >= 0;
+    const amount = hasPrice ? Math.round(unitPrice * quantity * 100) / 100 : null;
+    return `<li><span class="portal-service-name">${html(name)}</span><span class="portal-service-calculation">${hasPrice ? `${html(money(unitPrice))} × ${html(quantity)}` : `Price pending · Qty ${html(quantity)}`}</span><strong class="portal-service-total" aria-label="Line total ${hasPrice ? html(money(amount)) : 'pending'}">${hasPrice ? html(money(amount)) : '—'}</strong></li>`;
+  }).join('')}</ul>`;
+}
 window.customerDogSummaryCardHtml = function(dog) {
   const entry = customerVisibleStay(dog);
   const stay = entry?.stay || {}, record = entry?.record || {};
   const vaccine = customerFacingVaccineStatus(dog);
   const status = entry ? boardingStayDisplayStatus(record,stay) : '';
   const photoRecord = customerDogPhotoRecordForDisplay(dog,record);
+  const canPay = entry && stay.id && !['Pending','Cancelled','Declined'].includes(status) && boardingPaymentSummary(record,stay).balance > 0;
   return `<article class="customer-dog-summary-card portal-dog-card">
     <div class="portal-dog-photo">${customerDogPhotoHtml(dog,{photoRecord})}</div>
     <div class="portal-dog-info"><h3>${html(dog.dogName || 'Your dog')}</h3><div class="chip-row">${statusChipHtml(pricing(dog),'pricing-scope-chip')}${statusChipHtml(vaccine.label,`vaccination-status-chip ${vaccine.className}`)}</div>
     <p class="portal-dog-breed">${html(dog.breedDescription || dog.breed || 'Dog profile')}</p>
-    ${entry ? `<dl class="portal-stay-facts"><div><dt>${icon('calendar')}${['Pending','Approved'].includes(status)?'Upcoming stay':'Current stay'}</dt><dd>${statusChipHtml(status,`boarding-status-chip ${statusClassForBoardingStatus(status)}`)}</dd></div><div><dt>Drop-off</dt><dd>${html(formatDateTime(stay.dropoffTime || stay.requestedDropoffTime))}</dd></div><div><dt>Pickup</dt><dd>${html(formatDateTime(stay.pickupTime || stay.requestedPickupTime))}</dd></div><div><dt>Services</dt><dd>${html(boardingStayServicesText(stay,{customerFacing:true}))}</dd></div></dl>` : '<p class="portal-empty-stay">No upcoming stay. Ready to plan their next visit?</p>'}</div>
-    <div class="customer-dashboard-actions">${dog.showRegistrationEnabled === 'Yes' ? `<button type="button" class="secondary-button" data-customer-show-schedule data-dog-id="${html(dog.id)}">Show schedule</button>` : ''}${entry ? `<button type="button" data-customer-workspace="stay" data-id="${html(record.id)}" data-stay-id="${html(stay.id)}">View stay</button>` : `<button type="button" data-customer-workspace="book" data-dog-id="${html(dog.id)}">Book a stay</button>`}<button type="button" class="secondary-button" data-action="edit-customer-dog-inline" data-id="${html(dog.id)}" data-boarding-id="${html(dog.sourceBoardingDogId || dog.linkedBoardingDogId || '')}">Edit profile</button></div>
+    ${entry ? `<dl class="portal-stay-facts"><div><dt>${icon('calendar')}${['Pending','Approved'].includes(status)?'Upcoming stay':'Current stay'}</dt><dd>${statusChipHtml(status,`boarding-status-chip ${statusClassForBoardingStatus(status)}`)}</dd></div><div><dt>Drop-off</dt><dd>${html(formatDateTime(stay.dropoffTime || stay.requestedDropoffTime))}</dd></div><div><dt>Pickup</dt><dd>${html(formatDateTime(stay.pickupTime || stay.requestedPickupTime))}</dd></div><div class="portal-stay-services"><dt>Services</dt><dd>${customerStayServiceItemsHtml(stay)}</dd></div></dl>` : '<p class="portal-empty-stay">No upcoming stay. Ready to plan their next visit?</p>'}</div>
+    <div class="customer-dashboard-actions">${dog.showRegistrationEnabled === 'Yes' ? `<button type="button" class="secondary-button" data-customer-show-schedule data-dog-id="${html(dog.id)}">Show schedule</button>` : ''}${entry ? `<button type="button" data-customer-workspace="stay" data-id="${html(record.id)}" data-stay-id="${html(stay.id)}">View stay</button>${canPay ? `<button type="button" data-customer-workspace="pay" data-id="${html(record.id)}" data-stay-id="${html(stay.id)}">Pay</button>` : ''}` : `<button type="button" data-customer-workspace="book" data-dog-id="${html(dog.id)}">Book a stay</button>`}<button type="button" class="secondary-button" data-action="edit-customer-dog-inline" data-id="${html(dog.id)}" data-boarding-id="${html(dog.sourceBoardingDogId || dog.linkedBoardingDogId || '')}">Edit profile</button></div>
   </article>`;
 };
 function prepareShell() {
@@ -159,6 +178,13 @@ document.addEventListener('click',async event=>{
   }
   if(action==='stay'){
     const record=boardingDogRecordForDisplay(button.dataset.id);if(record&&boardingDogVisibleToCustomer(record))openCustomerRequestDetail(record,{stayId:button.dataset.stayId});
+  }
+  if(action==='pay'){
+    const record=boardingDogRecordForDisplay(button.dataset.id);
+    if(!record || !boardingDogVisibleToCustomer(record))return;
+    const stay=boardingStayByReference(record,{stayId:button.dataset.stayId});
+    if(!stay || ['Pending','Cancelled','Declined'].includes(boardingStayDisplayStatus(record,stay)))return;
+    showDetailDialog('Pay for ' + (record.dogName || 'your stay'), customerStayPaymentHtml(record,stay));
   }
   if(action==='updates')switchPage('customerUpdatesPage');
   if(action==='upload'){

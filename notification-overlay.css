@@ -1,0 +1,12 @@
+#notificationOverlay { position:fixed; inset:92px 24px auto auto; width:min(520px,calc(100vw - 32px)); max-width:none; max-height:calc(100dvh - 120px); margin:0; padding:0; border:0; border-radius:12px; background:var(--panel,#fff); color:var(--ink,#17324d); overflow:hidden; z-index:120; box-shadow:0 16px 48px #12314e40; }
+#notificationOverlay:not([open]) { display:none; }
+#notificationOverlay #notificationPanel { margin:0; max-width:none; max-height:calc(100dvh - 120px); display:grid; grid-template-rows:auto minmax(0,1fr); overflow:hidden; box-sizing:border-box; }
+#notificationOverlay #notificationPanel[hidden] { display:none; }
+#notificationOverlay .notification-list { overflow-y:auto; overscroll-behavior:contain; min-height:0; }
+#notificationOverlay .notification-panel-header { flex-wrap:wrap; }
+#notificationOverlay .notification-panel-actions { flex-wrap:wrap; }
+@media(max-width:700px) {
+ #notificationOverlay { inset:50% 12px auto; transform:translateY(-50%); width:calc(100vw - 24px); max-height:calc(100dvh - 48px); }
+ #notificationOverlay #notificationPanel { max-height:calc(100dvh - 48px); }
+ #notificationOverlay::backdrop { background:#0b233c80; }
+}

@@ -160,3 +160,12 @@ body.role-customer #customerSignatureBlock{background:var(--portal-surface);box-
  :root[data-theme] body.role-customer #mobileBottomNav :is(.mobile-bottom-nav-icon,.mobile-bottom-nav-label){color:inherit!important}
  body.role-customer .table-toolbar{display:flex;flex-direction:row}body.role-customer .table-toolbar button{flex:1}
 }
+
+.portal-service-items{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.portal-service-items li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:8px 0;border-bottom:1px solid var(--portal-border,#d7e2eb)}
+.portal-service-items li:last-child{border-bottom:0;padding-bottom:0}
+.portal-service-name{grid-column:1/-1;font-weight:500;overflow-wrap:anywhere}
+.portal-service-calculation{color:var(--portal-muted);font-variant-numeric:tabular-nums}
+.portal-service-total{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
+
+body.role-customer .customer-dashboard-actions{grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
