@@ -5,6 +5,11 @@ same canonical dogs and records. Only Showing entries in open, non-removed shows
 appear; socializing attendance is unchanged. Past shows stay until explicitly
 completed, matching the existing operational selection rule.
 
+The registration profile is collapsed by default, with completeness visible in
+the disclosure row. Its open/closed choice persists across dog switches and
+registration saves during the current workspace session. Expand it to edit or
+copy profile details; no dog data changes when toggling the disclosure.
+
 Show cards offer one-click forward progression: Planned to go → Not registered
 yet → Submitted — awaiting confirmation → Registered. Registered is terminal;
 it never cycles backward. More options → Status, receipt & notes retains the

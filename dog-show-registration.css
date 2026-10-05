@@ -19,7 +19,14 @@
 .reg-rail>p { border-top:1px solid #d5e2ec; margin-top:18px; padding-top:18px; font-size:12px; }
 .reg-main { padding:4px 20px 20px; min-width:0; }
 .reg-passport,.reg-show-card { padding:18px; background:white; border:1px solid #d5e2ec; border-radius:9px; }
-.reg-passport { margin-bottom:25px; }
+.reg-workspace details.reg-passport { margin:0 0 25px; padding:18px; }
+.reg-workspace .reg-passport>summary { display:flex; align-items:center; flex-wrap:wrap; gap:10px; min-height:32px; font-size:15px; list-style:none; }
+.reg-passport>summary::-webkit-details-marker { display:none; }
+.reg-passport>summary::before { content:"▸"; color:#173651; }
+.reg-passport[open]>summary::before { content:"▾"; }
+.reg-passport>summary>.reg-pill { margin-left:auto; }
+.reg-passport>summary:focus-visible { outline:2px solid #096da8; outline-offset:5px; border-radius:3px; }
+.reg-passport-edit { display:flex; justify-content:flex-end; margin-top:18px; }
 .reg-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 20px; margin:15px 0; }
 .reg-field { display:flex; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid #e2eaf1; padding:13px 0; min-width:0; }
 .reg-field small { display:block; color:#526d85; margin-bottom:5px; font-size:12px; }
@@ -102,6 +109,7 @@
   .reg-main { padding:4px 12px 15px; }
   .reg-fields,.reg-form .field-grid { grid-template-columns:1fr; }
   .reg-passport,.reg-show-card { padding:14px; }
+  .reg-workspace details.reg-passport { padding:14px; }
   .reg-workspace h3 { font-size:21px; }
   .reg-card-actions { display:grid; grid-template-columns:1fr; }
   .reg-card-actions>button,.reg-primary-link { width:100%; justify-content:center; }

@@ -143,7 +143,7 @@ export function registrationPatch(dog, appearance, values, actor, now) {
 }
 
 export function createRegistrationWorkspace(deps) {
-  const state = { mode: "dog", key: "", eventId: "", pending: true, search: "", notice: "" };
+  const state = { mode: "dog", key: "", eventId: "", pending: true, search: "", notice: "", passportOpen: false };
   let editContext = null, bound = false;
   let statusSaving = false;
   const statusContexts = new Map(), statusMessages = new Map();
@@ -199,10 +199,10 @@ export function createRegistrationWorkspace(deps) {
         return button("dog", `<strong>${esc(item.name)}</strong><small>${pending} pending · ${passportMissing(item.passport).length ? "Profile incomplete" : passportReviewed(item.profile) ? "Profile reviewed" : "Review profile"}</small>`, `data-dog="${esc(item.key)}" aria-pressed="${state.key === item.key}"`);
       }).join("") || '<p>No matching dogs.</p>'}</div><p>Showing dogs only. Socializing dogs stay on the travel roster.</p></aside>
       <section class="reg-main">${dog ? `<header class="reg-heading"><div><small>ENTRY PASSPORT</small><h3>${esc(dog.name)}</h3></div>${button("next", "Next dog →", dogs.length < 2 ? "disabled" : "")}</header>
-        <section class="reg-passport"><header>${pill(!dog.profile ? "Linked dog profile unavailable" : missing.length ? `${missing.length} details missing` : passportReviewed(dog.profile) ? "Profile reviewed" : "Review before entering", missing.length > 0 || !passportReviewed(dog.profile))}${button("profile", "Review / edit profile", !dog.profile ? "disabled" : "")}</header>
+        <details class="reg-passport" data-reg-passport${state.passportOpen ? " open" : ""}><summary><span>Registration profile</span>${pill(!dog.profile ? "Linked dog profile unavailable" : missing.length ? `${missing.length} details missing` : passportReviewed(dog.profile) ? "Profile reviewed" : "Review before entering", missing.length > 0 || !passportReviewed(dog.profile))}</summary><div class="reg-passport-edit">${button("profile", "Review / edit profile", !dog.profile ? "disabled" : "")}</div>
         <div class="reg-fields">${fieldHtml(dog.passport, passportFields.slice(0, 8))}</div>
         <details><summary>Owner contact, eligibility & entry documents</summary><div class="reg-fields">${fieldHtml(dog.passport, passportFields.slice(8))}</div>${safeRegistrationUrl(dog.passport.certificateUrl) ? `<a href="${esc(safeRegistrationUrl(dog.passport.certificateUrl))}" target="_blank" rel="noopener noreferrer">Open certificate ↗</a>` : ""}</details>
-        <footer>${button("copy-all", "⧉ Copy entry details")}<small>Copy individual fields using ⧉</small></footer></section>
+        <footer>${button("copy-all", "⧉ Copy entry details")}<small>Copy individual fields using ⧉</small></footer></details>
         <header class="reg-heading"><h3>${state.mode === "dog" ? "Shows for this dog" : "Selected show"}</h3><label class="reg-check"><input type="checkbox" data-reg-pending${state.pending ? " checked" : ""}/> Not registered only</label></header>
         ${dog.appearances.map((item, index) => ({ item, index })).filter(({ item }) => (!state.pending || item.status !== "Registered") && (state.mode === "dog" || item.event.id === state.eventId)).map(({ item, index }) => appearanceHtml(dog, item, index)).join("") || '<p class="reg-empty">No outstanding entries in this view. Uncheck “Not registered only” to review saved registrations.</p>'}
         ` : '<div class="reg-empty"><h3>No showing dogs in open shows</h3><p>Add dogs to a show’s team and choose Showing to build your registration queue.</p></div>'}</section></div>
@@ -305,6 +305,9 @@ export function createRegistrationWorkspace(deps) {
     if (bound) return; bound = true;
     root.addEventListener("click", event => { void click(event); });
     root.addEventListener("submit", event => { void submit(event); });
+    root.addEventListener("toggle", event => {
+      if (event.target.matches("[data-reg-passport]") && event.target.isConnected) state.passportOpen = event.target.open;
+    }, true);
     root.addEventListener("change", event => {
       if (event.target.matches("[data-reg-event]")) { state.eventId = event.target.value; deps.render(); }
       if (event.target.matches("[data-reg-pending]")) { state.pending = event.target.checked; deps.render(); }

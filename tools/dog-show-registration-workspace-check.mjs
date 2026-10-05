@@ -93,6 +93,11 @@ await assert.rejects(()=>store.save('showEntry',cloud,{notes:'changed'}),/read/)
 fail=false;denied=true;
 await assert.rejects(()=>store.save('showEntry',cloud,patch),/access/);
 const html=createRegistrationWorkspace(deps).render();
+assert.match(html,/<details class="reg-passport" data-reg-passport>/,'Registration profile starts collapsed');
+assert.match(html,/<summary><span>Registration profile<\/span>/,'Profile disclosure is named');
+const expandedWorkspace=createRegistrationWorkspace(deps);
+expandedWorkspace.state.passportOpen=true;
+assert.match(expandedWorkspace.render(),/data-reg-passport open>/,'Expanded state survives rendering');
 assert.match(html,/Entry link missing|Open Example superintendent/);
 assert.match(html,/Not registered only/);
 assert(!html.includes('social-dog'));
