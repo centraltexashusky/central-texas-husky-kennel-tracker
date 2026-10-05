@@ -68,7 +68,12 @@
 .reg-card-actions small { max-width:250px; }
 .reg-quick-status { display:grid; gap:6px; flex:1 1 260px; min-width:0; max-width:100%; font-size:13px; font-weight:600; text-transform:none!important; letter-spacing:normal!important; }
 .reg-quick-status .reg-progress-button { width:100%; min-width:0; min-height:44px; white-space:normal; font-size:14px; margin-top:6px; }
-.reg-quick-status>strong { color:#526d85; font-size:13px; font-weight:400; }
+.reg-current-status { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:6px; }
+.reg-current-status>span { font-size:14px; font-weight:700; color:#173651; }
+.reg-current-status-badge { display:block; max-width:100%; padding:10px 14px; border:1px solid #d5e2ec; border-radius:6px; background:#e9eef4; color:#29445e; font-size:17px; font-weight:800; line-height:1.4; overflow-wrap:anywhere; }
+.reg-current-status-badge[data-status="Not registered yet"] { background:#fff3d4; border-color:#e6c573; color:#754900; }
+.reg-current-status-badge[data-status="Submitted — awaiting confirmation"] { background:#e4f1ff; border-color:#96bfdf; color:#155483; }
+.reg-current-status-badge[data-status="Registered"] { background:#e1f3e9; border-color:#98cbb1; color:#145a3c; }
 .reg-quick-status .reg-progress-button:disabled { cursor:default; }
 .reg-quick-status small { font-weight:400; color:#526d85; }
 .reg-status-feedback:empty { display:none; }
