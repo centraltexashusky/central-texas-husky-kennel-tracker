@@ -10,7 +10,7 @@ try {
  await page.evaluate(()=>{
    document.querySelectorAll('dialog[open]').forEach(d=>d.close());
    const dog={id:'qa-dog',type:'customerDog',dogName:'QA Dog',ownerName:'QA Owner',ownerEmail:currentUser.email,sourceBoardingDogId:'qa-board',breed:'Husky'};
-   const stay={id:'qa-stay',requestCode:'BR-QA',status:'Ready For Pickup',dropoffTime:'2026-10-01T10:00',pickupTime:'2026-10-08T10:00',estimatedTotal:240,pricingSnapshot:{total:240},requests:[{serviceName:'Full Premium Bath',unitPrice:100,quantity:1},{serviceName:'De-Shedding Add-On',unitPrice:40,quantity:1}]};
+   const stay={id:'qa-stay',requestCode:'BR-QA',status:'Ready For Pickup',dropoffTime:'2026-10-01T10:00',pickupTime:'2026-10-08T10:00',estimatedTotal:240,pricingSnapshot:{version:'boarding-rate-v2',total:240,lineItems:[{type:'boarding',label:'Overnight boarding (2 nights)',quantity:2,unitPrice:50,amount:100},{type:'service',label:'Full Premium Bath',quantity:1,unitPrice:100,amount:100},{type:'service',label:'De-Shedding Add-On',quantity:1,unitPrice:40,amount:40}]},requests:[{serviceName:'Full Premium Bath',unitPrice:100,quantity:1},{serviceName:'De-Shedding Add-On',unitPrice:40,quantity:1}]};
    upsertRecord('customerDog',dog);
    upsertRecord('boardingDog',{id:'qa-board',type:'boardingDog',dogName:dog.dogName,ownerEmail:currentUser.email,ownerName:dog.ownerName,linkedCustomerDogId:dog.id,customerRequest:true,boardingStatus:'Ready For Pickup',stays:[stay]});
    upsertRecord('appConfig',{id:'workspace-branding',type:'appConfig',organizationName:'QA Kennel',paymentMethods:{Zelle:{enabled:true,account:'qa@example.invalid'}}});
@@ -18,7 +18,7 @@ try {
  });
  const card=page.locator('#customerDogList .portal-dog-card');
  assert.equal(await card.count(),1);
- assert.equal(await card.locator('.portal-service-items li').count(),2);
+ assert.equal(await card.locator('.customer-stay-breakdown .estimate-line').count(),3);
  assert.equal(await card.getByRole('button',{name:'Pay',exact:true}).count(),1);
  const before=await page.evaluate(()=>document.querySelector('#customerPage').getBoundingClientRect().top);
  await page.locator('#notificationBellButton').click();
@@ -29,6 +29,8 @@ try {
  assert.equal(await page.locator('#notificationBellButton').getAttribute('aria-expanded'),'false');
  await card.getByRole('button',{name:'Pay',exact:true}).click();
  assert(await page.getByText('How to pay',{exact:true}).isVisible());
+ assert.equal(await page.locator('#detailDialog .customer-stay-breakdown .estimate-line').count(),3);
+ assert(await page.locator('#detailDialog').getByText('Overnight boarding (2 nights)',{exact:true}).isVisible());
  assert(await page.getByText('qa@example.invalid',{exact:true}).isVisible());
  assert.equal(await page.locator('#detailDialog [data-action="record-boarding-payment"]').count(),0);
  await page.locator('#closeDetailDialog').click();

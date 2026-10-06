@@ -8,7 +8,7 @@ const ctx={URL,Date,Object,String,document:{addEventListener(){}},readRecords:()
   appBrandingConfig:()=>records[0],currentUser:{email:'qa@example.invalid'},localTestMode:false,supabaseClient:{},
   persistAppBrandingConfig:async r=>{payload=r;if(failed)throw new Error('Server rejected save');},
   upsertRecord:(_t,r)=>{records=[r];},boardingStayDisplayStatus:(_r,s)=>s.status,
-  boardingPaymentSummary:(_r,s)=>({balance:s.balance}),boardingPaymentSummaryHtml:()=>'<p>Payment balance</p>',boardingStayRequestCode:()=> 'BR-QA'};
+  boardingPaymentSummary:(_r,s)=>({balance:s.balance}),boardingPaymentSummaryHtml:()=>'<p>Payment balance</p>',boardingStayInvoiceSummaryHtml:()=>'<div>Boarding: 5 nights × $54 = $270</div>',stayScheduleRangeLabel:()=> 'Sep 30–Oct 5',boardingStayRequestCode:()=> 'BR-QA'};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync('js/payment-methods.js','utf8'),ctx);
 assert.equal(ctx.acceptedPaymentLink('javascript:alert(1)'), '');
 assert.equal(ctx.acceptedPaymentLink('http://venmo.com/qa'), '');
@@ -26,3 +26,5 @@ assert.equal(payload.organizationName,'QA Kennel');assert.equal(payload.agreemen
 assert.equal(records[0].paymentMethods.Cash.enabled,true);
 role='customer';await assert.rejects(ctx.savePaymentMethodSettings(form),/administrators/);
 console.log('Payment-method checks passed: safe links, bill status/balance, remote failure, preserved organization/agreement and admin-only writes.');
+
+assert(ctx.customerStayPaymentHtml({}, {id:'s',status:'Approved',balance:100}).includes('5 nights'));

@@ -144,8 +144,8 @@ function boardingWorkspaceCheckoutInvoiceHtml(record = {}, options = {}) {
       <section class="checkout-invoice-section"><h3>Services</h3>${services.length ? '<ul class="checkout-service-list">' + services.map(name => '<li>' + escapeHtml(name) + '</li>').join('') + '</ul>' : '<p>No additional services requested.</p>'}</section>
       ${boardingStayBelongingsHtml(stay, { showEmpty: true, label: 'Belongings to return at checkout', className: 'boarding-checkout-belongings-card' })}
       <label class="checkout-note-label">Checkout note<textarea id="checkoutNote" rows="3" placeholder="Payment note, pickup person, invoice issue, or checkout detail"></textarea></label>
-    </div><aside class="checkout-invoice-bill"><h3>Invoice summary</h3>${invoiceSummary}${boardingPaymentSummaryHtml(record, stay)}<p>Review the charges and return belongings before completing checkout.</p></aside></div>
-    <footer class="checkout-invoice-actions"><button type="button" class="secondary-button" data-action="confirm-check-out"${attrs}>Check Out</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></footer>
+    </div><aside class="checkout-invoice-bill"><h3>Invoice summary</h3>${invoiceSummary}${boardingPaymentSummaryHtml(record, stay)}${boardingCheckoutPaymentPromptHtml(record,stay)}<p>Review the charges and return belongings before completing checkout.</p></aside></div>
+    <footer class="checkout-invoice-actions"><button type="button" class="secondary-button" data-action="confirm-check-out"${attrs}${boardingPaymentSummary(record,stay).balance > 0 ? ' disabled aria-describedby="checkoutPaymentHint"' : ''}>Check Out</button><span id="checkoutPaymentHint">${boardingPaymentSummary(record,stay).balance > 0 ? 'Record the remaining payment first.' : ''}</span><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></footer>
   </section>`;
 }
 

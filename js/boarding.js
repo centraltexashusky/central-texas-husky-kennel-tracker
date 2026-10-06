@@ -5258,6 +5258,10 @@ function queueBoardingStatusFollowUps(updated = {}, options = {}) {
 }
 
 async function saveBoardingStatusTransition(record = {}, nextStatus = "", options = {}) {
+  if (nextStatus === "Checked Out") {
+    record = await requireBoardingCheckoutPayment(record, options);
+    if (!record) return null;
+  }
   if (nextStatus === "Checked In") {
     const targetStay = options.stayId ? boardingStayByReference(record, options) || {} : boardingPrimaryStay(record) || {};
     if (!requireBoardingApprovalPreflight(record, targetStay, { nextStatus, options })) return null;
@@ -7173,6 +7177,11 @@ function openBoardingStayStatusMenu(record = activeBoardingDog(), stayId = "") {
 async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextStatus = "", reference = {}) {
   const options = typeof reference === "object" ? { ...reference, stayId: reference.stayId || stayId } : { stayId };
   if (!record?.id || !options.stayId || !boardingLifecycleStatuses.includes(nextStatus)) return null;
+  if (nextStatus === "Checked Out") {
+    record = await requireBoardingCheckoutPayment(record, options);
+    if (!record) return null;
+  }
+
   const targetStay = boardingStayByReference(record, options);
   if (nextStatus === "Checked In" && !requireBoardingApprovalPreflight(record, targetStay || {}, { nextStatus, options })) return null;
   if (shouldPromptBoardingDecline(record, nextStatus, options)) {

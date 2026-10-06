@@ -49,7 +49,37 @@ function boardingPaymentSummaryHtml(record, stay, options = {}) {
     '<p class="workspace-info">Payments apply only to this dog’s stay. Additional charges may change the balance.</p></section>';
 }
 
-function openBoardingPaymentPopup(record, reference = {}) {
+async function requireBoardingCheckoutPayment(record, reference = {}) {
+  let refreshed = record;
+  if (!localTestMode) {
+    if (!supabaseClient) throw new Error('Connect to the server to verify payment before checkout.');
+    const sources = boardingPaymentRecords(record);
+    const result = await cuddleStayRequest(db => db.from('kennel_records').select('id,payload,updated_at')
+      .eq('type','boardingDog').in('id',[...new Set([record.id,...sources.map(s=>s.id)])]));
+    if (result.error) throw result.error;
+    if (!result.data?.length) throw new Error('The current stay could not be verified. Refresh before checkout.');
+    result.data.forEach(row => upsertRecord('boardingDog',row.payload));
+    refreshed = boardingDogRecordForDisplay(record.id);
+  }
+  const stay = (reference.stayId || reference.requestCode) ? boardingStayByReference(refreshed,reference) : activeBoardingStay(refreshed) || currentOrNextStay(refreshed);
+  if (!stay?.id) throw new Error('Select a saved stay before checkout.');
+  if (boardingPaymentSummary(refreshed,stay).balance > 0) {
+    openCheckoutInvoicePopup(refreshed,{...reference,stayId:stay.id});
+    const note = document.getElementById('checkoutNote');
+    if (note) note.value = record.checkoutNote || '';
+    showToast('Payment confirmation required. Record the remaining payment received before checkout.');
+    return null;
+  }
+  return {...refreshed, checkoutNote:record.checkoutNote || refreshed.checkoutNote || ''};
+}
+function boardingCheckoutPaymentPromptHtml(record,stay) {
+  const summary = boardingPaymentSummary(record,stay);
+  if (!(summary.balance > 0)) return '<p class="workspace-info">No outstanding balance. Recorded payments are shown above.</p>';
+  const action = currentRole() === 'admin' ? '<button type="button" data-action="record-checkout-payment" data-dog-id="' + escapeHtml(record.id) + '" data-stay-id="' + escapeHtml(stay.id) + '" data-request-code="' + escapeHtml(boardingStayRequestCode(record,stay)) + '">Confirm payment received</button>' : '<p>An administrator must record the payment received before you can check out this stay.</p>';
+  return '<section class="checkout-payment-required" role="status"><h3>Confirm the remaining payment</h3><p><strong>' + escapeHtml(money(summary.balance)) + '</strong> is still due after recorded payments. Confirm the amount and payment method actually received before checkout.</p>' + action + '</section>';
+}
+
+function openBoardingPaymentPopup(record, reference = {}, options = {}) {
   if (currentRole() !== 'admin') return showToast('An administrator must record boarding payments.');
   const stay = boardingStayByReference(record, reference) || (!reference.stayId && !reference.requestCode ? activeBoardingStay(record) || currentOrNextStay(record) : null);
   if (!stay?.id) return showToast('Select a saved stay first.');
@@ -69,6 +99,14 @@ function openBoardingPaymentPopup(record, reference = {}) {
     '<label class="boarding-payment-confirm"><input type="checkbox" name="received" required> I confirm this payment was actually received.</label>' +
     '<p>This records a payment already received. It does not charge the customer or check the dog out.</p>' +
     '<div class="button-row"><button type="submit">Save payment</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div></form>');
+  if (options.checkout) {
+    const form = document.getElementById('boardingPaymentForm');
+    form.dataset.checkout = 'true';
+    form.dataset.checkoutNote = options.checkoutNote || '';
+    form.elements.kind.value = 'Paid in full';
+    form.elements.amount.readOnly = true;
+    form.elements.amount.value = summary.balance.toFixed(2);
+  }
 }
 
 async function saveBoardingPayment(form) {
@@ -207,11 +245,11 @@ document.addEventListener('change', event => {
   if (form.elements.amount.readOnly) form.elements.amount.value = form.dataset.balance;
 });
 document.addEventListener('click', event => {
-  const button = event.target.closest('[data-action="record-boarding-payment"]');
+  const button = event.target.closest('[data-action="record-boarding-payment"], [data-action="record-checkout-payment"]');
   if (!button) return;
   event.preventDefault();
   const record = boardingDogRecordForDisplay(button.dataset.dogId);
-  if (record) openBoardingPaymentPopup(record, boardingStayReferenceFromAction(button));
+  if (record) openBoardingPaymentPopup(record, boardingStayReferenceFromAction(button), {checkout:button.dataset.action==='record-checkout-payment',checkoutNote:document.getElementById('checkoutNote')?.value || ''});
 });
 document.addEventListener('submit', async event => {
   const form = event.target.closest('#boardingPaymentForm');
@@ -221,6 +259,13 @@ document.addEventListener('submit', async event => {
   await runPopupOperation(event.submitter, 'Saving payment...', async () => {
     const record = await saveBoardingPayment(form);
     const stay = boardingStayByReference(record, { stayId: form.dataset.stayId, requestCode: form.dataset.requestCode });
+    if (form.dataset.checkout === 'true') {
+      openCheckoutInvoicePopup(record,{stayId:stay.id,requestCode:form.dataset.requestCode});
+      const note = document.getElementById('checkoutNote');
+      if (note) note.value = form.dataset.checkoutNote || '';
+      showToast('Payment recorded. Review the balance, then complete checkout.');
+      return;
+    }
     showDetailDialog('Payment recorded', '<p>The payment was recorded. The dog’s stay status has not changed.</p>' + boardingPaymentSummaryHtml(record, stay));
     return record;
   }, 'Payment could not be saved');

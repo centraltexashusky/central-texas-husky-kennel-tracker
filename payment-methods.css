@@ -13,3 +13,12 @@
 .payment-method-toggle input:checked { background:#386c52; }
 .payment-method-toggle input:checked::before { transform:translateX(18px); }
 .payment-method-toggle input:focus-visible { outline:2px solid #386c52; outline-offset:3px; }
+
+.customer-stay-breakdown .estimate-line {gap:8px;align-items:start;overflow-wrap:anywhere}
+.customer-stay-breakdown .estimate-line>span:last-child {text-align:right;font-variant-numeric:tabular-nums}
+.portal-stay-services .stay-invoice-summary {margin:0;padding:10px;background:transparent}
+.checkout-payment-required {border:2px solid #ba7620;border-radius:10px;padding:14px;margin-top:14px;background:#fff6e6;color:#473011}
+@media(max-width:700px){.customer-stay-breakdown .estimate-line{display:grid;grid-template-columns:minmax(0,1fr)}.customer-stay-breakdown .estimate-line>span:last-child{justify-self:end}.checkout-invoice-actions{flex-wrap:wrap}}
+.customer-stay-breakdown .estimate-total {gap:8px;flex-wrap:wrap;padding:8px}
+body.role-customer .customer-stay-breakdown .estimate-total span {font-size:18px;white-space:nowrap;flex-shrink:0}
+@media(max-width:700px){.portal-stay-facts>.portal-stay-services{grid-template-columns:minmax(0,1fr)}.portal-stay-services dt{align-items:start}.portal-stay-services .stay-invoice-summary{padding:8px;box-shadow:none}.customer-stay-breakdown .estimate-line{gap:3px;margin-bottom:10px}}

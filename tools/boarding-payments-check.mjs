@@ -4,7 +4,7 @@ import vm from 'node:vm';
 let records = [{ id:'dog', type:'boardingDog', dogName:'QA', stays:[{ id:'stay', requestCode:'BR-QA', status:'In Kennel', total:300 }, {id:'future',requestCode:'BR-FUTURE',status:'Approved',total:500}] }];
 let role = 'admin';
 const ctx = {
-  document:{addEventListener(){}}, currentRole:()=>role, readRecords:()=>records,
+  document:{addEventListener(){},getElementById(){return null;}}, currentRole:()=>role, readRecords:()=>records,
   boardingStayRequestCode:(_r,s)=>s.requestCode,
   boardingStayInvoiceTotal:(_r,s)=>s.total,
   boardingStayDisplayStatus:(_r,s)=>s.status,
@@ -77,3 +77,15 @@ assert(workspace.includes('boardingPaymentSummaryHtml(record, stay)'));
 assert(!workspace.includes('data-action="checkout-paid-method"'),'Payment entry cannot implicitly check dog out');
 assert(!fs.readFileSync('js/settings.js','utf8').includes('boardingPayments'),'Receipts are not double counted as revenue');
 console.log('Boarding payment checks passed: deposit, partial/full balances, separate stays, idempotency, validation, permissions, price changes and concurrent-save rejection.');
+
+let prompted=0;
+ctx.openCheckoutInvoicePopup=()=>prompted++;
+ctx.showToast=()=>{};
+records[0].stays[0].total=1000;
+assert.equal(await ctx.requireBoardingCheckoutPayment(records[0],{stayId:'stay'}),null);
+assert.equal(prompted,1,'Unpaid checkout opens invoice without advancing status');
+records[0].stays[0].total=0;
+assert((await ctx.requireBoardingCheckoutPayment(records[0],{stayId:'stay'})).id==='dog');
+ctx.localTestMode=false;ctx.supabaseClient=null;
+await assert.rejects(ctx.requireBoardingCheckoutPayment(records[0],{stayId:'stay'}),/verify|available|connect/i);
+console.log('Checkout guard checks passed: outstanding balance blocks checkout; settled balance continues; unavailable verification fails closed.');

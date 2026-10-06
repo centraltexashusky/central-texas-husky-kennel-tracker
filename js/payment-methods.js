@@ -68,10 +68,16 @@ function customerAcceptedPaymentMethodsHtml(reference = '') {
         (method.link ? '<a class="payment-link" href="' + escapeHtml(method.link) + '" target="_blank" rel="noopener noreferrer">Open ' + name + '</a>' : '') + '</article>';
     }).join('') + '</div><p>Payments are confirmed by staff after receipt. Opening a link does not mark your bill paid.</p></section>';
 }
+function customerStayChargeBreakdownHtml(record, stay, options = {}) {
+  const invoice = boardingStayInvoiceSummaryHtml(record, stay, {final:boardingStayDisplayStatus(record,stay)==='Checked Out'});
+  return '<section class="customer-stay-breakdown" aria-label="Stay charge breakdown">' +
+    (options.compact ? '' : '<h3>Stay breakdown</h3><p>' + escapeHtml(boardingStayRequestCode(record,stay)) + ' · ' + escapeHtml(stayScheduleRangeLabel(record,stay)) + '</p>') +
+    (invoice || '<p>The stay charges are awaiting review by staff.</p>') + '</section>';
+}
 function customerStayPaymentHtml(record, stay) {
   if (!stay.id || ['Pending','Cancelled','Declined'].includes(boardingStayDisplayStatus(record, stay))) return '';
   const summary = boardingPaymentSummary(record, stay);
-  return boardingPaymentSummaryHtml(record, stay, {hideAction:true}) +
+  return customerStayChargeBreakdownHtml(record, stay) + boardingPaymentSummaryHtml(record, stay, {hideAction:true}) +
     (summary.balance > 0 ? customerAcceptedPaymentMethodsHtml(boardingStayRequestCode(record, stay)) : '');
 }
 document.addEventListener('submit', async event => {
