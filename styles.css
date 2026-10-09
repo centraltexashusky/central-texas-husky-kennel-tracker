@@ -5558,6 +5558,9 @@ button:disabled {
   bottom: 18px;
   color: white;
   left: 50%;
+  margin: 0;
+  top: auto;
+  right: auto;
   max-width: calc(100% - 28px);
   opacity: 0;
   padding: 12px 16px;
@@ -5565,7 +5568,7 @@ button:disabled {
   position: fixed;
   transform: translateX(-50%) translateY(14px);
   transition: opacity 160ms ease, transform 160ms ease;
-  z-index: 10;
+  z-index: 10000;
 }
 
 .toast.is-visible {

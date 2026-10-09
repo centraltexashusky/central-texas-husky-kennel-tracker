@@ -3593,9 +3593,19 @@ function showToast(message) {
   if (!toast) return;
   window.clearTimeout(toastHideTimer);
   toast.textContent = message;
+  toast.setAttribute("role", popupFeedbackIsError(message) ? "alert" : "status");
+  toast.setAttribute("aria-live", popupFeedbackIsError(message) ? "assertive" : "polite");
+  if (typeof toast.showPopover === "function") {
+    toast.setAttribute("popover", "manual");
+    if (toast.matches(":popover-open")) toast.hidePopover();
+    toast.showPopover();
+  }
   toast.classList.add("is-visible");
   showPopupFeedback(message);
-  toastHideTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 3400);
+  toastHideTimer = window.setTimeout(() => {
+    toast.classList.remove("is-visible");
+    if (typeof toast.hidePopover === "function" && toast.matches(":popover-open")) toast.hidePopover();
+  }, 6000);
 }
 
 function friendlyNetworkError(error) {
