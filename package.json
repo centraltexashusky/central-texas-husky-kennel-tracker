@@ -17,6 +17,7 @@
     "test:payment-methods-browser": "node tools/payment-methods-browser-check.mjs",
     "test:customer-service-items": "node tools/customer-service-items-check.mjs",
     "test:customer-page-browser": "node tools/customer-page-browser-check.mjs",
-    "test:pedigree": "node tools/pedigree-core-check.mjs"
+    "test:pedigree": "node tools/pedigree-core-check.mjs",
+    "test:pedigree-appearance": "node tools/pedigree-appearance-check.mjs"
   }
 }

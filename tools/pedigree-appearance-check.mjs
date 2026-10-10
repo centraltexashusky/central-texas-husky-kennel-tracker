@@ -1,0 +1,18 @@
+import assert from 'node:assert/strict';
+import {appearancePredictions,colorCross,observedColors,validateAppearance} from '../js/pedigree-appearance.js';
+assert.deepEqual(colorCross('Bb','Bb',['BB','Bb','bb']),{BB:.25,Bb:.5,bb:.25});
+assert.deepEqual(colorCross('bb','BB',['BB','Bb','bb']),{BB:0,Bb:1,bb:0});
+assert.deepEqual(colorCross('NV','NN',['NN','NV','VV']),{NN:.5,NV:.5,VV:0});
+assert.equal(colorCross('blue','brown',['NN','NV','VV']),null);
+const a={coatColor:'Brown',colorGenetics:{brown:'Bb',verified:true,sourceUrl:'https://example.org/report'}};
+assert.equal(appearancePredictions(a,a)[0].probabilities.bb,.25);
+assert.equal(appearancePredictions(a,{...a,colorGenetics:{brown:'Bb'}})[0].probabilities,null);
+assert.equal(appearancePredictions({coatColor:'Brown'},{coatColor:'Brown'})[0].probabilities,null);
+assert.throws(()=>validateAppearance({colorGenetics:{verified:true,brown:'Bb'}}),/report URL/);
+assert.throws(()=>validateAppearance({colorGenetics:{brown:'blue'}}),/Invalid/);
+const dogs=[{sireId:'s',damId:'d',coatColor:' Gray & White ',leftEyeColor:'Blue',rightEyeColor:'Brown'},{sireId:'s',damId:'d',coatColor:'gray & white'},{sireId:'s',damId:'d',leftEyeColor:'Blue'},{sireId:'s',damId:'other',coatColor:'Red'},{sireId:'s',damId:'d',coatColor:'Red',archived:true}];
+const r=observedColors(dogs,'s','d');
+assert.equal(r.total,3);assert.equal(r.coat.recorded,2);assert.equal(r.coat.rows[0].percent,100);assert.equal(r.coat.missing,1);
+assert.equal(r.eyes.recorded,1);assert.equal(r.eyes.missing,2);
+assert.equal(observedColors([],'s','d').coat.rows.length,0);
+console.log('Appearance checks passed: Mendelian crosses, unknown evidence, invalid calls, sample denominators and exact-parent filtering.');

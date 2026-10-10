@@ -1,3 +1,4 @@
+import {validateAppearance} from './pedigree-appearance.js?v=1';
 // Pure pedigree calculations. Unknown founders are assumed unrelated, never clear of disease.
 export const emptyPedigree = () => ({version:1, dogs:[], health:[], relationships:[], pairings:[]});
 export const pedigreeName = d => d?.name || d?.registeredName || 'Unknown';
@@ -9,6 +10,7 @@ export function validatePedigree(data) {
   if (data.dogs.length > 5000 || data.health.length > 25000) throw Error('Split this research file into a smaller import (maximum 5,000 dogs / 25,000 health records).');
   const ids = new Set(), owned = new Set(), registrations = new Set();
   for (const d of data.dogs) {
+    validateAppearance(d);
     if (!d || typeof d.id !== 'string' || !/^[\w-]{1,120}$/.test(d.id) || ids.has(d.id)) throw Error('Each dog needs a unique ID using letters, numbers, underscores or hyphens.');
     if (!String(d.name || '').trim()) throw Error('Every dog needs a call name.');
     ids.add(d.id);
