@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {emptyPedigree,validatePedigree,pedigreeCoefficient as coi,familyOf,completeness,singleGeneCross,testedTraitCrosses,mergePedigree,safePedigreeUrl} from '../js/pedigree-core.js';
+import {includeOwnedDogs,emptyPedigree,validatePedigree,pedigreeCoefficient as coi,familyOf,completeness,singleGeneCross,testedTraitCrosses,mergePedigree,safePedigreeUrl} from '../js/pedigree-core.js';
 const make=(id,sex='Unknown',sireId='',damId='')=>({id,name:id,sex,sireId,damId});
 const dogs=[make('g1','Male'),make('g2','Female'),make('s1','Male','g1','g2'),make('s2','Female','g1','g2'),make('u1','Female'),make('u2','Male'),make('c1','Male','s1','u1'),make('c2','Female','u2','s2')];
 assert.equal(coi(dogs,'g1','g2'),0);
@@ -26,3 +26,15 @@ assert.equal(testedTraitCrosses(health,'s1','s2')[0].probabilities.aa,.25);
 assert.equal(testedTraitCrosses(health.map(h=>({...h,verified:false})),'s1','s2').length,0);
 assert(testedTraitCrosses([...health,{...health[0],genotype:'AA'}],'s1','s2')[0].conflict);
 console.log('Pedigree core: 21 checks passed (kinship, completeness, family relationships, integrity, imports and genetic evidence).');
+
+const roster=[{id:'owned1',callName:'First',sex:'Male',akcRegistrationNumber:'AKC1'},{id:'owned2',callName:'Second',sex:'Female',akcRegistrationNumber:'AKC1'},{id:'removed',removed:true}];
+let seq=0;const synced=includeOwnedDogs(emptyPedigree(),roster,()=>`new${++seq}`);
+assert.equal(synced.dogs.length,2);
+assert.equal(synced.dogs[1].registrationNumber,'');
+assert.match(synced.dogs[1].notes,/needs review/);
+synced.dogs[0].notes='Retain research';synced.dogs[0].archived=true;
+assert.deepEqual(includeOwnedDogs(synced,roster,()=>`new${++seq}`),synced);
+const extended=includeOwnedDogs(synced,[...roster,{id:'later',callName:'Later'}],()=>`new${++seq}`);
+assert.equal(extended.dogs.length,3);assert.equal(extended.dogs[2].sex,'Unknown');
+assert.equal(synced.dogs.length,2);
+console.log('Roster sync: all dogs, repeat sync, later additions, archived preservation and duplicate registration checks passed.');

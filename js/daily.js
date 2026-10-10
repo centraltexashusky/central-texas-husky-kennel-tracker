@@ -999,6 +999,10 @@ function renderOwnedDogListStatus(total = 0, shown = 0) {
 }
 
 function renderOwnedDogs() {
+  window.syncOwnedPedigreeProfiles?.().catch(error => {
+    console.warn('Pedigree profiles could not sync', error);
+    showToast('Pedigree profiles could not sync. Open Pedigree Research and refresh to retry.');
+  });
   const query = ($("#ownedDogSearch").value || "").trim();
   const isAdmin = currentRole() === "admin";
   const addButton = $("#addOwnedDogButton");

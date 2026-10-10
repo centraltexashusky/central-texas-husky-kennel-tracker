@@ -1,4 +1,4 @@
-import {emptyPedigree,pedigreeName as name,validatePedigree,safePedigreeUrl as safeUrl,ancestors,familyOf,completeness,pedigreeCoefficient,testedTraitCrosses,mergePedigree} from './pedigree-core.js?v=pedigree-v1';
+import {includeOwnedDogs,emptyPedigree,pedigreeName as name,validatePedigree,safePedigreeUrl as safeUrl,ancestors,familyOf,completeness,pedigreeCoefficient,testedTraitCrosses,mergePedigree} from './pedigree-core.js?v=pedigree-v2';
 const TABLE='pedigree_workspaces', KEY='cth-pedigree-local-test-v1';
 let data=emptyPedigree(),revision=null,loaded=false,loading=null,identity='',selected='',tab='tree',view='Ancestors',generations=3,zoom=1,highlight=false,familyTab='progeny',query='',showArchived=false,healthKind='All',healthScope='Dog',healthArchived=false,sire='',dam='',pairResult=null,undo=null,busy=false;
 const root=()=>document.getElementById('pedigreeWorkspace');
@@ -17,17 +17,27 @@ function sessionKey(){return `${localTestMode?'test':'remote'}:${currentUser?.em
 function checkIdentity(){if(identity!==sessionKey()){identity=sessionKey();data=emptyPedigree();revision=null;loaded=false;selected='';undo=null;pairResult=null;document.getElementById('pedigreeDialog')?.close();}}
 async function load(force=false){
   if(!canRead())throw Error('Sign in with a staff account to view pedigree research.');
-  checkIdentity();if(loaded&&!force)return;if(loading)return loading;
+  checkIdentity();if(loaded&&!force)return syncRoster();if(loading)return loading;
   const who=identity;
   loading=(async()=>{
     let next,rev;
     if(localTestMode){const row=JSON.parse(localStorage.getItem(KEY)||'null');next=row?.data||emptyPedigree();rev=row?.revision??null;}
     else {if(!supabaseClient)throw Error('The database is unavailable. Reconnect before opening pedigree research.');const result=await cuddleStayDb().from(TABLE).select('data,revision').eq('id','main').maybeSingle();if(result.error)throw result.error;next=result.data?.data||emptyPedigree();rev=result.data?.revision??null;}
     if(who!==sessionKey()||!canRead())return;
-    validatePedigree(next);data=next;revision=rev;loaded=true;
+    validatePedigree(next);data=next;revision=rev;loaded=true;await syncRoster();
   })().finally(()=>loading=null);
   return loading;
 }
+let rosterSync=null;
+async function syncRoster(){
+  if(!canEdit()||busy)return;
+  if(rosterSync)return rosterSync;
+  const next=includeOwnedDogs(data,owned(),uuid);
+  if(next.dogs.length===data.dogs.length)return;
+  rosterSync=commit(next,'',revision).finally(()=>rosterSync=null);
+  return rosterSync;
+}
+window.syncOwnedPedigreeProfiles=()=>load();
 async function commit(next,message='Saved',expected=revision){
   if(!canEdit())throw Error('Only administrators can edit pedigree research.');
   if(busy)throw Error('Please wait for the current save.');
@@ -44,8 +54,8 @@ async function commit(next,message='Saved',expected=revision){
       if(!result.data)throw Error('Another session changed this pedigree, or edit access changed. Close this editor, refresh, and reapply your change.');
     }
     if(who!==sessionKey()||!canRead())return;
-    data=next;revision=newRevision;undo={data:previous,revision:newRevision};pairResult=null;
-    render();showToast(`${message}${localTestMode?' · local test only':''}`);
+    data=next;revision=newRevision;undo=message?{data:previous,revision:newRevision}:null;pairResult=null;
+    render();if(message)showToast(`${message}${localTestMode?' · local test only':''}`);
   }finally{busy=false;}
 }
 function photo(d){if(d?.photoPath)return `<span class="ped-avatar"><img data-ped-photo="${esc(d.photoPath)}" alt="" hidden><span>${esc(name(d)[0])}</span></span>`;const source=owned().find(o=>o.id===d?.ownedDogId);if(source&&typeof ownedWorkspacePhoto==='function')return ownedWorkspacePhoto(source);return `<span class="ped-avatar" aria-hidden="true">${esc((name(d)[0]||'?').toUpperCase())}</span>`;}

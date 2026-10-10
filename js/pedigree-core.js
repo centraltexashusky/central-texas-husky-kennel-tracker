@@ -125,3 +125,20 @@ export function mergePedigree(current,incoming) {
   for(const key of ['dogs','health','relationships','pairings']) {const ids=new Set(next[key].map(r=>r.id));for(const row of incoming[key]){if(ids.has(row.id))throw Error(`ID ${row.id} already exists. Import adds new records only; edit existing records in the workspace.`);next[key].push(row);}}
   return validatePedigree(next);
 }
+
+// Add missing roster identities without changing existing ancestry or research.
+export function includeOwnedDogs(data, roster, createId) {
+  const next = structuredClone(data);
+  const registrations = new Set(next.dogs.map(d => String(d.registrationNumber || '').replace(/\s/g, '').toUpperCase()).filter(Boolean));
+  for (const o of roster) {
+    if (o.removed || next.dogs.some(d => d.ownedDogId === o.id)) continue;
+    const registration = String(o.akcRegistrationNumber || '').trim();
+    const duplicate = registration && registrations.has(registration.replace(/\s/g, '').toUpperCase());
+    next.dogs.push({id:createId(), ownedDogId:o.id, name:o.callName || o.showName || 'Dog', registeredName:o.showName || '', registrationNumber:duplicate ? '' : registration,
+      sex:['Male','Female'].includes(o.sex) ? o.sex : 'Unknown', dateOfBirth:o.dateOfBirth || '', breed:o.breed || 'Siberian Husky',
+      notes:[o.sireName && `Unlinked sire name from profile: ${o.sireName}`, o.damName && `Unlinked dam name from profile: ${o.damName}`, duplicate && `Registration from Our Dogs needs review (already used in research): ${registration}`].filter(Boolean).join('\n')});
+    if (registration) registrations.add(registration.replace(/\s/g, '').toUpperCase());
+  }
+  validatePedigree(next);
+  return next;
+}
