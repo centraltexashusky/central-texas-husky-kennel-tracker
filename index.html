@@ -36,6 +36,7 @@
     <link rel="stylesheet" href="emergency-workspace.css?v=emergency-procedures-v133" />
     <link rel="stylesheet" href="payment-methods.css?v=1-checkout-billing-v3" />
     <link rel="stylesheet" href="notification-overlay.css?v=1" />
+    <link rel="stylesheet" href="settings-setup-tabs.css?v=1" />
   </head>
   <body class="is-auth-booting">
     <div class="app-boot-loader" role="status" aria-live="polite" aria-label="Loading Snuggle Stay">
@@ -178,7 +179,7 @@
           <p class="eyebrow" data-app-organization-name>Central Texas Husky</p>
           <div class="app-title-row">
             <h1>Snuggle Stay</h1>
-            <time id="appReleaseVersion" datetime="2026-10-10T16:23:46.178114+00:00" title="App version · Release time in America/Chicago">v2026.10.10.14</time>
+            <time id="appReleaseVersion" datetime="2026-10-10T19:13:31.443853+00:00" title="App version · Release time in America/Chicago">v2026.10.10.15</time>
           </div>
         </div>
         <div class="status-card user-card" aria-live="polite">
@@ -1796,7 +1797,12 @@
       </section>
 
       <section class="page-view" id="settingsSetupPage">
-        <section class="recent-submissions settings-setup-panel">
+        <nav class="settings-setup-tabs" role="tablist" aria-label="Setup categories">
+          <button type="button" id="setupOrganizationTab" role="tab" aria-selected="true" aria-controls="setupOrganizationPanel" data-setup-tab>Organization</button>
+          <button type="button" id="setupPaymentsTab" role="tab" aria-selected="false" aria-controls="setupPaymentsPanel" tabindex="-1" data-setup-tab>Accepted payments</button>
+          <button type="button" id="setupAgreementTab" role="tab" aria-selected="false" aria-controls="setupAgreementPanel" tabindex="-1" data-setup-tab>Customer agreement</button>
+        </nav>
+        <section class="recent-submissions settings-setup-panel" id="setupOrganizationPanel" role="tabpanel" aria-labelledby="setupOrganizationTab">
           <div class="section-heading"><span>S</span><div><h2>Setup</h2><p>Customize the organization name shown throughout this workspace.</p></div></div>
           <form id="settingsSetupForm" class="tracker-form settings-setup-form">
             <div class="field-grid">
@@ -1816,7 +1822,7 @@
             </div>
           </form>
         </section>
-        <section class="recent-submissions settings-setup-panel">
+        <section class="recent-submissions settings-setup-panel" id="setupPaymentsPanel" role="tabpanel" aria-labelledby="setupPaymentsTab" hidden>
           <div class="section-heading"><span>P</span><div><h2>Accepted payments</h2><p>Choose which payment methods customers can use and where to send payment.</p></div></div>
           <form id="paymentMethodSettingsForm" class="tracker-form">
             <div id="paymentMethodSettingsFields" class="payment-method-grid"></div>
@@ -1824,7 +1830,7 @@
             <div class="button-row"><button type="submit">Save payment methods</button><span id="paymentMethodSaveStatus" role="status" aria-live="polite"></span></div>
           </form>
         </section>
-        <section class="recent-submissions settings-setup-panel settings-agreement-template-panel">
+        <section class="recent-submissions settings-setup-panel settings-agreement-template-panel" id="setupAgreementPanel" role="tabpanel" aria-labelledby="setupAgreementTab" hidden>
           <div class="section-heading"><span>A</span><div><h2>Customer Agreement</h2><p>Upload a document or enter the agreement customers review, then configure the information they must provide.</p></div></div>
           <form id="settingsAgreementForm" class="tracker-form settings-setup-form">
             <section class="settings-agreement-document-card">
@@ -2070,5 +2076,6 @@
     <script src="js/timesheet-workspace.js?v=payroll-drilldown-v129" defer></script>
     <link rel="stylesheet" href="operations-workspace.css?v=operations-v119" />
     <link rel="stylesheet" href="owned-bulk-care.css?v=heartworm-v118" />
+    <script src="js/settings-setup-tabs.js?v=1" defer></script>
 </body>
 </html>
