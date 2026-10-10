@@ -362,6 +362,7 @@ var defaultTaskTabMeta = [
 var mobilePrimaryPageIds = ["dashboardPage", "dailyPage", "ourDogsPage", "boardingDogsPage", "customerPage", "customerRequestsPage", "customerUpdatesPage", "customerFilesPage"];
 var mobilePrimaryPageSet = new Set(mobilePrimaryPageIds);
 var mobileMoreMenuItems = [
+  { pageId: "pedigreePage", label: "Pedigree Research", roles: ["helper", "staff", "admin"] },
   { pageId: "emergencyPage", label: "Emergency Procedures", roles: ["helper", "staff", "admin"] },
   { pageId: "timesheetPage", label: "Timesheet", roles: ["helper", "staff", "admin"] },
   { pageId: "taskSchedulerPage", label: "Task Scheduling", roles: ["helper", "staff", "admin"] },
@@ -1732,6 +1733,7 @@ function remoteRecordTypesForCurrentApp() {
 
 function remoteRecordLoadPlanForPage(pageId = "") {
   const plans = {
+    pedigreePage: { critical: ["ownedDog"], deferred: [] },
     emergencyPage: { critical: ["emergencyPlan"], deferred: [] },
     dashboardPage: {
       critical: ["boardingDog", "ownedDog", "request", "maintenance", TASK_TEMPLATE_RECORD_TYPE],
@@ -11987,6 +11989,7 @@ function scheduleRender(options = {}) {
 function renderActivePageRecords(pageId = activePageId()) {
   const mark = efficiencyPerfStart(\`renderActivePageRecords:\${pageId}\`);
   const renderers = {
+    pedigreePage: () => window.renderPedigree?.(),
     emergencyPage: () => window.renderEmergencyProcedures?.(),
     dashboardPage: () => renderDashboard(),
     dailyPage: () => renderDailyTaskLists(),

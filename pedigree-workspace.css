@@ -1,0 +1,126 @@
+/* Pedigree research uses the app's approved white/navy/blue design system. */
+#pedigreeWorkspace, #pedigreeDialog { --ped-ink:#12314e; --ped-muted:#526b82; --ped-border:#d6e2ec; --ped-blue:#0869aa; color:var(--ped-ink); font-size:14px; line-height:1.5; }
+#pedigreeWorkspace * ,#pedigreeDialog * {box-sizing:border-box;}
+#pedigreeWorkspace h1 {font-size:30px;letter-spacing:-.7px;margin:0;}
+#pedigreeWorkspace h2,#pedigreeDialog h2 {font-size:21px;letter-spacing:-.3px;margin:0 0 8px;}
+#pedigreeWorkspace h3 {font-size:15px;margin:18px 0 8px;}
+#pedigreeWorkspace p {margin:6px 0 16px;}
+.ped-header,.ped-section-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px;}
+.ped-actions {display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+#pedigreeWorkspace button,#pedigreeDialog button {padding:9px 13px;border-radius:7px;min-height:40px;cursor:pointer;font:inherit;font-weight:600;}
+#pedigreeWorkspace button:not(.secondary-button):not(.ped-dog):not(.ped-tabs button),#pedigreeDialog button:not(.secondary-button) {background:var(--ped-blue);color:white;border:1px solid var(--ped-blue);}
+#pedigreeWorkspace .secondary-button,#pedigreeDialog .secondary-button {background:white;color:var(--ped-ink);border:1px solid var(--ped-border);}
+#pedigreeWorkspace button:focus-visible,#pedigreeDialog button:focus-visible {outline:3px solid #82bdf0;outline-offset:2px;}
+#pedigreeWorkspace button:disabled,#pedigreeDialog button:disabled {opacity:.5;cursor:wait;}
+.ped-muted,#pedigreeWorkspace small,#pedigreeDialog small {color:var(--ped-muted);font-size:12px;}
+.ped-tabs {display:flex;gap:18px;border-bottom:1px solid var(--ped-border);margin:12px 0 20px;overflow:auto;}
+#pedigreeWorkspace .ped-tabs button {border:0;border-bottom:3px solid transparent;border-radius:0;background:transparent;color:var(--ped-muted);white-space:nowrap;padding:12px 3px;}
+#pedigreeWorkspace .ped-tabs button.is-active {color:var(--ped-blue);border-bottom-color:var(--ped-blue);}
+.ped-panel {border:1px solid var(--ped-border);background:white;border-radius:8px;padding:22px;margin-bottom:20px;min-width:0;}
+.ped-tools {display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+.ped-search {margin:0 0 20px;}
+#pedigreeWorkspace label,#pedigreeDialog label {display:grid;gap:5px;font-size:12px;color:var(--ped-muted);min-width:0;}
+#pedigreeWorkspace input,#pedigreeWorkspace select,#pedigreeDialog input,#pedigreeDialog select,#pedigreeDialog textarea {border:1px solid var(--ped-border);border-radius:6px;padding:10px 12px;background:white;color:var(--ped-ink);font:inherit;min-height:40px;max-width:100%;width:100%;}
+#pedigreeWorkspace .ped-checkbox,#pedigreeDialog .ped-checkbox {display:flex;align-items:center;gap:8px;font-size:13px;}
+#pedigreeWorkspace input[type=checkbox],#pedigreeDialog input[type=checkbox] {width:17px;height:17px;min-height:0;accent-color:var(--ped-blue);}
+.ped-search label:first-child {flex:1;max-width:360px;}
+.ped-search select {min-width:220px;}
+.ped-tree-layout {display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;}
+.ped-tree-panel {padding:0;display:flex;flex-direction:column;overflow:hidden;}
+.ped-tree-panel>.ped-tools {padding:14px;border-bottom:1px solid var(--ped-border);}
+.ped-tree-scroll {overflow:auto;min-height:390px;max-height:650px;background:#fbfdff;flex:1;overscroll-behavior:contain;}
+.ped-tree {padding:34px 20px;min-width:max-content;display:inline-block;}
+.ped-branch {display:flex;align-items:center;position:relative;}
+.ped-node {width:205px;flex-shrink:0;position:relative;padding:12px 0;}
+.ped-children {margin-left:35px;position:relative;display:flex;flex-direction:column;}
+.ped-children>.ped-branch:before {content:'';position:absolute;left:-18px;top:0;bottom:0;border-left:1.5px solid #91a3b4;}
+.ped-children>.ped-branch:first-child:before {top:50%;}
+.ped-children>.ped-branch:last-child:before {bottom:50%;}
+.ped-children>.ped-branch>.ped-node:before {content:'';position:absolute;width:18px;left:-18px;top:50%;border-top:1.5px solid #91a3b4;}
+.ped-branch:has(>.ped-children)>.ped-node:after {content:'';position:absolute;width:18px;right:-18px;top:50%;border-top:1.5px solid #91a3b4;}
+:is(#pedigreeWorkspace,#ownedPedigreePreview) .ped-dog {display:flex;align-items:center;gap:10px;text-align:left;width:100%;padding:11px;background:white;color:var(--ped-ink);border:1px solid var(--ped-border);border-radius:7px;font-size:13px;line-height:1.4;}
+:is(#pedigreeWorkspace,#ownedPedigreePreview) .ped-dog.is-selected {border:2px solid #1685c6;padding:10px;}
+:is(#pedigreeWorkspace,#ownedPedigreePreview) .ped-dog strong {display:block;font-size:14px;overflow-wrap:anywhere;}
+:is(#pedigreeWorkspace,#ownedPedigreePreview) .ped-dog small {display:block;font-weight:400;overflow-wrap:anywhere;}
+.ped-avatar {display:grid;place-items:center;flex-shrink:0;width:44px;height:44px;border-radius:7px;background:#e8f3fc;color:var(--ped-blue);font-size:22px;}
+.ped-identity {display:flex;gap:12px;align-items:center;margin-bottom:16px;}
+.ped-identity .ped-avatar {width:60px;height:60px;}
+.ped-identity p {font-size:12px;}
+.ped-inspector .ped-actions {margin:16px 0;}
+.ped-inspector hr {border:0;border-top:1px solid var(--ped-border);margin:20px 0;}
+.ped-badge {display:inline-block;background:#e8f3fc;color:#075e99;padding:3px 8px;border-radius:4px;font-size:11px;}
+.ped-repeated .ped-dog {background:#fff8df!important;border-color:#d7ad44!important;}
+.ped-family {display:flex;gap:12px;flex-wrap:wrap;}
+.ped-family>.ped-dog,.ped-family>div {width:220px!important;}
+.ped-empty {padding:40px 18px;color:var(--ped-muted);text-align:center;}
+.ped-metric {font-size:26px;color:var(--ped-blue);}
+.ped-table-wrap {overflow:auto;}
+#pedigreeWorkspace table {border-collapse:collapse;width:100%;font-size:13px;}
+#pedigreeWorkspace th {text-align:left;background:#f5f8fb;color:var(--ped-muted);font-size:12px;font-weight:600;}
+#pedigreeWorkspace th,#pedigreeWorkspace td {padding:14px 12px;border-bottom:1px solid var(--ped-border);vertical-align:top;min-width:115px;}
+#pedigreeWorkspace td small {display:block;margin-top:5px;max-width:280px;white-space:pre-wrap;}
+#pedigreeWorkspace td .ped-dog {min-width:200px;}
+#pedigreeWorkspace td button {margin:2px;}
+.ped-pair-select {display:flex;gap:18px;align-items:end;flex-wrap:wrap;}
+.ped-pair-select label {flex:1;min-width:180px!important;}
+.ped-metrics {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:24px 0 14px;}
+.ped-metrics>div {border:1px solid var(--ped-border);border-radius:7px;padding:18px;display:grid;gap:4px;}
+.ped-metrics strong {font-size:29px;color:var(--ped-blue);}
+.ped-metrics span {font-size:13px;}
+.ped-trait {margin:18px 0;padding:16px;background:#f5f8fb;}
+.ped-trait>span {display:block;}
+.ped-saved {display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--ped-border);padding:14px 0;}
+.ped-saved>div {flex:1;}
+.ped-saved small {display:block;}
+#pedigreeDialog {width:min(680px,calc(100vw - 24px));max-height:calc(100dvh - 32px);overflow:auto;padding:24px;border:1px solid #d6e2ec;border-radius:10px;background:white;}
+#pedigreeDialog::backdrop {background:#12314e66;}
+.ped-form {display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0;}
+.ped-full {grid-column:1/-1;}
+.ped-ofa-fields,.ped-dna-fields {display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.ped-form [hidden] {display:none!important;}
+.ped-error,.ped-warning {color:#9e3325!important;white-space:pre-wrap;}
+.ped-attachments {display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;}
+#pedigreeWorkspace a {color:#0869aa;}
+@media(max-width:1100px){.ped-tree-layout {grid-template-columns:minmax(0,1fr);} .ped-inspector {display:block;} .ped-inspector .ped-actions {display:flex;} }
+@media(max-width:760px){.ped-header,.ped-section-heading {align-items:flex-start;flex-direction:column;} .ped-header h1 {font-size:25px!important;} .ped-panel {padding:16px;} .ped-tree-panel {padding:0;} .ped-tools {gap:10px;} .ped-search label {width:100%;max-width:none!important;} .ped-search select {min-width:0;} .ped-metrics {grid-template-columns:1fr;gap:8px;} .ped-metrics>div {padding:12px;} .ped-form,.ped-ofa-fields,.ped-dna-fields {grid-template-columns:1fr;} .ped-full {grid-column:1;} #pedigreeDialog {padding:16px;} .ped-tree-scroll {min-height:330px;max-height:500px;} .ped-saved {flex-wrap:wrap;} .ped-saved>div {flex-basis:100%;} }
+@media print {
+ body:has(#pedigreePage.is-active) .app-layout {display:block!important;}
+ body:has(#pedigreePage.is-active) :is(#sidebar,.page-header,.mobile-bottom-nav,.ped-header .ped-actions,.ped-search,.ped-tabs,.ped-tools,.ped-inspector button,#pedigreeStatus) {display:none!important;}
+ body:has(#pedigreePage.is-active)>*:not(.app-layout) {display:none!important;}
+ body:has(#pedigreePage.is-active) .page-view:not(#pedigreePage) {display:none!important;}
+ body:has(#pedigreePage.is-active) #pedigreeWorkspace .ped-tree-layout {display:block;}
+ body:has(#pedigreePage.is-active) .ped-tree-scroll {overflow:visible;max-height:none;height:auto;}
+ body:has(#pedigreePage.is-active) .ped-tree {zoom:.6!important;}
+ body:has(#pedigreePage.is-active) .ped-panel {break-inside:avoid;}
+}
+/* Keep the research canvas at the same height in the shell as Dog Shows. */
+body:has(#pedigreePage.is-active) #globalSearchPanel {display:none!important;}
+body:has(#pedigreePage.is-active) .page-header {margin-bottom:18px!important;}
+body:has(#pedigreePage.is-active) .page-header h1 {font-size:20px!important;}
+body:has(#pedigreePage.is-active) .page-header .eyebrow {display:none!important;}
+.ped-tree-layout {align-items:start;}
+.ped-tree-scroll {height:440px;flex:none;}
+
+body:has(#pedigreePage.is-active) .app-shell {max-width:none;width:100%;padding:16px 28px 40px;box-sizing:border-box;}
+body:has(#pedigreePage.is-active) .page-header {min-height:36px;margin:0 0 14px!important;padding:0!important;}
+#pedigreeStatus {margin:0 0 8px;min-height:26px;}
+#pedigreeStatus button {min-height:28px;padding:3px 8px;font-size:12px;}
+#pedigreeWorkspace .ped-header {margin-bottom:8px;}
+.ped-inspector {font-size:13px;padding:18px;}
+.ped-inspector .ped-actions {gap:6px;margin:12px 0;}
+.ped-inspector hr {margin:14px 0;}
+.ped-inspector p {margin-bottom:10px!important;}
+.ped-tree-labels {display:flex;gap:35px;margin-bottom:12px;color:#526b82;font-size:10px;letter-spacing:.7px;}
+.ped-tree-labels span {width:205px;flex-shrink:0;}
+.ped-avatar img {width:100%;height:100%;object-fit:cover;border-radius:7px;}
+#ownedPedigreePreview .ped-tree-scroll {height:340px;min-height:0;margin-bottom:16px;border:1px solid #d6e2ec;border-radius:8px;}
+#ownedPedigreePreview .ped-tree {zoom:.85;}
+#ownedPedigreePreview .ped-dog {--ped-ink:#12314e;--ped-border:#d6e2ec;--ped-muted:#526b82;}
+@media(max-width:760px){body:has(#pedigreePage.is-active) .app-shell {padding:12px 14px 100px;} .ped-header .ped-actions {gap:5px;} #pedigreeWorkspace .ped-header button {font-size:12px;padding:7px 9px;} }
+
+.ped-utility {display:flex;align-items:center;justify-content:space-between;gap:14px;border-bottom:1px solid #d6e2ec;padding:0 0 12px;margin-bottom:20px;color:#526b82;font-size:13px;}
+body:has(#pedigreePage.is-active):not(.ped-account-open) .page-header {display:none!important;}
+#pedigreeWorkspace [hidden] {display:none!important;}
+#ownedDogDetail.owned-workspace #ownedPedigreePreview button.ped-dog {background:#fff;color:#12314e;border:1px solid #d6e2ec;}
+#ownedDogDetail.owned-workspace #ownedPedigreePreview button.ped-dog.is-selected {border:2px solid #1685c6;}
+@media print {body:has(#pedigreePage.is-active) .ped-utility {display:none!important;}}

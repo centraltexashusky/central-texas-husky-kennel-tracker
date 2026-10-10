@@ -4,6 +4,7 @@ var ownedWorkspaceHistoryLimit = 30;
 
 function ownedWorkspaceIcon(name) {
   const paths = {
+    Pedigree: '<rect x="9" y="2" width="6" height="5"/><rect x="2" y="17" width="6" height="5"/><rect x="16" y="17" width="6" height="5"/><path d="M12 7v5M5 17v-5h14v5"/>',
     Overview: '<path d="M3 10l9-7 9 7v10H3zM9 20v-7h6v7"/>',
     Exercise: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
     Training: '<path d="M5 4h14v17l-7-4-7 4zM9 9h6M9 12h4"/>',
@@ -186,7 +187,11 @@ function setupOwnedWorkspace(record) {
       const button = event.target.closest('[data-owned-workspace-action]');
       if (!button) return;
       const action = button.dataset.ownedWorkspaceAction;
-      if (action === 'edit') {
+      if (action === 'pedigree') {
+        const id = activeOwnedDog()?.id;
+        if (!id) return showToast('Save the dog profile first.');
+        window.loadAppPageModule('pedigreePage').then(() => window.openPedigreeForOwned(id)).catch(error => showToast(error.message));
+      } else if (action === 'edit') {
         editOwnedWorkspace();
       } else if (action === 'care') openOwnedWorkspaceCare(activeOwnedDog());
       else if (action === 'more-history') {
@@ -269,7 +274,7 @@ function refreshOwnedWorkspace() {
   const read = ownedWorkspaceMode === 'view';
   modal.dataset.mode = ownedWorkspaceMode;
   const panel = document.getElementById('ownedWorkspaceReadPanel');
-  const native = !read || ['Files','Timeline','Registration'].includes(tab);
+  const native = !read || ['Files','Timeline','Registration','Pedigree'].includes(tab);
   modal.querySelectorAll('.owned-profile-section').forEach(section => {
     section.hidden = !native || section.dataset.ownedProfileSection !== tab;
     section.setAttribute('role', 'tabpanel');
@@ -294,9 +299,10 @@ function refreshOwnedWorkspace() {
   } else panel.innerHTML = '';
   const dog = activeOwnedDog();
   if (tab === 'Registration' && window.dogRegistrationProfileHtml) document.getElementById('ownedRegistrationProfile').innerHTML = window.dogRegistrationProfileHtml('ownedDog', dog);
+  if (dog && tab === 'Pedigree') window.loadAppPageModule('pedigreePage').then(() => window.renderOwnedPedigreePreview()).catch(error => { const panel = document.getElementById('ownedPedigreePreview'); if (panel) panel.textContent = error.message; });
   if (dog && tab === 'Files') renderOwnedDogFiles(dog);
   if (dog && tab === 'Timeline') renderOwnedActivity(dog);
-  modal.querySelector('.owned-dog-submit-row').hidden = read || tab === 'Registration';
+  modal.querySelector('.owned-dog-submit-row').hidden = read || ['Registration','Pedigree'].includes(tab);
 }
 
 function openOwnedWorkspaceCare(dog) {

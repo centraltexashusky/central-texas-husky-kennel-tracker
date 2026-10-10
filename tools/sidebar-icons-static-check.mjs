@@ -18,6 +18,7 @@ const expectedLabels = [
   "Daily Tasks",
   "Task Scheduling",
   "Our Dogs",
+  "Pedigree Research",
   "Boarding Dogs",
   "Emergency Procedures",
   "Requests &amp; Maintenance",
@@ -31,7 +32,7 @@ const expectedLabels = [
   "Alerts",
   "Audit Log"
 ];
-assert.equal(buttons.length, expectedLabels.length, "All original sidebar destinations remain");
+assert.equal(buttons.length, expectedLabels.length, "All original sidebar destinations plus Pedigree Research remain");
 assert.deepEqual(buttons.map(([, , content]) => content.match(/<span class="sidebar-nav-label">([^<]+)<\/span>/)?.[1]), expectedLabels, "Menu labels and order remain unchanged");
 for (const [, attrs, content] of buttons) {
   assert.match(attrs, /data-page="[^"]+"/, "Navigation destination is retained");
