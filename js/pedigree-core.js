@@ -139,6 +139,44 @@ export function includeOwnedDogs(data, roster, createId) {
       notes:[o.sireName && `Unlinked sire name from profile: ${o.sireName}`, o.damName && `Unlinked dam name from profile: ${o.damName}`, duplicate && `Registration from Our Dogs needs review (already used in research): ${registration}`].filter(Boolean).join('\n')});
     if (registration) registrations.add(registration.replace(/\s/g, '').toUpperCase());
   }
-  validatePedigree(next);
-  return next;
+  return linkOwnedParents(next, roster);
+}
+
+// Titles change over a dog's life; compare the registered identity, never a call name.
+export function registeredParentKey(value) {
+  return String(value || '').normalize('NFKC').toUpperCase()
+    .replace(/^(?:(?:GCHG|GCHS|GCHB|GCHP|GCH|CH)\.?\s+)+/, '')
+    .replace(/[^\p{L}\p{N}]/gu, '');
+}
+export function linkOwnedParents(data, roster) {
+  const next=structuredClone(data), rosterById=new Map(roster.filter(o=>!o.removed).map(o=>[o.id,o]));
+  const names=new Map();
+  for(const d of next.dogs) {
+    for(const raw of [d.registeredName,rosterById.get(d.ownedDogId)?.showName]) {
+      const key=registeredParentKey(raw);if(!key)continue;
+      if(!names.has(key))names.set(key,new Set());names.get(key).add(d.id);
+    }
+  }
+  for(const d of next.dogs) {
+    const o=rosterById.get(d.ownedDogId);if(!o)continue;
+    const review=[];
+    for(const [field,sourceField,label] of [['sireId','sireName','Sire'],['damId','damName','Dam']]) {
+      const raw=o[sourceField], key=registeredParentKey(raw);
+      if(!key||d[field+'AutoLinkDisabled'])continue;
+      const candidates=[...(names.get(key)||[])];
+      if(d[field]) {
+        if(candidates.length===1&&candidates[0]!==d[field])review.push(`${label}: saved parent differs from Our Dogs (${raw}). Review the connection.`);
+        continue;
+      }
+      if(candidates.length!==1){review.push(`${label}: ${candidates.length?'multiple registered-name matches':'no registered-name match'} for ${raw}.`);continue;}
+      d[field]=candidates[0];
+      try {validatePedigree(next);}catch {delete d[field];review.push(`${label}: ${raw} needs review because this connection conflicts with the pedigree (sex, birth date or ancestry).`);continue;}
+      d[field+'Verified']=false;
+      d[field+'Notes']=`Automatically linked from Our Dogs ${sourceField}: ${raw}. Registered-name match; certificate not verified.`;
+      const oldNote=`Unlinked ${label.toLowerCase()} name from profile: ${raw}`;
+      d.notes=String(d.notes||'').split('\n').filter(line=>line!==oldNote).join('\n');
+    }
+    d.parentMatchReview=review;
+  }
+  validatePedigree(next);return next;
 }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {includeOwnedDogs,emptyPedigree,validatePedigree,pedigreeCoefficient as coi,familyOf,completeness,singleGeneCross,testedTraitCrosses,mergePedigree,safePedigreeUrl} from '../js/pedigree-core.js';
+import {linkOwnedParents,registeredParentKey,includeOwnedDogs,emptyPedigree,validatePedigree,pedigreeCoefficient as coi,familyOf,completeness,singleGeneCross,testedTraitCrosses,mergePedigree,safePedigreeUrl} from '../js/pedigree-core.js';
 const make=(id,sex='Unknown',sireId='',damId='')=>({id,name:id,sex,sireId,damId});
 const dogs=[make('g1','Male'),make('g2','Female'),make('s1','Male','g1','g2'),make('s2','Female','g1','g2'),make('u1','Female'),make('u2','Male'),make('c1','Male','s1','u1'),make('c2','Female','u2','s2')];
 assert.equal(coi(dogs,'g1','g2'),0);
@@ -38,3 +38,24 @@ const extended=includeOwnedDogs(synced,[...roster,{id:'later',callName:'Later'}]
 assert.equal(extended.dogs.length,3);assert.equal(extended.dogs[2].sex,'Unknown');
 assert.equal(synced.dogs.length,2);
 console.log('Roster sync: all dogs, repeat sync, later additions, archived preservation and duplicate registration checks passed.');
+
+assert.equal(registeredParentKey("GCH CH Kristari’s Twilight Dancer"),registeredParentKey("Kristaris Twilight Dancer"));
+const parents=[{id:'dad',showName:"GCh. Kennel's Father",callName:'Dad',sex:'Male'},{id:'mom',showName:"Kennels Mother",callName:'Mom',sex:'Female'},{id:'pup',callName:'Pup',sex:'Female',sireName:"CH KENNEL'S FATHER",damName:"KENNEL'S MOTHER"}];
+const linked=includeOwnedDogs(emptyPedigree(),parents,()=>`p${++seq}`);
+const pup=linked.dogs.find(d=>d.ownedDogId==='pup'),dad=linked.dogs.find(d=>d.ownedDogId==='dad'),mom=linked.dogs.find(d=>d.ownedDogId==='mom');
+assert.equal(pup.sireId,dad.id);assert.equal(pup.damId,mom.id);assert.equal(pup.sireIdVerified,false);
+assert.deepEqual(linkOwnedParents(linked,parents),linked,'repeat matching is idempotent');
+const blocked=structuredClone(linked);const child=blocked.dogs.find(d=>d.id===pup.id);child.sireId='';child.sireIdAutoLinkDisabled=true;
+assert.equal(linkOwnedParents(blocked,parents).dogs.find(d=>d.id===pup.id).sireId,'','manual unlink persists');
+const ambiguous=structuredClone(linked);ambiguous.dogs.push({...dad,id:'duplicate',ownedDogId:''});delete ambiguous.dogs.find(d=>d.id===pup.id).sireId;
+assert.equal(linkOwnedParents(ambiguous,parents).dogs.find(d=>d.id===pup.id).sireId,undefined);
+const cycleRoster=parents.map(d=>d.id==='dad'?{...d,sireName:"CH KENNEL'S FATHER"}:d);
+assert.equal(linkOwnedParents(linked,cycleRoster).dogs.find(d=>d.id===dad.id).sireId,undefined);
+const wrongSex=parents.map(d=>d.id==='pup'?{...d,sireName:'Kennels Mother'}:d);
+const fresh=includeOwnedDogs(emptyPedigree(),wrongSex,()=>`p${++seq}`);
+assert.equal(fresh.dogs.find(d=>d.ownedDogId==='pup').sireId,undefined);
+console.log('Parent matching passed: title/punctuation normalization, both parents, provenance, idempotency, manual unlink, ambiguous names, cycles and sex guards.');
+const dates=parents.map(d=>({...d,dateOfBirth:d.id==='pup'?'2020-01-01':'2021-01-01'}));
+assert.equal(includeOwnedDogs(emptyPedigree(),dates,()=>`p${++seq}`).dogs.find(d=>d.ownedDogId==='pup').sireId,undefined);
+const alternate=structuredClone(linked);alternate.dogs.push({id:'manual',name:'Manual',sex:'Male'});alternate.dogs.find(d=>d.id===pup.id).sireId='manual';
+assert.equal(linkOwnedParents(alternate,parents).dogs.find(d=>d.id===pup.id).sireId,'manual');
