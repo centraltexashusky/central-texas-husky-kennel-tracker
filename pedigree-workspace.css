@@ -127,3 +127,15 @@ body:has(#pedigreePage.is-active):not(.ped-account-open) .page-header {display:n
 
 .ped-node [data-progeny-button] {width:100%;margin-top:6px;min-height:34px;font-size:12px;border-style:dashed;}
 @media print {.ped-node [data-progeny-button] {display:none!important;}}
+
+/* Separate photo and dog selection controls keep keyboard navigation accessible. */
+:is(#pedigreeWorkspace,#ownedPedigreePreview) .ped-dog-select {flex:1;min-width:0;padding:0;border:0;background:transparent;color:inherit;text-align:left;font:inherit;box-shadow:none;}
+:is(#pedigreeWorkspace,#ownedPedigreePreview) .ped-photo-trigger {flex-shrink:0;display:block;padding:0;border:0;border-radius:7px;background:transparent;cursor:zoom-in;box-shadow:none;}
+.ped-photo-trigger:focus-visible,.ped-dog-select:focus-visible {outline:3px solid #1685c6;outline-offset:3px;}
+.ped-photo-viewer {width:min(960px,94vw);max-height:94vh;padding:20px;border:0;border-radius:14px;background:#fff;color:#15334e;overflow:auto;}
+.ped-photo-viewer::backdrop {background:rgba(9,25,40,.8);}
+.ped-photo-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px;}
+.ped-photo-heading h2 {margin:0;font-size:20px;overflow-wrap:anywhere;}
+.ped-photo-heading button {flex-shrink:0;min-width:44px;min-height:44px;font-size:28px;cursor:pointer;}
+.ped-photo-large {display:block;width:100%;max-height:74vh;object-fit:contain;background:#f1f5f8;}
+.ped-photo-viewer [role=status]:empty {display:none;}

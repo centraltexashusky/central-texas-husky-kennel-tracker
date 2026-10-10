@@ -15,7 +15,7 @@ const pct=v=>v===null?'Not calculated':`${(v*100).toFixed(2)}%`;
 const btn=(action,label,extra='',secondary=true)=>`<button type="button" class="${secondary?'secondary-button':''}" data-ped-action="${action}" ${extra}>${label}</button>`;
 const options=(rows,value,blank='Choose a dog')=>`<option value="">${esc(blank)}</option>`+rows.map(d=>`<option value="${esc(d.id)}" ${d.id===value?'selected':''}>${esc(name(d))}${d.archived?' (archived)':''}</option>`).join('');
 function sessionKey(){return `${localTestMode?'test':'remote'}:${currentUser?.email || ''}`;}
-function checkIdentity(){if(identity!==sessionKey()){identity=sessionKey();data=emptyPedigree();revision=null;loaded=false;selected='';undo=null;pairResult=null;document.getElementById('pedigreeDialog')?.close();}}
+function checkIdentity(){if(identity!==sessionKey()){identity=sessionKey();data=emptyPedigree();revision=null;loaded=false;selected='';undo=null;pairResult=null;document.getElementById('pedigreeDialog')?.close();document.getElementById('pedigreePhotoViewer')?.close();}}
 async function load(force=false){
   if(!canRead())throw Error('Sign in with a staff account to view pedigree research.');
   checkIdentity();if(loaded&&!force)return syncRoster();if(loading)return loading;
@@ -60,8 +60,25 @@ async function commit(next,message='Saved',expected=revision){
   }finally{busy=false;}
 }
 function externalPhotoUrl(value){try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='static.pedigreeonline.com'&&/^\/photos\/Dog\/[\w.-]+\.(jpg|jpeg|png|webp)$/i.test(u.pathname)?u.href:'';}catch{return '';}}
-function photo(d){if(d?.photoPath)return `<span class="ped-avatar"><img data-ped-photo="${esc(d.photoPath)}" alt="" hidden><span>${esc(name(d)[0])}</span></span>`;const source=owned().find(o=>o.id===d?.ownedDogId);if(source&&typeof ownedWorkspacePhoto==='function')return ownedWorkspacePhoto(source);if(externalPhotoUrl(d?.photoUrl))return `<span class="ped-avatar"><img data-ped-photo-url="${esc(d.photoUrl)}" alt="${esc(name(d))}" decoding="async" referrerpolicy="no-referrer" hidden><span>${esc((name(d)[0]||'?').toUpperCase())}</span></span>`;return `<span class="ped-avatar" aria-hidden="true">${esc((name(d)[0]||'?').toUpperCase())}</span>`;}
-function card(d,extra='') {return `<button type="button" class="ped-dog ${d?.id===selected?'is-selected':''}" data-ped-action="select" data-id="${esc(d?.id)}">${photo(d)}<span><strong>${esc(name(d))}</strong><small>${esc(d?.sex||'Unknown')}${d?.archived?' · Archived':''}</small>${d?.coatColor?`<small>Coat: ${esc(d.coatColor)}</small>`:''}${eyeDescription(d)?`<small>${esc(eyeDescription(d))}</small>`:''}${extra?`<small>${esc(extra)}</small>`:''}</span></button>`;}
+function photoMarkup(d){if(d?.photoPath)return `<span class="ped-avatar"><img data-ped-photo="${esc(d.photoPath)}" alt="" hidden><span>${esc(name(d)[0])}</span></span>`;const source=owned().find(o=>o.id===d?.ownedDogId);if(source&&typeof ownedWorkspacePhoto==='function')return ownedWorkspacePhoto(source);if(externalPhotoUrl(d?.photoUrl))return `<span class="ped-avatar"><img data-ped-photo-url="${esc(d.photoUrl)}" alt="${esc(name(d))}" decoding="async" referrerpolicy="no-referrer" hidden><span>${esc((name(d)[0]||'?').toUpperCase())}</span></span>`;return `<span class="ped-avatar" aria-hidden="true">${esc((name(d)[0]||'?').toUpperCase())}</span>`;}
+function photo(d){const markup=photoMarkup(d);return markup.includes('<img')?`<button type="button" class="ped-photo-trigger" data-ped-action="photo" data-id="${esc(d.id)}" aria-label="Enlarge photo of ${esc(name(d))}" title="Enlarge photo">${markup}</button>`:markup;}
+async function showPhoto(d,trigger){
+  if(!d)return;
+  let url=trigger.querySelector('img')?.currentSrc||trigger.querySelector('img')?.src||'';
+  if(d.photoPath){const r=await supabaseClient.storage.from(MEDIA_BUCKET).createSignedUrl(d.photoPath,300);if(r.error)throw r.error;url=r.data.signedUrl;}
+  else if(!d.ownedDogId&&externalPhotoUrl(d.photoUrl))url=externalPhotoUrl(d.photoUrl);
+  if(!url)throw Error('This photo is still loading. Please try again in a moment.');
+  if(!canRead())return;
+  let viewer=document.getElementById('pedigreePhotoViewer');
+  if(!viewer){viewer=document.createElement('dialog');viewer.id='pedigreePhotoViewer';viewer.className='ped-photo-viewer';document.body.append(viewer);viewer.addEventListener('click',e=>{if(e.target===viewer)viewer.close();});}
+  viewer.setAttribute('aria-label',`Photo of ${name(d)}`);
+  viewer.innerHTML=`<div class="ped-photo-heading"><h2>${esc(name(d))}</h2><button type="button" aria-label="Close photo">×</button></div><img class="ped-photo-large" alt="${esc(name(d))}" referrerpolicy="no-referrer"><p role="status">Loading photo…</p>${d.photoUrl&&!d.photoPath&&!d.ownedDogId?sourceLink(d.photoSourceUrl,'Photo: Pedigree Online ↗'):''}`;
+  viewer.querySelector('button').onclick=()=>viewer.close();
+  const img=viewer.querySelector('img'),status=viewer.querySelector('[role="status"]');
+  img.onload=()=>{status.textContent='';};img.onerror=()=>{status.textContent='This photo is currently unavailable. Please try again later.';};img.src=url;
+  viewer.showModal();
+}
+function card(d,extra='') {return `<div class="ped-dog ${d?.id===selected?'is-selected':''}" >${photo(d)}<button type="button" class="ped-dog-select" data-ped-action="select" data-id="${esc(d?.id)}"><span><strong>${esc(name(d))}</strong><small>${esc(d?.sex||'Unknown')}${d?.archived?' · Archived':''}</small>${d?.coatColor?`<small>Coat: ${esc(d.coatColor)}</small>`:''}${eyeDescription(d)?`<small>${esc(eyeDescription(d))}</small>`:''}${extra?`<small>${esc(extra)}</small>`:''}</span></button></div>`;}
 function sourceLink(url,label='Source record ↗'){const safe=safeUrl(url);return safe?`<a href="${esc(safe)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`:'';}
 function empty(text){return `<div class="ped-empty">${text}</div>`;}
 function treeMarkup(id,depth=0,seen=new Set(),direction=view,levels=generations) {
@@ -179,6 +196,7 @@ async function act(e){
     if(!canRead())throw Error('Sign in with a staff account.');
     if(a==='account'){document.body.classList.toggle('ped-account-open');render();if(document.body.classList.contains('ped-account-open'))window.scrollTo({top:0,behavior:'smooth'});}
     else if(a==='tab'){tab=b.dataset.id;render();}
+    else if(a==='photo')await showPhoto(dog(id),b);
     else if(a==='select'){selected=id;tab='tree';render();}
     else if(a==='add-dog')editDog();else if(a==='edit-dog')editDog(id);
     else if(a==='relative')relativeEditor(id,b.dataset.relation||'sireId');
@@ -217,6 +235,6 @@ window.renderOwnedPedigreePreview=async()=>{
   target.innerHTML='<p>Loading pedigree…</p>';try{await load();if(activeOwnedDog()?.id!==o.id)return;const d=data.dogs.find(d=>d.ownedDogId===o.id);target.innerHTML=d?`<div class="ped-tree-scroll"><div class="ped-tree">${treeMarkup(d.id,0,new Set(),'Ancestors',3)}</div></div><div class="ped-family">${['sireId','damId'].map(key=>`<div><h3>${key==='sireId'?'Sire':'Dam'}</h3><p>${esc(name(dog(d[key])))}</p></div>`).join('')}</div><p>${familyOf(data.dogs,d.id).progeny.length} offspring · ${familyOf(data.dogs,d.id).siblings.length} siblings · ${data.health.filter(h=>h.dogId===d.id&&!h.archived&&h.kind==='OFA').length} OFA records</p><p>Pedigree COI: ${pct(pedigreeCoefficient(data.dogs,d.sireId,d.damId))} · based on recorded ancestry. Missing ancestry may underestimate this result.</p>`:'<p>No pedigree linked yet. Open Pedigree Research to start this dog’s family tree.</p>';hydrateProfilePhotoElements(target);hydrateResearchPhotos(target);}catch(e){target.textContent=e.message;}
 };
 // Clear the independent research cache when the authenticated shell signs out.
-new MutationObserver(()=>{if(!helperIsLoggedIn()){data=emptyPedigree();loaded=false;identity='';root()?.replaceChildren();document.getElementById('pedigreeDialog')?.close();}}).observe(document.body,{attributes:true,attributeFilter:['class']});
+new MutationObserver(()=>{if(!helperIsLoggedIn()){data=emptyPedigree();loaded=false;identity='';root()?.replaceChildren();document.getElementById('pedigreeDialog')?.close();document.getElementById('pedigreePhotoViewer')?.close();}}).observe(document.body,{attributes:true,attributeFilter:['class']});
 
-document.getElementById('ownedPedigreePreview')?.addEventListener('click',event=>{const b=event.target.closest('[data-ped-action]');if(!b)return;selected=b.dataset.id;tab='tree';closeOwnedDogModal({skipHistory:true});switchPage('pedigreePage');render();if(b.dataset.pedAction==='relative')relativeEditor(selected,b.dataset.relation);});
+document.getElementById('ownedPedigreePreview')?.addEventListener('click',event=>{const b=event.target.closest('[data-ped-action]');if(!b)return;if(b.dataset.pedAction==='photo'){act(event);return;}selected=b.dataset.id;tab='tree';closeOwnedDogModal({skipHistory:true});switchPage('pedigreePage');render();if(b.dataset.pedAction==='relative')relativeEditor(selected,b.dataset.relation);});
