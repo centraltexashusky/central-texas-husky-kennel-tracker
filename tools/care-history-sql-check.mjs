@@ -15,7 +15,7 @@ grant all on cuddle_stay.kennel_records to authenticated;
 create policy read_records on cuddle_stay.kennel_records for select to authenticated using (organization_id='org' and current_setting('test.app_role',true) in ('owner','admin','manager','staff','helper'));
 create policy write_records on cuddle_stay.kennel_records for all to authenticated using (organization_id='org' and current_setting('test.app_role',true) in ('owner','admin','manager','staff','helper')) with check (organization_id='org' and current_setting('test.app_role',true) in ('owner','admin','manager','staff','helper'));
 set test.uid='00000000-0000-0000-0000-000000000001';set test.app_role='admin';`);
-await db.exec(fs.readFileSync('supabase/migrations/20261011155818_admin_owned_care_history_edit.sql','utf8'));
+await db.exec(fs.readFileSync('supabase/migrations/20261011203811_admin_owned_care_history_edit.sql','utf8'));
 const original={id:'a',type:'Medical/Care',date:'2026-01-02',note:'one\ntwo',completedBy:'Original Staff',createdAt:'2026-01-04T18:30:00Z',mediaItems:[{url:'fixture'}]};
 const duplicate={...original,note:'same day independent entry',id:'b'};
 const dog={id:'dog',type:'ownedDog',careNotesHistory:[original,duplicate],foodAmount:'unchanged',bathHistory:[],notes:'unchanged'};

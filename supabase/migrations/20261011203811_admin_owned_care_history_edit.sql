@@ -45,7 +45,7 @@ begin
       raise exception 'Care history IDs must identify a single entry.' using errcode = '42501';
     end if;
   end loop;
-  return new;
+  if tg_op = 'DELETE' then return old; else return new; end if;
 end;
 $$;
 revoke all on function cuddle_stay_private.protect_owned_care_history() from public, anon, authenticated;

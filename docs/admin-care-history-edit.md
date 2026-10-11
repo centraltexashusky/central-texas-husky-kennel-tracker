@@ -1,6 +1,6 @@
 # Admin care-history corrections and entry timestamps
 
-Prepared on `feature/admin-care-history-edit`, based on production `50a3410`. Not deployed. Production release approval for the earlier display-only fix does not authorize this feature.
+Prepared on `feature/admin-care-history-edit`, based on production `50a3410`. Care-history frontend and backend release explicitly approved October 11, 2026.
 
 ## Behavior
 
@@ -34,8 +34,10 @@ Requires explicit approval for BOTH the database migration and frontend deployme
 
 Rollback: reverting the frontend removes Edit UI but retains the backend protection. Removing the trigger would reopen non-admin history writes and requires an explicit security decision. Existing correction metadata is additive and can remain stored.
 
-The one-hour itemized pickup email is a separate proposal outside this commit; it has not been implemented or activated.
+The one-hour itemized pickup email is a separate unreleased branch, excluded from this care-history release. No reminder configuration or email behavior is changed here.
 
 ## Boarding-specific correction
 
 `edit_boarding_care_history` uses the exact raw record, array index and full expected entry, under the same authoritative admin and organization checks. Matching log-ID copies across boarding profiles are locked and corrected atomically, preserving each profile/stay identity and all original author/date/time/media fields. Differing copies or ambiguous duplicate IDs fail closed. Legacy entries with no ID target only the exact record/index. The editor offers existing minutes fields alongside notes, including workout and service logs. Changes do not alter service completion state or charges. Rapid Cancel/reopen is guarded against an old dialog close event clearing a new session.
+
+Approved backend migration applied as `20261011203811` on October 11, 2026. The local filename matches the server-assigned version. Both RPCs are security invoker, authenticated-only, with an enabled protection trigger. Post-deployment advisors introduced no new findings.
