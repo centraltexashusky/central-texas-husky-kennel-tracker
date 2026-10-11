@@ -4407,7 +4407,7 @@ function renderStructuredCareLogs() {
       const details = [log.date, log.minutes ? \`\${log.minutes} minutes\` : "", log.note].filter(Boolean).join(" | ");
       const canModify = canModifyCareLog(log);
       const actions = canModify ? \`<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-care-log" data-id="\${escapeHtml(log.id)}">Edit</button><button type="button" class="secondary-button danger-button" data-action="remove-care-log" data-id="\${escapeHtml(log.id)}">Remove</button></div>\` : "";
-      return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || "Care")}</strong><p>\${escapeHtml(details || "No extra details")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${actions}</article>\`;
+      return \`<article class="record-card compact-record-card"><strong>\${escapeHtml(log.dogName || "Dog")} - \${escapeHtml(log.careType || "Care")}</strong><p>\${escapeHtml(details || "No extra details")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${careLogEntryMetadataHtml(log)}\${mediaLinkHtml(log)}\${actions}</article>\`;
     })
     .join("");
   const countLabel = \`\${pendingStructuredCareLogs.length} care log\${pendingStructuredCareLogs.length === 1 ? "" : "s"}\`;
@@ -4415,9 +4415,7 @@ function renderStructuredCareLogs() {
 }
 
 function canModifyCareLog(log = {}) {
-  if (currentRole() === "admin") return true;
-  const currentEmail = String(currentUser?.email || helperEmail.value || "").toLowerCase();
-  return currentEmail && String(log.completedEmail || "").toLowerCase() === currentEmail;
+  return currentRole() === "admin";
 }
 
 // Extracted to js/daily.js: careLogEditFormHtml
@@ -7644,7 +7642,9 @@ function generatedCareEntry(record, log, type) {
     note: log.note || "",
     mediaItems: arrayValue(log.mediaItems),
     completedBy: log.completedBy || record.helperName || "",
-    createdAt: new Date().toISOString(),
+    ...(log.loggedAt ? {loggedAt: log.loggedAt} : {}),
+    ...(log.createdAt ? {createdAt: log.createdAt} : {}),
+    ...(log.updatedAt ? {updatedAt: log.updatedAt, updatedByEmail: log.updatedByEmail || "", editHistory: arrayValue(log.editHistory)} : {}),
   };
 }
 
@@ -9985,6 +9985,7 @@ function applyOwnedCareLog(record = {}, type, minutes, note = "") {
     id: uid("log"),
     type,
     date: todayDate(),
+    createdAt: new Date().toISOString(),
     minutes,
     note,
     completedBy: currentUser?.name || helperName?.value || "",

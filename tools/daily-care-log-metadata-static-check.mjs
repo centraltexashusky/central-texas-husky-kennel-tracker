@@ -17,7 +17,7 @@ for (const [name, source] of [["daily", sources.daily], ["legacy", sources.legac
   if (!source.includes('"<span>Completed " + escapeHtml(workDate) + " by " + escapeHtml(staffName)')) {
     failures.push(`${name} does not show the work date and completing staff member.`);
   }
-  if (!source.includes("log.loggedAt || log.createdAt || log.updatedAt")) {
+  if (name === "legacy" ? !source.includes("log.loggedAt || log.createdAt || log.updatedAt") : !source.includes("careLogEntryMetadataHtml(log)")) {
     failures.push(`${name} does not use the saved log timestamp for the logged-time label.`);
   }
   if (!source.includes("dailyCareLogCompletionMetaHtml(log, record)")) {

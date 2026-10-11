@@ -319,7 +319,7 @@ async function removeDailyCareLog(logId) {
   const date = currentDailyDate();
   const target = structuredCareLogsForDate(date).find((log) => log.id === logId);
   if (!target || !canModifyCareLog(target)) {
-    showToast("Only admins or the staff member who logged this can remove it.");
+    showToast("Only admins can remove care history.");
     return;
   }
   const structuredCareLogs = structuredCareLogsForDate(date).filter((log) => log.id !== logId);
@@ -332,7 +332,7 @@ async function updateDailyCareLog(logId, updates = {}) {
   const logs = structuredCareLogsForDate(date);
   const target = logs.find((log) => log.id === logId);
   if (!target || !canModifyCareLog(target)) {
-    showToast("Only admins or the staff member who logged this can edit it.");
+    showToast("Only admins can edit care history.");
     return null;
   }
   const updatedLog = { ...target, ...updates, updatedAt: new Date().toISOString() };
@@ -609,9 +609,7 @@ function dailyCareLogDateLabel(date = "") {
 function dailyCareLogCompletionMetaHtml(log = {}, record = {}) {
   const staffName = dailyCareLogStaffName(log, record);
   const workDate = dailyCareLogDateLabel(dailyCareLogWorkDate(log, record));
-  const loggedAt = log.loggedAt || log.createdAt || log.updatedAt || "";
-  const loggedAtLabel = loggedAt ? formatDateTime(loggedAt) : "";
-  return "<span>Completed " + escapeHtml(workDate) + " by " + escapeHtml(staffName) + (loggedAtLabel ? " | Logged " + escapeHtml(loggedAtLabel) : "") + "</span>";
+  return "<span>Completed " + escapeHtml(workDate) + " by " + escapeHtml(staffName) + "</span>" + careLogEntryMetadataHtml(log);
 }
 
 function dailyDetailHtml(record) {
@@ -698,6 +696,19 @@ async function syncOwnedDogCareFromDailyReport(record) {
   });
 
   for (const dog of dogUpdates.values()) {
+    const previous = readRecords("ownedDog").find(item => item.id === dog.id) || {};
+    for (const field of ["exerciseLogs", "trainingLogs", "bathHistory", "heatHistory", "careNotesHistory"]) {
+      dog[field] = dog[field].map(entry => {
+        const old = arrayValue(previous[field]).find(item => item.id && item.id === entry.id);
+        if (!old) return entry;
+        // Unchanged projections retain their exact entry metadata, including legacy missing times.
+        if ((old.note || "") === (entry.note || "") && String(old.minutes || "") === String(entry.minutes || "") && old.date === entry.date && old.type === entry.type && (old.completedBy || "") === (entry.completedBy || "") && JSON.stringify(arrayValue(old.mediaItems)) === JSON.stringify(arrayValue(entry.mediaItems))) return old;
+        const next = {...entry};
+        if (old.createdAt) next.createdAt = old.createdAt; else delete next.createdAt;
+        if (old.loggedAt) next.loggedAt = old.loggedAt;
+        return next;
+      });
+    }
     const saved = upsertRecord("ownedDog", dog);
     await sendPayload(saved);
     if (typeof syncOwnedDogBathTask === "function") {
@@ -1162,16 +1173,16 @@ function updateOwnedDogConditionalFields() {
 function ownedDogActivityLogs(record = {}) {
   const dog = normalizeOwnedDogCare(record || {});
   return [
-    ...dog.exerciseLogs.map((log) => ({ ...log, group: "Exercise" })),
-    ...dog.trainingLogs.map((log) => ({ ...log, group: "Training" })),
-    ...dog.bathHistory.map((log) => ({ ...log, group: "Bath" })),
-    ...dog.heatHistory.map((log) => ({ ...log, group: "Heat" })),
-    ...dog.careNotesHistory.map((log) => ({ ...log, group: "Medical/Care" })),
+    ...dog.exerciseLogs.map((log, historyIndex) => ({ ...log, group: "Exercise", historyField: "exerciseLogs", historyIndex, historyDogId: dog.id, historyExpected: log })),
+    ...dog.trainingLogs.map((log, historyIndex) => ({ ...log, group: "Training", historyField: "trainingLogs", historyIndex, historyDogId: dog.id, historyExpected: log })),
+    ...dog.bathHistory.map((log, historyIndex) => ({ ...log, group: "Bath", historyField: "bathHistory", historyIndex, historyDogId: dog.id, historyExpected: log })),
+    ...dog.heatHistory.map((log, historyIndex) => ({ ...log, group: "Heat", historyField: "heatHistory", historyIndex, historyDogId: dog.id, historyExpected: log })),
+    ...dog.careNotesHistory.map((log, historyIndex) => ({ ...log, group: "Medical/Care", historyField: "careNotesHistory", historyIndex, historyDogId: dog.id, historyExpected: log })),
   ].sort((a, b) => new Date(b.date || b.loggedAt || 0) - new Date(a.date || a.loggedAt || 0));
 }
 
 function ownedDogActivityLogCardHtml(log = {}, { removable = false } = {}) {
-  return \`<article class="record-card"><strong>\${escapeHtml(log.type)} - \${escapeHtml(log.date || "")}</strong><p class="\${log.group === "Medical/Care" ? "owned-care-note" : ""}">\${escapeHtml([log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ") || "No notes")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${removable ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="\${escapeHtml(log.id)}">Remove Entry</button></div>\` : ""}</article>\`;
+  return \`<article class="record-card"><strong>\${escapeHtml(log.type)} - \${escapeHtml(log.date || "")}</strong><p class="\${log.group === "Medical/Care" ? "owned-care-note" : ""}">\${escapeHtml([log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ") || "No notes")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${typeof careLogEntryMetadataHtml === "function" ? careLogEntryMetadataHtml(log) : ""}\${mediaLinkHtml(log)}\${typeof ownedCareHistoryEditButtonHtml === "function" ? ownedCareHistoryEditButtonHtml(log) : ""}\${removable && currentRole() === "admin" ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="\${escapeHtml(log.id)}">Remove Entry</button></div>\` : ""}</article>\`;
 }
 
 function ownedDogActivityEntriesHtml(record = {}, filter = "All", { removable = false } = {}) {
@@ -1270,7 +1281,7 @@ async function updateOwnedDogDocuments(documents = []) {
 function ownedDogTrainingHistoryHtml(record = {}) {
   const logs = ownedDogActivityLogs(record).filter((log) => log.group === "Training").slice(0, 4);
   return logs.length
-    ? \`<section class="quick-care-history"><h3>Recent training notes</h3>\${logs.map((log) => \`<article><strong>\${escapeHtml(log.date || "")}</strong><p>\${escapeHtml(log.note || "No note")}</p></article>\`).join("")}</section>\`
+    ? \`<section class="quick-care-history"><h3>Recent training notes</h3>\${logs.map((log) => \`<article><strong>\${escapeHtml(log.date || "")}</strong><p>\${escapeHtml(log.note || "No note")}</p>\${careLogEntryMetadataHtml(log)}</article>\`).join("")}</section>\`
     : \`<section class="quick-care-history"><h3>Recent training notes</h3><p>No training notes logged yet.</p></section>\`;
 }
 
@@ -1388,6 +1399,7 @@ function handleOwnedDogRosterAction(button) {
 }
 
 async function removeOwnedLog(logId) {
+  if (currentRole() !== "admin") return showToast("Only admins can change care history.");
   const active = activeOwnedDog();
   if (!active || !logId) return;
   const dog = normalizeOwnedDogCare(active);

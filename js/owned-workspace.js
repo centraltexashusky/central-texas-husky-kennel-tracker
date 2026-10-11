@@ -44,6 +44,10 @@ function ownedWorkspaceCareFacts(items) {
   return '<dl class="owned-focus-facts">' + items.map(([label,value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || 'Not recorded')}</dd></div>`).join('') + '</dl>';
 }
 
+function ownedWorkspaceCareEntryMeta(log) {
+  return typeof careLogEntryMetadataText === 'function' ? careLogEntryMetadataText(log) : '';
+}
+
 function ownedWorkspaceCareFocus(record) {
   const filter = ownedWorkspaceCareFilter();
   if (!['Vaccine','Heat Watch','Training Due','Exercise Due','Bath Due','Special Care'].includes(filter)) return '';
@@ -53,7 +57,7 @@ function ownedWorkspaceCareFocus(record) {
     const logs = ownedDogActivityLogs(dog).filter(log => log.group === 'Medical/Care' && dateOnly(log.date || log.loggedAt) <= today).slice(0,2);
     return `<p class="owned-care-warning owned-care-note">${escapeHtml(ownedDogCareAlertNotes(dog) || 'No specific care instructions saved — review this profile.')}</p>` + ownedWorkspaceCareFacts([
       ['Care status',dog.careStatus || 'Special care instructions on file'],
-      ...logs.map((log,index) => [index ? 'Previous care note' : 'Latest care note',[log.date || dateOnly(log.loggedAt),log.note || 'No note recorded',log.completedBy].filter(Boolean).join(' · ')])
+      ...logs.map((log,index) => [index ? 'Previous care note' : 'Latest care note',[log.date || dateOnly(log.loggedAt),log.note || 'No note recorded',log.completedBy,ownedWorkspaceCareEntryMeta(log)].filter(Boolean).join(' · ')])
     ]) + (logs.length ? '' : '<p>No medical / behavior notes recorded.</p>');
   }
   if (filter === 'Bath Due') {
@@ -63,7 +67,7 @@ function ownedWorkspaceCareFocus(record) {
       ['Next bath',dog.nextBath ? `${dog.nextBath}${days < 0 ? ` · ${-days} days overdue` : days === 0 ? ' · Due today' : ''}` : 'Date needs review'],
       ['Last bath',dog.lastBath],['Bath routine',dog.bathRoutine],['Products / shampoo',dog.bathProducts],
       ['Frequency',dog.bathIntervalDays > 0 ? `Every ${dog.bathIntervalDays} days` : 'No recurring reminder'],
-      ['Latest bath note',log ? [log.date || dateOnly(log.loggedAt),log.note || 'No note recorded',log.completedBy].filter(Boolean).join(' · ') : 'No bath log recorded']
+      ['Latest bath note',log ? [log.date || dateOnly(log.loggedAt),log.note || 'No note recorded',log.completedBy,ownedWorkspaceCareEntryMeta(log)].filter(Boolean).join(' · ') : 'No bath log recorded']
     ]);
   }
   if (filter === 'Vaccine') {
@@ -97,7 +101,7 @@ function ownedWorkspaceCareFocus(record) {
   const due = training && dog.nextTrainingDate ? dog.nextTrainingDate : lastDate && frequency > 0 ? addDays(lastDate,frequency) : '';
   const days = due ? daysBetweenDates(today,due) : null;
   const next = due ? `${due}${days === null ? '' : days < 0 ? ` · ${-days} days overdue` : days === 0 ? ' · Due today' : ` · In ${days} days`}` : 'No last session date — review routine';
-  const session = last ? [last.date || dateOnly(last.loggedAt),last.type,last.minutes ? `${last.minutes} minutes` : '',last.completedBy].filter(Boolean).join(' · ') : lastDate ? `${lastDate} · Session details not recorded` : 'No completed session recorded';
+  const session = last ? [last.date || dateOnly(last.loggedAt),last.type,last.minutes ? `${last.minutes} minutes` : '',last.completedBy,ownedWorkspaceCareEntryMeta(last)].filter(Boolean).join(' · ') : lastDate ? `${lastDate} · Session details not recorded` : 'No completed session recorded';
   return ownedWorkspaceCareFacts([
     ['Work on next — saved plan',training ? [dog.trainingRoutine,dog.trainingGoals].filter(Boolean).join(' · ') : dog.exerciseRoutine],
     ['Next scheduled / due',next],['Most recent completed session',session],

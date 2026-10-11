@@ -7516,7 +7516,7 @@ async function renderBoardingHistory(record = activeBoardingDog()) {
     ? '<section class="popup-record-section"><h3>Care Logs</h3>' + careLogs.map((log) =>
         '<article class="record-card compact-record-card">' +
           '<strong>' + escapeHtml([log.careType || "Care", log.date || ""].filter(Boolean).join(" - ")) + '</strong>' +
-          '<span>' + escapeHtml([log.completedBy || "", formatDateTime(log.loggedAt || "")].filter(Boolean).join(" | ")) + '</span>' +
+          '<span>' + escapeHtml(log.completedBy || "") + '</span>' + careLogEntryMetadataHtml(log) +
           (log.note ? '<p>' + escapeHtml(log.note) + '</p>' : '') +
         '</article>'
       ).join("") + '</section>'

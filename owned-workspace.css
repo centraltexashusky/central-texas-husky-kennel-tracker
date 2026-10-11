@@ -160,3 +160,7 @@
   max-width: 100%;
   overflow-x: auto;
 }
+.owned-history-editor { width: min(620px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; box-sizing: border-box; }
+.owned-history-editor textarea { width: 100%; box-sizing: border-box; white-space: pre; overflow-x: auto; }
+.owned-history-editor .care-log-times { display: block; margin-bottom: 16px; }
+.care-log-times { display: block; font-size: 12px; line-height: 1.5; color: var(--muted); }
