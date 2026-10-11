@@ -147,3 +147,30 @@ body:has(#pedigreePage.is-active):not(.ped-account-open) .page-header {display:n
 #ownedDogDetail.owned-workspace #ownedPedigreePreview .ped-dog small {color:#40566b;}
 #pedigreeWorkspace .ped-photo-trigger,
 #ownedDogDetail.owned-workspace #ownedPedigreePreview .ped-photo-trigger {background:transparent;border:0;padding:0;}
+
+/* Research tools retain high contrast, clear actions and contained tables. */
+#pedigreeWorkspace > .ped-tabs {flex-wrap:wrap;gap:2px 20px;overflow:visible;}
+.ped-research-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px;}
+.ped-research-item {border:1px solid #d6e2ec;border-radius:8px;padding:18px;margin:14px 0;background:#fff;min-width:0;overflow-wrap:anywhere;}
+.ped-research-grid .ped-research-item {margin:0;}
+.ped-research-item li {margin:10px 0;}
+.ped-research-item > button {margin:4px 4px 4px 0;}
+.ped-comparison-grid {display:grid;grid-auto-flow:column;grid-auto-columns:minmax(280px,1fr);gap:14px;overflow-x:auto;}
+.ped-comparison-grid:empty {display:none;}
+.ped-certificate-grid {display:grid;gap:10px;min-width:650px;}
+#pedigreeCertificate {overflow:auto;margin-top:20px;}
+.ped-certificate-column {display:flex;flex-direction:column;gap:5px;}
+.ped-certificate-dog {flex:1;display:flex;flex-direction:column;justify-content:center;padding:7px;border:1px solid #d6e2ec;border-radius:4px;overflow-wrap:anywhere;font-size:11px;}
+.ped-certificate-dog strong,.ped-certificate-dog small {display:block;}
+.ped-certificate-dog .ped-photo-trigger {align-self:start;margin-bottom:5px;}
+@media(max-width:760px){#pedigreeWorkspace > .ped-tabs {gap:0 14px;}#pedigreeWorkspace > .ped-tabs button {font-size:12px;padding:8px 2px;}.ped-research-item {padding:12px;}.ped-comparison-grid {grid-auto-columns:85%;}}
+@media print {
+ @page {size:landscape;margin:12mm;}
+ body:has(#pedigreeCertificate) #pedigreeWorkspace > :not(.ped-panel),body:has(#pedigreeCertificate) .ped-panel > :not(#pedigreeCertificate) {display:none!important;}
+ body:has(#pedigreeCertificate) .app-shell,body:has(#pedigreeCertificate) #pedigreeWorkspace .ped-panel {padding:0!important;margin:0!important;border:0;break-inside:auto!important;}
+ body:has(#pedigreeCertificate) #pedigreeCertificate {overflow:visible;margin:0;}
+ body:has(#pedigreeCertificate) .ped-certificate-grid {min-width:0;gap:5px;}
+ body:has(#pedigreeCertificate) .ped-certificate-dog {break-inside:avoid;font-size:8pt;padding:4px;}
+ body:has(#pedigreeCertificate) .ped-certificate-dog small {font-size:7pt!important;}
+ body:has(#pedigreeCertificate) .ped-certificate-dog .ped-avatar {width:30px;height:30px;}
+}
