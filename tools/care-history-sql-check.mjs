@@ -58,4 +58,15 @@ await update({...saved,careNotesHistory:[projection]});await edit(projection,'sy
 await db.exec("set test.app_role='staff'");let daily=await get('daily');await assert.rejects(update({...daily,structuredCareLogs:[{...daily.structuredCareLogs[0],note:'source bypass'}]},'daily'),/Only admins/);
 await update({...daily,structuredCareLogs:[{id:'second',note:'new'},...daily.structuredCareLogs]},'daily');
 await db.exec("set test.app_role='admin'");const current=(await get()).careNotesHistory[0];await update({...await get('daily'),structuredCareLogs:[]},'daily');await assert.rejects(edit(current,'missing source'),/source care log changed/);assert.deepEqual((await get()).careNotesHistory[0],current,'failed linked edit rolls back');
+// Boarding entry and mirrored source profiles, with real backend enforcement.
+const boardingLog={id:'board-log',date:'2020-01-02',loggedAt:'2026-07-03T18:00:00Z',note:'old boarding note',completedBy:'Original',dogId:'board',stayId:'stay',minutes:'10',staffOnly:true,mediaItems:[{name:'keep'}]};
+await db.exec("reset role;set test.app_role='admin'");
+await put('board','boardingDog',{id:'board',type:'boardingDog',careLogs:[boardingLog,{id:'sibling',note:'untouched'}]});
+await put('board-copy','boardingDog',{id:'board-copy',type:'boardingDog',careLogs:[{...boardingLog,dogId:'board-copy',stayId:'copy-stay'}]});
+await db.exec('set role authenticated');
+const boardEdit=async(expected=boardingLog,note='updated board',minutes='15')=>db.query("select cuddle_stay.edit_boarding_care_history('board','careLogs',0,$1,$2,$3)",[expected,note,minutes]);
+for(const role of ['staff','helper','manager','customer']){await db.exec(`set test.app_role='${role}'`);await assert.rejects(boardEdit(),/Only admins/);if(role!=='customer')await assert.rejects(update({...await get('board'),careLogs:[]},'board'),/Only admins/);}
+await db.exec("set test.app_role='staff'");await update({...await get('board'),careLogs:[boardingLog,{id:'sibling',note:'untouched'},{id:'append',note:'new'}]},'board');
+await db.exec("set test.app_role='admin'");await boardEdit();let board=await get('board');const copy=await get('board-copy');assert.equal(board.careLogs[0].note,'updated board');assert.equal(copy.careLogs[0].note,'updated board');assert.equal(copy.careLogs[0].dogId,'board-copy');assert.equal(copy.careLogs[0].stayId,'copy-stay');assert.equal(board.careLogs[0].loggedAt,boardingLog.loggedAt);assert.equal(board.careLogs[0].completedBy,'Original');assert.deepEqual(board.careLogs[0].mediaItems,boardingLog.mediaItems);assert.equal(board.careLogs[1].note,'untouched');await assert.rejects(boardEdit(),/history changed/);
+await update({...copy,careLogs:[{...copy.careLogs[0],note:'conflicting copy'}]},'board-copy');await assert.rejects(boardEdit(board.careLogs[0],'must rollback'),/linked boarding/);assert.equal((await get('board')).careLogs[0].note,'updated board');
 await db.close();console.log('PASS SQL: real PostgreSQL RPC, admin authorization, staff append/unrelated updates, direct-edit/delete/type/duplicate denial, stale conflicts, precise legacy identity, source atomicity, audit and timestamp preservation.');

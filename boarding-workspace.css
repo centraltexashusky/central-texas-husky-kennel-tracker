@@ -234,3 +234,13 @@ body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
 #boardingPaymentForm { max-width:600px; margin:auto; }
 #boardingPaymentForm .boarding-payment-confirm { display:flex; align-items:center; gap:10px; }
 #boardingPaymentForm input[type="checkbox"] { width:20px; height:20px; flex:0 0 20px; margin:0; }
+
+/* Entered care lines stay intact; the table/panel owns horizontal overflow. */
+#boardingDogDetail .owned-care-note {
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}

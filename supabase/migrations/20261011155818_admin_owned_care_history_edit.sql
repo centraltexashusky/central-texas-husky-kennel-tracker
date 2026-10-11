@@ -10,6 +10,8 @@ begin
   end if;
   if old.type = 'ownedDog' then
     fields := array['exerciseLogs','trainingLogs','bathHistory','heatHistory','careNotesHistory'];
+  elsif old.type = 'boardingDog' then
+    fields := array['careLogs'];
   elsif old.type = 'dailyTask' then
     fields := array['structuredCareLogs','careLogs'];
   else
@@ -119,3 +121,47 @@ end;
 $$;
 revoke all on function cuddle_stay.edit_owned_care_history(text,text,integer,jsonb,text,text) from public, anon;
 grant execute on function cuddle_stay.edit_owned_care_history(text,text,integer,jsonb,text,text) to authenticated;
+
+-- Boarding notes may be mirrored across duplicate source profiles. Correct matching
+-- copies atomically; differing copies fail closed instead of silently overwriting.
+create function cuddle_stay.edit_boarding_care_history(
+ p_dog_id text,p_history_field text,p_entry_index integer,p_expected_entry jsonb,p_note text,p_minutes text default null
+) returns jsonb language plpgsql security invoker set search_path='' as $$
+declare
+ dog cuddle_stay.kennel_records%rowtype; r cuddle_stay.kennel_records%rowtype;
+ entry jsonb; current_entry jsonb; revised jsonb; pos integer; matches integer;
+ records jsonb := '[]'; dog_payload jsonb; audit jsonb;
+ stamp text := to_char(clock_timestamp() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+ actor text := cuddle_stay.kennel_auth_email();
+begin
+ if auth.uid() is null or not cuddle_stay_private.kennel_is_admin() then raise exception 'Only admins can edit care history.' using errcode='42501';end if;
+ if p_history_field is distinct from 'careLogs' or p_entry_index is null or p_entry_index<0 or p_expected_entry is null or p_note is null then raise exception 'Invalid care history entry.';end if;
+ if p_minutes is not null and (not(p_expected_entry ? 'minutes') or (p_minutes<>'' and p_minutes !~ '^\d+(\.\d+)?$')) then raise exception 'Invalid exercise minutes.';end if;
+ -- Lock matching profiles in deterministic order for atomic mirrored updates.
+ for r in select * from cuddle_stay.kennel_records k where k.type='boardingDog'
+ and k.organization_id=cuddle_stay_private.cuddle_stay_organization_id()
+ and (k.id=p_dog_id or (coalesce(p_expected_entry->>'id','')<>'' and exists(select 1 from jsonb_array_elements(coalesce(k.payload->'careLogs','[]')) e where e->>'id'=p_expected_entry->>'id')))
+ order by k.id for update loop
+   if r.id=p_dog_id then dog:=r;end if;
+ end loop;
+ if dog.id is null or coalesce(dog.payload->>'removed','false') in ('true','on') then raise exception 'This dog is no longer available.';end if;
+ entry:=dog.payload->'careLogs'->p_entry_index;
+ if entry is null or entry is distinct from p_expected_entry then raise exception 'This history changed while you were editing.' using errcode='40001';end if;
+ for r in select * from cuddle_stay.kennel_records k where k.type='boardingDog' and k.organization_id=dog.organization_id
+ and (k.id=p_dog_id or (coalesce(entry->>'id','')<>'' and exists(select 1 from jsonb_array_elements(coalesce(k.payload->'careLogs','[]')) e where e->>'id'=entry->>'id'))) order by k.id loop
+   if coalesce(entry->>'id','')='' then pos:=p_entry_index;matches:=1;
+   else select count(*),min((ordinality-1)::integer) into matches,pos from jsonb_array_elements(coalesce(r.payload->'careLogs','[]')) with ordinality where value->>'id'=entry->>'id';end if;
+   current_entry:=r.payload->'careLogs'->pos;
+   if matches<>1 or (current_entry-array['dogId','dogName','stayId']) is distinct from (entry-array['dogId','dogName','stayId']) then raise exception 'A linked boarding care entry changed. Refresh and reopen.' using errcode='40001';end if;
+   audit:=jsonb_build_object('note',coalesce(current_entry->>'note',''),'minutes',coalesce(current_entry->'minutes','""'::jsonb),'editedAt',stamp,'editedByEmail',actor);
+   revised:=current_entry || jsonb_build_object('note',p_note,'updatedAt',stamp,'updatedByEmail',actor,'editHistory',coalesce(current_entry->'editHistory','[]')||jsonb_build_array(audit));
+   if p_minutes is not null then revised:=revised||jsonb_build_object('minutes',p_minutes);end if;
+   r.payload:=jsonb_set(r.payload,array['careLogs',pos::text],revised,false)||jsonb_build_object('updatedAt',stamp);
+   update cuddle_stay.kennel_records set payload=r.payload,updated_at=stamp::timestamptz where id=r.id;
+   records:=records||jsonb_build_array(r.payload);if r.id=p_dog_id then dog_payload:=r.payload;end if;
+ end loop;
+ return jsonb_build_object('dog',dog_payload,'records',records);
+end;
+$$;
+revoke all on function cuddle_stay.edit_boarding_care_history(text,text,integer,jsonb,text,text) from public,anon;
+grant execute on function cuddle_stay.edit_boarding_care_history(text,text,integer,jsonb,text,text) to authenticated;

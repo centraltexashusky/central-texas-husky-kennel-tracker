@@ -27,7 +27,7 @@ function careHistoryEqual(left, right) {
   return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
 }
 function ownedCareHistoryEntry(dog, field, index, expected) {
-  if (!dog || dog.removed || !ownedCareHistoryFields.includes(field) || !Number.isInteger(index) || index < 0) throw Error('This care entry is no longer available.');
+  if (!dog || dog.removed || !(dog.type === 'boardingDog' ? field === 'careLogs' : ownedCareHistoryFields.includes(field)) || !Number.isInteger(index) || index < 0) throw Error('This care entry is no longer available.');
   const entry = arrayValue(dog[field])[index];
   if (!entry || (expected && !careHistoryEqual(entry, expected))) throw Error('This history changed while you were editing. Cancel and reopen the entry to review the latest version.');
   return entry;
@@ -38,11 +38,11 @@ function correctedCareHistoryEntry(entry, note, minutes, timestamp, email) {
   if (minutes !== null) next.minutes = minutes;
   return next;
 }
-async function freshOwnedCareHistoryDog(id) {
+async function freshOwnedCareHistoryDog(id, recordType = 'ownedDog') {
   if (currentRole() !== 'admin') throw Error('Only admins can edit care history.');
-  if (localTestMode) return readRecords('ownedDog').find(d=>d.id===id && !d.removed);
+  if (localTestMode) return readRecords(recordType).find(d=>d.id===id && !d.removed);
   if (!supabaseClient) throw Error('Connect and sign in before editing care history.');
-  const result = await withRemoteRequestTimeout(cuddleStayRequest(db=>db.from('kennel_records').select('payload').eq('type','ownedDog').eq('id',id).maybeSingle()), 'Load care history');
+  const result = await withRemoteRequestTimeout(cuddleStayRequest(db=>db.from('kennel_records').select('payload').eq('type',recordType).eq('id',id).maybeSingle()), 'Load care history');
   if (result.error) throw result.error;
   return result.data?.payload;
 }
@@ -51,30 +51,30 @@ function ownedCareHistoryDialog() {
   if (!dialog) {
     dialog = document.createElement('dialog'); dialog.id = 'ownedCareHistoryEditDialog'; dialog.className = 'detail-dialog owned-history-editor'; dialog.setAttribute('aria-label','Edit care history'); document.body.append(dialog);
     dialog.addEventListener('cancel', event=>{if(ownedCareHistorySession?.busy)event.preventDefault();});
-    dialog.addEventListener('close', ()=>{ownedCareHistorySession=null;});
+    dialog.addEventListener('close', ()=>{if(!dialog.open)ownedCareHistorySession=null;});
   }
   return dialog;
 }
-async function openOwnedCareHistoryEditor(dogId, field, index, expected) {
+async function openOwnedCareHistoryEditor(dogId, field, index, expected, recordType = 'ownedDog') {
   if (ownedCareHistorySession?.busy) return;
   if (currentRole() !== 'admin') return showToast('Only admins can edit care history.');
   const dialog = ownedCareHistoryDialog();
-  const session = {dogId,field,index,busy:false}; ownedCareHistorySession=session;
+  const session = {dogId,field,index,recordType,busy:false}; ownedCareHistorySession=session;
   dialog.innerHTML='<h2>Edit care history</h2><p role="status">Loading current entry…</p><button type="button" data-cancel-owned-history>Cancel</button>';
   if (!dialog.open) dialog.showModal();
   try {
-    const dog=await freshOwnedCareHistoryDog(dogId);
+    const dog=await freshOwnedCareHistoryDog(dogId,recordType);
     if (ownedCareHistorySession!==session || !dialog.open) return;
     if (dog) {
-      mergeRecords('ownedDog',[dog]);
-      if (activeOwnedDog()?.id===dogId) { renderOwnedActivity(dog); refreshOwnedWorkspace(); }
+      mergeRecords(recordType,[dog]);
+      if (recordType==='ownedDog' && activeOwnedDog()?.id===dogId) { renderOwnedActivity(dog); refreshOwnedWorkspace(); }
     }
     const entry=ownedCareHistoryEntry(dog,field,index,expected);
     session.expected=JSON.parse(JSON.stringify(entry));
-    session.editMinutes=field==='exerciseLogs';
-    dialog.innerHTML='<h2>Edit care history</h2><p>'+escapeHtml(ownedDogDisplayName(dog))+' · '+escapeHtml(entry.type || 'Care')+'</p><p>Event date: '+escapeHtml(entry.date || 'Not recorded')+'</p>'+careLogEntryMetadataHtml(entry)+'<form id="ownedCareHistoryEditForm" class="tracker-form"><label>Care note<textarea name="note" rows="7" wrap="off"></textarea></label>'+(session.editMinutes?'<label>Minutes<input name="minutes" type="number" min="0" step="any"></label>':'')+'<p role="status" id="ownedCareHistoryEditStatus"></p><div class="button-row"><button type="submit">Save</button><button type="button" class="secondary-button" data-cancel-owned-history>Cancel</button></div></form>';
+    session.editMinutes=field==='exerciseLogs' || (recordType==='boardingDog' && Object.hasOwn(entry,'minutes'));
+    dialog.innerHTML='<h2>Edit care history</h2><p>'+escapeHtml(recordType==='boardingDog' ? dog.dogName || 'Boarding dog' : ownedDogDisplayName(dog))+' · '+escapeHtml(entry.type || 'Care')+'</p><p>Event date: '+escapeHtml(entry.date || 'Not recorded')+'</p>'+careLogEntryMetadataHtml(entry)+'<form id="ownedCareHistoryEditForm" class="tracker-form"><label>Care note<textarea name="note" rows="7" wrap="off"></textarea></label>'+(session.editMinutes?'<label>Minutes<input name="minutes" type="number" min="0" step="any"></label>':'')+'<p role="status" id="ownedCareHistoryEditStatus"></p><div class="button-row"><button type="submit">Save</button><button type="button" class="secondary-button" data-cancel-owned-history>Cancel</button></div></form>';
     const form=dialog.querySelector('form'); form.elements.note.value=entry.note || ''; if(session.editMinutes)form.elements.minutes.value=entry.minutes ?? '';
-    form.elements.note.focus();
+    form.elements.note.focus();form.elements.note.setSelectionRange(0,0);form.elements.note.scrollLeft=0;form.elements.note.scrollTop=0;
   } catch(error) {
     if (ownedCareHistorySession===session && dialog.open) dialog.innerHTML='<h2>Care history unavailable</h2><p role="alert">'+escapeHtml(error.message)+'</p><button type="button" data-cancel-owned-history>Close</button>';
   }
@@ -83,11 +83,12 @@ async function persistOwnedCareHistoryEdit(session, note, minutes) {
   if (currentRole() !== 'admin') throw Error('Only admins can edit care history.');
   if (!localTestMode) {
     if (!supabaseClient) throw Error('Connect and sign in before saving.');
-    const result=await withRemoteRequestTimeout(cuddleStayRequest(db=>db.rpc('edit_owned_care_history', {p_dog_id:session.dogId,p_history_field:session.field,p_entry_index:session.index,p_expected_entry:session.expected,p_note:note,p_minutes:minutes})), 'Save care history');
+    const result=await withRemoteRequestTimeout(cuddleStayRequest(db=>db.rpc(session.recordType==='boardingDog' ? 'edit_boarding_care_history' : 'edit_owned_care_history', {p_dog_id:session.dogId,p_history_field:session.field,p_entry_index:session.index,p_expected_entry:session.expected,p_note:note,p_minutes:minutes})), 'Save care history');
     if(result.error)throw result.error;
     if(!result.data?.dog)throw Error('The save could not be confirmed. Reopen the entry before retrying.');
     return result.data;
   }
+  if(session.recordType==='boardingDog')return persistLocalBoardingCareHistoryEdit(session,note,minutes);
   const dog=readRecords('ownedDog').find(d=>d.id===session.dogId);
   const entry=ownedCareHistoryEntry(dog,session.field,session.index,session.expected);
   const now=new Date().toISOString(), email=currentUser?.email || '';
@@ -113,15 +114,42 @@ async function saveOwnedCareHistoryEditor(form) {
   session.busy=true;form.querySelectorAll('button,input,textarea').forEach(el=>el.disabled=true);status.textContent='Saving…';
   try{
     const saved=await persistOwnedCareHistoryEdit(session,note,minutes);
-    mergeRecords('ownedDog',[saved.dog]);if(saved.source)mergeRecords('dailyTask',[saved.source]);
-    renderOwnedDogs();if(activeOwnedDog()?.id===session.dogId){renderOwnedActivity(saved.dog);refreshOwnedWorkspace();}
+    mergeRecords(session.recordType || 'ownedDog',saved.records || [saved.dog]);if(saved.source)mergeRecords('dailyTask',[saved.source]);
+    if(session.recordType==='boardingDog'){const current=boardingDogRecordForDisplay(session.dogId) || saved.dog;if(boardingEditorShowsRecord(current)){renderBoardingWorkspaceCareLog(current);renderBoardingHistory(current);}}
+    else {renderOwnedDogs();if(activeOwnedDog()?.id===session.dogId){renderOwnedActivity(saved.dog);refreshOwnedWorkspace();}}
     if(ownedCareHistorySession===session && form.isConnected){ownedCareHistoryDialog().close();showToast('Care history saved.');}
   }catch(error){if(ownedCareHistorySession===session && form.isConnected)status.textContent='Not saved: '+error.message;}
   finally{session.busy=false;if(ownedCareHistorySession===session && form.isConnected)form.querySelectorAll('button,input,textarea').forEach(el=>el.disabled=false);}
 }
 document.addEventListener('click',event=>{
   const edit=event.target.closest('[data-edit-owned-history]');
-  if(edit){event.preventDefault();openOwnedCareHistoryEditor(edit.dataset.dogId,edit.dataset.field,Number(edit.dataset.index),JSON.parse(edit.dataset.historyExpected));}
+  if(edit){event.preventDefault();openOwnedCareHistoryEditor(edit.dataset.dogId,edit.dataset.field,Number(edit.dataset.index),JSON.parse(edit.dataset.historyExpected),edit.dataset.recordType || 'ownedDog');}
   if(event.target.closest('[data-cancel-owned-history]') && !ownedCareHistorySession?.busy)ownedCareHistoryDialog().close();
 });
 document.addEventListener('submit',event=>{if(event.target.id==='ownedCareHistoryEditForm'){event.preventDefault();saveOwnedCareHistoryEditor(event.target);}});
+
+function boardingCareHistoryEditButtonHtml(record, log) {
+  if(currentRole()!=='admin')return '';
+  const ids=new Set([record.id,...arrayValue(record.sourceRecordIds),...arrayValue(record.duplicateProfileIds)]);
+  for(const source of readRecords('boardingDog').filter(r=>ids.has(r.id) && !r.removed)) {
+    const index=arrayValue(source.careLogs).findIndex(entry=>careHistoryEqual(entry,log));
+    if(index>=0)return '<button type="button" class="secondary-button" data-edit-owned-history data-record-type="boardingDog" data-dog-id="'+escapeHtml(source.id)+'" data-field="careLogs" data-index="'+index+'" data-history-expected="'+escapeHtml(JSON.stringify(log))+'">Edit</button>';
+  }
+  return '';
+}
+function persistLocalBoardingCareHistoryEdit(session,note,minutes) {
+  const dog=readRecords('boardingDog').find(d=>d.id===session.dogId);
+  const entry=ownedCareHistoryEntry(dog,'careLogs',session.index,session.expected);
+  const stamp=new Date().toISOString(),email=currentUser?.email || '';
+  const records=[];
+  for(const source of readRecords('boardingDog').filter(r=>!r.removed)) {
+    const indexes=arrayValue(source.careLogs).map((e,i)=>({e,i})).filter(({e,i})=>entry.id ? e.id===entry.id : source.id===dog.id && i===session.index);
+    if(!indexes.length)continue;
+    if(indexes.length!==1 || indexes.some(({e})=>!careHistoryEqual(boardingCareComparable(e),boardingCareComparable(entry))))throw Error('A linked boarding care entry changed. Refresh and reopen.');
+    records.push({...source,updatedAt:stamp,careLogs:source.careLogs.map((e,i)=>i===indexes[0].i?correctedCareHistoryEntry(e,note,minutes,stamp,email):e)});
+  }
+  return {dog:records.find(r=>r.id===dog.id),records};
+}
+function boardingCareComparable(entry) {
+  const copy={...entry};for(const key of ['dogId','dogName','stayId'])delete copy[key];return copy;
+}

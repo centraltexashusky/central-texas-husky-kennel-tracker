@@ -7517,7 +7517,7 @@ async function renderBoardingHistory(record = activeBoardingDog()) {
         '<article class="record-card compact-record-card">' +
           '<strong>' + escapeHtml([log.careType || "Care", log.date || ""].filter(Boolean).join(" - ")) + '</strong>' +
           '<span>' + escapeHtml(log.completedBy || "") + '</span>' + careLogEntryMetadataHtml(log) +
-          (log.note ? '<p>' + escapeHtml(log.note) + '</p>' : '') +
+          (log.note ? '<p class="owned-care-note">' + escapeHtml(log.note) + '</p>' : '') + boardingCareHistoryEditButtonHtml(displayRecord,log) +
         '</article>'
       ).join("") + '</section>'
     : "";

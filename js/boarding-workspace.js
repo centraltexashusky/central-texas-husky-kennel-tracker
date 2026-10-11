@@ -110,7 +110,7 @@ function renderBoardingWorkspaceCareLog(record = {}) {
   if (!list) return;
   const logs = arrayValue(record.careLogs).filter(log => log.staffOnly || log.source === 'boarding-medical-behavior-note' || /medical|behavior/i.test(log.category || log.careType || ''));
   list.innerHTML = '<div class="record-actions">' + boardingMedicalBehaviorButtonHtml(record, activeBoardingStay(record) || {}) + '</div>' + (logs.length
-    ? '<div class="workspace-table-scroll"><table class="workspace-log-table"><thead><tr><th>Event date / entered time</th><th>Staff</th><th>Type</th><th>Note</th></tr></thead><tbody>' + logs.map(log => '<tr><td>' + escapeHtml(log.date || 'Event date not recorded') + careLogEntryMetadataHtml(log) + '</td><td>' + escapeHtml(log.completedBy || 'Staff') + '</td><td>' + escapeHtml(log.category || log.careType || 'Care') + '</td><td>' + escapeHtml(log.note || '') + '</td></tr>').join('') + '</tbody></table></div>'
+    ? '<div class="workspace-table-scroll"><table class="workspace-log-table"><thead><tr><th>Event date / entered time</th><th>Staff</th><th>Type</th><th>Note</th></tr></thead><tbody>' + logs.map(log => '<tr><td>' + escapeHtml(log.date || 'Event date not recorded') + careLogEntryMetadataHtml(log) + '</td><td>' + escapeHtml(log.completedBy || 'Staff') + '</td><td>' + escapeHtml(log.category || log.careType || 'Care') + '</td><td>' + '<div class="owned-care-note">' + escapeHtml(log.note || '') + '</div>' + boardingCareHistoryEditButtonHtml(record,log) + '</td></tr>').join('') + '</tbody></table></div>'
     : '<p class="profile-empty-note">No staff-only medical or behavior notes recorded.</p>');
 }
 
