@@ -149,3 +149,14 @@
 }
 :root[data-theme="dark"] .owned-care-warning { background: #403820; color: #f5daa0; }
 :root[data-theme="dark"] #ownedDogCareFilters [data-filter].is-active, :root[data-theme="dark"] #ownedDogDetail.owned-workspace #ownedDogProfileTabs button.is-active { background: #234b68 !important; color: #c8e9ff; }
+
+/* Keep entered care-note lines intact; scroll only the note on narrow screens. */
+#ourDogsPage .owned-care-note,
+#ownedDogDetail .owned-care-note {
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}

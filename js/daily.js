@@ -1171,7 +1171,7 @@ function ownedDogActivityLogs(record = {}) {
 }
 
 function ownedDogActivityLogCardHtml(log = {}, { removable = false } = {}) {
-  return \`<article class="record-card"><strong>\${escapeHtml(log.type)} - \${escapeHtml(log.date || "")}</strong><p>\${escapeHtml([log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ") || "No notes")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${removable ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="\${escapeHtml(log.id)}">Remove Entry</button></div>\` : ""}</article>\`;
+  return \`<article class="record-card"><strong>\${escapeHtml(log.type)} - \${escapeHtml(log.date || "")}</strong><p class="\${log.group === "Medical/Care" ? "owned-care-note" : ""}">\${escapeHtml([log.minutes ? \`\${log.minutes} minutes\` : "", log.note || ""].filter(Boolean).join(" ") || "No notes")}</p><span>\${escapeHtml(log.completedBy || "")}</span>\${mediaLinkHtml(log)}\${removable ? \`<div class="record-actions"><button type="button" class="secondary-button danger-button" data-action="remove-owned-log" data-id="\${escapeHtml(log.id)}">Remove Entry</button></div>\` : ""}</article>\`;
 }
 
 function ownedDogActivityEntriesHtml(record = {}, filter = "All", { removable = false } = {}) {

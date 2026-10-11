@@ -51,7 +51,7 @@ function ownedWorkspaceCareFocus(record) {
   const today = todayDate();
   if (filter === 'Special Care') {
     const logs = ownedDogActivityLogs(dog).filter(log => log.group === 'Medical/Care' && dateOnly(log.date || log.loggedAt) <= today).slice(0,2);
-    return `<p class="owned-care-warning">${escapeHtml(ownedDogCareAlertNotes(dog) || 'No specific care instructions saved — review this profile.')}</p>` + ownedWorkspaceCareFacts([
+    return `<p class="owned-care-warning owned-care-note">${escapeHtml(ownedDogCareAlertNotes(dog) || 'No specific care instructions saved — review this profile.')}</p>` + ownedWorkspaceCareFacts([
       ['Care status',dog.careStatus || 'Special care instructions on file'],
       ...logs.map((log,index) => [index ? 'Previous care note' : 'Latest care note',[log.date || dateOnly(log.loggedAt),log.note || 'No note recorded',log.completedBy].filter(Boolean).join(' · ')])
     ]) + (logs.length ? '' : '<p>No medical / behavior notes recorded.</p>');
@@ -142,7 +142,7 @@ function ownedWorkspaceMobileCard(dog) {
   return `<article class="owned-modern-card" data-id="${escapeHtml(dog.id)}">
     <div class="owned-roster-identity">${ownedWorkspacePhoto(dog)}<div><strong>${escapeHtml(ownedDogDisplayName(dog))}</strong><small>${escapeHtml(dog.sex || '')}</small></div></div>
     ${focus || ownedDogCareTagsHtml(dog)}
-    ${ownedWorkspaceCareFilter() !== 'Special Care' && ownedDogCareAlertNotes(dog) ? `<p class="owned-care-warning">${escapeHtml(ownedDogCareAlertNotes(dog))}</p>` : ''}
+    ${ownedWorkspaceCareFilter() !== 'Special Care' && ownedDogCareAlertNotes(dog) ? `<p class="owned-care-warning owned-care-note">${escapeHtml(ownedDogCareAlertNotes(dog))}</p>` : ''}
     ${focus ? '' : `<dl class="owned-card-facts"><div><dt>Next care</dt><dd>${escapeHtml(ownedWorkspaceNextCare(dog))}</dd></div><div><dt>Food</dt><dd>${escapeHtml(dog.foodAmount || 'Not specified')}</dd></div></dl>`}
     <div class="owned-card-actions"><button type="button" class="secondary-button" data-action="view-owned" data-id="${escapeHtml(dog.id)}">View</button><button type="button" data-action="log-owned-care" data-id="${escapeHtml(dog.id)}">Log Care</button></div>
   </article>`;
@@ -253,7 +253,7 @@ function ownedWorkspaceReadHtml(dog, tab) {
   const quick = (type, label = 'Log ' + type) => `<button type="button" data-owned-workspace-action="quick" data-care-type="${escapeHtml(type)}">${escapeHtml(label)}</button>`;
   let content = '';
   if (tab === 'Overview') {
-    content = `${ownedDogCareTagsHtml(dog)}${ownedDogCareAlertNotes(dog) ? `<p class="owned-care-warning">${escapeHtml(ownedDogCareAlertNotes(dog))}</p>` : ''}
+    content = `${ownedDogCareTagsHtml(dog)}${ownedDogCareAlertNotes(dog) ? `<p class="owned-care-warning owned-care-note">${escapeHtml(ownedDogCareAlertNotes(dog))}</p>` : ''}
     ${facts([['Show name','showName'],['Sex','sex'],['Date of birth','dateOfBirth'],['Spayed / neutered','spayNeuterStatus']])}
     <h3>Feeding</h3><p>${escapeHtml(dog.foodAmount || 'No feeding instructions saved.')}</p>
     <h3>Vaccinations & preventive care</h3>${facts([['Rabies · last','rabiesDate'],['Rabies · next','nextRabiesDate'],['DHPP · last','dhppDate'],['DHPP · next','nextDhppDate'],['Bordetella · last','bordetellaDate'],['Bordetella · next','nextBordetellaDate'],['Heartworm · last','heartwormDate'],['Leptospirosis · last','leptospirosisDate']])}
@@ -262,7 +262,7 @@ function ownedWorkspaceReadHtml(dog, tab) {
   else if (tab === 'Training') content = facts([['Routine','trainingRoutine'],['Frequency (days)','trainingFrequencyDays'],['Last training','lastTrainingDate'],['Next session','nextTrainingDate'],['Goals','trainingGoals'],['Session notes','trainingSessionNotes']]) + quick('Training', 'Add Training Entry');
   else if (tab === 'Baths') content = facts([['Last bath','lastBath'],['Next bath','nextBath'],['Interval (days)','bathIntervalDays'],['Routine','bathRoutine'],['Products','bathProducts'],['Coat notes','coatNotes']]) + quick('Bath', 'Log Bath');
   else if (tab === 'Heat Cycle') content = '<p class="owned-care-warning">Next heat dates are estimates, not confirmed cycles.</p>' + facts([['Status','heatCycleStatus'],['Last heat','lastHeat'],['Estimated next heat','nextHeat'],['Cycle length (days)','heatCycleLengthDays'],['Summary','heatCycle'],['Notes','heatCycleNotes']]) + quick('Heat Note');
-  else if (tab === 'Medical / Care Notes') content = `<p class="owned-care-warning">${escapeHtml(ownedDogCareAlertNotes(dog) || 'No current medical or care alerts.')}</p>` + quick('Medical/Behavior Note', 'Add Care Note');
+  else if (tab === 'Medical / Care Notes') content = `<p class="owned-care-warning owned-care-note">${escapeHtml(ownedDogCareAlertNotes(dog) || 'No current medical or care alerts.')}</p>` + quick('Medical/Behavior Note', 'Add Care Note');
   if (tab !== 'Overview') content += ownedWorkspaceHistory(dog, tab);
   return `<div class="owned-read-heading"><h2>${escapeHtml(tab)}</h2><p>Care details and records for ${escapeHtml(ownedDogDisplayName(dog))}.</p></div>${content}`;
 }
