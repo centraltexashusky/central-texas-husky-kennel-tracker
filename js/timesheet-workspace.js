@@ -2,6 +2,15 @@
 var timesheetStaffFilterValue = '';
 var timesheetTimeOffFilter = 'All';
 
+function payrollWorkDateLabel(value) {
+  const dateKey = dateOnly(value);
+  if (!dateKey) return '';
+  // A work date is a calendar day, not a UTC timestamp.
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'short', day: 'numeric', year: 'numeric'
+  });
+}
+
 // Payroll drill-down uses exactly the same entries and rounding as the summary.
 function openPayrollStaffHours(staffKey) {
   if (currentRole() !== 'admin') return;
@@ -14,7 +23,7 @@ function openPayrollStaffHours(staffKey) {
   const originals = new Map(readRecords('timesheet').filter(r => !r.removed).map(r => [r.id,r]));
   const rows = entries.map(entry => {
     const record = originals.get(entry.id) || {};
-    return `<tr><td data-label="Date">${escapeHtml(timesheetDateLabel(entry.date))}</td><td data-label="Clock in">${escapeHtml(formatDateTime(record.clockInTime))}</td><td data-label="Clock out">${escapeHtml(formatDateTime(record.clockOutTime))}</td><td data-label="Hours"><strong>${entry.hours.toFixed(2)}</strong></td><td data-label="Note">${escapeHtml(record.note || '—')}</td></tr>`;
+    return `<tr><td data-label="Date">${escapeHtml(payrollWorkDateLabel(entry.date))}</td><td data-label="Clock in">${escapeHtml(formatDateTime(record.clockInTime))}</td><td data-label="Clock out">${escapeHtml(formatDateTime(record.clockOutTime))}</td><td data-label="Hours"><strong>${entry.hours.toFixed(2)}</strong></td><td data-label="Note">${escapeHtml(record.note || '—')}</td></tr>`;
   }).join('');
   showDetailDialog(`${staff.staffName || 'Staff'} · Logged hours`, `<section class="payroll-hours-detail">
     <p class="payroll-hours-range">${escapeHtml(timesheetRangeLabel(range))}</p>
