@@ -16,6 +16,7 @@ create policy read_records on cuddle_stay.kennel_records for select to authentic
 create policy write_records on cuddle_stay.kennel_records for all to authenticated using (organization_id='org' and current_setting('test.app_role',true) in ('owner','admin','manager','staff','helper')) with check (organization_id='org' and current_setting('test.app_role',true) in ('owner','admin','manager','staff','helper'));
 set test.uid='00000000-0000-0000-0000-000000000001';set test.app_role='admin';`);
 await db.exec(fs.readFileSync('supabase/migrations/20261011203811_admin_owned_care_history_edit.sql','utf8'));
+await db.exec(fs.readFileSync('supabase/migrations/20261012224936_sync_daily_care_history_mirrors.sql','utf8'));
 const original={id:'a',type:'Medical/Care',date:'2026-01-02',note:'one\ntwo',completedBy:'Original Staff',createdAt:'2026-01-04T18:30:00Z',mediaItems:[{url:'fixture'}]};
 const duplicate={...original,note:'same day independent entry',id:'b'};
 const dog={id:'dog',type:'ownedDog',careNotesHistory:[original,duplicate],foodAmount:'unchanged',bathHistory:[],notes:'unchanged'};
@@ -53,11 +54,50 @@ await assert.rejects(edit((await get()).exerciseLogs[0],'bad','exerciseLogs',0,'
 // Source and projection update atomically. Later source synchronization cannot revert the note.
 const sourceLog={id:'source-log',dogId:'dog',careType:'Medical/Behavior Note',date:'2026-01-02',note:'source note',loggedAt:'2026-01-04T17:00:00Z',completedBy:'Staff'};
 const projection={id:'derived',sourceDailyTaskId:'daily',sourceCareLogId:'source-log',type:'Medical/Care',date:sourceLog.date,note:sourceLog.note,loggedAt:sourceLog.loggedAt,completedBy:'Staff'};
-await put('daily','dailyTask',{id:'daily',type:'dailyTask',date:'2026-01-02',structuredCareLogs:[sourceLog],unrelated:'kept'});
+await put('daily','dailyTask',{id:'daily',type:'dailyTask',date:'2026-01-02',structuredCareLogs:[sourceLog],careLogs:[sourceLog],unrelated:'kept'});
 await update({...saved,careNotesHistory:[projection]});await edit(projection,'synced edit');assert.equal((await get('daily')).structuredCareLogs[0].note,'synced edit');assert.equal((await get('daily')).structuredCareLogs[0].loggedAt,sourceLog.loggedAt);assert.equal((await get('daily')).unrelated,'kept');
-await db.exec("set test.app_role='staff'");let daily=await get('daily');await assert.rejects(update({...daily,structuredCareLogs:[{...daily.structuredCareLogs[0],note:'source bypass'}]},'daily'),/Only admins/);
-await update({...daily,structuredCareLogs:[{id:'second',note:'new'},...daily.structuredCareLogs]},'daily');
+await db.exec("set test.app_role='staff'");let daily=await get('daily');
+assert.deepEqual(daily.careLogs,daily.structuredCareLogs,'admin correction keeps both daily source arrays identical');
+await assert.rejects(update({...daily,structuredCareLogs:[{...daily.structuredCareLogs[0],note:'source bypass'}]},'daily'),/Only admins/);
+// The real daily form writes both arrays. A new entry must still save after an admin edit.
+const appended=[{id:'second',note:'new'},...daily.structuredCareLogs];
+await update({...daily,structuredCareLogs:appended,careLogs:appended},'daily');
+assert.equal((await get('daily')).careLogs.length,2);
+await assert.rejects(update({...daily,structuredCareLogs:[{id:'stale'},sourceLog],careLogs:[{id:'stale'},sourceLog]},'daily'),/Only admins/,'stale staff data cannot revert an admin correction');
 await db.exec("set test.app_role='admin'");const current=(await get()).careNotesHistory[0];await update({...await get('daily'),structuredCareLogs:[]},'daily');await assert.rejects(edit(current,'missing source'),/source care log changed/);assert.deepEqual((await get()).careNotesHistory[0],current,'failed linked edit rolls back');
+// Mirror ordering and unrelated entries are preserved; conflicting copies fail atomically.
+const sibling={id:'independent',note:'keep exactly'};
+await update({...daily,structuredCareLogs:[sourceLog,sibling],careLogs:[sibling,sourceLog]},'daily');
+await update({...await get(),careNotesHistory:[projection]});
+await edit(projection,'ordered correction');
+daily=await get('daily');
+assert.deepEqual(daily.structuredCareLogs[0],daily.careLogs[1]);
+assert.deepEqual(daily.careLogs[0],sibling);
+assert.deepEqual(daily.structuredCareLogs[1],sibling);
+let expected=(await get()).careNotesHistory[0];
+for (const copies of [[sibling,{...daily.careLogs[1],note:'independent conflict'}], [sibling], [daily.careLogs[1],daily.careLogs[1]]]) {
+ await update({...daily,careLogs:copies},'daily');
+ const before=await get('daily');
+ await assert.rejects(edit(expected,'must not change either copy'),/linked daily care copy changed/);
+ assert.deepEqual(await get('daily'),before);
+ assert.deepEqual((await get()).careNotesHistory[0],expected);
+}
+// Older records with just one representation still support corrections.
+for (const field of ['careLogs','structuredCareLogs']) {
+ await update({id:'daily',type:'dailyTask',date:sourceLog.date,[field]:[sourceLog]},'daily');
+ await update({...await get(),careNotesHistory:[projection]});
+ await edit(projection,'single-array correction');
+ assert.equal((await get('daily'))[field][0].note,'single-array correction');
+}
+const runLog={...sourceLog,careType:'Treadmill',minutes:'10'};
+const runProjection={...projection,type:'Treadmill',minutes:'10'};
+await update({id:'daily',type:'dailyTask',structuredCareLogs:[runLog],careLogs:[runLog]},'daily');
+await update({...await get(),exerciseLogs:[runProjection]});
+await edit(runProjection,'minutes corrected','exerciseLogs',0,'12');
+daily=await get('daily');
+assert.deepEqual(daily.careLogs,daily.structuredCareLogs);
+assert.equal(daily.careLogs[0].minutes,'12');
+assert.equal(daily.careLogs[0].editHistory[0].minutes,'10');
 // Boarding entry and mirrored source profiles, with real backend enforcement.
 const boardingLog={id:'board-log',date:'2020-01-02',loggedAt:'2026-07-03T18:00:00Z',note:'old boarding note',completedBy:'Original',dogId:'board',stayId:'stay',minutes:'10',staffOnly:true,mediaItems:[{name:'keep'}]};
 await db.exec("reset role;set test.app_role='admin'");
