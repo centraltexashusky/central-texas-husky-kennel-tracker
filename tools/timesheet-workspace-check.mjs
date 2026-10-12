@@ -39,6 +39,17 @@ assert.match(css,/#timesheetPage #timesheetClockPanel \.table-wrap \{ display:bl
 const dashboardRules=[...css.matchAll(/#dashboardPage[^{}]*\{([^{}]*)\}/g)].map(m=>m[1]).join('');
 assert(!/\b(display|order|grid-template|width|height|padding|margin)\s*:/.test(dashboardRules),'Dashboard restyle must not change layout.');
 const adapter=read('js/timesheet-workspace.js');
+assert(html.indexOf('id="lastWeekPayrollDateFilterButton"') < html.indexOf('id="resetPayrollDateFilterButton"'), 'Last Week precedes This Week in visual and keyboard order.');
+const dateContext = vm.createContext({ dateOnly: value => value || '' });
+vm.runInContext(adapter.match(/function payrollWorkDateLabel\(value\) \{[\s\S]*?\n\}/)[0], dateContext);
+for (const [date, label] of [
+  ['2026-10-05', 'Monday, Oct 5, 2026'],
+  ['2026-10-11', 'Sunday, Oct 11, 2026'],
+  ['2026-03-08', 'Sunday, Mar 8, 2026'],
+  ['2027-01-01', 'Friday, Jan 1, 2027'],
+  ['', '']
+]) assert.equal(dateContext.payrollWorkDateLabel(date), label);
+assert.match(adapter, /data-label="Date">\$\{escapeHtml\(payrollWorkDateLabel\(entry.date\)\)\}/, 'Logged-hours rows use the weekday label.');
 assert(!/\b(sendPayload|saveAndNotify|upsertRecord|writeRecords)\s*\(/.test(adapter),'Presentation adapter cannot write operational records.');
 console.log('Timesheet workspace checks passed: selected-tab rendering, staff-filter privacy, lazy date picker, responsive visibility, unchanged Dashboard layout and presentation-only adapter.');
 
