@@ -3717,6 +3717,7 @@ function boardingPickupReviewHtml(record = {}, options = {}) {
       <p>\${escapeHtml(record.ownerEmail || "No email saved")}</p>
     </article>
     \${stay.id ? boardingStayDetailCardHtml(record, stay, { compact: true, showServiceTasks: false }) : ""}
+    \${stay.id ? boardingPaymentSummaryHtml(record, stay, { hideAction: true }) : ""}
     \${boardingStayBelongingsHtml(stay, { showEmpty: true, label: "Belongings to leave with dog" })}
     \${serviceReview}
     \${serviceMessage}
@@ -5930,13 +5931,14 @@ function activeBoardingStay(record = {}, date = new Date()) {
   const now = date instanceof Date ? date : new Date(date);
   if (Number.isNaN(now.getTime())) return null;
   return (record.stays || []).find((stay) => {
-    if (inactiveBoardingStayStatus(stay)) return false;
+    if (inactiveBoardingStayStatus(stay) || stayHasActualPickupEvidence(stay)) return false;
     const explicitStatus = explicitBoardingStatus(stay.status) || explicitBoardingStatus(record.boardingStatus || record.status);
     if (!activeBoardingStayStatuses.includes(explicitStatus)) return false;
     const dropoff = new Date(boardingActiveWindowStartTime(stay));
-    const pickup = new Date(stay.pickupTime);
-    if (Number.isNaN(dropoff.getTime()) || Number.isNaN(pickup.getTime())) return false;
-    return dropoff <= now && pickup >= now;
+    // Scheduled pickup is not checkout. Keep the checked-in stay selected until
+    // staff record departure, even when pickup is overdue or not scheduled.
+    if (Number.isNaN(dropoff.getTime())) return false;
+    return dropoff <= now;
   }) || null;
 }
 
