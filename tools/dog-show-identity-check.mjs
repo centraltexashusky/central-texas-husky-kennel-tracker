@@ -43,4 +43,35 @@ records.customerDog.push({id:'reverse',sourceBoardingDogId:'missing'});
 assert.equal(ctx.dogShowCanonicalDogKey('boardingDog:missing'),'customerDog:reverse');
 records.customerDog.push({id:'ambiguous',sourceBoardingDogId:'missing'});
 assert.equal(ctx.dogShowCanonicalDogKey('boardingDog:missing'),'boardingDog:missing');
-console.log('PASS: canonical dog grouping, complete history/points, legacy baseline/planner compatibility, namesake separation, conflicts, missing links and cycles.');
+// Invoice selectors reuse explicit dog identity while retaining every original billing line.
+for (const name of ['dogShowFinanceTotals','dogShowDogAttributableCostTotals','dogShowFinanceDogGroupKey','dogShowFinanceDogCostGroups','dogShowFinanceDogReportData','dogShowInvoiceCenterData','dogShowDogInvoiceLineItems','dogShowInvoiceSelection','dogShowInvoices','dogShowInvoiceBillingKeys','dogShowInvoiceLineBillingKeys','dogShowInvoiceIsActive','dogShowInvoiceState']) {
+ vm.runInContext(source.match(new RegExp('function '+name+'\\([\\s\\S]*?\\n\\}'))[0],ctx);
+}
+const group=(index,amount)=>({entry:records.showEntry[index],label:'Mango',transactions:[{id:`charge-${index}`,amount,entryType:'expense'}]});
+const summaries=[{event:{id:'show-a'},dogGroups:[group(0,149.2),group(2,10)]},{event:{id:'show-b'},dogGroups:[group(1,149.2),group(3,900)]}];
+ctx.dogShowEvents=()=>summaries.map(s=>s.event);
+ctx.dogShowFinanceEventSummary=event=>summaries.find(s=>s.event.id===event.id);
+ctx.dogShowFinanceReportGroups=()=>[{key:'2026',label:'2026',summaries}];
+ctx.dogShowFinancePeriod='year';ctx.dogShowFinanceDogKey='boardingDog:stay-b';ctx.DOG_SHOW_FINANCE_DOG_KEY='test';
+ctx.localStorage={setItem:(key,value)=>{ctx.savedSelection=value;}};
+ctx.arrayValue=v=>Array.isArray(v)?v:[];
+ctx.dogShowCustomerIdentity=()=>({key:'customer',email:'owner@example.invalid'});
+const before=JSON.stringify(records);
+const center=ctx.dogShowInvoiceCenterData('dog','year','boardingDog:stay-b');
+assert.equal(center.targets.length,2,'Linked stays combine, but the unrelated namesake remains separate');
+assert.equal(center.targetKey,'customerDog:customer-a','Old saved invoice selection follows the canonical dog');
+assert.equal(center.targets.find(t=>t.key===center.targetKey).detail,'2 shows');
+const report=ctx.dogShowFinanceDogReportData();
+assert.equal(ctx.savedSelection,'customerDog:customer-a');
+assert.equal(report.periods[0].matches.length,3,'Do not discard a second linked entry in the same show');
+assert.equal(report.selected.costTotals.netCost,308.4);
+const invoice=ctx.dogShowInvoiceSelection('dog','boardingDog:stay-a','2026','year');
+assert.equal(invoice.lineItems.length,3);
+assert.equal(invoice.lineItems.reduce((sum,line)=>sum+line.amount,0),308.4);
+assert.deepEqual([...invoice.lineItems.map(l=>l.billingKey)],['show-a:entry-0','show-a:entry-2','show-b:entry-1']);
+assert.equal(JSON.stringify(records),before,'Grouping never changes persisted records or charges');
+records.showInvoice=[{id:'paid',status:'Paid',customerEmail:'owner@example.invalid',total:149.2,billingKeys:['show-b:entry-1']}];
+const state=ctx.dogShowInvoiceState(invoice);
+assert.equal(state.relatedInvoices.length,1,'Previously paid invoices still resolve using original billing keys');
+assert.equal(state.billableLineItems.length,2,'Previously invoiced charges are not billed again');
+console.log('PASS: canonical dog grouping, complete history/points and invoice lines, namesake separation, legacy selections, paid billing-key retention, conflicts and cycles.');
