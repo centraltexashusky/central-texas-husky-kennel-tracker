@@ -2029,7 +2029,7 @@ function dogShowFinanceEventSummary(event = {}) {
 
 function dogShowFinanceDogGroupKey(dogGroup = {}) {
   const entry = dogGroup.entry || {};
-  if (entry.dogType && entry.dogId) return `${entry.dogType}:${entry.dogId}`;
+  if (entry.dogType && entry.dogId) return dogShowCanonicalDogKey(`${entry.dogType}:${entry.dogId}`);
   return String(dogGroup.label || dogGroup.key || "Dog").trim().toLowerCase();
 }
 
@@ -2484,6 +2484,7 @@ function dogShowInvoiceCenterData(invoiceScope = "customer", periodType = "show"
   const scope = invoiceScope === "dog" ? "dog" : "customer";
   const normalizedPeriod = ["show", "week", "month", "year"].includes(periodType) ? periodType : "show";
   if (scope === "dog") {
+    targetKey = dogShowCanonicalDogKey(targetKey);
     const dogs = dogShowFinanceDogCostGroups(dogShowEvents().map(dogShowFinanceEventSummary));
     const selectedKey = dogs.some((dog) => dog.key === targetKey) ? targetKey : dogs[0]?.key || "";
     const { periods } = dogShowFinanceDogReportData(selectedKey, normalizedPeriod);
@@ -2741,19 +2742,21 @@ function dogShowFinanceDogReportData(targetDogKey = dogShowFinanceDogKey, period
   const summaries = dogShowEvents().map(dogShowFinanceEventSummary);
   const dogs = dogShowFinanceDogCostGroups(summaries);
   const followsSavedSelection = targetDogKey === dogShowFinanceDogKey;
+  targetDogKey = dogShowCanonicalDogKey(targetDogKey);
   if (!dogs.some((dog) => dog.key === targetDogKey)) {
     targetDogKey = dogs[0]?.key || "";
-    if (followsSavedSelection) {
-      dogShowFinanceDogKey = targetDogKey;
-      if (dogShowFinanceDogKey) localStorage.setItem(DOG_SHOW_FINANCE_DOG_KEY, dogShowFinanceDogKey);
-    }
+  }
+  if (followsSavedSelection && dogShowFinanceDogKey !== targetDogKey) {
+    dogShowFinanceDogKey = targetDogKey;
+    if (dogShowFinanceDogKey) localStorage.setItem(DOG_SHOW_FINANCE_DOG_KEY, dogShowFinanceDogKey);
   }
   const selected = dogs.find((dog) => dog.key === targetDogKey) || null;
   const periods = selected ? dogShowFinanceReportGroups(periodType).map((period) => {
-    const matches = period.summaries.map((summary) => {
-      const dogGroup = summary.dogGroups.find((group) => dogShowFinanceDogGroupKey(group) === selected.key);
-      return dogGroup ? { summary, dogGroup, costTotals: dogShowDogAttributableCostTotals(dogGroup.transactions) } : null;
-    }).filter(Boolean);
+    // Retain every linked entry and its original billing key, including multiple
+    // assignments in one show. Grouping a dog must never discard invoice lines.
+    const matches = period.summaries.flatMap((summary) => summary.dogGroups
+      .filter((group) => dogShowFinanceDogGroupKey(group) === selected.key)
+      .map((dogGroup) => ({ summary, dogGroup, costTotals: dogShowDogAttributableCostTotals(dogGroup.transactions) })));
     if (!matches.length) return null;
     const transactions = matches.flatMap((match) => match.dogGroup.transactions);
     return { ...period, matches, transactions, costTotals: dogShowDogAttributableCostTotals(transactions) };
