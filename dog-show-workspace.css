@@ -151,6 +151,10 @@
 :root[data-theme] #dogShowPage .dog-show-dog-primary > .dog-show-dog-photo { position:absolute; left:12px; top:20px; width:62px; height:62px; border-radius:50%; }
 :root[data-theme] #dogShowPage .dog-show-dog-copy { display:flex; align-items:center; gap:14px; flex:1; flex-wrap:wrap; }
 :root[data-theme] #dogShowPage .dog-show-dog-copy strong { font-size:16px; }
+:root[data-theme] #dogShowPage .dog-show-dog-heading { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+:root[data-theme] #dogShowPage .dog-show-result-status { display:inline-flex; align-items:center; gap:4px; padding:5px 9px; border:1px solid var(--show-line); border-radius:6px; font-size:12px; line-height:1.3; font-weight:700; color:var(--show-muted); background:var(--show-soft); }
+:root[data-theme] #dogShowPage .dog-show-result-status.is-complete { color:#145b3a; background:#e4f5eb; border-color:#9ccdb2; }
+:root[data-theme] #dogShowPage .dog-show-result-status.is-partial { color:#795000; background:#fff4d7; border-color:#e6c66e; }
 :root[data-theme] #dogShowPage .dog-show-dog-meta { gap:10px; }
 :root[data-theme] #dogShowPage .dog-show-dog-meta small { font-size:12px; }
 :root[data-theme] #dogShowPage .dog-show-ring-flag { border:0; border-radius:7px; background:#e8f3fc; color:#0869aa; font-size:11px; padding:5px 8px; }
