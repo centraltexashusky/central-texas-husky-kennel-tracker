@@ -781,6 +781,22 @@ function dogShowResultProgress(event = dogShowActiveEvent(), entries = dogShowEn
   };
 }
 
+function dogShowEntryResultStatusHtml(entry = {}) {
+  if (entry.attendanceRole !== "Showing") return "";
+  const event = entry.showEventId ? { id: entry.showEventId } : dogShowActiveEvent();
+  const results = dogShowResultsForEntry(entry, event);
+  const schedules = dogShowRingSchedules(entry);
+  const total = schedules.length || 1;
+  const logged = schedules.length
+    ? schedules.filter((schedule) => dogShowResultForSchedule(entry, schedule, event, results)).length
+    : Number(Boolean(dogShowResultForSchedule(entry, null, event, results)));
+  const state = !logged ? "pending" : logged === total ? "complete" : "partial";
+  const label = !logged ? "Result not logged" : total === 1 ? "Result logged" : `Results logged ${logged}/${total}`;
+  const title = !logged ? "No saved result for this dog's current ring appearances."
+    : `${logged} of ${total} ring ${total === 1 ? "result" : "results"} saved for this dog at this show.`;
+  return `<span class="dog-show-result-status is-${state}" title="${escapeHtml(title)}">${state === "complete" ? '<span aria-hidden="true">✓</span> ' : ""}${escapeHtml(label)}</span>`;
+}
+
 function dogShowOutcomeLabel(value = "") {
   return value === "Scratched" ? "Withdrawn before judging" : value;
 }
@@ -1320,7 +1336,7 @@ function dogShowEntryRowHtml(entry = {}, options = {}) {
   return `<article class="dog-show-dog-row is-${state} care-priority-${carePriority.key}${options.conflict ? " has-conflict" : ""}" title="Care priority: ${escapeHtml(carePriority.label)}">
     <button type="button" class="dog-show-dog-primary" data-action="open-show-dog" data-id="${escapeHtml(entry.id)}">
       ${dogShowPhotoHtml(entry)}
-      <span class="dog-show-dog-copy"><strong>${escapeHtml(dogShowEntryName(entry))}</strong><span class="dog-show-dog-meta">${ringFlag ? `<span class="dog-show-ring-flag">${escapeHtml(ringFlag)}</span>` : ""}<small>${escapeHtml(meta)}</small></span></span>
+      <span class="dog-show-dog-copy"><span class="dog-show-dog-heading"><strong>${escapeHtml(dogShowEntryName(entry))}</strong>${dogShowEntryResultStatusHtml(entry)}</span><span class="dog-show-dog-meta">${ringFlag ? `<span class="dog-show-ring-flag">${escapeHtml(ringFlag)}</span>` : ""}<small>${escapeHtml(meta)}</small></span></span>
       <span class="dog-show-dog-status"><span class="dog-show-time-chip is-${state}" title="${escapeHtml(timestampTitle)}">${escapeHtml(timestamp)}</span><span class="dog-show-role-chip">${showing ? "Show" : "Social"}</span></span>
     </button>
     ${quickActions}
