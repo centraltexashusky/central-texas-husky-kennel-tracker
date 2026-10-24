@@ -3452,6 +3452,8 @@ function boardingQuickActionButtons(record = {}) {
   if (status === "Ready For Pickup") {
     buttons.push(\`<button type="button" class="secondary-button" data-action="inline-boarding-status" data-next-status="Checked Out" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Check Out</button>\`);
   }
+  const paymentButton = typeof boardingPaymentActionHtml === "function" ? boardingPaymentActionHtml(record, stay) : "";
+  if (paymentButton) buttons.push(paymentButton);
   const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
   if (ownerUpdateButton) buttons.push(ownerUpdateButton);
   const medicalBehaviorButton = boardingMedicalBehaviorButtonHtml(record, stay);
@@ -3891,6 +3893,7 @@ function boardingQuickCardHtml(record = {}) {
 function boardingRosterActionButtons(record = {}) {
   const icons = {
     'data-next-status': '<path d="M10 4H4v16h6M14 8l4 4-4 4M8 12h10"/>',
+    'record-boarding-payment': '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h3"/>',
     'open-owner-update': '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/>',
     'open-boarding-medical': '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 3h6v4H9zM9 12h6M9 16h6"/>',
     'change-boarding': '<circle cx="12" cy="12" r="9"/><path d="M7 12h1M11.5 12h1M16 12h1"/>',
