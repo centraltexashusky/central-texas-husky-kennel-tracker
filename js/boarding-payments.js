@@ -1,4 +1,18 @@
 /* Stay receipts are credits against charges, not additional ledger income. */
+// Staff may record receipts, but only administrators can cancel existing ones.
+function canRecordBoardingPayment() {
+  return ['admin', 'helper', 'staff'].includes(currentRole());
+}
+
+function boardingPaymentActionHtml(record, stay) {
+  if (!canRecordBoardingPayment() || !stay?.id ||
+      ['Cancelled', 'Declined', 'Checked Out'].includes(boardingStayDisplayStatus(record, stay)) ||
+      !(boardingPaymentSummary(record, stay).balance > 0)) return '';
+  return '<button type="button" class="secondary-button" data-action="record-boarding-payment" data-dog-id="' +
+    escapeHtml(record.id) + '" data-stay-id="' + escapeHtml(stay.id) + '" data-request-code="' +
+    escapeHtml(boardingStayRequestCode(record, stay)) + '">Payment received</button>';
+}
+
 function boardingPaymentRecords(record = {}) {
   const ids = new Set([record.id, ...(record.sourceRecordIds || [])]);
   return readRecords('boardingDog').filter(item => ids.has(item.id) && !item.removed);
@@ -38,7 +52,7 @@ function boardingPaymentSummaryHtml(record, stay, options = {}) {
       currentRole() === 'admin' && !options.hideAction ? '<button type="button" class="danger-button" data-action="cancel-boarding-payment" data-dog-id="' +
         escapeHtml(record.id) + '" data-stay-id="' + escapeHtml(stay.id) + '" data-request-code="' + escapeHtml(boardingStayRequestCode(record, stay)) +
         '" data-payment-id="' + escapeHtml(p.id) + '">Cancel payment</button>' : '') + '</li>').join('');
-  const available = currentRole() === 'admin' && !['Cancelled', 'Declined'].includes(boardingStayDisplayStatus(record, stay));
+  const available = canRecordBoardingPayment() && !['Cancelled', 'Declined'].includes(boardingStayDisplayStatus(record, stay));
   return '<section class="boarding-payments" aria-label="Stay payments"><h3>Payments</h3><p><strong>' + escapeHtml(summary.status) +
     '</strong></p><div class="estimate-line"><span>Payments received</span><strong>' + (summary.legacyPaid ? 'Legacy paid record' : money(summary.paid)) +
     '</strong></div><div class="estimate-total"><span>Balance due</span><strong>' + money(summary.balance) + '</strong></div>' +
@@ -75,12 +89,12 @@ async function requireBoardingCheckoutPayment(record, reference = {}) {
 function boardingCheckoutPaymentPromptHtml(record,stay) {
   const summary = boardingPaymentSummary(record,stay);
   if (!(summary.balance > 0)) return '<p class="workspace-info">No outstanding balance. Recorded payments are shown above.</p>';
-  const action = currentRole() === 'admin' ? '<button type="button" data-action="record-checkout-payment" data-dog-id="' + escapeHtml(record.id) + '" data-stay-id="' + escapeHtml(stay.id) + '" data-request-code="' + escapeHtml(boardingStayRequestCode(record,stay)) + '">Confirm payment received</button>' : '<p>An administrator must record the payment received before you can check out this stay.</p>';
+  const action = canRecordBoardingPayment() ? '<button type="button" data-action="record-checkout-payment" data-dog-id="' + escapeHtml(record.id) + '" data-stay-id="' + escapeHtml(stay.id) + '" data-request-code="' + escapeHtml(boardingStayRequestCode(record,stay)) + '">Confirm payment received</button>' : '<p>A staff member must record the payment received before checkout.</p>';
   return '<section class="checkout-payment-required" role="status"><h3>Confirm the remaining payment</h3><p><strong>' + escapeHtml(money(summary.balance)) + '</strong> is still due after recorded payments. Confirm the amount and payment method actually received before checkout.</p>' + action + '</section>';
 }
 
 function openBoardingPaymentPopup(record, reference = {}, options = {}) {
-  if (currentRole() !== 'admin') return showToast('An administrator must record boarding payments.');
+  if (!canRecordBoardingPayment()) return showToast('Only staff or administrators can record boarding payments.');
   const stay = boardingStayByReference(record, reference) || (!reference.stayId && !reference.requestCode ? activeBoardingStay(record) || currentOrNextStay(record) : null);
   if (!stay?.id) return showToast('Select a saved stay first.');
   const summary = boardingPaymentSummary(record, stay);
@@ -110,7 +124,7 @@ function openBoardingPaymentPopup(record, reference = {}, options = {}) {
 }
 
 async function saveBoardingPayment(form) {
-  if (currentRole() !== 'admin') throw new Error('Only an administrator can record boarding payments.');
+  if (!canRecordBoardingPayment()) throw new Error('Only staff or administrators can record boarding payments.');
   const reference = { stayId: form.dataset.stayId, requestCode: form.dataset.requestCode };
   let record = boardingDogRecordForDisplay(form.dataset.dogId);
   if (!record) throw new Error('This dog is no longer available.');
@@ -144,7 +158,7 @@ async function saveBoardingPayment(form) {
   const timestamp = new Date().toISOString();
   const payment = { id: form.dataset.paymentId, stayId: boardingStayByReference(source, reference).id, requestCode: reference.requestCode,
     amount, receivedDate, method, kind, reference: form.elements.reference.value.trim(),
-    recordedAt: timestamp, recordedBy: currentUser?.name || currentUser?.email || 'Admin' };
+    recordedAt: timestamp, recordedBy: currentUser?.name || currentUser?.email || 'Staff' };
   const updated = { ...source, boardingPayments: [...(source.boardingPayments || []), payment], updatedAt: timestamp };
   if (!localTestMode) {
     const row = rows.find(item => item.id === source.id);

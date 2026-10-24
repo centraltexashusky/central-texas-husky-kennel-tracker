@@ -11,7 +11,8 @@ const ctx = {
   boardingStayByReference:(r,ref)=>r.stays.find(s=>s.id===ref.stayId||s.requestCode===ref.requestCode),
   boardingDogRecordForDisplay:id=>records.find(r=>r.id===id),
   upsertRecord:(_type,r)=>{records=records.map(old=>old.id===r.id?r:old);return r;},
-  currentUser:{name:'QA Admin'}, localTestMode:true, supabaseClient:null,
+  currentUser:{name:'QA Staff'}, localTestMode:true, supabaseClient:null,
+  escapeHtml:value=>String(value || ''), money:value=>'$'+Number(value).toFixed(2),
   todayDate:()=> '2026-09-27', renderBoardingStays(){},renderBoardingDogs(){},
 };
 vm.createContext(ctx);
@@ -35,8 +36,24 @@ await assert.rejects(ctx.saveBoardingPayment(form(1.111,'Deposit','bad',200)));
 await assert.rejects(ctx.saveBoardingPayment(form(201,'Deposit','bad',200)));
 await assert.rejects(ctx.saveBoardingPayment(form(100,'Paid in full','bad',200)));
 await assert.rejects(ctx.saveBoardingPayment(form(100,'Deposit','bad',300)),/balance changed/);
-role='helper';await assert.rejects(ctx.saveBoardingPayment(form(100)),/administrator/);role='admin';
-await ctx.saveBoardingPayment(form(200,'Paid in full','receipt-2',200));
+for (const deniedRole of ['customer', '', 'unknown']) {
+  role=deniedRole;
+  await assert.rejects(ctx.saveBoardingPayment(form(100)),/staff or administrators/);
+  assert.equal(ctx.boardingPaymentActionHtml(records[0],records[0].stays[0]),'');
+}
+const beforeStaffReceipt = structuredClone(records);
+for (const staffRole of ['helper','staff']) {
+  records = structuredClone(beforeStaffReceipt);
+  role=staffRole;
+  assert.match(ctx.boardingPaymentActionHtml(records[0],records[0].stays[0]),/Payment received/);
+  assert.match(ctx.boardingPaymentActionHtml(records[0],records[0].stays[0]),/data-stay-id="stay"/);
+  assert.match(ctx.boardingCheckoutPaymentPromptHtml(records[0],records[0].stays[0]),/record-checkout-payment/);
+  assert(!ctx.boardingPaymentSummaryHtml(records[0],records[0].stays[0]).includes('cancel-boarding-payment'));
+  await ctx.saveBoardingPayment(form(200,'Paid in full','receipt-2',200));
+}
+assert.equal(records[0].boardingPayments[1].recordedBy,'QA Staff');
+assert.equal(ctx.boardingPaymentActionHtml(records[0],records[0].stays[0]),'','No receipt action on a settled stay');
+role='admin';
 assert.equal(summary().balance,0);assert.equal(summary().status,'Paid in full');
 records[0].stays[0].total=350;
 assert.equal(summary().balance,50,'New charges reopen only the unpaid difference');
