@@ -13,6 +13,21 @@ function boardingPaymentActionHtml(record, stay) {
     escapeHtml(boardingStayRequestCode(record, stay)) + '">Payment received</button>';
 }
 
+function boardingCardPaymentSummaryHtml(record, stay) {
+  if (!stay?.id) return '';
+  const summary = boardingPaymentSummary(record, stay);
+  const settled = summary.balance === 0;
+  const status = summary.legacyPaid ? 'Paid (legacy record)' : settled
+    ? (summary.paid > 0 ? 'Paid in full' : 'No balance due') : summary.status;
+  return '<section class="boarding-card-payments' + (settled ? ' is-settled' : '') + '" aria-label="Payment summary for this stay">' +
+    '<div class="boarding-card-payment-status"><span class="boarding-roster-label">Payment status</span><strong>' + escapeHtml(status) + '</strong></div>' +
+    '<div><span class="boarding-roster-label">Payments received</span><strong>' +
+    (summary.legacyPaid ? 'Previously marked paid' : escapeHtml(money(summary.paid))) + '</strong></div>' +
+    '<div><span class="boarding-roster-label">Remaining balance</span><strong>' + escapeHtml(money(summary.balance)) + '</strong></div>' +
+    (summary.credit > 0 ? '<p class="boarding-card-payment-note">Credit on this stay: ' + escapeHtml(money(summary.credit)) + '</p>' : '') +
+    '</section>';
+}
+
 function boardingPaymentRecords(record = {}) {
   const ids = new Set([record.id, ...(record.sourceRecordIds || [])]);
   return readRecords('boardingDog').filter(item => ids.has(item.id) && !item.removed);

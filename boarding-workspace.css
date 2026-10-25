@@ -244,3 +244,25 @@ body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
   max-width: 100%;
   overflow-x: auto;
 }
+/* Stay-specific receipt totals, visible without opening the invoice. */
+.boarding-card-payments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #cbdbe7;
+  border-radius: 10px;
+  background: #f4f8fc;
+}
+.boarding-card-payments > div { display: grid; gap: 6px; align-content: start; }
+.boarding-card-payments strong { font-size: 1.05rem; overflow-wrap: anywhere; }
+.boarding-card-payments .boarding-card-payment-status strong { color: #865000; }
+.boarding-card-payments.is-settled { background: #edf8f2; border-color: #b3d9c4; }
+.boarding-card-payments.is-settled .boarding-card-payment-status strong { color: #12613c; }
+.boarding-card-payment-note { grid-column: 1 / -1; margin: 0; }
+@media (max-width: 600px) {
+  .boarding-card-payments { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 14px; }
+  .boarding-card-payment-status { grid-column: 1 / -1; }
+  .boarding-card-payments > div:not(.boarding-card-payment-status) .boarding-roster-label { min-height: 2.8em; }
+}

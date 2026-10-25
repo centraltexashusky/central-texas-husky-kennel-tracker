@@ -3885,6 +3885,7 @@ function boardingQuickCardHtml(record = {}) {
         \${boardingQuickBelongingsFact(record, stay)}
        </section>
       </div>
+      \${typeof boardingCardPaymentSummaryHtml === "function" ? boardingCardPaymentSummaryHtml(record, stay) : ""}
       \${boardingRosterActionButtons(record)}
       <span class="inline-save-status" data-inline-status-message="\${escapeHtml(record.id || "")}" aria-live="polite"></span>
     </article>\`;

@@ -24,6 +24,7 @@ const context = {
   boardingQuickServiceFact: () => '1/4 done',
   boardingQuickSpecialCareFact: () => 'Medication twice daily',
   boardingQuickBelongingsFact: () => 'Belongings saved',
+  boardingCardPaymentSummaryHtml: (_record, stay) => '<section>Payment summary for ' + stay.id + '</section>',
   boardingQuickActionButtons: () => '<div><button data-next-status="Ready For Pickup">Ready for Pickup</button><button data-action="open-boarding-medical-behavior-note">Log Medical/Behavior</button><button data-action="change-boarding">Details</button></div>',
 };
 vm.createContext(context);
@@ -31,6 +32,7 @@ vm.runInContext(functionSource('boardingRosterActionButtons') + '\n' + functionS
 const html = context.boardingQuickCardHtml({id:'test-dog',dogName:'<script>dog</script>',regular:true,stays:[{id:'test-stay',tasks:Array.from({length:4},(_,i)=>({serviceName:'Service '+i,status:i===0?'completed':'pending'}))}]});
 for (const expected of ['boarding-roster-identity','boarding-roster-stay','boarding-roster-services','boarding-roster-care','Regular pricing','+1 more services','is-complete','Log Care','data-next-status="Ready For Pickup"','data-stay-id="test-stay"']) assert.ok(html.includes(expected), expected);
 assert.ok(!html.includes('<script>dog</script>'), 'Names must be escaped');
+assert.ok(html.includes('Payment summary for test-stay'), 'Payment summary uses the displayed primary stay');
 assert.equal((html.match(/<li>/g)||[]).length, 3, 'Large service lists are bounded');
 assert.ok(context.boardingQuickCardHtml({}).includes('No services requested'));
 assert.ok(source.includes('const renderDesktopRows = false;'), 'No hidden table rows');
