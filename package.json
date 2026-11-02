@@ -22,6 +22,8 @@
     "test:pedigree-appearance": "node tools/pedigree-appearance-check.mjs",
     "test:care-history": "node tools/care-history-check.mjs",
     "test:care-history-browser": "node tools/care-history-browser-check.mjs",
-    "test:care-history-sql": "node tools/care-history-sql-check.mjs"
+    "test:care-history-sql": "node tools/care-history-sql-check.mjs",
+    "test:troubleshooting": "node tools/troubleshooting-check.mjs && node tools/care-submit-reproduction-check.mjs && node tools/care-submit-atomic-check.mjs",
+    "test:care-append-sql": "node tools/care-append-diagnostics-sql-check.mjs"
   }
 }

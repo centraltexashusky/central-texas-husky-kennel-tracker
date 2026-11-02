@@ -1,0 +1,12 @@
+import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';import {webcrypto} from 'node:crypto';
+const values=new Map();let requests=[],mode='fail',displayFail=false,taskFail=false;
+const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
+const c={console,Map,JSON,crypto:webcrypto,TextEncoder,Uint8Array,localStorage:storage,remoteWriteIdentity:async()=>({userId:'fixture-staff'}),withRemoteRequestTimeout:p=>p,mergeRecords:()=>{if(displayFail)throw Error('quota');},showToast:()=>{},syncOwnedDogBathTask:async()=>{if(taskFail)throw Error('task');},cuddleStayRequest:fn=>fn({rpc:async(name,args)=>{assert.equal(name,'append_owned_care_log');requests.push(args.p_log);if(mode==='fail')return {error:{code:'42501',message:'test denied'}};if(mode==='pending')await new Promise(r=>setTimeout(r,20));return {data:{daily:{id:'daily'},dog:{id:args.p_log.dogId},log:{...args.p_log,completedBy:'server actor'}}};}})};
+vm.createContext(c);vm.runInContext(fs.readFileSync('js/care-submit.js','utf8'),c);
+const log=id=>({id,dogId:'comet-fixture',careType:'Bath',date:'2026-10-30',note:'private care note',minutes:'',mediaItems:[]});
+await assert.rejects(c.persistStructuredCareLogAtomic(log('first')));assert.equal(values.size,1);assert(!JSON.stringify([...values]).includes('private care note'));
+mode='success';const retried=log('new-generated-id');await c.persistStructuredCareLogAtomic(retried);assert.equal(requests.at(-1).id,'first');assert.equal(retried.completedBy,'server actor');assert.equal(values.size,0);
+mode='pending';const before=requests.length;await Promise.all([c.persistStructuredCareLogAtomic(log('race-a')),c.persistStructuredCareLogAtomic(log('race-b'))]);assert.equal(requests.length,before+1);
+displayFail=true;taskFail=true;await c.persistStructuredCareLogAtomic(log('saved-despite-display-task-failure'));assert.equal(values.size,0);
+const count=requests.length;storage.setItem=()=>{throw Error('storage unavailable');};await assert.rejects(c.persistStructuredCareLogAtomic(log('blocked-storage')),/storage/);assert.equal(requests.length,count);
+console.log('PASS atomic frontend: stable retry ID, no raw care payload in retry storage, simultaneous click dedupe, server-confirmed author, no false failure after durable commit, no unsafe write without retry ID.');

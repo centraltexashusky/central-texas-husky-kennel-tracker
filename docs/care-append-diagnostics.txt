@@ -1,0 +1,47 @@
+Atomic care submission and admin diagnostics
+
+Remote structured care submissions use append_owned_care_log, a SECURITY INVOKER
+RPC that retains existing staff RLS and care-history protection. It locks the dog
+then the daily source (the same order as admin corrections), appends only the new
+entry to each daily history array and the matching dog history, and commits both
+or neither. Earlier entries, duplicates, edit metadata, and unrelated fields are
+preserved. Backdating does not move latest-care dates backwards. Repeated IDs by
+the same actor return the durable entry; conflicting actors/identities are denied.
+The frontend retains an opaque retry ID keyed by account and payload digest until
+confirmation, deduplicates simultaneous clicks, and never falls back to replacing
+a remote day's history from browser cache. Retry IDs contain no care-note payload.
+All direct profile log buttons now await confirmation before showing success.
+
+Admin location: Settings > Audit Log > Troubleshooting text log.
+Diagnostics cover record-save and structured-care submission failures. They carry
+operation, record/dog IDs, care type/date, server-attributed actor and timestamp,
+error code, fixed sanitized message, and request ID if available. Raw error details,
+stack, session, tokens, passwords, photos, and care notes are not recorded. Unknown
+errors are generic. Client events are best-effort reports, not authoritative audit
+proof; offline events can be lost. The UI explicitly labels these limitations.
+
+Existing owner/admin/manager/staff members may insert. Only owner/admin members
+may read, within the current organization. Clients cannot supply actor/time/org,
+or update/delete events. Customer and anonymous access is denied. Daily pg_cron
+cleanup removes events older than 14 days; actual removal can be up to one day
+later. Only the diagnostic table is affected. No existing access policy changed.
+
+Validation:
+- 73 existing repository checks passed.
+- Isolated native PostgreSQL: staff role restrictions, simultaneous appends,
+  simultaneous first-day creation, idempotent retry races, admin correction races,
+  old metadata/duplicate preservation, backdating, atomic rollback for both an
+  existing day and newly created day, diagnostic role/actor/update/delete checks.
+- Retention SQL executed on synthetic rows; recent rows and care data retained.
+  Local cron.schedule is a test stub; production cron registration is checked.
+- Browser staff form against localhost PostgreSQL with production requests blocked:
+  empty daily cache + backdated bath persisted both records and preserved history;
+  deliberately invalid fixture produced an error and a persisted admin diagnostic;
+  admin filter/copy and staff route denial verified.
+- Unit tests: retry storage/deduplication, sanitized diagnostic capture, bounded
+  logging, unavailable backend, and no false save failure after confirmed commit.
+
+Production migration: 20261102165317_atomic_care_append_and_diagnostics.
+Production verification uses read-only schema/grant/cron/record checks plus deployed
+source identity. No staff impersonation or synthetic production care submission.
+No historical error events or unsubmitted real care records are reconstructed.

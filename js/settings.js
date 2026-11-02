@@ -3076,6 +3076,7 @@ async function clearOperationDateOverride(id = "") {
 }
 
 function renderAuditLog() {
+  if (typeof renderTroubleshootingPanel === "function") renderTroubleshootingPanel();
   const list = $("#auditLogList");
   if (!list) return;
   const records = readRecords("auditLog").filter((record) => !record.removed).slice(0, 25);
