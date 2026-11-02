@@ -1356,18 +1356,17 @@ function renderOwnedActivity(record = activeOwnedDog()) {
   if (history) history.innerHTML = ownedDogActivityEntriesHtml(record || {}, filter, { removable: true });
 }
 
-function addOwnedLog(type, minutes, note = "", dogId = "") {
+async function addOwnedLog(type, minutes, note = "", dogId = "") {
   const active = dogId ? readRecords("ownedDog").find((record) => record.id === dogId && !record.removed) : activeOwnedDog();
-  if (!active) {
-    showToast("Save the dog first.");
-    return;
+  if (!active) return showToast("Save the dog first.");
+  try {
+    const careType = type === "Medical/Care" ? "Medical/Behavior Note" : type;
+    if (careTypeIsExercise(careType) && Number(minutes || 0) <= 0) return showToast("Enter exercise minutes before saving.");
+    await saveStructuredCareLog(buildStructuredCareLog(active, {careType, minutes, note, date:todayDate()}));
+    showToast(type + " entry saved.");
+  } catch (error) {
+    showToast("Care log not saved: " + remoteSaveErrorMessage(error));
   }
-  const record = applyOwnedCareLog(active, type, minutes, note);
-  sendPayload(record).catch((error) => console.warn("Owned care log save failed", error));
-  if ($("#ourDogForm")?.elements.id.value === record.id) renderOwnedActivity(record);
-  renderOwnedDogs();
-  renderDashboard();
-  showToast(\`\${type} entry added.\`);
 }
 
 function handleOwnedDogRosterAction(button) {

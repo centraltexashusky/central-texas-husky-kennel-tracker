@@ -4566,10 +4566,19 @@ function careLogAdminAlertRecord(log = {}, dailyRecord = {}) {
 
 async function saveStructuredCareLog(log) {
   const date = log.date || todayDate();
-  const structuredCareLogs = [log, ...structuredCareLogsForDate(date)];
-  const result = await saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
-  if (typeof refreshOwnedWorkspace === "function") refreshOwnedWorkspace();
-  return result;
+  try {
+    if (!localTestMode && supabaseClient) {
+      if (typeof persistStructuredCareLogAtomic !== "function") throw Error("Reload the app before saving care.");
+      return await persistStructuredCareLogAtomic(log);
+    }
+    const structuredCareLogs = [log, ...structuredCareLogsForDate(date)];
+    const result = await saveDailyWorkPayload(dailyWorkPayload(date, { structuredCareLogs }));
+    if (typeof refreshOwnedWorkspace === "function") refreshOwnedWorkspace();
+    return result;
+  } catch (error) {
+    if (typeof recordTroubleshootingEvent === "function") recordTroubleshootingEvent({operation:"care.submit", dogId:log.dogId, careType:log.careType, workDate:date, recordId:log.id, error});
+    throw error;
+  }
 }
 
 async function completeDailyTaskRemote(completion = {}) {
@@ -5154,6 +5163,7 @@ async function sendPayload(payload, options = {}) {
       modeLabel.textContent = "Save failed";
       showToast(\`Save failed: \${remoteSaveErrorMessage(error)}\`);
     }
+    if (typeof recordTroubleshootingEvent === "function") recordTroubleshootingEvent({operation:"record.save", recordType:payload?.type, recordId:payload?.id, dogId:payload?.type === "ownedDog" ? payload.id : "", error});
     throw error;
   }
 }
