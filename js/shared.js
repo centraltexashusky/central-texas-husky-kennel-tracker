@@ -5117,6 +5117,30 @@ async function boardingPayloadForRemoteWrite(payload = {}) {
   });
 }
 
+// A customer dog can carry staff-assigned member pricing. An upsert runs the
+// INSERT guard before resolving the existing ID, incorrectly rejecting that
+// unchanged pricing. Update an accessible existing row first; only insert when
+// no row matched. The database still enforces ownership and pricing changes.
+async function writeCustomerDogRemoteRow(row) {
+  const execute = async (buildQuery) => {
+    const request = cuddleStayRequest((db) => {
+      const query = buildQuery(db.from("kennel_records"));
+      const signal = remoteRequestAbortSignal();
+      return signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
+    });
+    const result = await withRemoteRequestTimeout(request, "Save");
+    if (result.error) throw result.error;
+    return result;
+  };
+  const updated = await execute((table) => table.update(row)
+    .eq("id", row.id).eq("type", "customerDog").select("id").maybeSingle());
+  if (updated.data?.id === row.id) return updated;
+  if (updated.data) throw new Error("The dog save could not be confirmed. Refresh and try again.");
+  const inserted = await execute((table) => table.insert(row).select("id").single());
+  if (inserted.data?.id !== row.id) throw new Error("The dog save could not be confirmed. Refresh and try again.");
+  return inserted;
+}
+
 async function sendPayload(payload, options = {}) {
   if (localTestMode || !supabaseClient) {
     modeLabel.textContent = localTestMode ? "Local test saved" : "Local saved";
@@ -5151,11 +5175,17 @@ async function sendPayload(payload, options = {}) {
     const now = new Date().toISOString();
     const remotePayload = await boardingPayloadForRemoteWrite(payload);
     const identity = await remoteWriteIdentity(remotePayload);
-    const query = cuddleStayRequest((db) => db.from("kennel_records").upsert(remoteWriteRow(remotePayload, now, identity)));
-    const signal = remoteRequestAbortSignal();
-    const request = signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
-    const { error } = await withRemoteRequestTimeout(request, "Save");
-    if (error) throw error;
+    const row = remoteWriteRow(remotePayload, now, identity);
+    if (remotePayload.type === "customerDog") {
+      // Each of its possible requests owns its timeout and abort signal.
+      await writeCustomerDogRemoteRow(row);
+    } else {
+      const query = cuddleStayRequest((db) => db.from("kennel_records").upsert(row));
+      const signal = remoteRequestAbortSignal();
+      const request = signal && typeof query.abortSignal === "function" ? query.abortSignal(signal) : query;
+      const { error } = await withRemoteRequestTimeout(request, "Save");
+      if (error) throw error;
+    }
     modeLabel.textContent = "Saved";
     return { ok: true };
   } catch (error) {
