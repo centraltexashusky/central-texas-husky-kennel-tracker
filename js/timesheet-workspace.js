@@ -23,14 +23,14 @@ function openPayrollStaffHours(staffKey) {
   const originals = new Map(readRecords('timesheet').filter(r => !r.removed).map(r => [r.id,r]));
   const rows = entries.map(entry => {
     const record = originals.get(entry.id) || {};
-    return `<tr><td data-label="Date">${escapeHtml(payrollWorkDateLabel(entry.date))}</td><td data-label="Clock in">${escapeHtml(formatDateTime(record.clockInTime))}</td><td data-label="Clock out">${escapeHtml(formatDateTime(record.clockOutTime))}</td><td data-label="Hours"><strong>${entry.hours.toFixed(2)}</strong></td><td data-label="Note">${escapeHtml(record.note || '—')}</td></tr>`;
+    return `<tr><td data-label="Date">${escapeHtml(payrollWorkDateLabel(entry.date))}</td><td data-label="Clock in">${escapeHtml(formatDateTime(record.clockInTime))}</td><td data-label="Clock out">${escapeHtml(formatDateTime(record.clockOutTime))}</td><td data-label="Hours"><strong>${entry.hours.toFixed(2)}</strong></td><td data-label="Rate / gross">${payrollMoney(entry.rate)}/hr · ${payrollMoney(entry.total)}<br>${entry.paid?'Paid & locked':'Needs review'}</td><td data-label="Note">${escapeHtml(record.note || '—')}</td></tr>`;
   }).join('');
   showDetailDialog(`${staff.staffName || 'Staff'} · Logged hours`, `<section class="payroll-hours-detail">
     <p class="payroll-hours-range">${escapeHtml(timesheetRangeLabel(range))}</p>
     ${staff.staffEmail ? `<p class="payroll-hours-email">${escapeHtml(staff.staffEmail)}</p>` : ''}
-    <div class="payroll-hours-summary"><div><span>Completed hours</span><strong>${staff.hours.toFixed(2)}</strong></div><div><span>Clock records</span><strong>${entries.length}</strong></div><div><span>Hourly rate</span><strong>${staff.missingRate ? 'Not set' : escapeHtml(staffHourlyRateText({hourlyRate:staff.rate}))}</strong></div><div><span>Estimated gross pay</span><strong>${staff.missingRate ? '—' : payrollMoney(staff.total)}</strong></div></div>
-    <div class="table-wrap"><table class="data-table payroll-hours-table"><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th>Hours</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="payroll-hours-note">Completed clock records only; open and removed entries are excluded. Hours use the saved records, with the same rounding as Payroll Review. Gross pay is before taxes and deductions.</p>
+    <div class="payroll-hours-summary"><div><span>Completed hours</span><strong>${staff.hours.toFixed(2)}</strong></div><div><span>Clock records</span><strong>${entries.length}</strong></div><div><span>Hourly rate</span><strong>${staff.missingRate ? 'Not set' : escapeHtml(payrollRateLabel(staff))}</strong></div><div><span>Estimated gross pay</span><strong>${staff.missingRate ? '—' : payrollMoney(staff.total)}</strong></div></div>
+    <div class="table-wrap"><table class="data-table payroll-hours-table"><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th>Hours</th><th>Rate / gross</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="payroll-hours-note">Completed clock records only; open and removed entries are excluded. Each entry uses its work-date rate; paid entries use the locked payment snapshot. Totals sum the rounded pay of each clock entry. Gross pay is before taxes and deductions.</p>
   </section>`);
 }
 

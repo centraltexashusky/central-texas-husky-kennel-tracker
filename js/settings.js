@@ -1669,6 +1669,7 @@ async function fetchPersistedFinancialLedger() {
 }
 
 async function ensureFinancialProjectionSourcesLoaded(forceRefresh = false) {
+  if (typeof ensurePayrollPaymentsLoaded === "function") await ensurePayrollPaymentsLoaded(forceRefresh);
   const missing = () => FINANCIAL_LEDGER_SOURCE_TYPES.filter((type) => !remoteTypesFullyLoadedInMemory.has(type));
   if (!forceRefresh && !missing().length) return;
   if (remoteLoadPromise) await remoteLoadPromise.catch(() => {});
@@ -3223,7 +3224,8 @@ function settingsUserPopupHtml(user = {}) {
         <label>Name<input type="text" name="name" required value="\${escapeHtml(user.name || "")}" /></label>
         <label>Email<input type="email" name="email" required value="\${escapeHtml(user.email || "")}" /></label>
         <label>Role<select name="role" required><option value="customer" \${user.role === "customer" ? "selected" : ""}>Customer</option><option value="helper" \${user.role === "helper" || user.role === "staff" ? "selected" : ""}>Staff</option><option value="admin" \${user.role === "admin" ? "selected" : ""}>Admin</option></select></label>
-        <label class="settings-user-pay-field" \${showPayrollFields ? "" : "hidden"}>Hourly pay rate<input type="number" name="hourlyRate" min="0" step="0.01" value="\${escapeHtml(staffHourlyRate(user) || "")}" placeholder="Example: 18.50" \${showPayrollFields ? "" : "disabled"} /><small>Used for staff/admin payroll estimates.</small></label>
+        <label class="settings-user-pay-field" \${showPayrollFields ? "" : "hidden"}>Hourly pay rate<input type="number" name="hourlyRate" min="0" step="0.01" value="\${escapeHtml(user.hourlyRate || "")}" placeholder="Example: 18.50" \${showPayrollFields ? "" : "disabled"} /><small>Changing this rate requires an effective date. Paid payroll stays locked.</small></label>
+        <label class="settings-user-effective-field" \${showPayrollFields ? "" : "hidden"}>Rate effective date<input type="date" name="hourlyRateEffectiveDate" min="1900-01-02" value="\${escapeHtml(user.hourlyRateEffectiveDate || payrollToday())}" \${showPayrollFields ? "required" : "disabled"} /></label>
       </div>
       <p class="admin-policy">Customer accounts use regular pricing. Assign member pricing to an individual dog under Boarding Dogs → Dog Info.</p><input type="hidden" name="isMember" value="false" />
       <div class="admin-password-panel">
@@ -3313,6 +3315,10 @@ function syncSettingsUserRoleFields(formEl = activeSettingsUserForm()) {
   const payInput = formEl.elements.namedItem("hourlyRate");
   const showPayrollFields = isStaffRole(roleField?.value || "customer");
   if (payField) payField.hidden = !showPayrollFields;
+  const effectiveField = formEl.querySelector(".settings-user-effective-field");
+  const effectiveInput = formEl.elements.namedItem("hourlyRateEffectiveDate");
+  if (effectiveField) effectiveField.hidden = !showPayrollFields;
+  if (effectiveInput) { effectiveInput.disabled = !showPayrollFields; effectiveInput.required = showPayrollFields; }
   if (payInput) {
     payInput.disabled = !showPayrollFields;
     if (!showPayrollFields) payInput.value = "";

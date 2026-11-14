@@ -1,0 +1,30 @@
+#payrollHistory { margin-top:2rem; border-top:1px solid #d3e0eb; padding-top:1.5rem; }
+.payroll-history-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+.payroll-history-heading h3 { margin:0 0 .5rem; }
+.payroll-history-heading p,.payroll-history-note { color:#4c6680; line-height:1.5; max-width:75ch; }
+.payroll-history-heading button { flex-shrink:0; }
+.payroll-history-table td:first-child span { display:block; font-size:.85em; margin-top:.4rem; }
+.payroll-history-table .button-row { margin-top:.65rem; gap:.5rem; }
+.payroll-history-table button { padding:.55rem .7rem; font-size:.85rem; }
+.payroll-status { display:inline-block; padding:.3rem .6rem; border-radius:1rem; background:#fff2d7; color:#714706; font-size:.8rem; font-weight:700; }
+.payroll-status.is-paid { background:#e0f4eb; color:#136347; }
+.payroll-week-bar { width:100%; min-width:70px; height:7px; background:#edf3f8; border-radius:5px; margin-top:.6rem; overflow:hidden; }
+.payroll-week-bar i,.payroll-week-bar b { display:block; height:100%; background:#1778b4; border-radius:5px; }
+.payroll-week-bar b { background:#21845f; }
+.payroll-rate-history { padding:1rem; border:1px solid #d3e0eb; border-radius:10px; margin-top:1rem; }
+.payroll-rate-history summary { cursor:pointer; font-weight:700; }
+.payroll-rate-history article { padding-top:1rem; }
+.payroll-form-error { color:#ae2424; font-weight:600; }
+.payroll-confirm-total { background:#e9f3fb; border-radius:8px; padding:1rem; }
+.payroll-confirm-total strong { font-size:1.4rem; }
+@media(max-width:760px) {
+ .payroll-history-heading { flex-direction:column; }
+ .payroll-history-table thead { display:none; }
+ .payroll-history-table,.payroll-history-table tbody,.payroll-history-table tr,.payroll-history-table td { display:block; width:100%; }
+ .payroll-history-table tr { margin-bottom:1rem; border:1px solid #d3e0eb; border-radius:10px; padding:.5rem; }
+ .payroll-history-table td { border:0; padding:.6rem; white-space:normal; }
+ #timesheetPayrollPanel .payroll-history-table tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+ #timesheetPayrollPanel .payroll-history-table td:first-child,
+ #timesheetPayrollPanel .payroll-history-table td:last-child { grid-column:1/-1; }
+ #timesheetPage #timesheetPayrollPanel .payroll-history-table td::before { content:attr(data-label); display:block; color:#526b83; font-size:.75rem; margin-bottom:.25rem; }
+}

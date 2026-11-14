@@ -373,8 +373,9 @@ async function saveSettingsUserProfile(extra = {}, formEl = activeSettingsUserFo
     submittedAt: existing?.submittedAt || new Date().toISOString(),
     removed: false,
   };
-  const record = upsertRecord("settingsUser", payload);
+  let record = upsertRecord("settingsUser", payload);
   await sendPayload(record);
+  if (!localTestMode && typeof payrollRefreshStaff === "function") record = await payrollRefreshStaff(record.id);
   if (!localTestMode && supabaseClient && settingsUserPayloadBelongsToCurrentSession(record)) {
     const { error } = await supabaseClient.auth.updateUser({
       data: {

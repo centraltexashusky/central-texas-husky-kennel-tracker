@@ -148,7 +148,7 @@ function timesheetRecordsForRange(range = timesheetActiveRange()) {
 }
 
 function staffHourlyRate(user = {}) {
-  const rate = Number(user.hourlyRate ?? user.payRate ?? user.staffHourlyRate ?? 0);
+  const rate = typeof payrollRateOnDate === "function" ? payrollRateOnDate(user) : Number(user.hourlyRate ?? user.payRate ?? user.staffHourlyRate ?? 0);
   return Number.isFinite(rate) && rate > 0 ? rate : 0;
 }
 
@@ -188,9 +188,9 @@ function payrollSettingsUsers() {
 function staffPayrollUserForRecord(record = {}, users = payrollSettingsUsers()) {
   const recordEmail = normalizeEmail(record.helperEmail || record.staffEmail || "");
   const recordName = normalizeHelperName(record.helperName || record.staffName || "");
-  return users.find((user) => recordEmail && normalizeEmail(user.email) === recordEmail)
-    || users.find((user) => recordName && normalizeHelperName(user.name || "") === recordName)
-    || {};
+  if (recordEmail) return users.find((user) => normalizeEmail(user.email) === recordEmail) || {};
+  const names = users.filter((user) => recordName && normalizeHelperName(user.name || "") === recordName);
+  return names.length === 1 ? names[0] : {};
 }
 
 function staffPayrollRecordsForRange(range = timesheetActiveRange(), options = {}) {
@@ -204,11 +204,12 @@ function staffPayrollRecordsForRange(range = timesheetActiveRange(), options = {
     .filter((record) => Number(record.hours || 0) > 0 && record.clockOutTime)
     .map((record) => {
       const user = staffPayrollUserForRecord(record, users);
-      const rate = staffHourlyRate(user);
-      const hours = Number(record.hours || 0) || 0;
-      const total = payrollRoundToHundredth(hours * rate);
+      const rate = typeof payrollRateOnDate === "function" ? payrollRateOnDate(user, timesheetRecordDate(record)) : staffHourlyRate(user);
+      const hours = payrollRoundToHundredth(record.hours);
+      const total = typeof payrollAmountCents === "function" ? payrollAmountCents(hours,rate)/100 : payrollRoundToHundredth(hours * rate);
       return {
         id: record.id || "",
+        staffId: user.id || "",
         date: timesheetRecordDate(record),
         staffName: record.helperName || user.name || "Staff",
         staffEmail: record.helperEmail || user.email || "",
@@ -218,6 +219,7 @@ function staffPayrollRecordsForRange(range = timesheetActiveRange(), options = {
         missingRate: !rate,
       };
     })
+    .map((entry) => typeof payrollApplyPaidSnapshot === "function" ? payrollApplyPaidSnapshot(entry) : entry)
     .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.staffName || "").localeCompare(String(b.staffName || "")));
 }
 
@@ -231,11 +233,14 @@ function staffPayrollSummaryForRange(range = timesheetActiveRange(), options = {
       staffEmail: entry.staffEmail,
       hours: 0,
       rate: entry.rate,
+      rates: [],
       total: 0,
       missingRate: false,
       shifts: 0,
     };
     existing.hours += entry.hours;
+    existing.total += entry.total;
+    if (!existing.rates.includes(entry.rate)) existing.rates.push(entry.rate);
     existing.rate = entry.rate || existing.rate;
     existing.missingRate = existing.missingRate || entry.missingRate;
     existing.shifts += 1;
@@ -244,7 +249,7 @@ function staffPayrollSummaryForRange(range = timesheetActiveRange(), options = {
   const staff = [...byStaff.values()]
     .map((item) => {
       const hours = payrollRoundToHundredth(item.hours);
-      const total = payrollRoundToHundredth(hours * Number(item.rate || 0));
+      const total = payrollRoundToHundredth(item.total);
       return { ...item, hours, total };
     })
     .sort((a, b) => String(a.staffName || "").localeCompare(String(b.staffName || "")));
@@ -447,6 +452,7 @@ function timesheetEditFormHtml(record = {}) {
 }
 
 function openTimesheetEditPopup(record = {}) {
+  if (typeof payrollPaidItem === "function" && payrollPaidItem(record.id)) { showToast("This clock entry belongs to paid payroll and is locked."); return; }
   showDetailDialog("Edit Timesheet", timesheetEditFormHtml(record));
 }
 
@@ -470,6 +476,7 @@ async function removeTimesheetEntryById(id = "") {
     showToast("Admin access required to delete a timesheet entry.");
     return null;
   }
+  if (typeof payrollPaidItem === "function" && payrollPaidItem(id)) throw new Error("This clock entry belongs to paid payroll and is locked.");
   const removed = await markRecordRemoved("timesheet", id);
   if (!removed) return null;
   await addAuditLog("Deleted timesheet", "timesheet", removed, \`\${removed.helperName || "Staff"} | \${removed.date || ""}\`);
@@ -1595,6 +1602,7 @@ function renderPayrollTab() {
   if (currentRole() !== "admin") {
     summary.innerHTML = "";
     rows.innerHTML = "";
+    if (typeof renderPayrollHistory === "function") renderPayrollHistory();
     return;
   }
 
@@ -1611,11 +1619,12 @@ function renderPayrollTab() {
     ? payroll.staff.map((item) => \`<tr\${item.missingRate ? ' class="payroll-rate-missing"' : ""}>
         <td><button type="button" class="payroll-staff-link" data-payroll-staff="\${escapeHtml(normalizeEmail(item.staffEmail) || normalizeHelperName(item.staffName))}" aria-haspopup="dialog" aria-label="View logged hours for \${escapeHtml(item.staffName || "Staff")}"><strong>\${escapeHtml(item.staffName || "Staff")}</strong>\${item.staffEmail ? \`<span>\${escapeHtml(item.staffEmail)}</span>\` : ""}</button></td>
         <td>\${escapeHtml(item.hours.toFixed(2))}</td>
-        <td>\${item.missingRate ? '<strong class="service-warning-text">Rate not set</strong>' : escapeHtml(staffHourlyRateText({ hourlyRate: item.rate }))}</td>
+        <td>\${item.missingRate ? '<strong class="service-warning-text">Rate not set</strong>' : escapeHtml(typeof payrollRateLabel === "function" ? payrollRateLabel(item) : staffHourlyRateText({ hourlyRate: item.rate }))}</td>
         <td><strong>\${item.missingRate ? "—" : escapeHtml(payrollMoney(item.total || 0))}</strong></td>
         <td>\${escapeHtml(String(item.shifts || 0))}</td>
       </tr>\`).join("")
     : '<tr><td colspan="5">No completed clock records for this date range.</td></tr>';
+  if (typeof renderPayrollHistory === "function") renderPayrollHistory();
 }
 
 function scheduleShiftFormHtml(record = {}) {
