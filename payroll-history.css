@@ -17,12 +17,30 @@
 .payroll-form-error { color:#ae2424; font-weight:600; }
 .payroll-confirm-total { background:#e9f3fb; border-radius:8px; padding:1rem; }
 .payroll-confirm-total strong { font-size:1.4rem; }
+.payroll-bulk-toolbar { background:#f0f6fb; border:1px solid #cbddeb; border-radius:10px; padding:1rem; margin:1rem 0; }
+.payroll-bulk-toolbar small { display:block; color:#4c6680; margin:.5rem 0; line-height:1.5; }
+.payroll-bulk-toolbar .button-row { flex-wrap:wrap; }
+.payroll-bulk-choice { margin-bottom:.7rem; font-size:.85rem; }
+.payroll-bulk-choice input { width:18px; height:18px; }
+.payroll-bulk-common { border:1px solid #cbddeb; border-radius:8px; padding:1rem; }
+.payroll-bulk-common small { display:block; margin-top:.5rem; }
+.payroll-bulk-review-list { display:grid; gap:1rem; }
+.payroll-bulk-review-week { border:1px solid #cbddeb; border-radius:8px; padding:1rem; min-width:0; }
+.payroll-bulk-review-week h3 { margin:.2rem 0; }
+.payroll-bulk-review-week summary { cursor:pointer; padding:.6rem 0; font-weight:600; }
 @media(max-width:760px) {
  .payroll-history-heading { flex-direction:column; }
  .payroll-history-table thead { display:none; }
  .payroll-history-table,.payroll-history-table tbody,.payroll-history-table tr,.payroll-history-table td { display:block; width:100%; }
  .payroll-history-table tr { margin-bottom:1rem; border:1px solid #d3e0eb; border-radius:10px; padding:.5rem; }
  .payroll-history-table td { border:0; padding:.6rem; white-space:normal; }
+ #detailDialog .payroll-snapshot-table { display:block; min-width:0!important; width:100%; }
+ #detailDialog .payroll-snapshot-table thead { display:none; }
+ #detailDialog .payroll-snapshot-table tbody { display:grid; gap:.5rem; }
+ #detailDialog .payroll-snapshot-table tr { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; padding:.75rem; }
+ #detailDialog .payroll-snapshot-table td { display:block; padding:0; border:0; white-space:normal; }
+ #detailDialog .payroll-snapshot-table td:first-child { grid-column:1/-1; }
+ #detailDialog .payroll-snapshot-table td::before { content:attr(data-label); display:block; font-size:.75rem; color:#526b83; margin-bottom:.2rem; }
  #timesheetPayrollPanel .payroll-history-table tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
  #timesheetPayrollPanel .payroll-history-table td:first-child,
  #timesheetPayrollPanel .payroll-history-table td:last-child { grid-column:1/-1; }
