@@ -841,6 +841,7 @@ function renderAdminBoardingRequestEmail(
             <tr>
               <td style="padding:20px 24px;">
                 <div style="font-family:Georgia,'Times New Roman',serif;color:#9a6815;font-size:18px;font-weight:700;">Media links</div>
+                <p style="font-size:14px;line-height:1.5;color:#344054;">Sign in, then open request ${emailValue(details.requestId)} for ${emailValue(details.dogs)} and select Customer Uploaded Files to view photos and files.</p>
                 ${mediaLinksButtonListHtml(mediaLines)}
               </td>
             </tr>
@@ -1017,6 +1018,7 @@ function renderAdminBoardingRequestEmail(
     `Email: ${emailTextValue(details.email)}`,
     `Phone: ${emailTextValue(details.phone)}`,
     `Dogs: ${emailTextValue(details.dogs)}`,
+    `Request code: ${emailTextValue(details.requestId)}`,
     `Drop-off: ${formatEmailDateTimeText(details.dropOff)}`,
     `Pick-up: ${formatEmailDateTimeText(details.pickUp)}`,
     serviceLines.length ? "Requested services:" : "",
@@ -1761,7 +1763,12 @@ async function notificationContent(adminClient: ReturnType<typeof createClient>,
   }
   if (eventName === "customerBoardingRequestCreated" || eventName === "customerBoardingRequestUpdated") {
     const action = eventName.endsWith("Updated") ? "updated" : "submitted";
-    const media = await recordMediaLines(adminClient, record);
+    // Boarding attachments are private. Email must not publish stored public URLs
+    // or bearer links; the signed-in app resolves media through media-access.
+    const media: MediaEmailLink[] = [{
+      label: "Click here to view photos and files in Cuddle Stay (sign in required)",
+      url: appLink("#boardingDogsPage"),
+    }];
     const requestType = requestTypeLabel(record, stay);
     const serviceLines = requestServiceLines(record, stay);
     const adminTo = audienceEmails.length ? audienceEmails : adminEmails();
