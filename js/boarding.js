@@ -6829,6 +6829,7 @@ function openBoardingDog(record = {}) {
   if (typeof setupBoardingWorkspace === "function") setupBoardingWorkspace(record);
   setBoardingDogActiveTab(record.id ? "Boarding & Request" : "Dog Info");
   setBoardingFormLocked(false);
+  renderBoardingPhotoAutosaveState();
 }
 
 function openBoardingDogToTab(record = {}, tabName = "Boarding & Request") {

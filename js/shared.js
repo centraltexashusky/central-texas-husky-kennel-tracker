@@ -14984,7 +14984,7 @@ function initEvents() {
   $("#boardingDogForm").elements.spayNeuterStatus?.addEventListener("change", (event) => {
     syncDogPhotoSexClass($("#boardingDogPhotoPicker"), { spayNeuterStatus: event.target.value || "" });
   });
-  $("#boardingDogPhotoInput").addEventListener("change", async () => previewSelectedDogPhoto("boarding"));
+  $("#boardingDogPhotoInput").addEventListener("change", async () => autoSaveBoardingDogPhoto());
   $("#addBoardingCustomerUpdateButton")?.addEventListener("click", (...args) => addBoardingCustomerUpdate(...args));
   $("#uploadBoardingDogFilesButton")?.addEventListener("click", async () => {
     const dog = activeBoardingDog({ raw: true }) || activeBoardingDog();
@@ -15263,6 +15263,10 @@ function initEvents() {
   $("#boardingDogForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const formEl = event.currentTarget;
+    if (boardingPhotoSavePending()) {
+      showToast("Please wait for the photo to finish saving.");
+      return;
+    }
     if (formEl.dataset.boardingDogSubmitting === "true") {
       showToast("Boarding dog save is already processing.");
       return;

@@ -266,3 +266,10 @@ body:not(.is-login-view) #boardingDogDetail.boarding-workspace:not([hidden]) {
   .boarding-card-payment-status { grid-column: 1 / -1; }
   .boarding-card-payments > div:not(.boarding-card-payment-status) .boarding-roster-label { min-height: 2.8em; }
 }
+/* Photo feedback belongs in the persistent profile header, above every tab. */
+.boarding-photo-status { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin-top:6px; font-size:13px; line-height:1.4; max-width:600px; overflow-wrap:anywhere; }
+.boarding-photo-status[hidden], .boarding-photo-status button[hidden] { display:none !important; }
+.boarding-photo-status[data-state="success"] { color:#126347; font-weight:700; }
+.boarding-photo-status[data-state="error"] { color:#a01e25; background:#fff0f0; border:1px solid #e8a6aa; border-radius:6px; padding:7px 9px; }
+.boarding-photo-status button { padding:5px 8px; font-size:12px; }
+#boardingDogDetail.boarding-workspace .boarding-profile-editor > div { min-width:0; }
