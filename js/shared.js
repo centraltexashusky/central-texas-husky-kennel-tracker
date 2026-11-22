@@ -16019,12 +16019,26 @@ function initEvents() {
     renderFinancials();
   });
   $("#financialTransactionsBody")?.addEventListener("click", async (event) => {
-    const action = event.target.closest("[data-action]");
-    if (!action) return;
-    const entry = financialEditableEntry(action.dataset.key || "");
-    if (!entry) return;
-    if (action.dataset.action === "edit-financial-transaction") openFinancialTransactionDialog(entry);
-    if (action.dataset.action === "delete-financial-transaction") await deleteFinancialTransaction(entry);
+    const row = event.target.closest("tr[data-financial-transaction-key]");
+    if (!row || currentRole() !== "admin") return;
+    const action = event.target.closest("button[data-action]");
+    if (!action && window.getSelection()?.isCollapsed === false) return;
+    const key = row.dataset.financialTransactionKey;
+    let entry = financialEditableEntry(key);
+    if (!entry && remoteLoadPromise) {
+      await remoteLoadPromise.catch(() => {});
+      if (activePageId() !== "financialsPage") return;
+      entry = financialEditableEntry(key);
+    }
+    if (!entry?.editable) {
+      showToast("This transaction could not be loaded. Refresh Financials and try again.");
+      return;
+    }
+    if (action?.dataset.action === "delete-financial-transaction") {
+      await deleteFinancialTransaction(entry);
+      return;
+    }
+    openFinancialTransactionDialog(entry);
   });
 
   $("#settingsUserForm")?.addEventListener("submit", async (event) => {

@@ -22360,6 +22360,34 @@ button.dog-show-planner-score:focus-visible {
   vertical-align: top;
 }
 
+.financial-transactions-table tbody tr {
+  cursor: default;
+}
+
+.financial-transactions-table tbody tr[data-financial-transaction-key] {
+  cursor: pointer;
+}
+
+.financial-transactions-table .financial-transaction-date {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  min-height: 32px;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.financial-transactions-table .financial-transaction-date:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
 .financial-transactions-table .financial-category-cell {
   min-width: 170px;
 }
