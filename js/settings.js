@@ -2117,11 +2117,16 @@ function financialSortedTransactions(entries = []) {
 
 function financialTransactionRowHtml(entry = {}) {
   const isIncome = entry.entryType === "income";
-  const actions = entry.editable
-    ? '<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-financial-transaction" data-key="' + escapeHtml(entry.key || "") + '">Edit</button><button type="button" class="secondary-button danger-button" data-action="delete-financial-transaction" data-key="' + escapeHtml(entry.key || "") + '">Delete</button></div>'
+  const editable = entry.editable && entry.key;
+  const date = financialShortDateLabel(entry.date) + ", " + String(entry.date || "").slice(0, 4);
+  const dateCell = editable
+    ? '<button type="button" class="financial-transaction-date" data-action="edit-financial-transaction" aria-label="' + escapeHtml("Edit transaction · " + date + " · " + (entry.description || "Transaction")) + '">' + escapeHtml(date) + '</button>'
+    : '<strong>' + escapeHtml(date) + '</strong>';
+  const actions = editable
+    ? '<div class="record-actions"><button type="button" class="secondary-button" data-action="edit-financial-transaction">Edit</button><button type="button" class="secondary-button danger-button" data-action="delete-financial-transaction">Delete</button></div>'
     : '<span class="financial-calculated-label">Calculated</span>';
-  return '<tr>'
-    + '<td><strong>' + escapeHtml(financialShortDateLabel(entry.date) + ", " + String(entry.date || "").slice(0, 4)) + '</strong></td>'
+  return (editable ? '<tr data-financial-transaction-key="' + escapeHtml(entry.key) + '">' : '<tr>')
+    + '<td>' + dateCell + '</td>'
     + '<td><span class="financial-type-chip is-' + (isIncome ? "income" : "expense") + '">' + (isIncome ? "Income" : "Expense") + '</span></td>'
     + '<td><strong>' + escapeHtml(entry.businessArea || "General") + '</strong></td>'
     + '<td class="financial-category-cell"><strong>' + escapeHtml(entry.category || "Uncategorized") + '</strong></td>'
@@ -2242,7 +2247,8 @@ async function saveFinancialTransaction(form) {
       const event = readRecords("showEvent").find((candidate) => candidate.id === eventId && !candidate.removed);
       if (!event) throw new Error("Choose an active Dog Show for this transaction.");
       const existingTransactions = Array.isArray(event.expenses) ? event.expenses : [];
-      const existing = existingTransactions.find((candidate) => candidate.id === data.sourceTransactionId);
+      const existing = data.sourceTransactionId && existingTransactions.find((candidate) => candidate?.id === data.sourceTransactionId && !candidate.removed);
+      if (data.sourceType === "showEvent" && !existing) throw new Error("This transaction is no longer available. Refresh Financials and try again.");
       const transaction = {
         ...(existing || {}),
         ...common,
@@ -2257,7 +2263,8 @@ async function saveFinancialTransaction(form) {
       upsertRecord("showEvent", saved);
       addAuditLog(existing ? "Updated Dog Show transaction" : "Added Dog Show transaction", "showEvent", event, common.description + " · " + money(amount)).catch((error) => console.warn("Financial audit log failed.", error));
     } else {
-      const existing = data.recordId ? readRecords("financialTransaction").find((candidate) => candidate.id === data.recordId) || {} : {};
+      const existing = data.recordId ? readRecords("financialTransaction").find((candidate) => candidate.id === data.recordId && !candidate.removed) : {};
+      if (!existing) throw new Error("This transaction is no longer available. Refresh Financials and try again.");
       const record = {
         ...existing,
         ...common,
