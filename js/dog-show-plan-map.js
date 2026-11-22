@@ -1,4 +1,4 @@
-const MAP_ASSET = new URL("../assets/show-plan-map.json?v=2026-11", import.meta.url);
+const MAP_ASSET = new URL("../assets/show-plan-map.json?v=2026-11-city-v2", import.meta.url);
 const FULL_MAP = [0, 0, 900, 540];
 const INSETS = [["AK", 20, 535], ["HI", 207, 535], ["PR", 790, 535]];
 const SMALL_STATES = new Set(["CT", "DC", "DE", "MA", "MD", "NH", "NJ", "RI", "VT"]);
@@ -19,14 +19,16 @@ function placeKey(value) {
 export function locateShowOnMap(show, geography) {
   const { states, cities, zips } = geography;
   const research = show.plannerMetadata || {};
-  const labels = [show.cityState, show.venueAddress, show.venue, research.cityState, research.venueAddress]
-    .map(value => String(value || "").trim()).filter(Boolean);
+  const labels = [
+    [show.cityState, "city"], [show.venueAddress, "address"],
+    [research.cityState, "city"], [research.venueAddress, "address"], [show.venue, "venue"],
+  ].map(([value, kind]) => [String(value || "").trim(), kind]).filter(([value]) => value);
   const names = Object.entries(states).sort(([, a], [, b]) => b.name.length - a.name.length);
   const explicitState = String(show.state || research.state || "").trim();
   const explicitCode = Object.hasOwn(states, explicitState.toUpperCase()) ? explicitState.toUpperCase()
     : names.find(([, area]) => area.name.toLowerCase() === explicitState.toLowerCase())?.[0];
   let fallback;
-  for (const label of labels) {
+  for (const [label, kind] of labels) {
     const address = label.replace(/[,\s]+(?:United States(?: of America)?|USA|US)\.?$/i, "").trim();
     const zipMatch = address.match(/(?:^|[\s,])(\d{5})(?:-\d{4})?\s*$/);
     const withoutZip = (zipMatch ? address.slice(0, zipMatch.index) : address).trim().replace(/[,\s]+$/, "");
@@ -41,12 +43,14 @@ export function locateShowOnMap(show, geography) {
       ? [code, withoutZip.slice(0, codeMatch.index)]
       : fullState
       ? [fullState[0], withoutZip.slice(0, -fullState[1].name.length)]
-      : [fallback || explicitCode, withoutZip];
+      : [kind === "venue" ? "" : fallback || explicitCode, withoutZip];
     if (!stateCode || (fallback && stateCode !== fallback)) continue;
 
     const words = cityText.split(/[\s,]+/).filter(Boolean);
     const stateCities = cities[stateCode] || {};
-    for (let offset = 0; offset < words.length; offset += 1) {
+    const hasStreet = kind === "address" && /\d/.test(cityText);
+    const attempts = hasStreet ? words.length : Math.min(words.length, 1);
+    for (let offset = 0; offset < attempts; offset += 1) {
       const city = stateCities[placeKey(words.slice(offset).join(" "))];
       if (city) return { state: stateCode, point: city.slice(1), label: city[0] + ", " + stateCode, precision: "City" };
     }
@@ -64,7 +68,7 @@ export function locateShowOnMap(show, geography) {
   const stateCode = fallback || explicitCode;
   return stateCode
     ? { state: stateCode, point: states[stateCode].point, label: states[stateCode].name, precision: "State only" }
-    : { state: "", point: null, label: labels[0] || "No location saved", precision: "Unmapped" };
+    : { state: "", point: null, label: labels[0]?.[0] || "No location saved", precision: "Unmapped" };
 }
 
 function mapViewBox(state) {
