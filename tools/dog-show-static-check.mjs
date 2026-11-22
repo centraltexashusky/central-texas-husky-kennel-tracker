@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
-import { canRemoveFromShowPlan, locateShowOnMap, showPlanStages } from "../js/dog-show-plan-map.js";
+import { canRemoveFromShowPlan, locateShowOnMap, panShowMap, showPlanStages, zoomShowMap } from "../js/dog-show-plan-map.js";
 
 const read = (path) => fs.readFileSync(path, "utf8");
 
@@ -547,6 +547,11 @@ const plannerPointScheduleHtmlSource = dogShowSource.slice(dogShowSource.indexOf
 if (!plannerPointScheduleHtmlSource.includes('<details class="dog-show-plan-point-schedule') || !plannerPointScheduleHtmlSource.includes("<summary>")) failures.push("Planner point schedules must render as collapsed details controls.");
 assert.deepEqual([...showPlanStages.keys()], ["Active", "Going", "Going To", "Potential Plan", "Completed"]);
 assert.deepEqual([...showPlanStages.keys()].filter(canRemoveFromShowPlan), ["Going", "Going To", "Potential Plan"]);
+const baseMap = [0, 0, 900, 540];
+assert.deepEqual(zoomShowMap(baseMap, baseMap, 2, 0.25, 0.75), [112.5, 202.5, 450, 270]);
+assert.deepEqual(panShowMap(baseMap, [112.5, 202.5, 450, 270], -300, 600), [0, 270, 450, 270]);
+assert.deepEqual(zoomShowMap(baseMap, [112.5, 202.5, 450, 270], 0.1), baseMap);
+assert.equal(zoomShowMap(baseMap, baseMap, 99)[2], baseMap[2] / 8);
 const geography = JSON.parse(read("assets/show-plan-map.json"));
 assert.equal(Object.keys(geography.states).length, 52);
 assert.equal(locateShowOnMap({ venueAddress: "15210 Hwy 205, Terrell, TX" }, geography).label, "Terrell, TX");
