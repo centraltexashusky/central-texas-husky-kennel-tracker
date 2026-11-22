@@ -1,4 +1,6 @@
 import fs from "node:fs";
+import assert from "node:assert/strict";
+import { canRemoveFromShowPlan, locateShowOnMap, showPlanStages } from "../js/dog-show-plan-map.js";
 
 const read = (path) => fs.readFileSync(path, "utf8");
 
@@ -215,7 +217,6 @@ const required = [
   ["js/dog-show.js", 'class="dog-show-plan-point-schedule-content"', "Collapsed point schedules are missing their expandable content."],
   ["js/dog-show.js", "Counts for 1–5 points · Group points excluded.", "Lifecycle point schedules do not explain their thresholds."],
   ["js/dog-show.js", 'aria-label="${points[index]} point requires ${count} dogs"', "Compact lifecycle point thresholds are not individually labeled."],
-  ["js/dog-show.js", '"Active", "Going", "Going To", "Potential Plan", "Completed"', "The show lifecycle board is missing one or more required stages."],
   ["js/dog-show.js", 'status === dogShowPlannerStage ? "" : " hidden"', "Only the selected lifecycle stage should be visible."],
   ["js/dog-show.js", 'Going To — Planned', "Show Setup is missing the planned attendance status."],
   ["js/dog-show.js", 'Going — Booked/Paid', "Show Setup is missing the booked and paid attendance status."],
@@ -544,6 +545,16 @@ for (const [division, dogs, bitches] of official2026SiberianHuskySchedules) {
 }
 const plannerPointScheduleHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerPointScheduleHtml"), dogShowSource.indexOf("function dogShowPlannerEventPlanHtml"));
 if (!plannerPointScheduleHtmlSource.includes('<details class="dog-show-plan-point-schedule') || !plannerPointScheduleHtmlSource.includes("<summary>")) failures.push("Planner point schedules must render as collapsed details controls.");
+assert.deepEqual([...showPlanStages.keys()], ["Active", "Going", "Going To", "Potential Plan", "Completed"]);
+assert.deepEqual([...showPlanStages.keys()].filter(canRemoveFromShowPlan), ["Going", "Going To", "Potential Plan"]);
+const geography = JSON.parse(read("assets/show-plan-map.json"));
+assert.equal(Object.keys(geography.states).length, 52);
+assert.equal(locateShowOnMap({ venueAddress: "15210 Hwy 205, Terrell, TX" }, geography).label, "Terrell, TX");
+assert.equal(locateShowOnMap({ venueAddress: "89-195 Farrington Hwy, Waianae HI 96792" }, geography).state, "HI");
+assert.equal(locateShowOnMap({ cityState: "Portland", state: "Maine" }, geography).label, "Portland, ME");
+assert.equal(locateShowOnMap({ venueAddress: "Unknown location, TX 76513" }, geography).precision, "ZIP area");
+assert.equal(locateShowOnMap({ state: "Washington" }, geography).precision, "State only");
+assert.equal(locateShowOnMap({ venueAddress: "Venue to be announced" }, geography).point, null);
 const plannerEventPlanHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerEventPlanHtml"), dogShowSource.indexOf("function dogShowPlannerVisibleCandidates"));
 if (!plannerEventPlanHtmlSource.includes('lifecycleStatus === "Completed"') || !plannerEventPlanHtmlSource.includes("dog-show-plan-completed-results")) failures.push("Completed shows do not render a compact date, attendee, and results history card.");
 if (!plannerEventPlanHtmlSource.includes("dogShowAppearanceResultsAll()") || !plannerEventPlanHtmlSource.includes("Dogs who went")) failures.push("Completed show history does not preserve attendees and appearance results.");
