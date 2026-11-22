@@ -7,6 +7,8 @@ import {
 import { createRegistrationWorkspace, registrationStatusForEntry } from "./dog-show-registration.js?v=20261005-collapsible-registration-profile-1";
 import { createRegistrationStore } from "./dog-show-registration-store.js?v=20261003-registration-1";
 
+import { canRemoveFromShowPlan, createDogShowPlanMap, showPlanStages } from "./dog-show-plan-map.js?v=show-plan-map-v1";
+
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
 const DOG_SHOW_EVENT_KEY = "cth-dog-show-active-event";
@@ -3538,9 +3540,134 @@ function dogShowPlannerVisibleCandidates(potentialShows = dogShowPlannerCandidat
   });
 }
 
+function dogShowPlanMapOwner() {
+  return currentUser && isStaffRole() ? accountSessionKey(currentUser) : "";
+}
+
+function dogShowPlanMapEntries() {
+  if (!dogShowPlanMapOwner()) return [];
+  const events = dogShowEvents();
+  const rows = events.map(show => ({ show, id: show.id, type: "showEvent", stage: dogShowPlannerLifecycleStatus(show) }));
+  for (const candidate of dogShowPlannerVisibleCandidates(dogShowPlannerCandidates(), events)) {
+    rows.push({ show: candidate.show || {}, id: candidate.id, type: "showResult", stage: "Potential Plan" });
+  }
+  return rows.filter(entry => entry.id).map(entry => ({
+    ...entry,
+    name: entry.show.name || entry.show.club || "Dog Show",
+    dateLabel: dogShowPlannerDateRange(entry.show),
+    removable: canRemoveFromShowPlan(entry.stage),
+  })).sort((a, b) => String(a.show.startDate || "").localeCompare(String(b.show.startDate || ""))
+    || a.name.localeCompare(b.name));
+}
+
+function dogShowPlanRemovalMatches(row, entry) {
+  return row?.type === entry.type && row.payload && !row.payload.removed && (entry.type === "showResult"
+    ? row.payload?.recordKind === DOG_SHOW_PLANNER_CANDIDATE_KIND
+    : canRemoveFromShowPlan(dogShowPlannerLifecycleStatus(row.payload)));
+}
+
+async function reviewDogShowPlanRemoval(ids, button) {
+  const owner = dogShowPlanMapOwner();
+  if (!owner || button.disabled) return;
+  const selected = new Set(ids);
+  const entries = dogShowPlanMapEntries().filter(entry => entry.removable && selected.has(entry.id));
+  if (!entries.length || entries.length !== selected.size) return showToast("The show plan changed. Review your selection again.");
+  button.disabled = true;
+  try {
+    let rows;
+    if (localTestMode) {
+      rows = entries.map(entry => ({ id: entry.id, type: entry.type, payload: readRecords(entry.type).find(record => record.id === entry.id) }));
+    } else {
+      if (!supabaseClient) throw new Error("Connect to Snuggle Stay before removing shows.");
+      const { data, error } = await withRemoteRequestTimeout(cuddleStayRequest(db => db.from("kennel_records")
+        .select("id,type,payload,updated_at").in("id", entries.map(entry => entry.id))), "Review shows");
+      if (error) throw error;
+      rows = data || [];
+    }
+    if (owner !== dogShowPlanMapOwner() || !button.isConnected || !dogShowPlanMap.isOpen() || dogShowView !== "planner") return;
+    const byId = new Map(rows.map(row => [row.id, row]));
+    if (!entries.every(entry => dogShowPlanRemovalMatches(byId.get(entry.id), entry))) {
+      throw new Error("A selected show changed or was removed. Refresh Show Plan and review your selection again.");
+    }
+    const label = entries.length + (entries.length === 1 ? " show" : " shows");
+    const review = entries.map(entry => {
+      const row = byId.get(entry.id);
+      const show = row.type === "showResult" ? row.payload.show || {} : row.payload;
+      const stage = row.type === "showResult" ? "Potential Plan" : dogShowPlannerLifecycleStatus(show);
+      return `<li><strong>${escapeHtml(show.name || show.club || "Dog Show")}</strong><span>${escapeHtml([dogShowPlannerDateRange(show), show.cityState || show.venueAddress, showPlanStages.get(stage)].filter(Boolean).join(" · "))}</span></li>`;
+    }).join("");
+    openDogShowDialog("Remove " + label + " from Show Plan?", `<form id="dogShowPlanRemoveForm" class="tracker-form">
+      <p>These shows will be removed from Snuggle Stay’s schedule or potential list. Saved records are retained. Any official registration changes go through the show organizer.</p>
+      <ul class="show-map-review-list">${review}</ul>
+      <p class="show-map-review-error" role="alert" hidden></p>
+      <div class="button-row"><button type="submit" class="secondary-button danger-button">Remove ${label}</button><button type="button" class="secondary-button" data-action="close-show-dialog" autofocus>Cancel</button></div>
+    </form>`);
+    document.getElementById("dogShowPlanRemoveForm")?.addEventListener("submit", event => {
+      event.preventDefault();
+      void saveDogShowPlanRemoval(event.currentTarget, entries, rows, owner);
+    });
+  } catch (error) {
+    if (owner === dogShowPlanMapOwner()) showToast(remoteSaveErrorMessage(error));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function saveDogShowPlanRemoval(form, entries, reviewedRows, owner) {
+  const button = form.querySelector('button[type="submit"]');
+  const feedback = form.querySelector(".show-map-review-error");
+  if (!owner || owner !== dogShowPlanMapOwner() || button.disabled) return;
+  button.disabled = true;
+  feedback.hidden = true;
+  try {
+    let saved;
+    if (localTestMode) {
+      const latest = entries.map(entry => ({ ...entry, payload: readRecords(entry.type).find(record => record.id === entry.id) }));
+      if (latest.some((row, index) => !dogShowPlanRemovalMatches(row, entries[index])
+        || JSON.stringify(row.payload) !== JSON.stringify(reviewedRows[index].payload))) {
+        throw new Error("A selected show changed. Review your selection again.");
+      }
+      const now = new Date().toISOString();
+      saved = latest.map(row => ({ ...row.payload, type: row.type, id: row.id, removed: true, removedAt: now, updatedAt: now }));
+    } else {
+      const { data, error } = await withRemoteRequestTimeout(cuddleStayRequest(db => db.rpc("bulk_remove_show_plan_items", {
+        p_entries: reviewedRows.map(({ id, type, updated_at }) => ({ id, type, updated_at })),
+      })), "Remove shows");
+      if (error) throw error;
+      saved = data;
+    }
+    if (owner !== dogShowPlanMapOwner()) return;
+    const expected = new Map(entries.map(entry => [entry.id, entry.type]));
+    if (!Array.isArray(saved) || saved.length !== expected.size
+      || saved.some(row => !row?.removed || expected.get(row.id) !== row.type || !expected.delete(row.id))) {
+      throw new Error("The removal could not be verified. Refresh Show Plan before trying again.");
+    }
+    saved.forEach(row => upsertRecord(row.type, row));
+    if (saved.some(row => row.id === localStorage.getItem(DOG_SHOW_EVENT_KEY))) localStorage.removeItem(DOG_SHOW_EVENT_KEY);
+    dogShowPlanMap.clearSelection();
+    form.closest("dialog")?.close();
+    renderDogShow();
+    if (typeof renderNotifications === "function") renderNotifications();
+    showToast(saved.length === 1 ? "Show removed from the plan." : saved.length + " shows removed from the plan.");
+  } catch (error) {
+    if (owner === dogShowPlanMapOwner()) {
+      feedback.textContent = error?.code === "REMOTE_REQUEST_TIMEOUT" || error?.name === "AbortError"
+        ? "The removal could not be confirmed. Refresh Show Plan before trying again."
+        : remoteSaveErrorMessage(error);
+      feedback.hidden = false;
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+const dogShowPlanMap = createDogShowPlanMap({
+  escapeHtml, readEntries: dogShowPlanMapEntries, ownerKey: dogShowPlanMapOwner, reviewSelection: reviewDogShowPlanRemoval,
+});
+
 function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlannerRecord()) {
   const events = dogShowEvents();
-  const groups = new Map(["Active", "Going", "Going To", "Potential Plan", "Completed"].map((status) => [status, []]));
+  const groups = new Map([...showPlanStages.keys()].map(status => [status, []]));
   events.forEach((event) => {
     const status = dogShowPlannerLifecycleStatus(event);
     groups.get(status).push({ kind: "event", event });
@@ -3549,7 +3676,8 @@ function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlann
     .forEach((candidate) => groups.get("Potential Plan").push({ kind: "potential", candidate }));
   const itemCount = [...groups.values()].reduce((sum, items) => sum + items.length, 0);
   if (!itemCount) return "";
-  const groupHtml = [...groups.entries()].map(([status, items]) => {
+  const mapOpen = dogShowPlanMap.isOpen();
+  const groupHtml = mapOpen ? "" : [...groups.entries()].map(([status, items]) => {
     const sorted = [...items].sort((left, right) => {
       const leftDate = left.event?.startDate || left.candidate?.show?.startDate || "";
       const rightDate = right.event?.startDate || right.candidate?.show?.startDate || "";
@@ -3557,7 +3685,13 @@ function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlann
     });
     return `<section class="dog-show-plan-stage is-${status.toLowerCase().replace(/\s+/g, "-")}"${status === dogShowPlannerStage ? "" : " hidden"}><div>${sorted.length ? sorted.map((item) => item.kind === "event" ? dogShowPlannerEventPlanHtml(item.event, status, planner) : dogShowPlannerCandidateHtml(item.candidate, planner)).join("") : `<p class="dog-show-plan-empty">No ${escapeHtml(status.toLowerCase())} shows.</p>`}</div></section>`;
   }).join("");
-  return `<section class="dog-show-plan-board"><header><div><span>SHOW LIFECYCLE</span><h3>Show Plan</h3></div></header><nav class="show-segmented" aria-label="Show plan status">${[...groups].map(([status, items]) => `<button type="button" data-show-plan-stage="${escapeHtml(status)}" aria-pressed="${status === dogShowPlannerStage}">${escapeHtml({Going: "Booked", "Going To": "Planning", "Potential Plan": "Potential"}[status] || status)} <span>${items.length}</span></button>`).join("")}</nav><div class="dog-show-plan-stages">${groupHtml}</div></section>`;
+  return `<section class="dog-show-plan-board">
+    <header><h3>Show Plan</h3><div class="show-segmented" role="group" aria-label="Show Plan view">
+      <button type="button" data-show-plan-view="list" aria-pressed="${!mapOpen}">List</button>
+      <button type="button" data-show-plan-view="map" aria-pressed="${mapOpen}">Map</button>
+    </div></header>
+    ${mapOpen ? '<section id="dogShowPlanMap" aria-label="Show Plan map"></section>' : `<nav class="show-segmented" aria-label="Show plan status">${[...groups].map(([status, items]) => `<button type="button" data-show-plan-stage="${escapeHtml(status)}" aria-pressed="${status === dogShowPlannerStage}">${escapeHtml(showPlanStages.get(status))} <span>${items.length}</span></button>`).join("")}</nav><div class="dog-show-plan-stages">${groupHtml}</div>`}
+  </section>`;
 }
 
 function dogShowPlannerPotentialButtonHtml(show = {}, plan = dogShowPlannerRecord()) {
@@ -4354,6 +4488,7 @@ function renderDogShow() {
     content.querySelector(".dog-show-view")?.insertAdjacentHTML("afterbegin", dogShowResultsNavHtml());
   }
   if (dogShowView === "planner") {
+    dogShowPlanMap.render(document.getElementById("dogShowPlanMap"));
     scheduleDogShowPlannerLazyLoad();
     void refreshDogShowPlannerMetadata();
   }
@@ -5815,6 +5950,7 @@ function setupDogShowEventListeners() {
   if (!page || page.dataset.dogShowBound === "true") return;
   page.dataset.dogShowBound = "true";
   dogShowRegistrationWorkspace.bind();
+  dogShowPlanMap.bind(page);
   const mobileNav = document.getElementById("dogShowMobileNav");
   const dialog = document.getElementById("dogShowDialog");
 
@@ -6031,6 +6167,14 @@ function setupDogShowEventListeners() {
   });
 
   page.addEventListener("click", async (event) => {
+    const planView = event.target.closest("[data-show-plan-view]");
+    if (planView) {
+      const view = planView.dataset.showPlanView;
+      dogShowPlanMap.setOpen(view === "map");
+      renderDogShow();
+      page.querySelector(`[data-show-plan-view="${view}"]`)?.focus({ preventScroll: true });
+      return;
+    }
     const planStage = event.target.closest("[data-show-plan-stage]");
     if (planStage) { dogShowPlannerStage = planStage.dataset.showPlanStage; renderDogShow(); return; }
     const entryResults = event.target.closest('[data-action="show-entry-results"]');
