@@ -24,7 +24,11 @@ for(const field of ['breedJudge','groupJudge','bisJudge','eventNumber','superint
 ctx.dogShowEvents=()=>[saved];await ctx.preserveDogShowPlannerResearch(plan);assert.equal(writes.length,1,'No redundant snapshot write');
 const html=ctx.dogShowPlannerEventPlanHtml(saved,'Going',{shows:[]});
 for(const text of ['is-added-show','Breed Judge Example','Group Judge Example','BIS Judge Example','AKC BREED POINTS','AKC Event','Superintendent','Premium List','Judging Program','Last Year Entries','2026123456','Open Show'])assert(html.includes(text),text);
-const completed=ctx.dogShowPlannerEventPlanHtml(saved,'Completed',{shows:[]});assert(completed.includes('Last Year Entries'));assert(completed.includes('No results recorded'));assert(!completed.includes('Open Show'));
+const actionGroup = /<div class="button-row">\s*<button[^>]*data-action="open-planner-show-event"[^>]*data-event-id="entered-1"[^>]*>Open Show<\/button>\s*<button[^>]*data-action="remove-calendar-show"[^>]*data-event-id="entered-1"[^>]*>Remove from Plan<\/button>/;
+assert.match(html, actionGroup, 'Booked shows offer removal beside Open Show for the same saved event');
+assert.match(ctx.dogShowPlannerEventPlanHtml(saved, 'Going To', {shows:[]}), actionGroup, 'Planning offers the same adjacent controls');
+assert(!ctx.dogShowPlannerEventPlanHtml(saved, 'Active', {shows:[]}).includes('Remove from Plan'), 'Active shows do not have a planning removal shortcut');
+const completed=ctx.dogShowPlannerEventPlanHtml(saved,'Completed',{shows:[]});assert(completed.includes('Last Year Entries'));assert(completed.includes('No results recorded'));assert(!completed.includes('Open Show'));assert(!completed.includes('Remove from Plan'));
 const legacy=ctx.dogShowPlannerEventResearch({notes:'AKC event number: 12345\nSiberian Husky judge: Legacy Breed\nWorking judge: Legacy Group\nBIS judge: Legacy BIS\nSuperintendent source: https://example.org/super'},{});assert.equal(legacy.breedJudge,'Legacy Breed');assert.equal(legacy.eventNumber,'12345');
 assert(source.includes('await preserveDogShowPlannerResearch();'),'Archive research before replacing search');
 assert(source.includes('name="plannerMetadata"'),'Import/edit form carries research');

@@ -3509,12 +3509,19 @@ function dogShowPlannerEventPlanHtml(event = {}, lifecycleStatus = "Going To", p
       <section class="dog-show-plan-completed-results" aria-label="Show results"><header><h5>Results by dog</h5><span>Select a dog to view details</span></header>${dogShowPlannerCompletedResultsHtml(results)}</section>
     </article>`;
   }
+  const eventId = escapeHtml(event.id || "");
+  const canRemoveFromPlan = event.id && ["Going To", "Going"].includes(lifecycleStatus);
   return `<article class="dog-show-plan-event-card is-added-show is-${lifecycleStatus.toLowerCase().replace(/\s+/g, "-")}">
     <header><div><span>${escapeHtml(lifecycleStatus)}</span><h4>${escapeHtml(event.name || event.club || "Dog Show")}</h4><p>${escapeHtml(event.venueAddress || event.cityState || event.venue || "Location pending")}</p></div><strong>${escapeHtml(dogShowPlannerDateRange(event))}</strong></header>
     ${dogShowPlannerEventFlagsHtml(event)}
     <dl><div><dt>Status</dt><dd>${escapeHtml(lifecycleStatus)}</dd></div><div><dt>Dogs</dt><dd>${escapeHtml(dogs.join(", ") || "No dogs added yet")}</dd></div></dl>
     ${dogShowPlannerEventResearchHtml(event, lifecycleStatus, planner)}
-    <footer><span>${entries.length} dog${entries.length === 1 ? "" : "s"} on roster</span><button type="button" data-action="open-planner-show-event" data-event-id="${escapeHtml(event.id || "")}">Open Show</button></footer>
+    <footer><span>${entries.length} dog${entries.length === 1 ? "" : "s"} on roster</span>
+      <div class="button-row">
+        <button type="button" data-action="open-planner-show-event" data-event-id="${eventId}">Open Show</button>
+        ${canRemoveFromPlan ? `<button type="button" class="secondary-button danger-button" data-action="remove-calendar-show" data-event-id="${eventId}">Remove from Plan</button>` : ""}
+      </div>
+    </footer>
   </article>`;
 }
 

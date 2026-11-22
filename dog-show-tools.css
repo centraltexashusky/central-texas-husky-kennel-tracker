@@ -343,6 +343,20 @@
 :root[data-theme] #dogShowPage .dog-show-entered-research .dog-show-planner-meta { display:flex; flex-wrap:wrap; gap:8px 14px; color:var(--show-muted); font-size:12px; }
 :root[data-theme] #dogShowPage .dog-show-entered-research .dog-show-planner-sources { border-top:1px solid var(--show-line); padding-top:12px; }
 :root[data-theme] #dogShowPage .dog-show-entered-research .dog-show-planner-sources>div { display:flex; flex-wrap:wrap; gap:6px; }
+@media(max-width:760px) {
+  #dogShowPage .dog-show-plan-event-card > footer > .button-row {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+  }
+
+  #dogShowPage .dog-show-plan-event-card > footer > .button-row > button {
+    min-width: 0;
+    padding-inline: 8px;
+    white-space: normal;
+  }
+}
+
 @media(max-width:640px) {
   :root[data-theme] #dogShowPage .dog-show-entered-research .dog-show-planner-panel { grid-template-columns:minmax(0,1fr); }
 }
