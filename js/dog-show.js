@@ -7,7 +7,7 @@ import {
 import { createRegistrationWorkspace, registrationStatusForEntry } from "./dog-show-registration.js?v=20261005-collapsible-registration-profile-1";
 import { createRegistrationStore } from "./dog-show-registration-store.js?v=20261003-registration-1";
 
-import { canRemoveFromShowPlan, createDogShowPlanMap, showPlanStages } from "./dog-show-plan-map.js?v=show-plan-map-v1";
+import { canRemoveFromShowPlan, createDogShowPlanMap, showPlanStages } from "./dog-show-plan-map.js?v=show-plan-map-v2";
 
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";

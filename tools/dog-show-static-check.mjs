@@ -553,6 +553,9 @@ assert.equal(locateShowOnMap({ venueAddress: "15210 Hwy 205, Terrell, TX" }, geo
 assert.equal(locateShowOnMap({ venueAddress: "89-195 Farrington Hwy, Waianae HI 96792" }, geography).state, "HI");
 assert.equal(locateShowOnMap({ cityState: "Portland", state: "Maine" }, geography).label, "Portland, ME");
 assert.equal(locateShowOnMap({ venueAddress: "Unknown location, TX 76513" }, geography).precision, "ZIP area");
+assert.equal(locateShowOnMap({ venueAddress: "Mesquite, TX", venue: "Mesquite Convention Center" }, geography).label, "Mesquite, TX");
+assert.equal(locateShowOnMap({ venueAddress: "1700 Rodeo Dr., Mesquite TX 75149" }, geography).label, "Mesquite, TX");
+assert.equal(locateShowOnMap({ state: "TX", venue: "Mesquite Convention Center" }, geography).precision, "State only");
 assert.equal(locateShowOnMap({ state: "Washington" }, geography).precision, "State only");
 assert.equal(locateShowOnMap({ venueAddress: "Venue to be announced" }, geography).point, null);
 const plannerEventPlanHtmlSource = dogShowSource.slice(dogShowSource.indexOf("function dogShowPlannerEventPlanHtml"), dogShowSource.indexOf("function dogShowPlannerVisibleCandidates"));

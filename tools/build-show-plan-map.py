@@ -121,6 +121,7 @@ for code, rings in sorted(boundaries.items()):
     }
 
 cities = defaultdict(dict)
+city_ranks = defaultdict(dict)
 for row in gazetteer("places.zip"):
     code = row["USPS"]
     if code not in state_data:
@@ -128,10 +129,15 @@ for row in gazetteer("places.zip"):
     name = re.sub(r" (city and borough|city and county|unified government|consolidated government|city|town|village|borough|municipality|CDP|comunidad|zona urbana)$", "", row["NAME"], flags=re.I)
     key = city_key(name)
     point = (name, *gazetteer_point(row, region(code)))
-    if key in cities[code] and cities[code][key] != point:
-        cities[code][key] = None
-    else:
+    # Prefer a municipality when its name also belongs to a separate CDP.
+    # Keep equally ranked duplicates ambiguous for the ZIP or state fallback.
+    rank = int(row["FUNCSTAT"] != "S")
+    highest = city_ranks[code].get(key, -1)
+    if rank > highest:
         cities[code][key] = point
+        city_ranks[code][key] = rank
+    elif rank == highest and cities[code][key] != point:
+        cities[code][key] = None
 
 zip_points = {}
 for row in gazetteer("zip-areas.zip"):
