@@ -128,6 +128,7 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
   let view;
   let drag;
   let previewTimer;
+  let previewPinned = false;
 
   function syncOwner() {
     const key = ownerKey();
@@ -136,6 +137,7 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
     open = false;
     stage = state = "all";
     view = drag = null;
+    previewPinned = false;
     selected = new Set();
   }
 
@@ -171,37 +173,64 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
       + '<button type="button" class="secondary-button" data-map-action="zoom-out" aria-label="Zoom out">−</button>'
       + '<button type="button" class="secondary-button" data-map-action="zoom-in" aria-label="Zoom in">+</button>'
       + '<button type="button" class="secondary-button" data-map-action="reset-view">Reset view</button></div></div>'
-      + '<div class="show-map-canvas" tabindex="0" role="group" aria-label="Show location map" aria-describedby="dogShowMapInstructions">'
-      + '<svg aria-hidden="true">' + paths + labels + insets + '</svg><div class="show-map-markers"></div>'
-      + '<div class="show-map-preview" id="dogShowMapPreview" role="tooltip" hidden></div></div>';
+      + '<div class="show-map-region"><div class="show-map-canvas" tabindex="0" role="group" aria-label="Show location map" aria-describedby="dogShowMapInstructions">'
+      + '<svg aria-hidden="true">' + paths + labels + insets + '</svg><div class="show-map-markers"></div></div>'
+      + '<section class="show-map-preview" id="dogShowMapPreview" aria-labelledby="dogShowMapPreviewTitle" hidden></section></div>';
   }
 
   function markerButtons() {
-    const e = escapeHtml;
-    return groups.map((group, index) => {
-      const removable = group.entries.filter(entry => entry.removable);
-      const selectedCount = removable.filter(entry => selected.has(entry.id)).length;
-      const allSelected = removable.length > 0 && selectedCount === removable.length;
-      const locations = [...new Set(group.entries.map(entry => entry.location.label))];
-      const description = locations.length === 1 ? locations[0] : locations.join(" · ");
-      const classes = "show-map-marker" + (!removable.length ? " is-readonly" : allSelected ? " is-selected" : selectedCount ? " is-partial" : "");
-      const action = !removable.length ? "inspect" : "pin";
-      const count = removable.length || group.entries.length;
-      const verb = action === "inspect" ? "View " : allSelected ? "Deselect " : "Select ";
-      const label = verb + count + (count === 1 ? " show near " : " shows near ") + description;
-      return '<button type="button" class="' + classes
-        + '" style="--pin-x:' + group.x.toFixed(2) + '%;--pin-y:' + group.y.toFixed(2) + '%"'
-        + ' data-map-action="' + action + '" data-map-index="' + index + '" data-map-focus="pin-' + index
-        + '" aria-label="' + e(label) + '"' + (removable.length ? ' aria-pressed="' + allSelected + '"' : '') + '>'
-        + group.entries.length + '</button>';
-    }).join("");
+    return groups.map((group, index) =>
+      '<button type="button" class="show-map-marker"'
+      + ' style="--pin-x:' + group.x.toFixed(2) + '%;--pin-y:' + group.y.toFixed(2) + '%"'
+      + ' data-map-action="pin" data-map-index="' + index + '" data-map-focus="pin-' + index
+      + '" aria-controls="dogShowMapPreview" aria-expanded="false">' + group.entries.length + '</button>'
+    ).join("");
+  }
+
+  function updateMarker(marker) {
+    const group = groups[Number(marker.dataset.mapIndex)];
+    const removable = group.entries.filter(entry => entry.removable);
+    const selectedCount = removable.filter(entry => selected.has(entry.id)).length;
+    const allSelected = removable.length > 0 && selectedCount === removable.length;
+    const locations = [...new Set(group.entries.map(entry => entry.location.label))];
+    const directSelect = group.entries.length === 1 && removable.length === 1;
+    const action = directSelect ? (allSelected ? "Deselect " : "Select ") : "View ";
+    const count = group.entries.length;
+    marker.classList.toggle("is-readonly", !removable.length);
+    marker.classList.toggle("is-selected", allSelected);
+    marker.classList.toggle("is-partial", !allSelected && selectedCount > 0);
+    marker.setAttribute("aria-label", action + count + (count === 1 ? " show near " : " shows near ") + locations.join(" · "));
+    if (directSelect) marker.setAttribute("aria-pressed", String(allSelected));
+  }
+
+  function updateSelection(root) {
+    const removable = mapEntries.filter(entry => entry.removable);
+    const visibleSelected = removable.filter(entry => selected.has(entry.id)).length;
+    const visibleButton = root.querySelector('[data-map-action="visible"]');
+    visibleButton.disabled = !removable.length;
+    visibleButton.textContent = removable.length && visibleSelected === removable.length ? "Deselect visible" : "Select visible";
+    root.querySelector('[data-map-action="clear"]').disabled = !selected.size;
+    const reviewButton = root.querySelector('[data-map-action="review"]');
+    reviewButton.disabled = !selected.size || reviewButton.getAttribute("aria-busy") === "true";
+    const selectionStatus = root.querySelector(".show-map-selection");
+    const message = selected.size + " selected"
+      + (selected.size > visibleSelected ? " · " + (selected.size - visibleSelected) + " outside these filters" : "");
+    if (selectionStatus.textContent !== message) selectionStatus.textContent = message;
+    root.querySelectorAll("[data-map-show]").forEach(input => { input.checked = selected.has(input.dataset.mapShow); });
+    root.querySelectorAll(".show-map-marker").forEach(updateMarker);
+    const bulkHere = root.querySelector('.show-map-preview:not([hidden]) [data-map-action="select-here"]');
+    if (bulkHere) {
+      const index = Number(bulkHere.closest(".show-map-preview").dataset.mapIndex);
+      const allHere = groups[index].entries.filter(entry => entry.removable).every(entry => selected.has(entry.id));
+      bulkHere.textContent = allHere ? "Deselect all here" : "Select all here";
+    }
   }
 
   function drawCamera(root) {
     const canvas = root.querySelector(".show-map-canvas");
     const base = mapViewBox(geography.states[state]);
     view ||= base;
-    hidePreview(canvas);
+    hidePreview(canvas.parentElement);
     const spacing = window.matchMedia("(max-width: 600px)").matches ? 47 : 36;
     groups = mapClusters(mapEntries, view, canvas.clientWidth || 550, spacing);
     const svg = canvas.querySelector("svg");
@@ -213,30 +242,48 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
     root.querySelector('[data-map-action="zoom-in"]').disabled = view[2] <= base[2] / 8 + 0.01;
     root.querySelector('[data-map-action="zoom-out"]').disabled = !canPan;
     root.querySelector('[data-map-action="reset-view"]').disabled = !canPan;
+    updateSelection(root);
   }
 
-  function hidePreview(canvas) {
+  function hidePreview(region) {
     window.clearTimeout(previewTimer);
-    const preview = canvas.querySelector(".show-map-preview");
-    preview.hidden = true;
-    canvas.querySelector('[aria-describedby="dogShowMapPreview"]')?.removeAttribute("aria-describedby");
+    previewPinned = false;
+    region.querySelector(".show-map-preview").hidden = true;
+    region.querySelector('.show-map-marker[aria-expanded="true"]')?.setAttribute("aria-expanded", "false");
   }
 
-  function showPreview(marker) {
+  function showPreview(marker, pin = false) {
     const canvas = marker.closest(".show-map-canvas");
+    const region = canvas.parentElement;
     const group = groups[Number(marker.dataset.mapIndex)];
     if (!group) return;
-    hidePreview(canvas);
-    const e = escapeHtml;
-    const preview = canvas.querySelector(".show-map-preview");
+    window.clearTimeout(previewTimer);
+    const preview = region.querySelector(".show-map-preview");
+    if (marker.getAttribute("aria-expanded") === "true") {
+      previewPinned ||= pin;
+      if (pin && getComputedStyle(preview).position === "static") preview.scrollIntoView({ block: "nearest" });
+      return preview;
+    }
+    hidePreview(region);
+    previewPinned = pin;
     const count = group.entries.length;
-    preview.innerHTML = '<strong>' + count + (count === 1 ? ' show' : ' shows') + '</strong><ul>'
-      + group.entries.map(entry => '<li><b>' + e(entry.name) + '</b><small>'
-        + e([entry.dateLabel, entry.location.label, showPlanStages.get(entry.stage)].filter(Boolean).join(" · "))
-        + '</small></li>').join("") + '</ul>';
-    marker.setAttribute("aria-describedby", "dogShowMapPreview");
+    const removableCount = group.entries.filter(entry => entry.removable).length;
+    preview.dataset.mapIndex = marker.dataset.mapIndex;
+    preview.innerHTML = '<div class="show-map-preview-heading"><strong id="dogShowMapPreviewTitle">'
+      + count + (count === 1 ? ' show' : ' shows') + '</strong>'
+      + (removableCount > 1 ? '<button type="button" class="secondary-button" data-map-action="select-here"></button>' : '')
+      + '<button type="button" class="secondary-button" data-map-action="close-preview" aria-label="Close pin preview">×</button></div><ul>'
+      + group.entries.map(entry => showEntryRow(entry, true)).join("") + '</ul>';
+    marker.setAttribute("aria-expanded", "true");
     preview.hidden = false;
     preview.scrollTop = 0;
+    updateSelection(region.closest("#dogShowPlanMap"));
+    preview.style.width = "";
+    preview.style.maxHeight = "";
+    if (getComputedStyle(preview).position === "static") {
+      if (pin) preview.scrollIntoView({ block: "nearest" });
+      return preview;
+    }
     const margin = 6;
     const gap = marker.offsetWidth / 2 + 5;
     const x = marker.offsetLeft;
@@ -244,8 +291,6 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
     const leftSpace = x - gap - margin;
     const rightSpace = canvas.clientWidth - x - gap - margin;
     const sideSpace = Math.max(leftSpace, rightSpace);
-    preview.style.width = "";
-    preview.style.maxHeight = "";
     if (sideSpace >= Math.min(178, preview.offsetWidth)) {
       preview.style.width = Math.min(preview.offsetWidth, sideSpace) + "px";
       preview.style.left = (rightSpace >= leftSpace ? x + gap : x - gap - preview.offsetWidth) + "px";
@@ -257,6 +302,19 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
       preview.style.left = clamp(x - preview.offsetWidth / 2, margin, canvas.clientWidth - preview.offsetWidth - margin) + "px";
       preview.style.top = (bottomSpace >= topSpace ? y + gap : y - gap - preview.offsetHeight) + "px";
     }
+    return preview;
+  }
+
+  function showEntryRow(entry, inPreview = false) {
+    const e = escapeHtml;
+    const name = '<strong>' + e(entry.name) + '</strong>';
+    const meta = '<span>' + e([entry.dateLabel, entry.location.label, showPlanStages.get(entry.stage)].filter(Boolean).join(" · ")) + '</span>';
+    const details = '<span class="show-map-row-copy">' + name + meta
+      + (["State only", "Unmapped"].includes(entry.location.precision) ? '<small>' + entry.location.precision + '</small>' : '') + '</span>';
+    return '<li>' + (entry.removable
+      ? '<label><input type="checkbox"' + (inPreview ? '' : ' data-map-focus="' + e("show-" + entry.id) + '"')
+        + ' data-map-show="' + e(entry.id) + '">' + details + '</label>'
+      : '<div class="show-map-readonly-row">' + details + '</div>') + '</li>';
   }
 
   function render(root, restoreFocus = false) {
@@ -290,44 +348,34 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
     const visible = entries.filter(entry => (stage === "all" || stage === entry.stage)
       && (state === "all" || (state === "unmapped" ? !entry.location.point : entry.location.state === state)));
     mapEntries = visible;
-    const removable = visible.filter(entry => entry.removable);
-    const visibleSelected = removable.filter(entry => selected.has(entry.id)).length;
     const unmapped = visible.filter(entry => !entry.location.point).length;
     const focus = restoreFocus ? document.activeElement?.dataset.mapFocus : "";
     const scroll = root.querySelector(".show-map-list")?.scrollTop ?? 0;
     const options = (items, value) => items.map(([id, label]) =>
       '<option value="' + e(id) + '"' + (id === value ? " selected" : "") + '>' + e(label) + '</option>').join("");
-    const row = entry => {
-      const name = '<strong>' + e(entry.name) + '</strong>';
-      const meta = '<span>' + e([entry.dateLabel, entry.location.label, showPlanStages.get(entry.stage)].filter(Boolean).join(" · ")) + '</span>';
-      const details = '<span class="show-map-row-copy">' + name + meta
-        + (["State only", "Unmapped"].includes(entry.location.precision) ? '<small>' + entry.location.precision + '</small>' : '') + '</span>';
-      return '<li>' + (entry.removable
-        ? '<label><input type="checkbox" data-map-focus="' + e("show-" + entry.id) + '" data-map-show="' + e(entry.id)
-          + '"' + (selected.has(entry.id) ? " checked" : "") + '>' + details + '</label>'
-        : '<div class="show-map-readonly-row">' + details + '</div>') + '</li>';
-    };
-
     root.innerHTML = '<div class="show-map-toolbar">'
       + '<label>Stage<select data-map-filter="stage" data-map-focus="stage">' + options([["all", "All stages"], ...showPlanStages], stage) + '</select></label>'
       + '<label>Location<select data-map-filter="state" data-map-focus="state">' + options([["all", "All locations"], ...stateCodes.map(code => [code, geography.states[code].name]), ["unmapped", "Unmapped"]], state) + '</select></label>'
-      + '<div class="show-map-bulk"><button type="button" class="secondary-button" data-map-action="visible" data-map-focus="visible"' + (removable.length ? '' : ' disabled') + '>'
-      + (removable.length && visibleSelected === removable.length ? "Deselect visible" : "Select visible") + '</button>'
-      + '<button type="button" class="secondary-button" data-map-action="clear" data-map-focus="clear"' + (selected.size ? '' : ' disabled') + '>Clear</button>'
-      + '<button type="button" class="secondary-button danger-button" data-map-action="review" data-map-focus="review"' + (selected.size ? '' : ' disabled') + '>Review removal</button></div></div>'
-      + '<p class="show-map-selection" role="status">' + selected.size + ' selected'
-      + (selected.size > visibleSelected ? ' · ' + (selected.size - visibleSelected) + ' outside these filters' : '') + '</p>'
+      + '<div class="show-map-bulk"><button type="button" class="secondary-button" data-map-action="visible" data-map-focus="visible"></button>'
+      + '<button type="button" class="secondary-button" data-map-action="clear" data-map-focus="clear">Clear</button>'
+      + '<button type="button" class="secondary-button danger-button" data-map-action="review" data-map-focus="review">Review removal</button></div></div>'
+      + '<p class="show-map-selection" role="status"></p>'
       + '<div class="show-map-layout"><div class="show-map-figure">' + mapHtml()
-      + '<div class="show-map-caption"><span>Approximate locations · U.S. Census Bureau</span><span>Blue pins select shows · Gray pins are for reference</span></div></div>'
+      + '<div class="show-map-caption"><span>Approximate locations · U.S. Census Bureau</span><span>Open a pin to see its shows · Gray pins are for reference</span></div></div>'
       + '<section class="show-map-results" aria-label="Shows on the map"><header><strong>' + visible.length + (visible.length === 1 ? ' show' : ' shows') + '</strong>'
       + (unmapped ? '<span>' + unmapped + ' unmapped</span>' : '') + '</header>'
-      + '<ul class="show-map-list">' + (visible.length ? visible.map(row).join("") : '<li class="show-map-empty">No shows match these filters.</li>') + '</ul></section></div>';
+      + '<ul class="show-map-list">' + (visible.length ? visible.map(entry => showEntryRow(entry)).join("") : '<li class="show-map-empty">No shows match these filters.</li>') + '</ul></section></div>';
     drawCamera(root);
     root.querySelector(".show-map-list").scrollTop = scroll;
     if (focus) {
       const control = [...root.querySelectorAll("[data-map-focus]")].find(item => item.dataset.mapFocus === focus && !item.disabled);
       (control || root.querySelector('[data-map-focus="stage"]'))?.focus({ preventScroll: true });
     }
+  }
+
+  function closePreview(region, restoreFocus) {
+    if (restoreFocus) region.querySelector('.show-map-marker[aria-expanded="true"]')?.focus({ preventScroll: true });
+    hidePreview(region);
   }
 
   function bind(page) {
@@ -343,20 +391,47 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
       if (mapShow) {
         if (event.target.checked) selected.add(mapShow);
         else selected.delete(mapShow);
+        updateSelection(root);
+        return;
       }
       render(root, true);
     });
     page.addEventListener("click", event => {
+      const region = page.querySelector("#dogShowPlanMap .show-map-region");
+      if (region && !event.target.closest(".show-map-marker, .show-map-preview")) hidePreview(region);
       const button = event.target.closest("#dogShowPlanMap [data-map-action]");
       if (!button) return;
       const root = button.closest("#dogShowPlanMap");
       const action = button.dataset.mapAction;
       if (action === "review") {
-        reviewSelection([...selected], button);
+        const ids = [...selected];
+        button.setAttribute("aria-busy", "true");
+        void reviewSelection(ids, button, () => ids.length === selected.size && ids.every(id => selected.has(id))).finally(() => {
+          button.removeAttribute("aria-busy");
+          if (button.isConnected) updateSelection(root);
+        });
         return;
       }
-      if (action === "inspect") {
-        showPreview(button);
+      if (action === "close-preview") {
+        closePreview(button.closest(".show-map-region"), true);
+        return;
+      }
+      if (action === "pin") {
+        const group = groups[Number(button.dataset.mapIndex)];
+        if (group.entries.length === 1 && group.entries[0].removable) {
+          addSelection([group.entries[0].id]);
+        }
+        const preview = showPreview(button, true);
+        updateSelection(root);
+        if (group.entries.length > 1 && preview) {
+          (preview.querySelector("input") || preview.querySelector('[data-map-action="close-preview"]')).focus({ preventScroll: true });
+        }
+        return;
+      }
+      if (action === "select-here") {
+        const group = groups[Number(button.closest(".show-map-preview").dataset.mapIndex)];
+        addSelection(group.entries.filter(entry => entry.removable).map(entry => entry.id));
+        updateSelection(root);
         return;
       }
       if (action === "zoom-in" || action === "zoom-out" || action === "reset-view") {
@@ -366,38 +441,38 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
         if (button.disabled) root.querySelector(".show-map-canvas").focus({ preventScroll: true });
         return;
       }
-      if (action === "retry") loadError = false;
+      if (action === "retry") {
+        loadError = false;
+        render(root, true);
+        return;
+      }
       if (action === "clear") selected.clear();
-      if (action === "pin") {
-        const group = groups[Number(button.dataset.mapIndex)];
-        if (group) addSelection(group.entries.filter(entry => entry.removable).map(entry => entry.id));
-      }
       if (action === "visible") {
-        addSelection([...root.querySelectorAll("[data-map-show]")].map(input => input.dataset.mapShow));
+        addSelection([...root.querySelectorAll(".show-map-list [data-map-show]")].map(input => input.dataset.mapShow));
       }
-      render(root, true);
-      if (action === "pin") {
-        const marker = root.querySelector('[data-map-index="' + button.dataset.mapIndex + '"]');
-        if (marker) showPreview(marker);
-      }
+      updateSelection(root);
     });
 
     page.addEventListener("pointerover", event => {
       const marker = event.target.closest(".show-map-marker");
-      if (marker && !marker.contains(event.relatedTarget)) showPreview(marker);
+      if (marker && !previewPinned && !marker.contains(event.relatedTarget)) showPreview(marker);
       if (event.target.closest(".show-map-preview")) window.clearTimeout(previewTimer);
     });
     page.addEventListener("focusin", event => {
       if (event.target.matches(".show-map-marker")) showPreview(event.target);
+      if (event.target.closest(".show-map-preview")) window.clearTimeout(previewTimer);
     });
     function schedulePreviewHide(event) {
       const hovered = event.target.closest(".show-map-marker, .show-map-preview");
       if (!hovered || hovered.contains(event.relatedTarget)) return;
+      if (event.type === "pointerout" && (previewPinned || document.activeElement?.closest(".show-map-preview"))) return;
+      const region = hovered.closest(".show-map-region");
+      if (!region || event.relatedTarget?.closest?.(".show-map-region") === region
+        && event.relatedTarget.closest(".show-map-preview, .show-map-marker[aria-expanded='true']")) return;
       window.clearTimeout(previewTimer);
-      const canvas = hovered.closest(".show-map-canvas");
-      if (canvas) previewTimer = window.setTimeout(() => {
-        if (canvas.isConnected) hidePreview(canvas);
-      }, 160);
+      previewTimer = window.setTimeout(() => {
+        if (region.isConnected) hidePreview(region);
+      }, 260);
     }
     page.addEventListener("pointerout", schedulePreviewHide);
     page.addEventListener("focusout", schedulePreviewHide);
@@ -414,12 +489,13 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
     }, { passive: false });
 
     page.addEventListener("keydown", event => {
-      const canvas = event.target.closest(".show-map-canvas");
-      if (!canvas) return;
+      const region = event.target.closest(".show-map-region");
+      if (!region) return;
       if (event.key === "Escape") {
-        hidePreview(canvas);
+        closePreview(region, Boolean(event.target.closest(".show-map-preview")));
         return;
       }
+      const canvas = region.querySelector(".show-map-canvas");
       if (event.target !== canvas) return;
       const arrows = { ArrowLeft: [-0.15, 0], ArrowRight: [0.15, 0], ArrowUp: [0, -0.15], ArrowDown: [0, 0.15] };
       const direction = arrows[event.key];
@@ -438,7 +514,7 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
       canvas.setPointerCapture(event.pointerId);
       drag = { canvas, id: event.pointerId, x: event.clientX, y: event.clientY, view };
       canvas.classList.add("is-panning");
-      hidePreview(canvas);
+      hidePreview(canvas.parentElement);
     });
     page.addEventListener("pointermove", event => {
       if (!drag || event.pointerId !== drag.id) return;

@@ -551,6 +551,10 @@
   outline-offset: 2px;
 }
 
+.show-map-region {
+  position: relative;
+}
+
 .show-map-preview {
   position: absolute;
   z-index: 3;
@@ -569,22 +573,53 @@
   line-height: 1.3;
 }
 
-.show-map-preview ul {
-  display: grid;
+.show-map-preview-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  list-style: none;
-  margin: 6px 0 0;
+}
+
+.show-map-preview-heading strong {
+  margin-inline-end: auto;
+}
+
+.show-map-preview-heading button {
+  min-height: 30px;
+  padding: 3px 8px;
+  font-size: .78rem;
+}
+
+.show-map-preview-heading button[data-map-action="close-preview"] {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.show-map-preview ul {
+  margin: 4px 0 0;
   padding: 0;
+  list-style: none;
 }
 
-.show-map-preview li {
-  display: grid;
-  gap: 1px;
+.show-map-preview li + li {
+  border-top: 1px solid var(--show-line);
 }
 
-.show-map-preview small {
-  color: var(--show-muted);
-  font-size: .73rem;
+.show-map-preview label,
+.show-map-preview .show-map-readonly-row {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  padding: 7px 1px;
+}
+
+.show-map-preview label {
+  cursor: pointer;
+}
+
+.show-map-preview input {
+  flex: none;
+  margin: 2px 0 0;
 }
 
 .show-map-caption,
@@ -683,6 +718,14 @@
 }
 
 @media (max-width: 600px) {
+  .show-map-preview {
+    position: static;
+    width: auto;
+    max-height: 245px;
+    margin: 6px 8px;
+    box-shadow: none;
+  }
+
   :root[data-theme] #dogShowPage .show-map-marker {
     width: 44px;
     height: 44px;
