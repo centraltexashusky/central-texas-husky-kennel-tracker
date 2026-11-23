@@ -94,12 +94,14 @@ if (!rosterFunctions.includes("function boardingRecordHasOperationalStay")) {
     "normalizeBoardingStatus",
     "arrayValue",
     "boardingDogRosterFilter",
+    "boardingApprovedServiceIsToday",
     `${rosterFunctions}\nreturn boardingDogMatchesRosterFilter;`,
   )(
     (_record, stay) => stay.status,
     (record) => record.boardingStatus || record.status || "",
     (value) => Array.isArray(value) ? value : [],
     "Active dogs",
+    () => false,
   );
   const overdueReady = {
     boardingStatus: "Ready For Pickup",

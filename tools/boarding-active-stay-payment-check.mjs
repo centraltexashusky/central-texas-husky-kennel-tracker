@@ -18,6 +18,7 @@ const ctx = {Date:Clock,activeBoardingStayStatuses:['Checked In','In Kennel','Re
   inactiveBoardingStayStatus:s=>['Cancelled','Checked Out'].includes(s.status),
   stayHasActualPickupEvidence:s=>Boolean(s.actualPickupAt||s.checkedOutAt||s.checkout?.verifiedAt),
   explicitBoardingStatus:s=>s||'',boardingActiveWindowStartTime:s=>s.actualDropoffAt||s.dropoffTime,
+  isServiceRequestStay:(r,s)=>(s.stayType||r.stayType)==='Service Request',
   boardingStayDisplayStatus:(_r,s)=>s.status,normalizeBoardingStatus:r=>r.boardingStatus,
   boardingStayByReference:(r,ref)=>r.stays.find(s=>s.id===ref.stayId||s.requestCode===ref.requestCode),
   boardingStayRequestCode:(_r,s)=>s.requestCode,boardingStayInvoiceTotal:(_r,s)=>s.total,
@@ -27,7 +28,8 @@ const ctx = {Date:Clock,activeBoardingStayStatuses:['Checked In','In Kennel','Re
   boardingStayServiceStats:()=>({total:0,incompleteTasks:[]}),phoneLinkHtml:()=>'',
   boardingStayDetailCardHtml:(_r,s)=>`<article>${s.requestCode} Total $${s.total}</article>`,boardingStayBelongingsHtml:()=>''};
 vm.createContext(ctx);
-vm.runInContext(['activeBoardingStay','currentOrNextStay','boardingPrimaryStay','boardingPickupReviewHtml'].map(fn).join('\n'),ctx);
+vm.runInContext(source.match(/var boardingServiceDateFormatter = [\s\S]+?\n\}\);/)[0],ctx);
+vm.runInContext(['activeBoardingStay','currentOrNextStay','boardingApprovedServiceIsToday','boardingPrimaryStay','boardingPickupReviewHtml'].map(fn).join('\n'),ctx);
 vm.runInContext(fs.readFileSync('js/boarding-payments.js','utf8'),ctx);
 assert.equal(ctx.activeBoardingStay(dog).id,'current','Scheduled pickup passing must not select the next booking');
 assert.equal(ctx.boardingPrimaryStay(dog).id,'current');
@@ -42,6 +44,13 @@ for (const departure of [{status:'Checked Out'},{actualPickupAt:now},{checkedOut
   assert.equal(ctx.activeBoardingStay({...dog,stays:[{...active,...departure}]}),null,'Departure evidence ends operational stay');
 }
 assert.equal(ctx.boardingPrimaryStay({...dog,stays:[future,{...active,status:'Checked Out',actualPickupAt:now}]}).id,'future');
+const service = {id:'service',stayType:'Service Request',status:'Approved',dropoffTime:'2026-10-13T01:00:00Z'};
+const dogWithService = {...dog,stayType:'Boarding',stays:[future,service]};
+assert.equal(ctx.boardingPrimaryStay(dogWithService).id,'service','A same-day Central Time service is selected even with a future boarding stay');
+assert.equal(ctx.activeBoardingStay(dogWithService),null,'A scheduled service still needs manual check-in');
+for (const other of [{status:'Pending'},{status:'Checked Out'},{dropoffTime:'2026-10-13T06:00:00Z'},{stayType:'Boarding'}]) {
+  assert.equal(ctx.boardingPrimaryStay({...dogWithService,stays:[future,{...service,...other}]}).id,'future');
+}
 const before=JSON.stringify(dog);
 const html=ctx.boardingPickupReviewHtml(dog,{stayId:'current'});
 for(const text of ['BR-CURRENT','Paid in full','Payments received','$2,900','Balance due','$0','data-stay-id="current"']) assert.ok(html.includes(text),text);
