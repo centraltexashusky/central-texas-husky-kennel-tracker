@@ -8916,9 +8916,10 @@ async function submitBoardingCheckIn(formEl) {
     showToast("Add a boarding stay before checking this dog in.");
     return;
   }
+  const serviceOnly = isServiceRequestStay(record, targetStay);
   const data = formPayload(formEl);
   const timestamp = new Date().toISOString();
-  const addedServices = pendingBoardingCheckIn?.addedServices || [];
+  const addedServices = serviceOnly ? [] : pendingBoardingCheckIn?.addedServices || [];
   const checkInPhoto = $("#boardingCheckInPhotoInput")?.files?.[0] || null;
   let profilePhotoUrl = record.profilePhotoUrl || "";
   let profilePhotoPath = record.profilePhotoPath || "";
@@ -8981,11 +8982,11 @@ async function submitBoardingCheckIn(formEl) {
     queueBoardingLifecycleFollowUp("Boarding check-in service audit log", () => addAuditLog("Added check-in service", "boardingDog", updated, addedServices.map((service) => service.serviceName + " x" + service.quantity).join(", ")));
   }
   pendingBoardingCheckIn = null;
-  if (data.assignKennelAfterCheckIn === "Yes") {
+  if (!serviceOnly && data.assignKennelAfterCheckIn === "Yes") {
     openKennelAssignmentPopup(updated, "In Kennel");
     return;
   }
-  showDetailDialog("Check-In Complete", \`<p>\${escapeHtml(updated.dogName || "Boarding dog")} has been checked in.</p><p>Belongings: \${escapeHtml(data.belongings || "None listed")}</p>\`);
+  showDetailDialog("Check-In Complete", \`<p>\${escapeHtml(updated.dogName || "Boarding dog")} has been checked in.</p>\${serviceOnly ? "" : \`<p>Belongings: \${escapeHtml(data.belongings || "None listed")}</p>\`}\`);
 }
 
 // Extracted to js/boarding.js: saveBoardingStayFromForm

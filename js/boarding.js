@@ -408,19 +408,30 @@ async function submitBoardingDeclineRequest(formEl) {
   return updated;
 }
 
+function boardingAllowedNextStatuses(record, stay, status) {
+  const nextStatuses = boardingStatusTransitions[status] || [];
+  if (!isServiceRequestStay(record, stay || {})) return nextStatuses;
+  if (status === "Checked In") return ["Approved", "Ready For Pickup", "Checked Out"];
+  if (status === "In Kennel") return [...nextStatuses, "Checked Out"];
+  if (status === "Ready For Pickup") return ["Checked Out"];
+  return nextStatuses;
+}
+
 function canTransitionBoardingStatus(record = {}, nextStatus, options = {}) {
   const targetStay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) : null;
   const currentStatus = targetStay ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
   if (options.allowEarly && nextStatus === "Checked In" && ["Pending", "Approved"].includes(currentStatus)) return true;
   if (options.allowEarly && nextStatus === "Checked Out" && ["Checked In", "In Kennel", "Ready For Pickup"].includes(currentStatus)) return true;
-  return (boardingStatusTransitions[currentStatus] || []).includes(nextStatus);
+  return boardingAllowedNextStatuses(record, targetStay || boardingStatusTargetStay(record, nextStatus, options), currentStatus).includes(nextStatus);
 }
 
 function boardingTransitionActions(record = {}) {
-  const currentStatus = boardingDisplayStatus(record);
-  const nextStatuses = boardingStatusTransitions[currentStatus] || [];
+  const stay = boardingPrimaryStay(record);
+  const stayAttrs = stay?.id && isServiceRequestStay(record, stay) ? boardingStayDataAttrs(record, stay) : "";
+  const currentStatus = boardingDisplayStatus(record, stay);
+  const nextStatuses = boardingAllowedNextStatuses(record, stay, currentStatus);
   return nextStatuses.length
-    ? \`<div class="record-actions lifecycle-actions">\${nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding" data-next-status="\${escapeHtml(nextStatus)}" data-id="\${escapeHtml(record.id)}">\${escapeHtml(transitionLabel(nextStatus))}</button>\`).join("")}</div>\`
+    ? \`<div class="record-actions lifecycle-actions">\${nextStatuses.map((nextStatus) => \`<button type="button" class="secondary-button" data-action="transition-boarding" data-next-status="\${escapeHtml(nextStatus)}" data-id="\${escapeHtml(record.id)}"\${stayAttrs}>\${escapeHtml(transitionLabel(nextStatus))}</button>\`).join("")}</div>\`
     : "";
 }
 
@@ -453,7 +464,7 @@ function boardingOwnerUpdateLoggedToday(record = {}, stay = {}, date = todayDate
 
 function boardingStayTransitionActions(record = {}, stay = {}, options = {}) {
   const currentStatus = boardingStayDisplayStatus(record, stay);
-  const nextStatuses = boardingStatusTransitions[currentStatus] || [];
+  const nextStatuses = boardingAllowedNextStatuses(record, stay, currentStatus);
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const ownerUpdateButton = options.includeOwnerUpdate === false ? "" : boardingOwnerUpdateButtonHtml(record, stay);
   const buttons = [
@@ -468,6 +479,7 @@ function boardingStayTransitionActions(record = {}, stay = {}, options = {}) {
 function boardingStatusTargetStay(record = {}, nextStatus = "", options = {}) {
   if (options.stayId || options.requestCode) return boardingStayByReference(record, options);
   if (nextStatus === "Checked Out") return activeBoardingStay(record) || currentOrNextStay(record);
+  if (nextStatus === "Checked In") return boardingPrimaryStay(record);
   return currentOrNextStay(record);
 }
 
@@ -573,6 +585,7 @@ function boardingTransitionIsEarly(record = {}, nextStatus = "", options = {}) {
 
 function withBoardingStatusTransition(record = {}, nextStatus, options = {}) {
   const targetStay = (options.stayId || options.requestCode) ? boardingStayByReference(record, options) : null;
+  if (nextStatus === "In Kennel" && options.forceStatusSync && isServiceRequestStay(record, targetStay || boardingStatusTargetStay(record, nextStatus, options) || {})) return null;
   const currentStatus = targetStay ? boardingStayDisplayStatus(record, targetStay) : normalizeBoardingStatus(record);
   if (!canTransitionBoardingStatus(record, nextStatus, options) && !options.forceStatusSync) return null;
   const timestamp = new Date().toISOString();
@@ -731,6 +744,7 @@ function boardingStayDisplayStatus(record = {}, stay = {}) {
 function boardingPrimaryStay(record = {}) {
   const stays = record.stays || [];
   return activeBoardingStay(record)
+    || stays.find((stay) => boardingApprovedServiceIsToday(record, stay))
     || currentOrNextStay(record)
     || stays.find((stay) => !inactiveBoardingStayStatus(stay))
     || stays[0]
@@ -2750,14 +2764,32 @@ function boardingRecordHasOperationalStay(record = {}, date = new Date()) {
     .some((status) => boardingRecordHasCurrentOrUpcomingStatus(record, status, date));
 }
 
+var boardingServiceDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit",
+});
+
+function boardingApprovedServiceIsToday(record = {}, stay = {}, date = new Date()) {
+  if (!isServiceRequestStay(record, stay) || boardingStayDisplayStatus(record, stay) !== "Approved") return false;
+  const appointment = stay.dropoffTime || stay.scheduledDropoffTime || stay.requestedDropoffTime || (!stay.id ? record.dropoffTime : "") || "";
+  if (!/^\\d{4}-\\d{2}-\\d{2}(?:$|T)/.test(appointment)) return false;
+  const hasTimeZone = /(?:Z|[+-]\\d{2}:\\d{2})$/i.test(appointment);
+  const appointmentInstant = hasTimeZone ? new Date(appointment) : null;
+  if (appointmentInstant && Number.isNaN(appointmentInstant.getTime())) return false;
+  const appointmentDate = appointmentInstant ? boardingServiceDateFormatter.format(appointmentInstant) : appointment.slice(0, 10);
+  return appointmentDate === boardingServiceDateFormatter.format(date);
+}
+
 function boardingDogMatchesRosterFilter(record = {}, filter = boardingDogRosterFilter) {
   if (filter === "All Boarding Dogs") return true;
   const hasOperationalStay = boardingRecordHasOperationalStay(record);
+  const hasServiceToday = (arrayValue(record.stays).length ? record.stays : [record])
+    .some((stay) => boardingApprovedServiceIsToday(record, stay));
+  const isActive = hasOperationalStay || hasServiceToday;
   if (filter === "Pending" || filter === "Pending Approval") return boardingRecordHasCurrentOrUpcomingStatus(record, "Pending") && !hasOperationalStay;
-  if (filter === "Approved") return boardingRecordHasCurrentOrUpcomingStatus(record, "Approved") && !hasOperationalStay;
+  if (filter === "Approved") return boardingRecordHasCurrentOrUpcomingStatus(record, "Approved") && !isActive;
   if (filter === "In Kennel") return boardingRecordHasCurrentOrUpcomingStatus(record, "In Kennel");
   if (filter === "Ready For Pickup") return boardingRecordHasCurrentOrUpcomingStatus(record, "Ready For Pickup");
-  return hasOperationalStay;
+  return isActive;
 }
 
 function boardingRosterCountMapFromRecords(records = []) {
@@ -2797,7 +2829,8 @@ function boardingQueueStayMatchesGroup(title = "", record = {}, stay = {}) {
   const tomorrow = addDays(today, 1);
   const status = boardingStayDisplayStatus(record, stay);
   if (title === "Pending Approval") return status === "Pending";
-  if (title === "Today Drop-offs") return sameDateValue(stay.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
+  if (title === "Today's Service Appointments") return boardingApprovedServiceIsToday(record, stay);
+  if (title === "Today Drop-offs") return !isServiceRequestStay(record, stay) && sameDateValue(stay.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
   if (title === "Tomorrow Arrivals") return sameDateValue(stay.dropoffTime, tomorrow) && status === "Approved";
   if (title === "In Kennel") {
     if (status !== "In Kennel" || stayHasActualPickupEvidence(stay)) return false;
@@ -2820,7 +2853,8 @@ function boardingQueueRecordMatchesGroup(title = "", record = {}) {
   const today = todayDate();
   const tomorrow = addDays(today, 1);
   if (title === "Pending Approval") return status === "Pending";
-  if (title === "Today Drop-offs") return sameDateValue(record.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
+  if (title === "Today's Service Appointments") return boardingApprovedServiceIsToday(record, record);
+  if (title === "Today Drop-offs") return !isServiceRequestStay(record) && sameDateValue(record.dropoffTime, today) && ["Pending", "Approved", "Checked In"].includes(status);
   if (title === "Tomorrow Arrivals") return sameDateValue(record.dropoffTime, tomorrow) && status === "Approved";
   if (title === "In Kennel") return status === "In Kennel";
   if (title === "Leaving in 48 Hours") return ["Checked In", "In Kennel", "Ready For Pickup"].includes(status) && boardingStayLeavesWithinHours(record, 48);
@@ -2895,6 +2929,7 @@ function renderBoardingQueueGroups(records = []) {
   if (!container) return;
   const operationalGroups = [
     ["Pending Approval", records.filter((record) => boardingQueueRecordMatchesGroup("Pending Approval", record))],
+    ["Today's Service Appointments", records.filter((record) => boardingQueueRecordMatchesGroup("Today's Service Appointments", record))],
     ["Tomorrow Arrivals", records.filter((record) => boardingQueueRecordMatchesGroup("Tomorrow Arrivals", record))],
     ["Today Drop-offs", records.filter((record) => boardingQueueRecordMatchesGroup("Today Drop-offs", record))],
     ["In Kennel", records.filter((record) => boardingQueueRecordMatchesGroup("In Kennel", record))],
@@ -3435,6 +3470,7 @@ function boardingQuickActionButtons(record = {}) {
   const stay = boardingPrimaryStay(record) || {};
   const status = stay?.id ? boardingStayDisplayStatus(record, stay) : normalizeBoardingStatus(record);
   const stayAttr = stay.id ? boardingStayDataAttrs(record, stay) : "";
+  const serviceOnly = isServiceRequestStay(record, stay);
   const buttons = [];
   if (status === "Pending") {
     buttons.push(\`<button type="button" class="secondary-button" data-action="inline-boarding-status" data-next-status="Approved" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Approve Request</button>\`);
@@ -3443,13 +3479,13 @@ function boardingQuickActionButtons(record = {}) {
   if (status === "Approved") {
     buttons.push(\`<button type="button" class="secondary-button" data-action="inline-boarding-status" data-next-status="Checked In" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Check In</button>\`);
   }
-  if (status === "Checked In") {
+  if (status === "Checked In" && !serviceOnly) {
     buttons.push(\`<button type="button" class="secondary-button" data-action="inline-boarding-status" data-next-status="In Kennel" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Mark In Kennel</button>\`);
   }
-  if (status === "In Kennel") {
+  if (status === "In Kennel" || (status === "Checked In" && serviceOnly)) {
     buttons.push(\`<button type="button" class="secondary-button" data-action="inline-boarding-status" data-next-status="Ready For Pickup" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Ready for Pickup</button>\`);
   }
-  if (status === "Ready For Pickup") {
+  if (status === "Ready For Pickup" || (serviceOnly && ["Checked In", "In Kennel"].includes(status))) {
     buttons.push(\`<button type="button" class="secondary-button" data-action="inline-boarding-status" data-next-status="Checked Out" data-id="\${escapeHtml(record.id)}"\${stayAttr}>Check Out</button>\`);
   }
   const paymentButton = typeof boardingPaymentActionHtml === "function" ? boardingPaymentActionHtml(record, stay) : "";
@@ -4206,6 +4242,14 @@ function boardingCheckInPhotoHtml(record = {}) {
 
 function boardingCheckInHtml(record = {}, nextStatus = "Checked In", options = {}, state = {}) {
   const stay = boardingStatusTargetStay(record, nextStatus, options) || {};
+  const serviceOnly = isServiceRequestStay(record, stay);
+  const formStart = \`<form id="boardingCheckInForm" class="tracker-form" data-id="\${escapeHtml(record.id || "")}" data-stay-id="\${escapeHtml(stay.id || options.stayId || "")}" data-request-code="\${escapeHtml(options.requestCode || (stay.id ? boardingStayRequestCode(record, stay) : ""))}" data-next-status="\${escapeHtml(nextStatus)}" data-allow-early="\${options.allowEarly ? "true" : "false"}" data-early="\${options.early ? "true" : "false"}">\`;
+  if (serviceOnly) {
+    return \`\${formStart}
+      <p>Confirm \${escapeHtml(record.dogName || "this dog")} has arrived for the service appointment.</p>
+      <div class="button-row"><button type="submit">Check In</button><button type="button" class="secondary-button" data-action="close-dialog">Cancel</button></div>
+    </form>\`;
+  }
   const formValues = state.formValues || {};
   const addedServices = state.addedServices || [];
   const serviceRows = boardingCheckInServices(record, addedServices, options);
@@ -4225,7 +4269,7 @@ function boardingCheckInHtml(record = {}, nextStatus = "Checked In", options = {
     ? \`<div class="checkin-service-list">\${serviceRows.map((item) => \`<article class="record-card compact-record-card"><strong>\${escapeHtml(item.label)}</strong><span>\${escapeHtml(item.source === "added" ? "Added during check-in" : "Requested by owner")}</span></article>\`).join("")}</div>\`
     : "";
   return \`
-    <form id="boardingCheckInForm" class="tracker-form" data-id="\${escapeHtml(record.id || "")}" data-stay-id="\${escapeHtml(stay.id || options.stayId || "")}" data-request-code="\${escapeHtml(options.requestCode || (stay.id ? boardingStayRequestCode(record, stay) : ""))}" data-next-status="\${escapeHtml(nextStatus)}" data-allow-early="\${options.allowEarly ? "true" : "false"}" data-early="\${options.early ? "true" : "false"}">
+    \${formStart}
       <input type="hidden" name="assignKennelAfterCheckIn" value="No" />
       \${boardingCheckInPhotoHtml(record)}
       <div class="field-grid">
@@ -5276,6 +5320,11 @@ async function saveBoardingStatusTransition(record = {}, nextStatus = "", option
     return null;
   }
   if (nextStatus === "In Kennel" && !options.kennelLocation) {
+    const targetStay = boardingStatusTargetStay(record, nextStatus, options) || {};
+    if (isServiceRequestStay(record, targetStay)) {
+      showToast("Service appointments do not require a kennel.");
+      return null;
+    }
     openKennelAssignmentPopup(record, nextStatus, options);
     return null;
   }
@@ -7016,7 +7065,7 @@ function renderBoardingStays(record = activeBoardingDog()) {
 
 function boardingStayStatusMenuHtml(record = {}, stay = {}) {
   const status = boardingStayDisplayStatus(record, stay);
-  const nextStatuses = boardingStatusTransitions[status] || [];
+  const nextStatuses = boardingAllowedNextStatuses(record, stay, status);
   const stayAttrs = stay.id ? boardingStayDataAttrs(record, stay) : "";
   const serviceRows = boardingRequestServiceRowsHtml(record, stay);
   const ownerUpdateButton = boardingOwnerUpdateButtonHtml(record, stay);
@@ -7227,7 +7276,7 @@ async function saveBoardingStayStatusTransition(record = {}, stayId = "", nextSt
 }
 
 function boardingApprovalPreflightIssues(record = {}, stay = {}) {
-  if (!record.customerRequest) return [];
+  if (!record.customerRequest || isServiceRequestStay(record, stay)) return [];
   const issues = [];
   const pickupDate = String(stay.pickupTime || record.pickupTime || todayDate()).slice(0, 10);
   const vaccineStatus = vaccinationStatusInfo(record, { asOfDate: pickupDate });
