@@ -7,7 +7,7 @@ import {
 import { createRegistrationWorkspace, registrationStatusForEntry } from "./dog-show-registration.js?v=20261005-collapsible-registration-profile-1";
 import { createRegistrationStore } from "./dog-show-registration-store.js?v=20261003-registration-1";
 
-import { canRemoveFromShowPlan, createDogShowPlanMap, showPlanStages } from "./dog-show-plan-map.js?v=show-plan-map-v2-navigation-v1";
+import { canRemoveFromShowPlan, createDogShowPlanMap, showPlanStages } from "./dog-show-plan-map.js?v=show-plan-map-v2-navigation-v1-pin-selection-v1";
 
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
@@ -3566,7 +3566,7 @@ function dogShowPlanRemovalMatches(row, entry) {
     : canRemoveFromShowPlan(dogShowPlannerLifecycleStatus(row.payload)));
 }
 
-async function reviewDogShowPlanRemoval(ids, button) {
+async function reviewDogShowPlanRemoval(ids, button, isCurrent) {
   const owner = dogShowPlanMapOwner();
   if (!owner || button.disabled) return;
   const selected = new Set(ids);
@@ -3585,6 +3585,7 @@ async function reviewDogShowPlanRemoval(ids, button) {
       rows = data || [];
     }
     if (owner !== dogShowPlanMapOwner() || !button.isConnected || !dogShowPlanMap.isOpen() || dogShowView !== "planner") return;
+    if (!isCurrent()) return showToast("The selection changed. Review the current selection.");
     const byId = new Map(rows.map(row => [row.id, row]));
     if (!entries.every(entry => dogShowPlanRemovalMatches(byId.get(entry.id), entry))) {
       throw new Error("A selected show changed or was removed. Refresh Show Plan and review your selection again.");
