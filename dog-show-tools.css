@@ -558,7 +558,7 @@
 .show-map-preview {
   position: absolute;
   z-index: 3;
-  width: min(266px, calc(100% - 16px));
+  width: min(310px, calc(100% - 16px));
   max-height: min(235px, calc(100% - 16px));
   overflow: auto;
   overscroll-behavior: contain;
@@ -599,6 +599,21 @@
   margin: 4px 0 0;
   padding: 0;
   list-style: none;
+}
+
+.show-map-preview li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding-inline-end: 1px;
+}
+
+.show-map-preview .show-map-open-show {
+  min-height: 32px;
+  padding: 4px 7px;
+  font-size: .75rem;
+  white-space: nowrap;
 }
 
 .show-map-preview li + li {

@@ -114,7 +114,7 @@ function mapClusters(entries, viewBox, pixelWidth, spacing) {
   return clusters;
 }
 
-export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, reviewSelection }) {
+export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, reviewSelection, openShow }) {
   let owner = "";
   let open = false;
   let stage = "all";
@@ -291,7 +291,7 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
     const leftSpace = x - gap - margin;
     const rightSpace = canvas.clientWidth - x - gap - margin;
     const sideSpace = Math.max(leftSpace, rightSpace);
-    if (sideSpace >= Math.min(178, preview.offsetWidth)) {
+    if (sideSpace >= Math.min(218, preview.offsetWidth)) {
       preview.style.width = Math.min(preview.offsetWidth, sideSpace) + "px";
       preview.style.left = (rightSpace >= leftSpace ? x + gap : x - gap - preview.offsetWidth) + "px";
       preview.style.top = clamp(y - preview.offsetHeight / 2, margin, canvas.clientHeight - preview.offsetHeight - margin) + "px";
@@ -311,10 +311,16 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
     const meta = '<span>' + e([entry.dateLabel, entry.location.label, showPlanStages.get(entry.stage)].filter(Boolean).join(" · ")) + '</span>';
     const details = '<span class="show-map-row-copy">' + name + meta
       + (["State only", "Unmapped"].includes(entry.location.precision) ? '<small>' + entry.location.precision + '</small>' : '') + '</span>';
-    return '<li>' + (entry.removable
+    const row = entry.removable
       ? '<label><input type="checkbox"' + (inPreview ? '' : ' data-map-focus="' + e("show-" + entry.id) + '"')
         + ' data-map-show="' + e(entry.id) + '">' + details + '</label>'
-      : '<div class="show-map-readonly-row">' + details + '</div>') + '</li>';
+      : '<div class="show-map-readonly-row">' + details + '</div>';
+    const action = inPreview
+      ? '<button type="button" class="secondary-button show-map-open-show" data-map-action="open-show"'
+        + ' data-event-id="' + e(entry.id) + '" data-record-type="' + e(entry.type) + '"'
+        + ' aria-label="' + e(["Open Show", entry.name, entry.dateLabel].filter(Boolean).join(" · ")) + '">Open Show</button>'
+      : "";
+    return '<li>' + row + action + '</li>';
   }
 
   function render(root, restoreFocus = false) {
@@ -412,6 +418,12 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
         });
         return;
       }
+      if (action === "open-show") {
+        previewPinned = true;
+        window.clearTimeout(previewTimer);
+        openShow(button.dataset.eventId, button.dataset.recordType);
+        return;
+      }
       if (action === "close-preview") {
         closePreview(button.closest(".show-map-region"), true);
         return;
@@ -465,6 +477,7 @@ export function createDogShowPlanMap({ escapeHtml, readEntries, ownerKey, review
     function schedulePreviewHide(event) {
       const hovered = event.target.closest(".show-map-marker, .show-map-preview");
       if (!hovered || hovered.contains(event.relatedTarget)) return;
+      if (event.type === "focusout" && event.relatedTarget?.closest?.("#dogShowDialog")) return;
       if (event.type === "pointerout" && (previewPinned || document.activeElement?.closest(".show-map-preview"))) return;
       const region = hovered.closest(".show-map-region");
       if (!region || event.relatedTarget?.closest?.(".show-map-region") === region

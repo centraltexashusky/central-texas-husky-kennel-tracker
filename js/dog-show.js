@@ -7,7 +7,7 @@ import {
 import { createRegistrationWorkspace, registrationStatusForEntry } from "./dog-show-registration.js?v=20261005-collapsible-registration-profile-1";
 import { createRegistrationStore } from "./dog-show-registration-store.js?v=20261003-registration-1";
 
-import { canRemoveFromShowPlan, createDogShowPlanMap, showPlanStages } from "./dog-show-plan-map.js?v=show-plan-map-v2-navigation-v1-pin-selection-v1";
+import { canRemoveFromShowPlan, createDogShowPlanMap, showPlanStages } from "./dog-show-plan-map.js?v=show-plan-map-v2-navigation-v1-pin-selection-v1-open-show-v1";
 
 // === MODULE: DOG SHOW ===
 const DOG_SHOW_VIEW_KEY = "cth-dog-show-view";
@@ -3341,7 +3341,7 @@ function dogShowPlannerDateRange(show = {}) {
   return end ? `${start} – ${end}` : start;
 }
 
-function dogShowPlannerCandidateHtml(candidate = {}, planner = dogShowPlannerRecord()) {
+function dogShowPlannerCandidateHtml(candidate = {}, planner = dogShowPlannerRecord(), showActions = true) {
   const show = candidate.show || {};
   const targets = Array.isArray(candidate.targets) ? candidate.targets : [];
   const breeds = [...new Set(targets.map((target) => dogShowPlannerCalendarBreedName(target.breed)).filter(Boolean))];
@@ -3354,7 +3354,7 @@ function dogShowPlannerCandidateHtml(candidate = {}, planner = dogShowPlannerRec
       <div><dt>Dogs</dt><dd>${escapeHtml(dogs.join(", ") || "Breed-only research")}</dd></div>
     </dl>
     ${dogShowPlannerPointScheduleHtml(show, "Potential Plan", planner)}
-    <footer><span>Potential Show</span><div class="button-row"><button type="button" data-action="add-potential-show" data-candidate-id="${escapeHtml(candidate.id)}">Add Show</button><button type="button" class="secondary-button" data-action="remove-potential-show" data-candidate-id="${escapeHtml(candidate.id)}">Remove</button></div></footer>
+    ${showActions ? `<footer><span>Potential Show</span><div class="button-row"><button type="button" data-action="add-potential-show" data-candidate-id="${escapeHtml(candidate.id)}">Add Show</button><button type="button" class="secondary-button" data-action="remove-potential-show" data-candidate-id="${escapeHtml(candidate.id)}">Remove</button></div></footer>` : dogShowPlannerSourceSectionHtml(show)}
   </article>`;
 }
 
@@ -3662,8 +3662,25 @@ async function saveDogShowPlanRemoval(form, entries, reviewedRows, owner) {
   }
 }
 
+function openDogShowPlanMapEntry(id, type) {
+  if (!dogShowPlanMapOwner()) return;
+  if (type === "showResult") {
+    const candidate = dogShowPlannerVisibleCandidates().find(item => item.id === id);
+    if (!candidate) return showToast("The potential show could not be found.");
+    openDogShowDialog("Potential show", dogShowPlannerCandidateHtml(candidate, dogShowPlannerRecord(), false));
+    return;
+  }
+  const event = dogShowEvents().find(item => item.id === id);
+  if (!event) return showToast("The selected show could not be found.");
+  if (dogShowPlannerLifecycleStatus(event) === "Completed") {
+    openDogShowDialog("Completed show", dogShowPlannerEventPlanHtml(event, "Completed"));
+    return;
+  }
+  openDogShowPlannerEvent(event.id);
+}
+
 const dogShowPlanMap = createDogShowPlanMap({
-  escapeHtml, readEntries: dogShowPlanMapEntries, ownerKey: dogShowPlanMapOwner, reviewSelection: reviewDogShowPlanRemoval,
+  escapeHtml, readEntries: dogShowPlanMapEntries, ownerKey: dogShowPlanMapOwner, reviewSelection: reviewDogShowPlanRemoval, openShow: openDogShowPlanMapEntry,
 });
 
 function dogShowPlannerLifecycleHtml(potentialShows = [], planner = dogShowPlannerRecord()) {
