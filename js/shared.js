@@ -5386,7 +5386,7 @@ function renderAfterRealtimeTypes(types = []) {
   if (activePage === "settingsAuditLogPage" && typeSet.has("auditLog")) renderAuditLog();
   if (activePage === "customerPage" && hasAny(["customerDog", "boardingDog"])) renderCustomerDogs();
   if (activePage === "customerRequestsPage" && hasAny(["boardingDog", "boardingAgreement"])) renderCustomerRequests();
-  if (activePage === "customerUpdatesPage" && hasAny(["boardingDog", "reservationCustomerUpdate", "showResult"])) renderCustomerUpdates();
+  if (activePage === "customerUpdatesPage" && hasAny(["boardingDog", "customerDog", "reservationCustomerUpdate", "showResult"])) renderCustomerUpdates();
   if (activePage === "customerFilesPage" && hasAny(["boardingDog", "customerDog", "boardingAgreement"])) renderCustomerFiles();
 
   if (typeSet.has("notificationLog") || typeSet.has("notificationRead")) renderNotifications();
@@ -5610,7 +5610,11 @@ async function fetchRemoteRecordRows(types = remoteRecordTypesForCurrentApp(), o
         lastRemoteRecordFetchModesByType.set(type, sinceUpdatedAt ? "delta" : "full");
         return await withTimeout(fetchRemoteRecordRowsForType(type, {
           sinceUpdatedAt,
-          boardingFullHistory: options.boardingFullHistory === true,
+          // Compact staff roster rows intentionally omit archived stays and photo
+          // data. Owner requests already run under customer RLS and need the
+          // original rows, including on a cold load of the Updates page.
+          boardingFullHistory: options.boardingFullHistory === true
+            || (type === "boardingDog" && isCustomerRole()),
           scheduledCareTaskAnchorDate: options.scheduledCareTaskAnchorDate || "",
           dailyTaskWindow: type === "dailyTask"
             ? (options.pageId === "dashboardPage" && dashboardTimelineRequestedDate
@@ -8796,13 +8800,48 @@ function customerUpdateForStay(record = {}, stay = {}) {
   }) || null;
 }
 
-function customerUpdateBelongsToCurrentStay(record = {}, update = {}) {
-  return ownerUpdateStaysForRecord(record).some((stay) => {
-    const code = boardingStayRequestCode(record, stay);
-    if (update.requestCode && code) return update.requestCode === code;
-    if (update.stayId) return [stay.id, ...arrayValue(stay.sourceStayIds)].includes(update.stayId);
-    return Boolean(stay.dropoffTime && stay.pickupTime && update.stayDropoffTime === stay.dropoffTime && update.stayPickupTime === stay.pickupTime);
+// The photo window is separate from posting eligibility. A genuine successor
+// replaces the completed stay's display window without deleting its media.
+function customerUpdateStayCandidates(record = {}) {
+  return arrayValue(record.stays).filter((stay) => stay?.id
+    && !isServiceRequestStay(record, stay)
+    && !["", "cancelled", "canceled", "declined", "rejected", "removed"].includes(
+      String(stay.status || boardingStayDisplayStatus(record, stay) || "").trim().toLowerCase())
+    && !stay.cancelledAt && !stay.declinedAt && !stay.removed);
+}
+
+function customerUpdateVisibleStays(records = []) {
+  const candidates = records.flatMap((record) => customerUpdateStayCandidates(record)
+    .map((stay) => ({ record, stay })));
+  const time = (value) => Number.isFinite(Date.parse(value || "")) ? Date.parse(value) : 0;
+  candidates.sort((a, b) => {
+    const dropoff = ({record, stay}) => time(stay.actualDropoffAt || stay.actualCheckInAt || stay.dropoffTime || stay.scheduledDropoffTime || stay.createdAt || record.submittedAt);
+    return Number(ownerUpdateStayIsAvailable(b.record, b.stay)) - Number(ownerUpdateStayIsAvailable(a.record, a.stay))
+      || dropoff(b) - dropoff(a) || time(b.stay.createdAt) - time(a.stay.createdAt)
+      || String(b.stay.id).localeCompare(String(a.stay.id));
   });
+  const selected = candidates[0];
+  if (!selected) return [];
+  if (ownerUpdateStayIsAvailable(selected.record, selected.stay)) return [selected];
+  if (!["checked out", "completed"].includes(
+    String(boardingStayDisplayStatus(selected.record, selected.stay) || selected.stay.status).trim().toLowerCase())
+    && String(selected.stay.status).trim().toLowerCase() !== "completed") return [];
+  return [selected];
+}
+
+function customerUpdateMatchesVisibleStay(record = {}, stay = {}, update = {}) {
+  const code = boardingStayExplicitRequestCode(stay);
+  const codeProvided = Boolean(update.requestCode && code);
+  const ids = [stay.id, ...arrayValue(stay.sourceStayIds), ...arrayValue(stay.duplicateStayIds)];
+  if (update.stayId) return ids.includes(update.stayId) && (!codeProvided || update.requestCode === code);
+  if (codeProvided) return update.requestCode === code;
+  return Boolean(stay.dropoffTime && stay.pickupTime && update.stayDropoffTime === stay.dropoffTime
+    && update.stayPickupTime === stay.pickupTime);
+}
+
+function customerUpdateBelongsToCurrentStay(record = {}, update = {}) {
+  return customerUpdateVisibleStays([record]).some(({ record: source, stay }) =>
+    customerUpdateMatchesVisibleStay(source, stay, update));
 }
 
 

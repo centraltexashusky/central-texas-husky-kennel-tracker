@@ -1452,28 +1452,48 @@ function editableCustomerDogForCurrentUser(id = "", boardingId = "") {
 function customerUpdatesForCurrentUser() {
   const email = normalizeEmail(currentUser?.email);
   const updateKeys = new Set();
-  const boardingUpdates = readRecords("boardingDog")
-    .filter((record) => !record.removed && boardingDogVisibleToCustomer(record, email))
-    .flatMap((record) => {
-      const displayRecord = boardingDogRecordForDisplay(record.id) || boardingDogWithStayStatus(record);
-      const stays = displayRecord.stays || [];
-      return (displayRecord.customerUpdates || record.customerUpdates || []).map((update) => {
-        const stay = boardingStayByReference(displayRecord, { stayId: update.stayId || "", requestCode: update.requestCode || "" }) || activeBoardingStay(displayRecord) || currentOrNextStay(displayRecord) || stays[0] || {};
-        return { ...update, source: "boardingDog", dog: displayRecord, stay };
-      });
+  const visibleDogs = readRecords("customerDog")
+    .filter((dog) => !dog.removed && customerDogVisibleToCustomer(dog, email));
+  const visibleBoardings = readRecords("boardingDog")
+    .filter((record) => !record.removed && boardingDogVisibleToCustomer(record, email));
+  const groups = new Map();
+  const dogsById = new Map(visibleDogs.map((dog) => [dog.id, dog]));
+  const dogIdsByBoarding = new Map();
+  visibleDogs.forEach((dog) => {
+    [dog.linkedBoardingDogId, dog.sourceBoardingDogId].filter(Boolean).forEach((id) => {
+      if (!dogIdsByBoarding.has(id)) dogIdsByBoarding.set(id, new Set());
+      dogIdsByBoarding.get(id).add(dog.id);
     });
-  const customerDogUpdates = readRecords("customerDog")
-    .filter((dog) => !dog.removed && customerDogVisibleToCustomer(dog, email))
-    .flatMap((dog) => (dog.customerUpdates || []).map((update) => ({
-      ...update,
-      source: "customerDog",
-      dog,
-      stay: {
-        id: update.stayId || "",
-        dropoffTime: update.stayDropoffTime || "",
-        pickupTime: update.stayPickupTime || "",
-      },
-    })));
+  });
+  const add = (key, record) => {
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(record);
+  };
+  // Scope the display by persisted dog IDs, not fuzzy same-owner/name matches.
+  // Explicit legacy profile links handle older records with no canonical ID.
+  visibleBoardings.forEach((record) => {
+    const explicitDogId = record.linkedCustomerDogId || record.sourceCustomerDogId || record.customerDogId
+      || record.requestProfileSnapshot?.customerDogId;
+    const aliases = dogIdsByBoarding.get(record.id);
+    const dogId = explicitDogId || (aliases?.size === 1 ? [...aliases][0] : "");
+    add(dogId ? "customer:" + dogId : "boarding:" + record.id, record);
+  });
+  const boardingUpdates = [];
+  const customerDogUpdates = [];
+  for (const [key, records] of groups) {
+    const dog = key.startsWith("customer:") ? dogsById.get(key.slice(9)) : null;
+    const window = customerUpdateVisibleStays(records);
+    for (const source of records) {
+      for (const update of arrayValue(source.customerUpdates)) {
+        const match = window.find(({ record, stay }) => customerUpdateMatchesVisibleStay(record, stay, update));
+        if (match) boardingUpdates.push({ ...update, source: "boardingDog", dog: source, stay: match.stay, customerDogId: dog?.id || "", boardingDogId: update.boardingDogId || source.id });
+      }
+    }
+    if (dog) for (const update of arrayValue(dog.customerUpdates)) {
+      const match = window.find(({ record, stay }) => customerUpdateMatchesVisibleStay(record, stay, update));
+      if (match) customerDogUpdates.push({ ...update, source: "customerDog", dog, stay: match.stay, customerDogId: dog.id, boardingDogId: update.boardingDogId || match.record.id });
+    }
+  }
   const showUpdates = readRecords("showResult")
     .filter((result) => !result.removed && result.customerVisible === true && [result.ownerEmail, result.customerEmail, result.linkedOwnerEmail, result.secondaryOwnerEmail].map(normalizeEmail).includes(email))
     .map((result) => {
@@ -1495,10 +1515,9 @@ function customerUpdatesForCurrentUser() {
       };
     });
   return [...boardingUpdates, ...customerDogUpdates, ...showUpdates]
-    .filter((update) => update.source === "showResult" || customerUpdateBelongsToCurrentStay(
-      update.source === "boardingDog" ? update.dog : boardingDogForCustomerDog(update.dog) || {}, update))
     .filter((update) => {
-      const key = update.id || \`\${update.createdAt || ""}|\${update.note || ""}|\${update.stayId || ""}\`;
+      const id = update.id || [update.createdAt || "", update.note || "", update.stayId || ""].join("|");
+      const key = [update.customerDogId || update.dog?.id || update.source, id].join("|");
       if (updateKeys.has(key)) return false;
       updateKeys.add(key);
       return true;
@@ -1519,8 +1538,8 @@ function renderCustomerUpdates() {
     const stayText = update.stayLabel || (update.stay?.dropoffTime || update.stay?.pickupTime
       ? stayScheduleRangeLabel(update.dog || {}, update.stay || {})
       : "Current stay");
-    const key = \`\${update.dog?.dogName || update.dogName || "Dog"}|\${stayText}|\${requestCode || update.stayId || update.stay?.id || ""}\`;
-    const profile = update.dog ? customerDogsForCurrentUser().find((dog) => dog.id === update.dog.id || boardingRecordMatchesCustomerDog(update.dog, dog)) : null;
+    const key = \`\${update.customerDogId || update.dog?.id || update.dogName || "Dog"}|\${stayText}|\${requestCode || update.stayId || update.stay?.id || ""}\`;
+    const profile = update.customerDogId ? { id: update.customerDogId } : update.dog ? customerDogsForCurrentUser().find((dog) => dog.id === update.dog.id || [dog.linkedBoardingDogId, dog.sourceBoardingDogId].includes(update.dog.id)) : null;
     groups[key] = groups[key] || { dogName: update.dog?.dogName || update.dogName || "Dog", customerDogId: profile?.id || "", stayText, requestCode, updates: [] };
     groups[key].updates.push(update);
     return groups;

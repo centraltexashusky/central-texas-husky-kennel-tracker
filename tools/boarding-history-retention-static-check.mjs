@@ -23,10 +23,10 @@ assert.match(boarding, /Past stays load only when this section is opened/, "the 
 assert.match(boarding, /boardingPastStayCardHtml/, "checked-out stays use a dedicated lightweight card");
 assert.doesNotMatch(boarding.match(/function boardingPastStayCardHtml[\s\S]*?\n\}/)?.[0] || "", /confirm-undo-stay-service|complete-stay-service|edit-stay|remove-stay/, "historical stay cards have no live-work actions");
 assert.match(boarding, /Completed service log/, "historical services retain simple completion audit text");
-assert.match(boarding, /kennel_boarding_customer_update_retention_plan/, "checkout plans exact historical owner-update cleanup");
-assert.match(boarding, /storage\.from\(MEDIA_BUCKET\)\.remove/, "historical media is deleted through the Storage API");
-assert.match(boarding, /kennel_apply_boarding_customer_update_retention/, "database references are pruned only after media deletion succeeds");
-assert.match(boarding, /p_record_ids: recordIds/, "retention spans every legacy source row in the displayed dog profile");
+const nonDestructiveMigration = fs.readFileSync("supabase/migrations/20261124000000_retain_boarding_customer_update_media.sql", "utf8");
+assert.doesNotMatch(boarding, /kennel_boarding_customer_update_retention_plan|kennel_apply_boarding_customer_update_retention/);
+assert.match(nonDestructiveMigration, /"storagePaths":\[\]/, "stale clients receive no object deletion plan");
+assert.match(nonDestructiveMigration, /"removedUpdateCount":0/, "stale clients cannot remove saved references");
 
 for (const functionName of [
   "kennel_compact_boarding_payload",
